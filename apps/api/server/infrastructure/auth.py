@@ -78,6 +78,26 @@ class JWTAuth:
         except pyjwt.InvalidTokenError as e:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e}")
 
+    def refresh_token(self, token: str) -> Optional[str]:
+        """Validate a token and issue a new one with a fresh expiry.
+
+        Args:
+            token: Raw JWT string to refresh.
+
+        Returns:
+            A new signed JWT for the same subject, or None if invalid/expired.
+
+        Side effects:
+            None.
+        """
+        try:
+            payload = self.verify_token(token)
+        except HTTPException:
+            return None
+        if not payload:
+            return None
+        return self.create_token(payload.get("sub", ""))
+
     async def require_user(self, credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security)) -> dict:
         """FastAPI dependency — extracts and validates bearer token.
 

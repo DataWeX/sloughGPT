@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 from domains.infrastructure.model_size import compute_model_size_gb, format_size_gb, is_model_cached
 
+# Module-level so tests can patch ``routers.models._hf_cache_dir``; resolved at call time.
+_hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
+
 
 class ExportRequest(BaseModel):
     output_path: str = "models/exported"
@@ -49,7 +52,6 @@ class ModelsRouter:
 
     def __init__(self):
         self.router = APIRouter(prefix="/models", tags=["models"])
-        self._hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
         self._register_routes()
 
     def _register_routes(self):
@@ -283,9 +285,9 @@ class ModelsRouter:
                 seen_ids.add(mid)
                 all_model_ids.append(mid)
 
-        if not q and self._hf_cache_dir.exists():
+        if not q and _hf_cache_dir.exists():
             try:
-                for entry in self._hf_cache_dir.iterdir():
+                for entry in _hf_cache_dir.iterdir():
                     if not entry.name.startswith("models--") or not entry.is_dir():
                         continue
                     cached_id = _cache_model_id(entry.name)
@@ -482,7 +484,7 @@ class ModelsRouter:
 
     async def cache_usage(self) -> Dict[str, Any]:
         """Total disk usage of the HuggingFace model cache (fast — walks blobs/ only)."""
-        cache = self._hf_cache_dir
+        cache = _hf_cache_dir
         if not cache.exists():
             return success_response(data={"total_bytes": 0, "total_gb": 0, "model_count": 0, "cache_dir": str(cache)})
         total = 0

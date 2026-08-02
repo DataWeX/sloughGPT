@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "planner" / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "packages" / "planner" / "src"))
 from planner.kanban import (  # noqa: E402
     KanbanStore, Card, ColumnDef, Board, Note,
     _make_id, _abbrev, _render_board,

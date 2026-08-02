@@ -54,7 +54,9 @@ class MockSloTransformer:
         gen_len = min(max_new_tokens, 5)
         return np.random.randint(0, self.vocab_size, (batch, gen_len), dtype=np.int64)
 
-    def generate_numpy_stream(self, input_ids, max_new_tokens=10, eos_token=0):
+    def generate_numpy_stream(self, input_ids, max_new_tokens=10, eos_token=0,
+                              temperature=1.0, top_k=None, top_p=None,
+                              repetition_penalty=1.0):
         gen_len = min(max_new_tokens, 5)
         for _ in range(gen_len):
             yield int(np.random.randint(0, self.vocab_size))

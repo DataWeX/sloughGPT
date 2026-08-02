@@ -151,6 +151,35 @@ class TestGetContext:
         assert len(ctx) <= 60
 
 
+class TestGetContextBranches:
+    def test_get_context_breaks_at_max_chars(self, store):
+        store.add("aaaa", role="user")
+        store.search = lambda query, top_k=10, role_filter=None: [
+            ("m1", "aaaa", 0.5),
+            ("m2", "bbbb", 0.5),
+        ]
+        ctx = store.get_context("q", max_chars=5)
+        assert ctx == "[User]: aaaa"
+
+    def test_get_context_without_roles(self, store):
+        store.add("alpha content", role="user")
+        store.search = lambda query, top_k=10, role_filter=None: [
+            ("m1", "alpha content", 0.9),
+        ]
+        ctx = store.get_context("q", include_roles=False)
+        assert ctx == "alpha content"
+
+
+class TestHyperdimFailure:
+    def test_init_failure_raises(self, monkeypatch):
+        import sys
+
+        monkeypatch.setitem(sys.modules, "domains.soul.quantum", None)
+        s = HDMemoryStore(dim=64)
+        with pytest.raises(Exception):
+            s._get_hyperdim()
+
+
 class TestBundleRecent:
     def test_empty_bundle(self, store):
         vec = store.bundle_recent(5)
@@ -191,3 +220,25 @@ class TestPrune:
         removed = store.prune(similarity_threshold=0.0)
         assert removed == 1
         assert len(store.items) == 1
+
+    def test_prune_skips_already_removed(self, store):
+        store.add("a")
+        store.add("b")
+        store.add("c")
+        store.add("d")
+        items = store.items
+        markers = {0: [1.0], 1: [2.0], 2: [3.0], 3: [4.0]}
+        for idx, it in enumerate(items):
+            it.hypervector = markers[idx] * store.dim
+        items[0].timestamp = 1000.0
+        items[1].timestamp = 100.0
+        items[2].timestamp = 500.0
+        items[3].timestamp = 50.0
+
+        def sim(a, b):
+            return 0.99 if b[0] in (2.0, 4.0) else 0.1
+
+        store._hyperdim.similarity = sim
+        removed = store.prune(similarity_threshold=0.5)
+        assert removed == 2
+        assert [i.content for i in store.items] == ["a", "c"]

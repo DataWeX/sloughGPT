@@ -68,6 +68,13 @@ class TestQuantumCognitiveEngine:
     def test_measure_empty(self):
         assert QuantumCognitiveEngine().measure() == ""
 
+    def test_measure_falls_back_to_first(self, monkeypatch):
+        """Falls back to first state when probabilities don't accumulate past r."""
+        monkeypatch.setattr(random, "random", lambda: 0.5)
+        engine = QuantumCognitiveEngine()
+        engine.superposition = [QuantumState(0 + 0j, "first"), QuantumState(0 + 0j, "second")]
+        assert engine.measure() == "first"
+
     def test_entangle_and_tunnel(self, monkeypatch):
         engine = QuantumCognitiveEngine(coherence=1.0)
         engine.entangle("thought_a", "thought_b")

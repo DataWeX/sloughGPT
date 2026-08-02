@@ -238,6 +238,10 @@ def _slo_worker_main(
             input_ids,
             max_new_tokens=max_new_tokens,
             eos_token=provider._tokenizer.eos_token_id or 0,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
         ):
             decoded = provider._tokenizer.decode([tok_id])
             if decoded:

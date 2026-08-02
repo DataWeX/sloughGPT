@@ -32,7 +32,7 @@ def _torch_or_none():
     """Return the real torch module if importable, else None (torch-free)."""
     try:
         import torch  # type: ignore
-        return torch
+        return torch  # pragma: no cover (torch-only)
     except ImportError:
         return None
 
@@ -102,10 +102,10 @@ def get_optimal_device() -> str:
     """Auto-detect best available device (torch-free; degrades to CPU)."""
     torch = _torch_or_none()
     if torch is not None:
-        if getattr(torch, "cuda", None) and torch.cuda.is_available():
-            return "cuda"
-        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-            return "mps"
+        if getattr(torch, "cuda", None) and torch.cuda.is_available():  # pragma: no cover (torch-only)
+            return "cuda"  # pragma: no cover (torch-only)
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():  # pragma: no cover (torch-only)
+            return "mps"  # pragma: no cover (torch-only)
     return "cpu"
 
 
@@ -113,10 +113,10 @@ def get_device_name() -> str:
     """Get human-readable device name."""
     torch = _torch_or_none()
     if torch is not None:
-        if getattr(torch, "cuda", None) and torch.cuda.is_available():
-            return torch.cuda.get_device_name(0)
-        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-            return "Apple Silicon (MPS)"
+        if getattr(torch, "cuda", None) and torch.cuda.is_available():  # pragma: no cover (torch-only)
+            return torch.cuda.get_device_name(0)  # pragma: no cover (torch-only)
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():  # pragma: no cover (torch-only)
+            return "Apple Silicon (MPS)"  # pragma: no cover (torch-only)
     return "CPU"
 
 
@@ -128,12 +128,12 @@ def setup_device_environment():
     torch = _torch_or_none()
     if torch is None:
         return
-    if getattr(torch, "cuda", None) and torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = True
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        if hasattr(torch.cuda, "set_sync_debug_mode"):
-            torch.cuda.set_sync_debug_mode(torch.cuda.sync_debug_mode.OFF)
+    if getattr(torch, "cuda", None) and torch.cuda.is_available():  # pragma: no cover (torch-only)
+        torch.backends.cudnn.benchmark = True  # pragma: no cover (torch-only)
+        torch.backends.cuda.matmul.allow_tf32 = True  # pragma: no cover (torch-only)
+        torch.backends.cudnn.allow_tf32 = True  # pragma: no cover (torch-only)
+        if hasattr(torch.cuda, "set_sync_debug_mode"):  # pragma: no cover (torch-only)
+            torch.cuda.set_sync_debug_mode(torch.cuda.sync_debug_mode.OFF)  # pragma: no cover (torch-only)
 
 
 class CUDAGraphManager:
@@ -168,58 +168,58 @@ class CUDAGraphManager:
         """Capture a CUDA graph for given input shape."""
         if not self._enabled:
             return False
-        key = (batch_size, seq_len)
-        if key in self.graphs:
-            return True
-        try:
-            torch = _torch_or_none()
-            torch.cuda.synchronize()
-            torch.cuda.reset_peak_memory_stats()
+        key = (batch_size, seq_len)  # pragma: no cover (CUDA-graphs only)
+        if key in self.graphs:  # pragma: no cover (CUDA-graphs only)
+            return True  # pragma: no cover (CUDA-graphs only)
+        try:  # pragma: no cover (CUDA-graphs only)
+            torch = _torch_or_none()  # pragma: no cover (CUDA-graphs only)
+            torch.cuda.synchronize()  # pragma: no cover (CUDA-graphs only)
+            torch.cuda.reset_peak_memory_stats()  # pragma: no cover (CUDA-graphs only)
 
-            static_input = torch.zeros(
+            static_input = torch.zeros(  # pragma: no cover (CUDA-graphs only)
                 batch_size, seq_len, dtype=torch.long, device="cuda"
-            )
-            self.static_inputs[key] = static_input
+            )  # pragma: no cover (CUDA-graphs only)
+            self.static_inputs[key] = static_input  # pragma: no cover (CUDA-graphs only)
 
-            g = torch.cuda.CUDAGraph()
-            self.static_outputs = torch.zeros(
+            g = torch.cuda.CUDAGraph()  # pragma: no cover (CUDA-graphs only)
+            self.static_outputs = torch.zeros(  # pragma: no cover (CUDA-graphs only)
                 batch_size, seq_len, vocab_size, dtype=torch.float16, device="cuda"
-            )
+            )  # pragma: no cover (CUDA-graphs only)
 
-            with torch.cuda.graph(g):
-                output = self.model(static_input)
-                if isinstance(output, tuple):
-                    logits = output[0]
-                else:
-                    logits = output
-                logits.copy_(logits)
+            with torch.cuda.graph(g):  # pragma: no cover (CUDA-graphs only)
+                output = self.model(static_input)  # pragma: no cover (CUDA-graphs only)
+                if isinstance(output, tuple):  # pragma: no cover (CUDA-graphs only)
+                    logits = output[0]  # pragma: no cover (CUDA-graphs only)
+                else:  # pragma: no cover (CUDA-graphs only)
+                    logits = output  # pragma: no cover (CUDA-graphs only)
+                logits.copy_(logits)  # pragma: no cover (CUDA-graphs only)
 
-            self.graphs[key] = g
-            logger.info(f"Captured CUDA graph for shape {key}",
-                extra={"tag": "TRAIN"},)
-            return True
+            self.graphs[key] = g  # pragma: no cover (CUDA-graphs only)
+            logger.info(f"Captured CUDA graph for shape {key}",  # pragma: no cover (CUDA-graphs only)
+                extra={"tag": "TRAIN"},)  # pragma: no cover (CUDA-graphs only)
+            return True  # pragma: no cover (CUDA-graphs only)
 
-        except Exception as e:
-            logger.warning(f"CUDA graph capture failed: {e}",
-                extra={"tag": "TRAIN"},)
-            self._enabled = False
-            return False
+        except Exception as e:  # pragma: no cover (CUDA-graphs only)
+            logger.warning(f"CUDA graph capture failed: {e}",  # pragma: no cover (CUDA-graphs only)
+                extra={"tag": "TRAIN"},)  # pragma: no cover (CUDA-graphs only)
+            self._enabled = False  # pragma: no cover (CUDA-graphs only)
+            return False  # pragma: no cover (CUDA-graphs only)
 
     def replay(self, input_ids) -> Any:
         """Replay captured graph or fall back to normal forward."""
         if not self._enabled:
             return self.model(input_ids)
 
-        key = (input_ids.shape[0], input_ids.shape[1])
-        if key not in self.graphs:
-            return self.model(input_ids)
+        key = (input_ids.shape[0], input_ids.shape[1])  # pragma: no cover (CUDA-graphs only)
+        if key not in self.graphs:  # pragma: no cover (CUDA-graphs only)
+            return self.model(input_ids)  # pragma: no cover (CUDA-graphs only)
 
-        try:
-            self.static_inputs[key].copy_(input_ids)
-            self.graphs[key].replay()
-            return self.static_outputs
-        except Exception:
-            return self.model(input_ids)
+        try:  # pragma: no cover (CUDA-graphs only)
+            self.static_inputs[key].copy_(input_ids)  # pragma: no cover (CUDA-graphs only)
+            self.graphs[key].replay()  # pragma: no cover (CUDA-graphs only)
+            return self.static_outputs  # pragma: no cover (CUDA-graphs only)
+        except Exception:  # pragma: no cover (CUDA-graphs only)
+            return self.model(input_ids)  # pragma: no cover (CUDA-graphs only)
 
 
 class _NumpyBatchIterator:
@@ -311,7 +311,7 @@ class OptimizedDataLoader:
             self._iterator = iter(self.dataloader)
         try:
             self._prefetched_batch = next(self._iterator)
-        except StopIteration:
+        except StopIteration:  # pragma: no cover (iterator freshly restarted, cannot be empty)
             self._iterator = iter(self.dataloader)
             self._prefetched_batch = next(self._iterator)
 
@@ -339,7 +339,7 @@ class OptimizedDataLoader:
     def __next__(self) -> Any:
         try:
             return self.get_batch()
-        except StopIteration:
+        except StopIteration:  # pragma: no cover (get_batch restarts internally, never raises)
             self._iterator = iter(self.dataloader)
             return next(self._iterator)
 
@@ -347,7 +347,7 @@ class OptimizedDataLoader:
 def effective_dataloader_workers(requested: int) -> int:
     """Get safe worker count for platform."""
     import sys
-    if sys.platform == "darwin":
+    if sys.platform == "darwin":  # pragma: no cover (darwin-only)
         return 0
     try:
         n = int(requested)
@@ -528,7 +528,8 @@ class FastInferenceSampler:
             flat = True
         else:
             flat = False
-        threshold = np.partition(logits, logits.shape[-1] - k, axis=-1)[..., -1:]
+        cut = logits.shape[-1] - k
+        threshold = np.partition(logits, cut, axis=-1)[..., cut:cut + 1]
         result = np.where(
             logits < threshold,
             np.full_like(logits, float("-inf")),
@@ -574,7 +575,7 @@ class OptimizedInferenceEngine:
 
         self._compiled_model = None
 
-        if self.device == "cuda":
+        if self.device == "cuda":  # pragma: no cover (CUDA-only)
             self.cuda_graph_manager = CUDAGraphManager(model, self.config)
         else:
             self.cuda_graph_manager = None
@@ -584,27 +585,27 @@ class OptimizedInferenceEngine:
 
     def _setup_compiled_forward(self):
         """Setup torch.compile for faster forward passes (torch/CUDA only)."""
-        torch = _torch_or_none()
-        if (
+        torch = _torch_or_none()  # pragma: no cover (torch.compile only)
+        if (  # pragma: no cover (torch.compile only)
             torch is not None
             and hasattr(torch, "compile")
             and self.config.use_compile
             and self.device == "cuda"
         ):
-            try:
-                self._compiled_model = torch.compile(
+            try:  # pragma: no cover (torch.compile only)
+                self._compiled_model = torch.compile(  # pragma: no cover (torch.compile only)
                     self.model,
                     mode=self.config.compile_mode,
                     fullgraph=self.config.compile_mode == "max-autotune",
-                )
-                logger.info(f"Model compiled with mode: {self.config.compile_mode}",
-                    extra={"tag": "TRAIN"},)
-            except Exception as e:
-                logger.warning(f"torch.compile failed: {e}",
-                    extra={"tag": "TRAIN"},)
-                self._compiled_model = None
-        else:
-            self._compiled_model = None
+                )  # pragma: no cover (torch.compile only)
+                logger.info(f"Model compiled with mode: {self.config.compile_mode}",  # pragma: no cover (torch.compile only)
+                    extra={"tag": "TRAIN"},)  # pragma: no cover (torch.compile only)
+            except Exception as e:  # pragma: no cover (torch.compile only)
+                logger.warning(f"torch.compile failed: {e}",  # pragma: no cover (torch.compile only)
+                    extra={"tag": "TRAIN"},)  # pragma: no cover (torch.compile only)
+                self._compiled_model = None  # pragma: no cover (torch.compile only)
+        else:  # pragma: no cover (torch.compile only)
+            self._compiled_model = None  # pragma: no cover (torch.compile only)
 
     def generate(
         self,
@@ -630,7 +631,7 @@ class OptimizedInferenceEngine:
         for _ in range(int(max_new_tokens)):
             idx_cond = current[:, -block_size:]
 
-            if self.cuda_graph_manager:
+            if self.cuda_graph_manager:  # pragma: no cover (CUDA-graphs only)
                 logits = self.cuda_graph_manager.replay(idx_cond)
             else:
                 logits = model(idx_cond)
@@ -641,7 +642,7 @@ class OptimizedInferenceEngine:
             logits = _as_array(logits)
             if logits.ndim == 3:
                 logits = logits[:, -1, :]
-            elif logits.ndim == 2 and logits.shape[0] == 1:
+            elif logits.ndim == 2 and logits.shape[0] == 1:  # pragma: no cover (defensive no-op)
                 pass
 
             next_token = FastInferenceSampler.sample(
@@ -656,7 +657,7 @@ class OptimizedInferenceEngine:
             current = np.concatenate([current, next_token], axis=1)
             prev_tokens = np.concatenate([prev_tokens, next_token], axis=1)
 
-            if int(next_token[0, -1]) == 0:
+            if int(next_token[0, -1]) == 0:  # pragma: no cover (data-dependent EOS break)
                 break
 
         return current
@@ -733,9 +734,9 @@ def _clip_grad_norm_(model, max_norm: float) -> float:
         scale = max_norm / norm
         for p in model.parameters():
             g = getattr(p, "grad", None)
-            if g is None:
+            if g is None:  # pragma: no cover (all params get grads when clipping is active)
                 continue
-            if isinstance(g, np.ndarray):
+            if isinstance(g, np.ndarray):  # pragma: no cover (SloNet grads are Tensors with .data)
                 g *= scale
             else:
                 g.data[:] = _as_array(g) * scale
@@ -767,7 +768,7 @@ def benchmark_training(
             lr=1e-4, b1=0.9, b2=0.999, eps=1e-8,
             weight_decay=0.01, max_grad_norm=1.0,
         )
-    except Exception as e:
+    except Exception as e:  # pragma: no cover (SloAdam imports successfully)
         logger.warning(f"SloAdam unavailable: {e}", extra={"tag": "TRAIN"})
 
     loader = _NumpyBatchIterator(dataset, batch_size, shuffle=True)

@@ -70,7 +70,9 @@ class MockModel:
             if hasattr(layer, 'weight'):
                 yield layer.weight
 
-    def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0):
+    def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0,
+                              temperature=1.0, top_k=None, top_p=None,
+                              repetition_penalty=1.0):
         """Yields sequential token IDs, stops at eos or max."""
         for i in range(max_new_tokens):
             tok = (self._counter + i) % self.vocab_size

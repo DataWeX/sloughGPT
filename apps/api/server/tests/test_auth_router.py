@@ -30,7 +30,7 @@ def mock_auth_deps():
 
     mock_audit = MagicMock()
 
-    with patch("routers.auth._get_auth_deps") as mock:
+    with patch("routers.auth.AuthRouter._get_auth_deps") as mock:
         mock.return_value = ({"test-api-key"}, 24, mock_jwt, mock_audit)
         yield
 
@@ -213,8 +213,7 @@ class TestCreateToken:
             "auth_success",
             "testclient",
             resource="/auth/token",
-            action="token_create",
-            status="success",
+            extra={"action": "token_create", "status": "success"},
         )
 
     def test_token_audit_logged_on_failure(self):
@@ -226,8 +225,7 @@ class TestCreateToken:
             "auth_failed",
             "testclient",
             resource="/auth/token",
-            action="token_create",
-            status="failure",
+            extra={"action": "token_create", "status": "failure"},
         )
 
 

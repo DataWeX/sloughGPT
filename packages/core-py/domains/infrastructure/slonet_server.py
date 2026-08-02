@@ -273,6 +273,10 @@ class SloNetServer:
                 input_ids,
                 max_new_tokens=max_new_tokens,
                 eos_token=eos_id,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
             ):
                 if cancel_event and cancel_event.is_set():
                     return

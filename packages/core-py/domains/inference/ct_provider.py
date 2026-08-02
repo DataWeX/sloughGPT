@@ -49,7 +49,7 @@ class CTransformProvider:
 
         parser = SLNCParser(slnc_path)
         config = parser.config
-        tensors = {name: parser.get_tensor(name) for name in parser.tensor_names}
+        tensors = parser.get_weights_dict()
 
         engine = NativeEngine()
         info = engine.load_from_slnc(tensors, config, seq_capacity=seq_capacity)

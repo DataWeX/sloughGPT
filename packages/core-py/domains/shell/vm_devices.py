@@ -331,6 +331,7 @@ class SlonetDevice(Device):
             input_ids = input_ids.reshape(1, -1)
         for token_id in self._provider._model.generate_numpy_stream(
             input_ids, max_new_tokens=int(max_tokens), eos_token=int(eos_token),
+            temperature=1.0, top_k=None, top_p=None, repetition_penalty=1.0,
         ):
             yield token_id
 

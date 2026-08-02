@@ -31,7 +31,7 @@ import math
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -143,8 +143,12 @@ class QuantDtype(Enum):
 
 @dataclass
 class QuantMeta:
-    """Quantization metadata for a single tensor."""
-    scale: float
+    """Quantization metadata for a single tensor.
+
+    ``scale`` is a float for per-tensor quantization or an ``(N,)`` float32
+    array for per-channel (per output row) quantization.
+    """
+    scale: Union[float, np.ndarray]
     zero_point: int
     bits: int
     mode: str
@@ -156,9 +160,17 @@ class QuantMeta:
     max_abs_error: float = 0.0  # worst-case absolute error
     cosine_sim: float = 1.0    # cosine similarity (1.0 = perfect)
 
+    @property
+    def is_per_channel(self) -> bool:
+        """True when per-channel (one scale per output row) is in use."""
+        return isinstance(self.scale, np.ndarray)
+
     def to_dict(self) -> dict:
+        scale = self.scale
+        if isinstance(scale, np.ndarray):
+            scale = scale.tolist()
         return {
-            "scale": self.scale,
+            "scale": scale,
             "zero_point": self.zero_point,
             "bits": self.bits,
             "mode": self.mode,
@@ -172,8 +184,11 @@ class QuantMeta:
 
     @classmethod
     def from_dict(cls, d: dict) -> "QuantMeta":
+        scale = d["scale"]
+        if isinstance(scale, list):
+            scale = np.asarray(scale, dtype=np.float32)
         return cls(
-            scale=d["scale"],
+            scale=scale,
             zero_point=d["zero_point"],
             bits=d["bits"],
             mode=d["mode"],
@@ -324,6 +339,18 @@ class QuantEngine:
         if self.should_skip(name):
             return TensorInfo(name=name, array=arr)
 
+        # Per-channel quantization for 2D weight matrices in symmetric mode.
+        # A single per-tensor scale collapses the whole matrix to one scale,
+        # which destroys LLM logits (a few outlier rows dominate). One scale
+        # per output row matches GPTQ/AWQ-style weight schemes.
+        if (
+            self._bits == 8
+            and self._mode == QuantMode.SYMMETRIC
+            and arr.ndim == 2
+            and arr.shape[0] > 1
+        ):
+            return self._quantize_per_channel(name, arr)
+
         flat = arr.flatten().astype(np.float32)
 
         # Apply clipping if configured
@@ -383,6 +410,65 @@ class QuantEngine:
 
         return TensorInfo(name=name, array=quantized_reshaped, meta=meta)
 
+    def _quantize_per_channel(self, name: str, arr: np.ndarray) -> TensorInfo:
+        """Quantize a 2D weight matrix with one int8 scale per output row.
+
+        Each row (output feature) gets its own scale computed from that row's
+        absolute max, so outlier rows no longer force a coarse global scale
+        across the entire matrix. This is what restores LLM logit quality under
+        int8 weight-only quantization.
+
+        Args:
+            name: tensor name (e.g. "blocks.0.q_proj.weight")
+            arr: float32 2D weight array (out_features, in_features)
+
+        Returns:
+            TensorInfo with int8 ``(N, K)`` array and per-row scale metadata
+        """
+        arr = arr.astype(np.float32)
+
+        # Per-row scale from the TRUE row maximum (no percentile clipping).
+        # Clipping here would clamp outlier weights to the 99.9th percentile,
+        # then the raw outlier overflows int8 and is clipped to +/-127, losing
+        # its true magnitude. A single outlier weight aligned with a large
+        # activation can destroy that output channel (measured forward cosine
+        # drop 0.9999 -> 0.67 on Qwen FFN down-projections).
+        max_abs = np.maximum(np.max(np.abs(arr), axis=1, keepdims=True), 1e-10)
+        scale = (max_abs / 127.0).astype(np.float32)  # (N, 1)
+
+        quantized = np.clip(np.round(arr / scale), -128, 127).astype(np.int8)
+        dequantized = quantized.astype(np.float32) * scale
+
+        flat = arr.flatten()
+        dequantized_flat = dequantized.flatten()
+        mse = float(np.mean((flat - dequantized_flat) ** 2))
+        max_err = float(np.max(np.abs(flat - dequantized_flat)))
+        cos_sim = float(_cosine_similarity(flat, dequantized_flat))
+
+        var = float(np.var(flat))
+        relative_mse = mse / max(var, 1e-10)
+        if relative_mse > self._error_threshold:
+            logger.warning(
+                "QuantEngine: skipping %s — rel_mse %.4f > threshold %.4f (var=%.6f)",
+                name, relative_mse, self._error_threshold, var, extra={"tag": "INFRA"}
+            )
+            return TensorInfo(name=name, array=arr)
+
+        meta = QuantMeta(
+            scale=scale[:, 0].copy(),  # (N,) per-row scales
+            zero_point=0,
+            bits=self._bits,
+            mode=self._mode.value,
+            dtype_code=5,  # UINT8 for int8 storage
+            original_shape=arr.shape,
+            original_dtype=str(arr.dtype),
+            mse=mse,
+            max_abs_error=max_err,
+            cosine_sim=cos_sim,
+        )
+        self._error_report[name] = meta
+        return TensorInfo(name=name, array=quantized, meta=meta)
+
     def dequantize_to_float(self, info: TensorInfo) -> np.ndarray:
         """Dequantize a TensorInfo to float32. Convenience method."""
         return info.as_float()
@@ -407,11 +493,21 @@ class QuantEngine:
         if self.should_skip(name):
             return TensorInfo(name=name, array=arr)
 
-        flat = arr.flatten().astype(np.float32)
-        quantized = self._encode(flat, scale, zero_point)
-
+        arr = arr.astype(np.float32)
         _signed = (self._mode == QuantMode.SYMMETRIC)
-        dequantized = _dequantize(quantized, scale, zero_point, self._bits, arr.shape, signed=_signed)
+
+        if isinstance(scale, np.ndarray):
+            # Per-channel re-apply: keep 2D layout so per-row scales align.
+            quantized = self._encode(arr, scale, zero_point)
+            dequantized = _dequantize(quantized, scale, zero_point, self._bits, arr.shape, signed=_signed)
+            quantized_reshaped = quantized
+        else:
+            flat = arr.flatten()
+            quantized = self._encode(flat, scale, zero_point)
+            dequantized = _dequantize(quantized, scale, zero_point, self._bits, arr.shape, signed=_signed)
+            quantized_reshaped = quantized if self._bits == 4 else quantized.reshape(arr.shape)
+
+        flat = arr.flatten()
         mse = float(np.mean((flat - dequantized.flatten()) ** 2))
         max_err = float(np.max(np.abs(flat - dequantized.flatten())))
         cos_sim = float(_cosine_similarity(flat, dequantized.flatten()))
@@ -428,7 +524,6 @@ class QuantEngine:
             max_abs_error=max_err,
             cosine_sim=cos_sim,
         )
-        quantized_reshaped = quantized if self._bits == 4 else quantized.reshape(arr.shape)
         self._error_report[name] = meta
         return TensorInfo(name=name, array=quantized_reshaped, meta=meta)
 
@@ -497,27 +592,33 @@ class QuantEngine:
 
         return float(scale), zero_point
 
-    def _encode(self, flat: np.ndarray, scale: float, zero_point: int) -> np.ndarray:
+    def _encode(self, data: np.ndarray, scale: float, zero_point: int) -> np.ndarray:
         """Encode float32 array to quantized integer array.
 
         For int8: returns int8 array of same length.
         For int4: returns packed int8 array with two values per byte (half the length).
+
+        When ``scale`` is an ``(N,)`` ndarray (per-channel), ``data`` must be a
+        2D ``(N, K)`` array and the scale is broadcast per output row.
         """
         if self._mode == QuantMode.SYMMETRIC:
             if self._bits == 8:
-                return np.clip(np.round(flat / scale), -128, 127).astype(np.int8)
+                if isinstance(scale, np.ndarray):
+                    s = scale.reshape(-1, 1)
+                    return np.clip(np.round(data / s), -128, 127).astype(np.int8)
+                return np.clip(np.round(data / scale), -128, 127).astype(np.int8)
             else:
                 # int4 symmetric: range [-8, 7]
-                q = np.clip(np.round(flat / scale), -8, 7).astype(np.int8)
+                q = np.clip(np.round(data / scale), -8, 7).astype(np.int8)
                 return _pack_int4(q)
         else:
             # Asymmetric
             if self._bits == 8:
-                quantized = np.clip(np.round(flat / scale) + zero_point, -128, 127).astype(np.int8)
+                quantized = np.clip(np.round(data / scale) + zero_point, -128, 127).astype(np.int8)
                 return quantized
             else:
                 # int4 asymmetric: range [0, 15]
-                q = np.clip(np.round(flat / scale) + zero_point, 0, 15).astype(np.int8)
+                q = np.clip(np.round(data / scale) + zero_point, 0, 15).astype(np.int8)
                 return _pack_int4(q)
 
     def save_metadata(self, path: str):
@@ -785,6 +886,15 @@ def _dequantize(
         n_original = int(np.prod(original_shape))
         flat = _unpack_int4(flat, n_original, signed=signed)
 
+    if isinstance(scale, np.ndarray):
+        # Per-channel scale: one scale per output row (N, K array).
+        s = scale.reshape(-1, 1).astype(np.float32)
+        grid = quantized if quantized.ndim >= 2 else quantized.reshape(original_shape)
+        grid = grid.astype(np.float32)
+        if zero_point != 0:
+            return (grid - zero_point) * s
+        return grid * s
+
     if zero_point == 0:
         # Symmetric
         result = flat.astype(np.float32) * scale
@@ -939,7 +1049,7 @@ def int8_matmul(
     a: np.ndarray,
     b: np.ndarray,
     a_scale: float,
-    b_scale: float,
+    b_scale: Union[float, np.ndarray],
     a_zero_point: int = 0,
     b_zero_point: int = 0,
 ) -> np.ndarray:
@@ -951,11 +1061,14 @@ def int8_matmul(
     For symmetric quantization (zero_point=0):
         result_fp32 = (a_int8 @ b_int8.T) * a_scale * b_scale
 
+    ``b_scale`` may be a per-channel ``(N,)`` array — one scale per output
+    row of ``b`` — which broadcasts against the ``(M, N)`` result.
+
     Args:
         a: int8 matrix (M, K) — activations
         b: int8 matrix (N, K) — weights (stored transposed, as produced by QuantEngine)
         a_scale: scale for matrix a
-        b_scale: scale for matrix b
+        b_scale: scale for matrix b (float or per-row ``(N,)`` array)
         a_zero_point: zero point for a (0 for symmetric)
         b_zero_point: zero point for b (0 for symmetric)
 
@@ -981,7 +1094,7 @@ def int8_matmul(
 def quantized_linear(
     x: np.ndarray,
     weight_int8: np.ndarray,
-    weight_scale: float,
+    weight_scale: Union[float, np.ndarray],
     weight_zero_point: int = 0,
     bias: Optional[np.ndarray] = None,
     x_scale: Optional[float] = None,
@@ -995,10 +1108,14 @@ def quantized_linear(
         3. Dequantize result to float32
         4. Add bias
 
+    ``weight_scale`` may be a float (per-tensor) or an ``(N,)`` per-output-row
+    array (per-channel), in which case each output feature is scaled by its own
+    factor after the int8 matmul.
+
     Args:
         x: float32 input (..., in_features)
         weight_int8: int8 weight matrix (out_features, in_features) — as stored by QuantEngine
-        weight_scale: quantization scale for weight
+        weight_scale: quantization scale for weight (float or per-row ``(N,)`` array)
         weight_zero_point: zero point for weight
         bias: optional float32 bias (out_features,)
         x_scale: quantization scale for x (if None, uses weight_scale)
@@ -1109,7 +1226,7 @@ class QuantizedLinear:
 
     def __init__(self, weight_int8, scale, zero_point, bias, bits, original_shape, mode="symmetric"):
         self.weight_int8 = np.asarray(weight_int8, dtype=np.int8)
-        self.scale = np.float32(scale)
+        self.scale = scale if isinstance(scale, np.ndarray) else np.float32(scale)
         self.zero_point = np.int32(zero_point)
         self.bias = np.asarray(bias, dtype=np.float32).copy() if bias is not None else None
         self.bits = bits

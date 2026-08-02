@@ -49,6 +49,16 @@ class _LinearModel:
             "bias": self.lin.bias.data.copy(),
         }
 
+    def to(self, device):
+        return self
+
+
+class _TupleModel(_LinearModel):
+    """Model whose ``__call__`` returns a ``(logits, extra)`` tuple."""
+
+    def __call__(self, x):
+        return self.lin.forward(x), None
+
 
 def _make_batches(n=4, batch_size=4, in_f=4, out_f=3):
     rng = np.random.RandomState(0)
@@ -337,3 +347,66 @@ def test_estimate_forgetting_increases_when_params_change():
     learner.model.lin.weight.data = learner.model.lin.weight.data + 5.0
     forgetting = learner.estimate_forgetting()
     assert forgetting["t1"] > 0
+
+
+def test_fisher_estimate_tuple_outputs():
+    model = _TupleModel()
+    est = DiagonalFisherEstimator(model)
+    out = est.estimate(_make_batches(), _ce_loss, num_samples=100, accumulation_steps=2)
+    assert out["weight"].shape == (3, 4)
+    assert out["bias"].shape == (3,)
+
+
+def test_fisher_estimate_from_logits_tuple_outputs():
+    model = _TupleModel()
+    est = DiagonalFisherEstimator(model)
+    x = tensor(np.random.RandomState(1).randn(2, 4).astype(np.float32))
+    y = np.random.RandomState(1).randint(0, 3, size=2).astype(np.int64)
+    out = est.estimate_from_logits(x, y, num_samples=2)
+    assert out["weight"].shape == (3, 4)
+
+
+class _TrackingModel(_LinearModel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.to_calls = []
+
+    def to(self, device):
+        self.to_calls.append(device)
+        return self
+
+
+def test_init_calls_model_to_device():
+    model = _TrackingModel()
+    EwcContinualLearner(model, device="cpu")
+    assert model.to_calls == ["cpu"]
+
+
+def test_save_task_snapshot_tuple_and_no_targets_break():
+    model = _TupleModel()
+    learner = EwcContinualLearner(model)
+    rng = np.random.RandomState(3)
+    batches = [tensor(rng.randn(2, 4).astype(np.float32)) for _ in range(12)]
+    snap = learner.save_task_snapshot("t1", "Task 1", batches, _ce_loss)
+    assert snap.task_id == "t1"
+    assert "weight" in snap.parameters
+    assert "weight" in snap.fisher_diagonal
+    assert np.isfinite(snap.optimal_loss)
+
+
+def test_forward_and_ewc_tuple_no_targets():
+    learner = EwcContinualLearner(_TupleModel())
+    rng = np.random.RandomState(4)
+    batch = tensor(rng.randn(2, 4).astype(np.float32))
+    total, meta = learner.forward_and_ewc(batch, _ce_loss)
+    assert meta["active_tasks"] == 0
+    assert meta["total_loss"] == pytest.approx(meta["task_loss"])
+
+
+def test_prune_consolidation_scalar_param_branch():
+    model = _LinearModel(in_f=4, out_f=1)
+    learner = EwcContinualLearner(model)
+    learner.save_task_snapshot("t1", "t", _make_batches(n=1, in_f=4, out_f=1), _ce_loss)
+    important = learner.prune_consolidation(top_k_percent=100.0)
+    assert "bias" in important
+    assert important["bias"] in (0, 1)

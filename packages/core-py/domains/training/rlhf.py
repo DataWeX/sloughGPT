@@ -102,6 +102,8 @@ class RewardModel:
         arr = _as_array(hidden)
         if arr.ndim < 2:
             arr = arr.reshape(1, -1)
+        if arr.ndim == 2:
+            arr = arr[:, np.newaxis, :]
         # Use last token's representation
         last_hidden = arr[:, -1, :]
         self._ensure_head(last_hidden.shape[-1])

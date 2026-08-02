@@ -479,12 +479,19 @@ class KnowledgeMemory:
 
     @staticmethod
     def _run_async(coro) -> Any:
-        """Run a coroutine, creating an event loop if needed (thread-safe)."""
+        """Run a coroutine to completion (safe from any thread).
+
+        When called from inside a running event loop, running the coroutine on
+        that same loop and blocking with ``fut.result()`` deadlocks — the loop
+        thread waits on a task only it can schedule. Instead, execute the
+        coroutine on a dedicated new event loop in a helper thread so the
+        caller never blocks the loop that owns ``coro``'s dependencies.
+        """
         import asyncio
+        import threading
+
         try:
-            loop = asyncio.get_running_loop()
-            fut = asyncio.run_coroutine_threadsafe(coro, loop)
-            return fut.result()
+            asyncio.get_running_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -492,6 +499,24 @@ class KnowledgeMemory:
                 return loop.run_until_complete(coro)
             finally:
                 loop.close()
+
+        box: dict = {}
+
+        def _runner() -> None:
+            inner = asyncio.new_event_loop()
+            try:
+                box["result"] = inner.run_until_complete(coro)
+            except BaseException as e:  # noqa: BLE001 - propagated to caller
+                box["error"] = e
+            finally:
+                inner.close()
+
+        thread = threading.Thread(target=_runner, daemon=True)
+        thread.start()
+        thread.join()
+        if "error" in box:
+            raise box["error"]
+        return box.get("result")
 
     def __init__(self, vector_store: Optional[Any] = None, load_persisted: bool = True):
         self._lock = threading.Lock()

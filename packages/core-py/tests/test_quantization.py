@@ -105,6 +105,77 @@ class TestQuantEngineSymmetric:
         assert info.meta.bits == 4
 
 
+class TestQuantEnginePerChannel:
+    """Test per-channel int8 quantization for 2D weight matrices."""
+
+    def test_2d_symmetric_uses_per_channel(self):
+        engine = QuantEngine(bits=8, mode="symmetric")
+        arr = np.random.randn(64, 128).astype(np.float32) * 0.5
+        info = engine.quantize("blocks.0.w.weight", arr)
+
+        assert info.is_quantized
+        assert info.meta.is_per_channel
+        assert info.meta.scale.shape == (64,)
+        assert info.array.shape == (64, 128)
+        assert info.array.dtype == np.int8
+
+    def test_per_channel_scale_from_true_row_max(self):
+        engine = QuantEngine(bits=8, mode="symmetric")
+        arr = np.array([[1.0, 2.0, 3.0], [10.0, -20.0, 30.0]], dtype=np.float32)
+        info = engine.quantize("blocks.0.w.weight", arr)
+
+        expected = np.array([3.0, 30.0], dtype=np.float32) / 127.0
+        np.testing.assert_allclose(info.meta.scale, expected, rtol=1e-3)
+
+    def test_outlier_row_does_not_destroy_other_rows(self):
+        # A single huge outlier in row 0 must not compress row 1's scale.
+        engine = QuantEngine(bits=8, mode="symmetric")
+        arr = np.array([[1.0, 2.0, 3.0], [10.0, -20.0, 30.0]], dtype=np.float32)
+        info = engine.quantize("blocks.0.w.weight", arr)
+
+        dequant = info.as_float()
+        np.testing.assert_allclose(dequant[1], arr[1], atol=0.3)
+
+    def test_quantized_outlier_preserved(self):
+        # No percentile clipping on the per-channel path: the raw outlier must
+        # survive quantization instead of overflowing to +/-127 after a clipped
+        # scale (the clip-then-quantize inconsistency that wrecked LLM logits).
+        engine = QuantEngine(bits=8, mode="symmetric", clip_percentile=0.99)
+        arr = np.array([[1.0, 2.0, 3.0], [5.0, 10.0, 1000.0]], dtype=np.float32)
+        info = engine.quantize("blocks.0.w.weight", arr)
+
+        dequant = info.as_float()
+        # Row 1 keeps its own scale from true max (1000.0), so the outlier is
+        # represented faithfully even though clip_percentile is set.
+        assert abs(dequant[1, 2] - 1000.0) < 1000.0 * 0.01
+        np.testing.assert_allclose(dequant[0], arr[0], atol=0.3)
+
+    def test_per_channel_error_metrics(self):
+        engine = QuantEngine(bits=8, mode="symmetric")
+        arr = np.random.randn(32, 64).astype(np.float32) * 0.5
+        info = engine.quantize("blocks.0.w.weight", arr)
+
+        assert info.meta.cosine_sim > 0.99
+        assert info.meta.max_abs_error < 0.02
+
+    def test_1d_does_not_use_per_channel(self):
+        engine = QuantEngine(bits=8, mode="symmetric")
+        arr = np.random.randn(100).astype(np.float32) * 0.5
+        info = engine.quantize("some.vec", arr)
+
+        assert info.is_quantized
+        assert not info.meta.is_per_channel
+
+    def test_asymmetric_2d_does_not_use_per_channel(self):
+        engine = QuantEngine(bits=8, mode="asymmetric")
+        arr = np.random.randn(16, 32).astype(np.float32) * 2.0 + 10.0
+        info = engine.quantize("blocks.0.w.weight", arr)
+
+        # Only symmetric int8 uses the per-channel path.
+        assert info.meta is not None
+        assert not info.meta.is_per_channel
+
+
 class TestQuantEngineAsymmetric:
     """Test asymmetric quantization mode."""
 

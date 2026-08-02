@@ -77,7 +77,7 @@ class ServerConfig:
     enable_health_monitor: bool = True
     health_monitor_interval: int = 300
 
-    enable_process_guard: bool = False
+    enable_process_guard: bool = True
     enable_web: bool = False
 
     jwt_secret: str = ""  # auto-generated if empty
@@ -103,7 +103,7 @@ class ServerConfig:
             inference_pool_size=int(os.getenv("SLO_INFERENCE_POOL_SIZE", str(max(1, multiprocessing.cpu_count() // 2)))),
             request_timeout_seconds=float(os.getenv("SLO_REQUEST_TIMEOUT", "120.0")),
             enable_watchdog=os.getenv("SLO_WATCHDOG", "true").lower() == "true",
-            enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes"),
+            enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower() in ("1", "true", "yes"),
             enable_workflow=os.getenv("SLO_AUTO_WORKFLOW", "true").lower() == "true",
             enable_health_monitor=os.getenv("SLO_HEALTH_MONITOR", "true").lower() == "true",
             health_monitor_interval=int(os.getenv("SLO_HEALTH_INTERVAL", "300")),

@@ -5,6 +5,10 @@ resolution and real SloughGPTModel load round-trips against the numpy
 SloNet/torch-shim stack (no real PyTorch, no weights, no network).
 """
 
+import sys
+import subprocess
+import textwrap
+
 import numpy as np
 import pytest
 
@@ -236,3 +240,23 @@ class TestLoadSloughgptFromCheckpoint:
                   "training_info": _hp()}
         model, _ = cu.load_sloughgpt_from_checkpoint(bundle, device="cpu")
         assert model is not None
+
+
+def test_import_fallback_when_domains_models_missing():
+    """Reload the module with domains.models blocked so the module-level
+    ImportError fallback runs (SloughGPTModel is None, load raises RuntimeError)."""
+    import importlib
+    import types as _types
+    real_models = sys.modules.get("domains.models")
+    try:
+        sys.modules["domains.models"] = _types.ModuleType("domains.models")
+        importlib.reload(cu)
+        assert cu.SloughGPTModel is None
+        with pytest.raises(RuntimeError):
+            cu.load_sloughgpt_from_checkpoint({"model_state_dict": {}}, device="cpu")
+    finally:
+        if real_models is not None:
+            sys.modules["domains.models"] = real_models
+        else:
+            sys.modules.pop("domains.models", None)
+        importlib.reload(cu)

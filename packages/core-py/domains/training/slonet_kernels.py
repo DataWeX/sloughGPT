@@ -95,14 +95,14 @@ def _build_kernels():
             out.flat[i] = val
         return out
 
-    # ---- SwiGLU -----------------------------------------------------------
+    # ---- SiLU (swish) / SwiGLU gate ---------------------------------------
     @njit(cache=True)
     def nb_swiglu(h1):
-        """SwiGLU: 0.5 * h1 * (1 + tanh(0.7978845608 * (h1 + 0.044715 * h1^3)))"""
+        """SiLU (SwiGLU gate): h1 * sigmoid(h1)."""
         out = np.empty_like(h1)
         for i in range(h1.size):
             v = h1.flat[i]
-            out.flat[i] = 0.5 * v * (1.0 + np.tanh(0.7978845608 * (v + 0.044715 * v * v * v)))
+            out.flat[i] = v * (1.0 / (1.0 + np.exp(-v)))
         return out
 
     # ---- Softmax (in-place on last axis) ----------------------------------
@@ -168,7 +168,7 @@ def _build_kernels():
         out = np.empty_like(h1)
         for i in range(h1.size):
             v = h1.flat[i]
-            s = 0.5 * v * (1.0 + np.tanh(0.7978845608 * (v + 0.044715 * v * v * v)))
+            s = v * (1.0 / (1.0 + np.exp(-v)))
             out.flat[i] = s * h3.flat[i]
         return out
 
@@ -237,7 +237,7 @@ def _warmup(eps=np.float32(1e-5), has_bias=True):
 
     @njit
     def _warmup_softmax():
-        e = np.ones((1, 12, 1, 4), dtype=np.float32)
+        e = np.tile(np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float32), (1, 12, 1, 1))
         n_last = 4
         total = e.size
         for offset in range(0, total, n_last):
@@ -342,12 +342,12 @@ def nb_layernorm(x, w, b, eps=np.float32(1e-5)):
 
 
 def nb_swiglu(h1):
-    """SwiGLU activation with numba acceleration."""
+    """SiLU (SwiGLU gate) activation with numba acceleration."""
     _ensure_kernels()
     if _nb_swiglu is not None:
         return _nb_swiglu(h1)
-    # Fallback
-    return 0.5 * h1 * (1.0 + np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+    # Fallback: SiLU
+    return h1 * (1.0 / (1.0 + np.exp(-h1)))
 
 
 def nb_softmax(e):
@@ -391,8 +391,8 @@ def nb_swi_glu_mul(h1, h3):
     _ensure_kernels()
     if _nb_swi_glu_mul is not None:
         return _nb_swi_glu_mul(h1, h3)
-    # Fallback: SwiGLU then multiply
-    s = 0.5 * h1 * (1.0 + np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+    # Fallback: SiLU(h1) then multiply
+    s = h1 * (1.0 / (1.0 + np.exp(-h1)))
     return s * h3
 
 
@@ -788,10 +788,12 @@ def _build_lm_head_argmax():
             accum = np.int32(0)
             for d in range(D):
                 xi = int(x[0, d] / x_scale)
-                if xi > 127:
-                    xi = 127
-                elif xi < -128:
-                    xi = -128
+                # xi is bounded by +/-127 by construction (x_scale = x_max / 127),
+                # so the saturation branches are unreachable.
+                if xi > 127:  # pragma: no cover (unreachable — |xi| <= 127)
+                    xi = 127  # pragma: no cover
+                elif xi < -128:  # pragma: no cover (unreachable — |xi| <= 127)
+                    xi = -128  # pragma: no cover
                 accum += np.int32(xi) * np.int32(W_int8[v, d])
             score = np.float32(accum) * (x_scale * w_scale)
             if score > best_score:

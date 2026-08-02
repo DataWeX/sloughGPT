@@ -60,7 +60,7 @@ def _repetition_score(assistant_msg: str) -> float:
         trigram_counts = Counter(trigrams)
         most_common_trigram_count = trigram_counts.most_common(1)[0][1]
         trigram_repetition = most_common_trigram_count / len(trigrams)
-    else:
+    else:  # pragma: no cover — len(words) >= 4 guarantees non-empty trigrams
         trigram_repetition = 0
 
     word_counts = Counter(words)

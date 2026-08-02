@@ -42,7 +42,7 @@ def load_manifest(path: Union[str, Path]) -> Dict[str, Any]:
 def _glob_train_files(pattern: str, base_dir: Path) -> List[Path]:
     if any(ch in pattern for ch in "*?["):
         parts = pattern.replace("\\", "/").split("/")
-        if not parts:
+        if not parts:  # pragma: no cover — unreachable (glob chars imply non-empty pattern)
             return []
         if "**" in pattern:
             return sorted(base_dir.glob(pattern))

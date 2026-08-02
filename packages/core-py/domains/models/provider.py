@@ -333,7 +333,22 @@ class ToolUseProcessor:
     def __init__(self, tools: Optional[List[ToolDef]] = None):
         self._tools = tools or _BUILTIN_TOOLS
 
+    @staticmethod
+    def _has_image(messages: list) -> bool:
+        """True if any message content references an image."""
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "image_url":
+                        return True
+            elif isinstance(content, str) and "data:image/" in content:
+                return True
+        return False
+
     async def process(self, messages: list) -> list:
+        if not self._has_image(messages):
+            return messages
         tool_descriptions = "\n".join(
             f"- {t.description}" for t in self._tools
         )
@@ -352,14 +367,21 @@ class ToolUseProcessor:
             messages.insert(0, {"role": "system", "content": tool_prompt})
         return messages
 
+    _PLACEHOLDER_ARG_RE = re.compile(r'^<[^>]*>$')
+
     def match_tool(self, text: str) -> Optional[Tuple[str, str, str]]:
         """Check if generated text contains a tool call.
 
         Returns (tool_name, argument, full_match_text) or None.
+        Placeholder arguments (e.g. ``<base64_image_data>``) copied verbatim
+        from the tool description are rejected so a small model echoing the
+        system prompt does not trigger a real tool invocation.
         """
         m = self.TOOL_RE.search(text)
         if m:
             tool_name, tool_arg = m.group(1), m.group(2)
+            if self._PLACEHOLDER_ARG_RE.match(tool_arg):
+                return None
             for tool in self._tools:
                 if tool.name == tool_name:
                     return (tool_name, tool_arg, m.group(0))

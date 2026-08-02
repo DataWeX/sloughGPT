@@ -459,7 +459,10 @@ def compress_checkpoint(
             "n_head": getattr(model, "n_head", 4),
             "block_size": getattr(model, "block_size", 32),
             "use_rope": getattr(model, "use_rope", True),
-            "weight_shapes": {name: list(w.shape) for name, w in state_dict.items()},
+            "weight_shapes": {
+                name: list(np.asarray(w, dtype=np.float32).shape)
+                for name, w in state_dict.items()
+            },
         },
     }
     meta_path = out_dir / f"{lib_name}.meta.json"

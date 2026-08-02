@@ -114,7 +114,7 @@ def _load_gpt2_numpy() -> Tuple[dict, ArchConfig, dict]:
         tok_data = json.loads(tokenizer_path.read_text())
         vocab = tok_data["model"]["vocab"]  # dict: string → int
         itos = {i: s for s, i in vocab.items()}
-        stoi = {s: i for i, s in vocab.items()}
+        stoi = {s: i for s, i in vocab.items()}
     else:
         raise RuntimeError(f"tokenizer.json not found in {snap}")
 
@@ -517,6 +517,9 @@ def distill_gpt2_to_slo(
     # Training loop
     total_steps = config.epochs * (len(dataset) // config.batch_size)
     step = start_step
+    epoch_loss = 0.0
+    epoch_steps = 0
+    epoch = start_epoch
 
     # Build teacher token map for fast lookup
     # Teacher: forward_fast needs token_ids as a list
@@ -676,7 +679,7 @@ def distill_gpt2_to_slo(
     return student, metadata
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover (requires GPT-2 download)
     import sys
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")

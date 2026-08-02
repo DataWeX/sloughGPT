@@ -114,6 +114,25 @@ class GenerateResponse(BaseModel):
 
 # ── Pure module-level helpers (no instance state) ──
 
+def _count_tokens(text: str, server_state) -> int:
+    """Count real tokens using the loaded tokenizer, falling back to word count.
+
+    Args:
+        text: generated text
+        server_state: module exposing ``tokenizer`` / ``model_type`` attributes
+
+    Returns:
+        token count (via tokenizer.encode when available, else len(text.split()))
+    """
+    try:
+        tokenizer = getattr(server_state, "tokenizer", None)
+        if tokenizer is not None and hasattr(tokenizer, "encode"):
+            return len(tokenizer.encode(text))
+    except Exception:
+        pass
+    return len(text.split())
+
+
 def _extract_user_message(messages: List[Message]) -> Optional[str]:
     """Extract the last user message from conversation."""
     for msg in reversed(messages):
@@ -373,13 +392,14 @@ class InferenceRouter:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
             )
-            tokens = len(result.split())
+            tokens = _count_tokens(result, _gen_state)
+            actual_model = _gen_state.model_type or req.model
             try:
                 from domains.infrastructure.server_state import get_server_state
-                get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=req.model)
+                get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=actual_model)
             except Exception as e:
                 logger.debug("Failed to record inference metrics: %s", e)
-            return GenerateResponse(text=result, model=req.model, tokens_generated=tokens)
+            return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -423,7 +443,9 @@ class InferenceRouter:
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:
                 from domains.infrastructure.server_state import get_server_state
-                get_server_state().record_inference(tokens=token_count, elapsed_ms=elapsed, model=req.model)
+                get_server_state().record_inference(
+                    tokens=token_count, elapsed_ms=elapsed, model=_stream_state.model_type or req.model
+                )
             except Exception as e:
                 logger.debug("Failed to record inference metrics: %s", e)
             yield sse_token("generate", "", done=True, meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)})
@@ -779,7 +801,7 @@ class InferenceRouter:
                     from domains.infrastructure.server_state import get_server_state
                     _post_gen_tasks.append(asyncio.to_thread(
                         get_server_state().record_inference,
-                        tokens=tokens, elapsed_ms=duration_ms, model=req.model,
+                        tokens=tokens, elapsed_ms=duration_ms, model=_check_state.model_type or req.model,
                     ))
                 except Exception as e:
                     logger.debug("Failed to record inference metrics: %s", e)
@@ -910,7 +932,7 @@ class InferenceRouter:
 
         result = await chat_domain.respond(
             messages=messages,
-            model=req.model,
+            model=_chat_state.model_type or req.model,
             system_prompt=system_prompt,
             temperature=req.temperature,
             max_tokens=req.max_tokens,
@@ -920,8 +942,10 @@ class InferenceRouter:
 
         try:
             from domains.infrastructure.server_state import get_server_state
-            tokens = len(result.text.split())
-            get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=req.model)
+            tokens = _count_tokens(result.text, _chat_state)
+            get_server_state().record_inference(
+                tokens=tokens, elapsed_ms=0, model=_chat_state.model_type or req.model
+            )
         except Exception as e:
             logger.debug("Failed to record inference metrics: %s", e)
 

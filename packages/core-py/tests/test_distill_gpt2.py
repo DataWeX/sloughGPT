@@ -6,9 +6,15 @@ The full distill_gpt2_to_slo() is slow (downloads GPT-2) and marked @slow.
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+import json
+import threading
+import types
+from pathlib import Path
+
 import numpy as np
 import pytest
 
+import domains.training.distill_gpt2 as dg
 from domains.training.distill_gpt2 import (
     DistillConfig,
     TextDataset,
@@ -19,6 +25,9 @@ from domains.training.distill_gpt2 import (
     _cross_entropy_loss,
     _compute_perplexity,
     _bleu_score,
+    _load_gpt2_numpy,
+    _teacher_forward,
+    distill_gpt2_to_slo,
 )
 
 
@@ -354,3 +363,520 @@ class TestDistillConfigResume:
         assert c.resume_checkpoint == "test.soul"
         assert c.resume_epoch == 5
         assert c.resume_step == 100
+
+
+class _Param:
+    def __init__(self):
+        self.grad = None
+
+
+class _LogitsObj:
+    def __init__(self, data):
+        self.data = data
+
+
+class _StubSloTransformer:
+    def __init__(self, vocab_size, **kw):
+        self.vocab_size = vocab_size
+        self.metadata = None
+        self.params = [_Param(), _Param()]
+
+    def parameters(self):
+        return self.params
+
+    def forward(self, x, y=None):
+        return _LogitsObj(np.zeros((1, 1, self.vocab_size))), None
+
+
+class _StubAdam:
+    def __init__(self, **kw):
+        pass
+
+    def step(self, params):
+        for p in params:
+            if hasattr(p, "grad"):
+                p.grad = None
+
+
+class TestLoadGpt2Numpy:
+    def test_success(self, monkeypatch, tmp_path):
+        fake_st = types.ModuleType("safetensors")
+
+        class _SafeOpen:
+            def __init__(self, path, framework):
+                self._data = {"wte": np.zeros((2, 2)), "ln_f": np.zeros((2,))}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def keys(self):
+                return list(self._data.keys())
+
+            def get_tensor(self, key):
+                return self._data[key]
+
+        fake_st.safe_open = _SafeOpen
+        monkeypatch.setitem(sys.modules, "safetensors", fake_st)
+
+        base = tmp_path / "home"
+        snap = base / ".cache/huggingface/hub/models--gpt2/snapshots/1234"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_text("fake")
+        (snap / "tokenizer.json").write_text(
+            json.dumps({"model": {"vocab": {"a": 0, "b": 1}}})
+        )
+
+        monkeypatch.setattr(dg.Path, "home", staticmethod(lambda: base))
+        monkeypatch.setattr(dg, "build_arch", lambda *a, **k: "ARCH")
+        monkeypatch.setattr(dg, "pre_extract_weights", lambda arch, w: {"extracted": w})
+
+        rw, arch, vocab = _load_gpt2_numpy()
+        assert arch == "ARCH"
+        assert "extracted" in rw
+        assert vocab["vocab_size"] == 2
+        assert vocab["stoi"] == {"a": 0, "b": 1}
+        assert vocab["itos"] == {0: "a", 1: "b"}
+
+    def test_no_snapshots_raises(self, monkeypatch, tmp_path):
+        fake_st = types.ModuleType("safetensors")
+        fake_st.safe_open = object
+        monkeypatch.setitem(sys.modules, "safetensors", fake_st)
+
+        base = tmp_path / "home"
+        (base / ".cache/huggingface/hub/models--gpt2").mkdir(parents=True)
+        monkeypatch.setattr(dg.Path, "home", staticmethod(lambda: base))
+
+        with pytest.raises(RuntimeError, match="GPT-2 not found"):
+            _load_gpt2_numpy()
+
+    def test_missing_tokenizer_raises(self, monkeypatch, tmp_path):
+        fake_st = types.ModuleType("safetensors")
+
+        class _SafeOpen:
+            def __init__(self, path, framework):
+                self._data = {"wte": np.zeros((2, 2))}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def keys(self):
+                return list(self._data.keys())
+
+            def get_tensor(self, key):
+                return self._data[key]
+
+        fake_st.safe_open = _SafeOpen
+        monkeypatch.setitem(sys.modules, "safetensors", fake_st)
+
+        base = tmp_path / "home"
+        snap = base / ".cache/huggingface/hub/models--gpt2/snapshots/1234"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_text("fake")
+        monkeypatch.setattr(dg.Path, "home", staticmethod(lambda: base))
+        monkeypatch.setattr(dg, "build_arch", lambda *a, **k: "ARCH")
+        monkeypatch.setattr(dg, "pre_extract_weights", lambda arch, w: {"extracted": w})
+
+        with pytest.raises(RuntimeError, match="tokenizer.json"):
+            _load_gpt2_numpy()
+
+
+class TestTeacherForward:
+    def test_delegates_to_forward_fast(self, monkeypatch):
+        monkeypatch.setattr(dg, "forward_fast", lambda rw, arch, ids: np.array([ids]))
+        out = _teacher_forward({"rw": 1}, "arch", [1, 2])
+        assert out.shape == (1, 2)
+
+
+class TestGenerateGreedy:
+    def _ev(self):
+        return DistillEvaluator(
+            teacher_rw={"w": np.zeros(2)},
+            teacher_arch=None,
+            itos={0: "", 1: "b"},
+            stoi={"a": 1},
+            eval_prompts=[],
+        )
+
+    def test_breaks_on_eos(self, monkeypatch):
+        ev = self._ev()
+
+        def fake_ff(gw, arch, tokens, kv_cache=None, start_pos=0):
+            return np.array([[5.0, 0.0]])
+
+        monkeypatch.setattr(dg, "forward_fast", fake_ff)
+        out = ev._generate_greedy("a", lambda n: 0, "arch", 5)
+        assert out == ""
+
+    def test_appends_token_then_breaks(self, monkeypatch):
+        ev = self._ev()
+
+        def fake_ff(gw, arch, tokens, kv_cache=None, start_pos=0):
+            return np.array([[0.0, 5.0]]) if len(tokens) < 2 else np.array([[5.0, 0.0]])
+
+        monkeypatch.setattr(dg, "forward_fast", fake_ff)
+        out = ev._generate_greedy("a", lambda n: 0, "arch", 5)
+        assert out == "b"
+
+    def test_empty_prompt_uses_zero_token(self, monkeypatch):
+        ev = self._ev()
+
+        def fake_ff(gw, arch, tokens, kv_cache=None, start_pos=0):
+            return np.array([[5.0, 0.0]])
+
+        monkeypatch.setattr(dg, "forward_fast", fake_ff)
+        out = ev._generate_greedy("", lambda n: 0, "arch", 5)
+        assert out == ""
+
+
+class TestGenerateStudent:
+    def _ev(self):
+        return DistillEvaluator(
+            teacher_rw={},
+            teacher_arch=None,
+            itos={0: "", 1: "b"},
+            stoi={"a": 1},
+            eval_prompts=[],
+        )
+
+    def test_data_attribute_path(self):
+        ev = self._ev()
+
+        class _Student:
+            def forward(self, x):
+                return _LogitsObj(np.array([[[5.0, 0.0]]])), None
+
+        out = ev._generate_student("a", _Student(), 5)
+        assert out == ""
+
+    def test_numpy_conversion_path(self):
+        ev = self._ev()
+
+        class _Student:
+            def forward(self, x):
+                return [[5.0, 0.0]], None
+
+        out = ev._generate_student("a", _Student(), 5)
+        assert out == ""
+
+    def test_appends_token_then_breaks(self):
+        ev = self._ev()
+        calls = {"n": 0}
+
+        class _Student:
+            def forward(self, x):
+                calls["n"] += 1
+                if calls["n"] < 2:
+                    return _LogitsObj(np.array([[[0.0, 5.0]]])), None
+                return _LogitsObj(np.array([[[5.0, 0.0]]])), None
+
+        out = ev._generate_student("a", _Student(), 5)
+        assert out == "b"
+
+    def test_empty_prompt_uses_zero_token(self):
+        ev = self._ev()
+
+        class _Student:
+            def forward(self, x):
+                return _LogitsObj(np.array([[[5.0, 0.0]]])), None
+
+        out = ev._generate_student("", _Student(), 5)
+        assert out == ""
+
+
+class TestComputePerplexityFromModel:
+    def _ev(self):
+        return DistillEvaluator(
+            teacher_rw={},
+            teacher_arch=None,
+            itos={0: "a"},
+            stoi={"a": 0},
+            eval_prompts=[],
+        )
+
+    def test_short_text_returns_one(self):
+        ev = self._ev()
+        assert ev._compute_perplexity_from_model(None, "a") == 1.0
+
+    def test_chunked_3d_logits(self):
+        ev = self._ev()
+
+        class _Student:
+            def forward(self, x, y):
+                return _LogitsObj(np.zeros((1, 3, 1))), None
+
+        # 3 tokens -> one chunk of 2 targets -> ppl = exp(0) = 1.0
+        ppl = ev._compute_perplexity_from_model(_Student(), "aaa")
+        assert ppl == pytest.approx(1.0)
+
+    def test_2d_logits_skip_reshape(self):
+        ev = self._ev()
+
+        class _Student:
+            def forward(self, x, y):
+                return _LogitsObj(np.zeros((2, 1))), None
+
+        ppl = ev._compute_perplexity_from_model(_Student(), "aaa")
+        assert ppl == pytest.approx(1.0)
+
+    def test_logits_without_data_attr(self):
+        ev = self._ev()
+
+        class _Student:
+            def forward(self, x, y):
+                return [[0.0, 0.0], [0.0, 0.0]], None
+
+        ppl = ev._compute_perplexity_from_model(_Student(), "aaa")
+        assert ppl == pytest.approx(2.0)
+
+    def test_zero_tokens_returns_one(self):
+        ev = self._ev()
+
+        class _Student:
+            def forward(self, x, y):
+                return _LogitsObj(np.zeros((0, 1))), None
+
+        assert ev._compute_perplexity_from_model(_Student(), "aaa") == 1.0
+
+
+class TestEvaluatorRun:
+    def _stub_eval(self, monkeypatch, t_out, s_out):
+        ev = DistillEvaluator(
+            teacher_rw={"w": np.zeros(2)},
+            teacher_arch=None,
+            itos={0: "a", 1: "b"},
+            stoi={"a": 0, "b": 1},
+            eval_prompts=["ab", "ba"],
+        )
+        monkeypatch.setattr(ev, "_generate_greedy", lambda *a, **k: t_out)
+        monkeypatch.setattr(ev, "_generate_student", lambda *a, **k: s_out)
+        monkeypatch.setattr(
+            ev, "_compute_perplexity_from_model", lambda *a, **k: 2.5
+        )
+        return ev
+
+    def test_run_with_samples(self, monkeypatch):
+        ev = self._stub_eval(monkeypatch, "hello", "hello")
+        res = ev.run(None)
+        assert res.perplexity == 2.5
+        assert res.bleu_vs_teacher == 100.0
+        assert res.avg_response_len == 1.0
+        assert len(res.teacher_samples) == 2
+
+    def test_run_with_empty_samples(self, monkeypatch):
+        ev = self._stub_eval(monkeypatch, "", "")
+        res = ev.run(None)
+        assert res.perplexity == 2.5
+        assert res.bleu_vs_teacher == 0.0
+        assert res.avg_response_len == 0.0
+
+    def test_run_with_no_prompts(self, monkeypatch):
+        ev = DistillEvaluator(
+            teacher_rw={},
+            teacher_arch=None,
+            itos={0: "a"},
+            stoi={"a": 0},
+            eval_prompts=[],
+        )
+        monkeypatch.setattr(ev, "_generate_greedy", lambda *a, **k: "")
+        monkeypatch.setattr(ev, "_generate_student", lambda *a, **k: "")
+        monkeypatch.setattr(
+            ev, "_compute_perplexity_from_model", lambda *a, **k: 2.5
+        )
+        res = ev.run(None)
+        assert res.bleu_vs_teacher == 0.0
+        assert res.avg_response_len == 0.0
+
+
+def _patch_distill(monkeypatch, vocab_size=5):
+    vocab = {chr(97 + i): i for i in range(vocab_size)}
+    itos = {i: chr(97 + i) for i in range(vocab_size)}
+    text = "abcde" * 8
+    arch = types.SimpleNamespace(n_layers=2)
+
+    monkeypatch.setattr(
+        dg,
+        "_load_gpt2_numpy",
+        lambda: ({"w": np.zeros((2, 2))}, arch,
+                 {"stoi": vocab, "itos": itos, "vocab_size": vocab_size}),
+    )
+    monkeypatch.setattr(
+        dg, "forward_fast", lambda rw, a, ids: np.zeros((len(ids), vocab_size))
+    )
+    monkeypatch.setattr(dg, "SloTransformer", lambda **kw: _StubSloTransformer(vocab_size))
+    monkeypatch.setattr(dg, "SloAdam", _StubAdam)
+    return text, vocab, itos
+
+
+class TestDistillGpt2ToSlo:
+    def _eval_stub(self):
+        class _Eval:
+            def __init__(self, **kw):
+                pass
+
+            def run(self, student):
+                return DistillEvalResult(
+                    perplexity=3.5,
+                    bleu_vs_teacher=60.0,
+                    avg_response_len=4.0,
+                    teacher_samples=["hi"],
+                    student_samples=["hello"],
+                    eval_prompts=["Hi"],
+                    inference_time_sec=0.1,
+                )
+
+        return _Eval
+
+    def _config(self, tmp_path, **kw):
+        base = dict(
+            n_embed=16, n_layer=1, n_head=2, block_size=8, dropout=0.0,
+            epochs=2, lr=1e-3, batch_size=2, grad_clip=1.0, warmup_steps=0,
+            temperature=4.0, alpha=0.5, beta=0.5, teacher_model="gpt2",
+            checkpoint_dir=str(tmp_path), eval_interval=3, log_interval=2,
+        )
+        base.update(kw)
+        return DistillConfig(**base)
+
+    def test_train_and_export(self, monkeypatch, tmp_path):
+        text, _, _ = _patch_distill(monkeypatch)
+        exported = {}
+        monkeypatch.setattr(
+            dg, "export_to_sou",
+            lambda net, path, soul_profile=None, metadata=None: exported.update(
+                {"path": path, "metadata": metadata}
+            ),
+        )
+        monkeypatch.setattr(dg, "DistillEvaluator", self._eval_stub())
+
+        steps = []
+        model, meta = distill_gpt2_to_slo(
+            text, self._config(tmp_path), on_step=lambda s, l, e: steps.append(s)
+        )
+        assert isinstance(model, _StubSloTransformer)
+        assert steps
+        assert meta["teacher"] == "gpt2"
+        assert meta["vocab_size"] == "5"
+        assert meta["perplexity"] == "3.5"
+        assert meta["bleu_vs_teacher"] == "60.0"
+        assert "epochs" in meta and "steps" in meta
+        assert exported["metadata"]["vocab_size"] == 5
+
+    def test_cancel_before_training(self, monkeypatch, tmp_path):
+        text, _, _ = _patch_distill(monkeypatch)
+        exported = {}
+        monkeypatch.setattr(
+            dg, "export_to_sou",
+            lambda net, path, soul_profile=None, metadata=None: exported.update(
+                {"path": path, "metadata": metadata}
+            ),
+        )
+        monkeypatch.setattr(dg, "DistillEvaluator", self._eval_stub())
+
+        ev = threading.Event()
+        ev.set()
+        model, meta = distill_gpt2_to_slo(text, self._config(tmp_path), cancel_event=ev)
+        assert meta["final_loss"] == "0.0"
+        assert meta["epochs"] == "1"
+
+    def test_cancel_mid_training(self, monkeypatch, tmp_path):
+        text, _, _ = _patch_distill(monkeypatch)
+        exported = {}
+        monkeypatch.setattr(
+            dg, "export_to_sou",
+            lambda net, path, soul_profile=None, metadata=None: exported.update(
+                {"path": path, "metadata": metadata}
+            ),
+        )
+        monkeypatch.setattr(dg, "DistillEvaluator", self._eval_stub())
+
+        ev = threading.Event()
+        model, meta = distill_gpt2_to_slo(
+            text,
+            self._config(tmp_path, log_interval=1, epochs=3),
+            on_step=lambda s, l, e: ev.set() if s >= 2 else None,
+            cancel_event=ev,
+        )
+        assert int(meta["steps"]) < 60
+
+    def test_train_student_returns_plain_logits(self, monkeypatch, tmp_path):
+        text, _, _ = _patch_distill(monkeypatch)
+        exported = {}
+
+        class _PlainLogitsStudent:
+            def __init__(self, **kw):
+                self.params = []
+
+            def parameters(self):
+                return self.params
+
+            def forward(self, x, y=None):
+                return [[[0.0, 0.0, 0.0, 0.0, 0.0]]], None
+
+        monkeypatch.setattr(dg, "SloTransformer", _PlainLogitsStudent)
+        monkeypatch.setattr(
+            dg, "export_to_sou",
+            lambda net, path, soul_profile=None, metadata=None: exported.update(
+                {"path": path, "metadata": metadata}
+            ),
+        )
+        monkeypatch.setattr(dg, "DistillEvaluator", self._eval_stub())
+
+        _, meta = distill_gpt2_to_slo(
+            text, self._config(tmp_path, batch_size=1, epochs=1)
+        )
+        assert meta["vocab_size"] == "5"
+
+    def test_resume_from_checkpoint(self, monkeypatch, tmp_path):
+        text, _, _ = _patch_distill(monkeypatch)
+        ckpt = tmp_path / "resume.soul"
+        ckpt.write_text("data")
+        exported = {}
+
+        class _ResumeStudent(_StubSloTransformer):
+            def __init__(self):
+                super().__init__(5)
+                self.metadata = {"epoch": 1, "step": 5, "best_loss": 0.25}
+
+        import domains.training.slonet as slonet
+        monkeypatch.setattr(slonet, "import_from_sou", lambda p: _ResumeStudent())
+        monkeypatch.setattr(
+            dg, "export_to_sou",
+            lambda net, path, soul_profile=None, metadata=None: exported.update(
+                {"path": path, "metadata": metadata}
+            ),
+        )
+        monkeypatch.setattr(dg, "DistillEvaluator", self._eval_stub())
+
+        model, meta = distill_gpt2_to_slo(
+            text,
+            self._config(tmp_path, resume_checkpoint=str(ckpt), epochs=2),
+        )
+        assert isinstance(model, _ResumeStudent)
+        assert meta["epochs"] == "2"
+        assert exported["metadata"]["step"] == 5 + 15
+
+    def test_resume_student_without_metadata(self, monkeypatch, tmp_path):
+        text, _, _ = _patch_distill(monkeypatch)
+        ckpt = tmp_path / "resume.soul"
+        ckpt.write_text("data")
+        exported = {}
+
+        import domains.training.slonet as slonet
+        monkeypatch.setattr(slonet, "import_from_sou", lambda p: _StubSloTransformer(5))
+        monkeypatch.setattr(
+            dg, "export_to_sou",
+            lambda net, path, soul_profile=None, metadata=None: exported.update(
+                {"path": path, "metadata": metadata}
+            ),
+        )
+        monkeypatch.setattr(dg, "DistillEvaluator", self._eval_stub())
+
+        _, meta = distill_gpt2_to_slo(
+            text, self._config(tmp_path, resume_checkpoint=str(ckpt), epochs=2)
+        )
+        assert meta["epochs"] == "2"

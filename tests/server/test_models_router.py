@@ -116,11 +116,13 @@ class TestListHFModels:
     @patch("apps.api.server.routers.models.get_models_controller")
     @patch("apps.api.server.routers.models.compute_model_size_gb")
     @patch("apps.api.server.routers.models.is_model_cached")
+    @patch("apps.api.server.routers.models._hf_cache_dir")
     @patch("domains.infrastructure.resource_manager.get_resource_manager")
-    def test_list_hf_models(self, mock_rm, mock_cached, mock_size, mock_get_ctrl, client):
+    def test_list_hf_models(self, mock_rm, mock_cached, mock_size, mock_cache_dir, mock_get_ctrl, client):
         mock_rm.return_value = MagicMock(inference_pool_size=2)
         mock_cached.return_value = False
         mock_size.return_value = 0.5
+        mock_cache_dir.exists.return_value = False
 
         ctrl = MagicMock()
         ctrl.list_hf_models.return_value = [

@@ -25,6 +25,7 @@ def client(app):
 MOCK_STATE = MagicMock()
 MOCK_STATE.model = MagicMock()
 MOCK_STATE.model_type = "gpt2"
+MOCK_STATE.tokenizer = None
 MOCK_STATE.model_request_logger = None
 MOCK_STATE.checkpoint = None
 MOCK_STATE.soul_engine = None

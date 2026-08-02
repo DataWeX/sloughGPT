@@ -141,6 +141,266 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
 
+class TestTrainingExecutorEdgeBranches:
+    """Remaining branch coverage: result_type, call_args, failures, cancel edge."""
+
+    def test_to_dict_non_dict_result(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=2)
+
+        def list_fn(job_id):
+            return [1.0, 2.0]
+
+        job_id = exec_.submit(list_fn, "list_result")
+        time.sleep(0.1)
+        status = exec_.status(job_id)
+        assert status["status"] == "completed"
+        assert status["result_type"] == "list"
+        exec_.shutdown(wait=True)
+
+    def test_submit_with_call_args(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=2)
+        seen = {}
+
+        def fn(job_id, **kw):
+            seen.update(kw)
+            return {}
+
+        job_id = exec_.submit(fn, "call_args_job", _call_args={"a": 1, "b": 2}, c=3)
+        time.sleep(0.1)
+        assert seen == {"a": 1, "b": 2, "c": 3}
+        exec_.shutdown(wait=True)
+
+    def test_failed_job_records_error(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=1)
+
+        def boom(job_id):
+            raise ValueError("training exploded")
+
+        job_id = exec_.submit(boom, "fail_job")
+        time.sleep(0.2)
+        status = exec_.status(job_id)
+        assert status["status"] == "failed"
+        assert "training exploded" in status["error"]
+        exec_.shutdown(wait=True)
+
+    def test_point_storage_exception_is_swallowed(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=2)
+
+        class BadLibrary:
+            def add(self, point):
+                raise RuntimeError("disk full")
+
+        def train_fn(job_id, tree_id, point_lib, is_cancelled):
+            return {"w": np.random.randn(32).astype(np.float32)}
+
+        job_id = exec_.submit_training(
+            train_fn, "bad_lib", tree_id="t", point_library=BadLibrary(),
+        )
+        status = None
+        for _ in range(50):
+            status = exec_.status(job_id)
+            if status is not None and status["status"] != "running":
+                break
+            time.sleep(0.1)
+        assert status["status"] == "completed"
+        exec_.shutdown(wait=True)
+
+    def test_result_summary_none_cases(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=2)
+        assert exec_.result_summary("unknown") is None
+
+        def returns_none(job_id):
+            return None
+
+        jid = exec_.submit(returns_none, "none_result")
+        time.sleep(0.1)
+        assert exec_.result_summary(jid) is None
+
+        def returns_list(job_id):
+            return [1, 2]
+
+        jid2 = exec_.submit(returns_list, "list_result2")
+        time.sleep(0.1)
+        assert exec_.result_summary(jid2) is None
+        exec_.shutdown(wait=True)
+
+    def test_result_summary_completed_dict(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=2)
+
+        def dict_fn(job_id):
+            return {"w": np.random.randn(8).astype(np.float32)}
+
+        job_id = exec_.submit(dict_fn, "dict_result")
+        time.sleep(0.1)
+        summary = exec_.result_summary(job_id)
+        assert summary is not None
+        assert summary["job_id"] == "dict_result"
+        assert "w" in summary["weights"]
+        assert summary["weights"]["w"]["shape"] == [8]
+        assert summary["total_bytes"] == 8 * 4
+        exec_.shutdown(wait=True)
+
+    def test_active_count(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=1)
+        evt = threading.Event()
+        started = threading.Event()
+
+        def slow_fn(job_id):
+            started.set()
+            evt.wait(timeout=2)
+
+        exec_.submit(slow_fn, "blocker2")
+        assert started.wait(timeout=2)
+        assert exec_.active_count() == 1
+        evt.set()
+        exec_.shutdown(wait=True)
+
+    def test_cancel_unknown_job_returns_false(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=2)
+        assert exec_.cancel("no_such_job") is False
+        exec_.shutdown(wait=True)
+
+    def test_cancel_completed_job_returns_false(self):
+        from domains.training.executor import TrainingExecutor
+
+        exec_ = TrainingExecutor(max_workers=2)
+
+        def fast_fn(job_id):
+            return {}
+
+        job_id = exec_.submit(fast_fn, "done_job")
+        time.sleep(0.2)
+        assert exec_.cancel(job_id) is False
+        exec_.shutdown(wait=True)
+
+    def test_get_training_executor_singleton(self):
+        import domains.training.executor as exmod
+
+        old = exmod._instance
+        try:
+            exmod._instance = None
+            ex1 = exmod.get_training_executor()
+            assert isinstance(ex1, exmod.TrainingExecutor)
+            ex2 = exmod.get_training_executor()
+            assert ex1 is ex2
+        finally:
+            exmod._instance = old
+            if ex1 is not None and ex1 is not old:
+                ex1.shutdown(wait=True)
+
+    def test_get_training_executor_double_check_race(self):
+        import domains.training.executor as exmod
+
+        old = exmod._instance
+        new_exec = exmod.TrainingExecutor(max_workers=1)
+        entered = threading.Event()
+        release = threading.Event()
+        try:
+            exmod._instance = None
+
+            def other_thread():
+                with exmod._instance_lock:
+                    entered.set()
+                    release.wait(timeout=2)
+                    exmod._instance = new_exec
+
+            t = threading.Thread(target=other_thread)
+            t.start()
+            assert entered.wait(timeout=2)
+
+            results = []
+
+            def do_get():
+                results.append(exmod.get_training_executor())
+
+            g = threading.Thread(target=do_get)
+            g.start()
+            time.sleep(0.2)  # let g pass the fast-path check and block on the lock
+            release.set()
+            g.join(timeout=2)
+            t.join(timeout=2)
+            assert results and results[0] is new_exec
+        finally:
+            exmod._instance = old
+            new_exec.shutdown(wait=True)
+
+
+class TestCompressCheckpointBranches:
+    """Failure paths in compress_checkpoint()."""
+
+    def test_missing_file_returns_none(self):
+        from domains.training.executor import compress_checkpoint
+
+        assert compress_checkpoint("/nonexistent/checkpoint.soul") is None
+
+    def test_import_error_returns_none(self, monkeypatch):
+        import sys
+        import tempfile
+        from pathlib import Path
+        from domains.training import executor as exmod
+
+        monkeypatch.setitem(sys.modules, "domains.infrastructure.pugqeep", None)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            soul_path = str(Path(tmpdir) / "x.soul")
+            Path(soul_path).write_text("x")
+            assert exmod.compress_checkpoint(soul_path) is None
+
+    def test_model_none_returns_none(self):
+        import tempfile
+        from pathlib import Path
+        from domains.training import executor as exmod
+
+        with patch("domains.training.slonet.import_from_sou", return_value=None), \
+                tempfile.TemporaryDirectory() as tmpdir:
+            soul_path = str(Path(tmpdir) / "x.soul")
+            Path(soul_path).write_text("x")
+            assert exmod.compress_checkpoint(soul_path) is None
+
+    def test_load_failure_returns_none(self):
+        import tempfile
+        from pathlib import Path
+        from domains.training import executor as exmod
+
+        with patch("domains.training.slonet.import_from_sou", side_effect=RuntimeError("corrupt")), \
+                tempfile.TemporaryDirectory() as tmpdir:
+            soul_path = str(Path(tmpdir) / "x.soul")
+            Path(soul_path).write_text("x")
+            assert exmod.compress_checkpoint(soul_path) is None
+
+    def test_weights_converted_to_ndarray(self):
+        import tempfile
+        from pathlib import Path
+        from domains.training import executor as exmod
+
+        class FakeModel:
+            def state_dict(self):
+                return {"w": [1.0, 2.0, 3.0]}
+
+        with patch("domains.training.slonet.import_from_sou", return_value=FakeModel()), \
+                tempfile.TemporaryDirectory() as tmpdir:
+            soul_path = str(Path(tmpdir) / "x.soul")
+            Path(soul_path).write_text("x")
+            stats = exmod.compress_checkpoint(soul_path, n_clusters=2)
+            assert stats is not None
+            assert stats["point_count"] == 1
+
+
 # ── TrainingExecutor + PGQ integration ─────────────────────────────
 
 

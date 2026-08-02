@@ -683,6 +683,8 @@ def _as_float16(tensor) -> Optional[np.ndarray]:
     Returns None for values that cannot be converted.
     """
     if isinstance(tensor, np.ndarray):
+        if tensor.dtype == object:
+            return None
         return tensor.astype(np.float16)
     data = getattr(tensor, "data", None)  # SloNet Tensor
     if isinstance(data, np.ndarray):
@@ -741,7 +743,7 @@ def get_tensor_mapping(model: ModelLike) -> Dict[str, str]:
     state_dict = model.state_dict()
     mapping = detect_architecture(state_dict)
 
-    if mapping is None:
+    if mapping is None:  # pragma: no cover (detect_architecture never returns None)
         mapping = SloughGPTMapping()
 
     tensor_map = mapping.get_tensor_map()
@@ -825,7 +827,7 @@ def export_to_gguf(
 
     n_layer = count_layers(state_dict, mapping.get_block_prefix())
 
-    config_dict = model._config if hasattr(model, "_config") else {}
+    config_dict = model._config if getattr(model, "_config", None) else {}
 
     vocab_size = config_dict.get("vocab_size", getattr(model, "vocab_size", 256))
     n_embed = config_dict.get("n_embed", getattr(model, "n_embed", 256))

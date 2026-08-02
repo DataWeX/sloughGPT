@@ -1175,7 +1175,21 @@ def export_all_formats(
             extra={"tag": "TRAIN"},)
 
     output = _replace_ext(config.output_path, ".soul")
-    export_to_sou(model, output, soul_profile=config.metadata)
+    from domains.inference import create_soul_profile
+
+    if isinstance(config.metadata, dict):
+        soul_profile = create_soul_profile(
+            name=config.metadata.get("name", Path(config.output_path).stem),
+            base_model="sloughgpt",
+            training_dataset=config.metadata.get("training_dataset", ""),
+            epochs_trained=config.metadata.get("epochs_trained", 0),
+            final_train_loss=config.metadata.get("final_train_loss", 0.0),
+            final_val_loss=config.metadata.get("final_val_loss", 0.0),
+            lineage=config.metadata.get("lineage", "sloughgpt"),
+        )
+    else:
+        soul_profile = config.metadata
+    export_to_sou(model, output, soul_profile=soul_profile)
     results["sou"] = output
 
 
@@ -1333,9 +1347,8 @@ def export_model(
                     epochs_trained=config.metadata.get("epochs_trained", 0) if config.metadata else 0,
                     final_train_loss=config.metadata.get("final_train_loss", 0.0) if config.metadata else 0.0,
                     final_val_loss=config.metadata.get("final_val_loss", 0.0) if config.metadata else 0.0,
-                    lineage="sloughgpt",
-                    **({"lineage": config.metadata["lineage"]} if config.metadata and "lineage" in config.metadata else {}),
-                )
+                lineage=config.metadata.get("lineage", "sloughgpt") if config.metadata else "sloughgpt",
+            )
                 output = _replace_ext(config.output_path, ".soul")
                 export_to_sou(model, output, soul_profile=soul)
                 results["sou"] = output

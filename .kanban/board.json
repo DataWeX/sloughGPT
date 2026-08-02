@@ -24,6 +24,54 @@
   ],
   "cards": [
     {
+      "id": "20260802_045304_planner-import-path-fix",
+      "title": "Planner import path fix",
+      "description": "test_kanban.py and test_notes.py referenced stale sys.path tools/planner/src; planner moved to packages/planner/src. Fixed both. Full core-py collection now clean: 6996 tests collected, 0 errors (was 1 collection error).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [],
+      "created_at": "2026-08-02T04:53:04.960956+00:00",
+      "updated_at": "2026-08-02T04:53:04.960956+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260802_044039_kernel-layout-fix-cache-usage-patchability",
+      "title": "Kernel layout fix + cache-usage patchability",
+      "description": "1) Fixed _nb_fused_attention_multi/_single einsum broadcast crash for non-GQA SloTransformer when kernels ON: caller passed k/v as (new_len,H,E) but kernels/einsum expect (H,new_len,E). Added transpose branch (guarded step>0 or seq_len>1) at both call sites in generate_numpy and generate_numpy_stream. 3 new regression tests (force _KERNELS_AVAILABLE=True) confirm crash before, pass after; kernel matches no-kernel path exactly. 2) Made routers/models.py _hf_cache_dir a module-level global (was instance attr) so patch('routers.models._hf_cache_dir',...) works; fixes pre-existing TestCacheUsage 3 failures (15/15 pass now). Verified: 182 + 176 tests pass, live server healthy.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "kernels",
+        "models",
+        "api"
+      ],
+      "created_at": "2026-08-02T04:40:39.063693+00:00",
+      "updated_at": "2026-08-02T04:40:39.063693+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260802_042424_router-model-echo-token-count-honesty-fix",
+      "title": "Router model echo + token count honesty fix",
+      "description": "Fixed /inference/generate, /inference/generate/stream, /chat, /chat/stream to report the actual loaded model (state.model_type) instead of echoing the request default 'gpt2'. Added _count_tokens() using the loaded tokenizer (fallback len(text.split())). Verified live: model=Qwen/Qwen2.5-0.5B-Instruct, tokens=32 real. Tests: 7 (test_inference_generate) + 17 (server inference router) pass. Stability benchmark 100/100 (4 runs).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "api",
+        "inference",
+        "observability"
+      ],
+      "created_at": "2026-08-02T04:24:24.445391+00:00",
+      "updated_at": "2026-08-02T04:24:24.445391+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260801_125622_continuous-feedback-to-training-background-loop-verified",
       "title": "Continuous feedback-to-training background loop verified",
       "description": "Verified the continuous feedback-to-training background loop fires incrementally (not only on explicit aggregation).\n\n1. Production wiring: workflow.start() runs in lifespan (main.py:137 via _start_feedback_workflow, gated by SLO_AUTO_WORKFLOW default true). scheduler_loop daemon thread calls _health_check -> run_scheduled_tasks every health_check_interval_seconds (30s), firing aggregate/prune/export/DPO on their interval timers.\n2. Incremental per-feedback paths confirmed:\n   - PerUserLoRAStore.update_adapter -> _auto_manage: auto-aggregates when quality_adapters >= auto_aggregate_threshold (50), auto-prunes when total_users >= auto_prune_threshold (100) - no explicit trigger_aggregate needed.\n   - OnlineLoRAUpdater.add_feedback -> _trigger_update at update_interval threshold (existing test test_add_feedback_triggers_update_at_threshold).\n   - FeedbackWorkflowManager.record_feedback pipes into meta weights, trait config, OnlineLoRAUpdater, PerUserLORAStore, and training data pipeline.\n3. Added 7 tests in tests/test_feedback_domain.py covering: incremental auto-aggregate on update_adapter, incremental auto-prune on update_adapter, scheduler thread launch, health_check running scheduled tasks, loop incrementing workflow_runs, and record_feedback triggering incremental aggregation without explicit trigger.\n4. Test results: tests/test_feedback_domain.py 105 passed, test_quality_guard 4 passed. test_workflow_router.py cannot collect (fastapi not installed - env limitation).",

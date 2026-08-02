@@ -291,3 +291,55 @@ class TestStandaloneNpzHelpers:
 
         result = _tensors_to_numpy({"w": np.array([1.0])})
         assert isinstance(result["w"], np.ndarray)
+
+
+def test_get_report_returns_report():
+    tracker = TrainingStatusTracker()
+    assert tracker.get_report() is tracker.report
+
+
+def test_save_report_raises_on_unserializable(tmp_path):
+    tracker = TrainingStatusTracker()
+    tracker.report.warnings.append({1, 2, 3})
+    with pytest.raises(TypeError):
+        tracker.save_report(str(tmp_path / "bad.json"))
+
+
+def test_print_summary_full_report():
+    tracker = TrainingStatusTracker("model-x")
+    tracker.start_training(pretrain_epochs=3, federated_rounds=2, rlhf_epochs=1)
+    tracker.start_stage(TrainingStage.PRETRAINING)
+    tracker.update_stage(TrainingStage.PRETRAINING, epoch=2, loss=0.4, val_loss=0.3)
+    tracker.complete_stage(TrainingStage.PRETRAINING)
+    tracker.report.pretraining.error = "recovered"
+    tracker.print_summary()
+
+
+def test_get_best_checkpoint_empty(tmp_path):
+    mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+    assert mgr.get_best_checkpoint() is None
+
+
+def test_get_best_checkpoint_skips_corrupt(tmp_path):
+    mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+    model = type("M", (), {"state_dict": lambda self: {}})()
+    good = mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.9)
+    (tmp_path / "ckpts" / "checkpoint_bad.npz").write_bytes(b"garbage not npz")
+    assert mgr.get_best_checkpoint() == good
+
+
+def test_list_checkpoints_skips_corrupt(tmp_path):
+    mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+    model = type("M", (), {"state_dict": lambda self: {}})()
+    mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.5)
+    (tmp_path / "ckpts" / "checkpoint_bad.npz").write_bytes(b"garbage")
+    ckpts = mgr.list_checkpoints()
+    assert len(ckpts) == 1
+    assert ckpts[0]["step"] == 1
+
+
+def test_tensors_to_numpy_nested_dict():
+    result = CheckpointManager._tensors_to_numpy(
+        {"nested": {"w": np.array([1.0, 2.0])}}
+    )
+    assert isinstance(result["nested"]["w"], np.ndarray)

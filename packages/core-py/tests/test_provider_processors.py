@@ -249,9 +249,18 @@ class TestToolUseProcessor:
     @pytest.mark.asyncio
     async def test_injects_tool_prompt(self):
         proc = ToolUseProcessor()
-        msgs = [{"role": "system", "content": "You are helpful."}]
+        msgs = [{"role": "system", "content": "You are helpful."},
+                {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
         result = await proc.process(msgs)
         assert "tools" in result[0]["content"].lower() or "TOOL" in result[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_text_only_skips_tool_prompt(self):
+        proc = ToolUseProcessor()
+        msgs = [{"role": "system", "content": "You are helpful."}]
+        result = await proc.process(msgs)
+        assert "tools" not in result[0]["content"].lower()
+        assert "TOOL" not in result[0]["content"]
 
     def test_match_tool_found(self):
         proc = ToolUseProcessor()

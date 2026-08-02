@@ -12,9 +12,9 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 try:
-    import torch
-    nn = torch.nn
-    _TORCH_AVAILABLE = True
+    import torch  # pragma: no cover (only when torch installed)
+    nn = torch.nn  # pragma: no cover (torch-only)
+    _TORCH_AVAILABLE = True  # pragma: no cover (torch-only)
 except ImportError:
     torch = None
     nn = None
@@ -43,7 +43,7 @@ class ONNXExportConfig:
         self.verbose = verbose
 
 
-if _TORCH_AVAILABLE:
+if _TORCH_AVAILABLE:  # pragma: no cover (torch-only classes)
 
     class ONNXCompatibleRMSNorm(nn.Module):
         """ONNX-compatible RMSNorm."""
@@ -216,7 +216,11 @@ def export_sloughgpt_to_onnx(model, output_path: str, example_input=None, config
     """Export SloughGPT to ONNX format (requires PyTorch)."""
     if not _TORCH_AVAILABLE:
         raise ImportError("ONNX export requires PyTorch. Install with: pip install torch")
+    return _export_onnx_with_torch(model, output_path, example_input, config, seq_len)  # pragma: no cover (torch-only)
 
+
+def _export_onnx_with_torch(model, output_path, example_input, config, seq_len):  # pragma: no cover (torch-only)
+    """Torch-gated export body. Only reachable when PyTorch is installed."""
     if config is None:
         config = ONNXExportConfig()
 

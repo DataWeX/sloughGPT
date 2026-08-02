@@ -100,7 +100,7 @@ class _MetalAccelerator:
         qd = np.asarray(q); kd = np.asarray(k); vd = np.asarray(v)
         if scale is None:
             scale = 1.0 / np.sqrt(kd.shape[-1])
-        scores = np.matmul(qd, kd.transpose(-2, -1)) * scale
+        scores = np.matmul(qd, np.swapaxes(kd, -2, -1)) * scale
         if mask is not None:
             scores = scores + np.asarray(mask)
         attn = self.softmax(scores, axis=-1)
@@ -225,7 +225,7 @@ class _CUDAAccelerator:
         n, c, h, w = input.shape
         oc, ic, kh, kw = weight.shape
         if padding > 0:
-            input = np.pad(input, [(0,0),(0,0),(padding,),(padding,)], mode='constant')
+            input = np.pad(input, [(0,0),(0,0),(padding,padding),(padding,padding)], mode='constant')
         out_h = (input.shape[2] - kh) // stride + 1
         out_w = (input.shape[3] - kw) // stride + 1
         result = np.zeros((n, oc, out_h, out_w), dtype=np.float32)
@@ -289,18 +289,19 @@ class _CPUAccelerator:
                             mask: Optional[np.ndarray] = None, scale: Optional[float] = None) -> np.ndarray:
         if scale is None:
             scale = 1.0 / np.sqrt(k.shape[-1])
-        scores = np.matmul(q, k.transpose(-2, -1)) * scale
+        scores = np.matmul(q, np.swapaxes(k, -2, -1)) * scale
         if mask is not None:
             scores = scores + mask
         attn = self.softmax(scores, axis=-1)
         return np.matmul(attn, v)
 
-    def conv2d(self, input: np.ndarray, weight: np.ndarray, bias: Optional[np.ndarray],
-               stride: int = 1, padding: int = 0) -> np.ndarray:
+    @staticmethod
+    def _conv2d_impl(input: np.ndarray, weight: np.ndarray, bias: Optional[np.ndarray],
+                     stride: int, padding: int) -> np.ndarray:
         n, c, h, w = input.shape
         oc, ic, kh, kw = weight.shape
         if padding > 0:
-            input = np.pad(input, [(0,0),(0,0),(padding,),(padding,)], mode='constant')
+            input = np.pad(input, [(0,0),(0,0),(padding,padding),(padding,padding)], mode='constant')
         out_h = (input.shape[2] - kh) // stride + 1
         out_w = (input.shape[3] - kw) // stride + 1
         result = np.zeros((n, oc, out_h, out_w), dtype=np.float32)
@@ -313,6 +314,10 @@ class _CPUAccelerator:
                         patch = input[i, :, ih:ih+kh, iw:iw+kw]
                         result[i, oc_idx, oh, ow] = np.sum(patch * weight[oc_idx]) + (bias[oc_idx] if bias is not None else 0)
         return result
+
+    def conv2d(self, input: np.ndarray, weight: np.ndarray, bias: Optional[np.ndarray],
+               stride: int = 1, padding: int = 0) -> np.ndarray:
+        return _CPUAccelerator._conv2d_impl(input, weight, bias, stride, padding)
 
     def max_pool2d(self, input: np.ndarray, kernel_size: int = 2, stride: int = 2) -> np.ndarray:
         n, c, h, w = input.shape

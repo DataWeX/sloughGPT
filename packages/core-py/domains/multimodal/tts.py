@@ -64,6 +64,8 @@ class SpectrogramDecoder:
         c = np.zeros((1, hd), dtype=np.float32)
         emb = self.encoder_lstm.embedding.forward_numpy(phoneme_ids)
         seq_len = emb.shape[1]
+        if seq_len == 0:
+            return Tensor(np.zeros((1, 0, hd), dtype=np.float32), requires_grad=True), h, c
         hidden_states = []
         for t in range(seq_len):
             xt = emb[:, t:t+1, :]
@@ -318,6 +320,9 @@ class TTSEngine:
         """
         # Simple character-level encoding (no phonemizer)
         phoneme_ids = np.array([[ord(c) % 256 for c in text]], dtype=np.int32)
+
+        if phoneme_ids.shape[1] == 0:
+            return np.zeros(self.sample_rate // 2, dtype=np.float32)
 
         # Generate mel spectrogram
         mel_spec = self.decoder.generate(phoneme_ids, max_frames)

@@ -776,6 +776,10 @@ class SloNetChatProvider:
                 input_ids,
                 max_new_tokens=max_tokens,
                 eos_token=eos_id,
+                temperature=temperature if temperature is not None else 0.8,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
             ):
                 decoded = self._tokenizer.decode([tok_id])
                 if decoded:
@@ -897,6 +901,10 @@ class SloNetChatProvider:
             input_ids,
             max_new_tokens=max_tokens,
             eos_token=eos_id,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
         )):
             decoded = self._tokenizer.decode([tok_id])
             # Approximate logprob from softmax (use 0.0 as placeholder — real
@@ -962,6 +970,10 @@ class SloNetChatProvider:
             input_ids,
             max_new_tokens=max_tokens,
             eos_token=eos_id,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
         ):
             generated_ids.append(tok_id)
             decoded = self._tokenizer.decode([tok_id])

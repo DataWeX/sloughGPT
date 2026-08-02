@@ -4013,12 +4013,17 @@ class SloTransformer(SloNet):
 
                 if _use_gqa:
                     if _use_kernels:
-                        # GQA expand via numba — wrapper returns expanded array
-                        k = _nb_gqa_expand(k[0], _gqa_reps).reshape(1, H, new_len, E)
-                        v = _nb_gqa_expand(v[0], _gqa_reps).reshape(1, H, new_len, E)
+                        # GQA expand via numba — kernel expects (K_H, new_len, E)
+                        # then expands along the head axis; k[0] is (new_len, K_H, E)
+                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(1, H, new_len, E)
+                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(1, H, new_len, E)
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
+                elif _use_kernels and (step > 0 or seq_len > 1):
+                    # Non-GQA: kernels expect (H, new_len, E); k/v here are (1, new_len, H, E).
+                    k = k.transpose(0, 2, 1, 3)
+                    v = v.transpose(0, 2, 1, 3)
 
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
@@ -4111,7 +4116,8 @@ class SloTransformer(SloNet):
                 if qi is not None and qi.is_quantized and qi.meta.bits == 8:
                     next_id = _nb_lm_head_argmax_int8(
                         x[:, -1, :], qi.array,
-                        np.float32(qi.meta.scale), np.int32(qi.meta.zero_point),
+                        np.float32(qi.meta.scale[0] if qi.meta.is_per_channel else qi.meta.scale),
+                        np.int32(qi.meta.zero_point),
                     )
                 elif _is_quantized:
                     logits = lm_head_mod.forward_numpy(x[:, -1, :])
@@ -4141,11 +4147,32 @@ class SloTransformer(SloNet):
 
         return out_buf
 
-    def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0):
+    def generate_numpy_stream(
+        self,
+        input_ids,
+        max_new_tokens=50,
+        eos_token=0,
+        temperature: float = 1.0,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+        repetition_penalty: float = 1.0,
+    ):
         """Generator version of generate_numpy — yields token ids one at a time.
 
         Inlines the full forward pass (identical to generate_numpy) but yields
         each token as produced, enabling true token-by-token streaming.
+
+        Args:
+            input_ids: (1, seq_len) token ids.
+            max_new_tokens: Number of new tokens to generate.
+            eos_token: Stop when this token is produced.
+            temperature: Sampling temperature (>0). Low = greedy, high = random.
+            top_k: Keep only top-k logits before sampling.
+            top_p: Nucleus threshold — keep tokens with cumulative prob <= p.
+            repetition_penalty: Scale factor for repeated tokens (>1 = penalize).
+
+        Yields:
+            Each generated token id.
         """
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
@@ -4157,6 +4184,7 @@ class SloTransformer(SloNet):
         out_buf[:, :prompt_len] = input_ids
 
         _use_kernels = _KERNELS_AVAILABLE
+        _is_greedy = temperature < 1e-6 and top_p is None and repetition_penalty == 1.0
 
         _is_quantized = False
         for l in self.layers[1:-2]:
@@ -4337,11 +4365,17 @@ class SloTransformer(SloNet):
 
                 if _use_gqa:
                     if _use_kernels:
-                        k = _nb_gqa_expand(k[0], _gqa_reps).reshape(1, H, new_len, E)
-                        v = _nb_gqa_expand(v[0], _gqa_reps).reshape(1, H, new_len, E)
+                        # GQA expand via numba — kernel expects (K_H, new_len, E)
+                        # then expands along the head axis; k[0] is (new_len, K_H, E)
+                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(1, H, new_len, E)
+                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(1, H, new_len, E)
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
+                elif _use_kernels and (step > 0 or seq_len > 1):
+                    # Non-GQA: kernels expect (H, new_len, E); k/v here are (1, new_len, H, E).
+                    k = k.transpose(0, 2, 1, 3)
+                    v = v.transpose(0, 2, 1, 3)
 
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
@@ -4422,12 +4456,13 @@ class SloTransformer(SloNet):
                 x = x * (norm_w / rms)
 
             # lm_head — use fused argmax kernel for greedy decoding (no logits allocation)
-            if _use_kernels:
+            if _is_greedy and _use_kernels:
                 qi = lm_head_mod._quant_info if _is_quantized else None
                 if qi is not None and qi.is_quantized and qi.meta.bits == 8:
                     next_id = _nb_lm_head_argmax_int8(
                         x[:, -1, :], qi.array,
-                        np.float32(qi.meta.scale), np.int32(qi.meta.zero_point),
+                        np.float32(qi.meta.scale[0] if qi.meta.is_per_channel else qi.meta.scale),
+                        np.int32(qi.meta.zero_point),
                     )
                 elif _is_quantized:
                     logits = lm_head_mod.forward_numpy(x[:, -1, :])
@@ -4439,7 +4474,17 @@ class SloTransformer(SloNet):
                     logits = lm_head_mod.forward_numpy(x[:, -1, :])
                 else:
                     logits = x[:, -1, :] @ lm_w.T
-                next_id = int(np.argmax(logits[0]))
+
+                if _is_greedy:
+                    next_id = int(np.argmax(logits[0]))
+                else:
+                    next_id = _sample_from_logits(
+                        logits, temperature=temperature,
+                        top_k=top_k, top_p=top_p,
+                        repetition_penalty=repetition_penalty,
+                        generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
+                        eos_token=eos_token if step < max_gen - 1 else None,
+                    )
 
             out_buf[0, prompt_len + step] = next_id
             if next_id == eos_token and step > 0:

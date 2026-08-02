@@ -144,6 +144,29 @@ class TestExtractPairsFromSessions:
         pairs = extract_pairs_from_sessions(limit=10, min_length=3)
         assert pairs[0]["session_id"] == "new"
 
+    def test_skip_short_session(self, tmp_path, monkeypatch):
+        """Sessions with fewer than two messages are skipped."""
+        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        _write_session(tmp_path, "s1", [{"role": "user", "content": "Only one message"}])
+        _write_session(tmp_path, "s2", [
+            {"role": "user", "content": "Hello there"},
+            {"role": "assistant", "content": "Hi there friend"},
+        ])
+        pairs = extract_pairs_from_sessions(limit=10, min_length=3)
+        assert len(pairs) == 1
+
+    def test_inner_limit_break(self, tmp_path, monkeypatch):
+        """Stops scanning a session once the limit is reached."""
+        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        _write_session(tmp_path, "s1", [
+            {"role": "user", "content": "Question one about something"},
+            {"role": "assistant", "content": "Answer one with detail"},
+            {"role": "user", "content": "Question two about something"},
+            {"role": "assistant", "content": "Answer two with detail"},
+        ])
+        pairs = extract_pairs_from_sessions(limit=1, min_length=3)
+        assert len(pairs) == 1
+
 
 class TestExtractPairsFromLogs:
     def test_basic_extraction(self, tmp_path, monkeypatch):
@@ -205,6 +228,51 @@ class TestExtractPairsFromLogs:
         pairs = extract_pairs_from_logs(limit=2, min_length=3)
         assert len(pairs) == 2
 
+    def test_log_inner_limit_break(self, tmp_path, monkeypatch):
+        """Stops reading a file once the limit is reached."""
+        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        _write_log(tmp_path, [
+            {"user_message": "Hello there", "assistant_response": "Hi there!", "model": "gpt2"},
+            {"user_message": "Bye now", "assistant_response": "Goodbye!", "model": "gpt2"},
+        ])
+        pairs = extract_pairs_from_logs(limit=1, min_length=3)
+        assert len(pairs) == 1
+
+    def test_blank_lines_skipped(self, tmp_path, monkeypatch):
+        """Blank lines in a JSONL log are ignored."""
+        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        ts = time.strftime("%Y%m%d")
+        p = tmp_path / f"responses_{ts}.jsonl"
+        p.write_text(
+            "\n\n"
+            '{"user_message": "Hello there", "assistant_response": "Hey there!", "model": "gpt2"}\n'
+            "\n"
+        )
+        pairs = extract_pairs_from_logs(limit=10, min_length=3)
+        assert len(pairs) == 1
+
+    def test_log_min_length_filter(self, tmp_path, monkeypatch):
+        """Short messages in logs are filtered out."""
+        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        _write_log(tmp_path, [
+            {"user_message": "Hi", "assistant_response": "Hey", "model": "gpt2"},
+            {"user_message": "Hello there", "assistant_response": "Hi there friend!", "model": "gpt2"},
+        ])
+        pairs = extract_pairs_from_logs(limit=10, min_length=5)
+        assert len(pairs) == 1
+        assert pairs[0]["user_msg"] == "Hello there"
+
+    def test_unreadable_log_skipped(self, tmp_path, monkeypatch):
+        """Unreadable log files (e.g. directories) are skipped."""
+        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        ts = time.strftime("%Y%m%d")
+        (tmp_path / f"zz_{ts}.jsonl").mkdir(parents=True)
+        _write_log(tmp_path, [
+            {"user_message": "Hello there", "assistant_response": "Hi there!", "model": "gpt2"},
+        ])
+        pairs = extract_pairs_from_logs(limit=10, min_length=3)
+        assert len(pairs) == 1
+
 
 class TestWriteTrainingText:
     def test_writes_text_file(self, tmp_path):
@@ -262,3 +330,29 @@ class TestCountPairs:
         """Returns 0 for nonexistent directory."""
         monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path / "nope")
         assert count_pairs_in_sessions() == 0
+
+    def test_count_sessions_skips_malformed(self, tmp_path, monkeypatch):
+        """Malformed session files are skipped while counting."""
+        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        (tmp_path / "bad.json").write_text("not json {{{")
+        _write_session(tmp_path, "s1", [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+        ])
+        assert count_pairs_in_sessions() == 1
+
+    def test_count_logs_missing_dir(self, tmp_path, monkeypatch):
+        """Returns 0 when the logs directory doesn't exist."""
+        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path / "nope")
+        assert count_pairs_in_logs() == 0
+
+    def test_count_logs_skips_unreadable(self, tmp_path, monkeypatch):
+        """Unreadable log files are skipped while counting."""
+        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        ts = time.strftime("%Y%m%d")
+        (tmp_path / f"zz_{ts}.jsonl").mkdir(parents=True)
+        _write_log(tmp_path, [
+            {"user_message": "a", "assistant_response": "b"},
+            {"user_message": "c", "assistant_response": "d"},
+        ])
+        assert count_pairs_in_logs() == 2

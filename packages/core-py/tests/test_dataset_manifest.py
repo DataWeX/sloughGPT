@@ -128,6 +128,13 @@ class TestResolveTrainingDataPath:
         path, _ = resolve_training_data_path(mp)
         assert path == tmp_path / "train_001.txt"
 
+    def test_multiple_matches_single_txt_resolves(self, tmp_path):
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "a.md").write_text("md")
+        mp = self._write_manifest(tmp_path, splits={"train": "a.*"})
+        path, _ = resolve_training_data_path(mp)
+        assert path == tmp_path / "a.txt"
+
     def test_multiple_txt_matches_raise(self, tmp_path):
         (tmp_path / "a.txt").write_text("a")
         (tmp_path / "b.txt").write_text("b")

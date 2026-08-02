@@ -1,7 +1,14 @@
 """Tests for training pair quality scorer."""
 
 import pytest
-from domains.training.quality_scorer import score_pair, score_batch
+from domains.training.quality_scorer import (
+    score_pair,
+    score_batch,
+    _length_score,
+    _repetition_score,
+    _coherence_score,
+    _language_quality_score,
+)
 
 
 class TestScorePair:
@@ -116,3 +123,51 @@ class TestScoreBatch:
         assert len(scores) == 5
         # At least some should be non-zero
         assert any(s > 0 for s in scores)
+
+
+class TestInternalBranchCoverage:
+    def test_length_over_1000_gives_07(self):
+        assert _length_score("a" * 1500, "b" * 1500) == pytest.approx(0.7)
+
+    def test_length_over_2000_gives_04(self):
+        assert _length_score("a" * 2500, "b" * 2500) == pytest.approx(0.4)
+
+    def test_repetition_heavy_bigram_penalty(self):
+        assert _repetition_score("A A A A") == pytest.approx(0.1)
+
+    def test_repetition_mild_trigram_penalty(self):
+        score = _repetition_score("alpha beta alpha beta gamma delta")
+        assert 0.0 <= score <= 1.0
+        assert score < _repetition_score("alpha beta gamma delta epsilon zeta")
+
+    def test_coherence_zero_when_user_only_stop_words(self):
+        assert _coherence_score("the and of", "Python is a language") == pytest.approx(0.3)
+
+    def test_coherence_ratio_edge_branches(self):
+        mid = _coherence_score("a" * 100, "b" * 30)  # ratio ~0.3 -> 0.6
+        far = _coherence_score("a" * 5, "b" * 200)   # ratio 40 -> 0.2
+        assert mid > far
+
+    def test_language_no_punctuation(self):
+        assert _language_quality_score("hello there friend") == pytest.approx(0.7)
+
+    def test_language_many_punctuation(self):
+        assert _language_quality_score("One, two; three: four. Five?") >= 0.5
+
+    def test_language_mid_unique_ratio(self):
+        assert _language_quality_score("the the the cat dog") >= 0.5
+
+    def test_language_whitespace_only(self):
+        assert _language_quality_score("              ") == pytest.approx(0.3)
+
+    def test_language_short_avg_word_length(self):
+        assert _language_quality_score("aa bb cc dd") < 0.6
+
+    def test_language_mid_avg_word_length(self):
+        assert _language_quality_score("aaa bbb ccc ddd eee") >= 0.6
+
+    def test_language_mid_caps_ratio(self):
+        assert _language_quality_score("AAAA bbbb cccc dddd eeee") == pytest.approx(0.6)
+
+    def test_language_high_caps_ratio(self):
+        assert _language_quality_score("AAAA BBBB CCCC DDDD EEEE") == pytest.approx(0.5)

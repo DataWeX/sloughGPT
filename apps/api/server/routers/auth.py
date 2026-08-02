@@ -96,7 +96,7 @@ class AuthRouter:
         from infrastructure.auth import get_jwt_auth, get_audit_logger
         from settings import get_security_settings
         sec = get_security_settings()
-        return sec.valid_api_keys, sec.jwt_expiration_hours, get_jwt_auth(), get_audit_logger
+        return sec.valid_api_keys, sec.jwt_expiration_hours, get_jwt_auth(), get_audit_logger()
 
     def _get_current_user(self, authorization: Optional[str] = Header(None)) -> dict:
         if not authorization or not authorization.startswith("Bearer "):
@@ -128,7 +128,7 @@ class AuthRouter:
                         u["password_hash"] = self._hash_password(req.password)
                         self._save_users(users)
                     _, exp_hours, jwt_auth, _ = self._get_auth_deps()
-                    token = jwt_auth.create_token(subject=uid)
+                    token = jwt_auth.create_token(user_id=uid)
                     return AuthResponse(
                         token=token,
                         user=UserInfo(id=uid, username=u["username"], email=u["email"]),
@@ -148,7 +148,7 @@ class AuthRouter:
             }
             self._save_users(users)
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
-            token = jwt_auth.create_token(subject=uid)
+            token = jwt_auth.create_token(user_id=uid)
             return AuthResponse(
                 token=token,
                 user=UserInfo(id=uid, username=req.username, email=req.email),
@@ -161,10 +161,10 @@ class AuthRouter:
             valid_keys, exp_hours, jwt_auth, audit_logger = self._get_auth_deps()
             client_ip = request.client.host if request.client else "unknown"
             if token_request.api_key not in valid_keys:
-                audit_logger.log("auth_failed", client_ip, resource="/auth/token", action="token_create", status="failure")
+                audit_logger.log("auth_failed", client_ip, resource="/auth/token", extra={"action": "token_create", "status": "failure"})
                 raise HTTPException(status_code=401, detail="Invalid API key")
-            token = jwt_auth.create_token(subject=token_request.api_key[:8])
-            audit_logger.log("auth_success", client_ip, resource="/auth/token", action="token_create", status="success")
+            token = jwt_auth.create_token(user_id=token_request.api_key[:8])
+            audit_logger.log("auth_success", client_ip, resource="/auth/token", extra={"action": "token_create", "status": "success"})
             return TokenResponse(access_token=token, token_type="bearer", expires_in=exp_hours * 3600)
 
         async def verify_token(authorization: Optional[str] = Header(None)):

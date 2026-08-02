@@ -348,8 +348,10 @@ class RelationshipMemory:
         context_parts = []
 
         if profile["total_interactions"] > 5:
+            tendencies = profile["emotional_tendencies"]
+            dominant = max(tendencies, key=tendencies.get) if tendencies else "neutral"
             context_parts.append(
-                f"You've been feeling {profile['emotional_tendencies'].most_common(1)[0][0]} lately."
+                f"You've been feeling {dominant} lately."
             )
 
         if current_emotion != "neutral":

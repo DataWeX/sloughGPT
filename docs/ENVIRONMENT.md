@@ -94,6 +94,21 @@ Enable uvicorn auto-reload on Python file changes.
 SLO_RELOAD=true  # Default: false
 ```
 
+### SLO_ENABLE_PROCESS_GUARD
+**Optional**
+
+Run model inference in a guarded subprocess for crash isolation. When enabled,
+the model is served from a worker process so a crash (OOM, segfault) cannot
+take down the API server; the guard auto-restarts the worker up to
+`SLO_GUARD_MAX_RESTARTS` times.
+
+```bash
+SLO_ENABLE_PROCESS_GUARD=true  # Default: true
+```
+
+Related knobs: `SLO_GUARD_MAX_RESTARTS` (default `3`), `SLO_GUARD_RESTART_DELAY`
+(seconds), `SLO_GUARD_MEMORY_LIMIT_MB`, `SLO_PROCESS_GUARD_CONCURRENT`.
+
 ---
 
 ## Logging

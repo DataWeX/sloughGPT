@@ -1062,11 +1062,12 @@ class DataImporter:
         """
         source = Path(path)
         output_path = Path(self.output_dir) / name
-        output_path.mkdir(parents=True, exist_ok=True)
 
         extensions = extensions or [".py", ".js", ".ts", ".md", ".txt", ".json", ".pdf"]
 
         try:
+            output_path.mkdir(parents=True, exist_ok=True)
+
             corpus_file = output_path / "corpus.jsonl"
             total_chars = 0
             files_count = 0

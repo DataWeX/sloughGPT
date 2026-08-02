@@ -251,7 +251,7 @@ class TestToolUseProcessor:
 
     async def test_process_adds_tool_prompt_no_system(self):
         tp = ToolUseProcessor()
-        msgs = [{"role": "user", "content": "hello"}]
+        msgs = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
         result = await tp.process(msgs)
         assert len(result) == 2
         assert result[0]["role"] == "system"
@@ -259,7 +259,8 @@ class TestToolUseProcessor:
 
     async def test_process_appends_to_existing_system(self):
         tp = ToolUseProcessor()
-        msgs = [{"role": "system", "content": "Be helpful."}, {"role": "user", "content": "hello"}]
+        msgs = [{"role": "system", "content": "Be helpful."},
+                {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
         result = await tp.process(msgs)
         assert result[0]["role"] == "system"
         assert "Be helpful." in result[0]["content"]
@@ -267,9 +268,16 @@ class TestToolUseProcessor:
 
     async def test_process_unmodified(self):
         tp = ToolUseProcessor(tools=[])
-        msgs = [{"role": "user", "content": "hi"}]
+        msgs = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
         result = await tp.process(msgs)
         assert len(result) == 2  # still adds empty prompt
+
+    async def test_process_text_only_skips_tool_prompt(self):
+        tp = ToolUseProcessor()
+        msgs = [{"role": "user", "content": "hello"}]
+        result = await tp.process(msgs)
+        assert len(result) == 1
+        assert "describe_image" not in result[0]["content"]
 
     def test_match_tool_found(self):
         tp = ToolUseProcessor()
@@ -278,6 +286,11 @@ class TestToolUseProcessor:
         name, arg, full = match
         assert name == "describe_image"
         assert "base64" in arg
+
+    def test_match_tool_rejects_placeholder_arg(self):
+        tp = ToolUseProcessor()
+        assert tp.match_tool("[[TOOL: describe_image]] <base64_image_data>") is None
+        assert tp.match_tool("[[TOOL: describe_image]] <base64_encode_data>") is None
 
     def test_match_tool_not_found(self):
         tp = ToolUseProcessor()

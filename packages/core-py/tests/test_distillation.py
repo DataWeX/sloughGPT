@@ -144,6 +144,120 @@ class _MockModel:
         pass
 
 
+class _FakeParam:
+    """Parameter stub with grad/requires_grad attributes (no tensor math)."""
+    def __init__(self):
+        self.requires_grad = True
+        self.grad = None
+
+
+class _TeacherWithGradParams:
+    """Teacher whose parameters expose requires_grad for freezing."""
+    def __init__(self):
+        self._params = [_FakeParam(), _FakeParam()]
+
+    def __call__(self, x):
+        batch, seq = x.shape[0], x.shape[1]
+        return np.random.randn(batch, seq, 10).astype(np.float32)
+
+    def parameters(self):
+        return self._params
+
+    def named_modules(self):
+        return []
+
+    def named_children(self):
+        return []
+
+    def eval(self):
+        pass
+
+
+class _FixedShapeModel:
+    """Model returning a fixed-shape logits array regardless of input."""
+    def __init__(self, shape):
+        self.shape = shape
+        self._params = []
+
+    def __call__(self, x):
+        return np.random.randn(*self.shape).astype(np.float32)
+
+    def parameters(self):
+        return self._params
+
+    def named_modules(self):
+        return []
+
+    def named_children(self):
+        return []
+
+    def eval(self):
+        pass
+
+
+class _CpuLike:
+    """Object mimicking a torch tensor (detach/cpu/numpy)."""
+    def detach(self):
+        return self
+
+    def cpu(self):
+        return self
+
+    def numpy(self):
+        return np.array([7.0, 8.0])
+
+
+class _Child:
+    def children(self):
+        return []
+
+    def named_children(self):
+        return []
+
+
+class _BlockWithChildren:
+    def children(self):
+        return [_Child()]
+
+    def named_children(self):
+        return [("child", _Child())]
+
+
+class _BlockRaises:
+    def children(self):
+        raise RuntimeError("children unavailable")
+
+    def named_children(self):
+        raise RuntimeError("children unavailable")
+
+
+class _LayeredModel:
+    """Model exposing named_modules with 'layer'/'block' submodules."""
+    def __init__(self, n_blocks=2):
+        self._params = []
+        self._modules = []
+        for i in range(n_blocks):
+            if i == n_blocks - 1:
+                self._modules.append((f"block{i}", _BlockRaises()))
+            else:
+                self._modules.append((f"layer{i}", _BlockWithChildren()))
+
+    def __call__(self, x):
+        return np.random.randn(2, 3, 10).astype(np.float32)
+
+    def parameters(self):
+        return self._params
+
+    def named_modules(self):
+        return self._modules
+
+    def named_children(self):
+        return self._modules
+
+    def eval(self):
+        pass
+
+
 class TestDistillationTrainer:
     def test_step_returns_loss_dict(self):
         teacher = _MockModel(vocab_size=10)
@@ -160,6 +274,38 @@ class TestDistillationTrainer:
         student = _MockModel(vocab_size=10)
         trainer = DistillationTrainer(teacher, student, DistillationConfig())
         assert not any(hasattr(p, 'requires_grad') and p.requires_grad for p in trainer.teacher.parameters())
+
+    def test_trainer_freezes_teacher_grads(self):
+        teacher = _TeacherWithGradParams()
+        student = _MockModel(vocab_size=10)
+        trainer = DistillationTrainer(teacher, student, DistillationConfig())
+        assert all(not p.requires_grad for p in teacher.parameters())
+
+    def test_step_size_mismatch_trims_sequence(self):
+        teacher = _FixedShapeModel((2, 6, 10))
+        student = _FixedShapeModel((2, 3, 10))
+        trainer = DistillationTrainer(teacher, student, DistillationConfig(alpha=0.5, beta=0.5))
+        inputs = Tensor(np.array([[1, 2, 3], [2, 3, 4]], dtype=np.int64))
+        labels = Tensor(np.array([[2, 3, 4], [3, 4, 5]], dtype=np.int64))
+        losses = trainer.step(inputs, labels)
+        assert "total_loss" in losses
+
+    def test_step_clears_grad_on_params_with_grad_attr(self):
+        teacher = _MockModel(vocab_size=5)
+        student = _MockModel(vocab_size=5)
+        student._params = [_FakeParam()]
+        trainer = DistillationTrainer(teacher, student, DistillationConfig(alpha=0.5, beta=0.5))
+        inputs = Tensor(np.array([[1, 2]], dtype=np.int64))
+        labels = Tensor(np.array([[2, 3]], dtype=np.int64))
+        trainer.step(inputs, labels)
+        for p in student.parameters():
+            assert p.grad is None
+
+    def test_trainer_parameters_empty(self):
+        teacher = _MockModel(vocab_size=10)
+        student = _MockModel(vocab_size=10)
+        trainer = DistillationTrainer(teacher, student, DistillationConfig())
+        assert trainer.parameters() == []
 
     def test_step_soft_only(self):
         teacher = _MockModel(vocab_size=10)
@@ -208,6 +354,18 @@ class TestProgressiveDistiller:
         distiller = ProgressiveDistiller(teacher, student, DistillationConfig())
         assert distiller.layer_mapping is not None
 
+    def test_progressive_finds_block_layers(self):
+        teacher = _LayeredModel(n_blocks=2)
+        student = _MockModel(vocab_size=10)
+        distiller = ProgressiveDistiller(teacher, student, DistillationConfig())
+        assert len(distiller.teacher_layers) == 2
+
+    def test_layer_mapping_student_fewer_layers(self):
+        teacher = _LayeredModel(n_blocks=2)
+        student = _LayeredModel(n_blocks=1)
+        distiller = ProgressiveDistiller(teacher, student, DistillationConfig())
+        assert distiller.layer_mapping == {0: 0}
+
     def test_distill_intermediate_returns_float(self):
         teacher = _MockModel(vocab_size=10)
         student = _MockModel(vocab_size=10)
@@ -232,6 +390,10 @@ class TestHelpers:
         result = _to_np([1.0, 2.0])
         assert isinstance(result, np.ndarray)
 
+    def test_to_np_from_cpu_like(self):
+        result = _to_np(_CpuLike())
+        assert result[0] == 7.0
+
     def test_to_tensor_from_array(self):
         arr = np.array([5.0, 6.0])
         t = _to_tensor(arr)
@@ -240,6 +402,13 @@ class TestHelpers:
     def test_to_tensor_requires_grad(self):
         arr = np.array([1.0, 2.0])
         t = _to_tensor(arr, requires_grad=True)
+        assert t.requires_grad
+
+    def test_to_tensor_existing_tensor_requires_grad(self):
+        t = Tensor(np.array([1.0, 2.0]))
+        assert not t.requires_grad
+        out = _to_tensor(t, requires_grad=True)
+        assert out is t
         assert t.requires_grad
 
 

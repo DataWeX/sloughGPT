@@ -94,6 +94,21 @@ class TestGenerateEndpoint:
             )
         assert response.status_code == 503
 
+    def test_generate_reports_actual_loaded_model(self, client, mock_provider):
+        """Should report the loaded model type, not the request default echo."""
+        import state as _st
+        _st.model_type = "Qwen/Qwen2.5-0.5B-Instruct"
+        try:
+            response = client.post(
+                "/inference/generate",
+                json={"prompt": "Hello", "max_new_tokens": 10}
+            )
+        finally:
+            _st.model_type = None
+        assert response.status_code == 200
+        data = response.json()
+        assert data["model"] == "Qwen/Qwen2.5-0.5B-Instruct"
+
 
 class TestGenerateStreamEndpoint:
     """Tests for POST /inference/generate/stream."""
