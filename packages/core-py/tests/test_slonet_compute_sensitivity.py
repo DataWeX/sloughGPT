@@ -133,6 +133,7 @@ def test_sensitivity_backward_preserved():
 
 def test_sensitivity_training_tracking():
     """Sensitivity score evolves as model trains (params become less sensitive)."""
+    np.random.seed(0)
     lin = SloLinear(4, 2)
     opt = SloSGD(lr=0.1)
     x = tensor(np.random.randn(16, 4).astype(np.float32), requires_grad=True)
