@@ -608,6 +608,77 @@ class TestNormalize:
         assert np.all(np.isfinite(out.data))
 
 
+class TestSiluAccelerator:
+    def test_accel_success(self, monkeypatch):
+        class _A:
+            name = "gpu"
+
+            def silu(self, d):
+                return d
+
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _A())
+        t = Tensor(np.array([1.0, 2.0], dtype=np.float32), requires_grad=True)
+        out = silu(t)
+        assert np.allclose(out.data, t.data)
+
+    def test_accel_exception_falls_back(self, monkeypatch):
+        class _A:
+            name = "gpu"
+
+            def silu(self, d):
+                raise RuntimeError("boom")
+
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _A())
+        t = Tensor(np.array([1.0, 2.0], dtype=np.float32), requires_grad=True)
+        out = silu(t)
+        assert out.data.shape == (2,)
+
+
+class TestSoftmaxAccelerator:
+    def test_accel_success(self, monkeypatch):
+        class _A:
+            name = "gpu"
+
+            def softmax(self, d, axis=-1):
+                return d * 0 + 0.25
+
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _A())
+        t = Tensor(np.array([[1.0, 1.0, 1.0, 1.0]], dtype=np.float32))
+        out = softmax(t)
+        assert isinstance(out, Tensor)
+        assert np.allclose(out.data, 0.25)
+
+    def test_accel_exception_falls_back(self, monkeypatch):
+        class _A:
+            name = "gpu"
+
+            def softmax(self, d, axis=-1):
+                raise RuntimeError("boom")
+
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _A())
+        t = Tensor(np.array([[1.0, 2.0, 3.0]], dtype=np.float32))
+        out = softmax(t)
+        assert np.allclose(out.data.sum(axis=-1), np.ones(1), atol=1e-5)
+
+
+class TestSloCyclicLR:
+    def test_down_phase_and_cycle_halving(self):
+        opt = slonet.SloAdam(lr=0.1)
+        sched = slonet.SloCyclicLR(
+            opt, base_lr=0.1, max_lr=0.5, step_size_up=4, step_size_down=6,
+            mode="triangular2", last_epoch=-1,
+        )
+        sched.step(7)
+        assert sched.get_last_lr()[0] == pytest.approx(0.3)
+        sched.step(17)
+        assert sched.get_last_lr()[0] == pytest.approx(0.2)
+
+
+class TestInvalidateGpuCache:
+    def test_runs_with_cpu_backend(self):
+        slonet._invalidate_gpu_cache()
+
+
 class TestMultinomial:
     def test_samples_without_replacement(self):
         t = Tensor(np.array([0.1, 0.2, 0.7], dtype=np.float32))
