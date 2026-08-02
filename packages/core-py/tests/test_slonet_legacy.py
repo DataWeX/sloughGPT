@@ -9,19 +9,26 @@ import pytest
 
 from domains.training import slonet
 from domains.training.slonet import (
+    SloAdapterLayer,
     SloDataLoader,
     SloEmbedding,
     SloLSTM,
+    SloLinear,
     SloMultiHeadAttention,
     SloNet,
     SloTransformer,
     Tensor,
+    _accel_op,
     _load_pytorch_zip_weights,
     _rebuild_net_from_params,
     _sanitize,
     export_to_sou,
     import_from_sou,
+    kl_div_loss,
+    log_softmax,
+    pairwise_distance,
     silu,
+    softmax,
     souls_from_directory,
     train_char_lstm_from_gpt,
     train_soul_transformer,
@@ -346,3 +353,234 @@ class TestGQARepeatBackward:
         assert q.grad is not None
         assert np.all(np.isfinite(q.grad.data))
         assert np.all(np.isfinite(mha.W_q.weight.grad.data))
+
+
+class TestLossUtils:
+    def test_log_softmax_numpy(self):
+        x = np.array([[1.0, 2.0, 3.0], [1.0, 1.0, 1.0]], dtype=np.float32)
+        lp = log_softmax(x, dim=-1)
+        assert isinstance(lp, np.ndarray)
+        assert np.allclose(np.exp(lp).sum(axis=-1), np.ones(2), atol=1e-5)
+
+    def test_log_softmax_tensor_backward(self):
+        t = Tensor(np.array([1.0, 2.0, 3.0], dtype=np.float32), requires_grad=True)
+        out = log_softmax(t)
+        assert isinstance(out, Tensor)
+        (out * out).sum().backward()
+        assert t.grad is not None
+        assert np.all(np.isfinite(t.grad.data))
+
+    def test_log_softmax_forward_grad(self):
+        t = Tensor(np.array([1.0, 2.0, 3.0], dtype=np.float32), requires_grad=True)
+        out = log_softmax(t)
+        tangents = out.forward_grad({t.id: np.ones(3, dtype=np.float32)})
+        assert tangents.get(out.id) is not None
+
+    def test_kl_div_loss(self):
+        ilp = np.log(np.array([[0.5, 0.5]], dtype=np.float32))
+        tp = np.array([[0.3, 0.7]], dtype=np.float32)
+        loss = kl_div_loss(ilp, tp)
+        assert isinstance(loss, (np.ndarray, float)) or hasattr(loss, "data")
+        val = loss.data[()] if hasattr(loss, "data") else loss
+        assert np.isfinite(val)
+
+    def test_pairwise_distance_numpy(self):
+        x1 = np.array([[0.0, 0.0], [3.0, 4.0]], dtype=np.float32)
+        x2 = np.array([[0.0, 0.0], [0.0, 0.0]], dtype=np.float32)
+        dist = pairwise_distance(x1, x2)
+        assert np.allclose(dist[0], 0.0, atol=1e-4)
+        assert np.allclose(dist[1], 5.0, atol=1e-3)
+
+    def test_pairwise_distance_tensor_backward(self):
+        x1 = Tensor(np.array([[1.0, 2.0]], dtype=np.float32), requires_grad=True)
+        x2 = Tensor(np.array([[4.0, 6.0]], dtype=np.float32), requires_grad=True)
+        dist = pairwise_distance(x1, x2)
+        assert isinstance(dist, Tensor)
+        dist.sum().backward()
+        assert x1.grad is not None
+        assert x2.grad is not None
+        assert np.all(np.isfinite(x1.grad.data))
+
+
+class TestSoftmaxNumpyPath:
+    def test_numpy_input(self):
+        x = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
+        out = softmax(x)
+        assert isinstance(out, np.ndarray)
+        assert np.allclose(out.sum(axis=-1), np.ones(1), atol=1e-5)
+
+    def test_tensor_input_delegates(self):
+        t = Tensor(np.array([[1.0, 2.0, 3.0]], dtype=np.float32), requires_grad=True)
+        out = softmax(t)
+        assert isinstance(out, Tensor)
+        assert np.allclose(out.data.sum(axis=-1), np.ones(1), atol=1e-5)
+
+
+class TestSloNetFit:
+    def test_fit_returns_epoch_losses(self):
+        net = SloNet([SloLinear(4, 2, "lin")], soul_name="fit_test")
+        rng = np.random.default_rng(0)
+        X = Tensor(rng.standard_normal((12, 4)).astype(np.float32))
+        y = Tensor(np.asarray(rng.integers(0, 2, 12), dtype=np.float32))
+        opt = slonet.SloAdam(lr=0.05)
+        losses = net.fit(X, y, opt, epochs=2, batch_size=4)
+        assert len(losses) == 2
+        assert all(np.isfinite(l) for l in losses)
+        assert net._step == 6
+
+    def test_fit_on_step_callback(self):
+        net = SloNet([SloLinear(4, 2, "lin")])
+        rng = np.random.default_rng(1)
+        X = Tensor(rng.standard_normal((8, 4)).astype(np.float32))
+        y = Tensor(np.asarray(rng.integers(0, 2, 8), dtype=np.float32))
+        opt = slonet.SloAdam(lr=0.05)
+        calls = []
+        net.fit(X, y, opt, epochs=1, batch_size=4, on_step=lambda step, loss, ep: calls.append((step, ep)))
+        assert len(calls) == 2
+        assert calls[0] == (1, 0)
+
+
+class TestUserAdapters:
+    def test_cache_hit(self):
+        net = SloNet([SloLinear(4, 2, "lin")])
+        a = SloAdapterLayer(dim=4, rank=2, name="adapter_u1")
+        net._user_adapters["u1"] = a
+        assert net.get_user_adapter("u1", dim=4, rank=2) is a
+
+    def test_fresh_identity_adapter(self):
+        net = SloNet([SloLinear(4, 2, "lin")])
+        a = net.get_user_adapter("u2", dim=4, rank=2)
+        assert isinstance(a, SloAdapterLayer)
+        assert np.all(a.up_proj.weight.data == 0)
+        assert net._user_adapters["u2"] is a
+
+    def test_load_from_npz(self, monkeypatch, tmp_path):
+        net = SloNet([SloLinear(4, 2, "lin")])
+        ref = net.get_user_adapter("u3", dim=4, rank=2)
+        dw = np.ones_like(ref.down_proj.weight.data)
+        uw = np.ones_like(ref.up_proj.weight.data)
+        monkeypatch.chdir(tmp_path)
+        out_dir = tmp_path / "data" / "user_adapters"
+        out_dir.mkdir(parents=True)
+        np.savez(str(out_dir / "u3_adapter.npz"), down_weight=dw, up_weight=uw)
+        net._user_adapters.clear()
+        a = net.get_user_adapter("u3", dim=4, rank=2)
+        assert np.allclose(a.down_proj.weight.data, dw)
+        assert np.allclose(a.up_proj.weight.data, uw)
+
+    def test_shape_mismatch_keeps_fresh(self, monkeypatch, tmp_path):
+        net = SloNet([SloLinear(4, 2, "lin")])
+        ref = net.get_user_adapter("u4", dim=4, rank=2)
+        dw = np.ones((2, 2), dtype=np.float32)
+        uw = np.ones((4, 2), dtype=np.float32)
+        monkeypatch.chdir(tmp_path)
+        out_dir = tmp_path / "data" / "user_adapters"
+        out_dir.mkdir(parents=True)
+        np.savez(str(out_dir / "u4_adapter.npz"), down_weight=dw, up_weight=uw)
+        net._user_adapters.clear()
+        a = net.get_user_adapter("u4", dim=4, rank=2)
+        assert a.down_proj.weight.data.shape == ref.down_proj.weight.data.shape
+        assert np.all(a.up_proj.weight.data == 0)
+
+    def test_apply_adapter_in_forward(self):
+        net = SloNet([SloLinear(4, 4, "lin")])
+        net.set_active_user("u5")
+        a = net.get_user_adapter("u5", dim=4, rank=2)
+        a.down_proj.weight.data = np.ones_like(a.down_proj.weight.data) * 0.1
+        a.up_proj.weight.data = np.ones_like(a.up_proj.weight.data) * 0.1
+        x = Tensor(np.ones((2, 4), dtype=np.float32))
+        out = net.forward(x)
+        assert out.data.shape == (2, 4)
+        assert np.all(np.isfinite(out.data))
+
+
+class TestMHAForwardNumpy:
+    def test_batch_greater_than_one_einsum(self):
+        mha = SloMultiHeadAttention(d_model=16, n_heads=4, n_kv_head=4)
+        rng = np.random.default_rng(0)
+        q = rng.standard_normal((2, 3, 16)).astype(np.float32)
+        k = rng.standard_normal((2, 3, 16)).astype(np.float32)
+        v = rng.standard_normal((2, 3, 16)).astype(np.float32)
+        out, kv = mha.forward_numpy(q, k, v)
+        assert out.shape == (2, 3, 16)
+        assert kv[0].shape == (2, 3, 4, 4)
+
+    def test_single_token_fused_kernel(self):
+        mha = SloMultiHeadAttention(d_model=16, n_heads=4, n_kv_head=2, use_rope=True)
+        rng = np.random.default_rng(1)
+        q = rng.standard_normal((1, 1, 16)).astype(np.float32)
+        k = rng.standard_normal((1, 1, 16)).astype(np.float32)
+        v = rng.standard_normal((1, 1, 16)).astype(np.float32)
+        cache = (np.zeros((1, 3, 2, 4), dtype=np.float32), np.zeros((1, 3, 2, 4), dtype=np.float32))
+        out, kv = mha.forward_numpy(q, k, v, kv_cache=cache, start_pos=3)
+        assert out.shape == (1, 1, 16)
+        assert np.all(np.isfinite(out))
+        assert kv[0].shape == (1, 4, 2, 4)
+
+    def test_multi_token_fused_kernel_with_rope_and_cache(self):
+        mha = SloMultiHeadAttention(d_model=16, n_heads=4, n_kv_head=2, use_rope=True)
+        rng = np.random.default_rng(2)
+        q = rng.standard_normal((1, 2, 16)).astype(np.float32)
+        k = rng.standard_normal((1, 2, 16)).astype(np.float32)
+        v = rng.standard_normal((1, 2, 16)).astype(np.float32)
+        cache = (np.zeros((1, 1, 2, 4), dtype=np.float32), np.zeros((1, 1, 2, 4), dtype=np.float32))
+        out, kv = mha.forward_numpy(q, k, v, kv_cache=cache, start_pos=1)
+        assert out.shape == (1, 2, 16)
+        assert kv[0].shape == (1, 3, 2, 4)
+
+
+class TestLSTMNumbaFallback:
+    def test_forward_numba_without_numba(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_check_numba", lambda: False)
+        net = SloLSTM(vocab_size=16, embed_dim=8, hidden_dim=8, num_layers=1)
+        x = np.array([[1, 2, 3]], dtype=np.int64)
+        out, hidden = net.forward_numba(x)
+        assert out.shape == (1, 16)
+        assert hidden[0].shape == (8,)
+
+
+class TestAccelOpDispatch:
+    class _FakeAcc:
+        name = "gpu"
+
+        def silu(self, d):
+            return d * 2
+
+        def to_device(self, a):
+            return a
+
+        def from_device(self, r):
+            return r
+
+    def test_dispatch_uses_accel(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: self._FakeAcc())
+        arr = np.array([1.0, 2.0], dtype=np.float32)
+        out = _accel_op("silu", arr, lambda d: d, threshold=1)
+        assert np.allclose(out, arr * 2)
+
+    def test_missing_acc_fn_falls_back(self, monkeypatch):
+        class _NoOp:
+            name = "gpu"
+
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _NoOp())
+        arr = np.array([1.0, 2.0], dtype=np.float32)
+        out = _accel_op("silu", arr, lambda d: d * 3, threshold=1)
+        assert np.allclose(out, arr * 3)
+
+    def test_accel_exception_falls_back(self, monkeypatch):
+        class _Boom:
+            name = "gpu"
+
+            def silu(self, d):
+                raise RuntimeError("boom")
+
+            def to_device(self, a):
+                return a
+
+            def from_device(self, r):
+                return r
+
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _Boom())
+        arr = np.array([1.0, 2.0], dtype=np.float32)
+        out = _accel_op("silu", arr, lambda d: d * 3, threshold=1)
+        assert np.allclose(out, arr * 3)
