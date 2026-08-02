@@ -3,6 +3,7 @@ demo trainers, SloDataLoader, silu numpy path, Tensor.to, GQA repeat backward.""
 
 import json
 import struct
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -1585,3 +1586,620 @@ class TestSchedulerFactoryBranches:
     def test_unknown_type_raises(self):
         with pytest.raises(ValueError):
             slonet.create_scheduler(slonet.SloAdam(lr=1.0), "bogus", total_steps=100)
+
+
+class _TorchLike:
+    """Minimal torch-like tensor shim (cpu/detach/numpy) for compat paths."""
+
+    def __init__(self, arr):
+        self._a = arr
+
+    def cpu(self):
+        return self
+
+    def detach(self):
+        return self
+
+    def numpy(self):
+        return self._a
+
+
+class _GoodAcc:
+    name = "metal"
+
+    def layer_norm(self, d, w, b, eps):
+        mu = d.mean(axis=-1, keepdims=True)
+        var = d.var(axis=-1, keepdims=True)
+        return (d - mu) / np.sqrt(var + eps) * w + b
+
+    def rms_norm(self, d, w, eps):
+        return d / np.sqrt(np.mean(d**2, axis=-1, keepdims=True) + eps) * w
+
+
+class TestTensorCompatMethods:
+    def test_comparisons_scalar_and_tensor(self):
+        t = Tensor(np.array([1.0, 2.0, 3.0]))
+        np.testing.assert_array_equal((t > 2).data, [0, 0, 1])
+        np.testing.assert_array_equal((t < 2).data, [1, 0, 0])
+        np.testing.assert_array_equal((t >= 2).data, [0, 1, 1])
+        np.testing.assert_array_equal((t <= 2).data, [1, 1, 0])
+        o = Tensor(np.array([1.0, 1.0, 1.0]))
+        np.testing.assert_array_equal((t == o).data, [1, 0, 0])
+        np.testing.assert_array_equal((t != o).data, [0, 1, 1])
+        np.testing.assert_array_equal((t > o).data, [0, 1, 1])
+        np.testing.assert_array_equal((t < o).data, [0, 0, 0])
+        np.testing.assert_array_equal((t >= o).data, [1, 1, 1])
+        np.testing.assert_array_equal((t <= o).data, [1, 0, 0])
+
+    def test_named_comparison_and_aggregate_methods(self):
+        t = Tensor(np.array([1.0, 2.0, 3.0]))
+        o = Tensor(np.array([2.0, 2.0, 2.0]))
+        np.testing.assert_array_equal(t.eq(o).data, [0, 1, 0])
+        np.testing.assert_array_equal(t.ne(o).data, [1, 0, 1])
+        np.testing.assert_array_equal(t.gt(o).data, [0, 0, 1])
+        np.testing.assert_array_equal(t.lt(o).data, [1, 0, 0])
+        np.testing.assert_array_equal(t.ge(o).data, [0, 1, 1])
+        np.testing.assert_array_equal(t.le(o).data, [1, 1, 0])
+        np.testing.assert_array_equal(t.all().data, [1.0])
+        np.testing.assert_array_equal(t.any().data, [1.0])
+        np.testing.assert_array_equal(t.all(dim=0).data, [1.0])
+
+    def test_bool_and_len(self):
+        assert bool(Tensor(np.array(1.0)))
+        assert not bool(Tensor(np.array(0.0)))
+        with pytest.raises(RuntimeError, match="ambiguous"):
+            bool(Tensor(np.array([1.0, 2.0])))
+        assert len(Tensor(np.array([1.0, 2.0, 3.0]))) == 3
+        with pytest.raises(TypeError):
+            len(Tensor(np.array(1.0)))
+
+    def test_t_method(self):
+        m = Tensor(np.arange(6.0).reshape(2, 3))
+        assert m.t().shape == (3, 2)
+        with pytest.raises(RuntimeError, match="2D"):
+            Tensor(np.zeros((2, 2, 2))).t()
+
+    def test_type_casts_and_mutators(self):
+        i = Tensor(np.array([1, 2], dtype=np.int64))
+        assert i.float().data.dtype == np.float32
+        z = Tensor(np.ones(3, dtype=np.float32))
+        assert z.zero_() is z
+        np.testing.assert_array_equal(z.data, np.zeros(3))
+        z.fill_(7.0)
+        np.testing.assert_array_equal(z.data, np.full(3, 7.0))
+        dst = Tensor(np.zeros(3, dtype=np.float32))
+        dst.copy_(np.array([9.0, 8.0, 7.0]))
+        np.testing.assert_array_equal(dst.data, [9, 8, 7])
+        dst.copy_(Tensor(np.array([1.0, 2.0, 3.0])))
+        np.testing.assert_array_equal(dst.data, [1, 2, 3])
+        np.testing.assert_array_equal(Tensor(np.array([1.0, -2.0])).abs().data, [1, 2])
+        np.testing.assert_array_equal(Tensor(np.array([1.0, 2.0])).expand(2, 2).data, [[1, 2], [1, 2]])
+        np.testing.assert_array_equal(Tensor(np.arange(6.0).reshape(2, 3)).transpose(0, 1).data.shape, (3, 2))
+        np.testing.assert_array_equal(Tensor(np.arange(6.0).reshape(2, 3)).permute(1, 0).data.shape, (3, 2))
+        np.testing.assert_array_equal(Tensor(np.array([3.0, 1.0, 2.0])).argsort().data, [1, 2, 0])
+        np.testing.assert_array_equal(Tensor(np.array([3.0, 1.0, 2.0])).argsort(descending=True).data, [0, 2, 1])
+        rg = Tensor(np.ones(2))
+        assert not rg.requires_grad
+        assert rg.requires_grad_() is rg
+        assert rg.requires_grad
+
+
+class TestMiscTensorBackwardForwardGrad:
+    def test_slice_basic_and_fancy_backward(self):
+        x = Tensor(np.array([1.0, 2.0, 3.0, 4.0]), requires_grad=True)
+        s = x[1:3]
+        s.grad = Tensor(np.array([10.0, 20.0]))
+        s.backward()
+        np.testing.assert_array_equal(x.grad.data, [0, 10, 20, 0])
+        x2 = Tensor(np.array([1.0, 2.0, 3.0, 4.0]), requires_grad=True)
+        s2 = x2[[0, 2]]
+        s2.grad = Tensor(np.array([7.0, 8.0]))
+        s2.backward()
+        np.testing.assert_array_equal(x2.grad.data, [7, 0, 8, 0])
+        res = s.forward_grad({x.id: np.array([1.0, 1.0, 1.0, 1.0])})
+        np.testing.assert_array_equal(res[x.id], np.array([1.0, 1.0, 1.0, 1.0]))
+        np.testing.assert_array_equal(res[s.id], np.array([1.0, 1.0]))
+
+    def test_max_and_sum_forward_grad(self):
+        x = Tensor(np.array([1.0, 5.0, 3.0, 5.0]), requires_grad=True)
+        m = x.max()
+        m.backward()
+        np.testing.assert_array_equal(x.grad.data, [0, 1, 0, 1])
+        res = m.forward_grad({x.id: np.array([0.0, 1.0, 0.0, 0.0])})
+        np.testing.assert_array_equal(res[x.id], np.array([0.0, 1.0, 0.0, 0.0]))
+        s = x.sum()
+        sres = s.forward_grad({x.id: np.array([1.0, 1.0, 1.0, 1.0])})
+        np.testing.assert_array_equal(sres[x.id], np.array([1.0, 1.0, 1.0, 1.0]))
+
+    def test_randint_and_no_grad_decorator(self):
+        t = slonet.randint(0, 10, (2, 3))
+        assert t.shape == (2, 3)
+        assert t.data.dtype == np.float32
+        assert (t.data >= 0).all() and (t.data < 10).all()
+        called = []
+        fn = slonet._NoGrad()(lambda: called.append(1) or 42)
+        assert fn() == 42
+        assert called == [1]
+
+    def test_conv_tuple_padding_backward_and_jvp(self):
+        rng = np.random.RandomState(0)
+        x = Tensor(rng.randn(1, 2, 6, 6).astype(np.float32), requires_grad=True)
+        w = Tensor(rng.randn(3, 2, 3, 3).astype(np.float32), requires_grad=True)
+        b = Tensor(rng.randn(3).astype(np.float32), requires_grad=True)
+        out = slonet._conv2d(x, w, b, stride=1, padding=(1, 1))
+        assert out.data.shape == (1, 3, 6, 6)
+        out.backward()
+        assert x.grad is not None
+        assert w.grad is not None
+        assert b.grad is not None
+        assert np.all(np.isfinite(x.grad.data))
+        res = out.forward_grad({x.id: np.ones((1, 2, 6, 6), dtype=np.float32)})
+        assert x.id in res
+
+
+class TestNormAccAndNd:
+    def test_layernorm_3d_and_acc_branches(self, monkeypatch):
+        ln = slonet.SloLayerNorm(16)
+        x = Tensor(np.random.RandomState(0).randn(2, 5, 16).astype(np.float32), requires_grad=True)
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _GoodAcc())
+        out = ln.forward(x)
+        assert out.data.shape == (2, 5, 16)
+        out.backward()
+        assert x.grad is not None
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _FakeAcc())
+        out2 = ln.forward(x)
+        assert np.all(np.isfinite(out2.data))
+        out2.backward()
+
+    def test_rmsnorm_acc_branches(self, monkeypatch):
+        rn = slonet.SloRMSNorm(64)
+        x = Tensor(np.random.RandomState(1).randn(2, 64, 64).astype(np.float32), requires_grad=True)
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _GoodAcc())
+        out = rn.forward(x)
+        out.backward()
+        assert x.grad is not None
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _FakeAcc())
+        out2 = rn.forward(x)
+        assert np.all(np.isfinite(out2.data))
+        out2.backward()
+
+    def test_rmsnorm_forward_numpy(self):
+        rn = slonet.SloRMSNorm(8)
+        out = rn.forward_numpy(np.random.randn(3, 8).astype(np.float32))
+        assert out.shape == (3, 8)
+
+    def test_layernorm_forward_numpy_both_paths(self, monkeypatch):
+        ln = slonet.SloLayerNorm(8)
+        x = np.random.randn(3, 8).astype(np.float32)
+        with_kernels = ln.forward_numpy(x)
+        assert with_kernels.shape == (3, 8)
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        no_kernels = ln.forward_numpy(x)
+        np.testing.assert_allclose(with_kernels, no_kernels, atol=1e-4)
+
+
+class TestQuantizedLinearForward:
+    def test_int8_quantized_forward(self):
+        from domains.infrastructure.quantization import QuantEngine
+        lin = SloLinear(8, 4, "q8")
+        info = QuantEngine(bits=8, mode="symmetric").quantize("w", lin.weight.data)
+        lin.set_quantized_weight(info)
+        x = np.random.randn(3, 8).astype(np.float32)
+        f = lin.forward_numpy(x)
+        t = lin.forward(Tensor(x))
+        assert f.shape == (3, 4)
+        np.testing.assert_allclose(f, t.data, atol=1e-3)
+
+    def test_int4_quantized_forward(self):
+        from domains.infrastructure.quantization import QuantEngine
+        lin = SloLinear(8, 4, "q4")
+        info = QuantEngine(bits=4, mode="symmetric").quantize("w", lin.weight.data)
+        lin.set_quantized_weight(info)
+        x = np.random.randn(3, 8).astype(np.float32)
+        f = lin.forward_numpy(x)
+        t = lin.forward(Tensor(x))
+        assert f.shape == (3, 4)
+        np.testing.assert_allclose(f, t.data, atol=1e-3)
+
+
+class TestSloNetMiscMethods:
+    def test_train_eval_and_checkpointing(self):
+        m = _small_transformer()
+        m.train(False)
+        m.eval()
+        m.train()
+        m.apply_gradient_checkpointing()
+        assert m.layers[2].use_checkpoint
+        assert m.num_parameters() > 0
+        assert m.named_modules() == [("", m)]
+        children = m.named_children()
+        assert len(children) == len(m.layers)
+        assert m._get_weights_dict()
+        assert "soul_name" in m.soul_signature()
+
+    def test_get_user_adapter_disk_error(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        import pathlib
+        target = pathlib.Path("data/user_adapters")
+        target.mkdir(parents=True, exist_ok=True)
+        bad = target / "opencode_bad_adapter.npz"
+        bad.write_bytes(b"not a zip archive")
+        net = slonet.SloNet()
+        adapter = net.get_user_adapter("opencode_bad", dim=768, rank=8)
+        assert adapter is not None
+        assert adapter is net.get_user_adapter("opencode_bad")
+        net.remove_user_adapter("opencode_bad")
+        assert "opencode_bad" not in net._user_adapters
+
+    def test_invalidate_gpu_cache(self, monkeypatch):
+        class _HasClear:
+            def clear_cache(self):
+                return None
+        monkeypatch.setattr("domains.slolib.gpu.get_accelerator", lambda: _HasClear())
+        slonet._invalidate_gpu_cache()
+        monkeypatch.setattr("domains.slolib.gpu.get_accelerator", _boom if False else (lambda: (_ for _ in ()).throw(RuntimeError("no gpu"))))
+        slonet._invalidate_gpu_cache()
+
+
+class TestTransformerCompatInputs:
+    def test_forward_torchlike_and_targets(self):
+        m = _small_transformer()
+        arr = np.array([[1, 2, 3]])
+        logits, loss = m.forward(_TorchLike(arr), targets=_TorchLike(arr))
+        assert logits.data.shape == (1, 3, 32)
+        assert loss.data.ndim == 0
+        logits2, loss2 = m.forward(np.array([[1, 2, 3]]), targets=np.array([[1, 2, 3]]))
+        assert logits2.data.shape == (1, 3, 32)
+        assert loss2 is not None
+        logits3, none3 = m.forward(np.array([[1, 2, 3]]))
+        assert none3 is None
+
+    def test_forward_pos_emb(self):
+        m = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
+                           block_size=16, max_seq_len=32, use_abs_pos_emb=True)
+        logits, _ = m.forward(np.array([[1, 2, 3]]))
+        assert logits.data.shape == (1, 3, 32)
+
+    def test_forward_pass(self):
+        m = _small_transformer()
+        r1 = m.forward_pass(np.array([1, 2, 3]))
+        assert r1.logits.shape == (1, 3, 32)
+        r2 = m.forward_pass(np.array([[1, 2, 3]]))
+        assert r2.logits.shape == (1, 3, 32)
+
+    def test_generate_torchlike_and_pos_emb(self):
+        m = _small_transformer()
+        out = m.generate(_TorchLike(np.array([[1, 2, 3]])), max_new_tokens=2)
+        assert isinstance(out, Tensor)
+        assert out.data.shape[1] == 5
+        mp = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
+                            block_size=16, max_seq_len=32, use_abs_pos_emb=True)
+        outp = mp.generate(np.array([[1, 2, 3]]), max_new_tokens=2)
+        assert outp.data.shape[1] == 5
+
+    def test_forward_state_dict_legacy_fallbacks(self):
+        sd = {}
+        hidden, ff_dim = 32, 64
+        sd["tok_emb.weight"] = np.random.RandomState(1).randn(16, hidden).astype(np.float32)
+        sd["blocks.0.norm1.weight"] = np.ones(hidden, dtype=np.float32)
+        sd["blocks.0.q_proj.weight"] = np.random.RandomState(2).randn(hidden, hidden).astype(np.float32)
+        sd["blocks.0.k_proj.weight"] = np.random.RandomState(3).randn(hidden, hidden).astype(np.float32)
+        sd["blocks.0.v_proj.weight"] = np.random.RandomState(4).randn(hidden, hidden).astype(np.float32)
+        sd["blocks.0.proj.weight"] = np.random.RandomState(5).randn(hidden, hidden).astype(np.float32)
+        sd["blocks.0.norm2.weight"] = np.ones(hidden, dtype=np.float32)
+        sd["blocks.0.w1.weight"] = np.random.RandomState(6).randn(ff_dim, hidden).astype(np.float32)
+        sd["blocks.0.w2.weight"] = np.random.RandomState(7).randn(hidden, ff_dim).astype(np.float32)
+        sd["blocks.0.w3.weight"] = np.random.RandomState(8).randn(ff_dim, hidden).astype(np.float32)
+        sd["norm.weight"] = np.ones(hidden, dtype=np.float32)
+        sd["lm_head.weight"] = np.random.RandomState(9).randn(16, hidden).astype(np.float32)
+        net = slonet.SloNet()
+        net._rebuild_from_state_dict(sd)
+        out = net.forward(slonet.Tensor(np.array([[1, 2, 3, 4]], dtype=np.float32)))
+        assert isinstance(out, slonet.Tensor)
+        assert out.data.shape == (1, 4, 16)
+        assert np.all(np.isfinite(out.data))
+
+
+class TestGenerateNumpyNoKernels:
+    def _ln_model(self):
+        return SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
+                              block_size=16, norm_type="layer_norm")
+
+    def test_generate_numpy_layer_norm_fallback(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        out = self._ln_model().generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        assert out.shape == (1, 6)
+
+    def test_generate_numpy_rms_norm_fallback(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        out = _small_transformer().generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        assert out.shape == (1, 6)
+
+    def test_generate_numpy_pos_emb(self):
+        m = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
+                           block_size=16, max_seq_len=32, use_abs_pos_emb=True)
+        out = m.generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        assert out.shape == (1, 6)
+
+    def test_generate_numpy_stream_layer_norm_fallback(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        toks = list(self._ln_model().generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        assert len(toks) == 3
+
+    def test_generate_numpy_stream_rms_norm_fallback(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        toks = list(_small_transformer().generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        assert len(toks) == 3
+
+    def test_generate_numpy_stream_gqa_kernel_and_fallback(self, monkeypatch):
+        m = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=4, n_kv_head=2,
+                           block_size=16, tie_weights=False)
+        toks = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=4, temperature=0.0))
+        assert len(toks) == 4
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        toks2 = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=4, temperature=0.0))
+        assert len(toks2) == 4
+
+    def test_generate_numpy_stream_pos_emb(self):
+        m = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
+                           block_size=16, max_seq_len=32, use_abs_pos_emb=True)
+        toks = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        assert len(toks) == 3
+
+
+class TestTensorFormatMethods:
+    def test_shape_and_scalar_queries(self):
+        t = Tensor(np.arange(6.0).reshape(2, 3))
+        assert t.dim() == 2
+        assert t.numel() == 6
+        assert t.size() == (2, 3)
+        assert t.size(1) == 3
+        assert t.tolist() == [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]]
+        assert t.item() == 0.0
+        assert Tensor(np.array(7.0)).item() == 7.0
+
+    def test_any_and_reduction_dim(self):
+        z = Tensor(np.zeros((2, 3)))
+        np.testing.assert_array_equal(z.any().data, [0.0])
+        np.testing.assert_array_equal(z.any(dim=1).data, [0.0, 0.0])
+        np.testing.assert_array_equal(z.any(dim=0, keepdim=True).data, [[0.0, 0.0, 0.0]])
+
+    def test_reshape_repeat_gather_squeeze(self):
+        t = Tensor(np.arange(6.0).reshape(2, 3))
+        assert t.reshape(3, 2).shape == (3, 2)
+        np.testing.assert_array_equal(t.repeat(2, 1).data, np.tile(t.data, (2, 1)))
+        idx = Tensor(np.array([[0, 2], [1, 2]]))
+        np.testing.assert_array_equal(t.gather(1, idx).data, [[0.0, 2.0], [4.0, 5.0]])
+        sq = Tensor(np.array([[1.0, 2.0]]))
+        assert sq.squeeze().shape == (2,)
+        assert sq.squeeze(0).shape == (2,)
+        assert Tensor(np.array([1.0, 2.0])).unsqueeze(0).shape == (1, 2)
+        assert Tensor(np.array([1.0, 2.0])).unsqueeze(-1).shape == (2, 1)
+
+    def test_dtype_casts_and_copies(self):
+        i = Tensor(np.array([1, 2], dtype=np.int64))
+        np.testing.assert_array_equal(i.long().data, [1, 2])
+        np.testing.assert_array_equal(i.int().data, [1, 2])
+        np.testing.assert_array_equal(i.half().data, [1, 2])
+        np.testing.assert_array_equal(i.double().data, [1, 2])
+        assert i.float().data.dtype == np.float32
+        det = i.detach()
+        assert not det.requires_grad
+        assert i.numpy() is i.data
+        assert i.cpu() is i
+        cl = i.clone()
+        assert cl is not i
+        np.testing.assert_array_equal(cl.data, [1, 2])
+        assert i.contiguous() is i
+        assert i.flatten().shape == (2,)
+        assert i.view(1, 2).shape == (1, 2)
+        assert i.view(-1).shape == (2,)
+        np.testing.assert_array_equal(i.tolist(), [1, 2])
+
+
+class TestSloLayerBaseMethods:
+    def test_base_slo_layer(self):
+        lay = slonet.SloLayer("test")
+        lay.eval()
+        lay.train()
+        assert lay.parameters() == []
+        assert lay.named_children() == []
+        assert lay.named_modules() == [("", lay)]
+        assert lay.soul_signature()["name"] == "test"
+
+    def test_slonet_train_eval_module(self):
+        net = slonet.SloNet()
+        net.train()
+        net.eval()
+
+    def test_transformer_block_forward_numpy(self):
+        m = _small_transformer()
+        block = m.layers[2]
+        x = np.random.RandomState(0).randn(1, 8, 16).astype(np.float32)
+        out, cache = block.forward_numpy(x, kv_cache=None)
+        assert out.shape == (1, 8, 16)
+        assert np.all(np.isfinite(out))
+
+    def test_load_state_dict_roundtrip(self):
+        m = _small_transformer()
+        sd = {k: p.data.copy() for k, p in m._named_parameters()}
+        assert m.load_state_dict(sd) == []
+        sd["blocks.0.attn.q_proj.weight"] = sd["blocks.0.attn.q_proj.weight"][:8]
+        m.load_state_dict(sd, strict=False)
+
+
+class _FakeCPUTensor:
+    """Stand-in for a PyTorch-style tensor exposing .cpu().detach().numpy()."""
+
+    def __init__(self, arr):
+        self._a = arr
+
+    def cpu(self):
+        return self
+
+    def detach(self):
+        return self
+
+    def numpy(self):
+        return self._a
+
+
+class TestSloTransformerNoSoul:
+    def _tiny(self, **kw):
+        cfg = dict(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
+                   block_size=16, max_seq_len=32, dropout=0.0, tie_weights=True)
+        cfg.update(kw)
+        return SloTransformer(**cfg)
+
+    def test_default_soul_metadata(self):
+        m = self._tiny()
+        sig = m.soul_signature()
+        assert m.soul_name == "SloTransformer"
+        assert m.lineage == "soultransformer"
+        assert sig["soul_name"] == "SloTransformer"
+        assert sig["lineage"] == "soultransformer"
+        assert sig["system_prompt"] == ""
+        assert "soul_traits" in sig and "layers" in sig and "step" in sig
+        assert m.metadata["model_type"] == "sloughgpt"
+
+    def test_explicit_no_soul_name(self):
+        m = self._tiny(soul_name="no soul", soul_traits={"creativity": 0.9})
+        assert m.soul_name == "no soul"
+        assert m.soul_signature()["soul_name"] == "no soul"
+        assert m.soul_signature()["soul_traits"] == {"creativity": 0.9}
+        out = m.generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        assert out.shape == (1, 6)
+
+    def test_properties_and_tie_weights(self):
+        m = self._tiny()
+        assert isinstance(m.tok_emb, SloEmbedding)
+        assert isinstance(m.norm, slonet.SloRMSNorm)
+        assert isinstance(m.lm_head, SloLinear)
+        assert len(m.blocks) == 1 and isinstance(m.blocks[0], slonet.SloTransformerBlock)
+        np.testing.assert_array_equal(m.layers[0].weight.data, m.layers[-1].weight.data)
+
+    def test_norm_property_fallback_for_layer_norm(self):
+        m = self._tiny(norm_type="layer_norm")
+        assert isinstance(m.norm, slonet.SloLayerNorm)
+        assert m.norm is m.layers[-2]
+
+    def test_tie_weights_exception_is_silent(self):
+        m = self._tiny()
+        m.layers[0] = object()
+        m._tie_weights()
+
+    def test_forward_use_cache_stores_kv(self):
+        m = self._tiny()
+        logits, loss = m.forward(np.array([[1, 2, 3]]), use_cache=True)
+        assert logits.data.shape == (1, 3, 32)
+        assert all(k is not None for k in m._kv_caches)
+        m.clear_kv_cache()
+        assert m._kv_caches == [None]
+
+    def test_generate_1d_input_reshaped(self):
+        m = self._tiny()
+        out = m.generate(np.array([1, 2, 3]), max_new_tokens=3, temperature=0.0)
+        assert out.data.shape == (1, 6)
+
+    def test_generate_accepts_cpu_style_input(self):
+        m = self._tiny()
+        out = m.generate(_FakeCPUTensor(np.array([[1, 2, 3]])), max_new_tokens=3, temperature=0.0)
+        assert out.data.shape == (1, 6)
+
+    def test_forward_accepts_cpu_style_inputs(self):
+        m = self._tiny()
+        logits, loss = m.forward(_FakeCPUTensor(np.array([[1, 2, 3]])))
+        assert logits.data.shape == (1, 3, 32)
+        logits, loss = m.forward(np.array([[1, 2, 3]]),
+                                 targets=_FakeCPUTensor(np.array([[1, 2, 3]])))
+        assert loss is not None
+
+    def test_forward_list_input_no_cpu(self):
+        m = self._tiny()
+        logits, loss = m.forward([[1, 2, 3]])
+        assert logits.data.shape == (1, 3, 32)
+        assert loss is None
+
+    def test_forward_pass_1d_and_2d(self):
+        m = self._tiny()
+        fp = m.forward_pass(np.array([1, 2, 3]))
+        assert fp.logits.shape == (1, 3, 32)
+        assert fp.engine == "numpy"
+        fp2 = m.forward_pass(np.array([[1, 2, 3]]))
+        assert fp2.logits.shape == (1, 3, 32)
+
+    def test_forward_and_generate_abs_pos_emb(self):
+        m = self._tiny(use_abs_pos_emb=True)
+        logits, loss = m.forward(np.array([[1, 2, 3]]))
+        assert logits.data.shape == (1, 3, 32)
+        out = m.generate(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        assert out.data.shape == (1, 6)
+
+    def test_generate_numpy_gqa_nokernel_repeat(self, monkeypatch):
+        m = self._tiny(n_kv_head=1)
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        out = m.generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=4, temperature=0.0)
+        assert out.shape == (1, 7)
+
+    def test_load_state_dict_reports_shape_mismatch(self):
+        m = self._tiny()
+        lm = np.random.RandomState(0).randn(16, 32).astype(np.float32)
+        missing = m.load_state_dict({"lm_head.weight": lm}, strict=True)
+        assert missing == ["lm_head.weight"]
+        np.testing.assert_array_equal(m.layers[-1].weight.data, m.layers[0].weight.data)
+
+    def test_load_state_dict_emb_drop_alias(self):
+        m = self._tiny(dropout=0.1)
+        assert isinstance(m.layers[1], slonet.SloDropout)
+        missing = m.load_state_dict({"emb_drop.weight": np.zeros((4, 4))})
+        assert missing == ["emb_drop.weight"]
+
+    def test_to_train_eval_and_context_manager(self):
+        m = self._tiny()
+        assert m.to("cpu") is m
+        assert m.train(True) is m
+        assert m.train(False) is m
+        with m:
+            pass
+        m.__exit__(None, None, None)
+
+    def test_quantized_nokernel_generate_numpy(self, monkeypatch):
+        m = self._tiny()
+        m.blocks[0].attn.W_q._quant_info = SimpleNamespace(is_quantized=False)
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        out = m.generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=5, temperature=0.0)
+        assert out.shape == (1, 8)
+
+    def test_quantized_nokernel_stream(self, monkeypatch):
+        m = self._tiny()
+        m.blocks[0].attn.W_q._quant_info = SimpleNamespace(is_quantized=False)
+        monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
+        out = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        assert len(out) == 3
+
+    def test_quantized_kernel_stream_greedy(self):
+        m = self._tiny()
+        m.blocks[0].attn.W_q._quant_info = SimpleNamespace(is_quantized=False)
+        out = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        assert len(out) == 3
+
+    def test_quantized_int8_lm_head_argmax(self):
+        m = self._tiny()
+        info = SimpleNamespace(
+            is_quantized=True,
+            meta=SimpleNamespace(bits=8, is_per_channel=False, scale=np.float32(0.1), zero_point=0),
+            array=np.zeros((16, 16), dtype=np.int8),
+        )
+        m.blocks[0].attn.W_q._quant_info = info
+        m.layers[-1]._quant_info = SimpleNamespace(
+            is_quantized=True,
+            meta=SimpleNamespace(bits=8, is_per_channel=False, scale=np.float32(0.1), zero_point=0),
+            array=np.zeros((32, 16), dtype=np.int8),
+        )
+        out = m.generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=5, temperature=0.0)
+        assert out.shape == (1, 8)
+        m2 = self._tiny()
+        m2.blocks[0].attn.W_q._quant_info = info
+        m2.layers[-1]._quant_info = m.layers[-1]._quant_info
+        s = list(m2.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        assert len(s) == 3

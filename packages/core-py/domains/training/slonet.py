@@ -1793,22 +1793,6 @@ class SloMaxPool2D(SloLayer):
     def parameters(self) -> List[Tensor]: return []
 
 
-class SloLayerNorm(SloLayer):
-    def __init__(self, normalized_shape: int, eps: float = 1e-5, name=""):
-        super().__init__(name or f"LayerNorm{normalized_shape}")
-        self.normalized_shape = (normalized_shape,) if isinstance(normalized_shape, int) else tuple(normalized_shape)
-        self.eps = eps
-        self.weight = ones(self.normalized_shape, requires_grad=True)
-        self.bias = zeros(self.normalized_shape, requires_grad=True)
-        self.soul_traits = {"warmth": 0.5, "confidence": 0.5}
-
-    def forward(self, x: Tensor) -> Tensor:
-        return _layernorm(x, self.weight, self.bias, self.eps)
-
-    def parameters(self) -> List[Tensor]:
-        return [self.weight, self.bias]
-
-
 class SloRMSNorm(SloLayer):
     def __init__(self, dim: int, eps: float = 1e-5, name=""):
         super().__init__(name or f"RMSNorm{dim}")
@@ -2537,8 +2521,8 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
         t_w_np = np.zeros_like(weight.data) if t_w is None else t_w
         # JVP: conv2d(x, w) = im2col(x) @ w.T → JVP = im2col(t_x) @ w.T + im2col(x) @ t_w.T
         pad_h, pad_w = (padding[0], padding[1] if len(padding) > 1 else padding[0]) if isinstance(padding, (tuple, list)) else (padding, padding)
-        t_cols = _im2col(np.pad(t_x_np, ((0,0),(0,0),(pad_h,pad_h),(pad_w,pad_w)), mode='constant'), kh, kw, stride) if t_x is not None else 0
-        w_col_t = t_w_np.reshape(oc, -1) if not (t_w is None) else 0
+        t_cols = _im2col(np.pad(t_x_np, ((0,0),(0,0),(pad_h,pad_h),(pad_w,pad_w)), mode='constant'), kh, kw, stride)
+        w_col_t = t_w_np.reshape(oc, -1)
         result_t = (np.matmul(t_cols, _w_col.T) + np.matmul(cols, w_col_t.T)).reshape(n, oh, ow, oc).transpose(0, 3, 1, 2)
         if bias is not None:
             t_b_np = np.zeros_like(bias.data) if t_b is None else t_b
@@ -4633,15 +4617,6 @@ def _named_ff(prefix: str, ff: SloFeedForward) -> List[Tuple[str, Tensor]]:
         named.append((f"{prefix}.w2.bias", ff.w2.bias))
     if ff.w3.use_bias:
         named.append((f"{prefix}.w3.bias", ff.w3.bias))
-    return named
-
-
-def _named_transformer_block(prefix: str, block: SloTransformerBlock) -> List[Tuple[str, Tensor]]:
-    named = []
-    named.append((f"{prefix}.attn_norm.weight", block.attn_norm.weight))
-    named.extend(_named_mha(f"{prefix}.attn", block.attn))
-    named.append((f"{prefix}.ff_norm.weight", block.ff_norm.weight))
-    named.extend(_named_ff(f"{prefix}.ff", block.ff))
     return named
 
 
