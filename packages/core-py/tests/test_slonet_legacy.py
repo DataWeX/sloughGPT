@@ -1237,3 +1237,351 @@ class TestTensorUtilOps:
         out.backward()
         assert np.allclose(a.grad.data, [[-0.6, -0.8]])
         assert np.allclose(b.grad.data, [[0.6, 0.8]])
+
+
+class _FakeAcc:
+    name = "metal"
+
+    def matmul(self, a, b):
+        raise RuntimeError("boom")
+
+    def gelu(self, d):
+        raise RuntimeError("boom")
+
+    def layer_norm(self, *a):
+        raise RuntimeError("boom")
+
+
+class TestTensorTypeAndJvp:
+    def test_type_casts(self):
+        t = Tensor(np.array([1.0, 2.0]))
+        t.type(np.float64)
+        assert t.data.dtype == np.float64
+        t.type("torch.FloatTensor")
+        assert t.data.dtype == np.float32
+        t.type(np.float32)
+        assert t.data.dtype == np.float32
+        t.type("bogus")
+        assert t.data.dtype == np.float32
+
+    def test_jvp_and_forward_grad(self):
+        x = Tensor(np.array([2.0, 3.0]), requires_grad=True)
+        y = x * x
+        z = y + y
+        res = z.forward_grad({x.id: np.array([1.0, 1.0])})
+        assert np.allclose(res[x.id], [1.0, 1.0])
+        assert np.allclose(res[y.id], [4.0, 6.0])
+        assert np.allclose(res[z.id], [8.0, 12.0])
+        j = z.jvp(Tensor(np.array([0.5, 0.5])))
+        assert np.allclose(j.data, [0.5, 0.5])
+
+
+class TestModuleTensorFuncs:
+    def test_topk(self):
+        t = Tensor(np.array([3.0, 1.0, 4.0, 2.0]))
+        vals, idx = slonet.topk(t, 2)
+        assert vals.shape == (1, 2)
+        assert idx.shape == (1, 2)
+        assert vals.data[0, 0] == 4.0
+
+    def test_concatenate_where_stack(self):
+        a = Tensor(np.ones((2, 3)))
+        b = Tensor(np.zeros((2, 3)))
+        c = slonet.concatenate([a, b], dim=-1)
+        assert c.shape == (2, 6)
+        w = slonet.where(
+            Tensor(np.array([True, False])),
+            Tensor(np.array([1.0, 2.0])),
+            Tensor(np.array([3.0, 4.0])),
+        )
+        assert np.array_equal(w.data, [1.0, 4.0])
+        s = slonet.stack([a, b])
+        assert s.shape == (2, 2, 3)
+
+    def test_squeeze_unsqueeze_tensor(self):
+        x = Tensor(np.array([[1.0, 2.0]]))
+        assert slonet.squeeze(x).shape == (2,)
+        assert slonet.unsqueeze(x, 0).shape == (1, 1, 2)
+        assert slonet.squeeze(np.array([[1.0, 2.0]])).shape == (2,)
+        assert slonet.unsqueeze(np.array([1.0, 2.0]), 0).shape == (1, 2)
+
+
+class TestAccelFallbacks:
+    def test_matmul_fallback(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _FakeAcc())
+        rng = np.random.default_rng(0)
+        a = rng.standard_normal((300, 300)).astype(np.float32)
+        b = rng.standard_normal((300, 300)).astype(np.float32)
+        out = slonet._matmul(a, b)
+        assert np.allclose(out.data, a @ b)
+
+    def test_gelu_fallback(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _FakeAcc())
+        out = slonet.gelu(Tensor(np.array([0.0, 1.0, -1.0])))
+        assert np.allclose(out.data, [0.0, 0.84119, -0.15881], atol=1e-3)
+
+    def test_state_dict_acc_fallbacks(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _FakeAcc())
+        a = Tensor(np.random.randn(5, 8).astype(np.float32))
+        b = np.random.randn(8, 3).astype(np.float32)
+        r1 = slonet._matmul_state_dict(a, b)
+        assert np.allclose(r1.data, a.data @ b)
+        r2 = slonet._layernorm_state_dict(a, np.ones(8))
+        assert r2.shape == (5, 8)
+
+    def test_conv2d_fallback(self, monkeypatch):
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: _FakeAcc())
+        x = Tensor(np.random.randn(1, 1, 8, 8).astype(np.float32))
+        w = Tensor(np.random.randn(2, 1, 3, 3).astype(np.float32))
+        b = Tensor(np.random.randn(2).astype(np.float32))
+        out = slonet._conv2d(x, w, b, stride=1, padding=1)
+        assert out.shape == (1, 2, 8, 8)
+
+
+class TestEmbedding3DInput:
+    def test_squeeze_axis_1(self):
+        emb = SloEmbedding(32, 16)
+        out = emb.forward_numpy(np.array([[[1, 2, 3]]], dtype=np.int64))
+        assert out.shape == (1, 3, 16)
+
+    def test_squeeze_axis_2(self):
+        emb = SloEmbedding(32, 16)
+        out = emb.forward_numpy(np.array([[[1], [2], [3]]], dtype=np.int64))
+        assert out.shape == (1, 3, 16)
+
+    def test_reshape_3d_fallback(self):
+        emb = SloEmbedding(32, 16)
+        out = emb.forward_numpy(np.array([[[1, 2], [3, 4]]], dtype=np.int64))
+        assert out.shape == (1, 4, 16)
+
+
+class TestLSTMShapesAndAdapter:
+    def _lstm(self):
+        return SloLSTM(vocab_size=32, embed_dim=16, hidden_dim=8, num_layers=1, dropout=0.0)
+
+    def test_skip_embed_2d(self):
+        lstm = self._lstm()
+        out, (h, c) = lstm.forward_numpy(np.random.randn(4, 16).astype(np.float32), skip_embed=True)
+        assert out.shape == (1, 32)
+        assert h.shape == (8,)
+
+    def test_skip_embed_3d(self):
+        lstm = self._lstm()
+        out, (h, c) = lstm.forward_numpy(np.random.randn(2, 4, 16).astype(np.float32), skip_embed=True)
+        assert out.shape == (1, 32)
+
+    def test_adapter_applied(self):
+        lstm = self._lstm()
+        adapter = SloAdapterLayer(dim=8, rank=2)
+        out, _ = lstm.forward_numpy(np.random.randn(4, 16).astype(np.float32), adapter=adapter, skip_embed=True)
+        assert out.shape == (1, 32)
+
+    def test_zero_grad_clears_grads(self):
+        lstm = self._lstm()
+        for p in lstm.parameters():
+            p.grad = Tensor(np.ones_like(p.data))
+        lstm.zero_grad()
+        assert all(p.grad is None for p in lstm.parameters())
+
+
+class TestSloNetStateDict:
+    def test_state_dict_and_load_weights(self):
+        net = SloNet(layers=[SloLinear(4, 2)])
+        sd = net.state_dict()
+        assert set(sd) == {"p0", "p1"}
+        net._load_weights({"p0": np.zeros((2, 4), dtype=np.float32)})
+        assert np.allclose(net.layers[0].weight.data, 0)
+
+    def test_empty_load_noop(self):
+        SloNet()._load_weights({})
+
+
+class TestCrossAttentionJvp:
+    def test_forward_grad_through_einsum(self):
+        ca = slonet.SloCrossAttention(d_model=16, n_heads=4)
+        rng = np.random.default_rng(0)
+        x = Tensor(rng.standard_normal((2, 3, 16)).astype(np.float32), requires_grad=True)
+        ctx = Tensor(rng.standard_normal((2, 5, 16)).astype(np.float32), requires_grad=True)
+        out = ca.forward(x, ctx)
+        tangents = out.forward_grad({
+            x.id: np.ones_like(x.data),
+            ctx.id: np.ones_like(ctx.data),
+        })
+        assert out.id in tangents
+        assert np.all(np.isfinite(tangents[out.id]))
+
+
+class TestKLDivGradBranch:
+    def test_backward_batchmean(self):
+        ilp = Tensor(np.log(np.array([[0.5, 0.5], [0.2, 0.8]])), requires_grad=True)
+        tp = np.array([[0.3, 0.7], [0.6, 0.4]])
+        loss = kl_div_loss(ilp, tp, reduction="batchmean")
+        loss.backward()
+        assert ilp.grad is not None
+        assert np.allclose(ilp.grad.data, -tp / 2)
+
+    def test_backward_sum_reduction(self):
+        ilp = Tensor(np.log(np.array([[0.5, 0.5]])), requires_grad=True)
+        tp = np.array([[0.3, 0.7]])
+        loss = kl_div_loss(ilp, tp, reduction="sum")
+        loss.backward()
+        assert ilp.grad is not None
+        assert np.allclose(ilp.grad.data, -tp)
+
+
+class TestLayerNormTransformerGeneration:
+    def _layer_norm_transformer(self):
+        return SloTransformer(
+            vocab_size=16, n_embed=16, n_layer=1, n_head=2,
+            block_size=16, norm_type="layer_norm",
+        )
+
+    def test_generate_numpy_layernorm(self):
+        m = self._layer_norm_transformer()
+        prompt = np.array([[1, 2, 3, 4]])
+        out = m.generate_numpy(prompt, max_new_tokens=3, temperature=0.0)
+        assert out.shape == (1, 7)
+
+    def test_generate_numpy_stream_layernorm(self):
+        m = self._layer_norm_transformer()
+        prompt = np.array([[1, 2, 3, 4]])
+        toks = list(m.generate_numpy_stream(prompt, max_new_tokens=3, temperature=0.0))
+        assert len(toks) == 3
+
+
+class _MockOpt:
+    def __init__(self, lr=1.0):
+        self.lr = lr
+
+
+class _ParamGroupsOpt:
+    def __init__(self, lr=0.2):
+        self.param_groups = [{"lr": lr}]
+
+
+class _EmptyGroupsOpt:
+    def __init__(self):
+        self.param_groups = []
+
+
+class _BareScheduler(slonet.SloLRScheduler):
+    pass
+
+
+class _RangeDataset(slonet.SloDataset):
+    def __len__(self):
+        return 3
+
+    def __getitem__(self, idx):
+        return idx * 10
+
+
+class TestSloDatasetAbstract:
+    def test_abstract_len_raises(self):
+        with pytest.raises(NotImplementedError):
+            len(slonet.SloDataset())
+
+    def test_abstract_getitem_raises(self):
+        with pytest.raises(NotImplementedError):
+            slonet.SloDataset()[0]
+
+    def test_iter_yields_items(self):
+        assert list(iter(_RangeDataset())) == [0, 10, 20]
+
+
+class TestKLDivMeanReduction:
+    def test_mean_reduction_forward(self):
+        ilp = np.log(np.array([[0.5, 0.5], [0.25, 0.75]], dtype=np.float32))
+        tp = np.array([[0.3, 0.7], [0.6, 0.4]], dtype=np.float32)
+        loss = kl_div_loss(ilp, tp, reduction="mean")
+        batchmean = kl_div_loss(ilp, tp, reduction="batchmean")
+        assert loss.data == pytest.approx(batchmean.data)
+        assert loss.data == pytest.approx(0.178060, abs=1e-5)
+
+    def test_mean_reduction_backward_no_scale(self):
+        ilp = Tensor(np.log(np.array([[0.5, 0.5], [0.25, 0.75]])), requires_grad=True)
+        tp = np.array([[0.3, 0.7], [0.6, 0.4]])
+        loss = kl_div_loss(ilp, tp, reduction="mean")
+        loss.backward()
+        assert np.allclose(ilp.grad.data, -tp)
+
+    def test_ndarray_input_no_backward_grad(self):
+        ilp = np.log(np.array([[0.5, 0.5]], dtype=np.float32))
+        tp = np.array([[0.3, 0.7]], dtype=np.float32)
+        loss = kl_div_loss(ilp, tp)
+        loss.backward()
+        assert loss._children == ()
+
+
+class TestSchedulerBaseEdges:
+    def test_param_groups_only_optimizer(self):
+        opt = _ParamGroupsOpt(lr=0.2)
+        sched = slonet.SloConstantLR(opt, last_epoch=-1)
+        assert sched.base_lrs == [0.2]
+        assert opt.lr == 0.2
+
+    def test_no_lr_no_param_groups_defaults_zero(self):
+        opt = _EmptyGroupsOpt()
+        sched = slonet.SloConstantLR(opt, last_epoch=-1)
+        assert sched.base_lrs == [0.0]
+        assert opt.lr == 0.0
+
+    def test_abstract_get_lr_raises(self):
+        sched = _BareScheduler(_MockOpt(lr=1.0), last_epoch=0)
+        with pytest.raises(NotImplementedError):
+            sched.get_lr()
+
+    def test_get_last_lr_fallback_to_get_lr(self):
+        opt = _MockOpt(lr=0.1)
+        sched = slonet.SloConstantLR(opt, last_epoch=0)
+        assert sched.get_last_lr() == [0.1]
+
+    def test_step_with_explicit_epoch_sets_lr(self):
+        opt = _MockOpt(lr=0.1)
+        sched = slonet.SloConstantLR(opt, last_epoch=0)
+        sched.step(5)
+        assert sched.last_epoch == 5
+        assert opt.lr == 0.1
+        assert sched.get_last_lr() == [0.1]
+
+
+class TestSchedulerFactoryBranches:
+    def test_onecycle_branch(self):
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "onecycle", total_steps=100),
+            slonet.SloOneCycleLR,
+        )
+
+    def test_cyclic_branch(self):
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "cyclic", total_steps=100),
+            slonet.SloCyclicLR,
+        )
+
+    def test_polynomial_branch(self):
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "polynomial", total_steps=100),
+            slonet.PolynomialDecayScheduler,
+        )
+
+    def test_step_branch(self):
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "step", total_steps=100),
+            slonet.SloStepLR,
+        )
+
+    def test_plateau_branch(self):
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "plateau", total_steps=100),
+            slonet.SloReduceLROnPlateau,
+        )
+
+    def test_cosine_annealing_branch(self):
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "cosine_annealing", total_steps=100),
+            slonet.SloCosineAnnealingLR,
+        )
+
+    def test_unknown_type_raises(self):
+        with pytest.raises(ValueError):
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "bogus", total_steps=100)
