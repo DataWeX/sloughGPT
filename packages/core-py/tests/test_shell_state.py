@@ -128,3 +128,13 @@ class TestShellState:
             state = ShellState()
         assert state.history == []
         assert state.aliases == {}
+
+    def test_save_failure_is_silent(self, tmp_path):
+        state_file = tmp_path / "shell_state.json"
+        with patch("domains.shell.state._STATE_FILE", state_file), \
+             patch("domains.shell.state._CONFIG_DIR", tmp_path), \
+             patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            state = ShellState()
+            state.add_history("cmd")
+            state.save()  # should not raise
+        assert state.history == ["cmd"]

@@ -126,6 +126,56 @@ class TestShellPermissions:
                 p2 = ShellPermissions()
                 assert p2.is_granted("rm")
 
+    def test_denied_command_short_message(self):
+        from domains.shell.permissions import ShellPermissions
+        p = ShellPermissions()
+        p._denied.add("rm")
+        with pytest.raises(PermissionError, match=r"Use `permit rm` to grant\.$"):
+            p.check("rm")
+
+    def test_revoke_persist(self):
+        from domains.shell.permissions import ShellPermissions
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "perms.json"
+            with patch.object(ShellPermissions, "_config_path", config_path):
+                p = ShellPermissions()
+                p.grant("rm", persist=True)
+                p.revoke("rm", persist=True)
+            saved = json.loads(config_path.read_text())
+            assert saved["granted"] == []
+
+    def test_load_persistent_config(self):
+        from domains.shell.permissions import ShellPermissions
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "perms.json"
+            config_path.write_text(json.dumps({
+                "granted": ["rm"],
+                "policy": {"dangerous": "allow"},
+            }))
+            with patch.object(ShellPermissions, "_config_path", config_path):
+                p = ShellPermissions()
+            assert p.is_granted("rm")
+            assert p._policy["dangerous"] == "allow"
+
+    def test_load_corrupt_config_ignored(self):
+        from domains.shell.permissions import ShellPermissions
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "perms.json"
+            config_path.write_text("NOT JSON!!!")
+            with patch.object(ShellPermissions, "_config_path", config_path):
+                p = ShellPermissions()
+            assert not p.is_granted("rm")
+
+    def test_save_persistent_failure_ignored(self):
+        from domains.shell.permissions import ShellPermissions
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "perms.json"
+            with patch.object(ShellPermissions, "_config_path", config_path), \
+                 patch.object(Path, "write_text", side_effect=OSError("disk full")):
+                p = ShellPermissions()
+                p.grant("rm", persist=True)  # should not raise
+            assert p.is_granted("rm")
+
 
 # ── ShellAuditLogger ──────────────────────────────────────────────
 
