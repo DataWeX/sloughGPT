@@ -3,6 +3,7 @@
 import json
 import struct
 import zlib
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -58,6 +59,21 @@ def _compile(compiler, output, config=CFG, weights=None):
     if weights is None:
         weights = _gpt2_weights()
     return compiler.compile_from_dict(config, weights, str(output))
+
+
+def _write_safetensors(path, weights, dtype="F32"):
+    """Write a minimal .safetensors file with per-tensor dtype strings."""
+    header = {"__metadata__": {}}
+    data = b""
+    for name, arr in weights.items():
+        header[name] = {
+            "dtype": dtype,
+            "shape": list(arr.shape),
+            "data_offsets": [len(data), len(data) + arr.nbytes],
+        }
+        data += arr.tobytes()
+    header_json = json.dumps(header).encode()
+    path.write_bytes(struct.pack("<Q", len(header_json)) + header_json + data)
 
 
 class TestCompileFromDict:
@@ -344,17 +360,7 @@ class TestBlockSize:
 
 class TestCompileHf:
     def _write_safetensors(self, path, weights):
-        header = {"__metadata__": {}}
-        data = b""
-        for name, arr in weights.items():
-            header[name] = {
-                "dtype": "F32",
-                "shape": list(arr.shape),
-                "data_offsets": [len(data), len(data) + arr.nbytes],
-            }
-            data += arr.tobytes()
-        header_json = json.dumps(header).encode()
-        path.write_bytes(struct.pack("<Q", len(header_json)) + header_json + data)
+        return _write_safetensors(path, weights)
 
     def test_compile_reads_safetensors_and_writes(self, tmp_path, monkeypatch):
         import domains.infrastructure.safetensors_loader as stl
@@ -385,3 +391,212 @@ class TestCompileHf:
         monkeypatch.setattr(stl, "load_model_config", lambda model_id: CFG)
         with pytest.raises(FileNotFoundError):
             SLNCCompiler().compile("gpt2", output=str(tmp_path / "x.slnc"))
+
+    def test_compile_bf16_safetensors_converts_to_f32(self, tmp_path, monkeypatch):
+        import domains.infrastructure.safetensors_loader as stl
+
+        raw = np.array([0x3F80, 0xC000], dtype=np.uint16)  # 1.0, -2.0 as bfloat16 bits
+        st_path = tmp_path / "model.safetensors"
+        _write_safetensors(st_path, {"h.0.ln_1.weight": raw}, dtype="BF16")
+        monkeypatch.setattr(stl, "_get_model_dir", lambda model_id: tmp_path)
+        monkeypatch.setattr(stl, "_find_safetensors", lambda model_dir: st_path)
+        monkeypatch.setattr(stl, "load_model_config", lambda model_id: CFG)
+
+        out = tmp_path / "bf16.slnc"
+        SLNCCompiler().compile("gpt2", output=str(out))
+        parser = SLNCParser(str(out))
+        got = parser.get_tensor("h.0.ln_1.weight")
+        expected = (raw.astype(np.uint32) << 16).view(np.float32)
+        np.testing.assert_array_equal(got, expected)
+
+    def test_compile_f16_safetensors_converts_to_f32(self, tmp_path, monkeypatch):
+        import domains.infrastructure.safetensors_loader as stl
+
+        f16 = np.array([1.0, -2.5, 0.25], dtype=np.float16)
+        st_path = tmp_path / "model.safetensors"
+        _write_safetensors(st_path, {"h.0.ln_1.weight": f16}, dtype="F16")
+        monkeypatch.setattr(stl, "_get_model_dir", lambda model_id: tmp_path)
+        monkeypatch.setattr(stl, "_find_safetensors", lambda model_dir: st_path)
+        monkeypatch.setattr(stl, "load_model_config", lambda model_id: CFG)
+
+        out = tmp_path / "f16.slnc"
+        SLNCCompiler().compile("gpt2", output=str(out))
+        parser = SLNCParser(str(out))
+        np.testing.assert_array_equal(
+            parser.get_tensor("h.0.ln_1.weight"), f16.astype(np.float32)
+        )
+
+    def test_compile_unknown_safetensors_dtype_reads_as_f32(self, tmp_path, monkeypatch):
+        import domains.infrastructure.safetensors_loader as stl
+
+        raw = np.arange(8, dtype=np.float32)
+        st_path = tmp_path / "model.safetensors"
+        _write_safetensors(st_path, {"h.0.ln_1.weight": raw}, dtype="I8")
+        monkeypatch.setattr(stl, "_get_model_dir", lambda model_id: tmp_path)
+        monkeypatch.setattr(stl, "_find_safetensors", lambda model_dir: st_path)
+        monkeypatch.setattr(stl, "load_model_config", lambda model_id: CFG)
+
+        out = tmp_path / "unknown.slnc"
+        SLNCCompiler().compile("gpt2", output=str(out))
+        parser = SLNCParser(str(out))
+        np.testing.assert_array_equal(parser.get_tensor("h.0.ln_1.weight"), raw)
+
+
+class TestCompileOutputAndProtect:
+    def test_default_output_path(self, tmp_path, monkeypatch):
+        import os
+
+        import domains.infrastructure.model_protector as mp
+        import domains.infrastructure.safetensors_loader as stl
+        import domains.infrastructure.slnc.compiler as compiler_mod
+
+        monkeypatch.setattr(mp, "protect_model", lambda *a, **k: None)
+        weights = {"h.0.ln_1.weight": np.ones(4, dtype=np.float32)}
+        st_path = tmp_path / "model.safetensors"
+        _write_safetensors(st_path, weights)
+        monkeypatch.setattr(stl, "_get_model_dir", lambda model_id: tmp_path)
+        monkeypatch.setattr(stl, "_find_safetensors", lambda model_dir: st_path)
+        monkeypatch.setattr(stl, "load_model_config", lambda model_id: CFG)
+
+        compiler = SLNCCompiler()
+        models_dir = (
+            Path(compiler_mod.__file__).resolve().parents[4] / "models"
+        )
+        expected = models_dir / "gpt2.slnc"
+        if expected.exists():
+            os.chmod(expected, 0o644)
+            os.remove(expected)
+        result = None
+        try:
+            result = compiler.compile("gpt2")
+            assert result == str(expected)
+            assert Path(result).exists()
+        finally:
+            if result and Path(result).exists():
+                os.remove(result)
+            if models_dir.exists() and not any(models_dir.iterdir()):
+                os.rmdir(models_dir)
+
+    def test_protect_failure_is_silent(self, tmp_path, monkeypatch):
+        import domains.infrastructure.safetensors_loader as stl
+
+        weights = {"h.0.ln_1.weight": np.ones(4, dtype=np.float32)}
+        st_path = tmp_path / "model.safetensors"
+        _write_safetensors(st_path, weights)
+        monkeypatch.setattr(stl, "_get_model_dir", lambda model_id: tmp_path)
+        monkeypatch.setattr(stl, "_find_safetensors", lambda model_dir: st_path)
+        monkeypatch.setattr(stl, "load_model_config", lambda model_id: CFG)
+
+        def boom(model_id, files):
+            raise RuntimeError("protection unavailable")
+
+        monkeypatch.setattr(
+            "domains.infrastructure.model_protector.protect_model", boom
+        )
+        out = tmp_path / "unprotected.slnc"
+        result = SLNCCompiler().compile("gpt2", output=str(out))
+        assert result == str(out)
+        assert SLNCParser(str(out)).tensor_count == len(weights)
+
+
+class TestParserEdges:
+    def _compiled(self, tmp_path):
+        out = tmp_path / "m.slnc"
+        _compile(SLNCCompiler(), output=out)
+        return out
+
+    def test_unsupported_version_rejected(self, tmp_path):
+        out = self._compiled(tmp_path)
+        data = bytearray(open(out, "rb").read())
+        struct.pack_into("<I", data, 4, 99)
+        bad = tmp_path / "v99.slnc"
+        bad.write_bytes(bytes(data))
+        with pytest.raises(ValueError, match="Unsupported version"):
+            SLNCParser(str(bad))
+
+    def test_file_size_property(self, tmp_path):
+        import os
+
+        out = self._compiled(tmp_path)
+        parser = SLNCParser(str(out))
+        assert parser.file_size == os.path.getsize(out)
+
+    def test_del_is_exception_safe(self, tmp_path):
+        import types
+
+        out = self._compiled(tmp_path)
+        parser = SLNCParser(str(out))
+        parser._mm = types.SimpleNamespace(
+            close=lambda: (_ for _ in ()).throw(OSError("closed"))
+        )
+        parser.__del__()  # must not raise
+
+    def test_repr(self, tmp_path):
+        out = self._compiled(tmp_path)
+        parser = SLNCParser(str(out))
+        r = repr(parser)
+        assert "SLNCParser" in r
+        assert "1 layers" in r
+        assert "tensors" in r
+
+    def test_get_weights_dict_round_trip(self, tmp_path):
+        out = self._compiled(tmp_path)
+        parser = SLNCParser(str(out))
+        weights = parser.get_weights_dict()
+        assert set(weights) == set(_gpt2_weights())
+
+
+class TestLlamaAutoBias:
+    def test_bias_appended_when_not_in_layout(self, tmp_path):
+        llama_cfg = {
+            "n_layer": 1,
+            "hidden_size": 4,
+            "num_attention_heads": 1,
+            "intermediate_size": 8,
+            "vocab_size": 8,
+            "max_position_embeddings": 6,
+            "rope_theta": 10000.0,
+            "model_type": "llama",
+        }
+        weights = {
+            "model.embed_tokens.weight": np.zeros((8, 4), dtype=np.float32),
+            "model.layers.0.input_layernorm.weight": np.ones(4, dtype=np.float32),
+            "model.layers.0.self_attn.q_proj.weight": np.zeros((4, 4), dtype=np.float32),
+            "model.layers.0.self_attn.q_proj.bias": np.arange(4, dtype=np.float32),
+            "model.norm.weight": np.ones(4, dtype=np.float32),
+        }
+        ordered = SLNCCompiler()._order_tensors(llama_cfg, weights)
+        names = [n for n, _ in ordered]
+        assert "model.layers.0.self_attn.q_proj.bias" in names
+        assert names.index("model.layers.0.self_attn.q_proj.bias") == (
+            names.index("model.layers.0.self_attn.q_proj.weight") + 1
+        )
+
+
+class TestXxhash:
+    def test_uses_xxhash_when_installed(self, monkeypatch):
+        import sys
+        import types
+
+        calls = []
+        fake = types.ModuleType("xxhash")
+
+        class _H:
+            def __init__(self, data):
+                calls.append(data)
+
+            def intdigest(self):
+                return 12345
+
+        fake.xxh64 = lambda data: _H(data)
+        monkeypatch.setitem(sys.modules, "xxhash", fake)
+        assert _xxhash64(b"h.0.attn.c_attn.weight") == 12345
+        assert calls == [b"h.0.attn.c_attn.weight"]
+
+    def test_fallback_when_xxhash_missing(self, monkeypatch):
+        import sys
+
+        monkeypatch.delitem(sys.modules, "xxhash", raising=False)
+        h = _xxhash64(b"h.0.attn.c_attn.weight")
+        assert isinstance(h, int)
+        assert h >= 0

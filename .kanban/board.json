@@ -24,6 +24,24 @@
   ],
   "cards": [
     {
+      "id": "20260803_013243_wave-h-slnc-specparsercompiler-resource-manager-100-coverage",
+      "title": "Wave H: slnc spec/parser/compiler + resource_manager 100% coverage",
+      "description": "Wave H: pushed slnc/* + resource_manager.py to 100% coverage.\n\nspec.py: fixed latent bug \u2014 code_to_dtype(2) raised AttributeError (numpy 2.5.1 has no np.bfloat16); added hasattr guard raising ValueError. New tests/test_slnc_spec.py (5 classes, parametrized): spec.py 50/50.\n\nresource_manager.py: added 5 tests to tests/test_resource_manager.py (numexpr fake-module injection, numexpr-missing silent, singleton-None lazy init, np compute limits, singleton global) \u2014 163/163.\n\ncompiler.py + parser.py: extended tests/test_slnc_compiler.py with BF16/F16/unknown-dtype safetensors load branches, default output path (output=None -> models dir, chmod-444 artifact cleaned), protect_model failure silence, parser edges (unsupported version, file_size, exception-safe __del__, repr, get_weights_dict), LLaMA bias auto-append, _xxhash64 installed-path via fake xxhash module. compiler.py 172/172, parser.py 107/107.\n\nAlso fixed flaky Wave F test: test_slonet_wave_f.py bf16 assertion used random data under atol=1e-2 -> deterministic bf16-exact values.\n\nCombined: 492/492 stmts (100%) across slnc/* + resource_manager. 8 consecutive clean runs; full slonet family (slnc + resource_manager + kernels + morph tokenizer + wave_g) green.\n\nNote: gpu/accelerator.py Metal stride-tuple fix + test_gpu_accelerator.py remain uncommitted (pre-existing orphaned WIP, excluded from this commit).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "coverage",
+        "slnc",
+        "resource-manager"
+      ],
+      "created_at": "2026-08-03T01:32:43.794834+00:00",
+      "updated_at": "2026-08-03T01:32:43.794834+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260803_011803_wave-f-slonet-kernels-numpy-fallback-coverage",
       "title": "wave F: slonet_kernels numpy-fallback coverage",
       "description": "slonet.py at 97% floor (1 dead line). Wave F extends coverage to domains/training/slonet_kernels.py (18%). Numba not installed, so public numpy-fallback wrappers are the production code path; _build_*/njit bodies are the unreachable env floor. Plan: deterministic numpy tests for all 13 fallback functions + _ensure_* guards + _check_numba, then broaden sweep --source.",

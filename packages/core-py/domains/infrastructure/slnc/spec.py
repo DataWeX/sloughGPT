@@ -152,6 +152,6 @@ def code_to_dtype(code: int):
     """Convert format code to numpy dtype."""
     import numpy as np
     name = DTYPE_MAP.get(code)
-    if name is None:
+    if name is None or not hasattr(np, name):
         raise ValueError(f"Unknown dtype code: {code}")
     return getattr(np, name)

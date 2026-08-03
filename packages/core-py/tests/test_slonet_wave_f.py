@@ -208,7 +208,7 @@ class TestConstructorAndSafetensors:
     def test_load_safetensors_bf16_all_dtypes(self, tmp_path):
         path = tmp_path / "w.bin"
         f32 = np.random.randn(2, 3).astype(np.float32)
-        bf16 = np.random.randn(4).astype(np.float32)
+        bf16 = np.array([0.5, 1.25, -2.5, 3.0], dtype=np.float32)
         f16 = np.random.randn(5).astype(np.float16)
         i32 = np.random.randint(0, 9, size=(3,)).astype(np.int32)
         blocks = {

@@ -1,7 +1,9 @@
 """Tests for ResourceManager, ResourceAllocation, compute_allocation."""
 
 import os
+import sys
 import threading
+import types
 from unittest.mock import patch
 
 import pytest
@@ -246,6 +248,35 @@ class TestResourceManager:
         rm = get_resource_manager()
         # Should not raise
         rm.apply_compute_limits()
+
+    def test_apply_compute_limits_calls_numexpr(self, monkeypatch):
+        import numpy as np
+
+        calls = []
+        fake_numexpr = types.ModuleType("numexpr")
+        fake_numexpr.set_num_threads = lambda n: calls.append(n)
+        monkeypatch.setitem(sys.modules, "numexpr", fake_numexpr)
+        rm = get_resource_manager()
+        rm.apply_compute_limits()
+        assert calls == [rm.numexpr_num_threads]
+
+    def test_apply_compute_limits_numexpr_missing_is_silent(self, monkeypatch):
+        monkeypatch.delitem(sys.modules, "numexpr", raising=False)
+        rm = get_resource_manager()
+        rm.apply_compute_limits()  # must not raise
+
+    def test_lazy_init_when_singleton_none(self, monkeypatch):
+        import domains.infrastructure.resource_manager as rm_mod
+
+        monkeypatch.setattr(rm_mod, "_global_manager", None)
+        rm = rm_mod.get_resource_manager()
+        assert rm_mod._global_manager is rm
+
+    def test_singleton_is_global_variable(self, monkeypatch):
+        import domains.infrastructure.resource_manager as rm_mod
+
+        rm = get_resource_manager()
+        assert rm_mod._global_manager is rm
 
     def test_apply_environment(self, monkeypatch):
         monkeypatch.setenv("SLO_COMPUTE_THREADS", "1")
