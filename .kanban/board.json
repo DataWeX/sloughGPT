@@ -27,7 +27,7 @@
       "id": "20260803_011803_wave-f-slonet-kernels-numpy-fallback-coverage",
       "title": "wave F: slonet_kernels numpy-fallback coverage",
       "description": "slonet.py at 97% floor (1 dead line). Wave F extends coverage to domains/training/slonet_kernels.py (18%). Numba not installed, so public numpy-fallback wrappers are the production code path; _build_*/njit bodies are the unreachable env floor. Plan: deterministic numpy tests for all 13 fallback functions + _ensure_* guards + _check_numba, then broaden sweep --source.",
-      "column": "in_progress",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "slonet",
@@ -36,7 +36,7 @@
         "tests"
       ],
       "created_at": "2026-08-03T01:18:03.418474+00:00",
-      "updated_at": "2026-08-03T01:18:03.418474+00:00",
+      "updated_at": "2026-08-03T01:20:26.972611+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
