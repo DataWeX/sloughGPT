@@ -1,6 +1,8 @@
 """Tests for the .soul format (SloProfile, SouParser, save/load soul)."""
 
 import json
+import math
+import os
 import struct
 import string
 
@@ -385,3 +387,160 @@ class TestGenerateSampleDialogue:
 
         dialogue = generate_sample_dialogue(NoGenModel(), stoi, itos, num_turns=1)
         assert dialogue[1]["content"] == ""
+
+    def test_model_without_generate_or_forward(self):
+        stoi, itos = build_vocab(["Hello! How are you today?"])
+        dialogue = generate_sample_dialogue(object(), stoi, itos, num_turns=1)
+        # output falls back to the raw prompt tokens, so the response is empty
+        assert dialogue[1]["content"] == ""
+
+
+class TestSouParserEdgeBranches:
+    def test_parse_non_numeric_parameter(self):
+        sp = SouParser.parse("SOUL t\nPARAMETER\n    temperature fast\n")
+        assert sp.generation.temperature == "fast"
+
+    def test_parse_non_int_context(self):
+        sp = SouParser.parse("SOUL t\nCONTEXT\n    context_window many\n")
+        assert sp.context.context_window == "many"
+
+    def test_parse_non_float_personality(self):
+        sp = SouParser.parse("SOUL t\nPERSONALITY\n    warmth high\n    END\n")
+        assert sp.personality.warmth == "high"
+
+    def test_parse_quantization(self):
+        sp = SouParser.parse("SOUL t\nQUANTIZATION int8\n")
+        assert sp.quantization == "int8"
+
+    def test_parse_metadata_generic_key(self):
+        sp = SouParser.parse("SOUL t\nMETADATA custom_key custom_value\n")
+        assert sp.metadata == {"custom_key": "custom_value"}
+
+    def test_parse_behavior_float_conversion_overflow(self):
+        big = "9" * 400
+        sp = SouParser.parse(
+            "SOUL t\nBEHAVIOR\n    speaking_style " + big + "\n    END\n"
+        )
+        assert math.isinf(sp.behavior.speaking_style)
+
+    def test_parse_behavior_unicode_digit_conversion_failure(self):
+        sp = SouParser.parse("SOUL t\nBEHAVIOR\n    speaking_style ²\n    END\n")
+        assert sp.behavior.speaking_style == "²"
+
+    def test_sou_parser_load_save_file(self, tmp_path):
+        path = tmp_path / "p.soul"
+        sp = SouParser.parse("SOUL rtr\nVERSION 3.0\nTAGLINE hello\n")
+        SouParser.save(sp, str(path))
+        sp2 = SouParser.load(str(path))
+        assert sp2.name == "rtr"
+        assert sp2.version == "3.0"
+        assert sp2.tagline == "hello"
+
+
+class TestSaveSoulEdgeBranches:
+    def test_lineage_from_model_when_profile_empty(self, tmp_path):
+        path = str(tmp_path / "model.soul")
+        model = FakeStateDictModel(lineage="model-lineage")
+        save_soul(model, path, soul_profile=make_profile(lineage=""))
+        soul, _ = load_soul(path)
+        assert soul.lineage == "model-lineage"
+
+    def test_state_value_type_branches(self, tmp_path):
+        class TensorLike:
+            def __init__(self, arr):
+                self.data = arr
+
+        class NumpyLike:
+            def cpu(self):
+                return self
+
+            def numpy(self):
+                return np.array([1.0, 2.0])
+
+        class DetachLike:
+            def detach(self):
+                class Inner:
+                    def cpu(self):
+                        return self
+
+                    def numpy(self):
+                        return np.array([3.0, 4.0])
+
+                return Inner()
+
+        path = str(tmp_path / "model.soul")
+        model = FakeStateDictModel(params={
+            "t": TensorLike(np.array([1.0], np.float64)),
+            "n": NumpyLike(),
+            "d": DetachLike(),
+            "l": [5.0, 6.0],
+            "s": 7.5,
+        })
+        save_soul(model, path, soul_profile=make_profile())
+        _, state = load_soul(path)
+        assert state["t"].tolist() == [1.0]
+        assert state["n"].tolist() == [1.0, 2.0]
+        assert state["d"].tolist() == [3.0, 4.0]
+        assert state["l"].tolist() == [5.0, 6.0]
+        assert float(state["s"]) == 7.5
+
+    def test_skips_unconvertible_value(self, tmp_path):
+        path = str(tmp_path / "model.soul")
+        model = FakeStateDictModel(params={"w": np.array([1.0]), "bad": {1, 2}})
+        save_soul(model, path, soul_profile=make_profile())
+        _, state = load_soul(path)
+        assert "w" in state
+        assert "bad" not in state
+
+    def test_zero_params_logs_error(self, tmp_path):
+        path = str(tmp_path / "model.soul")
+        model = FakeStateDictModel(params={"only": {"nested": 1}})
+        save_soul(model, path, soul_profile=make_profile())
+        _, state = load_soul(path)
+        assert state == {}
+
+    def test_temp_cleanup_on_failure(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "model.soul")
+
+        def boom(src, dst):
+            raise OSError("rename failed")
+
+        monkeypatch.setattr("os.rename", boom)
+        with pytest.raises(OSError):
+            save_soul(FakeStateDictModel(), path, soul_profile=make_profile())
+        assert not list(tmp_path.glob("*.tmp"))
+
+    def test_temp_cleanup_unlink_error_swallowed(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "model.soul")
+
+        def boom_rename(src, dst):
+            raise OSError("rename failed")
+
+        def boom_unlink(p):
+            raise OSError("unlink failed")
+
+        monkeypatch.setattr("os.rename", boom_rename)
+        monkeypatch.setattr("os.unlink", boom_unlink)
+        with pytest.raises(OSError):
+            save_soul(FakeStateDictModel(), path, soul_profile=make_profile())
+        assert not os.path.exists(path)
+
+
+class TestLoadSoulEdge:
+    def test_v2_bad_state_json(self, tmp_path):
+        path = tmp_path / "v2bad.soul"
+        config = make_profile().to_dict()
+        config_json = json.dumps(config, default=str).encode()
+        state_json = b"{this is not valid json"
+        data = (
+            SOU_MAGIC
+            + struct.pack("<I", 2)
+            + struct.pack("<I", len(config_json))
+            + config_json
+            + struct.pack("<I", len(state_json))
+            + state_json
+        )
+        path.write_bytes(data)
+        soul, state = load_soul(str(path))
+        assert state == {}
+        assert soul.name == "soul-test"

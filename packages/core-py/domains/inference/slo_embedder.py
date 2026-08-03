@@ -757,10 +757,13 @@ class SloTextEmbedder:
                 from domains.multimodal.bpe_tokenizer import BPETokenizer
                 bpe_path = path.replace(".sou", "-bpe.json")
                 if os.path.exists(bpe_path):
-                    bpe_tokenizer = BPETokenizer.load(bpe_path)
-                    logger.info("Loaded BPE tokenizer from %s", bpe_path, extra={"tag": "INFRA"})
+                    bpe_tokenizer = BPETokenizer()
+                    if bpe_tokenizer.load(bpe_path):
+                        logger.info("Loaded BPE tokenizer from %s", bpe_path, extra={"tag": "INFRA"})
+                    else:
+                        bpe_tokenizer = None
             except Exception:
-                pass
+                bpe_tokenizer = None
 
             # Build encoder
             encoder = _build_encoder(actual_vocab, embed_dim, max_seq_len, n_heads, n_layers)
