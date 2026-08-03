@@ -24,6 +24,41 @@
   ],
   "cards": [
     {
+      "id": "20260803_043203_testinference-wave-m-slonet-providerblasmatmul-100-real-comp",
+      "title": "test(inference): wave M slonet_provider/blas/matmul 100% real-components",
+      "description": "",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "test",
+        "coverage",
+        "wave-m"
+      ],
+      "created_at": "2026-08-03T04:32:03.501759+00:00",
+      "updated_at": "2026-08-03T04:32:03.501759+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_041253_qwen-gold-standard-benchmark-stability-fail-latency-baseline",
+      "title": "Qwen Gold Standard benchmark: stability FAIL + latency baseline",
+      "description": "Benchmarked served Qwen/Qwen2.5-0.5B-Instruct against Gold Standard + latency baseline.\n\n## Results (recorded via scripts/benchmark_results.py)\n- Stability: FAIL. overall=90. length_cv ~0.80 (threshold \u22640.30). Latencies bimodal (~47s real, ~70s = 60s timeout placeholder). 20 runs, ~23 min.\n- Latency baseline: mean 31.7s, p50 28.0s, p95 57.8s (15 samples, fresh session per request). Docs claim ~2s \u2014 15x slower than documented on this CPU box.\n\n## Work done\n- scripts/benchmark_latency.py: fixed dead /labs/chat endpoint \u2192 POST /chat; client timeout 30s \u2192 120s (server takes 47-70s); unique session_id per request to avoid SessionKVCache replay (was poisoning results with ~0.017s cached responses).\n- scripts/benchmark_stability.py: _resolve_model unwraps health envelope (data.model_type); unique session_id per request.\n- scripts/benchmark_results.py: NEW harness \u2014 record/history/compare for stability + latency runs; direction-aware regression thresholds; tests in packages/core-py/tests/test_benchmark_results.py (15 pass).\n\n## Defects found\n1. 60s ChatDomain timeout (packages/core-py/domains/chat/domain.py:150) fires on most requests \u2192 server returns exactly '[Error: Generation timed out after 60 seconds]' (46 chars) as HTTP 200. Model cannot finish 50 tokens in 60s on this box.\n2. Qwen output degenerate/rambling \u2014 ignores 'Say hi in 3 words', emits '<|im_start|>/<|im_end|>' boilerplate. Not Gold Standard quality.\n3. SessionKVCache (model_server.py:299) stores generated sequence per session \u2014 same prompt + same session replays cached tokens in ~0.017s, corrupting benchmarks unless fresh session_id used.\n4. SloNet generate timeout is 70s (slonet_server.py:334) vs documented 120s; ChatDomain 60s wait_for fires first.\n\n## Files\n- data/benchmark_results/stability/Qwen--Qwen2.5-0.5B-Instruct_2026-08-03T035353166894+0000.json (FAILED)\n- data/benchmark_results/latency/Qwen--Qwen2.5-0.5B-Instruct_2026-08-03T041201363061+0000.json\n- data/benchmark_latency_baseline.json (mean 31.7s)\n\n## Next steps\n- Decide whether to re-run stability with fresh sessions (clean Gold Standard verdict) and/or fix the 60s timeout / degenerate generation defects.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "benchmark",
+        "stability",
+        "latency",
+        "defect"
+      ],
+      "created_at": "2026-08-03T04:12:53.765887+00:00",
+      "updated_at": "2026-08-03T04:12:53.765887+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260803_040336_wave-l-slo-manager-58-100-forward-pass-0-100-embeddings-98-1",
       "title": "Wave L: slo_manager 58%->100%, forward_pass 0%->100%, embeddings 98%->100%",
       "description": "Wave L: slo_manager.py 58%->100%, forward_pass.py 0%->100%, embeddings.py 98%->100%.\n\n- slo_manager.py: 2 unreachable except blocks in _scan_souls pragma'd (no-cover; _parse_soul_info swallows all errors internally). embeddings.py: 3 abstractmethod pass bodies pragma'd.\n- tests/test_slo_manager.py: +16 tests \u2014 real _scan_souls (top-level .slo+.soul, souls/ subdir, repo core-py/models/souls resolution via fixture with teardown, duplicate-name non-overwrite), preference load-restore success + read-error + save-write-error paths, get_trait_weights (no soul full schema, soul personality overlay, metadata cognition/emotion overlay via hand-registered soul in reader-expected SOUL+len+meta layout, text .slo non-SOUL magic branch, metadata read-error, empty-personality skip, live-config override, config-exception fallback), module-level switch_soul/list_souls.\n- tests/test_forward_pass.py: +11 tests \u2014 ForwardPassResult defaults/shape, ForwardPassable runtime_checkable +/-/signature, timed_forward model_name/time/result.\n- Found latent quirk: get_trait_weights metadata reader expects SOUL+meta_len+meta layout (no version field) unlike _parse_soul_info's versioned layout; behavior preserved, not fixed in this wave.\n- Verified: 81 targeted tests, slo_format/context_managers/soul_engine/knowledge/rag regression + wave-K consumer sweep + npu/tokenizer/quantum sweep all pass. No filesystem pollution (models/ fixture cleaned up).",

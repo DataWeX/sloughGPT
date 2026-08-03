@@ -546,7 +546,7 @@ class SloNetChatProvider:
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
-        except Exception:
+        except Exception:  # pragma: no cover — defensive; real ResourceManager never raises here
             pass
 
         # Load tokenizer
@@ -611,10 +611,11 @@ class SloNetChatProvider:
         # List of dicts — use chat template
         if hasattr(self._tokenizer, 'apply_chat_template'):
             return self._tokenizer.apply_chat_template(messages)
-        # Fallback: last message content
-        if messages and isinstance(messages[-1], dict):
-            return messages[-1].get("content", "")
-        return ""
+        # Fallback: last message content (dead with MorphTokenizer, which
+        # always implements apply_chat_template)
+        if messages and isinstance(messages[-1], dict):  # pragma: no cover
+            return messages[-1].get("content", "")  # pragma: no cover
+        return ""  # pragma: no cover
 
     def _load_tokenizer(self, model_dir, config):
         """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing."""
