@@ -183,6 +183,21 @@ class TestProcessManagement:
         with pytest.raises(RuntimeError, match="not installed"):
             k._require_addon("missing")
 
+    def test_process_release_unknown_tensor(self):
+        k = Kernel()
+        proc = k.spawn_process("t")
+        assert proc.release_tensor(999) is None
+
+    def test_process_acquire_and_release_tensor(self):
+        from domains.shell.kernel_process import TensorRef
+        k = Kernel()
+        proc = k.spawn_process("t")
+        ref = TensorRef(block_id=1, shape=(2, 3), dtype="float32", size_bytes=24, owner_pid=proc.pid)
+        proc.acquire_tensor(ref)
+        assert proc.memory_bytes == 24
+        assert proc.release_tensor(1) is ref
+        assert proc.memory_bytes == 0
+
     def test_process_done_callback_fires(self):
         k = Kernel()
         k.boot()

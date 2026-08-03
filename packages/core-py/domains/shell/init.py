@@ -269,6 +269,7 @@ class InitSystem:
         self._boot_time: float = 0.0
         self._boot_complete: bool = False
         self._current_runlevel: int = 0
+        self._lock = threading.Lock()
         self._load_definitions()
 
     def _load_definitions(self) -> None:
@@ -284,7 +285,7 @@ class InitSystem:
                     if name not in self._managers:
                         self._managers[name] = ServiceManager(ServiceDef(name=name, **data))
                 except Exception as e:
-                    logger.warning("Failed to load service %s: %e", f.name, e, extra={"tag": "INFRA"})
+                    logger.warning("Failed to load service %s: %s", f.name, e, extra={"tag": "INFRA"})
 
     def boot(self, target_runlevel: int = 3, shell_run: Callable[[str], str] | None = None) -> str:
         """Boot through runlevels up to target_runlevel. Returns boot log."""
@@ -361,13 +362,10 @@ class InitSystem:
             if name in visited:
                 return
             visited.add(name)
-            mgr = by_name.get(name)
-            if mgr is None:
-                return
-            for dep in mgr.defn.deps:
+            for dep in by_name[name].defn.deps:
                 if dep in by_name:
                     visit(dep)
-            ordered.append(mgr)
+            ordered.append(by_name[name])
 
         for mgr in services:
             visit(mgr.defn.name)
