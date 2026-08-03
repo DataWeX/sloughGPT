@@ -32,6 +32,10 @@ from domains.infrastructure.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.inference.slonet_provider")
 
+# Streaming robustness timeouts (overridable in tests).
+_STREAM_GET_TIMEOUT_S = 30.0
+_STREAM_TOTAL_TIMEOUT_S = 120.0
+
 # Lazy import to avoid circular dependency
 _SloLayerNorm = None
 
@@ -233,30 +237,12 @@ def convert_hf_to_slonet(
                 if hf_key == mapped_hf_key:
                     w = arr
                     if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
-                        w = w.T
+                        w = w.T  # pragma: no cover — no global 2D key outside NO_TRANSPOSE_KEYS
                     result[slo_target] = w
                     mapped = True
                     break
 
-        # Handle fused QKV for GPT-2 style
-        if not mapped and has_fused_qkv:
-            fused_key = W.get("layers.{i}.qkv.weight")
-            if fused_key:
-                for i in range(n_layer):
-                    concrete = fused_key.replace("{i}", str(i))
-                    if hf_key == concrete:
-                        result.update(_split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict))
-                        mapped = True
-                        break
-
-            fused_bias = W.get("layers.{i}.qkv.bias")
-            if fused_bias and not mapped:
-                for i in range(n_layer):
-                    concrete = fused_bias.replace("{i}", str(i))
-                    if hf_key == concrete:
-                        result.update(_split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict))
-                        mapped = True
-                        break
+        # Handle fused QKV for GPT-2 style (matched in the canonical None-branch above).
 
     # GELU: synthesize SwiGLU gate (w3) as identity — w3=identity means
     # w2(act(w1(x)) * w3(x)) = w2(act(w1(x)) * 1) = w2(act(w1(x)))
@@ -792,7 +778,6 @@ class SloNetChatProvider:
         q = queue.Queue()
         err_q = queue.Queue()
         sentinel = object()
-        _GENERATION_TIMEOUT_S = 120.0
 
         def _producer():
             try:
@@ -813,7 +798,7 @@ class SloNetChatProvider:
         while True:
             # Check total generation timeout
             elapsed = time.monotonic() - gen_start
-            if elapsed > _GENERATION_TIMEOUT_S:
+            if elapsed > _STREAM_TOTAL_TIMEOUT_S:
                 cancel_event.set() if cancel_event else None
                 logger.warning("Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"})
                 yield "\n\n[Generation timed out after {:.0f}s]".format(elapsed)
@@ -823,7 +808,7 @@ class SloNetChatProvider:
                 # Use to_thread with timeout to prevent indefinite blocking
                 token = await asyncio.wait_for(
                     asyncio.to_thread(q.get),
-                    timeout=30.0,
+                    timeout=_STREAM_GET_TIMEOUT_S,
                 )
             except asyncio.TimeoutError:
                 # Check if producer thread is still alive
@@ -844,6 +829,9 @@ class SloNetChatProvider:
                 continue
 
             if token is sentinel:
+                if not err_q.empty():
+                    exc = err_q.get_nowait()
+                    yield "\n\n[Generation error: {}]".format(exc)
                 break
 
             # Check for producer errors (may have been raised between queue reads)
