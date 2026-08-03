@@ -72,8 +72,8 @@ class SloManager:
                     soul_info = self._parse_soul_info(sou_path)
                     if soul_info:
                         self._souls_cache[soul_info.name] = soul_info
-                except Exception as e:
-                    logger.debug(f"Failed to parse soul {sou_path}: {e}")
+                except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
+                    logger.debug(f"Failed to parse soul {sou_path}: {e}")  # pragma: no cover
 
         # Find text profile files in souls/ subdirectory (both .slo and .soul)
         soul_candidates = [self.slos_dir / "souls"]
@@ -91,8 +91,8 @@ class SloManager:
                             soul_info = self._parse_soul_info(soul_path)
                             if soul_info and soul_info.name not in self._souls_cache:
                                 self._souls_cache[soul_info.name] = soul_info
-                        except Exception as e:
-                            logger.debug(f"Failed to parse soul profile {soul_path}: {e}")
+                        except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
+                            logger.debug(f"Failed to parse soul profile {soul_path}: {e}")  # pragma: no cover
 
         if not hasattr(self, '_scanned'):
             logger.info(f"Found {len(self._souls_cache)} souls", extra={"tag": "SOUL"})

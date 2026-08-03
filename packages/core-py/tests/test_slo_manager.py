@@ -3,6 +3,7 @@
 import os
 import struct
 import json
+import shutil
 import pytest
 from pathlib import Path
 from unittest.mock import patch
@@ -238,5 +239,244 @@ class TestGetSloManager:
             m1 = get_slo_manager()
             m2 = get_slo_manager()
             assert m1 is m2
+        finally:
+            mod._slo_manager = original
+
+
+# ── Real _scan_souls (unpatched) ──────────────────────────────────────────
+
+_TXT_SLO = """# test text profile
+SOUL txtsoul
+DESCRIPTION A text personality profile
+PERSONALITY
+    warmth 0.9
+    creativity 0.7
+    confidence 0.3
+    END
+BEHAVIOR
+    reasoning_approach analytical
+    END
+"""
+
+
+def _write_binary_soul(path, config):
+    """Write a binary .soul file with an arbitrary config JSON."""
+    config_bytes = json.dumps(config).encode("utf-8")
+    with open(path, "wb") as f:
+        f.write(b"SOUL")
+        f.write(struct.pack("<I", 1))
+        f.write(struct.pack("<I", len(config_bytes)))
+        f.write(config_bytes)
+
+
+class _DefaultConfig:
+    """TraitWeightsConfig stand-in returning pure 0.5 defaults."""
+
+    def all(self):
+        from domains.context.managers import TRAIT_SCHEMA
+        return {g: {t: 0.5 for t in ts} for g, ts in TRAIT_SCHEMA.items()}
+
+
+def _raise_config():
+    """Stand-in for a failing get_trait_config()."""
+    raise RuntimeError("config down")
+
+
+class TestRealScan:
+
+    def test_top_level_binary_and_text(self, tmp_souls_dir):
+        _write_mock_soul(tmp_souls_dir / "bin.soul", name="bin")
+        (tmp_souls_dir / "txt.slo").write_text(_TXT_SLO)
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        souls = m.list_souls()
+        names = {s.name for s in souls}
+        assert "bin" in names
+        assert "txtsoul" in names
+        txt = m.get_soul("txtsoul")
+        assert txt.description == "A text personality profile"
+        assert txt.personality["warmth"] == 0.9
+        assert "analytical" in txt.traits
+        assert "warmth" in txt.traits
+        assert "confidence" not in txt.traits
+
+    def test_souls_subdirectory(self, tmp_souls_dir):
+        sub = tmp_souls_dir / "souls"
+        sub.mkdir()
+        _write_mock_soul(sub / "sub.soul", name="sub")
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        assert m.get_soul("sub") is not None
+
+    def test_repo_models_souls_resolution(self, tmp_souls_dir):
+        import domains.inference.slo_manager as mod
+        models_dir = Path(mod.__file__).resolve().parents[2] / "models"
+        created = not models_dir.exists()
+        souls_dir = models_dir / "souls"
+        souls_dir.mkdir(parents=True, exist_ok=True)
+        _write_mock_soul(souls_dir / "repo.soul", name="repo")
+        try:
+            m = SloManager(souls_dir=str(tmp_souls_dir))
+            assert m.get_soul("repo") is not None
+        finally:
+            if created:
+                shutil.rmtree(models_dir)
+
+    def test_subdir_duplicate_name_not_overwritten(self, tmp_souls_dir):
+        _write_mock_soul(tmp_souls_dir / "dup.soul", name="dup")
+        sub = tmp_souls_dir / "souls"
+        sub.mkdir()
+        _write_mock_soul(sub / "dup.soul", name="dup")
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        assert m.get_soul("dup").path.startswith(str(tmp_souls_dir))
+
+
+# ── Preference load/save edge cases ───────────────────────────────────────
+
+class TestPreferenceEdgeCases:
+
+    def test_load_restores_saved_soul(self, tmp_souls_dir):
+        _write_mock_soul(tmp_souls_dir / "pref.soul", name="pref")
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        pref = tmp_souls_dir / ".pref"
+        pref.write_text("pref")
+        m._preference_file = pref
+        m._load_preference()
+        assert m._current_soul == "pref"
+
+    def test_load_read_error_is_swallowed(self, tmp_souls_dir):
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        bad = tmp_souls_dir / "prefdir"
+        bad.mkdir()
+        m._preference_file = bad
+        m._load_preference()
+        assert m._current_soul is None
+
+    def test_save_write_error_is_swallowed(self, tmp_souls_dir):
+        blocker = tmp_souls_dir / "afile"
+        blocker.write_text("x")
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        m._current_soul = "x"
+        m._preference_file = blocker / "pref"
+        m._save_preference()
+
+
+# ── get_trait_weights ─────────────────────────────────────────────────────
+
+class TestGetTraitWeights:
+
+    def _manager_with_current(self, tmp_souls_dir, name):
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        m._preference_file = tmp_souls_dir / ".pref"
+        m.switch_soul(name)
+        return m
+
+    def test_no_soul_returns_full_schema(self, tmp_souls_dir, monkeypatch):
+        monkeypatch.setattr(
+            "domains.context.managers.get_trait_config", lambda: _DefaultConfig()
+        )
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        result = m.get_trait_weights()
+        assert set(result.keys()) == {"personality", "cognition", "emotion"}
+        assert result["personality"]["warmth"] == 0.5
+        assert len(result["cognition"]) == 8
+        assert len(result["emotion"]) == 5
+
+    def test_soul_personality_overrides_defaults(self, tmp_souls_dir, monkeypatch):
+        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
+        _write_mock_soul(tmp_souls_dir / "p.soul", name="p",
+                         personality={"warmth": 0.9, "creativity": 0.6})
+        m = self._manager_with_current(tmp_souls_dir, "p")
+        result = m.get_trait_weights()
+        assert result["personality"]["warmth"] == 0.9
+        assert result["personality"]["creativity"] == 0.6
+
+    def test_soul_metadata_cognition_emotion_overlay(self, tmp_souls_dir, tmp_path, monkeypatch):
+        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
+        meta = {
+            "personality": {"warmth": 0.8},
+            "cognition": {"abstract_reasoning": 0.8, "systematic_planning": 0.7},
+            "emotion": {"empathy_depth": 0.7},
+        }
+        meta_bytes = json.dumps(meta).encode("utf-8")
+        path = tmp_path / "meta.soul"
+        path.write_bytes(b"SOUL" + struct.pack("<I", len(meta_bytes)) + meta_bytes)
+
+        m = SloManager(souls_dir=str(tmp_souls_dir))
+        m._preference_file = tmp_souls_dir / ".pref"
+        m._souls_cache["meta"] = SloInfo(
+            name="meta", path=str(path), personality={"warmth": 0.8}
+        )
+        m.switch_soul("meta")
+        result = m.get_trait_weights()
+        assert result["cognition"]["abstract_reasoning"] == 0.8
+        assert result["cognition"]["systematic_planning"] == 0.7
+        assert result["emotion"]["empathy_depth"] == 0.7
+        assert result["personality"]["warmth"] == 0.8
+
+    def test_text_soul_skips_binary_metadata(self, tmp_souls_dir, monkeypatch):
+        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
+        (tmp_souls_dir / "txt.slo").write_text(_TXT_SLO)
+        m = self._manager_with_current(tmp_souls_dir, "txtsoul")
+        result = m.get_trait_weights()
+        assert result["personality"]["warmth"] == 0.9
+        assert result["personality"]["creativity"] == 0.7
+
+    def test_metadata_read_error_is_swallowed(self, tmp_souls_dir, monkeypatch):
+        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
+        _write_mock_soul(tmp_souls_dir / "s.soul", name="s")
+        m = self._manager_with_current(tmp_souls_dir, "s")
+        m.get_soul("s").path = str(tmp_souls_dir / "missing.soul")
+        result = m.get_trait_weights()
+        assert result["personality"]["warmth"] == 0.8
+
+    def test_empty_personality_skips_overlay(self, tmp_souls_dir, monkeypatch):
+        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
+        _write_binary_soul(tmp_souls_dir / "e.soul", {
+            "name": "e",
+            "description": "no personality",
+            "personality": {},
+        })
+        m = self._manager_with_current(tmp_souls_dir, "e")
+        result = m.get_trait_weights()
+        assert result["personality"]["warmth"] == 0.5
+
+    def test_live_config_overrides_soul(self, tmp_souls_dir, monkeypatch):
+        _write_mock_soul(tmp_souls_dir / "s.soul", name="s",
+                         personality={"warmth": 0.8, "creativity": 0.6})
+        m = self._manager_with_current(tmp_souls_dir, "s")
+
+        class _Live:
+            def all(self):
+                return {"personality": {"warmth": 0.95}}
+
+        monkeypatch.setattr("domains.context.managers.get_trait_config", lambda: _Live())
+        result = m.get_trait_weights()
+        assert result["personality"]["warmth"] == 0.95
+        assert result["personality"]["creativity"] == 0.6
+
+    def test_config_exception_falls_back_to_defaults(self, tmp_souls_dir, monkeypatch):
+        _write_mock_soul(tmp_souls_dir / "s.soul", name="s",
+                         personality={"warmth": 0.8, "creativity": 0.6})
+        m = self._manager_with_current(tmp_souls_dir, "s")
+
+        def _boom():
+            raise RuntimeError("config down")
+
+        monkeypatch.setattr("domains.context.managers.get_trait_config", _boom)
+        result = m.get_trait_weights()
+        assert result["personality"]["warmth"] == 0.8
+
+
+# ── Module-level convenience functions ────────────────────────────────────
+
+class TestModuleLevelFunctions:
+
+    def test_module_switch_and_list(self):
+        import domains.inference.slo_manager as mod
+        original = mod._slo_manager
+        mod._slo_manager = None
+        try:
+            result = mod.switch_soul("does_not_exist")
+            assert result["success"] is False
+            assert mod.list_souls() == []
         finally:
             mod._slo_manager = original

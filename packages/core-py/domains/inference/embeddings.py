@@ -50,15 +50,15 @@ class EmbeddingResult:
 class BaseEmbedder(ABC):
     @abstractmethod
     def embed(self, texts: Union[str, List[str]]) -> List[List[float]]:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
     def get_dimension(self) -> int:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
     def get_model_name(self) -> str:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
 
 class InMemoryEmbedder(BaseEmbedder):

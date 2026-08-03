@@ -24,6 +24,42 @@
   ],
   "cards": [
     {
+      "id": "20260803_040336_wave-l-slo-manager-58-100-forward-pass-0-100-embeddings-98-1",
+      "title": "Wave L: slo_manager 58%->100%, forward_pass 0%->100%, embeddings 98%->100%",
+      "description": "Wave L: slo_manager.py 58%->100%, forward_pass.py 0%->100%, embeddings.py 98%->100%.\n\n- slo_manager.py: 2 unreachable except blocks in _scan_souls pragma'd (no-cover; _parse_soul_info swallows all errors internally). embeddings.py: 3 abstractmethod pass bodies pragma'd.\n- tests/test_slo_manager.py: +16 tests \u2014 real _scan_souls (top-level .slo+.soul, souls/ subdir, repo core-py/models/souls resolution via fixture with teardown, duplicate-name non-overwrite), preference load-restore success + read-error + save-write-error paths, get_trait_weights (no soul full schema, soul personality overlay, metadata cognition/emotion overlay via hand-registered soul in reader-expected SOUL+len+meta layout, text .slo non-SOUL magic branch, metadata read-error, empty-personality skip, live-config override, config-exception fallback), module-level switch_soul/list_souls.\n- tests/test_forward_pass.py: +11 tests \u2014 ForwardPassResult defaults/shape, ForwardPassable runtime_checkable +/-/signature, timed_forward model_name/time/result.\n- Found latent quirk: get_trait_weights metadata reader expects SOUL+meta_len+meta layout (no version field) unlike _parse_soul_info's versioned layout; behavior preserved, not fixed in this wave.\n- Verified: 81 targeted tests, slo_format/context_managers/soul_engine/knowledge/rag regression + wave-K consumer sweep + npu/tokenizer/quantum sweep all pass. No filesystem pollution (models/ fixture cleaned up).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "coverage",
+        "inference",
+        "slo-manager",
+        "forward-pass",
+        "embeddings"
+      ],
+      "created_at": "2026-08-03T04:03:36.905476+00:00",
+      "updated_at": "2026-08-03T04:03:36.905476+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_035627_multimodal-coverage-27-to-99",
+      "title": "Multimodal coverage 27% to 99%",
+      "description": "Multimodal statement coverage raised 27% -> 99% via new tests/test_multimodal_coverage.py (~1200 lines, slow-marked). Fixed 2 source bugs found while testing: missing MultimodalManager._pick_seed_caption (added, stable seed from embed mean), AudioEncoder._embed_patches pads to max_patches+1. Engine: param_groups() is a method, not property; contrastive_loss.backward() sets no external grads; VisionCNN default embed_dim=128; browser-speech recognize is client-only (server guards on capabilities first). Coverage final: manager 100%, speech 100%, tts 100%, char_tokenizer 100%, text_encoder 100%, engine 99%, diffusion 99%, video 99%, bpe 98%, vae 97%, vision 92% (remaining lines are defensive error paths). Regression: 407 passed in 68s (coverage + slolib_gpu + v2 + generation + speech + tts).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "core-py",
+        "multimodal",
+        "testing"
+      ],
+      "created_at": "2026-08-03T03:56:27.594475+00:00",
+      "updated_at": "2026-08-03T03:56:27.594475+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260803_034935_wave-k-vector-store-vector-stores-semantic-cache-coverage-10",
       "title": "Wave K: vector_store + vector_stores + semantic_cache coverage 100%",
       "description": "Wave K: domains/inference/vector_store.py 69%->100%, vector_stores/ package (__init__/chromadb_store/pinecone_store) 0%->100%, semantic_cache.py 95%->100%.\n\n- 6 abstractmethod pass bodies marked pragma:no-cover (unreachable by design).\n- tests/test_vector_store.py: +24 tests \u2014 sanitize_input pattern/IMPORTANT branches, InMemory connect/disconnect/upsert_sync/count_sync, MogDB no-connection sync paths, _load_embed_model (cached model, psutil low-memory, sentence-transformers load success/failure via sys.modules fakes), simple_embed ST path (equal/pad/truncate/encode-error) and SloNet path (untrained skip, trained load, pad/truncate/error fallbacks).\n- tests/test_vector_stores.py: +31 tests \u2014 package re-exports, ChromaDB/Pinecone stores fully exercised with faked provider modules (connect/upsert/query/delete/count/disconnect/error paths), create_vector_store factory (in_memory/memory/local/mogdb/persist/persistent/chromadb/pinecone + pinecone-failure RuntimeError + NotImplementedError).\n- tests/test_semantic_cache.py: +6 tests \u2014 medium (0.5-0.8) and low (0.3-0.5) word-overlap scoring bands with scripted HD similarity, empty LRU evict.\n- No source behavior changes (pragma comments only); 405 consumer tests + 150 inference regression tests pass.",
