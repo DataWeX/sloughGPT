@@ -9,6 +9,7 @@ Usage:
 import json
 import time
 import sys
+import uuid
 from pathlib import Path
 
 BASELINE_FILE = Path("data/benchmark_latency_baseline.json")
@@ -29,15 +30,20 @@ def measure_latency(url: str = "http://localhost:8000", runs: int = 5) -> dict:
     latencies = []
     for prompt in SAMPLE_PROMPTS:
         for _ in range(runs):
-            payload = _json.dumps({"prompt": prompt, "max_tokens": 20, "temperature": 0.8}).encode()
+            payload = _json.dumps({
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 20,
+                "temperature": 0.01,
+                "session_id": f"bench-{uuid.uuid4().hex[:8]}",
+            }).encode()
             req = urllib.request.Request(
-                f"{url}/labs/chat",
+                f"{url}/chat",
                 data=payload,
                 headers={"Content-Type": "application/json"},
             )
             start = time.perf_counter()
             try:
-                urllib.request.urlopen(req, timeout=30)
+                urllib.request.urlopen(req, timeout=120)
                 elapsed = time.perf_counter() - start
                 latencies.append(elapsed)
             except Exception as e:

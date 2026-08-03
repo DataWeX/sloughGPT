@@ -48,6 +48,7 @@ beforeEach(() => {
     last_train: '2026-07-13T10:00:00Z',
     session_count: 42,
     response_log_count: 7,
+    captured_count: 16,
   })
   mockListSessions.mockResolvedValue([
     { id: 's1', name: 'First chat', updated_at: '2026-07-13T10:00:00Z', messages: [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Hi' }] },
@@ -92,6 +93,7 @@ describe('TrainFromSessionsCard', () => {
     await waitFor(() => {
       expect(screen.getByText(/42 conversations/)).toBeDefined()
       expect(screen.getByText(/7 log files/)).toBeDefined()
+      expect(screen.getByText(/16 captured pairs/)).toBeDefined()
     })
   })
 

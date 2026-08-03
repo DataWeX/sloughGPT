@@ -1251,6 +1251,7 @@ class SloLinear(SloLayer):
             self.bias = zeros((out_f,), requires_grad=True)
         self.out_features = out_f; self.in_features = in_f
         self._weight_T = None
+        self._weight_T_contig = None  # cached contiguous (K, N) transpose for numpy GEMM
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
         self._quant_info = None  # TensorInfo for quantized weight
         self._quant_unpacked = None  # lazy int4→int8 unpack cache
@@ -1261,6 +1262,23 @@ class SloLinear(SloLayer):
         if self._weight_T is None:
             self._weight_T = self.weight.T()
         return self._weight_T
+
+    def _get_weight_T_contig(self) -> np.ndarray:
+        """Return a cached contiguous transposed weight matrix.
+
+        Unlike _get_weight_T (a strided view), this returns a contiguous
+        (K, N) copy so numpy `x @ W_T` uses the optimized GEMM kernel.
+        The cache is built once per layer and reused across generate calls;
+        it is invalidated when the weight is replaced (set_quantized_weight,
+        set_point_weight). In-place updates to weight.data are NOT reflected
+        (same staleness semantics as _get_weight_T).
+
+        Returns:
+            np.ndarray: (K, N) contiguous float32 array of weight.data.T
+        """
+        if self._weight_T_contig is None:
+            self._weight_T_contig = np.ascontiguousarray(self.weight.data.T)
+        return self._weight_T_contig
 
     def set_quantized_weight(self, quant_info):
         """Set a quantized weight for this layer.
@@ -1274,6 +1292,7 @@ class SloLinear(SloLayer):
         """
         self._quant_info = quant_info
         self._quant_unpacked = None  # lazy unpack cache for int4
+        self._weight_T_contig = None  # transpose cache no longer valid
 
     def _get_quant_array(self) -> np.ndarray:
         if self._quant_info is None or not self._quant_info.is_quantized:
@@ -1306,6 +1325,7 @@ class SloLinear(SloLayer):
         # Sync generated data into self.weight so training/gradients still work
         arr = point_weight.generate()
         self.weight.data = arr.astype(np.float32)
+        self._weight_T_contig = None  # transpose cache no longer valid
 
     def get_point_weight(self):
         """Return the PointWeight for this layer, or None."""
@@ -3857,22 +3877,24 @@ class SloTransformer(SloNet):
                     m_w13.append(None); m_b13.append(None)
                     m_w2.append(None); m_b2.append(None)
                 else:
-                    wqkv = np.concatenate([b.attn.W_q.weight.data, b.attn.W_k.weight.data,
-                                           b.attn.W_v.weight.data], axis=0)
+                    wqkv = np.concatenate([b.attn.W_q._get_weight_T_contig(),
+                                           b.attn.W_k._get_weight_T_contig(),
+                                           b.attn.W_v._get_weight_T_contig()], axis=1)
                     bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
                     bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
                     bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
                     bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
-                    w13 = np.concatenate([b.ff.w1.weight.data.T, b.ff.w3.weight.data.T], axis=1)
+                    w13 = np.concatenate([b.ff.w1._get_weight_T_contig(),
+                                          b.ff.w3._get_weight_T_contig()], axis=1)
                     b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
                     b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
                     b13 = np.concatenate([b1, b3]) if b1 is not None else None
                     _nkv.append(b.attn.n_kv_head)
                     m_wqkv.append(wqkv); m_bqkv.append(bqkv)
-                    m_wo.append(b.attn.W_o.weight.data)
+                    m_wo.append(b.attn.W_o._get_weight_T_contig())
                     m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
                     m_w13.append(w13); m_b13.append(b13)
-                    m_w2.append(b.ff.w2.weight.data)
+                    m_w2.append(b.ff.w2._get_weight_T_contig())
                     m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
         n_blocks = len(m_wqkv)
@@ -3887,6 +3909,7 @@ class SloTransformer(SloNet):
         norm_b = norm_layer.bias.data if norm_has_bias else None
         norm_eps = norm_layer.eps
         lm_w = self.layers[-1].weight.data
+        lm_w_T = self.layers[-1]._get_weight_T_contig()
 
         # Extract E (head_dim) and H (n_heads) from the first transformer block
         _first_block = None
@@ -3987,7 +4010,7 @@ class SloTransformer(SloNet):
                     k = k.reshape(1, seq_len, K_H, E)
                     v = v.reshape(1, seq_len, K_H, E)
                 else:
-                    qkv = h @ m_wqkv[bi].T
+                    qkv = h @ m_wqkv[bi]
                     if _use_bias_bqkv:
                         qkv = qkv + m_bqkv[bi]
                     q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
@@ -4044,7 +4067,7 @@ class SloTransformer(SloNet):
                 if _is_quantized:
                     ao = q_wo[bi].forward_numpy(ao)
                 else:
-                    ao = ao @ m_wo[bi].T
+                    ao = ao @ m_wo[bi]
                     if _use_bias_bo:
                         ao = ao + m_bo[bi]
                 x = x + ao
@@ -4085,7 +4108,7 @@ class SloTransformer(SloNet):
                         h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
                     else:
                         h = h13[..., :_ff_dim] * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h13[..., :_ff_dim]))) * h13[..., _ff_dim:]
-                    h = h @ m_w2[bi].T
+                    h = h @ m_w2[bi]
                     if _use_bias_b2:
                         h = h + m_b2[bi]
                 x = x + h
@@ -4126,7 +4149,7 @@ class SloTransformer(SloNet):
                 if _is_quantized:
                     logits = lm_head_mod.forward_numpy(x[:, -1, :])
                 else:
-                    logits = x[:, -1, :] @ lm_w.T
+                    logits = x[:, -1, :] @ lm_w_T
 
                 # Greedy sampling
                 if _is_greedy:
@@ -4219,22 +4242,24 @@ class SloTransformer(SloNet):
                     m_w13.append(None); m_b13.append(None)
                     m_w2.append(None); m_b2.append(None)
                 else:
-                    wqkv = np.concatenate([b.attn.W_q.weight.data, b.attn.W_k.weight.data,
-                                           b.attn.W_v.weight.data], axis=0)
+                    wqkv = np.concatenate([b.attn.W_q._get_weight_T_contig(),
+                                           b.attn.W_k._get_weight_T_contig(),
+                                           b.attn.W_v._get_weight_T_contig()], axis=1)
                     bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
                     bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
                     bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
                     bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
-                    w13 = np.concatenate([b.ff.w1.weight.data.T, b.ff.w3.weight.data.T], axis=1)
+                    w13 = np.concatenate([b.ff.w1._get_weight_T_contig(),
+                                          b.ff.w3._get_weight_T_contig()], axis=1)
                     b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
                     b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
                     b13 = np.concatenate([b1, b3]) if b1 is not None else None
                     _nkv.append(b.attn.n_kv_head)
                     m_wqkv.append(wqkv); m_bqkv.append(bqkv)
-                    m_wo.append(b.attn.W_o.weight.data)
+                    m_wo.append(b.attn.W_o._get_weight_T_contig())
                     m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
                     m_w13.append(w13); m_b13.append(b13)
-                    m_w2.append(b.ff.w2.weight.data)
+                    m_w2.append(b.ff.w2._get_weight_T_contig())
                     m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
         n_blocks = len(m_wqkv)
@@ -4249,6 +4274,7 @@ class SloTransformer(SloNet):
         norm_eps = norm_layer.eps
         lm_w = self.layers[-1].weight.data
         lm_head_mod = self.layers[-1]  # SloLinear — for quantized forward_numpy()
+        lm_w_T = self.layers[-1]._get_weight_T_contig()
 
         _first_block = None
         for l in self.layers[1:-2]:
@@ -4340,7 +4366,7 @@ class SloTransformer(SloNet):
                     k = k.reshape(1, seq_len, K_H, E)
                     v = v.reshape(1, seq_len, K_H, E)
                 else:
-                    qkv = h @ m_wqkv[bi].T
+                    qkv = h @ m_wqkv[bi]
                     if _use_bias_bqkv:
                         qkv = qkv + m_bqkv[bi]
                     q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
@@ -4394,7 +4420,7 @@ class SloTransformer(SloNet):
                 if _is_quantized:
                     ao = q_wo[bi].forward_numpy(ao)
                 else:
-                    ao = ao @ m_wo[bi].T
+                    ao = ao @ m_wo[bi]
                     if _use_bias_bo:
                         ao = ao + m_bo[bi]
                 x = x + ao
@@ -4434,7 +4460,7 @@ class SloTransformer(SloNet):
                         h = _nb_swi_glu_mul(h1, h3)
                     else:
                         h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
-                    h = h @ m_w2[bi].T
+                    h = h @ m_w2[bi]
                     if _use_bias_b2:
                         h = h + m_b2[bi]
                 x = x + h
@@ -4470,7 +4496,7 @@ class SloTransformer(SloNet):
                 if _is_quantized:
                     logits = lm_head_mod.forward_numpy(x[:, -1, :])
                 else:
-                    logits = x[:, -1, :] @ lm_w.T
+                    logits = x[:, -1, :] @ lm_w_T
 
                 if _is_greedy:
                     next_id = int(np.argmax(logits[0]))

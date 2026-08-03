@@ -604,6 +604,7 @@ export interface AutoTrainStatus {
   last_checkpoint: string | null
   session_count: number
   response_log_count: number
+  captured_count?: number
 }
 
 export interface TrainingDataStats {

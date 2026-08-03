@@ -19,6 +19,7 @@ logger = logging.getLogger("slo.training.pair_extractor")
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _SESSIONS_DIR = _REPO_ROOT / "data" / "chat_sessions"
 _RESPONSE_LOGS_DIR = _REPO_ROOT / "data" / "response_logs"
+_CAPTURED_DIR = _REPO_ROOT / "datasets" / "api_conversations"
 
 # Ensure directories exist (auto-created on first access)
 _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -196,6 +197,86 @@ def extract_pairs_from_logs(
     return pairs
 
 
+def extract_pairs_from_corpus(
+    limit: int = 100,
+    min_length: int = 5,
+    model: Optional[str] = None,
+) -> List[Dict[str, str]]:
+    """
+    Extract (user_msg, assistant_msg) pairs from captured API conversations.
+
+    Reads ``datasets/api_conversations/corpus.jsonl``, where each line is a
+    messages-format exchange: ``{"messages": [{"role": "user", ...}, {"role":
+    "assistant", ...}], "meta": {...}}``.
+
+    Args:
+        limit: Maximum number of pairs to return.
+        min_length: Minimum character length for both messages.
+        model: If provided, only extract pairs from this model.
+
+    Returns:
+        List of dicts with keys: user_msg, assistant_msg, session_id, model.
+        Deduplicated by content hash. File order.
+    """
+    corpus_file = _CAPTURED_DIR / "corpus.jsonl"
+    if not corpus_file.exists():
+        logger.info("Captured corpus not found: %s", corpus_file,
+            extra={"tag": "TRAIN"},)
+        return []
+
+    seen_hashes: set = set()
+    pairs: List[Dict[str, str]] = []
+
+    try:
+        with open(corpus_file, encoding="utf-8") as f:
+            for line in f:
+                if len(pairs) >= limit:
+                    break
+
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                meta = entry.get("meta") or {}
+                if model and meta.get("model") != model:
+                    continue
+
+                user_msg = ""
+                assistant_msg = ""
+                for m in entry.get("messages") or []:
+                    if m.get("role") == "user":
+                        user_msg = (m.get("content") or "").strip()
+                    elif m.get("role") == "assistant":
+                        assistant_msg = (m.get("content") or "").strip()
+
+                if len(user_msg) < min_length or len(assistant_msg) < min_length:
+                    continue
+
+                h = hashlib.md5(f"{user_msg}|||{assistant_msg}".encode()).hexdigest()
+                if h in seen_hashes:
+                    continue
+                seen_hashes.add(h)
+
+                pairs.append({
+                    "user_msg": user_msg,
+                    "assistant_msg": assistant_msg,
+                    "session_id": meta.get("session_id", ""),
+                    "model": meta.get("model", ""),
+                })
+    except OSError as e:
+        logger.warning("Failed to read captured corpus %s: %s", corpus_file, e,
+            extra={"tag": "TRAIN"},)
+
+    logger.info("Extracted %d pairs from captured corpus", len(pairs),
+        extra={"tag": "TRAIN"},)
+    return pairs
+
+
 def write_training_text(
     pairs: List[Dict[str, str]],
     output_dir: Optional[Path] = None,
@@ -262,10 +343,24 @@ def count_pairs_in_logs() -> int:
     return total
 
 
+def count_pairs_in_corpus() -> int:
+    """Count total exchanges in the captured API conversations corpus."""
+    corpus_file = _CAPTURED_DIR / "corpus.jsonl"
+    if not corpus_file.exists():
+        return 0
+    try:
+        with open(corpus_file, encoding="utf-8") as f:
+            return sum(1 for line in f if line.strip())
+    except OSError:
+        return 0
+
+
 __all__ = [
     "extract_pairs_from_sessions",
     "extract_pairs_from_logs",
+    "extract_pairs_from_corpus",
     "write_training_text",
     "count_pairs_in_sessions",
     "count_pairs_in_logs",
+    "count_pairs_in_corpus",
 ]

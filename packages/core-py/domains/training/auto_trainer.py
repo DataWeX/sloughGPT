@@ -25,6 +25,7 @@ logger = logging.getLogger("slo.training.auto_trainer")
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _SESSIONS_DIR = _REPO_ROOT / "data" / "chat_sessions"
 _RESPONSE_LOGS_DIR = _REPO_ROOT / "data" / "response_logs"
+_CAPTURED_CORPUS = _REPO_ROOT / "datasets" / "api_conversations" / "corpus.jsonl"
 
 
 class AutoTrainer:
@@ -53,6 +54,7 @@ class AutoTrainer:
         self._stop_event = threading.Event()
         self._sessions_mtime: float = 0
         self._logs_mtime: float = 0
+        self._corpus_mtime: float = 0
 
     def start(self) -> None:
         """Start the background monitoring thread."""
@@ -93,13 +95,17 @@ class AutoTrainer:
         # Check for new files
         sessions_mtime = self._dir_mtime(_SESSIONS_DIR)
         logs_mtime = self._dir_mtime(_RESPONSE_LOGS_DIR)
+        corpus_mtime = self._dir_mtime(_CAPTURED_CORPUS)
 
-        if sessions_mtime == self._sessions_mtime and logs_mtime == self._logs_mtime:
+        if (sessions_mtime == self._sessions_mtime
+                and logs_mtime == self._logs_mtime
+                and corpus_mtime == self._corpus_mtime):
             return
 
         # New data detected — count new conversations
         self._sessions_mtime = sessions_mtime
         self._logs_mtime = logs_mtime
+        self._corpus_mtime = corpus_mtime
         self._conversation_count += 1
 
         # Check if we should train
@@ -113,12 +119,15 @@ class AutoTrainer:
         """Extract pairs and spawn training subprocess."""
         from domains.training.pair_extractor import (
             extract_pairs_from_sessions,
+            extract_pairs_from_corpus,
             extract_pairs_from_logs,
             write_training_text,
         )
 
-        # Prefer session pairs, fall back to logs
+        # Prefer session pairs, fall back to captured corpus, then logs
         pairs = extract_pairs_from_sessions(limit=self.threshold * 3, min_length=5)
+        if len(pairs) < 5:
+            pairs = extract_pairs_from_corpus(limit=self.threshold * 3, min_length=5)
         if len(pairs) < 5:
             pairs = extract_pairs_from_logs(limit=self.threshold * 3, min_length=5)
 
@@ -230,9 +239,11 @@ class AutoTrainer:
 
     @staticmethod
     def _dir_mtime(d: Path) -> float:
-        """Get latest mtime of files in a directory."""
+        """Get latest mtime of a directory's files (or a single file's mtime)."""
         if not d.exists():
             return 0
+        if d.is_file():
+            return d.stat().st_mtime
         latest = 0.0
         for f in d.iterdir():
             if f.is_file():
@@ -243,6 +254,7 @@ class AutoTrainer:
         """Return current auto-trainer status."""
         session_count = len(list(_SESSIONS_DIR.glob("*.json"))) if _SESSIONS_DIR.exists() else 0
         log_count = len(list(_RESPONSE_LOGS_DIR.glob("*.jsonl"))) if _RESPONSE_LOGS_DIR.exists() else 0
+        from domains.training.pair_extractor import count_pairs_in_corpus
         return {
             "enabled": self._thread is not None and self._thread.is_alive(),
             "threshold": self.threshold,
@@ -258,6 +270,7 @@ class AutoTrainer:
             "last_checkpoint": self._last_train_checkpoint,
             "session_count": session_count,
             "response_log_count": log_count,
+            "captured_count": count_pairs_in_corpus(),
         }
 
 

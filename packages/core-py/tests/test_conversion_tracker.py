@@ -111,6 +111,12 @@ class TestConversionTrackerUpdate:
         s = t.update("gpt2", progress=0.9)
         assert s.message == "original"
 
+    def test_update_explicit_message_with_stage(self):
+        t = ConversionTracker()
+        t.start("gpt2")
+        s = t.update("gpt2", stage=ConversionStage.DOWNLOADING, message="fetching weights")
+        assert s.message == "fetching weights"
+
     def test_update_auto_starts_unknown(self):
         t = ConversionTracker()
         s = t.update("unknown", stage=ConversionStage.DOWNLOADING, progress=0.1)

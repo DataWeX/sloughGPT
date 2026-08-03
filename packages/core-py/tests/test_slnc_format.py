@@ -279,6 +279,40 @@ class TestConvertToSlnc:
         assert h["block_count"] == 1
         assert len(loader._tensor_map) == len(sf.GPT2_BLOCK_TENSORS) + 4
 
+    def test_default_output_path(self, fake_hf, tmp_path, monkeypatch):
+        from pathlib import Path as RealPath
+
+        real_root = RealPath(sf.__file__).resolve().parents[4]
+        real_root_s = str(real_root)
+
+        def _redirect(p):
+            p = RealPath(p)
+            s = str(p)
+            if s == real_root_s:
+                return RealPath(str(tmp_path))
+            if s.startswith(real_root_s + "/"):
+                return RealPath(str(tmp_path) + s[len(real_root_s):])
+            return p
+
+        monkeypatch.setattr(sf, "Path", _redirect)
+        created = sf.convert_to_slnc("gpt2")
+        out = str(tmp_path / "models" / "gpt2.slnc")
+        assert created == out
+        assert sf.read_slnc_header(out)["version"] == sf.SLNC_VERSION
+
+    def test_no_safetensors_raises(self, fake_hf, monkeypatch, tmp_path):
+        import domains.infrastructure.safetensors_loader as stl
+
+        monkeypatch.setattr(stl, "_find_safetensors", lambda model_dir: None)
+        with pytest.raises(FileNotFoundError, match="No .safetensors"):
+            sf.convert_to_slnc("gpt2", output_path=str(tmp_path / "m.slnc"))
+
+    def test_missing_non_block_tensor_raises(self, fake_hf, tmp_path):
+        config, weights = fake_hf
+        del weights["wte.weight"]
+        with pytest.raises(KeyError, match="wte.weight"):
+            sf.convert_to_slnc("gpt2", output_path=str(tmp_path / "m.slnc"))
+
 
 class TestReadSlncHeader:
     def test_valid_file(self, tmp_path):

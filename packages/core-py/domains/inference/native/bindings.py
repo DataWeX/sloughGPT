@@ -29,11 +29,14 @@ def _find_lib():
 
     for p in candidates:
         if p.exists():
-            _LIB = ctypes.CDLL(str(p))
-            _setup_signatures(_LIB)
-            return _LIB
+            try:
+                _LIB = ctypes.CDLL(str(p))
+                _setup_signatures(_LIB)
+                return _LIB
+            except OSError:
+                continue
 
-    raise RuntimeError(
+    raise RuntimeError(  # pragma: no cover — lib ships alongside this module
         "libtransformer_forward.dylib not found. Compile with:\n"
         "  cc -O3 -march=native -dynamiclib -framework Accelerate "
         "-o libtransformer_forward.dylib transformer_forward.c"

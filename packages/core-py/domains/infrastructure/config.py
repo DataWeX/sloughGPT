@@ -154,8 +154,6 @@ def _apply_env_overrides(config: AppConfig) -> AppConfig:
             continue
         if key.startswith("SLO_RATE_LIMIT__"):
             continue
-        if key == _ENV_PREFIX.rstrip("_"):
-            continue
         dot_path = _env_to_key(key)
         overrides[dot_path] = value
 

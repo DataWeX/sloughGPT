@@ -24,6 +24,7 @@ import sys
 import json
 import time
 import math
+import uuid
 import argparse
 from dataclasses import dataclass, asdict, field
 from typing import List, Optional
@@ -91,6 +92,7 @@ def _chat_request(url: str, prompt: str, timeout: int = 120) -> tuple:
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 50,
         "temperature": 0.01,  # near-deterministic for stable length CV
+        "session_id": f"bench-{uuid.uuid4().hex[:8]}",  # unique — avoid SessionKVCache replay
     }).encode()
     req = Request(f"{url}/chat", data=body, headers={"Content-Type": "application/json"})
     start = time.time()
@@ -121,7 +123,8 @@ def _resolve_model(url: str) -> str:
     """Get the loaded model name from health endpoint."""
     health = _health_check(url)
     if health:
-        return health.get("model", health.get("model_type", "unknown"))
+        payload = health.get("data", health)
+        return payload.get("model") or payload.get("model_type") or "unknown"
     return "unknown"
 
 

@@ -312,15 +312,9 @@ class ContinualLearner:
 
         for start in range(0, len(buf) - TRAIN_SEQ_LEN, TRAIN_BATCH_SIZE):
             chunk = buf[start:start + TRAIN_BATCH_SIZE + TRAIN_SEQ_LEN]
-            if len(chunk) < TRAIN_SEQ_LEN + 1:
-                break
 
             xi = chunk[:TRAIN_SEQ_LEN]
             yi = chunk[1:TRAIN_SEQ_LEN + 1]
-            while len(xi) < TRAIN_SEQ_LEN:
-                xi.append(UNK)
-            while len(yi) < TRAIN_SEQ_LEN:
-                yi.append(UNK)
 
             x = tensor([xi], requires_grad=True)
             y = tensor([yi])

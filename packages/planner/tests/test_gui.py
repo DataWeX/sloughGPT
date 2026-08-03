@@ -60,6 +60,13 @@ def test_index_serves_spa(server):
     assert "Planner" in r.text
 
 
+def test_card_html_note_chip_has_no_tdz_self_reference():
+    """Regression: cardHtml used `const n = ... ${n} ...`, a temporal
+    dead zone error that crashed board rendering for any card with notes."""
+    assert "${c.notes.length} note" in GUI_HTML
+    assert "${n} note${n>1" not in GUI_HTML
+
+
 def test_create_list_and_get_note(server):
     with _client() as c:
         r = c.post(server.base_url + "/api/notes", json={

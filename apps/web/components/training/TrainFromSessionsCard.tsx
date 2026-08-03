@@ -257,6 +257,9 @@ export function TrainFromSessionsCard() {
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground/70">
           <span>{status.session_count} conversations</span>
           <span>{status.response_log_count} log files</span>
+          {typeof status.captured_count === 'number' && (
+            <span>{status.captured_count} captured pairs</span>
+          )}
         </div>
 
         {/* Config section */}

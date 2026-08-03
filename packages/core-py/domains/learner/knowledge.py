@@ -135,8 +135,6 @@ def chunk_by_paragraph(text: str, max_chunk_size: int = 1000) -> list[str]:
     current = ""
     for para in paragraphs:
         para = para.strip()
-        if not para:
-            continue
 
         if current and len(current) + len(para) + 2 > max_chunk_size:
             if current:

@@ -515,6 +515,9 @@ def train_from_sessions(
     config = config or ChatTrainConfig()
     pairs = extract_pairs_from_sessions(limit=config.max_pairs, session_ids=config.session_ids)
     if not pairs:
+        from domains.training.pair_extractor import extract_pairs_from_corpus
+        pairs = extract_pairs_from_corpus(limit=config.max_pairs)
+    if not pairs:
         raise ValueError("No chat sessions found to train on")
 
     logger.info("Extracted %d pairs from sessions", len(pairs),

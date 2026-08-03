@@ -432,3 +432,235 @@ class TestOrchestratorSingleton:
         reset_orchestrator()
         o2 = get_orchestrator()
         assert o1 is not o2
+
+
+# ── Custom agent loading ──────────────────────────────────────────────
+
+
+class TestLoadCustomAgents:
+    def test_loads_custom_agents_from_config(self, tmp_path, monkeypatch):
+        from pathlib import Path
+        config_dir = tmp_path / ".config" / "sloughgpt"
+        config_dir.mkdir(parents=True)
+        (config_dir / "custom_agents.json").write_text(
+            '{"analyst": {"name": "Analyst", "role": "analyze", '
+            '"system_prompt": "You analyze.", "tools": ["memory", "web_search"]}}'
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        orch = MultiAgentOrchestrator()
+        assert "analyst" in orch.agents
+        assert orch.agents["analyst"].name == "Analyst"
+        assert orch.agents["analyst"].role == "analyze"
+        assert orch.agents["analyst"].tools == ["memory", "web_search"]
+
+    def test_existing_agent_not_overridden(self, tmp_path, monkeypatch):
+        from pathlib import Path
+        config_dir = tmp_path / ".config" / "sloughgpt"
+        config_dir.mkdir(parents=True)
+        (config_dir / "custom_agents.json").write_text(
+            '{"researcher": {"name": "Hacker", "role": "bad", "system_prompt": "evil"}}'
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        orch = MultiAgentOrchestrator()
+        assert orch.agents["researcher"].name == "Researcher"
+
+    def test_custom_agent_default_tools(self, tmp_path, monkeypatch):
+        from pathlib import Path
+        config_dir = tmp_path / ".config" / "sloughgpt"
+        config_dir.mkdir(parents=True)
+        (config_dir / "custom_agents.json").write_text(
+            '{"solo": {"name": "Solo", "role": "work alone", "system_prompt": "Just do it."}}'
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        orch = MultiAgentOrchestrator()
+        assert orch.agents["solo"].tools == ["memory"]
+
+    def test_malformed_json_ignored(self, tmp_path, monkeypatch):
+        from pathlib import Path
+        config_dir = tmp_path / ".config" / "sloughgpt"
+        config_dir.mkdir(parents=True)
+        (config_dir / "custom_agents.json").write_text("{not valid json")
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        orch = MultiAgentOrchestrator()
+        assert len(orch.agents) == 4
+
+    def test_missing_key_in_entry_ignored(self, tmp_path, monkeypatch):
+        from pathlib import Path
+        config_dir = tmp_path / ".config" / "sloughgpt"
+        config_dir.mkdir(parents=True)
+        (config_dir / "custom_agents.json").write_text(
+            '{"broken": {"role": "no name", "system_prompt": "x"}}'
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        orch = MultiAgentOrchestrator()
+        assert "broken" not in orch.agents
+
+
+# ── Uncovered orchestrator paths ──────────────────────────────────────
+
+
+class _FakeGenerate:
+    def __init__(self, result):
+        self._result = result
+
+    def generate(self, prompt, max_tokens=200):
+        return self._result
+
+
+class TestUncoveredOrchestratorPaths:
+    def test_execute_cannot_plan(self):
+        orch = MultiAgentOrchestrator()
+        orch._plan = lambda goal, context: []
+        result = orch.execute("test")
+        assert result["response"] == "Could not plan this goal."
+        assert result["tasks"] == []
+
+    def test_plan_from_llm_dict(self):
+        orch = MultiAgentOrchestrator()
+        orch._generate = lambda prompt, max_tokens=200: (
+            '{"id": "1", "description": "research topic", "agent": "researcher"}'
+        )
+        tasks = orch._plan("test goal", "")
+        assert len(tasks) == 1
+        assert tasks[0].assigned_agent == "researcher"
+
+    def test_plan_regex_extracts_json(self):
+        orch = MultiAgentOrchestrator()
+        orch._generate = lambda prompt, max_tokens=200: (
+            'Sure! Here is the plan:\n'
+            '[{"id": "1", "description": "research", "agent": "researcher"}]\n'
+            'Let me know.'
+        )
+        tasks = orch._plan("test goal", "")
+        assert len(tasks) == 1
+        assert tasks[0].assigned_agent == "researcher"
+
+    def test_plan_regex_invalid_json_falls_back(self):
+        orch = MultiAgentOrchestrator()
+        orch._generate = lambda prompt, max_tokens=200: 'Plan: [{"id": "1", bad]'
+        tasks = orch._plan("test goal", "")
+        assert len(tasks) == 2
+        assert tasks[0].assigned_agent == "researcher"
+
+    def test_plan_depends_on_as_string(self):
+        orch = MultiAgentOrchestrator()
+        orch._generate = lambda prompt, max_tokens=200: (
+            '[{"id": "1", "description": "research", "agent": "researcher", '
+            '"depends_on": "0"}]'
+        )
+        tasks = orch._plan("test goal", "")
+        assert tasks[0].depends_on == ["0"]
+
+    def test_plan_unknown_agent_defaults_to_researcher(self):
+        orch = MultiAgentOrchestrator()
+        orch._generate = lambda prompt, max_tokens=200: (
+            '[{"id": "1", "description": "hack", "agent": "ghost"}]'
+        )
+        tasks = orch._plan("test", "")
+        assert tasks[0].assigned_agent == "researcher"
+
+    def test_compose_with_completed_tasks(self):
+        orch = MultiAgentOrchestrator()
+        orch._generate = lambda prompt, max_tokens=400: "synthesized final"
+        task = AgentTask(id="1", description="research", assigned_agent="researcher")
+        task.status = TaskStatus.COMPLETED
+        task.result = "important data"
+        result = orch._compose("goal", [task])
+        assert result == "synthesized final"
+
+    def test_generate_text_dict(self):
+        orch = MultiAgentOrchestrator()
+        orch._cmds = _FakeGenerate({"text": "hello"})
+        assert orch._generate("p") == "hello"
+
+    def test_generate_error_dict(self):
+        orch = MultiAgentOrchestrator()
+        orch._cmds = _FakeGenerate({"error": "timeout"})
+        assert orch._generate("p") == "[LLM error: timeout]"
+
+    def test_generate_plain_string(self):
+        orch = MultiAgentOrchestrator()
+        orch._cmds = _FakeGenerate("plain result")
+        assert orch._generate("p") == "plain result"
+
+    @pytest.mark.asyncio
+    async def test_async_execute_cannot_plan(self):
+        orch = MultiAgentOrchestrator()
+
+        async def no_plan(goal, context):
+            return []
+
+        orch._async_plan = no_plan
+        result = await orch.async_execute("test")
+        assert result["response"] == "Could not plan this goal."
+        assert result["tasks"] == []
+
+    @pytest.mark.asyncio
+    async def test_async_generate_plain_string(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return "raw text"
+
+        orch._cmds.generate_async = mock_gen
+        result = await orch._async_generate("test")
+        assert result == "raw text"
+
+    @pytest.mark.asyncio
+    async def test_async_plan_from_dict(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return '{"id": "1", "description": "research", "agent": "researcher"}'
+
+        orch._async_generate = mock_gen
+        tasks = await orch._async_plan("test goal", "")
+        assert len(tasks) == 1
+        assert tasks[0].assigned_agent == "researcher"
+
+    @pytest.mark.asyncio
+    async def test_async_plan_regex_extracts_json(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return 'Sure:\n[{"id": "1", "description": "research", "agent": "researcher"}]'
+
+        orch._async_generate = mock_gen
+        tasks = await orch._async_plan("test goal", "")
+        assert len(tasks) == 1
+        assert tasks[0].assigned_agent == "researcher"
+
+    @pytest.mark.asyncio
+    async def test_async_plan_regex_invalid_json_falls_back(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return 'Plan: [{"id": "1", bad]'
+
+        orch._async_generate = mock_gen
+        tasks = await orch._async_plan("test goal", "")
+        assert len(tasks) == 2
+        assert tasks[0].assigned_agent == "researcher"
+
+    @pytest.mark.asyncio
+    async def test_async_plan_rejects_unknown_agent(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return '[{"id": "1", "description": "hack", "agent": "hacker"}]'
+
+        orch._async_generate = mock_gen
+        tasks = await orch._async_plan("test", "")
+        assert tasks[0].assigned_agent == "researcher"
+
+    @pytest.mark.asyncio
+    async def test_async_plan_depends_on_as_string(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return '[{"id": "1", "description": "research", "agent": "researcher", ' \
+                   '"depends_on": "0"}]'
+
+        orch._async_generate = mock_gen
+        tasks = await orch._async_plan("test goal", "")
+        assert tasks[0].depends_on == ["0"]

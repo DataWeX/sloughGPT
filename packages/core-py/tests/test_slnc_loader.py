@@ -150,3 +150,8 @@ class TestGetWeightsDict:
         sizes = [int(np.prod(ld._tensor_map[n][1])) * 4 for n in names]
         for i in range(len(offs) - 1):
             assert offs[i + 1] == offs[i] + sizes[i]
+
+    def test_del_tolerates_closed_fd(self, tmp_path):
+        loader = SLNCLoader(str(_write_slnc(tmp_path / "m.slnc")))
+        os.close(loader._fd)
+        del loader

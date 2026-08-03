@@ -270,6 +270,12 @@ class TestGenerate:
         }
         assert set(s.keys()) == expected
 
+    async def test_generate_cancelled_before_start(self, server):
+        cancel = threading.Event()
+        cancel.set()
+        with pytest.raises(asyncio.CancelledError, match="cancelled before start"):
+            await server.generate("hello", cancel_event=cancel)
+
 
 # ---------------------------------------------------------------------------
 # Generate Stream
@@ -378,6 +384,48 @@ class TestGenerateStream:
         m = s.get_metrics()
         assert m["requests_total"] == 1
 
+    async def test_stream_circuit_breaker_open(self, server):
+        server._circuit_breaker._state = CircuitBreakerState.OPEN
+        server._circuit_breaker._last_failure_at = time.time()
+        with pytest.raises(RuntimeError, match="circuit breaker open"):
+            async for _ in server.generate_stream("hello"):
+                pass
+
+    async def test_stream_timeout_pump_alive_continues(self, server, monkeypatch):
+        block = threading.Event()
+
+        def _slow_gen(*a, **kw):
+            yield "tok"
+            block.wait()
+
+        server._generate_stream_sync = _slow_gen
+
+        real_wait_for = asyncio.wait_for
+        state = {"calls": 0}
+
+        async def _fake_wait_for(aw, timeout):
+            state["calls"] += 1
+            if state["calls"] == 1:
+                await asyncio.sleep(0.05)
+                aw.close()
+                raise asyncio.TimeoutError()
+            return await real_wait_for(aw, timeout)
+
+        monkeypatch.setattr(asyncio, "wait_for", _fake_wait_for)
+
+        results = []
+
+        async def _consume():
+            async for t in server.generate_stream("hi"):
+                results.append(t)
+
+        task = asyncio.create_task(_consume())
+        await asyncio.sleep(0.05)
+        assert state["calls"] >= 1
+        block.set()
+        await asyncio.wait_for(task, timeout=5)
+        assert results == ["tok"]
+
 
 # ---------------------------------------------------------------------------
 # Observability
@@ -424,6 +472,12 @@ class TestObservability:
         s = SloNetServer(mock_model, mock_tokenizer, enable_circuit_breaker=False, enable_warmup=False)
         md = s.metadata()
         assert md["circuit_breaker_state"] == "disabled"
+
+    def test_generate_sync_cancelled_before_start(self, server):
+        cancel = threading.Event()
+        cancel.set()
+        with pytest.raises(RuntimeError, match="cancelled before start"):
+            server._generate_sync("hello", cancel_event=cancel)
 
 
 # ---------------------------------------------------------------------------
@@ -728,6 +782,30 @@ class TestProcessGuardDelegation:
         assert len(guard.restart_cbs) == 1
         guard.restart_cbs[0]("fake")
         assert guarded_server._circuit_breaker.state == CircuitBreakerState.CLOSED
+
+    def test_guard_health_swallows_error(self, mock_model, mock_tokenizer):
+        class _BrokenGuard:
+            alive = True
+
+            def health(self):
+                raise RuntimeError("boom")
+
+            def on_crash(self, cb):
+                pass
+
+            def on_restart(self, cb):
+                pass
+
+        s = SloNetServer(mock_model, mock_tokenizer, process_guard=_BrokenGuard(), enable_warmup=False)
+        assert s.metadata()["process_guard"] == {"alive": False}
+
+    def test_generate_stream_sync_guard_cancel(self, mock_model, mock_tokenizer):
+        guard = _FakeGuard(alive=True)
+        srv = SloNetServer(mock_model, mock_tokenizer, process_guard=guard, enable_warmup=False)
+        cancel = threading.Event()
+        cancel.set()
+        gen = srv._generate_stream_sync("hi", cancel_event=cancel)
+        assert list(gen) == []
 
 
 

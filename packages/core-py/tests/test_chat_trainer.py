@@ -2,6 +2,7 @@
 
 import threading
 
+import json
 import numpy as np
 import pytest
 
@@ -301,9 +302,28 @@ class TestTrainFromSessions:
         empty = tmp_path / "empty"
         empty.mkdir()
         monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", empty)
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", empty)
         config = _tiny_config(tmp_path)
         with pytest.raises(ValueError, match="No chat sessions"):
             train_from_sessions(config)
+
+    def test_no_sessions_falls_back_to_corpus(self, tmp_path, monkeypatch):
+        """When no sessions exist, captured API conversations are used."""
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", empty)
+        corpus = tmp_path / "corpus"
+        corpus.mkdir()
+        with open(corpus / "corpus.jsonl", "w") as f:
+            f.write(json.dumps({"messages": [
+                {"role": "user", "content": "User message number one asking something interesting."},
+                {"role": "assistant", "content": "Assistant responds helpfully with a detailed answer about topic one."},
+            ]}) + "\n")
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", corpus)
+        config = _tiny_config(tmp_path)
+        model, meta = train_from_sessions(config)
+        assert meta["num_pairs"] >= 1
+        assert meta["checkpoint"]
 
     def test_train_from_session_files(self, tmp_path, monkeypatch):
         sess_dir = tmp_path / "sessions"

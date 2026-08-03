@@ -208,3 +208,65 @@ class TestEdgeCases:
         from domains.infrastructure.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.server.port == 8000  # unchanged
+
+
+class TestEnvEdgeBranches:
+    def test_skip_env_key_ignored(self, monkeypatch):
+        monkeypatch.setenv("SLO_AUTOLOAD_MODEL", "gpt2")
+        monkeypatch.setenv("SLO_MODEL__NAME", "still-works")
+        from domains.infrastructure.config import _apply_env_overrides
+        cfg = _apply_env_overrides(AppConfig())
+        assert cfg.model.name == "still-works"
+
+    def test_rate_limit_env_ignored(self, monkeypatch):
+        monkeypatch.setenv("SLO_RATE_LIMIT__MAX", "10")
+        monkeypatch.setenv("SLO_MODEL__NAME", "ok")
+        from domains.infrastructure.config import _apply_env_overrides
+        cfg = _apply_env_overrides(AppConfig())
+        assert cfg.model.name == "ok"
+
+    def test_bare_slo_env_ignored(self, monkeypatch):
+        monkeypatch.setenv("SLO", "1")
+        monkeypatch.setenv("SLO_MODEL__NAME", "ok")
+        from domains.infrastructure.config import _apply_env_overrides
+        cfg = _apply_env_overrides(AppConfig())
+        assert cfg.model.name == "ok"
+
+
+class TestConfigErrorPaths:
+    def test_malformed_yaml_falls_back(self, tmp_path):
+        d = tmp_path / "defaults.yaml"
+        d.mkdir()
+        mgr = ConfigManager(config_dir=str(tmp_path))
+        assert mgr.config.model.name == "Qwen/Qwen2.5-0.5B-Instruct"
+
+    def test_reload_callback_error_logged(self, tmp_path):
+        mgr = ConfigManager(config_dir=str(tmp_path))
+
+        def bad_cb(new_cfg, old_cfg):
+            raise RuntimeError("boom")
+
+        mgr.on_reload(bad_cb)
+        assert isinstance(mgr.reload(), AppConfig)
+
+    def test_reload_emits_with_running_loop(self, tmp_path):
+        import asyncio
+        mgr = ConfigManager(config_dir=str(tmp_path))
+
+        async def inner():
+            result = mgr.reload()
+            await asyncio.sleep(0)
+            return result
+
+        result = asyncio.run(inner())
+        assert isinstance(result, AppConfig)
+
+    def test_reload_emit_failure_logged(self, tmp_path, monkeypatch):
+        import domains.infrastructure.event_bus as eb
+
+        def boom():
+            raise RuntimeError("bus down")
+
+        monkeypatch.setattr(eb, "get_event_bus", boom)
+        mgr = ConfigManager(config_dir=str(tmp_path))
+        assert isinstance(mgr.reload(), AppConfig)

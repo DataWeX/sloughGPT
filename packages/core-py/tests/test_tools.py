@@ -1,5 +1,8 @@
 """Tests for ToolRegistry — tool detection, execution, and safety."""
 
+import sys
+import types
+
 import pytest
 pytestmark = pytest.mark.slow
 from domains.agents.tools import ToolRegistry, ToolSpec, ToolParam, ToolResult
@@ -213,13 +216,25 @@ class TestExecuteCalculator:
     async def test_expression_with_os_blocked(self, registry):
         result = await registry.execute("calculator", {"expression": "os.system('ls')"})
         assert result.success is False
-        assert "Blocked" in result.error
+        assert "Disallowed" in result.error
 
     @pytest.mark.asyncio
     async def test_expression_with_import_blocked(self, registry):
         result = await registry.execute("calculator", {"expression": "__import__('os')"})
         assert result.success is False
-        assert "Blocked" in result.error
+        assert "Disallowed" in result.error
+
+    @pytest.mark.asyncio
+    async def test_expression_unknown_name(self, registry):
+        result = await registry.execute("calculator", {"expression": "foobar"})
+        assert result.success is False
+        assert "Unknown name: foobar" in result.error
+
+    @pytest.mark.asyncio
+    async def test_expression_disallowed_node_type(self, registry):
+        result = await registry.execute("calculator", {"expression": "[1, 2, 3]"})
+        assert result.success is False
+        assert "Disallowed expression" in result.error
 
     @pytest.mark.asyncio
     async def test_empty_expression_fails(self, registry):
@@ -255,6 +270,38 @@ class TestExecuteWebSearch:
         assert isinstance(result, ToolResult)
         assert "not available" in result.output.lower()
 
+    @pytest.mark.asyncio
+    async def test_success_list_results(self, registry, monkeypatch):
+        async def fake_ws(query, num_results=3):
+            return [
+                {"title": "T", "url": "http://x", "snippet": "snippet"},
+                {"title": "U", "url": "http://y", "snippet": ""},
+            ]
+        monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
+        result = await registry.execute("web_search", {"query": "q", "num_results": 3})
+        assert result.success is True
+        assert "**T**" in result.output
+        assert "http://x" in result.output
+        assert "**U**" in result.output
+
+    @pytest.mark.asyncio
+    async def test_success_scalar_result(self, registry, monkeypatch):
+        async def fake_ws(query, num_results=3):
+            return "plain string"
+        monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
+        result = await registry.execute("web_search", {"query": "q"})
+        assert result.success is True
+        assert result.output == "plain string"
+
+    @pytest.mark.asyncio
+    async def test_empty_results_list(self, registry, monkeypatch):
+        async def fake_ws(query, num_results=3):
+            return []
+        monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
+        result = await registry.execute("web_search", {"query": "q"})
+        assert result.success is True
+        assert "No results found" in result.output
+
 
 class TestExecuteRunCode:
     @pytest.mark.asyncio
@@ -286,6 +333,23 @@ class TestExecuteRunCode:
         result = await registry.execute("run_code", {"language": "ruby", "code": "puts 'hi'"})
         # Should still try to execute even with unknown language
         assert isinstance(result, ToolResult)
+
+    @pytest.mark.asyncio
+    async def test_subprocess_creation_error(self, registry, monkeypatch):
+        async def boom(*args, **kwargs):
+            raise RuntimeError("spawn failed")
+        monkeypatch.setattr("asyncio.create_subprocess_exec", boom)
+        result = await registry.execute("run_code", {"language": "python", "code": "print(1)"})
+        assert result.success is False
+        assert "spawn failed" in result.error
+
+    @pytest.mark.asyncio
+    async def test_cleanup_error_is_swallowed(self, registry, monkeypatch):
+        def boom(path):
+            raise OSError("already gone")
+        monkeypatch.setattr("os.unlink", boom)
+        result = await registry.execute("run_code", {"language": "python", "code": "print('ok')"})
+        assert result.success is True
 
 
 class TestExecuteEdgeCases:

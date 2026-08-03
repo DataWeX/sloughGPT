@@ -72,6 +72,48 @@ def test_file_index_skips_large_files():
     assert n == 0
 
 
+def test_file_index_custom_embedder():
+    from domains.learner.knowledge_ops import FileIndex
+
+    class _Embedder:
+        def embed(self, text):
+            return [1.0] * 384
+
+    idx = FileIndex(embedder=_Embedder())
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='.') as f:
+        f.write("def something_here():\n    return 1\n")
+        f.flush()
+        n = idx.index_file(f.name)
+    os.unlink(f.name)
+    assert n >= 1
+
+
+def test_file_index_missing_file_returns_zero():
+    from domains.learner.knowledge_ops import FileIndex
+    assert FileIndex().index_file("/nonexistent/file.py") == 0
+
+
+def test_file_index_tiny_file_returns_zero():
+    from domains.learner.knowledge_ops import FileIndex
+    idx = FileIndex()
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        f.write("x = 1\n")
+        f.flush()
+        n = idx.index_file(f.name)
+    os.unlink(f.name)
+    assert n == 0
+
+
+def test_file_index_extension_filter():
+    from domains.learner.knowledge_ops import FileIndex
+    idx = FileIndex()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        Path(tmpdir, "a.py").write_text("def a():\n    pass\n")
+        Path(tmpdir, "b.md").write_text("hello world")
+        stats = idx.index_directory(tmpdir, extensions={'.py'})
+        assert stats["files_indexed"] == 1
+
+
 # ---------------------------------------------------------------------------
 # DuplicateDetector
 # ---------------------------------------------------------------------------
@@ -133,6 +175,42 @@ def test_duplicate_detector_clusters():
     assert len(clusters) >= 1
 
 
+def test_find_clusters_store_without_entries():
+    from domains.learner.knowledge_ops import DuplicateDetector
+    dup = DuplicateDetector()
+    dup.load_from_store(object())
+    assert dup.find_clusters() == []
+
+
+def test_find_clusters_single_entry():
+    from domains.learner.knowledge_ops import DuplicateDetector
+    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    store = InMemoryVectorStore(dimension=384)
+    store.upsert_sync([VectorEntry(id="f1", vector=simple_embed("x"), text="x", metadata={})])
+    dup = DuplicateDetector()
+    dup.load_from_store(store)
+    assert dup.find_clusters() == []
+
+
+def test_find_clusters_skips_visited_inner():
+    from domains.learner.knowledge_ops import DuplicateDetector
+    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
+    v0 = [1.0, 0.0] + [0.0] * 382
+    v1 = [0.0, 1.0] + [0.0] * 382
+    store = InMemoryVectorStore(dimension=384)
+    entries = [
+        VectorEntry(id="a", vector=v0, text="a", metadata={}),
+        VectorEntry(id="b", vector=v1, text="b", metadata={}),
+        VectorEntry(id="c", vector=v0, text="c", metadata={}),
+    ]
+    store.upsert_sync(entries)
+    dup = DuplicateDetector()
+    dup.load_from_store(store)
+    clusters = dup.find_clusters(threshold=0.5)
+    assert len(clusters) >= 1
+    assert all(c[0]["id"] != "b" for c in clusters)
+
+
 # ---------------------------------------------------------------------------
 # AutoCategorizer
 # ---------------------------------------------------------------------------
@@ -172,6 +250,30 @@ def test_auto_categorizer_empty():
     assert topic == "general"
 
 
+def test_auto_categorizer_load_no_entries():
+    from domains.learner.knowledge_ops import AutoCategorizer
+    cat = AutoCategorizer()
+    cat.load_from_store(object())
+    assert cat.categorize("anything") == "general"
+
+
+def test_auto_categorizer_empty_topic_centroid():
+    from domains.learner.knowledge_ops import AutoCategorizer
+    cat = AutoCategorizer(min_score=0.99)
+    cat._topic_examples = {"empty": [], "code": ["python code"]}
+    assert cat.categorize("zzz qqq wwww", embed_fn=lambda t: [1.0] * 384) == "general"
+
+
+def test_auto_categorizer_low_score_returns_general():
+    from domains.learner.knowledge_ops import AutoCategorizer
+    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    store = InMemoryVectorStore(dimension=384)
+    store.upsert_sync([VectorEntry(id="f1", vector=simple_embed("python code"), text="python code", metadata={"topic": "code"})])
+    cat = AutoCategorizer(min_score=0.99)
+    cat.load_from_store(store)
+    assert cat.categorize("zzz qqq wwww") == "general"
+
+
 def test_auto_categorizer_suggest():
     from domains.learner.knowledge_ops import AutoCategorizer
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
@@ -187,6 +289,20 @@ def test_auto_categorizer_suggest():
     cat.load_from_store(store)
     suggestions = cat.suggest_topics("training a model")
     assert len(suggestions) >= 1
+
+
+def test_suggest_topics_no_examples():
+    from domains.learner.knowledge_ops import AutoCategorizer
+    assert AutoCategorizer().suggest_topics("x") == []
+
+
+def test_suggest_topics_empty_topic_centroid():
+    from domains.learner.knowledge_ops import AutoCategorizer
+    cat = AutoCategorizer()
+    cat._topic_examples = {"empty": [], "code": ["python code"]}
+    out = cat.suggest_topics("python")
+    assert all(t != "empty" for t, _ in out)
+    assert any(t == "code" for t, _ in out)
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +334,72 @@ def test_gap_detector_empty():
     gap = KnowledgeGapDetector()
     gaps = gap.find_gaps()
     assert gaps == []
+
+
+def test_gap_detector_load_no_entries():
+    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    gap = KnowledgeGapDetector()
+    gap.load_from_store(object())
+    assert gap.find_gaps() == []
+
+
+def test_gap_detector_zero_total():
+    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    gap = KnowledgeGapDetector()
+    gap._store = object()
+    gap._topic_counts = {"x": 0}
+    assert gap.find_gaps() == []
+
+
+def test_gap_detector_rare_and_adequate():
+    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    store = InMemoryVectorStore(dimension=384)
+    entries = [VectorEntry(id="r0", vector=simple_embed("rare"), text="rare", metadata={"topic": "rare"})]
+    entries += [VectorEntry(id=f"c{i}", vector=simple_embed("common"), text="common", metadata={"topic": "common"}) for i in range(20)]
+    entries += [VectorEntry(id=f"m{i}", vector=simple_embed("mid"), text="mid", metadata={"topic": "mid"}) for i in range(5)]
+    store.upsert_sync(entries)
+    gap = KnowledgeGapDetector()
+    gap.load_from_store(store)
+    gaps = gap.find_gaps(seed_topics=["rare", "common", "mid", "zero"])
+    by_topic = {g["topic"]: g for g in gaps}
+    assert "rare" in by_topic
+    assert "zero" in by_topic
+    assert "common" in by_topic
+    assert "mid" not in by_topic
+
+
+def test_find_sparse_regions():
+    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
+    store = InMemoryVectorStore(dimension=384)
+    entries = []
+    for i in range(10):
+        vec = [float(i)] + [0.0] * 383
+        entries.append(VectorEntry(id=f"e{i}", vector=vec, text=f"t{i}", metadata={}))
+    store.upsert_sync(entries)
+    gap = KnowledgeGapDetector()
+    gap.load_from_store(store)
+    sparse = gap.find_sparse_regions()
+    assert len(sparse) >= 1
+    assert sparse[0]["count"] == 0
+
+
+def test_find_sparse_regions_too_few():
+    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
+    store = InMemoryVectorStore(dimension=384)
+    store.upsert_sync([VectorEntry(id="e", vector=[0.0] * 384, text="t", metadata={})])
+    gap = KnowledgeGapDetector()
+    gap.load_from_store(store)
+    assert gap.find_sparse_regions() == []
+
+
+def test_find_sparse_regions_no_entries():
+    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    gap = KnowledgeGapDetector()
+    gap.load_from_store(object())
+    assert gap.find_sparse_regions() == []
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +435,65 @@ def test_smart_context_injector_empty():
     injector = SmartContextInjector(None)
     ctx = injector.get_context("anything")
     assert ctx == ""
+
+
+class _CtxMem:
+    def __init__(self, results):
+        self._results = results
+
+    def search(self, query, top_k=5):
+        return self._results
+
+
+def test_get_context_no_results():
+    from domains.learner.knowledge_ops import SmartContextInjector
+    injector = SmartContextInjector(_CtxMem([]), min_score=0.5)
+    assert injector.get_context("q") == ""
+
+
+def test_get_context_all_filtered():
+    from domains.learner.knowledge_ops import SmartContextInjector
+    injector = SmartContextInjector(_CtxMem([{"content": "x", "score": 0.1}]), min_score=0.5)
+    assert injector.get_context("q") == ""
+
+
+def test_get_context_overflow_break():
+    from domains.learner.knowledge_ops import SmartContextInjector
+    results = [
+        {"content": "short", "score": 0.9},
+        {"content": "y" * 100, "score": 0.8},
+    ]
+    injector = SmartContextInjector(_CtxMem(results), min_score=0.5)
+    ctx = injector.get_context("q", max_chars=60)
+    assert "- short" in ctx
+    assert "y" not in ctx
+
+
+def test_get_context_parts_empty():
+    from domains.learner.knowledge_ops import SmartContextInjector
+    results = [{"content": "y" * 100, "score": 0.9}]
+    injector = SmartContextInjector(_CtxMem(results), min_score=0.5)
+    assert injector.get_context("q", max_chars=10) == ""
+
+
+def test_get_context_for_system_with_and_without():
+    from domains.learner.knowledge_ops import SmartContextInjector
+    injector = SmartContextInjector(_CtxMem([]), min_score=0.5)
+    assert injector.get_context_for_system("q", "SYSTEM") == "SYSTEM"
+    injector2 = SmartContextInjector(_CtxMem([{"content": "fact", "score": 0.9}]), min_score=0.5)
+    out = injector2.get_context_for_system("q", "SYSTEM", max_chars=200)
+    assert out.startswith("SYSTEM")
+    assert "Relevant knowledge" in out
+
+
+def test_should_inject_no_memory():
+    from domains.learner.knowledge_ops import SmartContextInjector
+    assert SmartContextInjector(None).should_inject("q") is False
+
+
+def test_should_inject_no_results():
+    from domains.learner.knowledge_ops import SmartContextInjector
+    assert SmartContextInjector(_CtxMem([])).should_inject("q") is False
 
 
 def test_smart_context_should_inject():
@@ -336,6 +577,56 @@ def test_bulk_processor_empty():
     bp = BulkProcessor(mem)
     report = bp.ingest_texts([])
     assert report["added"] == 0
+
+
+def test_bulk_processor_no_memory():
+    from domains.learner.knowledge_ops import BulkProcessor
+    report = BulkProcessor(None).ingest_texts(["a", "b"])
+    assert report == {"added": 0, "skipped": 0, "errors": 2}
+
+
+def test_bulk_processor_short_texts_skipped():
+    from domains.learner.knowledge_ops import BulkProcessor
+    mem = _fresh_memory()
+    bp = BulkProcessor(mem)
+    report = bp.ingest_texts(["", "tiny", "a reasonably long valid piece of text"], dedup_threshold=0.99)
+    assert report["skipped"] == 2
+    assert report["added"] == 1
+
+
+def test_bulk_processor_progress_callback():
+    from domains.learner.knowledge_ops import BulkProcessor
+    mem = _fresh_memory()
+    bp = BulkProcessor(mem)
+    calls = []
+    bp.ingest_texts(
+        ["text one here valid enough", "text two here valid enough"],
+        progress_callback=lambda c, t: calls.append((c, t)),
+    )
+    assert calls == [(1, 2), (2, 2)]
+
+
+def test_bulk_processor_exact_dup_add_fact_false():
+    from domains.learner.knowledge_ops import BulkProcessor
+    mem = _fresh_memory()
+    bp = BulkProcessor(mem)
+    text = "quantum computing uses qubits for parallel processing"
+    report = bp.ingest_texts([text, text], dedup_threshold=1.5)
+    assert report["added"] == 1
+    assert report["skipped"] == 1
+
+
+def test_bulk_processor_error():
+    from domains.learner.knowledge_ops import BulkProcessor
+    mem = _fresh_memory()
+
+    def bad_embed(text):
+        raise RuntimeError("embed boom")
+
+    mem._embed_fn = bad_embed
+    bp = BulkProcessor(mem)
+    report = bp.ingest_texts(["some text that triggers failure"])
+    assert report["errors"] == 1
 
 
 # ---------------------------------------------------------------------------

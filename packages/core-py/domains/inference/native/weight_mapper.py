@@ -45,8 +45,16 @@ def map_slnc_to_native(
     """
     D, NH, NKV, HD, FF, V = hidden_dim, n_heads, n_kv_heads, head_dim, ff_dim, vocab_size
 
-    def _get(name):
-        return tensors.get(name, np.zeros(0, dtype=np.float32)).astype(np.float32)
+    def _get(name, n):
+        """Return first n raveled floats of a tensor, or zeros(n) if missing.
+
+        Missing tensors (e.g. architectures that omit a weight) must not
+        break the flat layout, so they default to zeros of the block size.
+        """
+        t = tensors.get(name)
+        if t is None:
+            return np.zeros(n, dtype=np.float32)
+        return t.astype(np.float32).ravel()[:n]
 
     def _get_or(*names):
         for name in names:
@@ -71,10 +79,10 @@ def map_slnc_to_native(
     flat = np.zeros(total, dtype=np.float32)
     offset = 0
 
-    embed = _get("model.embed_tokens.weight")
-    if embed.size == 0:
-        embed = _get("wte.weight")
-    flat[offset:offset + V*D] = embed.ravel()[:V*D]
+    embed = tensors.get("model.embed_tokens.weight", tensors.get("wte.weight"))
+    if embed is None:
+        embed = np.zeros(V*D, dtype=np.float32)
+    flat[offset:offset + V*D] = embed.astype(np.float32).ravel()[:V*D]
     offset += V * D
 
     layer_info = {}
@@ -82,60 +90,64 @@ def map_slnc_to_native(
         p = prefix_fn(i)
         start = offset
 
-        an_w = _get(f"{p}.input_layernorm.weight")
-        flat[offset:offset+D] = an_w.ravel()[:D]; offset += D
+        an_w = _get(f"{p}.input_layernorm.weight", D)
+        flat[offset:offset+D] = an_w; offset += D
 
-        qw = _get(f"{p}.self_attn.q_proj.weight")
-        flat[offset:offset+D*(NH*HD)] = qw.ravel()[:D*(NH*HD)]; offset += D*(NH*HD)
-        qb = _get(f"{p}.self_attn.q_proj.bias")
-        flat[offset:offset+NH*HD] = qb.ravel()[:NH*HD]; offset += NH*HD
+        qw = _get(f"{p}.self_attn.q_proj.weight", D*(NH*HD))
+        flat[offset:offset+D*(NH*HD)] = qw; offset += D*(NH*HD)
+        qb = _get(f"{p}.self_attn.q_proj.bias", NH*HD)
+        flat[offset:offset+NH*HD] = qb; offset += NH*HD
 
-        kw = _get(f"{p}.self_attn.k_proj.weight")
-        flat[offset:offset+D*(NKV*HD)] = kw.ravel()[:D*(NKV*HD)]; offset += D*(NKV*HD)
-        kb = _get(f"{p}.self_attn.k_proj.bias")
-        flat[offset:offset+NKV*HD] = kb.ravel()[:NKV*HD]; offset += NKV*HD
+        kw = _get(f"{p}.self_attn.k_proj.weight", D*(NKV*HD))
+        flat[offset:offset+D*(NKV*HD)] = kw; offset += D*(NKV*HD)
+        kb = _get(f"{p}.self_attn.k_proj.bias", NKV*HD)
+        flat[offset:offset+NKV*HD] = kb; offset += NKV*HD
 
-        vw = _get(f"{p}.self_attn.v_proj.weight")
-        flat[offset:offset+D*(NKV*HD)] = vw.ravel()[:D*(NKV*HD)]; offset += D*(NKV*HD)
-        vb = _get(f"{p}.self_attn.v_proj.bias")
-        flat[offset:offset+NKV*HD] = vb.ravel()[:NKV*HD]; offset += NKV*HD
+        vw = _get(f"{p}.self_attn.v_proj.weight", D*(NKV*HD))
+        flat[offset:offset+D*(NKV*HD)] = vw; offset += D*(NKV*HD)
+        vb = _get(f"{p}.self_attn.v_proj.bias", NKV*HD)
+        flat[offset:offset+NKV*HD] = vb; offset += NKV*HD
 
-        ow = _get(f"{p}.self_attn.o_proj.weight")
-        flat[offset:offset+NH*HD*D] = ow.ravel()[:NH*HD*D]; offset += NH*HD*D
+        ow = _get(f"{p}.self_attn.o_proj.weight", NH*HD*D)
+        flat[offset:offset+NH*HD*D] = ow; offset += NH*HD*D
         ob = _get_or(f"{p}.self_attn.o_proj.bias", f"{p}.self_attn.bias")
         if ob.size == 0:
             ob = np.zeros(D, dtype=np.float32)
         flat[offset:offset+D] = ob.ravel()[:D]; offset += D
 
-        fnw = _get(f"{p}.post_attention_layernorm.weight")
-        flat[offset:offset+D] = fnw.ravel()[:D]; offset += D
+        fnw = _get(f"{p}.post_attention_layernorm.weight", D)
+        flat[offset:offset+D] = fnw; offset += D
 
-        gw = _get(f"{p}.mlp.gate_proj.weight")
-        flat[offset:offset+D*FF] = gw.ravel()[:D*FF]; offset += D*FF
+        gw = _get(f"{p}.mlp.gate_proj.weight", D*FF)
+        flat[offset:offset+D*FF] = gw; offset += D*FF
         gb = _bias_or(f"{p}.mlp.gate_proj.bias", FF)
         flat[offset:offset+FF] = gb.ravel()[:FF]; offset += FF
 
-        uw = _get(f"{p}.mlp.up_proj.weight")
-        flat[offset:offset+D*FF] = uw.ravel()[:D*FF]; offset += D*FF
+        uw = _get(f"{p}.mlp.up_proj.weight", D*FF)
+        flat[offset:offset+D*FF] = uw; offset += D*FF
         ub = _bias_or(f"{p}.mlp.up_proj.bias", FF)
         flat[offset:offset+FF] = ub.ravel()[:FF]; offset += FF
 
-        dw = _get(f"{p}.mlp.down_proj.weight")
-        flat[offset:offset+FF*D] = dw.ravel()[:FF*D]; offset += FF*D
+        dw = _get(f"{p}.mlp.down_proj.weight", FF*D)
+        flat[offset:offset+FF*D] = dw; offset += FF*D
         db = _bias_or(f"{p}.mlp.down_proj.bias", D)
         flat[offset:offset+D] = db.ravel()[:D]; offset += D
 
         layer_info[i] = {"offset": start, "size": layer_size}
 
-    fnw_f = _get("model.norm.weight")
-    if fnw_f.size == 0:
-        fnw_f = _get("ln_f.weight")
-    flat[offset:offset+D] = fnw_f.ravel()[:D]; offset += D
+    fnw_f = tensors.get("model.norm.weight")
+    if fnw_f is None:
+        fnw_f = tensors.get("ln_f.weight")
+    if fnw_f is None:
+        fnw_f = np.zeros(D, dtype=np.float32)
+    flat[offset:offset+D] = fnw_f.astype(np.float32).ravel()[:D]; offset += D
 
-    lm_head = _get("model.lm_head.weight")
-    if lm_head.size == 0:
-        lm_head = _get_or("wte.weight", "model.embed_tokens.weight")
-    flat[offset:offset+V*D] = lm_head.ravel()[:V*D]; offset += V*D
+    lm_head = tensors.get("model.lm_head.weight")
+    if lm_head is None:
+        lm_head = tensors.get("wte.weight", tensors.get("model.embed_tokens.weight"))
+    if lm_head is None:
+        lm_head = np.zeros(V*D, dtype=np.float32)
+    flat[offset:offset+V*D] = lm_head.astype(np.float32).ravel()[:V*D]; offset += V*D
 
     info = {
         "total_floats": offset,

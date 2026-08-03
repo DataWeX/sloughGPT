@@ -211,6 +211,9 @@ data/
 *.db
 *.sqlite
 
+# Compiled C extensions (build artifacts)
+*.so
+
 # Build output
 **/target/
 

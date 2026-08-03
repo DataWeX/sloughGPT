@@ -9,9 +9,11 @@ import pytest
 from domains.training.pair_extractor import (
     extract_pairs_from_sessions,
     extract_pairs_from_logs,
+    extract_pairs_from_corpus,
     write_training_text,
     count_pairs_in_sessions,
     count_pairs_in_logs,
+    count_pairs_in_corpus,
 )
 
 
@@ -27,6 +29,16 @@ def _write_log(d: Path, entries: list) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     ts = time.strftime("%Y%m%d")
     p = d / f"responses_{ts}.jsonl"
+    with open(p, "w") as f:
+        for e in entries:
+            f.write(json.dumps(e) + "\n")
+    return p
+
+
+def _write_corpus(d: Path, entries: list) -> Path:
+    """Write a captured-corpus JSONL file (messages format)."""
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / "corpus.jsonl"
     with open(p, "w") as f:
         for e in entries:
             f.write(json.dumps(e) + "\n")
@@ -274,6 +286,98 @@ class TestExtractPairsFromLogs:
         assert len(pairs) == 1
 
 
+class TestExtractPairsFromCorpus:
+    def test_basic_extraction(self, tmp_path, monkeypatch):
+        """Extracts user→assistant pairs from captured corpus JSONL."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        _write_corpus(tmp_path, [
+            {"messages": [{"role": "user", "content": "Hello there"}, {"role": "assistant", "content": "Hi! How can I help?"}], "meta": {"model": "qwen", "session_id": "s1"}},
+        ])
+        pairs = extract_pairs_from_corpus(limit=10, min_length=3)
+        assert len(pairs) == 1
+        assert pairs[0]["user_msg"] == "Hello there"
+        assert pairs[0]["assistant_msg"] == "Hi! How can I help?"
+        assert pairs[0]["session_id"] == "s1"
+        assert pairs[0]["model"] == "qwen"
+
+    def test_model_filter(self, tmp_path, monkeypatch):
+        """Filters corpus entries by meta.model."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        _write_corpus(tmp_path, [
+            {"messages": [{"role": "user", "content": "Hello there"}, {"role": "assistant", "content": "Hi there!"}], "meta": {"model": "qwen"}},
+            {"messages": [{"role": "user", "content": "Good day"}, {"role": "assistant", "content": "And to you!"}], "meta": {"model": "gpt2"}},
+        ])
+        pairs = extract_pairs_from_corpus(limit=10, min_length=3, model="qwen")
+        assert len(pairs) == 1
+        assert pairs[0]["model"] == "qwen"
+
+    def test_deduplication(self, tmp_path, monkeypatch):
+        """Duplicate corpus entries are deduplicated by content hash."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        row = {"messages": [{"role": "user", "content": "Hello there"}, {"role": "assistant", "content": "Hi there friend!"}]}
+        _write_corpus(tmp_path, [row, row])
+        pairs = extract_pairs_from_corpus(limit=10, min_length=3)
+        assert len(pairs) == 1
+
+    def test_limit(self, tmp_path, monkeypatch):
+        """Respects the limit parameter."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        _write_corpus(tmp_path, [
+            {"messages": [{"role": "user", "content": f"Question {i} about things"}, {"role": "assistant", "content": f"Answer {i} with detail"}]}
+            for i in range(5)
+        ])
+        pairs = extract_pairs_from_corpus(limit=3, min_length=3)
+        assert len(pairs) == 3
+
+    def test_min_length_filter(self, tmp_path, monkeypatch):
+        """Short messages are filtered out."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        _write_corpus(tmp_path, [
+            {"messages": [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hey"}]},
+            {"messages": [{"role": "user", "content": "What is machine learning today?"}, {"role": "assistant", "content": "It is a broad and deep field."}]},
+        ])
+        pairs = extract_pairs_from_corpus(limit=10, min_length=5)
+        assert len(pairs) == 1
+        assert "machine learning" in pairs[0]["user_msg"]
+
+    def test_missing_corpus(self, tmp_path, monkeypatch):
+        """Returns empty list when corpus file doesn't exist."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path / "nonexistent")
+        pairs = extract_pairs_from_corpus(limit=10, min_length=3)
+        assert pairs == []
+
+    def test_malformed_lines_skipped(self, tmp_path, monkeypatch):
+        """Malformed JSON lines are skipped."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "corpus.jsonl").write_text(
+            "not json\n"
+            '{"messages": [{"role": "user", "content": "Hello there"}, {"role": "assistant", "content": "Hi there friend!"}]}\n'
+        )
+        pairs = extract_pairs_from_corpus(limit=10, min_length=3)
+        assert len(pairs) == 1
+
+    def test_blank_lines_skipped(self, tmp_path, monkeypatch):
+        """Blank lines in the corpus are ignored."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "corpus.jsonl").write_text(
+            "\n\n"
+            '{"messages": [{"role": "user", "content": "Hello there"}, {"role": "assistant", "content": "Hey there!"}]}\n'
+            "\n"
+        )
+        pairs = extract_pairs_from_corpus(limit=10, min_length=3)
+        assert len(pairs) == 1
+
+    def test_unreadable_corpus_returns_empty(self, tmp_path, monkeypatch):
+        """An OSError reading the corpus yields an empty result."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "corpus.jsonl").mkdir()
+        pairs = extract_pairs_from_corpus(limit=10, min_length=3)
+        assert pairs == []
+
+
 class TestWriteTrainingText:
     def test_writes_text_file(self, tmp_path):
         """Writes pairs in User:/Assistant: format."""
@@ -356,3 +460,35 @@ class TestCountPairs:
             {"user_message": "c", "assistant_response": "d"},
         ])
         assert count_pairs_in_logs() == 2
+
+    def test_count_in_corpus(self, tmp_path, monkeypatch):
+        """Counts total exchanges in the captured corpus."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        _write_corpus(tmp_path, [
+            {"messages": [{"role": "user", "content": "a"}, {"role": "assistant", "content": "b"}]},
+            {"messages": [{"role": "user", "content": "c"}, {"role": "assistant", "content": "d"}]},
+        ])
+        assert count_pairs_in_corpus() == 2
+
+    def test_count_corpus_missing(self, tmp_path, monkeypatch):
+        """Returns 0 when corpus file doesn't exist."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path / "nope")
+        assert count_pairs_in_corpus() == 0
+
+    def test_count_corpus_skips_blank(self, tmp_path, monkeypatch):
+        """Blank lines are not counted."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "corpus.jsonl").write_text(
+            "\n"
+            '{"messages": [{"role": "user", "content": "a"}, {"role": "assistant", "content": "b"}]}\n'
+            "\n"
+        )
+        assert count_pairs_in_corpus() == 1
+
+    def test_count_corpus_unreadable_returns_zero(self, tmp_path, monkeypatch):
+        """An OSError counting the corpus yields zero."""
+        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "corpus.jsonl").mkdir()
+        assert count_pairs_in_corpus() == 0

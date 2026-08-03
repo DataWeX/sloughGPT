@@ -12,7 +12,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#ifdef __APPLE__
 #include <Accelerate/Accelerate.h>
+#else
+/* Portable BLAS: link with -lblas on Linux/BSD. Values match standard cblas.h. */
+enum { CblasRowMajor = 101, CblasNoTrans = 111, CblasTrans = 112 };
+void cblas_sgemm(int order, int trans_a, int trans_b, int m, int n, int k,
+                 float alpha, const float* a, int lda, const float* b, int ldb,
+                 float beta, float* c, int ldc);
+#endif
 
 #define EPS 1e-6f
 #define NEG_INF -1e9f

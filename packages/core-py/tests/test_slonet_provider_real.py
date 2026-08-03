@@ -328,8 +328,19 @@ def test_generate_batch_real(provider):
 # ── quantization via real QuantEngine ─────────────────────────────────────────
 
 
+# These tests exercise the quantization *mechanics* (fresh quantize, npz
+# reload, metadata reload). from_slnc() now skips quantization when the AVX2
+# int8 GEMM kernel is unavailable, so we pin HAS_AVX2=True to force the
+# quantized path regardless of the host machine.
+
+
 @pytest.fixture
-def quantized_provider(slnc, tmp_path, monkeypatch):
+def avx2_available(monkeypatch):
+    monkeypatch.setattr("domains.infrastructure.quant_core.wrapper.HAS_AVX2", True)
+
+
+@pytest.fixture
+def quantized_provider(slnc, tmp_path, monkeypatch, avx2_available):
     monkeypatch.setenv("HF_HOME", str(tmp_path))
     _build_tokenizer(str(tmp_path))
     return SloNetChatProvider.from_slnc(slnc, model_id="gpt2", quantize=True)
@@ -344,7 +355,7 @@ def test_quantize_fresh_and_report(quantized_provider):
     assert quantized_provider.generate("hi", max_tokens=3, temperature=0.0)
 
 
-def test_quantize_reload_prequantized_npz(slnc, tmp_path, monkeypatch):
+def test_quantize_reload_prequantized_npz(slnc, tmp_path, monkeypatch, avx2_available):
     monkeypatch.setenv("HF_HOME", str(tmp_path))
     _build_tokenizer(str(tmp_path))
     first = SloNetChatProvider.from_slnc(slnc, model_id="gpt2", quantize=True)
@@ -353,7 +364,7 @@ def test_quantize_reload_prequantized_npz(slnc, tmp_path, monkeypatch):
     assert second.quantization_report()["quantized"] is True
 
 
-def test_quantize_reload_metadata_only(slnc, tmp_path, monkeypatch):
+def test_quantize_reload_metadata_only(slnc, tmp_path, monkeypatch, avx2_available):
     monkeypatch.setenv("HF_HOME", str(tmp_path))
     _build_tokenizer(str(tmp_path))
     SloNetChatProvider.from_slnc(slnc, model_id="gpt2", quantize=True)
@@ -363,3 +374,12 @@ def test_quantize_reload_metadata_only(slnc, tmp_path, monkeypatch):
     npz.unlink()
     reloaded = SloNetChatProvider.from_slnc(slnc, model_id="gpt2", quantize=True)
     assert reloaded.quantization_report()["quantized"] is True
+
+
+def test_quantize_skipped_without_avx2(slnc, tmp_path, monkeypatch):
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    monkeypatch.setattr("domains.infrastructure.quant_core.wrapper.HAS_AVX2", False)
+    _build_tokenizer(str(tmp_path))
+    provider = SloNetChatProvider.from_slnc(slnc, model_id="gpt2", quantize=True)
+    assert provider.quantization_report() == {"quantized": False}
+    assert provider.generate("hi", max_tokens=3, temperature=0.0)

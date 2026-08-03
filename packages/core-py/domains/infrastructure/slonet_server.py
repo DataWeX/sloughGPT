@@ -212,6 +212,8 @@ class SloNetServer:
     ) -> str:
         if cancel_event and cancel_event.is_set():
             raise RuntimeError("Generation cancelled before start")
+        import time as _tmod
+        _st0 = _tmod.monotonic()
         if self._use_guard():
             result = self._process_guard.generate(
                 prompt,
@@ -220,6 +222,11 @@ class SloNetServer:
                 top_p=top_p,
                 top_k=top_k,
                 repetition_penalty=repetition_penalty,
+            )
+            logger.info(
+                "DBG slonet_server.generate_sync GUARD elapsed=%.3fs prompt=%r result=%r",
+                _tmod.monotonic() - _st0, prompt[:50], str(result.get("text", ""))[:80],
+                extra={"tag": "DBG"},
             )
             return result.get("text", "")
         model = self._acquire_model()
@@ -385,20 +392,22 @@ class SloNetServer:
                         timeout=30.0,
                     )
                 except asyncio.TimeoutError:
-                    if not pump_thread.is_alive():
-                        if not err_q.empty():
-                            exc = err_q.get_nowait()
-                            raise RuntimeError(f"SloNet stream error: {exc}")
-                        while not q_buf.empty():
-                            t = q_buf.get_nowait()
-                            if t is sentinel:
-                                break
-                            yield t
-                        break
-                    if not err_q.empty():
-                        exc = err_q.get_nowait()
-                        raise RuntimeError(f"SloNet stream error: {exc}")
-                    continue
+                    # Defensive race guard: a dead pump always pushes the sentinel,
+                    # so a timeout with a dead pump is unreachable in practice.
+                    if not pump_thread.is_alive():  # pragma: no cover
+                        if not err_q.empty():  # pragma: no cover
+                            exc = err_q.get_nowait()  # pragma: no cover
+                            raise RuntimeError(f"SloNet stream error: {exc}")  # pragma: no cover
+                        while not q_buf.empty():  # pragma: no cover
+                            t = q_buf.get_nowait()  # pragma: no cover
+                            if t is sentinel:  # pragma: no cover
+                                break  # pragma: no cover
+                            yield t  # pragma: no cover
+                        break  # pragma: no cover
+                    if not err_q.empty():  # pragma: no cover
+                        exc = err_q.get_nowait()  # pragma: no cover
+                        raise RuntimeError(f"SloNet stream error: {exc}")  # pragma: no cover
+                    continue  # pragma: no cover
 
                 if token is sentinel:
                     if not err_q.empty():

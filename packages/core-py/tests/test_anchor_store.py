@@ -226,6 +226,11 @@ class TestMeaningTagsRefine:
         assert refined == {"a": 3}
         assert np.allclose(s.get("a"), before)
 
+    def test_refine_skips_unknown_label(self):
+        s = MeaningTags(dimension=8)
+        embeddings = np.ones((3, 8))
+        assert s.refine(["x"] * 3, embeddings, min_samples=2) == {}
+
 
 class TestDefaultMeaningTags:
     def test_has_all_default_tags(self):

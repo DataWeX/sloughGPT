@@ -62,6 +62,12 @@ class TestTruthLabelerDirective:
         r = TruthLabeler().label("run the tests now")
         assert r.label == "directive"
 
+    def test_imperative_verb_not_directive_start(self):
+        r = TruthLabeler().label("verify the build passes")
+        assert r.label == "directive"
+        assert r.scores["directive"] == 0.6
+        assert "verify" in r.reason
+
     def test_you_should_prefix(self):
         r = TruthLabeler().label("you should check the logs")
         assert r.label == "directive"

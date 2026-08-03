@@ -732,7 +732,7 @@ function renderBoard(q) {
 function cardHtml(c) {
   const tags = c.tags.slice(0,3).map(t => `<span class="chip">${esc(t)}</span>`).join("");
   const due = c.due_date ? `<span class="due">&#128197; ${esc(c.due_date)}</span>` : "";
-  const n = c.notes.length ? `<span class="chip">${n} note${n>1?"s":""}</span>` : "";
+  const n = c.notes.length ? `<span class="chip">${c.notes.length} note${c.notes.length>1?"s":""}</span>` : "";
   return `<div class="card" draggable="true" data-id="${esc(c.id)}" title="${esc(c.description||"")}">
     <div class="t">${esc(c.title)}</div>
     <div class="meta">${PICO[c.priority] ? `<span class="pri">${PICO[c.priority]}</span>` : ""}${tags}${n}${due}</div>

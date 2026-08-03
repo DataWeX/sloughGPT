@@ -40,6 +40,25 @@ def test_find_project_root_ignores_board_without_file(tmp_path):
     assert config.find_project_root(tmp_path) is None
 
 
+def test_find_project_root_falls_back_to_package_location(tmp_path, monkeypatch):
+    root = _write_board(tmp_path / "proj")
+    monkeypatch.setattr(
+        config, "__file__",
+        str(root / "packages" / "planner" / "src" / "planner" / "config.py"),
+    )
+    (tmp_path / "elsewhere").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path / "elsewhere")
+    assert config.find_project_root() == root
+
+
+def test_find_project_root_explicit_start_ignores_package_fallback(tmp_path, monkeypatch):
+    root = _write_board(tmp_path / "proj")
+    monkeypatch.setattr(config, "__file__", str(root / "config.py"))
+    other = tmp_path / "elsewhere" / "deep"
+    other.mkdir(parents=True)
+    assert config.find_project_root(other) is None
+
+
 # ---------------------------------------------------------------------------
 # Path resolution
 # ---------------------------------------------------------------------------

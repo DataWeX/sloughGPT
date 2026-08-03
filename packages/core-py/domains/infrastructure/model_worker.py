@@ -62,7 +62,7 @@ def _worker_loop(
     generate_fn,
     stream_fn,
     cleanup_fn=None,
-) -> None:
+) -> None:  # pragma: no cover — child process only; coverage recorded in parent
     """Shared request loop for both HF and SloNet workers.
 
     Args:
@@ -150,7 +150,7 @@ def _slo_worker_main(
     quant_mode: str = "symmetric",
     quant_clip: float = 0.999,
     extra_sys_paths: Optional[list] = None,
-) -> None:
+) -> None:  # pragma: no cover — child process only; coverage recorded in parent
     """Worker subprocess entry point for SloNet models (pure NumPy).
 
     Loads via ``SloNetChatProvider.from_slnc()`` and streams via
@@ -212,6 +212,11 @@ def _slo_worker_main(
         elapsed_ms = (time.time() - start) * 1000
         generated = result[0].tolist()
         text = provider._tokenizer.decode(generated)
+        logger.info(
+            "DBG worker generate elapsed=%.1fms prompt_len=%d tokens=%d text=%r",
+            elapsed_ms, len(token_ids), len(generated), text[:80],
+            extra={"tag": "DBG"},
+        )
         return {
             "text": text,
             "tokens_generated": len(generated),
@@ -280,7 +285,7 @@ def _hf_worker_main(
     model_kwargs: dict,
     worker_id: str,
     extra_sys_paths: Optional[list] = None,
-) -> None:
+) -> None:  # pragma: no cover — child process only; coverage recorded in parent
     """Worker subprocess entry point for HuggingFace models (legacy).
 
     Loads via dynamic import of ``model_cls_path`` and uses HF

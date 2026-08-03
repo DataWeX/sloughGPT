@@ -441,11 +441,27 @@ class SloNetChatProvider:
         instance._parser = parser  # keep mmap alive
         instance._quant_engine = None
 
-        # Apply quantization if requested
+        # Apply quantization if requested.
+        #
+        # Quantization only helps when the AVX2 int8 GEMM kernel is loaded
+        # (quant_core C extension). When the kernel is unavailable the pure-numpy
+        # fallback converts every weight matrix to int32 on each forward pass,
+        # which is ~12x SLOWER than the plain float32 matmul. In that case we
+        # silently skip quantization — float32 BLAS is both faster and exact.
         if quantize:
+            from domains.infrastructure.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
             from domains.infrastructure.quantization import QuantEngine, walk_slo_linears, TensorInfo
             from pathlib import Path as PathlibPath
 
+            if not bool(_HAS_AVX2):
+                logger.info(
+                    "SloNetChatProvider.from_slnc: AVX2 int8 kernel not available "
+                    "(numpy fallback is slower than float32) — skipping quantization",
+                    extra={"tag": "INF"},
+                )
+                quantize = False
+
+        if quantize:
             slnc_path_obj = PathlibPath(slnc_path)
             quant_npz_path = slnc_path_obj.with_suffix(slnc_path_obj.suffix + ".quant.npz")
             quant_meta_path = slnc_path_obj.with_suffix(slnc_path_obj.suffix + ".quant.json")

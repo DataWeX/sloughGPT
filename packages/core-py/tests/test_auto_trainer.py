@@ -1,5 +1,6 @@
 """Tests for AutoTrainer (background training from inference logs)."""
 
+import subprocess
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -172,12 +173,15 @@ class TestAutoTrainer:
         assert t._last_train_loss == 2.5
 
     @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[])
+    @patch("domains.training.pair_extractor.extract_pairs_from_corpus", return_value=[])
     @patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[])
-    def test_do_train_insufficient_pairs(self, mock_logs, mock_sessions):
+    def test_do_train_insufficient_pairs(self, mock_logs, mock_corpus, mock_sessions):
         """Training skipped when fewer than 5 pairs found."""
         t = AutoTrainer()
+        t._conversation_count = 5
         result = t._do_train()
         assert result is False
+        assert t._conversation_count == 0
 
     def test_do_train_venv_missing(self, tmp_path, monkeypatch):
         """Training skipped when .venv Python doesn't exist."""
@@ -195,3 +199,210 @@ class TestAutoTrainer:
         ):
             result = t._do_train()
         assert result is False
+
+    def test_loop_logs_exception(self, caplog):
+        """The monitoring loop logs exceptions from _check_and_train."""
+        t = AutoTrainer()
+        with patch.object(t, "_check_and_train", side_effect=RuntimeError("boom")), \
+                patch.object(t._stop_event, "wait", side_effect=lambda *_: t._stop_event.set()):
+            t._loop()
+        assert t._stop_event.is_set()
+
+    def test_check_no_new_data_returns_early(self):
+        """_check_and_train returns immediately when mtimes unchanged."""
+        t = AutoTrainer()
+        with patch.object(AutoTrainer, "_dir_mtime", return_value=42.0):
+            t._sessions_mtime = 42.0
+            t._logs_mtime = 42.0
+            t._corpus_mtime = 42.0
+            t._conversation_count = 0
+            t._check_and_train()
+        assert t._conversation_count == 0
+
+    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[])
+    @patch("domains.training.pair_extractor.extract_pairs_from_corpus", return_value=[])
+    @patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[
+        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+        for i in range(5)
+    ])
+    @patch("domains.training.pair_extractor.write_training_text")
+    def test_do_train_falls_back_to_logs(self, mock_write, mock_logs, mock_corpus, mock_sessions, tmp_path):
+        """Training falls back to response logs when sessions/corpus are empty."""
+        mock_write.return_value = tmp_path / "train.txt"
+        venv = tmp_path / ".venv" / "bin"
+        venv.mkdir(parents=True)
+        (venv / "python3").touch()
+        (tmp_path / "models" / "auto-training").mkdir(parents=True, exist_ok=True)
+
+        t = AutoTrainer(threshold=5, interval_s=0)
+        t._conversation_count = 5
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='{"success": true, "loss": 1.5, "steps": 5}\n',
+                stderr="",
+            )
+            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+                result = t._do_train()
+        assert result is True
+        assert t._total_trains == 1
+
+    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[])
+    @patch("domains.training.pair_extractor.extract_pairs_from_corpus", return_value=[])
+    @patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[
+        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+        for i in range(5)
+    ])
+    @patch("domains.training.pair_extractor.write_training_text")
+    def test_do_train_subprocess_failed(self, mock_write, mock_logs, mock_corpus, mock_sessions, tmp_path):
+        """Training reports False when the subprocess exits non-zero."""
+        mock_write.return_value = tmp_path / "train.txt"
+        venv = tmp_path / ".venv" / "bin"
+        venv.mkdir(parents=True)
+        (venv / "python3").touch()
+        (tmp_path / "models" / "auto-training").mkdir(parents=True, exist_ok=True)
+
+        t = AutoTrainer(threshold=5, interval_s=0)
+        t._conversation_count = 5
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="train failed")
+            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+                result = t._do_train()
+        assert result is False
+        assert t._total_trains == 0
+
+    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+        for i in range(5)
+    ])
+    @patch("domains.training.pair_extractor.write_training_text")
+    def test_do_train_store_failure_is_logged(self, mock_write, mock_sessions, tmp_path):
+        """Store failures are logged without failing the training run."""
+        mock_write.return_value = tmp_path / "train.txt"
+        venv = tmp_path / ".venv" / "bin"
+        venv.mkdir(parents=True)
+        (venv / "python3").touch()
+        (tmp_path / "models" / "auto-training").mkdir(parents=True, exist_ok=True)
+
+        t = AutoTrainer(threshold=5, interval_s=0)
+        t._conversation_count = 5
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='{"success": true, "loss": 1.5, "steps": 5}\n',
+                stderr="",
+            )
+            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path), \
+                    patch("domains.training.quality_scorer.score_batch", side_effect=RuntimeError("db down")):
+                result = t._do_train()
+        assert result is True
+        assert t._total_trains == 1
+
+    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+        for i in range(5)
+    ])
+    @patch("domains.training.pair_extractor.write_training_text")
+    def test_do_train_result_not_success(self, mock_write, mock_sessions, tmp_path):
+        """Training reports False when the subprocess result is not successful."""
+        mock_write.return_value = tmp_path / "train.txt"
+        venv = tmp_path / ".venv" / "bin"
+        venv.mkdir(parents=True)
+        (venv / "python3").touch()
+        (tmp_path / "models" / "auto-training").mkdir(parents=True, exist_ok=True)
+
+        t = AutoTrainer(threshold=5, interval_s=0)
+        t._conversation_count = 5
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='{"success": false, "error": "loss diverged"}\n',
+                stderr="",
+            )
+            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+                result = t._do_train()
+        assert result is False
+        assert t._total_trains == 0
+
+    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+        for i in range(5)
+    ])
+    @patch("domains.training.pair_extractor.write_training_text")
+    def test_do_train_subprocess_timeout(self, mock_write, mock_sessions, tmp_path):
+        """Training reports False when the subprocess times out."""
+        mock_write.return_value = tmp_path / "train.txt"
+        venv = tmp_path / ".venv" / "bin"
+        venv.mkdir(parents=True)
+        (venv / "python3").touch()
+        (tmp_path / "models" / "auto-training").mkdir(parents=True, exist_ok=True)
+
+        t = AutoTrainer(threshold=5, interval_s=0)
+        t._conversation_count = 5
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("hf_train.py", 300)), \
+                patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+            result = t._do_train()
+        assert result is False
+
+    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+        for i in range(5)
+    ])
+    @patch("domains.training.pair_extractor.write_training_text")
+    def test_do_train_subprocess_other_error(self, mock_write, mock_sessions, tmp_path):
+        """Training reports False on an unexpected subprocess error."""
+        mock_write.return_value = tmp_path / "train.txt"
+        venv = tmp_path / ".venv" / "bin"
+        venv.mkdir(parents=True)
+        (venv / "python3").touch()
+        (tmp_path / "models" / "auto-training").mkdir(parents=True, exist_ok=True)
+
+        t = AutoTrainer(threshold=5, interval_s=0)
+        t._conversation_count = 5
+        with patch("subprocess.run", side_effect=OSError("no python")), \
+                patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+            result = t._do_train()
+        assert result is False
+
+
+class TestAutoTrainerSingleton:
+    def test_get_auto_trainer_creates_singleton(self, monkeypatch):
+        """get_auto_trainer creates a singleton with env-driven config."""
+        import domains.training.auto_trainer as at
+        monkeypatch.setattr(at, "_auto_trainer", None)
+        monkeypatch.setenv("SLO_AUTO_TRAIN_THRESHOLD", "7")
+        monkeypatch.setenv("SLO_AUTO_TRAIN_INTERVAL", "120")
+        trainer = at.get_auto_trainer()
+        assert trainer.threshold == 7
+        assert trainer.interval_s == 120
+        assert at.get_auto_trainer() is trainer
+
+    def test_start_auto_trainer_if_disabled(self, monkeypatch):
+        """start_auto_trainer_if_enabled returns None when disabled."""
+        import domains.training.auto_trainer as at
+        monkeypatch.setattr(at, "_auto_trainer", None)
+        monkeypatch.setenv("SLO_AUTO_TRAIN", "0")
+        assert at.start_auto_trainer_if_enabled() is None
+
+    def test_start_auto_trainer_if_enabled(self, monkeypatch):
+        """start_auto_trainer_if_enabled starts the trainer when enabled."""
+        import domains.training.auto_trainer as at
+        t = AutoTrainer(interval_s=9999)
+        monkeypatch.setattr(at, "_auto_trainer", t)
+        monkeypatch.setenv("SLO_AUTO_TRAIN", "1")
+        try:
+            result = at.start_auto_trainer_if_enabled()
+            assert result is t
+            assert t._thread.is_alive()
+        finally:
+            t.stop()
+            monkeypatch.setattr(at, "_auto_trainer", None)
+
+    def test_stop_auto_trainer_stops_global(self, monkeypatch):
+        """stop_auto_trainer stops the global trainer."""
+        import domains.training.auto_trainer as at
+        t = AutoTrainer(interval_s=9999)
+        monkeypatch.setattr(at, "_auto_trainer", t)
+        t.start()
+        at.stop_auto_trainer()
+        assert not t._thread.is_alive()

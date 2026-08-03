@@ -4,9 +4,10 @@ In this environment torch/cupy/pyopencl are all unavailable, so the CPU backend
 (_CPUBackend) plus the base-class numpy implementations are the production path.
 Every reachable numpy op is verified against an independent reference, the
 backend-detection priority logic is exercised by monkeypatching the availability
-probes, and the GPU backend classes are exercised in their numpy-fallback /
-is_available=False state. The torch/cupy/pyopencl dispatch arms are the
-documented environmental floor and are never executed here.
+probes, and the GPU backend classes are exercised both in their numpy-fallback /
+is_available=False state and with numpy-backed proxies installed in
+``sys.modules`` for torch (Metal), cupy (CUDA) and pyopencl (OpenCL) so their
+dispatch arms execute even without the real libraries.
 """
 
 import importlib.util
@@ -392,6 +393,27 @@ class TestDeviceBasics:
         arr = np.arange(3, dtype=np.float32)
         out = cpu.from_device(arr)
         assert np.array_equal(out, arr)
+
+    def test_vram_gb_uses_psutil(self, cpu, monkeypatch):
+        class _VM:
+            total = 32 * 1024 ** 3
+
+        class _FakePsutil:
+            @staticmethod
+            def virtual_memory():
+                return _VM()
+
+        monkeypatch.setitem(sys.modules, "psutil", _FakePsutil())
+        assert cpu.vram_gb() == 16.0
+
+    def test_vram_gb_psutil_installed_but_unavailable(self, cpu, monkeypatch):
+        class _Boom:
+            @staticmethod
+            def virtual_memory():
+                raise RuntimeError("no memory info")
+
+        monkeypatch.setitem(sys.modules, "psutil", _Boom())
+        assert cpu.vram_gb() == 8.0
 
 
 # =============================================================================
@@ -1296,6 +1318,515 @@ class TestCudaWithFakeCupy:
         b = np.random.randn(8).astype(np.float32)
         assert np.allclose(backend.layer_norm(x, w, b), _ref_layernorm(x, w, b), atol=1e-5)
         assert np.allclose(backend.gelu(x), _ref_gelu(x), atol=1e-5)
+
+
+# =============================================================================
+# Metal backend dispatch arms with a numpy-backed torch proxy
+# =============================================================================
+
+class TestMetalWithFakeTorch:
+    """Exercise the torch/MPS-present dispatch arms with a numpy-backed torch proxy.
+
+    The real ``torch`` is unavailable in this environment, so a minimal proxy
+    mirrors the surface the ``_MetalBackend`` touches: ``torch.tensor``, the
+    ``Tensor`` methods (sum/mean/softmax/amax/long/cpu/numpy/item), arithmetic
+    operators, module functions (sigmoid/tanh/relu/abs/exp/sqrt/rsqrt/mean) and
+    ``torch.nn.functional`` (gelu/silu/layer_norm/scaled_dot_product_attention/
+    cross_entropy/conv2d/max_pool2d/embedding/dropout).
+    """
+
+    class _Tensor:
+        def __init__(self, data):
+            self.data = np.asarray(data)
+
+        @property
+        def shape(self):
+            return self.data.shape
+
+        def sum(self, dim=None):
+            return TestMetalWithFakeTorch._Tensor(self.data.sum(axis=dim))
+
+        def mean(self, dim=None):
+            return TestMetalWithFakeTorch._Tensor(self.data.mean(axis=dim))
+
+        def softmax(self, dim=-1):
+            return TestMetalWithFakeTorch._Tensor(_ref_softmax(self.data, axis=dim))
+
+        def amax(self, dim=None):
+            return TestMetalWithFakeTorch._Tensor(self.data.max(axis=dim))
+
+        def long(self):
+            return TestMetalWithFakeTorch._Tensor(self.data.astype(np.int64))
+
+        def item(self):
+            return float(self.data.item())
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self.data
+
+        def __matmul__(self, o):
+            a, b = self.data, TestMetalWithFakeTorch._val(o)
+            if a.dtype == np.float16 or (isinstance(b, np.ndarray) and b.dtype == np.float16):
+                a, b = a.astype(np.float32), np.asarray(b).astype(np.float32)
+            return TestMetalWithFakeTorch._Tensor(a @ b)
+
+        def __add__(self, o):
+            return TestMetalWithFakeTorch._Tensor(self.data + TestMetalWithFakeTorch._val(o))
+
+        def __radd__(self, o):
+            return TestMetalWithFakeTorch._Tensor(TestMetalWithFakeTorch._val(o) + self.data)
+
+        def __sub__(self, o):
+            return TestMetalWithFakeTorch._Tensor(self.data - TestMetalWithFakeTorch._val(o))
+
+        def __rsub__(self, o):
+            return TestMetalWithFakeTorch._Tensor(TestMetalWithFakeTorch._val(o) - self.data)
+
+        def __mul__(self, o):
+            return TestMetalWithFakeTorch._Tensor(self.data * TestMetalWithFakeTorch._val(o))
+
+        def __rmul__(self, o):
+            return TestMetalWithFakeTorch._Tensor(TestMetalWithFakeTorch._val(o) * self.data)
+
+        def __truediv__(self, o):
+            return TestMetalWithFakeTorch._Tensor(self.data / TestMetalWithFakeTorch._val(o))
+
+        def __pow__(self, o):
+            return TestMetalWithFakeTorch._Tensor(self.data ** o)
+
+        def __neg__(self):
+            return TestMetalWithFakeTorch._Tensor(-self.data)
+
+    @staticmethod
+    def _val(x):
+        return x.data if isinstance(x, TestMetalWithFakeTorch._Tensor) else x
+
+    @classmethod
+    def _fake_torch(cls):
+        _T = cls._Tensor
+        _v = cls._val
+
+        class _Mps:
+            @staticmethod
+            def is_available():
+                return True
+
+            @staticmethod
+            def is_built():
+                return True
+
+            @staticmethod
+            def synchronize():
+                return None
+
+        class _Functional:
+            @staticmethod
+            def gelu(x):
+                return _T(_ref_gelu(_v(x)))
+
+            @staticmethod
+            def silu(x):
+                x = _v(x)
+                return _T(x / (1 + np.exp(-x)))
+
+            @staticmethod
+            def layer_norm(input, normalized_shape, weight=None, bias=None, eps=1e-5):
+                x = _v(input)
+                mean = x.mean(axis=-1, keepdims=True)
+                var = x.var(axis=-1, keepdims=True)
+                out = (x - mean) / np.sqrt(var + eps)
+                if weight is not None:
+                    out = out * _v(weight)
+                if bias is not None:
+                    out = out + _v(bias)
+                return _T(out)
+
+            @staticmethod
+            def scaled_dot_product_attention(query, key, value, attn_mask=None, is_causal=False):
+                return _T(_ref_scaled_dot_attention(
+                    _v(query), _v(key), _v(value),
+                    mask=None if attn_mask is None else _v(attn_mask),
+                    causal=is_causal,
+                ))
+
+            @staticmethod
+            def cross_entropy(logits, targets, reduction="mean"):
+                flat = _v(logits).reshape(-1, _v(logits).shape[-1])
+                t = _v(targets).astype(np.int64).flatten()
+                m = flat.max(axis=-1, keepdims=True)
+                lp = flat - m - np.log(np.exp(flat - m).sum(axis=-1, keepdims=True))
+                valid = (t >= 0) & (t < flat.shape[1])
+                idx = np.arange(len(t))[valid]
+                loss = float(-lp[idx, t[valid]].mean()) if idx.size else 0.0
+                return _T(np.asarray(loss))
+
+            @staticmethod
+            def conv2d(input, weight, bias=None, stride=1, padding=0, groups=1):
+                return _T(_ref_conv2d(_v(input), _v(weight),
+                                      None if bias is None else _v(bias), stride, padding))
+
+            @staticmethod
+            def max_pool2d(input, kernel_size, stride):
+                return _T(_ref_max_pool(_v(input), kernel_size, stride))
+
+            @staticmethod
+            def embedding(indices, weight):
+                return _T(_v(weight)[_v(indices).astype(np.int64)])
+
+            @staticmethod
+            def dropout(input, p=0.0, training=True):
+                x = _v(input)
+                if not training or p <= 0:
+                    return _T(x)
+                mask = (np.random.rand(*x.shape) > p) / (1 - p)
+                return _T(x * mask)
+
+        class _Backends:
+            mps = _Mps()
+
+        _Fake = type("FakeTorch", (), {
+            "Tensor": _T,
+            "float16": np.float16,
+            "float32": np.float32,
+            "nn": type("NN", (), {"functional": _Functional()}),
+            "backends": _Backends(),
+        })
+
+        @staticmethod
+        def tensor(data, dtype=None, device=None):
+            return _T(np.asarray(data, dtype=dtype))
+
+        @staticmethod
+        def sigmoid(x):
+            return _T(1 / (1 + np.exp(-_v(x))))
+
+        @staticmethod
+        def tanh(x):
+            return _T(np.tanh(_v(x)))
+
+        @staticmethod
+        def relu(x):
+            return _T(np.maximum(_v(x), 0))
+
+        @staticmethod
+        def abs(x):
+            return _T(np.abs(_v(x)))
+
+        @staticmethod
+        def exp(x):
+            return _T(np.exp(_v(x)))
+
+        @staticmethod
+        def sqrt(x):
+            return _T(np.sqrt(_v(x)))
+
+        @staticmethod
+        def rsqrt(x):
+            return _T(1 / np.sqrt(_v(x)))
+
+        @staticmethod
+        def mean(x, dim=None, keepdim=False):
+            return _T(np.mean(_v(x), axis=dim, keepdims=keepdim))
+
+        _Fake.tensor = tensor
+        _Fake.sigmoid = sigmoid
+        _Fake.tanh = tanh
+        _Fake.relu = relu
+        _Fake.abs = abs
+        _Fake.exp = exp
+        _Fake.sqrt = sqrt
+        _Fake.rsqrt = rsqrt
+        _Fake.mean = mean
+        return _Fake
+
+    def test_metal_available_with_fake_torch(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        assert backend.is_available() is True
+        assert backend._torch is not None
+
+    def test_metal_to_from_device_fp32(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        arr = np.arange(6, dtype=np.float64)
+        dev = backend.to_device(arr)
+        assert isinstance(dev, self._Tensor)
+        assert np.array_equal(backend.from_device(dev), arr)
+        assert np.array_equal(backend.from_device(arr), arr)
+
+    def test_metal_fp16_mode(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        backend._fp16_mode = True
+        dev = backend.to_device(np.array([1.0, 2.0]))
+        assert dev.data.dtype == np.float16
+
+    def test_metal_device_transfer_passthrough(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        t = backend._torch.tensor(np.array([1.0, 2.0]))
+        assert backend._t(t) is t
+        arr = np.array([3.0, 4.0])
+        assert backend._n(arr) is arr
+        assert backend.to_device([1, 2, 3]) == [1, 2, 3]
+
+    def test_metal_matmul_fp32_and_fp16(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        a = np.random.randn(3, 4).astype(np.float32)
+        b = np.random.randn(4, 5).astype(np.float32)
+        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-5)
+        backend._fp16_mode = True
+        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-2)
+
+    def test_metal_elementary_ops(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        a = np.random.randn(4, 5).astype(np.float32)
+        b = np.random.randn(4, 5).astype(np.float32)
+        assert np.allclose(backend.add(a, b), a + b, atol=1e-5)
+        assert np.allclose(backend.neg(a), -a, atol=1e-5)
+        assert np.allclose(backend.mul(a, b), a * b, atol=1e-5)
+        assert np.allclose(backend.pow(a, 2), a ** 2, atol=1e-5)
+
+    def test_metal_sum_mean(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        a = np.random.randn(3, 4).astype(np.float32)
+        assert np.allclose(backend.sum(a), a.sum())
+        assert np.allclose(backend.sum(a, axis=1), a.sum(axis=1))
+        assert np.allclose(backend.mean(a), a.mean())
+        assert np.allclose(backend.mean(a, axis=0), a.mean(axis=0))
+
+    def test_metal_activations(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        x = np.random.randn(4, 8).astype(np.float32)
+        assert np.allclose(backend.sigmoid(x), 1 / (1 + np.exp(-x)), atol=1e-5)
+        assert np.allclose(backend.tanh(x), np.tanh(x), atol=1e-5)
+        assert np.allclose(backend.relu(x), np.maximum(x, 0), atol=1e-5)
+        assert np.allclose(backend.gelu(x), _ref_gelu(x), atol=1e-5)
+        assert np.allclose(backend.silu(x), x / (1 + np.exp(-x)), atol=1e-5)
+        assert np.allclose(backend.softmax(x), _ref_softmax(x), atol=1e-5)
+
+    def test_metal_layer_rms_norm(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        x = np.random.randn(4, 8).astype(np.float32)
+        w = np.random.randn(8).astype(np.float32)
+        b = np.random.randn(8).astype(np.float32)
+        assert np.allclose(backend.layer_norm(x, w, b), _ref_layernorm(x, w, b), atol=1e-4)
+        assert np.allclose(backend.rms_norm(x, w), _ref_rmsnorm(x, w), atol=1e-4)
+
+    def test_metal_scaled_dot_causal_and_mask(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        q = np.random.randn(1, 1, 3, 8).astype(np.float32)
+        k = np.random.randn(1, 1, 4, 8).astype(np.float32)
+        v = np.random.randn(1, 1, 4, 8).astype(np.float32)
+        out = backend.scaled_dot_attention(q, k, v, causal=True)
+        assert np.allclose(out, _ref_scaled_dot_attention(q, k, v, causal=True), atol=1e-5)
+        mask = np.full((1, 1, 3, 4), -1e9, dtype=np.float32)
+        mask[..., :2] = 0.0
+        out = backend.scaled_dot_attention(q, k, v, mask=mask)
+        assert np.allclose(out, _ref_scaled_dot_attention(q, k, v, mask=mask), atol=1e-5)
+
+    def test_metal_cross_entropy(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        logits = np.random.randn(4, 8).astype(np.float32)
+        targets = np.array([0, 1, 7, 3])
+        assert np.allclose(backend.cross_entropy(logits, targets),
+                           _ref_cross_entropy(logits, targets), atol=1e-5)
+
+    def test_metal_conv_maxpool_embedding_dropout(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        x = np.random.randn(1, 2, 6, 6).astype(np.float32)
+        weight = np.random.randn(3, 2, 3, 3).astype(np.float32)
+        bias = np.random.randn(3).astype(np.float32)
+        assert np.allclose(backend.conv2d(x, weight, bias, stride=1, padding=1),
+                           _ref_conv2d(x, weight, bias, 1, 1), atol=1e-4)
+        assert np.allclose(backend.max_pool2d(x, 2, 2), _ref_max_pool(x, 2, 2), atol=1e-5)
+        idx = np.array([[0, 2], [1, 3]])
+        emb = np.random.randn(4, 5).astype(np.float32)
+        assert np.allclose(backend.embedding(idx, emb), emb[idx], atol=1e-5)
+        assert np.allclose(backend.dropout(x, p=0.5, training=False), x, atol=1e-5)
+        assert np.allclose(backend.dropout(x, p=0.0, training=True), x, atol=1e-5)
+        assert backend.dropout(x, p=0.5, training=True).shape == x.shape
+
+    def test_metal_abs_exp_sqrt_max(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._fake_torch())
+        backend = slib._MetalBackend()
+        backend.is_available()
+        a = np.abs(np.random.randn(3, 4)).astype(np.float32) + 0.1
+        assert np.allclose(backend.abs(a), np.abs(a), atol=1e-5)
+        assert np.allclose(backend.exp(a), np.exp(a), atol=1e-5)
+        assert np.allclose(backend.sqrt(a), np.sqrt(a), atol=1e-5)
+        assert np.allclose(backend.max(a), a.max())
+        assert np.allclose(backend.max(a, axis=0), a.max(axis=0))
+
+
+# =============================================================================
+# OpenCL backend dispatch arms with a numpy-backed pyopencl proxy
+# =============================================================================
+
+class TestOpenCLWithFakeOpenCL:
+    """Exercise the pyopencl-present dispatch arms with a minimal proxy.
+
+    The real ``pyopencl`` is unavailable in this environment, so a minimal proxy
+    mirrors the surface ``_OpenCLBackend`` touches: ``create_some_context``,
+    ``CommandQueue``, ``Buffer``, ``enqueue_copy``, ``mem_flags``,
+    ``get_platforms`` and device ``global_mem_size``.
+    """
+
+    class _Buf:
+        def __init__(self, data):
+            self.data = np.asarray(data)
+
+        @property
+        def shape(self):
+            return self.data.shape
+
+    @classmethod
+    def _fake_opencl(cls, mem_bytes=8 * 1024 ** 3):
+        _Buf = cls._Buf
+
+        class _MemFlags:
+            READ_WRITE = 1
+            COPY_HOST_PTR = 2
+
+        class _Dev:
+            global_mem_size = mem_bytes
+
+        class _Platform:
+            def get_devices(self, *a, **k):
+                return [_Dev()]
+
+        class _Ctx:
+            devices = [_Dev()]
+
+        class _Queue:
+            def __init__(self, ctx):
+                self.context = ctx
+
+            def finish(self):
+                return None
+
+        class _FakeCL:
+            mem_flags = _MemFlags()
+
+            @staticmethod
+            def create_some_context(interactive=False):
+                return _Ctx()
+
+            @staticmethod
+            def CommandQueue(ctx):
+                return _Queue(ctx)
+
+            @staticmethod
+            def Buffer(context, flags, hostbuf):
+                return _Buf(hostbuf)
+
+            @staticmethod
+            def enqueue_copy(queue, dest, src):
+                dest[...] = np.asarray(src.data if isinstance(src, _Buf) else src).astype(np.float32)
+                return None
+
+            @staticmethod
+            def get_platforms():
+                return [_Platform()]
+
+        return _FakeCL()
+
+    def test_opencl_available_with_fake(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl())
+        backend = slib._OpenCLBackend()
+        assert backend.is_available() is True
+        assert backend._cl is not None
+
+    def test_opencl_vram_full_tier(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=8 * 1024 ** 3))
+        backend = slib._OpenCLBackend()
+        backend.is_available()
+        assert backend.vram_gb() == 8.0
+        assert backend.compute_tier == "full"
+        hint = backend.memory_hint()
+        assert hint["tier"] == "full"
+        assert hint["max_batch"] == int(16 * (8.0 / 4))
+        assert hint["recommend_quantization"] is False
+
+    def test_opencl_vram_medium_tier(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=2 * 1024 ** 3))
+        backend = slib._OpenCLBackend()
+        backend.is_available()
+        assert backend.compute_tier == "medium"
+        assert backend.memory_hint()["max_seq_len"] == 256
+
+    def test_opencl_vram_lite_tier(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=1 * 1024 ** 3))
+        backend = slib._OpenCLBackend()
+        backend.is_available()
+        assert backend.compute_tier == "lite"
+        assert backend.memory_hint()["recommend_quantization"] is True
+
+    def test_opencl_vram_exception_falls_back(self, monkeypatch):
+        class _BoomDev:
+            global_mem_size = "boom"
+
+        class _BoomPlatform:
+            def get_devices(self, *a, **k):
+                return [_BoomDev()]
+
+        class _Ctx:
+            devices = [_BoomDev()]
+
+        class _FakeCL:
+            @staticmethod
+            def create_some_context(interactive=False):
+                return _Ctx()
+
+            @staticmethod
+            def get_platforms():
+                return [_BoomPlatform()]
+
+        monkeypatch.setitem(sys.modules, "pyopencl", _FakeCL())
+        backend = slib._OpenCLBackend()
+        backend.is_available()
+        assert backend.vram_gb() == 1.0
+
+    def test_opencl_to_from_device_roundtrip(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl())
+        backend = slib._OpenCLBackend()
+        backend.is_available()
+        arr = np.arange(6, dtype=np.float64)
+        dev = backend.to_device(arr)
+        assert isinstance(dev, self._Buf)
+        assert np.array_equal(dev.data, arr.astype(np.float32))
+        out = backend.from_device(dev)
+        assert out.dtype == np.float32
+        assert np.array_equal(out, arr.astype(np.float32))
+
+    def test_opencl_lazy_context_import(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl())
+        backend = slib._OpenCLBackend()
+        backend._ensure_context()
+        assert backend._cl is not None
+        assert backend._queue is not None
 
 
 # =============================================================================

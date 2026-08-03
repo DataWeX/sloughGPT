@@ -238,6 +238,28 @@ class MultimodalManager:
 
         return np.stack(images), captions
 
+    def _pick_seed_caption(self, embed_data: np.ndarray) -> str:
+        """Pick a deterministic seed caption for early self-supervised steps.
+
+        Used before the decoder has learned to generate its own text
+        (``_learning_count < 10`` or degenerate generations). Returns a
+        stable choice from ``_SEED_CAPTIONS`` derived from the image
+        embedding, so the first few captions are meaningful placeholders.
+
+        Args:
+            embed_data: image embedding array from the vision encoder.
+
+        Returns:
+            A seed caption string.
+        """
+        if not self._SEED_CAPTIONS:
+            return "an image"
+        arr = np.asarray(embed_data, dtype=np.float64)
+        if arr.size == 0:
+            return self._SEED_CAPTIONS[0]
+        idx = int(abs(float(arr.mean()))) % len(self._SEED_CAPTIONS)
+        return self._SEED_CAPTIONS[idx]
+
     def _pretrain_engine(self, epochs: int = 10, samples: int = 216,
                          batch_size: int = 8, lr: float = 5e-4) -> float:
         """Run multi-epoch batched synthetic training to initialize the engine.

@@ -122,3 +122,78 @@ class TestPDFVLMProcessor:
         with patch.dict("sys.modules", {"pdf2image": None}):
             result = p._page_images("/fake.pdf")
             assert result == []
+
+    def test_page_images_with_pdf2image(self, monkeypatch):
+        """_page_images should render pages to PNG bytes via pdf2image."""
+        import sys
+        import types
+
+        class FakeImage:
+            def save(self, buf, format=None):
+                buf.write(b"PNG-DATA")
+
+        fake = types.ModuleType("pdf2image")
+        fake.convert_from_path = lambda *a, **k: [FakeImage(), FakeImage()]
+        monkeypatch.setitem(sys.modules, "pdf2image", fake)
+
+        p = PDFVLMProcessor(max_pages=5)
+        result = p._page_images("/fake.pdf")
+        assert result == [b"PNG-DATA", b"PNG-DATA"]
+
+    def test_page_images_pdf2image_raises(self, monkeypatch):
+        """_page_images should return [] when rendering raises."""
+        import sys
+        import types
+
+        def boom(*a, **k):
+            raise ValueError("render failed")
+
+        fake = types.ModuleType("pdf2image")
+        fake.convert_from_path = boom
+        monkeypatch.setitem(sys.modules, "pdf2image", fake)
+
+        p = PDFVLMProcessor(max_pages=5)
+        assert p._page_images("/fake.pdf") == []
+
+    def test_extract_text_with_pymupdf(self, monkeypatch):
+        """_extract_text should use PyMuPDF when installed."""
+        import sys
+        import types
+
+        class FakePage:
+            def get_text(self):
+                return "Page text "
+
+        class FakeDoc:
+            def __init__(self):
+                self.pages = [FakePage(), FakePage(), FakePage()]
+
+            def __iter__(self):
+                return iter(self.pages)
+
+            def close(self):
+                pass
+
+        fake = types.ModuleType("fitz")
+        fake.open = lambda path: FakeDoc()
+        monkeypatch.setitem(sys.modules, "fitz", fake)
+
+        p = PDFVLMProcessor(max_pages=2)
+        assert p._extract_text("/fake.pdf") == "Page text Page text "
+
+    def test_extract_text_pypdf_breaks_at_max_pages(self, tmp_path, monkeypatch):
+        """pypdf fallback should stop reading past max_pages."""
+        import sys
+
+        monkeypatch.delitem(sys.modules, "fitz", raising=False)
+        import pypdf
+
+        writer = pypdf.PdfWriter()
+        for _ in range(3):
+            writer.add_blank_page(width=612, height=792)
+        path = tmp_path / "multi.pdf"
+        with open(path, "wb") as f:
+            writer.write(f)
+
+        p = PDFVLMProcessor(max_pages=1)
+        assert isinstance(p._extract_text(str(path)), str)

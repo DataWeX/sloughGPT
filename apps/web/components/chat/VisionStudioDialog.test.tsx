@@ -30,7 +30,16 @@ vi.mock('@sloughgpt/strui', () => ({
   IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
 }))
 
-const mockGetTrainingReport = vi.fn()
+const DEFAULT_REPORT = {
+  images_learned: 0,
+  vocab_size: 0,
+  caption_history: [],
+  accuracy_history: [],
+  mean_accuracy: 0,
+  last_accuracy: 0,
+}
+
+const mockGetTrainingReport = vi.fn().mockResolvedValue(DEFAULT_REPORT)
 
 vi.mock('@/lib/multimodal-controller', () => ({
   multimodalController: {
@@ -41,6 +50,17 @@ vi.mock('@/lib/multimodal-controller', () => ({
     transcribeAudio: vi.fn(),
     getCapabilities: vi.fn().mockResolvedValue({ speech_to_text: true, image_captioning: true }),
     resetModel: vi.fn(),
+  },
+}))
+
+vi.mock('@/lib/dev-log', () => ({
+  logger: {
+    child: vi.fn(() => ({ info: vi.fn(), warning: vi.fn(), error: vi.fn() })),
+    info: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    critical: vi.fn(),
   },
 }))
 
@@ -209,7 +229,8 @@ describe('VisionStudioDialog', () => {
     })
   })
 
-  it('shows initialCaps data without API call', () => {
+  it('shows initialCaps data when report API is unavailable', () => {
+    mockGetTrainingReport.mockRejectedValue(new Error('offline'))
     render(
       <VisionStudioDialog
         open={true}

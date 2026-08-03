@@ -210,6 +210,54 @@ class TestApplyCorrection:
         )
         assert isinstance(loss, float)
 
+    def test_clips_large_gradients(self, monkeypatch):
+        from domains.training import slonet
+        from domains.training.slonet import Tensor
+
+        seen = {}
+
+        class RecordingAdam(slonet.SloAdam):
+            def step(self, params):
+                seen["norms"] = [
+                    np.linalg.norm(p.grad.data) for p in params if p.grad is not None
+                ]
+                return super().step(params)
+
+        monkeypatch.setattr(slonet, "SloAdam", RecordingAdam)
+
+        max_len = 8
+        params = [Tensor(np.zeros((max_len, 4)), requires_grad=True)]
+        params[0].data[0, :] = [0.1, 0.0, 0.0, 0.0]
+        params[0].data[1, :] = [0.0, 1.0, 0.0, 0.0]
+        params[0].data[2, :] = [1.0, 0.0, 0.0, 0.0]
+
+        class FakeEncoder:
+            def parameters(self):
+                return params
+
+            def forward(self, ids):
+                x = Tensor(np.asarray(ids, dtype=np.float64))
+                return x @ params[0]
+
+        def encode_fn(text, max_len):
+            ids = np.zeros(max_len, dtype=np.int64)
+            ids[{"q": 0, "p": 1, "n": 2}[text]] = 1
+            return ids
+
+        m = TruthMaintainer()
+        loss = m.apply_correction(
+            FakeEncoder(),
+            ["q", "q"],
+            ["p", "p"],
+            ["n", "n"],
+            None,
+            {},
+            encode_fn=encode_fn,
+            max_seq_len=max_len,
+        )
+        assert isinstance(loss, float)
+        assert seen["norms"] and all(n <= 1.0 + 1e-6 for n in seen["norms"])
+
 
 class TestEncodeTokens:
     def test_pads_to_max_len(self):

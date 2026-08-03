@@ -44,18 +44,32 @@ COLUMN_TO_STATUS = {
 STATUSES = ["open", "wip", "done", "blocked", "review"]
 
 
-def find_project_root(start: Path | None = None) -> Path | None:
-    """Return the nearest ancestor of *start* that contains a kanban board.
-
-    Walks up from *start* (default: current directory) looking for a
-    directory containing ``.kanban/board.json``. Returns ``None`` when no
-    ancestor qualifies.
-    """
-    cur = Path(start or os.getcwd()).resolve()
+def _walk_for_board(start: Path) -> Path | None:
+    """Return the nearest ancestor of *start* containing ``.kanban/board.json``."""
+    cur = start.resolve()
     for candidate in (cur, *cur.parents):
         if (candidate / ".kanban" / "board.json").is_file():
             return candidate
     return None
+
+
+def find_project_root(start: Path | None = None) -> Path | None:
+    """Return the nearest project root that contains a kanban board.
+
+    With an explicit *start*, only *start* and its ancestors are searched.
+    Without one, the current directory is searched first, then the directory
+    tree of the installed ``planner`` package itself. The package fallback
+    keeps every planner tool (``notes``, ``kanban``, ``planner gui``) pointed
+    at the repository's board even when launched from a directory outside the
+    repo (the package is typically an editable install living inside it).
+    Returns ``None`` when no ancestor qualifies.
+    """
+    if start is not None:
+        return _walk_for_board(start)
+    root = _walk_for_board(Path(os.getcwd()))
+    if root is not None:
+        return root
+    return _walk_for_board(Path(__file__))
 
 
 def project_notes_dir(root: Path) -> Path:

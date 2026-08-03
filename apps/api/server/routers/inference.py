@@ -384,6 +384,8 @@ class InferenceRouter:
 
         provider_messages = [{"role": "user", "content": req.prompt}]
         try:
+            import time as _time
+            _t0 = _time.monotonic()
             result = await provider.chat(
                 provider_messages,
                 max_tokens=req.max_new_tokens,
@@ -392,6 +394,13 @@ class InferenceRouter:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
             )
+            logger.info(
+                "DBG generate handler: provider=%s elapsed=%.3fs result=%r",
+                getattr(provider, "_text_name", type(provider).__name__),
+                _time.monotonic() - _t0,
+                result[:80],
+                extra={"tag": "DBG"},
+            )
             tokens = _count_tokens(result, _gen_state)
             actual_model = _gen_state.model_type or req.model
             try:
@@ -399,6 +408,18 @@ class InferenceRouter:
                 get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=actual_model)
             except Exception as e:
                 logger.debug("Failed to record inference metrics: %s", e)
+            try:
+                from domains.infrastructure.conversation_log import capture
+                capture(
+                    req.prompt,
+                    result,
+                    model=actual_model,
+                    tokens_generated=tokens,
+                    elapsed_ms=(_time.monotonic() - _t0) * 1000,
+                    temperature=req.temperature,
+                )
+            except Exception as e:
+                logger.debug("Failed to capture conversation: %s", e)
             return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
@@ -422,6 +443,7 @@ class InferenceRouter:
             provider_messages = [{"role": "user", "content": req.prompt}]
             start = datetime.datetime.now()
             token_count = 0
+            collected = []
             try:
                 async for token in provider.chat_stream(
                     provider_messages,
@@ -436,6 +458,7 @@ class InferenceRouter:
                         return
                     if token:
                         token_count += 1
+                        collected.append(token)
                         yield sse_token("generate", token)
             except Exception as e:
                 yield sse_error("generate", "STREAMING", str(e))
@@ -448,6 +471,18 @@ class InferenceRouter:
                 )
             except Exception as e:
                 logger.debug("Failed to record inference metrics: %s", e)
+            try:
+                from domains.infrastructure.conversation_log import capture
+                capture(
+                    req.prompt,
+                    "".join(collected),
+                    model=_stream_state.model_type or req.model,
+                    tokens_generated=token_count,
+                    elapsed_ms=elapsed,
+                    temperature=req.temperature,
+                )
+            except Exception as e:
+                logger.debug("Failed to capture conversation: %s", e)
             yield sse_token("generate", "", done=True, meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)})
 
         return StreamingResponse(generate(), media_type="text/event-stream")
@@ -780,6 +815,20 @@ class InferenceRouter:
                 _post_gen_tasks = []
 
                 try:
+                    from domains.infrastructure.conversation_log import capture
+                    capture(
+                        user_msg or "",
+                        full_response,
+                        model=_check_state.model_type or req.model,
+                        tokens_generated=tokens,
+                        elapsed_ms=duration_ms,
+                        temperature=req.temperature,
+                        meta={"session_id": session_id},
+                    )
+                except Exception as e:
+                    logger.debug("Failed to capture conversation: %s", e)
+
+                try:
                     from domains.feedback.response_tracker import get_response_tracker
                     tracker = get_response_tracker()
                     _post_gen_tasks.append(asyncio.to_thread(
@@ -948,6 +997,19 @@ class InferenceRouter:
             )
         except Exception as e:
             logger.debug("Failed to record inference metrics: %s", e)
+
+        try:
+            from domains.infrastructure.conversation_log import capture
+            capture(
+                user_msg or "",
+                result.text,
+                model=_chat_state.model_type or req.model,
+                tokens_generated=_count_tokens(result.text, _chat_state),
+                temperature=req.temperature,
+                meta={"session_id": req.session_id or "default"},
+            )
+        except Exception as e:
+            logger.debug("Failed to capture conversation: %s", e)
 
         return ChatResponse(
             message=result.text,

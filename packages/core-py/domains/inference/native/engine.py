@@ -92,6 +92,7 @@ def sample_token(logits: np.ndarray, temperature: float = 1.0,
         rng = np.random.default_rng()
 
     logits = logits / temperature
+    logits = np.where(np.isfinite(logits), logits, -1e9)
 
     if top_k > 0 and top_k < len(logits):
         idx = np.argpartition(logits, -top_k)[-top_k:]
@@ -101,7 +102,7 @@ def sample_token(logits: np.ndarray, temperature: float = 1.0,
 
     if top_p < 1.0:
         sorted_idx = np.argsort(-logits)
-        sorted_logits = logits[sorted_idx]
+        sorted_logits = logits[sorted_idx] - logits[sorted_idx[0]]
         cumsum = np.cumsum(np.exp(sorted_logits))
         cutoff = cumsum[-1] * top_p
         for i in range(len(sorted_logits)):
@@ -153,7 +154,7 @@ class NativeEngine:
 
         self._weights = B.load_lib()._Weights()
         flat_arr = np.ascontiguousarray(flat, dtype=np.float32)
-        flat_ct = flat_arr.ctypes.data_as(B.load_lib()._Config._fields_[0][1])
+        flat_ct = flat_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
         rc = self._lib.transformer_load_weights(
             self._weights, flat_ct, len(flat), cfg
         )
