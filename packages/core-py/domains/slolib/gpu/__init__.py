@@ -48,7 +48,7 @@ class _BufferPool:
         self._misses = 0
 
     def get(self, shape: Tuple[int, ...], dtype=np.float32) -> np.ndarray:
-        key = (shape, dtype)
+        key = (shape, np.dtype(dtype))
         bucket = self._pool.get(key)
         if bucket:
             self._hits += 1
@@ -57,7 +57,7 @@ class _BufferPool:
         return np.empty(shape, dtype=dtype)
 
     def put(self, arr: np.ndarray) -> None:
-        key = (arr.shape, arr.dtype)
+        key = (arr.shape, np.dtype(arr.dtype))
         bucket = self._pool.setdefault(key, [])
         if len(bucket) < self._max_pool_size:
             bucket.append(arr)
@@ -434,13 +434,13 @@ class _Accelerator:
         n, c, h, w = x.shape
         oc, ic, kh, kw = weight.shape
         if padding > 0:
-            x = np.pad(x, [(0,0),(0,0),(padding,),(padding,)], mode='constant')
+            x = np.pad(x, [(0,0),(0,0),(padding,padding),(padding,padding)], mode='constant')
         oh = (x.shape[2] - kh) // stride + 1
         ow = (x.shape[3] - kw) // stride + 1
 
         cols = self._im2col(x, kh, kw, stride)
         w_col = weight.reshape(oc, -1)
-        out = self.matmul(w_col, cols.T).reshape(n, oc, oh, ow)
+        out = self.matmul(w_col, cols.T).T.reshape(n, oh, ow, oc).transpose(0, 3, 1, 2)
 
         if bias is not None:
             out = out + bias[:, None, None]
@@ -510,7 +510,7 @@ class _Accelerator:
             if mask is not None:
                 scores_tile = scores_tile + mask[:, :, :, t_start:t_end]
             if causal:
-                cm = np.triu(np.full((N, T), -1e9, dtype=np.float32), k=1 + max(0, t_start - N))
+                cm = np.triu(np.full((N, T), -1e9, dtype=np.float32), k=1 - t_start)
                 scores_tile = scores_tile + cm[None, None, :, :]
             m_prev = getattr(self, '_fus_attn_m', np.full((B, H, N, 1), -1e9, dtype=np.float32))
             if t_start == 0:
@@ -552,7 +552,7 @@ class _Accelerator:
         x_max = flat_l.max(axis=-1, keepdims=True)
         log_probs = flat_l - x_max - np.log(np.exp(flat_l - x_max).sum(axis=-1, keepdims=True))
         flat_t = targets.astype(np.int64).flatten()
-        valid = flat_t < log_probs.shape[1]
+        valid = (flat_t >= 0) & (flat_t < log_probs.shape[1])
         idx = np.arange(len(flat_t))[valid]
         losses = -log_probs[idx, flat_t[valid]]
         return float(losses.mean()) if losses.size > 0 else 0.0
@@ -923,7 +923,7 @@ class _CUDABackend(_Accelerator):
     def vram_gb(self) -> float:
         if self._cp:
             try:
-                mem = self._cp.cuda.Device().mem_info
+                mem = self._cp.cuda.Device().mem_info()
                 return mem[1] / (1024 ** 3)
             except Exception:
                 pass
@@ -990,7 +990,7 @@ class _CUDABackend(_Accelerator):
                 scores = scores + m_c
             if causal:
                 n, s = q_c.shape[2], k_c.shape[2]
-                scores = self._cp.where(self._cp.triu(self._cp.ones((n, s))) == 0, scores, -1e9)
+                scores = self._cp.where(self._cp.triu(self._cp.ones((n, s)), k=1) == 0, scores, -1e9)
             attn = self._cp.exp(scores - scores.max(axis=-1, keepdims=True))
             attn = attn / attn.sum(axis=-1, keepdims=True)
             out = self._cp.einsum("bhnk,bhkd->bhnd", attn, v_c)
@@ -1008,7 +1008,7 @@ class _CUDABackend(_Accelerator):
     def gelu(self, x: np.ndarray) -> np.ndarray:
         if self._cp:
             x_c = self._cp.asarray(x)
-            return self._cp.asnumpy(0.5 * x_c * (1 + self._cp.tanh(self._cp.sqrt(self._cp.pi / self._cp.pi) * (x_c + 0.044715 * x_c ** 3))))
+            return self._cp.asnumpy(0.5 * x_c * (1 + self._cp.tanh(self._cp.sqrt(2 / self._cp.pi) * (x_c + 0.044715 * x_c ** 3))))
         return super().gelu(x)
 
 
