@@ -2203,3 +2203,230 @@ class TestSloTransformerNoSoul:
         m2.layers[-1]._quant_info = m.layers[-1]._quant_info
         s = list(m2.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
         assert len(s) == 3
+
+
+class TestGetAcceleratorOldBackendFailure:
+    def test_both_backends_fail_returns_none(self, monkeypatch):
+        import domains.training.gpu.accelerator as _old_acc_mod
+        monkeypatch.setattr(slonet, "_ACCELERATOR", None)
+        monkeypatch.setattr(
+            _old_acc_mod,
+            "get_accelerator",
+            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        assert slonet._get_accelerator() is None
+        assert slonet._ACCELERATOR == "none"
+
+
+class TestTensorDtypeSurface:
+    def test_to_with_np_dtype_object(self):
+        class _FakeDtype:
+            _np = np.float64
+
+        t = Tensor(np.array([1, 2, 3], dtype=np.int64))
+        t.to(dtype=_FakeDtype())
+        assert t.data.dtype == np.float32
+
+    def test_float_casts_non_float32(self):
+        t = Tensor(np.array([1, 2, 3], dtype=np.int64))
+        t.data = t.data.astype(np.float64)
+        t.float()
+        assert t.data.dtype == np.float32
+
+
+class TestPointWeightLayerMethods:
+    def test_set_and_get_point_weight(self):
+        lin = SloLinear(4, 4, name="pw_lin")
+        assert lin.get_point_weight() is None
+        pw = lin.compress_to_point(method="cluster", n_clusters=4)
+        assert pw is lin.get_point_weight()
+        assert lin.weight.data.shape == (4, 4)
+        np.testing.assert_allclose(lin.weight.data, pw.generate(), atol=1e-3)
+
+
+class TestLstmForwardAdapterAndSkipEmbed1D:
+    def _lstm(self, layers, hidden):
+        return SloLSTM(vocab_size=32, embed_dim=16, hidden_dim=hidden, num_layers=layers, dropout=0.0)
+
+    def test_tensor_forward_with_adapter(self):
+        lstm = self._lstm(layers=2, hidden=16)
+        adapter = SloAdapterLayer(dim=16, rank=2)
+        x = Tensor(np.array([[1, 2, 3, 4]], dtype=np.int64))
+        out, (h, c) = lstm.forward(x, adapter=adapter)
+        assert out.shape == (1, 32)
+        assert np.isfinite(h.data).all()
+        assert np.isfinite(c.data).all()
+
+    def test_forward_numpy_skip_embed_1d(self):
+        lstm = self._lstm(layers=1, hidden=16)
+        out, _ = lstm.forward_numpy(np.random.randn(16).astype(np.float32), skip_embed=True)
+        assert out.shape == (1, 32)
+
+
+class TestAttention4DGradAccumulation:
+    def test_double_backward_accumulates(self):
+        rng = np.random.default_rng(0)
+        q = Tensor(rng.standard_normal((1, 2, 2, 4)).astype(np.float32), requires_grad=True)
+        k = Tensor(rng.standard_normal((1, 2, 2, 4)).astype(np.float32), requires_grad=True)
+        v = Tensor(rng.standard_normal((1, 2, 2, 4)).astype(np.float32), requires_grad=True)
+        out = SloMultiHeadAttention._attention_4d(q, k, v, None, 1.0)
+        loss = (out * out).sum()
+        loss.backward()
+        loss.backward()
+        assert np.all(np.isfinite(q.grad.data))
+        assert np.all(np.isfinite(k.grad.data))
+        assert np.all(np.isfinite(v.grad.data))
+
+
+class TestBatchNormEvalForwardGrad:
+    def test_eval_forward_grad(self):
+        rng = np.random.default_rng(0)
+        x = Tensor(rng.standard_normal((1, 3, 4, 4)).astype(np.float32), requires_grad=True)
+        g = Tensor(np.ones(3, dtype=np.float32), requires_grad=True)
+        b = Tensor(np.zeros(3, dtype=np.float32), requires_grad=True)
+        out = slonet._batchnorm2d(x, g, b, np.zeros(3), np.ones(3), 1e-5, training=False)
+        tangents = out.forward_grad({x.id: np.ones_like(x.data)})
+        assert out.id in tangents
+
+
+class TestSoulLibBlock:
+    def test_forward_identity_and_no_params(self):
+        blk = slonet._SoulTransformerBlockSoulLib(8, 2, 16, name="blk")
+        x = Tensor(np.random.randn(1, 5, 8).astype(np.float32))
+        out = blk.forward(x)
+        assert out.data.shape == (1, 5, 8)
+        assert blk.parameters() == []
+
+
+class TestSloNetNonCallableLayer:
+    def test_non_callable_layer_uses_forward(self):
+        class _Layer:
+            def forward(self, x):
+                return x
+
+        net = SloNet(layers=[_Layer()])
+        out = net.forward(Tensor(np.arange(4).reshape(1, 4).astype(np.float32)))
+        assert out.data.shape == (1, 4)
+
+
+class TestStateDictAccelHelpers:
+    def test_matmul_and_layernorm_accel_success(self, monkeypatch):
+        class _FakeAcc:
+            name = "metal"
+
+            def matmul(self, a, b):
+                return a @ b
+
+            def layer_norm(self, x, w, b, eps):
+                mean = x.mean(axis=-1, keepdims=True)
+                var = x.var(axis=-1, keepdims=True)
+                return ((x - mean) / np.sqrt(var + eps)) * w
+
+        monkeypatch.setattr(slonet, "_ACCELERATOR", _FakeAcc())
+        a = Tensor(np.random.randn(3, 4).astype(np.float32))
+        res = slonet._matmul_state_dict(a, np.random.randn(4, 5).astype(np.float32))
+        assert res.data.shape == (3, 5)
+        x = Tensor(np.random.randn(2, 3).astype(np.float32))
+        res2 = slonet._layernorm_state_dict(x, np.ones(3, dtype=np.float32))
+        assert res2.data.shape == (2, 3)
+        assert np.isfinite(res2.data).all()
+
+
+class TestImportFromSouVariants:
+    def test_pytorch_zip_lineage(self, tmp_path, monkeypatch):
+        meta = {"lineage": "slonet", "soul_name": "X", "system_prompt": ""}
+        mj = json.dumps(meta).encode()
+        raw = b"SOUL" + struct.pack("<I", 2) + struct.pack("<I", len(mj)) + mj + b"PKjunk"
+        p = tmp_path / "pk.soul"
+        p.write_bytes(raw)
+        monkeypatch.setattr(slonet, "_load_pytorch_zip_weights", lambda b: {"w0": np.ones(2)})
+        net = import_from_sou(str(p))
+        assert net.lineage == "slolib-pytorch"
+
+    def test_tok_emb_rebuild(self, tmp_path):
+        meta = {"lineage": "slonet", "soul_name": "X", "system_prompt": ""}
+        mj = json.dumps(meta).encode()
+        wj = json.dumps({"tok_emb.weight": [[0.1, 0.2], [0.3, 0.4]]}).encode()
+        raw = (
+            b"SOUL" + struct.pack("<I", 2) + struct.pack("<I", len(mj)) + mj
+            + struct.pack("<I", len(wj)) + wj
+        )
+        p = tmp_path / "tok.soul"
+        p.write_bytes(raw)
+        net = import_from_sou(str(p))
+        assert net.lineage == "slonet"
+        assert "tok_emb.weight" in net._sd
+
+    def test_rebuild_hidden_dim_nonpositive(self):
+        net = SloNet(soul_name="x", metadata={})
+        weights = {
+            "w0": np.ones((4, 4), dtype=np.float32),
+            "w1": np.ones((4, 4), dtype=np.float32),
+            "w2": np.ones((8, 4), dtype=np.float32),
+            "w3": np.ones((2,), dtype=np.float32),
+            "w4": np.ones((8, 8), dtype=np.float32),
+            "w5": np.ones((8,), dtype=np.float32),
+            "w6": np.ones((4, 8), dtype=np.float32),
+            "w7": np.ones((4,), dtype=np.float32),
+        }
+        _rebuild_net_from_params(net, weights)
+        assert len(net.layers) == 1
+
+
+class TestStateDictToNumpyBranch:
+    def test_numpy_method_object(self):
+        class _ArrLike:
+            def numpy(self):
+                return np.arange(3)
+
+        result = slonet._state_dict_to_numpy({"a": _ArrLike()})
+        assert np.array_equal(result["a"], np.arange(3))
+
+
+class TestTrainSoulTransformerNoneLoss:
+    def test_none_loss_skips_step(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            slonet.SloTransformer,
+            "forward",
+            lambda self, x, targets=None, **kw: (None, None),
+        )
+        monkeypatch.setattr(slonet, "export_to_sou", lambda net, path: None)
+        net = train_soul_transformer(
+            lambda topic, temperature: "hello world!",
+            epochs=1,
+            on_step=lambda *a: calls.append(a),
+        )
+        assert isinstance(net, SloTransformer)
+        assert calls == []
+
+
+class TestKernelsImportFallback:
+    def test_slonet_kernels_import_failure_falls_back(self):
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        core_py = Path(__file__).resolve().parents[1]
+        code = (
+            "import sys\n"
+            "class _Block:\n"
+            "    def find_spec(self, name, path=None, target=None):\n"
+            "        if name == 'domains.training.slonet_kernels':\n"
+            "            raise ImportError('blocked for test')\n"
+            "sys.meta_path.insert(0, _Block())\n"
+            "from domains.training import slonet\n"
+            "assert slonet._KERNELS_AVAILABLE is False\n"
+            "print('KERNELS_FALLBACK_OK')\n"
+        )
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(core_py) + os.pathsep + env.get("PYTHONPATH", "")
+        res = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert res.returncode == 0, res.stderr
+        assert "KERNELS_FALLBACK_OK" in res.stdout

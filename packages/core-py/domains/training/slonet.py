@@ -2882,10 +2882,6 @@ class SloNet:
             q_w = _sd_get(f"blocks.{i}.attn.q_proj.weight")
             k_w = _sd_get(f"blocks.{i}.attn.k_proj.weight")
             v_w = _sd_get(f"blocks.{i}.attn.v_proj.weight")
-            if q_w is None:
-                q_w = _sd_get(f"blocks.{i}.q_proj.weight")
-                k_w = _sd_get(f"blocks.{i}.k_proj.weight")
-                v_w = _sd_get(f"blocks.{i}.v_proj.weight")
 
             H = 4
             E = hidden // H
@@ -2926,10 +2922,6 @@ class SloNet:
             w1 = _sd_get(f"blocks.{i}.mlp.w1.weight")
             w2 = _sd_get(f"blocks.{i}.mlp.w2.weight")
             w3 = _sd_get(f"blocks.{i}.mlp.w3.weight")
-            if w1 is None:
-                w1 = _sd_get(f"blocks.{i}.w1.weight")
-                w2 = _sd_get(f"blocks.{i}.w2.weight")
-                w3 = _sd_get(f"blocks.{i}.w3.weight")
 
             mid1 = np.clip(h @ w1.T, -30, 30)
             mid3 = np.clip(h @ w3.T, -30, 30)
@@ -4553,17 +4545,6 @@ class SloTransformer(SloNet):
                     min_d = min(p.data.shape[0], arr.shape[0])
                     p.data[:min_d] = arr[:min_d]
                     loaded.add(key)
-            else:
-                alt_layer_names = ["tok_emb"]
-                if len(self.layers) > 2 + self.n_layer and isinstance(self.layers[1], SloDropout):
-                    alt_layer_names.append("emb_drop")
-                alt_layer_names += [f"blocks.{i}" for i in range(self.n_layer)] + ["norm", "lm_head"]
-                for lname, layer in zip(alt_layer_names, self.layers):
-                    if isinstance(layer, SloLinear) and not isinstance(layer, type(None)):
-                        if key.endswith(".weight") and key.replace(".weight", "") == lname:
-                            arr_2d = arr.reshape(layer.weight.data.shape)
-                            layer.weight.data[:] = arr_2d
-                            loaded.add(key)
         if strict and len(loaded) < len(state_dict):
             missing = [k for k in state_dict if k not in loaded]
         return missing
@@ -4640,8 +4621,6 @@ def train_soul_transformer(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8, 
                 continue
             text = (topic + " " + resp)[:128]
             ids = [stoi.get(c, unk) for c in text.lower() if c in stoi]
-            if len(ids) < 8:
-                continue
             for i in range(0, len(ids) - 1, 16):
                 xi = ids[i:i+32]; yi = ids[i+1:i+33]
                 while len(xi) < 32: xi.append(unk)
