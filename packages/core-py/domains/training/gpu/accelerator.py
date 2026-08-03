@@ -130,13 +130,15 @@ class _MetalAccelerator:
         kh = kernel_size if isinstance(kernel_size, int) else kernel_size[0]
         kw = kernel_size if isinstance(kernel_size, int) else kernel_size[1]
         st = stride if stride is not None else kh
-        out_h = (h + 2 * padding - kh) // st + 1; out_w = (w + 2 * padding - kw) // st + 1
+        sh = st if isinstance(st, int) else st[0]
+        sw = st if isinstance(st, int) else st[1]
+        out_h = (h + 2 * padding - kh) // sh + 1; out_w = (w + 2 * padding - kw) // sw + 1
         result = np.zeros((n, c, out_h, out_w), dtype=np.float32)
         for i in range(n):
             for ci in range(c):
                 for oh in range(out_h):
                     for ow in range(out_w):
-                        ih = oh * st - padding; iw = ow * st - padding
+                        ih = oh * sh - padding; iw = ow * sw - padding
                         ph = inp[i, ci, max(0,ih):min(h,ih+kh), max(0,iw):min(w,iw+kw)]
                         if ph.size > 0: result[i, ci, oh, ow] = ph.max()
         return result
@@ -315,7 +317,7 @@ class _CPUAccelerator:
                         result[i, oc_idx, oh, ow] = np.sum(patch * weight[oc_idx]) + (bias[oc_idx] if bias is not None else 0)
         return result
 
-    def conv2d(self, input: np.ndarray, weight: np.ndarray, bias: Optional[np.ndarray],
+    def conv2d(self, input: np.ndarray, weight: np.ndarray, bias: Optional[np.ndarray] = None,
                stride: int = 1, padding: int = 0) -> np.ndarray:
         return _CPUAccelerator._conv2d_impl(input, weight, bias, stride, padding)
 

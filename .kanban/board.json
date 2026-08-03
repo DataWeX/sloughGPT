@@ -24,6 +24,23 @@
   ],
   "cards": [
     {
+      "id": "20260803_014032_wave-g-gpu-accelerator-coverage-26-96",
+      "title": "Wave G: GPU accelerator coverage (26% -> 96%)",
+      "description": "Completed: wave G \u2014 GPU accelerator layer coverage 26% -> 96%.\n\nNew tests/test_gpu_accelerator.py (68 tests): every compute op of _CPUAccelerator, _MetalAccelerator, and the cupy-fallback path of _CUDAAccelerator verified against independent numpy references (softmax, gelu, silu, layernorm, rmsnorm, attention, scaled-dot-attention with mask/scale variants, dropout, embedding incl. clipping/OOR, cross_entropy incl. OOR-skip, conv2d, max_pool2d); CUDA env detection (CUDA_VISIBLE_DEVICES branches); global get_accelerator/to_gpu/from_gpu/reset (cache + CPU selection); Cholesky solvers vs np.linalg; dominant_eigen power iteration vs eigvalsh.\n\nBugs fixed in accelerator.py:\n- _CPUAccelerator.conv2d required bias positionally (inconsistent with Metal/CUDA) \u2014 now defaults to None.\n- _MetalAccelerator.max_pool2d crashed on tuple strides ('//' between int and tuple) \u2014 strides now split into sh/sw.\n\nEnvironmental floor (8 stmts, all cupy/MPS-only): cupy import/dispatch arms (lines 164-165, 179, 184, 189, 194) and CUDA/Metal selection in get_accelerator (375, 377). Pure delegation to a third-party GPU lib with no in-repo algorithm to verify.\n\nFull wave suite (16 files): 733 passed. slonet.py 97% (unchanged, 3 numba-probe misses), slonet_kernels.py 99%, accelerator.py 96%. TOTAL 4517 stmts / 11 miss / 98%.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "coverage",
+        "gpu"
+      ],
+      "created_at": "2026-08-03T01:40:32.225098+00:00",
+      "updated_at": "2026-08-03T01:40:32.225098+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260803_013243_wave-h-slnc-specparsercompiler-resource-manager-100-coverage",
       "title": "Wave H: slnc spec/parser/compiler + resource_manager 100% coverage",
       "description": "Wave H: pushed slnc/* + resource_manager.py to 100% coverage.\n\nspec.py: fixed latent bug \u2014 code_to_dtype(2) raised AttributeError (numpy 2.5.1 has no np.bfloat16); added hasattr guard raising ValueError. New tests/test_slnc_spec.py (5 classes, parametrized): spec.py 50/50.\n\nresource_manager.py: added 5 tests to tests/test_resource_manager.py (numexpr fake-module injection, numexpr-missing silent, singleton-None lazy init, np compute limits, singleton global) \u2014 163/163.\n\ncompiler.py + parser.py: extended tests/test_slnc_compiler.py with BF16/F16/unknown-dtype safetensors load branches, default output path (output=None -> models dir, chmod-444 artifact cleaned), protect_model failure silence, parser edges (unsupported version, file_size, exception-safe __del__, repr, get_weights_dict), LLaMA bias auto-append, _xxhash64 installed-path via fake xxhash module. compiler.py 172/172, parser.py 107/107.\n\nAlso fixed flaky Wave F test: test_slonet_wave_f.py bf16 assertion used random data under atol=1e-2 -> deterministic bf16-exact values.\n\nCombined: 492/492 stmts (100%) across slnc/* + resource_manager. 8 consecutive clean runs; full slonet family (slnc + resource_manager + kernels + morph tokenizer + wave_g) green.\n\nNote: gpu/accelerator.py Metal stride-tuple fix + test_gpu_accelerator.py remain uncommitted (pre-existing orphaned WIP, excluded from this commit).",
