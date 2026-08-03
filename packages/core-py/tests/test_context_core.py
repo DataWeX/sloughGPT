@@ -1,6 +1,7 @@
 """Tests for context_core — multi-layer context management, memory, RAG, frames."""
 
 import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -341,6 +342,92 @@ class TestRag:
         assert "[Knowledge: t]" in out
 
 
+# ── RAG error paths & auto-ingest ───────────────────────────────────────
+
+
+class TestRagErrorPaths:
+    def test_kmem_raises_falls_back_to_semantic(self, monkeypatch):
+        cc = ContextCore()
+        cc.store_fact("color", "blue")
+        monkeypatch.setattr(cc, "_auto_ingest", lambda: None)
+
+        def _boom():
+            raise RuntimeError("kmem down")
+
+        monkeypatch.setattr("domains.learner.knowledge.get_knowledge_memory", _boom)
+        out = asyncio.run(cc.get_rag_context("blue"))
+        assert "Related: color = blue" in out
+
+    def test_kmem_raises_no_facts_returns_empty(self, monkeypatch):
+        cc = ContextCore()
+        monkeypatch.setattr(cc, "_auto_ingest", lambda: None)
+
+        def _boom():
+            raise RuntimeError("kmem down")
+
+        monkeypatch.setattr("domains.learner.knowledge.get_knowledge_memory", _boom)
+        assert asyncio.run(cc.get_rag_context("q")) == ""
+
+    def test_vector_store_uses_simple_embed_fallback(self):
+        cc = ContextCore()
+        store = _FakeStore(results=[_FakeResult("alpha")])
+        cc._vector_store = store
+        cc._embedding_fn = None
+        out = asyncio.run(cc.get_rag_context("q"))
+        assert "[Doc: doc1] alpha" in out
+        assert store.queries and store.queries[0][0] is not None
+
+    def test_vector_store_exception_no_facts_returns_empty(self):
+        cc = ContextCore()
+        store = _FakeStore(results=[], error=RuntimeError("boom"))
+        cc.set_vector_store(store, embedding_fn=lambda q: [0.1])
+        assert asyncio.run(cc.get_rag_context("q")) == ""
+
+
+class TestAutoIngest:
+    def test_auto_ingest_runs_ingester(self, monkeypatch):
+        calls = []
+
+        class _FakeAutoIngester:
+            def __init__(self, provider):
+                self.provider = provider
+
+            async def ingest(self):
+                calls.append(self.provider)
+
+        monkeypatch.setattr(
+            "domains.infrastructure.auto_ingest.AutoIngester", _FakeAutoIngester
+        )
+        cc = ContextCore()
+        cc._auto_ingest()
+        deadline = time.monotonic() + 5
+        while not calls and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert calls
+        assert isinstance(calls[0], str)
+
+    def test_auto_ingest_ingester_exception_swallowed(self, monkeypatch):
+        reached = []
+
+        class _FakeFailingIngester:
+            def __init__(self, provider):
+                self.provider = provider
+
+            async def ingest(self):
+                reached.append("reached")
+                raise RuntimeError("ingest failed")
+
+        monkeypatch.setattr(
+            "domains.infrastructure.auto_ingest.AutoIngester", _FakeFailingIngester
+        )
+        cc = ContextCore()
+        cc._auto_ingest()
+        deadline = time.monotonic() + 5
+        while not reached and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert reached == ["reached"]
+
+
 # ── Context frames ──────────────────────────────────────────────────────
 
 
@@ -506,6 +593,28 @@ class TestInspectorAndPersistence:
         frame = asyncio.run(cc.build_context_frame())
         assert "[LATE INJECT]" in frame.system_prompt
 
+    def test_set_managers_memory_style_task(self):
+        cc = ContextCore()
+        memory = SimpleNamespace(working_capacity=5)
+        style = SimpleNamespace(apply=lambda sp: "[STYLE TEST]")
+        task = SimpleNamespace(apply=lambda sp: "[TASK TEST]")
+        cc.set_managers(memory=memory, style=style, task=task)
+        assert cc._memory is memory
+        assert cc._style is style
+        assert cc._task is task
+        frame = asyncio.run(cc.build_context_frame())
+        assert "[STYLE TEST]" in frame.system_prompt
+        assert "[TASK TEST]" in frame.system_prompt
+
+    def test_set_managers_with_all_falsey_keeps_defaults(self):
+        cc = ContextCore()
+        personality = SimpleNamespace(apply=lambda sp: sp)
+        cc.set_managers(personality=personality)
+        cc.set_managers(memory=None, style=None, task=None)
+        assert cc._memory is None
+        assert cc._style is None
+        assert cc._task is None
+
     def test_set_system_prompt_logs_sensory(self):
         cc = ContextCore()
         cc.set_system_prompt("NEW SYS")
@@ -565,6 +674,52 @@ class TestSingleton:
             get_context_core()
         assert any("auto-configured" in r.message for r in caplog.records)
         monkeypatch.delenv("MAN_VECTOR_STORE", raising=False)
+        reset_context_core()
+
+
+class TestSingletonEnvBranches:
+    def test_pinecone_without_api_key_skips_store(self, monkeypatch):
+        reset_context_core()
+        monkeypatch.setenv("MAN_VECTOR_STORE", "pinecone")
+        monkeypatch.delenv("MAN_PINECONE_API_KEY", raising=False)
+        cc = get_context_core()
+        assert cc._vector_store is None
+        reset_context_core()
+
+    def test_pinecone_with_api_key_failure_logs(self, monkeypatch, caplog):
+        reset_context_core()
+        import logging
+        monkeypatch.setenv("MAN_VECTOR_STORE", "pinecone")
+        monkeypatch.setenv("MAN_PINECONE_API_KEY", "sk-test")
+        monkeypatch.setenv("MAN_PINECONE_INDEX", "idx")
+
+        def _boom(provider="", **kw):
+            raise RuntimeError("no pinecone")
+
+        monkeypatch.setattr(
+            "domains.inference.vector_store.create_vector_store", _boom
+        )
+        with caplog.at_level(logging.WARNING):
+            cc = get_context_core()
+        assert cc._vector_store is None
+        assert any("Failed to auto-configure" in r.message for r in caplog.records)
+        reset_context_core()
+
+    def test_chromadb_failure_logs(self, monkeypatch, caplog):
+        reset_context_core()
+        import logging
+        monkeypatch.setenv("MAN_VECTOR_STORE", "chromadb")
+
+        def _boom(provider="", **kw):
+            raise RuntimeError("no chromadb")
+
+        monkeypatch.setattr(
+            "domains.inference.vector_store.create_vector_store", _boom
+        )
+        with caplog.at_level(logging.WARNING):
+            cc = get_context_core()
+        assert cc._vector_store is None
+        assert any("Failed to auto-configure" in r.message for r in caplog.records)
         reset_context_core()
 
 

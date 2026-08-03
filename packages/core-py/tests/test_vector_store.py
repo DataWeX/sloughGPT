@@ -14,6 +14,7 @@ from domains.inference.vector_store import (
     InMemoryVectorStore,
     MogDBVectorStore,
     VectorEntry,
+    create_vector_store,
     simple_embed,
     sanitize_input,
     _cosine_similarity,
@@ -532,5 +533,129 @@ class TestSimpleEmbedSloNet:
         monkeypatch.setattr(SloTextEmbedder, "load", boom)
         vec = simple_embed("hello world", dimension=32)
         assert len(vec) == 32
+
+
+# =========================================================================
+# create_vector_store factory tests
+# =========================================================================
+
+
+class TestCreateVectorStore:
+    async def test_default_is_in_memory(self):
+        store = await create_vector_store()
+        assert isinstance(store, InMemoryVectorStore)
+        await store.disconnect()
+
+    async def test_memory_alias(self):
+        store = await create_vector_store("memory", dimension=32)
+        assert isinstance(store, InMemoryVectorStore)
+        assert store.dimension == 32
+        await store.disconnect()
+
+    async def test_local_alias(self):
+        store = await create_vector_store("local")
+        assert isinstance(store, InMemoryVectorStore)
+        await store.disconnect()
+
+    async def test_mogdb_backend(self, tmp_path):
+        store = await create_vector_store("mogdb", dimension=32, path=str(tmp_path / "vs"))
+        assert isinstance(store, MogDBVectorStore)
+        assert store.dimension == 32
+        await store.upsert([VectorEntry(id="1", vector=[0.1] * 32, text="hello")])
+        assert await store.count() == 1
+        await store.disconnect()
+
+    async def test_persistent_alias(self, tmp_path):
+        store = await create_vector_store("persist", path=str(tmp_path / "vs2"))
+        assert isinstance(store, MogDBVectorStore)
+        await store.disconnect()
+
+    async def test_chromadb_backend(self, monkeypatch):
+        calls = {}
+
+        class FakeChroma:
+            def __init__(self, **kwargs):
+                calls["kwargs"] = kwargs
+
+            async def connect(self):
+                return True
+
+        monkeypatch.setattr(
+            "domains.inference.vector_stores.chromadb_store.ChromaDBVectorStore", FakeChroma
+        )
+        store = await create_vector_store("chromadb", persist_directory="/tmp/x")
+        assert calls["kwargs"] == {"persist_directory": "/tmp/x"}
+
+    async def test_pinecone_backend(self, monkeypatch):
+        calls = {}
+
+        class FakePinecone:
+            def __init__(self, **kwargs):
+                calls["kwargs"] = kwargs
+
+            async def connect(self):
+                return True
+
+        monkeypatch.setattr(
+            "domains.inference.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+        )
+        store = await create_vector_store(
+            "pinecone", api_key="k", index="idx", environment="us-west-2", dimension=16
+        )
+        assert calls["kwargs"]["api_key"] == "k"
+        assert calls["kwargs"]["index_name"] == "idx"
+        assert calls["kwargs"]["environment"] == "us-west-2"
+        assert calls["kwargs"]["dimension"] == 16
+
+    async def test_pinecone_index_name_kwarg(self, monkeypatch):
+        calls = {}
+
+        class FakePinecone:
+            def __init__(self, **kwargs):
+                calls["kwargs"] = kwargs
+
+            async def connect(self):
+                return True
+
+        monkeypatch.setattr(
+            "domains.inference.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+        )
+        await create_vector_store("pinecone", api_key="k", index_name="named")
+        assert calls["kwargs"]["index_name"] == "named"
+
+    async def test_pinecone_default_index(self, monkeypatch):
+        calls = {}
+
+        class FakePinecone:
+            def __init__(self, **kwargs):
+                calls["kwargs"] = kwargs
+
+            async def connect(self):
+                return True
+
+        monkeypatch.setattr(
+            "domains.inference.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+        )
+        await create_vector_store("pinecone", api_key="k")
+        assert calls["kwargs"]["index_name"] == "sloughgpt"
+        assert calls["kwargs"]["dimension"] == 768
+
+    async def test_pinecone_connect_failure_raises(self, monkeypatch):
+        class FakePinecone:
+            def __init__(self, **kwargs):
+                pass
+
+            async def connect(self):
+                return False
+
+        monkeypatch.setattr(
+            "domains.inference.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+        )
+        with pytest.raises(RuntimeError, match="Pinecone connection failed"):
+            await create_vector_store("pinecone")
+
+    async def test_unknown_provider_raises(self):
+        with pytest.raises(NotImplementedError, match="not implemented"):
+            await create_vector_store("unknown")
 
 

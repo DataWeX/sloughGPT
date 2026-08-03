@@ -16,6 +16,7 @@ from domains.infrastructure.lifecycle import (
     StartupProfile,
     ShutdownHook,
     _topological_sort,
+    _dependency_levels,
     get_lifecycle_manager,
     reset_lifecycle_manager,
 )
@@ -948,3 +949,126 @@ async def test_startup_results_empty_before_start():
 async def test_shutdown_results_empty_before_shutdown():
     mgr = LifecycleManager()
     assert mgr.shutdown_results == []
+
+
+# ── Remaining branch coverage ───────────────────────────────────────────
+
+
+def test_started_at_and_uptime_zero():
+    mgr = LifecycleManager()
+    assert mgr.started_at == 0.0
+    assert mgr.uptime_seconds == 0.0
+
+
+@pytest.mark.asyncio
+async def test_started_at_set_after_start(mgr):
+    await mgr.start()
+    assert mgr.started_at > 0
+    assert mgr.uptime_seconds > 0
+
+
+def test_get_profile_defaults_and_override():
+    mgr = LifecycleManager()
+    assert mgr.get_profile() == StartupProfile.FULL
+    assert mgr.get_profile().value == "full"
+
+
+@pytest.mark.asyncio
+async def test_get_profile_after_start_override():
+    mgr = LifecycleManager()
+    await mgr.start(profile=StartupProfile.QUICK)
+    assert mgr.get_profile() == StartupProfile.QUICK
+
+
+def test_dependency_levels_cycle_breaks():
+    a = StartupHook(name="a", handler=lambda: asyncio.sleep(0), depends_on=["b"])
+    b = StartupHook(name="b", handler=lambda: asyncio.sleep(0), depends_on=["a"])
+    levels = _dependency_levels([a, b])
+    assert len(levels) == 1
+    assert {h.name for h in levels[0]} == {"a", "b"}
+
+
+@pytest.mark.asyncio
+async def test_wait_for_gates_passed_emits_event():
+    bus = EventBus()
+    mgr = LifecycleManager(event_bus=bus)
+    passed: list[str] = []
+    bus.on("lifecycle.gates_passed", lambda name, data: passed.append(name))
+    mgr.register_gate("ok", lambda: True)
+    ready = await mgr.wait_for_gates(timeout=1.0, poll_interval=0.02)
+    assert ready is True
+    assert passed == ["lifecycle.gates_passed"]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_drain_timeout():
+    mgr = LifecycleManager()
+    await mgr.start()
+    assert await mgr.acquire_in_flight() is True
+    ok = await mgr.shutdown(timeout=0.5)
+    assert ok is True
+    assert mgr.phase == LifecyclePhase.STOPPED
+    assert mgr.in_flight_count == 1
+
+
+@pytest.mark.asyncio
+async def test_parallel_critical_hook_timeout_breaks():
+    mgr = LifecycleManager()
+
+    async def slow():
+        await asyncio.sleep(5)
+
+    mgr.register_startup_hook(StartupHook("a", slow, timeout=0.05, critical=True))
+    mgr.register_startup_hook(
+        StartupHook("b", lambda: asyncio.sleep(0), timeout=0.5, critical=False)
+    )
+    ok = await mgr.start()
+    assert ok is False
+    assert mgr.phase == LifecyclePhase.CRASHED
+
+
+@pytest.mark.asyncio
+async def test_shutdown_hook_timeout_tolerated():
+    mgr = LifecycleManager()
+
+    async def slow():
+        await asyncio.sleep(5)
+
+    mgr.register_shutdown_hook(ShutdownHook("s", slow, timeout=0.05))
+    await mgr.start()
+    ok = await mgr.shutdown()
+    assert ok is True
+    assert mgr.phase == LifecyclePhase.STOPPED
+    assert mgr.shutdown_results[0]["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_emit_sync_exception_logged(caplog):
+    class _BadBus:
+        async def emit(self, event, data=None, source=""):
+            pass
+
+        def emit_sync(self, event, data=None, source=""):
+            raise RuntimeError("bus down")
+
+    mgr = LifecycleManager(event_bus=_BadBus())
+
+    async def noop():
+        pass
+
+    mgr.register_startup_hook(StartupHook("h", noop))
+    await mgr.start()
+    assert mgr.phase == LifecyclePhase.RUNNING
+    assert any("Failed to emit lifecycle event" in r.message for r in caplog.records)
+
+
+def test_self_typing_fallback_import(monkeypatch):
+    import typing
+    import importlib
+    import domains.infrastructure.lifecycle as lifecycle_mod
+
+    if not hasattr(typing, "Self"):
+        pytest.skip("typing.Self already absent — fallback cannot be triggered")
+    monkeypatch.delattr(typing, "Self")
+    importlib.reload(lifecycle_mod)
+    assert lifecycle_mod.Self is not None

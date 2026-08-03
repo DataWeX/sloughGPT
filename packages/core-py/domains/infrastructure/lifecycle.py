@@ -183,7 +183,7 @@ def _dependency_levels(hooks: list[StartupHook]) -> list[list[StartupHook]]:
         level = [h for h in remaining if all(d in resolved or d not in by_name for d in h.depends_on)]
         if not level:
             # Break cycle: put remaining in one level
-            level = remaining
+            level = list(remaining)
             logger.warning("Dependency cycle in parallel startup — running remaining hooks sequentially",
                            extra={"tag": "INFRA"})
         levels.append(level)

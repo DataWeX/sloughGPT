@@ -194,8 +194,6 @@ Be concise, accurate, and helpful."""
             evicted = self.working_memory.pop(0)
             self._consolidate_episode(evicted)
         self.working_memory.append(item)
-        if not hasattr(self, 'system_prompt'):
-            self.system_prompt = self.DEFAULT_SYSTEM
 
     def _consolidate_episode(self, item: Dict) -> None:
         """Consolidate to episodic memory."""

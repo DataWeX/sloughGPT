@@ -24,6 +24,57 @@
   ],
   "cards": [
     {
+      "id": "20260803_083530_wave-r-infra-inference-modules-100-coverage-model-loader-vec",
+      "title": "Wave R: infra inference modules 100% coverage (model_loader, vector_store, quantization)",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "coverage",
+        "core-py",
+        "wave-r"
+      ],
+      "created_at": "2026-08-03T08:35:30.789090+00:00",
+      "updated_at": "2026-08-03T08:35:30.789090+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_083231_avx2-int8-quantization-quality-fix",
+      "title": "AVX2 int8 quantization quality fix",
+      "description": "Root cause: per-channel quantized lm_head (151936 per-row scales) was fed to _nb_lm_head_argmax_int8 with only scale[0] in greedy path (slonet.py:4137/4484), corrupting argmax. Fix: use fused int8 kernel only when NOT per-channel; per-channel lm_head falls back to forward_numpy which applies per-row scales. Verified: W8A8 greedy matches float32 exactly for '2+2 =', 12.9 tok/s on server9 (was 14-15 with garbage). Also added per-token activation scale in quantized_linear/int4_quantized_linear. 93+3 skipped (provider_real+quantization), 89 (features+wave_i+wave_a).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "quant",
+        "perf",
+        "slonet"
+      ],
+      "created_at": "2026-08-03T08:32:31.583476+00:00",
+      "updated_at": "2026-08-03T08:32:31.583476+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_083231_wave-r-cpu-topology-to-100",
+      "title": "Wave R: cpu_topology to 100%",
+      "description": "cpu_topology.py 230 stmts 0 miss (100%). Added 33 tests to tests/test_cpu_topology.py: dataclass threads_per_core zero-physical branch; direct helper coverage for _parse_sysctl/_parse_sysctl_string (success+error), _sysctl_cache_kb (known/unknown/None), _linux_cpuinfo (missing-file, full parse, bad-value excepts, no-core-ids phys*cores, cores-only n_physical recheck), _linux_lscpu (ok/error), _detect_numa (lscpu/sysfs/unavailable), _detect_freq_macos (value/brand/error/no-match), _detect_freq_linux (cpuinfo/sysfs/unavailable), _has_cgroup_cpuset (v1/v2/false/read-error); detect_topology under mocked platform (Linux lscpu cache fallback + physical estimate + HT, macOS full sysctl path, macOS fallback model re-read). Autouse fixture clears lru_cache between tests. Infra sweep: 481 passed, 1 pre-existing failure (test_lifecycle_endpoint, fastapi missing). pycache cleared, py_compile OK. Board was 138 cards.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infra",
+        "coverage",
+        "cpu_topology"
+      ],
+      "created_at": "2026-08-03T08:32:31.568636+00:00",
+      "updated_at": "2026-08-03T08:32:31.568636+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260803_064428_wave-q-model-worker-process-guard-100-coverage",
       "title": "Wave Q: model_worker + process_guard 100% coverage",
       "description": "model_worker.py 42%->100% (207/207) and process_guard.py 78%->100% (129/129) via tests/test_process_isolation.py. Pragma no-cover on 3 child-process-only worker functions (_worker_loop/_slo_worker_main/_hf_worker_main, recorded in parent). Added parent-side tests: spawn-failure fakes (_dead/_silent/_silent_alive worker mains, fake psutil in sys.modules), fake queues/procs, start failure/retry, stop edges, cleanup error swallow, health-check hb drain, generate/stream error paths, monitor-loop callback crash survival, memory_mb, factory config asserts. Final: 54 passed/3 skipped; combined TOTAL 336, 0 Miss; py_compile clean.",

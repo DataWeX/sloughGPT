@@ -205,3 +205,128 @@ class TestServerState:
         s1 = get_server_state()
         s2 = get_server_state()
         assert s1 is s2
+
+
+class TestServerStateAdvanced:
+    def test_swap_listener_exception_tolerated(self):
+        ref = AtomicRef(0, "test")
+        ref.on_change(lambda old, new: 1 / 0)
+        assert ref.swap(lambda x: x + 1) == 1
+        assert ref.get() == 1
+
+    def test_error_history_ring_buffer(self):
+        state = ServerState()
+        for i in range(25):
+            state.record_error_detail(f"/p{i}", "GET", 500, "e")
+        assert len(state.get_error_history(limit=100)) == 20
+
+    def test_path_latency_ring_buffer(self):
+        state = ServerState()
+        for _ in range(120):
+            state.record_path_latency("/chat", 1.0)
+        lat = state.get_path_latencies(top_n=5)
+        assert lat[0]["count"] == 100
+
+    def test_path_latencies_skips_empty(self):
+        state = ServerState()
+        state.record_path_latency("/a", 10.0)
+        state._path_latencies["/empty"] = []
+        top = state.get_path_latencies()
+        assert [t["path"] for t in top] == ["/a"]
+
+    def test_avg_tokens_per_request_no_data(self):
+        state = ServerState()
+        assert state.get_avg_tokens_per_request() == 0.0
+
+    def test_tokens_per_request_ring_buffer(self):
+        state = ServerState()
+        for _ in range(60):
+            state.record_inference(10, 100.0)
+        assert state.total_tokens == 600
+        assert len(state._tokens_per_request) == 50
+
+    def test_model_events_ring_buffer(self):
+        state = ServerState()
+        for i in range(35):
+            state.record_model_event("load", f"m{i}")
+        assert len(state.get_model_events(limit=100)) == 30
+
+    def test_health_score_shape(self):
+        state = ServerState()
+        state.model.set(type("Fake", (), {"name_or_path": "gpt2"})())
+        state.record_request_latency("/a", "GET", 200, 10.0)
+        state.record_inference(100, 1000.0, "gpt2")
+        h = state.get_health_score()
+        assert "score" in h and "status" in h and "summary" in h and "diagnoses" in h
+
+    def test_health_snapshot_and_history(self):
+        state = ServerState()
+        state.record_health_snapshot()
+        state.record_health_snapshot()
+        hist = state.get_health_history()
+        assert len(hist) == 2
+        assert hist[0]["ts"] <= hist[1]["ts"]
+
+    def test_health_history_ring_buffer(self):
+        state = ServerState()
+        for _ in range(40):
+            state.record_health_snapshot()
+        assert len(state.get_health_history(limit=100)) == 30
+
+    def test_memory_snapshot_and_history(self):
+        state = ServerState()
+        state.record_memory_snapshot()
+        hist = state.get_memory_history()
+        assert len(hist) == 1
+        assert "rss_mb" in hist[0]
+        assert "virtual_mb" in hist[0]
+
+    def test_memory_history_ring_buffer(self):
+        state = ServerState()
+        for _ in range(40):
+            state.record_memory_snapshot()
+        assert len(state.get_memory_history(limit=100)) == 30
+
+    def test_memory_snapshot_resource_fallback_and_psutil(self, monkeypatch):
+        import sys
+        import types as types_mod
+
+        class FakeMem:
+            percent = 42.5
+
+        class FakeProcInfo:
+            rss = 100 * 1024 * 1024
+            vms = 200 * 1024 * 1024
+
+        class FakeProcess:
+            def memory_info(self):
+                return FakeProcInfo()
+
+        fake = types_mod.SimpleNamespace(virtual_memory=lambda: FakeMem(), Process=FakeProcess)
+        monkeypatch.setitem(sys.modules, "psutil", fake)
+        import resource
+
+        def boom():
+            raise OSError("no rusage")
+
+        monkeypatch.setattr(resource, "getrusage", boom)
+        state = ServerState()
+        state.record_memory_snapshot()
+        hist = state.get_memory_history()
+        assert hist[0]["rss_mb"] == pytest.approx(100.0)
+        assert hist[0]["virtual_mb"] == pytest.approx(200.0)
+        assert hist[0]["system_percent"] == pytest.approx(42.5)
+
+    def test_rate_limit_window_resets(self):
+        state = ServerState()
+        state.check_rate_limit("/chat", max_per_second=30)
+        state._rate_limits["/chat"]["window_start"] = time.time() - 2.0
+        assert state.check_rate_limit("/chat", max_per_second=30) is True
+
+    def test_rate_limit_violation_ring_buffer(self):
+        state = ServerState()
+        for _ in range(25):
+            for __ in range(40):
+                state.check_rate_limit("/x", max_per_second=30)
+            state._rate_limits["/x"]["window_start"] = time.time() - 2.0
+        assert len(state.get_rate_limit_violations(limit=100)) == 20

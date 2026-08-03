@@ -4134,10 +4134,10 @@ class SloTransformer(SloNet):
             # LM head — use fused argmax kernel for greedy decoding
             if _is_greedy and _use_kernels:
                 qi = lm_head_mod._quant_info if _is_quantized else None
-                if qi is not None and qi.is_quantized and qi.meta.bits == 8:
+                if qi is not None and qi.is_quantized and qi.meta.bits == 8 and not qi.meta.is_per_channel:
                     next_id = _nb_lm_head_argmax_int8(
                         x[:, -1, :], qi.array,
-                        np.float32(qi.meta.scale[0] if qi.meta.is_per_channel else qi.meta.scale),
+                        np.float32(qi.meta.scale),
                         np.int32(qi.meta.zero_point),
                     )
                 elif _is_quantized:
@@ -4481,10 +4481,10 @@ class SloTransformer(SloNet):
             # lm_head — use fused argmax kernel for greedy decoding (no logits allocation)
             if _is_greedy and _use_kernels:
                 qi = lm_head_mod._quant_info if _is_quantized else None
-                if qi is not None and qi.is_quantized and qi.meta.bits == 8:
+                if qi is not None and qi.is_quantized and qi.meta.bits == 8 and not qi.meta.is_per_channel:
                     next_id = _nb_lm_head_argmax_int8(
                         x[:, -1, :], qi.array,
-                        np.float32(qi.meta.scale[0] if qi.meta.is_per_channel else qi.meta.scale),
+                        np.float32(qi.meta.scale),
                         np.int32(qi.meta.zero_point),
                     )
                 elif _is_quantized:

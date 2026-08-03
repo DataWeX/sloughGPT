@@ -1131,8 +1131,13 @@ def quantized_linear(
     if x_scale is not None:
         act_scale = x_scale
     else:
-        x_max = np.max(np.abs(x_flat))
-        act_scale = x_max / 127.0 if x_max > 0 else 1.0
+        # Per-token activation scale: one scale per row (token) so each token
+        # uses its own dynamic range. A single per-tensor scale (x_max over the
+        # whole matrix) degrades W8A8 quality — a few large outlier tokens waste
+        # the int8 grid for every other token, and the error compounds across
+        # layers. Per-token scaling is standard in LLM int8 inference.
+        row_max = np.max(np.abs(x_flat), axis=1, keepdims=True)
+        act_scale = np.where(row_max > 0, row_max / 127.0, 1.0)
 
     # Quantize activation
     x_int8 = quantize_activation(x_flat, act_scale, x_zero_point)
@@ -1159,6 +1164,7 @@ def int4_quantized_linear(
     weight_zero_point: int,
     orig_k: int,
     bias: Optional[np.ndarray] = None,
+    x_scale: Optional[Union[float, np.ndarray]] = None,
 ) -> np.ndarray:
     """Quantized linear layer with packed int4 weights: x @ weight.T + bias.
 
@@ -1183,8 +1189,13 @@ def int4_quantized_linear(
     x_flat = x.reshape(-1, x.shape[-1])  # (M, K)
 
     # Compute activation scale dynamically
-    x_max = np.max(np.abs(x_flat))
-    act_scale = x_max / 127.0 if x_max > 0 else 1.0
+    if x_scale is not None:
+        act_scale = x_scale
+    else:
+        # Per-token activation scale (same rationale as quantized_linear —
+        # a per-tensor scale wastes the int8 grid on outlier tokens).
+        row_max = np.max(np.abs(x_flat), axis=1, keepdims=True)
+        act_scale = np.where(row_max > 0, row_max / 127.0, 1.0)
 
     # Quantize activation to int8
     x_int8 = quantize_activation(x_flat, act_scale, 0)
