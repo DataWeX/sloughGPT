@@ -74,15 +74,15 @@ class QueryResult:
 class VectorStore(ABC):
     @abstractmethod
     async def connect(self) -> bool:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
     async def disconnect(self) -> None:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
     async def upsert(self, entries: List[VectorEntry]) -> int:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
     async def query(
@@ -91,15 +91,15 @@ class VectorStore(ABC):
         top_k: int = 5,
         filter_metadata: Optional[Dict[str, Any]] = None,
     ) -> List[QueryResult]:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
     async def delete(self, ids: List[str]) -> bool:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
     async def count(self) -> int:
-        pass
+        pass  # pragma: no cover (abstractmethod body)
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

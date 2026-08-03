@@ -245,3 +245,50 @@ class TestCachedSoulEngine:
         cached = CachedSoulEngine(self.FakeEngine(), cache=make_cache())
         cached.generate("the capital of France is Paris")
         assert cached.invalidate("the capital of France is Paris") is True
+
+
+class FakeHyperdim:
+    """Deterministic HD stand-in — encode is fixed, similarity is scripted."""
+
+    def __init__(self, similarity=0.0):
+        self._similarity = similarity
+
+    def encode_text(self, text):
+        return [1.0, 0.0]
+
+    def similarity(self, a, b):
+        return self._similarity
+
+
+class TestSemanticCacheScoringBands:
+    ENTRY = "alpha beta gamma delta"
+
+    def _seed(self, cache):
+        cache.put(self.ENTRY, "cached response")
+
+    def test_medium_overlap_hd_validates_hit(self):
+        cache = make_cache()
+        cache._hyperdim = FakeHyperdim(similarity=0.9)
+        self._seed(cache)
+        assert cache.get("alpha beta gamma delta omega tau") == "cached response"
+
+    def test_medium_overlap_low_hd_miss(self):
+        cache = make_cache()
+        cache._hyperdim = FakeHyperdim(similarity=0.4)
+        self._seed(cache)
+        assert cache.get("alpha beta gamma delta omega tau") is None
+
+    def test_low_overlap_hd_validates_hit(self):
+        cache = make_cache()
+        cache._hyperdim = FakeHyperdim(similarity=0.9)
+        self._seed(cache)
+        assert cache.get("alpha beta gamma delta p1 p2 p3 p4 p5 p6") == "cached response"
+
+    def test_low_overlap_low_hd_miss(self):
+        cache = make_cache()
+        cache._hyperdim = FakeHyperdim(similarity=0.5)
+        self._seed(cache)
+        assert cache.get("alpha beta gamma delta p1 p2 p3 p4 p5 p6") is None
+
+    def test_evict_lru_empty_returns_false(self):
+        assert make_cache()._evict_lru() is False

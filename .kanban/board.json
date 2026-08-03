@@ -24,6 +24,24 @@
   ],
   "cards": [
     {
+      "id": "20260803_034935_wave-k-vector-store-vector-stores-semantic-cache-coverage-10",
+      "title": "Wave K: vector_store + vector_stores + semantic_cache coverage 100%",
+      "description": "Wave K: domains/inference/vector_store.py 69%->100%, vector_stores/ package (__init__/chromadb_store/pinecone_store) 0%->100%, semantic_cache.py 95%->100%.\n\n- 6 abstractmethod pass bodies marked pragma:no-cover (unreachable by design).\n- tests/test_vector_store.py: +24 tests \u2014 sanitize_input pattern/IMPORTANT branches, InMemory connect/disconnect/upsert_sync/count_sync, MogDB no-connection sync paths, _load_embed_model (cached model, psutil low-memory, sentence-transformers load success/failure via sys.modules fakes), simple_embed ST path (equal/pad/truncate/encode-error) and SloNet path (untrained skip, trained load, pad/truncate/error fallbacks).\n- tests/test_vector_stores.py: +31 tests \u2014 package re-exports, ChromaDB/Pinecone stores fully exercised with faked provider modules (connect/upsert/query/delete/count/disconnect/error paths), create_vector_store factory (in_memory/memory/local/mogdb/persist/persistent/chromadb/pinecone + pinecone-failure RuntimeError + NotImplementedError).\n- tests/test_semantic_cache.py: +6 tests \u2014 medium (0.5-0.8) and low (0.3-0.5) word-overlap scoring bands with scripted HD similarity, empty LRU evict.\n- No source behavior changes (pragma comments only); 405 consumer tests + 150 inference regression tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "coverage",
+        "inference",
+        "vector-store",
+        "semantic-cache"
+      ],
+      "created_at": "2026-08-03T03:49:35.902324+00:00",
+      "updated_at": "2026-08-03T03:49:35.902324+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260803_033232_wave-j-slo-embedder-slo-format-coverage-100",
       "title": "Wave J: slo_embedder + slo_format coverage 100%",
       "description": "Wave J complete: domains/inference/slo_embedder.py and slo_format.py both at 100% statement coverage.\n\n## Coverage path\nslo_embedder.py: 91% -> 100% (439/439 stmts); slo_format.py: 93% -> 100% (501/501 stmts).\n\n## Bug fixes (slo_embedder.py)\n1. BPETokenizer.load called on the class instead of an instance (instance method) -> always failed silently, BPE tokenizer never loaded. Fixed with instance-based bpe_tokenizer = BPETokenizer(); if bpe_tokenizer.load(bpe_path).\n2. BPE sidecar load failure (corrupt json or load() returning False) left a half-initialized BPETokenizer instance as the active tokenizer because the except block did not reset bpe_tokenizer. Fixed to reset bpe_tokenizer = None on any load failure.\n\n## New fast tests (tests/test_slo_embedder_edge.py)\n- TestBpeTokenizerEdge / TestBuildVocabEdge / TestLabelByMeaningEdge (no-store + zero-vector None)\n- TestTrainEmbedderWhitespaceFallback (fast whitespace tokenizer path)\n- TestSaveCheckpointEdge: cleanup on params failure, bpe-save failure warns but writes file, rename+unlink both fail\n- TestSloTextEmbedderLoad: invalid magic/sys-prompt -> None, no-vocab load, with-BPE load, corrupt-BPE-sidecar skip, BPE load-failure skip\n- TestEmbedDimAdaptation: pad 8->32, truncate 8->4, batch\n\n## New fast tests (test_slo_format.py additions)\n- SouParser edge branches: non-numeric PARAMETER/CONTEXT/PERSONALITY kept as strings, QUANTIZATION, METADATA generic key, BEHAVIOR overflow->inf and unicode-digit->string, load/save round trip\n- save_soul value-type conversion branches (tensor .data, .cpu().numpy(), .detach().cpu().numpy(), list, scalar), error-skip on unconvertible value, zero-params log, lineage-from-model when profile lineage empty, temp cleanup + unlink-error-swallowed\n- load_soul v2 bad state json, generate_sample_dialogue model without generate/forward\n\n## Regression\ntest_slo_embedder slow suite (29 passed, 1 skipped, 1 xpassed), test_slo_format, test_vector_store, test_slo_manager, test_embedding_service, test_embeddings, test_soul_engine, test_knowledge_memory, test_knowledge_augmenter, test_morph_tokenizer, test_bpe_tokenizer, test_tokenizer suites all green.",
