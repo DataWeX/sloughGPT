@@ -24,6 +24,146 @@
   ],
   "cards": [
     {
+      "id": "20260803_011803_wave-f-slonet-kernels-numpy-fallback-coverage",
+      "title": "wave F: slonet_kernels numpy-fallback coverage",
+      "description": "slonet.py at 97% floor (1 dead line). Wave F extends coverage to domains/training/slonet_kernels.py (18%). Numba not installed, so public numpy-fallback wrappers are the production code path; _build_*/njit bodies are the unreachable env floor. Plan: deterministic numpy tests for all 13 fallback functions + _ensure_* guards + _check_numba, then broaden sweep --source.",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "kernels",
+        "coverage",
+        "tests"
+      ],
+      "created_at": "2026-08-03T01:18:03.418474+00:00",
+      "updated_at": "2026-08-03T01:18:03.418474+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_011803_wave-g-morph-tokenizer-test-coverage-68-99",
+      "title": "Wave G: morph_tokenizer test coverage 68% -> 99%",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "coverage",
+        "tokenizer"
+      ],
+      "created_at": "2026-08-03T01:18:03.415422+00:00",
+      "updated_at": "2026-08-03T01:18:03.415422+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_010322_slonet-coverage-8486-gqa-einsum-bug-fix",
+      "title": "SloNet coverage 84%\u219286%, GQA einsum bug fix",
+      "description": "Covered export_to_sou failure branch, int4 lazy unpack, .points.json import fallback. Fixed GQA B>1 einsum bug (slonet.py:2154). pragma:no cover on numba-only bodies. test_slonet_legacy.py: 75 tests. slonet.py coverage 70%\u219286%.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "core",
+        "tests",
+        "slonet"
+      ],
+      "created_at": "2026-08-03T01:03:22.964756+00:00",
+      "updated_at": "2026-08-03T01:03:22.964756+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_010322_extend-test-slonet-legacy-optimizers-schedulers-tensor-utils",
+      "title": "extend test_slonet_legacy: optimizers, schedulers, tensor utils (128 tests)",
+      "description": "Extended test_slonet_legacy 88->128 then 128->169 (combined with parallel editor additions). Wave A: SloFeedForward SwiGLU + checkpoint npz. Wave B: SloSGD/SloAdam/clip_grad_norm_/LR schedulers/tensor utils (verified vs source: Tensor coerces float32). Wave C (this): kl_div_loss reductions+backward, SloDataset abstract, SloLRScheduler base edges (param_groups-only, empty-groups default 0.0, abstract get_lr, get_last_lr fallback, explicit-epoch step), create_scheduler all branches + unknown ValueError; editor added Tensor.type/JVP, accel fallbacks, embedding 3D, LSTM skip_embed, state_dict, cross-attn JVP, layernorm generation. Fixed latent source bug: Tensor.backward() crashed when a child is an ndarray (kl_div_loss target) - now filters Tensor children, matching forward_grad. Full slonet sweep 538 passed. slonet.py coverage 85%->90%. Commits: d56e791, a6d3dd0, 6e6f7c6 (backward fix + wave C).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "core",
+        "tests",
+        "slonet"
+      ],
+      "created_at": "2026-08-03T01:03:22.953208+00:00",
+      "updated_at": "2026-08-03T01:03:22.953208+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_010322_slotransformer-no-soul-coverage-wave-d-94-slonet",
+      "title": "SloTransformer no-soul coverage wave D (94% slonet)",
+      "description": "Added TestSloTransformerNoSoul (20 tests) covering soul_name='no soul' metadata, properties/tie_weights (+exception path), layer_norm norm fallback, forward use_cache/1d/list/cpu inputs, forward_pass, abs_pos_emb forward+generate, generate 1d/cpu, GQA no-kernel np.repeat, quantized no-kernel generate_numpy+stream (silu fallback 4086/4433), quantized kernel greedy stream (4473-4474), int8 lm_head fused argmax (4123/4467), load_state_dict shape-mismatch reporting + emb_drop alias + to/train/eval/context-manager. Fixed editor TestTensorFormatMethods expectations to match Tensor contract (float32 coercion, take_along_axis broadcast, view(*shape)). Coverage 92%->94% (166->111 missing, 203->188 branch-partial). 4564-4566 unreachable dead code in load_state_dict alt-name branch (lm_head.weight always in param_map).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "legacy",
+        "tests",
+        "coverage"
+      ],
+      "created_at": "2026-08-03T01:03:22.942070+00:00",
+      "updated_at": "2026-08-03T01:03:22.942070+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_010322_wave-d-slonet-legacy-tests-97-coverage-dead-code-removal-con",
+      "title": "wave D slonet legacy tests: 97% coverage, dead code removal, conv2d JVP fix",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "coverage",
+        "tests"
+      ],
+      "created_at": "2026-08-03T01:03:22.930842+00:00",
+      "updated_at": "2026-08-03T01:03:22.930842+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_010322_wave-e-slonet-legacy-coverage-97-kernels-import-fallback",
+      "title": "wave E slonet legacy coverage: 97%, kernels import fallback",
+      "description": "Wave E closes the slonet.py coverage gap from 96% to 97% (missing 31 -> 3). Appended +16 deterministic tests to test_slonet_legacy.py (now 243 passing, plus 775-line editor test_slonet_wave_a.py): accelerator old-backend failure fallback, Tensor dtype surface (fake-dtype to()/float() with float32 pin), point-weight cluster compression + set/get_point_weight, 2-layer LSTM forward adapter + 1-D skip_embed, attention-4D double-backward GQA accumulation, eval-mode batch-norm forward-grad, SoulLibBlock identity/no-params, non-callable _Layer, state-dict accelerator matmul/layernorm helpers, SO-variant import lineage (PK bytes -> slolib-pytorch), JSON tok_emb.weight key, params rebuild hidden_dim<=0 early return, numpy()-only state-dict branch, train_soul_transformer None-loss skip, plus subprocess test proving slonet imports with _KERNELS_AVAILABLE=False when slonet_kernels import fails (covers 51-52 behaviorally). Remaining 3 misses are non-measurable: 51-52 import-time except (only reachable pre-import), 107 dead loop in _broadcast_forward (line 104 normalizes ndim). Also un-ignored test_slonet_broadcast.py + test_slonet_compute_sensitivity.py in pytest.ini. Commits: f47ddb7.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "coverage",
+        "tests",
+        "legacy"
+      ],
+      "created_at": "2026-08-03T01:03:22.919690+00:00",
+      "updated_at": "2026-08-03T01:03:22.919690+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260803_010322_wave-f-slonet-provider-test-coverage-43-91",
+      "title": "Wave F: slonet_provider test coverage 43% -> 91%",
+      "description": "Wave F complete. tests/test_slonet_wave_f.py: 36 tests covering SloNetChatProvider: build_slnc helper (header, metadata, JSON config, entry table, aligned data offset), from_slnc (metadata/generate/resource-manager apply+error, rope config), module helpers, constructor+safetensors BF16, _build_prompt branches, tokenizer load, chat/generate/stream paths, quantize=True paths, converter edge cases, generate_with_logprobs seed, fused QKV bias, LLaMA SwiGLU. Combined provider coverage: 43% -> 91% (461 stmts, 42 miss). Non-measurable: 236/243-259 (provably-unreachable dead paths: transpose global keys, fused-QKV fallback), 801-805/817-820/828-844/851-853 (chat_stream 30s/120s timeout + err_q race-dependent branches). Family run: 510 passed, 3 skipped; adjacent suites 309 passed.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "slc",
+        "provider",
+        "tests"
+      ],
+      "created_at": "2026-08-03T01:03:22.907366+00:00",
+      "updated_at": "2026-08-03T01:03:22.907366+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260802_090040_green-test-slonet-legacy-regression-suite-58-tests-sensitivi",
       "title": "green test_slonet_legacy regression suite (58 tests) + sensitivity seed",
       "description": "Concurrent editor added test_slonet_legacy.py (348 lines) plus a seed to test_slonet_compute_sensitivity. Verified and committed (91f5e4c-equivalent batch):\n\n- test_slonet_legacy.py v1 (36 tests): SOU round-trip (export/import, v1 format, bad magic, missing file, sanitize), flat-param rebuild guard rails, demo trainers (char-lstm, soul-transformer), SloDataLoader batching/shuffle/collate/reset/empty, silu numpy path + tensor backward/JVP, Tensor.to dtype/device/meta, GQA n_rep>1 backward. Committed in first batch.\n- Editor appended +238 lines after that commit: TestLossUtils (log_softmax/kl_div/pairwise_distance), TestSoftmaxNumpyPath, TestSloNetFit (fit + on_step), TestUserAdapters (cache/identity/npz/shape-mismatch/apply), TestMHAForwardNumpy (einsum batch>1, single-token fused kernel, multi-token rope+cache), TestLSTMNumbaFallback, TestAccelOpDispatch. Committed as second batch (58 tests total).\n- test_slonet_compute_sensitivity: np.random.seed(0) for deterministic training-tracking assertion. Verified 9/9 (file in pytest.ini ignore list, explicit run).\n\nTransient interference: a 3-test failure (TestMHAForwardNumpy, ValueError slonet.py:2128) appeared during a combined sweep while the concurrent editor was mid-write + running its own coverage-instrumented pytest (left slonet.py,cover artifact). Deleted artifact. After editor quiesced: 3x stable 58/58, full 10-file sweep 427 passed.\n\nNo source fixes were needed -- the legacy suite validates previously-fixed surfaces (import_from_sou, _rebuild_net_from_params, EMA, etc.).\n\nCleanup: removed stray 'domains/training/slonet.py,cover' coverage artifact; pycache cleaned.",
