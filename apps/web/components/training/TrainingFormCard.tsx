@@ -237,6 +237,32 @@ export function TrainingFormCard({
 
         {!session.trainingRunning && (
           <div className="border-t border-border/40 pt-3">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Quick presets</span>
+            </div>
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => { form.setMethod('distill'); form.setTrainingEpochs(3); form.setTrainingBatchSize(64); form.setTrainingLR(1e-3); form.setShowAdvanced(false) }}
+                className="flex-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-left hover:bg-muted/60 transition-colors"
+              >
+                <p className="text-xs font-medium">Fast test</p>
+                <p className="text-[10px] text-muted-foreground">3 epochs, ~2 min</p>
+              </button>
+              <button
+                onClick={() => { form.setMethod('distill'); form.setTrainingEpochs(10); form.setTrainingBatchSize(32); form.setTrainingLR(5e-4); form.setShowAdvanced(false) }}
+                className="flex-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-left hover:bg-muted/60 transition-colors"
+              >
+                <p className="text-xs font-medium">Balanced</p>
+                <p className="text-[10px] text-muted-foreground">10 epochs, ~8 min</p>
+              </button>
+              <button
+                onClick={() => { form.setMethod('finetune'); form.setTrainingEpochs(50); form.setTrainingBatchSize(16); form.setTrainingLR(2e-5); form.setUseLoRA(true); form.setShowAdvanced(true) }}
+                className="flex-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-left hover:bg-muted/60 transition-colors"
+              >
+                <p className="text-xs font-medium">Thorough</p>
+                <p className="text-[10px] text-muted-foreground">50 epochs + LoRA</p>
+              </button>
+            </div>
             <button
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => form.setShowAdvanced(!form.showAdvanced)}

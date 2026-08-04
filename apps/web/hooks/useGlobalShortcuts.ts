@@ -8,6 +8,11 @@ const NAV_SHORTCUTS: Record<string, string> = {
   '2': '/training',
   '3': '/datasets',
   '4': '/models',
+  '5': '/agents',
+  '6': '/compare',
+  '7': '/monitoring',
+  '8': '/knowledge',
+  '9': '/multimodal',
 }
 
 export function useGlobalShortcuts() {
@@ -51,6 +56,13 @@ export function useGlobalShortcuts() {
         e.preventDefault()
         closeIfOpen()
         window.dispatchEvent(new CustomEvent('search-conversations'))
+        return
+      }
+
+      if (ctrl && e.shiftKey && e.key === 'N') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('new-chat'))
         return
       }
 

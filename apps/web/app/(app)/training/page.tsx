@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
@@ -104,6 +104,38 @@ export default function TrainingPage() {
 
   const runningJob = form.allJobs.find(j => j.status === 'running')
   const completedCount = form.allJobs.filter(j => j.status === 'completed').length
+
+  // Browser notification on training completion
+  const prevJobStatusesRef = useRef<Map<string, string>>(new Map())
+  useEffect(() => {
+    const prev = prevJobStatusesRef.current
+    for (const job of form.allJobs) {
+      const prevStatus = prev.get(job.id)
+      if (prevStatus === 'running' && job.status === 'completed') {
+        if (Notification.permission === 'granted') {
+          new Notification('Training Complete', {
+            body: `${job.name || 'Training job'} finished successfully`,
+            icon: '/favicon.svg',
+          })
+        }
+      }
+    }
+    const next = new Map<string, string>()
+    for (const job of form.allJobs) {
+      next.set(job.id, job.status)
+    }
+    prevJobStatusesRef.current = next
+  }, [form.allJobs])
+
+  const requestNotificationPermission = useCallback(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
+
+  useEffect(() => {
+    requestNotificationPermission()
+  }, [requestNotificationPermission])
 
   const TABS = [
     { value: 'train', label: 'Train' },

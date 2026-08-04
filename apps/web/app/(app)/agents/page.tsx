@@ -13,6 +13,15 @@ import { useToastStore } from '@/lib/toast-store'
 
 const AVAILABLE_TOOLS = ['web_search', 'code_execution', 'file_read', 'knowledge_retrieval', 'image_analysis', 'data_analysis']
 
+const AGENT_TEMPLATES = [
+  { name: 'Researcher', desc: 'Finds information from the web and documents', instructions: 'You are a thorough researcher. Search for accurate, up-to-date information and present findings clearly with sources.', tools: ['web_search', 'knowledge_retrieval'] },
+  { name: 'Coder', desc: 'Writes and debugs code', instructions: 'You are an expert programmer. Write clean, efficient code. Explain your approach. Debug errors methodically.', tools: ['code_execution', 'file_read'] },
+  { name: 'Analyst', desc: 'Analyzes data and generates insights', instructions: 'You are a data analyst. Examine datasets, identify patterns, compute statistics, and present clear visualizations and insights.', tools: ['data_analysis', 'file_read'] },
+  { name: 'Writer', desc: 'Creates structured written content', instructions: 'You are a skilled writer. Produce clear, well-organized content. Adapt tone to the audience. Ensure accuracy.', tools: ['knowledge_retrieval'] },
+  { name: 'Vision Assistant', desc: 'Analyzes images and visual data', instructions: 'You are a vision expert. Analyze images carefully, describe what you see, identify objects, text, and patterns.', tools: ['image_analysis'] },
+  { name: 'Full Stack', desc: 'Handles all aspects of a task', instructions: 'You are a versatile full-stack assistant. Use whatever tools are needed to complete the task: search, code, analyze, or write.', tools: ['web_search', 'code_execution', 'file_read', 'knowledge_retrieval', 'data_analysis'] },
+]
+
 export default function AgentsPage() {
   const addToast = useToastStore(s => s.addToast)
   const [agents, setAgents] = useState<Agent[]>([])
@@ -34,6 +43,7 @@ export default function AgentsPage() {
   const [execPrompt, setExecPrompt] = useState('')
   const [execResult, setExecResult] = useState<string | null>(null)
   const [execRunning, setExecRunning] = useState(false)
+  const [agentSearch, setAgentSearch] = useState('')
 
   const [orchGoal, setOrchGoal] = useState('')
   const [orchContext, setOrchContext] = useState('')
@@ -194,6 +204,25 @@ export default function AgentsPage() {
 
   const toolCount = agents.reduce((acc, a) => acc + a.tools.length, 0)
 
+  const filteredAgents = agentSearch
+    ? agents.filter(a => a.name.toLowerCase().includes(agentSearch.toLowerCase()) || a.description.toLowerCase().includes(agentSearch.toLowerCase()))
+    : agents
+
+  const handleClone = async (agent: Agent) => {
+    try {
+      await agentsController.create({
+        name: `${agent.name} (copy)`,
+        description: agent.description,
+        instructions: agent.instructions,
+        tools: [...agent.tools],
+      })
+      addToast(`Cloned "${agent.name}"`, 'success')
+      await fetchAgents()
+    } catch {
+      addToast('Failed to clone agent', 'error')
+    }
+  }
+
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Agents" />} />
@@ -210,6 +239,20 @@ export default function AgentsPage() {
         <Card>
           <CardHeader><CardTitle className="text-base">New Agent</CardTitle></CardHeader>
           <CardContent className="space-y-3">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Start from a template</p>
+              <div className="flex flex-wrap gap-1.5">
+                {AGENT_TEMPLATES.map(t => (
+                  <button
+                    key={t.name}
+                    onClick={() => { setNewName(t.name); setNewDesc(t.desc); setNewInstructions(t.instructions); setNewTools([...t.tools]) }}
+                    className="rounded-full px-3 py-1 text-[10px] font-medium border border-border/60 bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Input placeholder="Name" value={newName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)} />
             <Input placeholder="Description (optional)" value={newDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDesc(e.target.value)} />
             <textarea
@@ -260,7 +303,20 @@ export default function AgentsPage() {
             ) : agents.length === 0 ? (
               <EmptyCard message="No agents yet" action={null} />
             ) : (
-              agents.map(agent => (
+              <>
+                {agents.length > 2 && (
+                  <input
+                    type="text"
+                    value={agentSearch}
+                    onChange={e => setAgentSearch(e.target.value)}
+                    placeholder="Search agents..."
+                    className="h-8 w-full max-w-xs rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  />
+                )}
+                {filteredAgents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No agents matching &quot;{agentSearch}&quot;</p>
+                ) : (
+                  filteredAgents.map(agent => (
                 <div key={agent.id} className={`rounded-lg border p-3 space-y-2 transition-colors ${execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50'}`}>
                   {editingId === agent.id ? (
                     <div className="space-y-2">
@@ -302,6 +358,9 @@ export default function AgentsPage() {
                           )}
                         </div>
                         <div className="flex gap-1 shrink-0 ml-2">
+                          <Button size="sm" variant="ghost" onClick={() => handleClone(agent)} aria-label={`Clone ${agent.name}`}>
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => startEdit(agent)}>Edit</Button>
                            <Button size="sm" variant="destructive" onClick={() => handleDelete(agent.id)} aria-label={`Delete ${agent.name}`}>
                             <IconTrash className="h-3.5 w-3.5" />
@@ -355,6 +414,8 @@ export default function AgentsPage() {
                   )}
                 </div>
               ))
+              )}
+              </>
             )}
           </CardContent>
         </Card>

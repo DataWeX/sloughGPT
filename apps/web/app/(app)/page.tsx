@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -21,8 +21,11 @@ import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { sessionController } from '@/lib/session-controller'
+import { datasetController } from '@/lib/dataset-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { useHomePageData } from '@/hooks/useHomePageData'
+import { formatUptime } from '@/lib/chat-utils'
 import type { FeedbackStats } from '@/lib/feedback-controller'
 
 function Greeting() {
@@ -41,13 +44,64 @@ function Greeting() {
 export default function HomePage() {
   const router = useRouter()
   const { t } = useLocale()
-  const { healthLegacy: health } = useLiveStatus()
+  const { healthLegacy: health, health: liveHealth } = useLiveStatus()
   const addToast = useToastStore(s => s.addToast)
   const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, healthSummary, feedbackStats, ...data } = useHomePageData(health)
 
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   const [startup, setStartup] = useState<{phase: string; step: number; total: number; message: string} | null>(null)
+
+  const [convStats, setConvStats] = useState<{ totalConversations: number; totalMessages: number; totalWords: number; activeDays: number; mostActiveHour: number | null } | null>(null)
+
+  const [datasetStats, setDatasetStats] = useState<{ totalDatasets: number; totalSize: number; totalSamples: number } | null>(null)
+
+  useEffect(() => {
+    if (apiStatus !== 'online') return
+    let cancelled = false
+    sessionController.list().then(sessions => {
+      if (cancelled) return
+      let totalMessages = 0
+      let totalWords = 0
+      const days = new Set<string>()
+      const hourCounts = new Array(24).fill(0)
+      for (const s of sessions) {
+        totalMessages += s.messages?.length || 0
+        for (const m of s.messages || []) {
+          totalWords += m.content ? m.content.split(/\s+/).length : 0
+          if (m.timestamp) {
+            const d = new Date(m.timestamp)
+            days.add(d.toISOString().slice(0, 10))
+            hourCounts[d.getHours()]++
+          }
+        }
+        if (s.updated_at) days.add(new Date(s.updated_at).toISOString().slice(0, 10))
+      }
+      const maxHour = hourCounts.indexOf(Math.max(...hourCounts))
+      setConvStats({
+        totalConversations: sessions.length,
+        totalMessages,
+        totalWords,
+        activeDays: days.size,
+        mostActiveHour: days.size > 0 ? maxHour : null,
+      })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [apiStatus])
+
+  useEffect(() => {
+    if (apiStatus !== 'online') return
+    let cancelled = false
+    datasetController.list().then(list => {
+      if (cancelled) return
+      setDatasetStats({
+        totalDatasets: list.length,
+        totalSize: list.reduce((sum, ds) => sum + (ds.size || 0), 0),
+        totalSamples: list.reduce((sum, ds) => sum + (ds.samples || 0), 0),
+      })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [apiStatus])
 
   useEffect(() => {
     if (apiStatus !== 'offline') return
@@ -410,6 +464,106 @@ export default function HomePage() {
         </Card>
       )}
 
+      {apiStatus === 'online' && convStats && convStats.totalConversations > 0 && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-medium">Your stats</p>
+              <p className="text-[10px] text-muted-foreground">Usage overview</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{convStats.totalConversations}</p>
+                <p className="text-[10px] text-muted-foreground">Conversations</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">Messages</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">Words</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{convStats.activeDays}</p>
+                <p className="text-[10px] text-muted-foreground">Active days</p>
+              </div>
+            </div>
+            {convStats.mostActiveHour !== null && (
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Most active at {convStats.mostActiveHour}:00
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {apiStatus === 'online' && datasetStats && datasetStats.totalDatasets > 0 && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-medium">Datasets</p>
+              <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
+                <p className="text-[10px] text-muted-foreground">Datasets</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold tabular-nums">
+                  {datasetStats.totalSize >= 1073741824
+                    ? `${(datasetStats.totalSize / 1073741824).toFixed(1)} GB`
+                    : datasetStats.totalSize >= 1048576
+                    ? `${(datasetStats.totalSize / 1048576).toFixed(1)} MB`
+                    : `${(datasetStats.totalSize / 1024).toFixed(1)} KB`}
+                </p>
+                <p className="text-[10px] text-muted-foreground">Total size</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">Samples</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {apiStatus === 'online' && liveHealth && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-medium">System</p>
+              <Link href="/monitoring" className="text-[10px] text-primary hover:text-primary/80 ml-auto">Details →</Link>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <p className="text-sm font-semibold tabular-nums">
+                  {liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">CPU</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold tabular-nums">
+                  {liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">Memory</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold tabular-nums">{liveHealth.request_count.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">Requests</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold tabular-nums">
+                  {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">Uptime</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <Link
           href="/chat"
@@ -480,16 +634,16 @@ export default function HomePage() {
           </div>
         </Link>
         <Link
-          href="/datasets"
+          href="/monitoring"
           className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-5 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 col-span-2 sm:col-span-1"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-accent/15 text-accent">
-              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-success/15 text-success">
+              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
             </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm font-semibold">Datasets</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Manage training data</p>
+              <p className="text-xs sm:text-sm font-semibold">System Health</p>
+              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Monitor API and resources</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">

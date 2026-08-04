@@ -93,7 +93,8 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                   <div key={model.id}>
                   <div
                     className={cn("flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm",
-                      isLoaded ? "border-primary/40 bg-primary/5" : "border-border/60")}
+                      isLoaded ? "border-primary/40 bg-primary/5" : "border-border/60",
+                      isLoading && "animate-pulse border-primary/30 bg-primary/[0.08]")}
                     onClick={() => router.push(`/model/${encodeURIComponent(model.id)}`)}
                     onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/model/${encodeURIComponent(model.id)}`) }}
                     tabIndex={0}
@@ -127,7 +128,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                           {isLoading
                             ? (conversionStatus && conversionStatus.stage !== 'idle'
                                 ? `${Math.round(conversionStatus.progress * 100)}%`
-                                : '…')
+                                : <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />)
                             : warmingModel === model.id ? 'Warming…' : isLoaded ? 'Loaded' : 'Load'}
                         </Button>
                       )}

@@ -17,14 +17,18 @@ import {
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
+import { Switch } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
+import { useLocale, LOCALES } from '@/hooks/useLocale'
 import { systemController, type DetailedHealth, type SystemMetrics, type DiskUsage, type SystemInfo } from '@/lib/system-controller'
+import { modelController } from '@/lib/model-controller'
 import { formatUptime } from '@/lib/chat-utils'
 import { downloadJson, importFile } from '@/lib/download-utils'
 
@@ -56,10 +60,12 @@ export default function SettingsPage() {
   const updateSettings = useUpdateSettings()
   const addToast = useToastStore(s => s.addToast)
   const { healthLegacy: apiHealth } = useLiveStatus()
+  const { locale, setLocale } = useLocale()
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
   const [disk, setDisk] = useState<DiskUsage | null>(null)
   const [info, setInfo] = useState<SystemInfo | null>(null)
+  const [connectionTest, setConnectionTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'error'; latency?: number; error?: string }>({ status: 'idle' })
 
   const fetchHealth = useCallback(async () => {
     const [d, m, dk, inf] = await Promise.allSettled([
@@ -81,6 +87,22 @@ export default function SettingsPage() {
   const modelLoaded = isOnline && (apiHealth.model_loaded || detailed?.model_loaded)
   const modelType = isOnline ? (apiHealth.model_type || detailed?.model_type) : null
 
+  const handleTestConnection = async () => {
+    setConnectionTest({ status: 'testing' })
+    const start = Date.now()
+    try {
+      const h = await modelController.getHealth()
+      const latency = Date.now() - start
+      if (h && (h.status === 'healthy' || h.model_loaded !== undefined)) {
+        setConnectionTest({ status: 'ok', latency })
+      } else {
+        setConnectionTest({ status: 'error', error: 'Unexpected response' })
+      }
+    } catch (e: any) {
+      setConnectionTest({ status: 'error', error: e?.message || 'Connection failed' })
+    }
+  }
+
   const clearChat = () => {
     localStorage.removeItem('man_current_conversation')
     addToast('Chat history cleared', 'success')
@@ -93,6 +115,8 @@ export default function SettingsPage() {
       defaultModel: 'gpt2',
       defaultTemp: 0.8,
       defaultMaxTokens: 200,
+      defaultTopP: 0.9,
+      defaultTopK: 50,
       theme: 'light',
       streaming: true,
       customContext: '',
@@ -109,8 +133,17 @@ export default function SettingsPage() {
         {/* Appearance */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Appearance</CardTitle>
-            <CardDescription>Theme preference</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Appearance</CardTitle>
+                <CardDescription>Theme preference</CardDescription>
+              </div>
+              {settings.theme !== 'light' && (
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateSettings({ theme: 'light' })}>
+                  Reset
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <ToggleGroupRadix type="single" value={settings.theme} onValueChange={(v) => v && updateSettings({ theme: v as 'light' | 'dark' | 'system' })}>
@@ -121,11 +154,88 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Language */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Language</CardTitle>
+            <CardDescription>Interface language</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {LOCALES.map(l => (
+                <Button
+                  key={l.code}
+                  size="sm"
+                  variant={locale === l.code ? 'default' : 'outline'}
+                  className="h-8 text-xs gap-1.5"
+                  onClick={() => setLocale(l.code)}
+                >
+                  <span>{l.flag}</span>
+                  <span>{l.name}</span>
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Connection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Connection</CardTitle>
+            <CardDescription>API server and authentication</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">API URL</label>
+              <Input
+                value={settings.apiUrl}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSettings({ apiUrl: e.target.value })}
+                placeholder="http://localhost:8000"
+                className="font-mono text-xs"
+                aria-label="API server URL"
+              />
+              <p className="text-[11px] text-muted-foreground">Backend server address. Changes take effect on next request.</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">HuggingFace Token</label>
+              <Input
+                type="password"
+                value={settings.hfToken}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSettings({ hfToken: e.target.value })}
+                placeholder="hf_..."
+                className="font-mono text-xs"
+                aria-label="HuggingFace API token"
+              />
+              <p className="text-[11px] text-muted-foreground">Required for loading private HuggingFace models. Stored locally in your browser.</p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleTestConnection} disabled={connectionTest.status === 'testing'}>
+                {connectionTest.status === 'testing' ? 'Testing...' : 'Test connection'}
+              </Button>
+              {connectionTest.status === 'ok' && (
+                <span className="text-xs text-success font-medium">Connected ({connectionTest.latency}ms)</span>
+              )}
+              {connectionTest.status === 'error' && (
+                <span className="text-xs text-destructive font-medium">{connectionTest.error}</span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Chat defaults */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Chat defaults</CardTitle>
-            <CardDescription>Default model and generation settings</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Chat defaults</CardTitle>
+                <CardDescription>Default model and generation settings</CardDescription>
+              </div>
+              {(settings.defaultTemp !== 0.8 || settings.defaultMaxTokens !== 200 || settings.defaultTopP !== 0.9 || settings.defaultTopK !== 50) && (
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateSettings({ defaultTemp: 0.8, defaultMaxTokens: 200, defaultTopP: 0.9, defaultTopK: 50 })}>
+                  Reset
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -144,6 +254,35 @@ export default function SettingsPage() {
                 min={50}
                 max={1000}
                 step={50}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <SettingsSlider
+                label="Top-P"
+                value={settings.defaultTopP}
+                onChange={(v) => updateSettings({ defaultTopP: v })}
+                min={0}
+                max={1}
+                step={0.05}
+              />
+              <SettingsSlider
+                label="Top-K"
+                value={settings.defaultTopK}
+                onChange={(v) => updateSettings({ defaultTopK: v })}
+                min={0}
+                max={100}
+                step={5}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <div>
+                <p className="text-sm font-medium">Streaming</p>
+                <p className="text-xs text-muted-foreground">Show tokens as they are generated</p>
+              </div>
+              <Switch
+                checked={settings.streaming}
+                onCheckedChange={(checked) => updateSettings({ streaming: checked })}
+                aria-label="Toggle streaming"
               />
             </div>
             <div className="pt-2">
@@ -204,6 +343,33 @@ export default function SettingsPage() {
               ].map(([cmd, desc]) => (
                 <div key={cmd} className="flex items-center gap-2">
                   <code className="text-xs text-primary font-mono shrink-0">{cmd}</code>
+                  <span className="text-xs text-muted-foreground truncate">{desc}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Keyboard shortcuts */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Keyboard shortcuts</CardTitle>
+            <CardDescription>Global shortcuts available on any page</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+              {[
+                ['Ctrl+1–9', 'Navigate pages (Chat, Models, etc.)'],
+                ['Ctrl+N', 'New conversation'],
+                ['Ctrl+\\', 'Toggle sidebar'],
+                ['Ctrl+K', 'Command palette'],
+                ['Ctrl+Shift+F', 'Search conversations'],
+                ['Ctrl+Shift+A', 'Open settings'],
+                ['?', 'Show keyboard shortcuts'],
+                ['Esc', 'Close dialog / Cancel'],
+              ].map(([key, desc]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <kbd className="text-xs text-primary font-mono shrink-0 min-w-[80px]">{key}</kbd>
                   <span className="text-xs text-muted-foreground truncate">{desc}</span>
                 </div>
               ))}
@@ -285,6 +451,40 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* System info */}
+        {info && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">System information</CardTitle>
+              <CardDescription>Detailed platform and environment details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Platform</p>
+                  <p className="text-sm font-medium mt-0.5">{info.platform} {info.platform_release}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Architecture</p>
+                  <p className="text-sm font-medium mt-0.5">{info.architecture}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Processor</p>
+                  <p className="text-sm font-medium mt-0.5 truncate">{info.processor}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">CPU cores</p>
+                  <p className="text-sm font-medium mt-0.5">{info.cpu_count}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Platform version</p>
+                  <p className="text-sm font-medium mt-0.5 font-mono">{info.platform_version}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Export / Import settings */}
         <Card>
           <CardHeader>
@@ -309,6 +509,8 @@ export default function SettingsPage() {
                   if (typeof raw.defaultModel === 'string') valid.defaultModel = raw.defaultModel
                   if (typeof raw.defaultTemp === 'number') valid.defaultTemp = raw.defaultTemp
                   if (typeof raw.defaultMaxTokens === 'number') valid.defaultMaxTokens = raw.defaultMaxTokens
+                  if (typeof raw.defaultTopP === 'number') valid.defaultTopP = raw.defaultTopP
+                  if (typeof raw.defaultTopK === 'number') valid.defaultTopK = raw.defaultTopK
                   if (['dark', 'light', 'system'].includes(raw.theme)) valid.theme = raw.theme
                   if (typeof raw.streaming === 'boolean') valid.streaming = raw.streaming
                   if (typeof raw.customContext === 'string') valid.customContext = raw.customContext

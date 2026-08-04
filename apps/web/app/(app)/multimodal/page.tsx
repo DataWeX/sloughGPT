@@ -35,6 +35,7 @@ export default function MultimodalPage() {
   const [transcribing, setTranscribing] = useState(false)
   const [transcript, setTranscript] = useState<string | null>(null)
   const [synthesizing, setSynthesizing] = useState(false)
+  const [synthAudio, setSynthAudio] = useState<{ audio: string; duration_sec: number } | null>(null)
   const [creatingDataset, setCreatingDataset] = useState(false)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [dpoStatus, setDpoStatus] = useState<string>('idle')
@@ -46,6 +47,7 @@ export default function MultimodalPage() {
 
   const fetchAll = useCallback(async () => {
     try {
+      // Graceful degradation: training report/status may be unavailable, UI handles null
       const [c, r, s] = await Promise.all([
         multimodalController.getCapabilities(),
         multimodalController.getTrainingReport().catch(() => null),
@@ -183,9 +185,10 @@ export default function MultimodalPage() {
   }
 
   const handleSynthesize = async (text: string) => {
-    setSynthesizing(true)
+    setSynthesizing(true); setSynthAudio(null)
     try {
       const result = await multimodalController.synthesizeSpeech(text)
+      setSynthAudio({ audio: result.audio, duration_sec: result.duration_sec })
       addToast(`Voice generated (${result.duration_sec.toFixed(1)}s)`, 'success')
     } catch { addToast('Speech generation failed', 'error')
     } finally { setSynthesizing(false) }
@@ -217,7 +220,7 @@ export default function MultimodalPage() {
             <VisualDatasetCard creatingDataset={creatingDataset} onCreate={handleCreateVisualDataset} />
             <DPOCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
             <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
-            <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
+            <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
           </>
         )}
       </div>

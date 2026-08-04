@@ -21,7 +21,7 @@ import { IconTrash, IconRefresh, IconDownload } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
-import { downloadBlob } from '@/lib/download-utils'
+import { downloadBlob, downloadJson } from '@/lib/download-utils'
 
 function formatDuration(start: number | string, end?: number | string): string {
   const s = new Date(start).getTime()
@@ -123,6 +123,27 @@ export default function TrainingJobDetailPage() {
     } finally { setShowDelete(false) }
   }
 
+  const handleExport = () => {
+    if (!job) return
+    const data = {
+      id: job.id,
+      name: job.name,
+      status: job.status,
+      model: job.model,
+      dataset: job.dataset,
+      epochs: job.epochs,
+      current_epoch: job.current_epoch,
+      loss: job.loss,
+      checkpoint: job.checkpoint,
+      created_at: job.created_at,
+      finished_at: job.finished_at,
+      error: job.error,
+      loss_history: job.loss_history,
+    }
+    downloadJson(data, `training-job-${job.id}.json`)
+    addToast('Job details exported', 'success')
+  }
+
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
@@ -138,6 +159,9 @@ export default function TrainingJobDetailPage() {
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" onClick={fetchJob} disabled={loading} aria-label="Refresh job status">
               <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5' : 'h-3.5 w-3.5'} />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleExport} disabled={!job} aria-label="Export job details">
+              <IconDownload className="h-3.5 w-3.5" />
             </Button>
             <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setShowDelete(true)} disabled={!job} aria-label="Delete job">
               <IconTrash className="h-3.5 w-3.5" />
@@ -199,6 +223,17 @@ export default function TrainingJobDetailPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
+                    {job.status === 'running' && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={async () => {
+                        try {
+                          await trainingJobsController.stop(job.id)
+                          addToast('Training stopped', 'info')
+                          await fetchJob()
+                        } catch { addToast('Failed to stop training', 'error') }
+                      }}>
+                        Stop
+                      </Button>
+                    )}
                     {job.checkpoint && job.status === 'completed' && (
                       <>
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleLoadCheckpoint}>
@@ -235,7 +270,21 @@ export default function TrainingJobDetailPage() {
                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                       <div className="h-full bg-primary transition-all duration-500 rounded-full" style={{ width: `${Math.min(job.progress, 100)}%` }} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">{job.progress}%</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">{job.progress}%</p>
+                      {job.progress > 0 && job.created_at && (() => {
+                        const elapsed = (Date.now() - new Date(job.created_at).getTime()) / 1000
+                        const rate = job.progress / elapsed
+                        const remaining = rate > 0 ? (100 - job.progress) / rate : 0
+                        const mins = Math.floor(remaining / 60)
+                        const secs = Math.floor(remaining % 60)
+                        return (
+                          <p className="text-xs text-muted-foreground">
+                            ETA: {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
+                          </p>
+                        )
+                      })()}
+                    </div>
                   </div>
                 )}
 

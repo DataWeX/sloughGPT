@@ -3,6 +3,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { MessageActions } from './MessageActions'
+import { MessageContextMenu } from './MessageContextMenu'
 import { MessageImages } from './MessageImages'
 import { MessageContent } from './MessageContent'
 import type { ImageAttachment } from './ImageUpload'
@@ -27,6 +28,7 @@ export interface MessageBubbleProps {
   isBookmarked?: boolean
   onBookmark?: (messageId: string) => void
   onDelete?: (messageId: string) => void
+  onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
@@ -61,6 +63,7 @@ export const MessageBubble = memo(function MessageBubble({
   isBookmarked = false,
   onBookmark,
   onDelete,
+  onSaveToKnowledge,
   collapsibleLength = 0,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
@@ -77,6 +80,18 @@ export const MessageBubble = memo(function MessageBubble({
   const id = messageId || 'msg'
 
   return (
+    <MessageContextMenu
+      messageId={id}
+      content={content}
+      role={role}
+      isBookmarked={isBookmarked}
+      onCopy={onCopy}
+      onEdit={onEdit ? () => setIsEditing(true) : undefined}
+      onBookmark={onBookmark}
+      onRegenerate={showActions ? onRegenerate : undefined}
+      onDelete={onDelete}
+      onSaveToKnowledge={onSaveToKnowledge}
+    >
     <div
       id={messageId ? `msg-${messageId}` : undefined}
       ref={bubbleRef}
@@ -116,6 +131,11 @@ export const MessageBubble = memo(function MessageBubble({
           role === 'user' ? 'text-primary-foreground/60 text-right' : 'text-muted-foreground/50'
         )}>
           {role === 'user' ? 'You' : 'Assistant'}
+          {isBookmarked && (
+            <span className="ml-1.5 text-warning" aria-label="Bookmarked">
+              <svg className="h-2.5 w-2.5 inline fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </span>
+          )}
           {role === 'assistant' && model && !isError && (
             <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
               {model}
@@ -167,6 +187,7 @@ export const MessageBubble = memo(function MessageBubble({
           isBookmarked={isBookmarked}
           onBookmark={onBookmark}
           onDelete={onDelete}
+          onSaveToKnowledge={onSaveToKnowledge}
         />
       )}
 
@@ -180,5 +201,6 @@ export const MessageBubble = memo(function MessageBubble({
         />
       )}
     </div>
+    </MessageContextMenu>
   )
 })

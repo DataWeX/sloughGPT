@@ -9,6 +9,7 @@ vi.mock('recharts', () => ({
   YAxis: () => null,
   Tooltip: () => null,
   CartesianGrid: () => null,
+  Legend: () => null,
 }))
 
 import { SystemChart } from '@/components/monitoring/SystemChart'

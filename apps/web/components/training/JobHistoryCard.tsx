@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { trainingController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
@@ -21,6 +22,12 @@ export function JobHistoryCard({
 }) {
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
+
+  const completedJobs = allJobs.filter(j => j.status === 'completed')
+  const totalLoss = completedJobs.reduce((sum, j) => sum + (j.loss ?? 0), 0)
+  const avgLoss = completedJobs.length > 0 ? totalLoss / completedJobs.length : 0
+  const totalEpochs = completedJobs.reduce((sum, j) => sum + (j.current_epoch ?? 0), 0)
+
   const hasJobs = allJobs.length > 0 || checkpoints.loadingJobs
   if (allJobs.length === 0 && !checkpoints.loadingJobs) return (
     <Card>
@@ -36,7 +43,18 @@ export function JobHistoryCard({
       <CardHeader>
         <CardTitle className="text-base">Job history</CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent>
+        {completedJobs.length > 0 && (
+          <div className="mb-4">
+            <KpiGrid columns={4}>
+              <StatCard label="Total jobs" value={allJobs.length} />
+              <StatCard label="Completed" value={completedJobs.length} />
+              <StatCard label="Avg loss" value={avgLoss > 0 ? avgLoss.toFixed(4) : '—'} />
+              <StatCard label="Total epochs" value={totalEpochs} />
+            </KpiGrid>
+          </div>
+        )}
+        <div className="p-0">
         {checkpoints.loadingJobs ? (
           loadingTimedOut ? (
             <div className="px-4 py-6 text-center space-y-2">
@@ -156,6 +174,7 @@ export function JobHistoryCard({
             })}
           </div>
         )}
+      </div>
       </CardContent>
     </Card>
   )

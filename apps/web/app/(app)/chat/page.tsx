@@ -29,6 +29,7 @@ import { imagesController } from '@/lib/images-controller'
 import { chatDB } from '@/lib/db'
 import type { ImageStyle } from '@/lib/images-controller'
 import { filesController } from '@/lib/files-controller'
+import { knowledgeController } from '@/lib/knowledge-controller'
 import { ChatArea, ErrorBanner } from '@/components/chat'
 import { ImageDropZone } from '@/components/chat/ImageDropZone'
 import { resizeImage } from '@/components/chat/ImageUpload'
@@ -44,7 +45,6 @@ import { useConvSidebar } from '@/contexts/ConvSidebarContext'
 const VoiceChatMode = dynamicNext(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
 const ConversationViewer = dynamicNext(() => import('@/components/chat/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
 const ConversationSearch = dynamicNext(() => import('@/components/chat/ConversationSearch').then(m => m.ConversationSearch), { ssr: false })
-const SearchConversationsDialog = dynamicNext(() => import('@/components/chat/SearchConversationsDialog').then(m => m.SearchConversationsDialog), { ssr: false })
 const ChatSettings = dynamicNext(() => import('@/components/chat/ChatSettings').then(m => m.ChatSettings), { ssr: false })
 const ConversationSidebar = dynamicNext(() => import('@/components/chat/ConversationSidebar').then(m => m.ConversationSidebar), { ssr: false })
 const ChatToolPanel = dynamicNext(() => import('@/components/chat/ChatToolPanel').then(m => m.ChatToolPanel), { ssr: false })
@@ -85,8 +85,6 @@ export default function ChatPage() {
     })
   }, [])
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
-  const [searchConversationsOpen, setSearchConversationsOpen] = useState(false)
-  const [searchConversationsQuery, setSearchConversationsQuery] = useState('')
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
@@ -154,6 +152,23 @@ export default function ChatPage() {
     handleRegenerateRef: chat.handleRegenerateRef,
     searchInputRef: ui.searchInputRef,
     handleSearchChange: ui.handleSearchChange,
+    onRenameConversation: () => {
+      const name = prompt('Rename conversation:')
+      if (name && name.trim()) {
+        const sid = chat.sessionIdRef.current
+        if (sid) chat.renameSession(sid, name.trim())
+        showToast(`Renamed to "${name.trim()}"`, 'success')
+      }
+    },
+    onExportMarkdown: () => chat.handleExportMarkdown(),
+    onDuplicateConversation: () => {
+      const sid = chat.sessionIdRef.current
+      if (sid) {
+        chat.duplicateSession(sid)
+        showToast('Conversation duplicated', 'success')
+      }
+    },
+    onToggleBookmarks: () => ui.setToolPanelOpen(prev => !prev),
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────
@@ -196,7 +211,7 @@ export default function ChatPage() {
       const desc: Record<string, string> = {}
       models.forEach(m => { if (m.description) desc[m.id] = m.description })
       setModelDescriptions(desc)
-    }).catch(() => {})
+    }).catch(() => /* model descriptions unavailable — UI still works */ {})
   }, [])
 
   useEffect(() => {
@@ -222,7 +237,7 @@ export default function ChatPage() {
       if (lastAssistant?.content) {
         navigator.clipboard.writeText(lastAssistant.content).then(() => {
           showToast('Last response copied', 'info')
-        }).catch(() => {})
+        }).catch(() => /* clipboard unavailable */ {})
       }
     }
     window.addEventListener('copy-last-response', handler)
@@ -276,8 +291,7 @@ export default function ChatPage() {
         if (sid) chat.renameSession(sid, name)
       },
       searchConversations: (query: string) => {
-        setSearchConversationsQuery(query)
-        setSearchConversationsOpen(true)
+        ui.setShowConversationSearch(true)
       },
     }
     try {
@@ -285,7 +299,7 @@ export default function ChatPage() {
     } catch (err: any) {
       showToast(`Command failed: ${err?.message || 'Unknown error'}`, 'error')
     }
-  }, [chat, clearChat, model, showToast, router, setSearchConversationsOpen, setSearchConversationsQuery])
+  }, [chat, clearChat, model, showToast, router, ui])
 
   const handleSelectAgentWithToast = useCallback((agent: any) => {
     agents.setCurrentAgent(agent)
@@ -308,7 +322,7 @@ export default function ChatPage() {
     modelDescriptions,
     showToast,
     onSystemPrompt: () => setSystemPromptOpen(true),
-    onSearchConversations: () => setSearchConversationsOpen(true),
+    onSearchConversations: () => ui.setShowConversationSearch(true),
     bookmarkCount: bookmarks.length,
   })
 
@@ -397,6 +411,15 @@ export default function ChatPage() {
     showToast('Message deleted', 'info')
   }, [chat, isBookmarked, removeBookmark, showToast])
 
+  const handleSaveToKnowledge = useCallback(async (messageId: string, content: string) => {
+    try {
+      await knowledgeController.add(content.slice(0, 500), 'chat-saved', true)
+      showToast('Saved to knowledge', 'success')
+    } catch {
+      showToast('Failed to save to knowledge', 'error')
+    }
+  }, [showToast])
+
   const handleReadFile = useCallback(async (file: File) => {
     setReadLoading(true)
     try {
@@ -425,6 +448,50 @@ export default function ChatPage() {
     }
   }, [chat, showToast])
 
+  const handleTextDropped = useCallback((content: string, filename: string) => {
+    const prefix = `📄 ${filename}:\n\`\`\`\n`
+    const suffix = `\n\`\`\`\n\nWhat would you like me to do with this file?`
+    chat.setInput(prev => prev ? `${prev}\n\n${prefix}${content}${suffix}` : `${prefix}${content}${suffix}`)
+    showToast(`Text from ${filename} inserted — edit or send`, 'info')
+  }, [chat, showToast])
+
+  const handlePDFDropped = useCallback(async (file: File) => {
+    showToast(`Analyzing ${file.name}...`, 'info')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('question', 'Analyze this document and summarize its contents.')
+      formData.append('per_page', 'false')
+      formData.append('max_new_tokens', '512')
+
+      const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const res = await fetch(`${PUBLIC_API_URL}/multimodal/pdf/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Upload failed' }))
+        throw new Error(err.detail || `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      const analysis = data.analysis || JSON.stringify(data)
+      chat.setMessages(prev => [...prev, {
+        id: `pdf-user-${Date.now()}`,
+        role: 'user',
+        content: `📎 Uploaded PDF: ${file.name}`,
+        timestamp: new Date(),
+      }, {
+        id: `pdf-${Date.now()}`,
+        role: 'assistant',
+        content: analysis,
+        timestamp: new Date(),
+      }])
+      showToast('PDF analyzed — see response below', 'info')
+    } catch (err: any) {
+      showToast(`PDF analysis failed: ${err?.message || 'Unknown error'}`, 'error')
+    }
+  }, [chat, showToast])
+
   // Open voice overlay when Talk mode is selected
   useEffect(() => {
     if (chatMode === 'talk') {
@@ -449,6 +516,7 @@ export default function ChatPage() {
         onArchiveConversation={chat.archiveSession}
         archivedCount={chat.archivedCount}
         onRenameConversation={chat.renameSession}
+        onDuplicateConversation={(id) => chat.duplicateSession(id)}
         open={ui.sidebarOpen}
         onClose={() => ui.setSidebarOpen(false)}
         collapsed={convCollapsed}
@@ -470,11 +538,11 @@ export default function ChatPage() {
             availableModels={model.availableModels}
             onTemperatureChange={(temp) => {
               model.setTemperature(temp)
-              generationConfigController.update({ temperature: temp }).catch(() => {})
+              generationConfigController.update({ temperature: temp }).catch(() => /* config save failed — UI already updated */ {})
             }}
             onMaxTokensChange={(tokens) => {
               model.setMaxTokens(tokens)
-              generationConfigController.update({ max_new_tokens: tokens }).catch(() => {})
+              generationConfigController.update({ max_new_tokens: tokens }).catch(() => /* config save failed — UI already updated */ {})
             }}
             onClear={clearChat}
             hasMessages={chat.messages.length > 0}
@@ -519,7 +587,11 @@ export default function ChatPage() {
             />
           )}
 
-          <ImageDropZone onImageDropped={handleImageDropped}>
+          <ImageDropZone
+            onImageDropped={handleImageDropped}
+            onTextDropped={handleTextDropped}
+            onPDFDropped={handlePDFDropped}
+          >
             <ChatArea
               messages={chat.messages}
               loading={chat.loading}
@@ -580,6 +652,7 @@ export default function ChatPage() {
               isBookmarked={isBookmarked}
               onBookmark={handleToggleBookmark}
               onDelete={handleDeleteMessage}
+              onSaveToKnowledge={handleSaveToKnowledge}
               collapsibleLength={settings.collapsibleMessageLength}
             />
           </ImageDropZone>
@@ -634,14 +707,6 @@ export default function ChatPage() {
             await chat.sendMessage(text)
           }}
           onClose={() => { ui.setVoiceMode(false); setChatMode('chat') }}
-        />
-      )}
-
-      {searchConversationsOpen && (
-        <SearchConversationsDialog
-          open={true}
-          onOpenChange={setSearchConversationsOpen}
-          initialQuery={searchConversationsQuery}
         />
       )}
       {systemPromptOpen && (

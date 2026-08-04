@@ -151,7 +151,7 @@ export default function ModelsPage() {
   }
 
   useEffect(() => { fetchTraitWeights() }, [fetchTraitWeights])
-  useEffect(() => { modelController.getCacheUsage().then(setCacheUsage).catch(() => {}) }, [])
+  useEffect(() => { modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache info unavailable */ {}) }, [])
 
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'
@@ -212,7 +212,7 @@ export default function ModelsPage() {
         <ModelCacheCard
           cacheUsage={cacheUsage}
           health={health}
-          onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => {})}
+          onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})}
         />
 
         {/* Comparison section */}

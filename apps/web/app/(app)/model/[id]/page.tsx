@@ -350,7 +350,7 @@ export default function ModelDetailPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Recent Activity</CardTitle>
-                <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => {})}>
+                <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => /* activity log refresh failed */ {})}>
                   <IconRefresh className="h-3 w-3" />
                 </Button>
               </CardHeader>

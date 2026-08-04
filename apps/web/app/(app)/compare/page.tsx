@@ -4,10 +4,12 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useMemo, useState } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
+import { Card, CardContent } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { downloadJson } from '@/lib/download-utils'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
@@ -67,6 +69,19 @@ export default function ComparePage() {
 
   const clearResult = (modelId: string) => setResults(prev => { const n = { ...prev }; delete n[modelId]; return n })
 
+  const exportResults = () => {
+    const data = completedResults.map(([modelId, r]) => ({
+      model: models.find(m => m.id === modelId)?.name || modelId,
+      throughput_tokens_per_sec: r.throughput_tokens_per_sec,
+      inference_time_ms: r.inference_time_ms,
+      latency_p95_ms: r.latency_p95_ms,
+      memory_mb: r.memory_mb,
+      num_parameters: r.num_parameters,
+    }))
+    downloadJson(data, `benchmark-comparison-${new Date().toISOString().slice(0, 10)}.json`)
+    addToast(`Exported ${data.length} results`, 'success')
+  }
+
   const completedResults = useMemo(() => Object.entries(results).filter(([, r]) => r !== null && !r!.error) as [string, BenchmarkResult][], [results])
 
   const bestMetrics: Record<string, number> = useMemo(() => {
@@ -87,15 +102,40 @@ export default function ComparePage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
         left={<AppRouteHeaderLead title="Model Comparison" subtitle="Side-by-side benchmark results across models" />}
-        right={<Button variant="outline" size="sm" onClick={runAll} disabled={loading || running.size > 0}><IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all</Button>}
+        right={
+          <div className="flex items-center gap-2">
+            {completedResults.length > 0 && (
+              <Button variant="outline" size="sm" onClick={exportResults}>
+                <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                Export
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={runAll} disabled={loading || running.size > 0}>
+              <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
+            </Button>
+          </div>
+        }
       />
 
       <div className="space-y-4">
         <ModelsCard models={models} loading={loading} results={results} running={running} onBenchmark={runBenchmark} onClear={clearResult} />
-        <ComparisonTableCard completedResults={completedResults} models={models} bestMetrics={bestMetrics} />
-        <SummaryCard completedResults={completedResults} models={models} />
-        <OutputComparisonCard models={models} />
-        <VisualComparisonCard chartData={chartData} />
+        {completedResults.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center space-y-3">
+              <p className="text-sm text-muted-foreground">No benchmark results yet.</p>
+              <p className="text-xs text-muted-foreground/70 max-w-md mx-auto">
+                Run benchmarks on your models to see side-by-side comparisons. Click &ldquo;Benchmark all&rdquo; or use the benchmark button on each model card above.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <ComparisonTableCard completedResults={completedResults} models={models} bestMetrics={bestMetrics} />
+            <SummaryCard completedResults={completedResults} models={models} />
+            <OutputComparisonCard models={models} />
+            <VisualComparisonCard chartData={chartData} />
+          </>
+        )}
       </div>
     </div>
   )

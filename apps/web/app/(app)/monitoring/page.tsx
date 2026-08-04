@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -21,6 +21,7 @@ const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChar
   loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
 })
 import { formatUptime } from '@/lib/chat-utils'
+import { downloadJson } from '@/lib/download-utils'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
 import { Skeleton } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
@@ -43,7 +44,7 @@ export default function SystemHealthPage() {
   } | null>(null)
   const [benchStats, setBenchStats] = useState<{ total: number; avg_tokens: number; models: string[] } | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
-  const [chartHistory, setChartHistory] = useState<Array<{ time: string; cpu: number; mem: number }>>([])
+  const [chartHistory, setChartHistory] = useState<Array<{ time: string; cpu: number; mem: number; tokens?: number; latency?: number }>>([])
   const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: { perplexity_delta?: number; bleu_delta?: number; verdict?: string; report_path?: string } | null } | null>(null)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
@@ -51,11 +52,14 @@ export default function SystemHealthPage() {
   const [autoTrainStatus, setAutoTrainStatus] = useState<AutoTrainStatus | null>(null)
   const [trainingJobs, setTrainingJobs] = useState<TrainingJob[]>([])
   const MAX_HISTORY = 30
+  const [inferenceRate, setInferenceRate] = useState<number>(0)
+  const prevInferenceRef = useRef<{ count: number; time: number } | null>(null)
 
   const fetchAll = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
+      // Graceful degradation: each subsystem returns null when unavailable, UI shows placeholders
       const [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
         systemController.getDetailedHealth().catch(() => null),
         systemController.getMetrics().catch(() => null),
@@ -84,7 +88,7 @@ export default function SystemHealthPage() {
       }
       setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
       setDpoStatus(dsRes as typeof dpoStatus)
-      setVisualStatus(null)
+      setVisualStatus(vs as typeof visualStatus)
       setExecutorStatus(ex)
       setAutoTrainStatus(at)
       setTrainingJobs(Array.isArray(tj) ? tj : [])
@@ -104,11 +108,33 @@ export default function SystemHealthPage() {
   useEffect(() => {
     if (!liveHealth || !loaded) return
     setChartHistory(prev => {
-      const next = [...prev, { time: new Date().toLocaleTimeString(), cpu: liveHealth.cpu_percent ?? 0, mem: liveHealth.memory_percent ?? 0 }]
+      const next = [...prev, {
+        time: new Date().toLocaleTimeString(),
+        cpu: liveHealth.cpu_percent ?? 0,
+        mem: liveHealth.memory_percent ?? 0,
+        tokens: liveHealth.tokens_per_sec ?? 0,
+        latency: liveHealth.avg_latency_ms ?? 0,
+      }]
       if (next.length > MAX_HISTORY) next.shift()
       return next
     })
   }, [liveHealth, loaded])
+
+  // Calculate inference rate from inference count changes
+  useEffect(() => {
+    if (!liveHealth) return
+    const now = Date.now()
+    const count = liveHealth.inference_count ?? 0
+    const prev = prevInferenceRef.current
+    if (prev) {
+      const elapsed = (now - prev.time) / 1000
+      if (elapsed > 0) {
+        const rate = ((count - prev.count) / elapsed) * 60
+        setInferenceRate(Math.max(0, rate))
+      }
+    }
+    prevInferenceRef.current = { count, time: now }
+  }, [liveHealth])
 
   // Periodic polling — pauses when tab is hidden
   useEffect(() => {
@@ -128,6 +154,26 @@ export default function SystemHealthPage() {
     }
   }, [loaded, fetchAll])
 
+  const handleExportReport = () => {
+    const report = {
+      timestamp: new Date().toISOString(),
+      api_health: liveHealth,
+      connection_status: connectionStatus,
+      detailed_health: detailed,
+      system_metrics: metrics,
+      system_info: info,
+      disk_usage: disk,
+      knowledge_stats: knowledgeStats,
+      adapter_status: adapterStatus,
+      benchmark_quality: benchQuality,
+      training_jobs: trainingJobs,
+      dpo_status: dpoStatus,
+      executor_status: executorStatus,
+      visual_status: visualStatus,
+    }
+    downloadJson(report, `system-report-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`)
+  }
+
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
@@ -141,6 +187,9 @@ export default function SystemHealthPage() {
             {lastUpdated && (
               <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">Updated {lastUpdated}</span>
             )}
+            <Button variant="outline" size="sm" onClick={handleExportReport} disabled={!loaded}>
+              Export
+            </Button>
             <Button variant="outline" size="sm" onClick={() => fetchAll(true)} disabled={refreshing || !loaded}>
               {refreshing ? 'Refreshing...' : 'Refresh'}
             </Button>
@@ -203,6 +252,10 @@ export default function SystemHealthPage() {
                   <StatCard
                     label="Responses"
                     value={!loaded ? '...' : <span className="font-mono">{String(liveHealth?.inference_count ?? detailed?.inference?.inference_count ?? 0)}</span>}
+                  />
+                  <StatCard
+                    label="Rate"
+                    value={!loaded ? '...' : <span className="font-mono">{inferenceRate.toFixed(1)}/min</span>}
                   />
                 </KpiGrid>
               </CardContent>
@@ -453,6 +506,39 @@ export default function SystemHealthPage() {
           <DiskCard disk={disk ?? undefined} />
           <ServerInfoCard info={info ?? undefined} />
         </div>
+
+        {/* Row 5b: Cross-turn KV cache sessions */}
+        {detailed?.kv_sessions?.enabled && (
+          <Card className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">KV cache sessions</span>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-medium">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />
+                cross-turn reuse
+              </span>
+            </div>
+            <CardContent className="p-0">
+              <KpiGrid columns={4}>
+                <StatCard
+                  label="Active"
+                  value={<span className="font-mono">{detailed.kv_sessions?.active_sessions ?? 0}</span>}
+                  icon={<span className={`inline-block w-2 h-2 rounded-full ${(detailed.kv_sessions?.active_sessions ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                />
+                <StatCard label="Cached tokens" value={<span className="font-mono">{detailed.kv_sessions?.cached_tokens ?? 0}</span>} />
+                <StatCard label="TTL" value={<span className="font-mono">{(detailed.kv_sessions?.ttl_seconds ?? 0) / 60}m</span>} />
+                <StatCard
+                  label="Oldest"
+                  value={<span className="font-mono">{detailed.kv_sessions?.oldest_session_age != null ? `${detailed.kv_sessions.oldest_session_age.toFixed(0)}s` : '...'}</span>}
+                />
+              </KpiGrid>
+              {detailed.kv_sessions?.max_sessions != null && (
+                <p className="text-xs text-muted-foreground px-3 pb-3">
+                  LRU cap: {detailed.kv_sessions.max_sessions} simultaneous sessions
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Row 6: Server Output + Activity */}
         <OutputCard compact />
