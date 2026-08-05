@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 import { GpuCard, DiskCard, ServerInfoCard } from './SystemInfoCards'
@@ -51,6 +51,11 @@ describe('DiskCard', () => {
   it('renders free GB', () => {
     render(<DiskCard disk={disk} />)
     expect(screen.getByText('128.0 GB free')).toBeDefined()
+  })
+
+  it('renders percentage', () => {
+    render(<DiskCard disk={disk} />)
+    expect(screen.getByText('50%')).toBeDefined()
   })
 })
 

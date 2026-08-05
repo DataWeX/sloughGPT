@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent } from '@sloughgpt/strui'
 import { ProgressBar } from '@sloughgpt/strui'
 import type { GPUInfo, DiskUsage, SystemInfo } from '@/lib/system-controller'
 
@@ -36,16 +36,22 @@ export function GpuCard({ gpu }: { gpu?: GPUInfo }) {
 export function DiskCard({ disk }: { disk?: DiskUsage }) {
   if (!disk) return null
   const pct = Math.round(disk.percent)
+  const color = pct > 90 ? 'bg-destructive' : pct > 75 ? 'bg-warning' : 'bg-success'
   return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">Disk</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
+    <Card className="p-3">
+      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Disk</span>
+      <CardContent className="p-0 space-y-2">
         <div className="flex justify-between text-xs text-muted-foreground font-mono">
           <span>{disk.used_gb.toFixed(1)} GB used</span>
           <span>{disk.total_gb.toFixed(1)} GB total</span>
         </div>
-        <ProgressBar value={pct} max={100} />
-        <p className="text-xs text-muted-foreground font-mono">{disk.free_gb.toFixed(1)} GB free</p>
+        <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+          <div className={`absolute inset-y-0 left-0 ${color} rounded-full transition-all duration-300`} style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex justify-between text-[11px] text-muted-foreground font-mono">
+          <span>{disk.free_gb.toFixed(1)} GB free</span>
+          <span>{pct}%</span>
+        </div>
       </CardContent>
     </Card>
   )
@@ -54,9 +60,9 @@ export function DiskCard({ disk }: { disk?: DiskUsage }) {
 export function ServerInfoCard({ info }: { info?: SystemInfo }) {
   if (!info) return null
   return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">Server</CardTitle></CardHeader>
-      <CardContent className="space-y-2 text-sm">
+    <Card className="p-3">
+      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Server</span>
+      <CardContent className="p-0 space-y-1.5 text-xs">
         <div className="flex justify-between"><span className="text-muted-foreground">Platform</span><span className="font-mono">{info.platform} {info.platform_release}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Architecture</span><span className="font-mono">{info.architecture}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">CPU cores</span><span className="font-mono">{info.cpu_count}</span></div>
