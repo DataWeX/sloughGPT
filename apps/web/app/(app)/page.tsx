@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -16,6 +16,7 @@ import {
 import { IconChevronRight, IconMessage, IconSearch } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { chatController } from '@/lib/chat-controller'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
@@ -26,7 +27,7 @@ import { datasetController } from '@/lib/dataset-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { useHomePageData } from '@/hooks/useHomePageData'
 import { formatUptime } from '@/lib/chat-utils'
-import type { FeedbackStats } from '@/lib/feedback-controller'
+import { MS_PER_MINUTE } from '@/lib/format-bytes'
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -85,7 +86,7 @@ export default function HomePage() {
         activeDays: days.size,
         mostActiveHour: days.size > 0 ? maxHour : null,
       })
-    }).catch(() => {})
+    }).catch(() => { /* session stats non-critical */ })
     return () => { cancelled = true }
   }, [apiStatus])
 
@@ -99,7 +100,7 @@ export default function HomePage() {
         totalSize: list.reduce((sum, ds) => sum + (ds.size || 0), 0),
         totalSamples: list.reduce((sum, ds) => sum + (ds.samples || 0), 0),
       })
-    }).catch(() => {})
+    }).catch(() => { /* dataset stats non-critical */ })
     return () => { cancelled = true }
   }, [apiStatus])
 
@@ -264,93 +265,74 @@ export default function HomePage() {
         </>
       )}
 
-      {apiStatus === 'online' && (
-        <Card className="overflow-hidden border-border/60">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-center">
-              <div className="flex flex-col items-center gap-1">
-                <div className="flex justify-center">
-                  <span className={`w-2 h-2 rounded-full ${health && health !== 'offline' && health.status === 'healthy' ? 'bg-success' : 'bg-warning'}`} />
+      {apiStatus === 'online' && modelStatus.loaded && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Card>
+            <CardContent className="py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium">Quick test</p>
+                  <p className="text-[10px] text-muted-foreground">Send &quot;Hello!&quot; to verify the model works</p>
                 </div>
-                <div className="space-y-0">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">API</p>
-                  <p className="text-xs font-semibold">{health && health !== 'offline' && health.status === 'healthy' ? 'Healthy' : 'Degraded'}</p>
-                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs shrink-0"
+                  disabled={data.testRunning}
+                  onClick={async () => {
+                    data.setTestRunning(true)
+                    data.setTestResponse(null)
+                    try {
+                      const result = await chatController.send('Hello!')
+                      data.setTestResponse(result.message || 'No response')
+                    } catch (e: unknown) {
+                      data.setTestResponse(extractErrorMessage(e, 'Failed to connect'))
+                    } finally {
+                      data.setTestRunning(false)
+                    }
+                  }}
+                >
+                  {data.testRunning ? 'Testing...' : 'Test model'}
+                </Button>
               </div>
-              <div className="flex flex-col items-center gap-1">
-                <div className="h-2 w-2 rounded-full bg-muted-foreground/20" />
-                <div className="space-y-0">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Model</p>
-                  <p className="text-xs font-semibold truncate max-w-[80px]">
-                    {modelStatus.loaded ? (modelStatus.model?.split('/').pop() || modelStatus.model) : 'None loaded'}
-                  </p>
-                  {inferenceCount !== null && inferenceCount !== undefined && (
-                    <p className="text-[10px] text-muted-foreground tabular-nums">{inferenceCount} convs</p>
-                  )}
+              {data.testResponse && (
+                <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground font-mono leading-relaxed">
+                  {data.testResponse}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs font-medium">Quick note</p>
+                <p className="text-[10px] text-muted-foreground">Add a fact the AI can remember</p>
               </div>
-              <div className="flex flex-col items-center gap-1">
-                <div className="h-2 w-2 rounded-full bg-muted-foreground/20" />
-                <div className="space-y-0">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Personality</p>
-                  <p className="text-xs font-semibold truncate max-w-[80px]">{currentSoul?.name || 'Default'}</p>
-                  {currentSoul?.traits && currentSoul.traits.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground truncate">{currentSoul.traits.slice(0, 2).join(', ')}</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <div className="h-2 w-2 rounded-full bg-muted-foreground/20" />
-                <div className="space-y-0">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Knowledge</p>
-                  <p className="text-xs font-semibold">{knowledgeCount} facts</p>
-                  <p className="text-[10px] text-muted-foreground">{modelCount !== null ? `${modelCount} models` : ''}</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              <form onSubmit={async (e) => {
+                e.preventDefault()
+                const input = e.currentTarget.querySelector('input') as HTMLInputElement
+                const text = input.value.trim()
+                if (!text) return
+                try {
+                  await knowledgeController.add(text, 'general')
+                  input.value = ''
+                  data.setKnowledgeCount(k => k + 1)
+                  addToast('Fact saved', 'success')
+                } catch { addToast('Failed to save', 'error') }
+              }} className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g., I prefer Python over JavaScript"
+                  className="flex-1 h-8 rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                />
+                <Button size="sm" type="submit" className="h-8 text-xs shrink-0">Save</Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {apiStatus === 'online' && modelStatus.loaded && (
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium">Quick test</p>
-                <p className="text-[10px] text-muted-foreground">Send &quot;Hello!&quot; to verify the model works</p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs shrink-0"
-                disabled={data.testRunning}
-                onClick={async () => {
-                  data.setTestRunning(true)
-                  data.setTestResponse(null)
-                  try {
-                    const result = await chatController.send('Hello!')
-                    data.setTestResponse(result.message || 'No response')
-                  } catch (e: any) {
-                    data.setTestResponse(e?.message || 'Failed to connect')
-                  } finally {
-                    data.setTestRunning(false)
-                  }
-                }}
-              >
-                {data.testRunning ? 'Testing...' : 'Test model'}
-              </Button>
-            </div>
-            {data.testResponse && (
-              <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground font-mono leading-relaxed">
-                {data.testResponse}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {apiStatus === 'online' && (recentSessions.length > 1 || recentJobs.length > 0) && (
         <Card>
           <CardContent className="py-3">
             <p className="text-xs font-medium mb-2">Recent activity</p>
@@ -369,7 +351,7 @@ export default function HomePage() {
                     {s.message_count != null && <span>{s.message_count}m · </span>}
                     {(() => {
                       const d = Date.now() - new Date(s.updated_at).getTime()
-                      const m = Math.floor(d / 60000)
+                      const m = Math.floor(d / MS_PER_MINUTE)
                       if (m < 1) return 'now'
                       if (m < 60) return `${m}m`
                       const h = Math.floor(m / 60)
@@ -434,226 +416,231 @@ export default function HomePage() {
         </button>
       )}
 
-      {apiStatus === 'online' && (
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-xs font-medium">Quick note</p>
-              <p className="text-[10px] text-muted-foreground">Add a fact the AI can remember</p>
-            </div>
-            <form onSubmit={async (e) => {
-              e.preventDefault()
-              const input = e.currentTarget.querySelector('input') as HTMLInputElement
-              const text = input.value.trim()
-              if (!text) return
-              try {
-                await knowledgeController.add(text, 'general')
-                input.value = ''
-                data.setKnowledgeCount(k => k + 1)
-                addToast('Fact saved', 'success')
-              } catch { addToast('Failed to save', 'error') }
-            }} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="e.g., I prefer Python over JavaScript"
-                className="flex-1 h-8 rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-              />
-              <Button size="sm" type="submit" className="h-8 text-xs shrink-0">Save</Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {apiStatus === 'online' && convStats && convStats.totalConversations > 0 && (
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-xs font-medium">Your stats</p>
-              <p className="text-[10px] text-muted-foreground">Usage overview</p>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <p className="text-lg font-semibold tabular-nums">{convStats.totalConversations}</p>
-                <p className="text-[10px] text-muted-foreground">Conversations</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground">Messages</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground">Words</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold tabular-nums">{convStats.activeDays}</p>
-                <p className="text-[10px] text-muted-foreground">Active days</p>
-              </div>
-            </div>
-            {convStats.mostActiveHour !== null && (
-              <p className="text-[10px] text-muted-foreground mt-2">
-                Most active at {convStats.mostActiveHour}:00
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {apiStatus === 'online' && datasetStats && datasetStats.totalDatasets > 0 && (
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-xs font-medium">Datasets</p>
-              <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-lg font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
-                <p className="text-[10px] text-muted-foreground">Datasets</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold tabular-nums">
-                  {datasetStats.totalSize >= 1073741824
-                    ? `${(datasetStats.totalSize / 1073741824).toFixed(1)} GB`
-                    : datasetStats.totalSize >= 1048576
-                    ? `${(datasetStats.totalSize / 1048576).toFixed(1)} MB`
-                    : `${(datasetStats.totalSize / 1024).toFixed(1)} KB`}
-                </p>
-                <p className="text-[10px] text-muted-foreground">Total size</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground">Samples</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {apiStatus === 'online' && (convStats || datasetStats) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {convStats && convStats.totalConversations > 0 && (
+            <Card>
+              <CardContent className="py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-medium">Your stats</p>
+                  <p className="text-[10px] text-muted-foreground">Usage overview</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums">{convStats.totalConversations}</p>
+                    <p className="text-[10px] text-muted-foreground">Conversations</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">Messages</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">Words</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums">{convStats.activeDays}</p>
+                    <p className="text-[10px] text-muted-foreground">Active days</p>
+                  </div>
+                </div>
+                {convStats.mostActiveHour !== null && (
+                  <p className="text-[10px] text-muted-foreground mt-2">
+                    Most active at {convStats.mostActiveHour}:00
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          {datasetStats && datasetStats.totalDatasets > 0 && (
+            <Card>
+              <CardContent className="py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-medium">Datasets</p>
+                  <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
+                    <p className="text-[10px] text-muted-foreground">Datasets</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {datasetStats.totalSize >= 1073741824
+                        ? `${(datasetStats.totalSize / 1073741824).toFixed(1)} GB`
+                        : datasetStats.totalSize >= 1048576
+                        ? `${(datasetStats.totalSize / 1048576).toFixed(1)} MB`
+                        : `${(datasetStats.totalSize / 1024).toFixed(1)} KB`}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Total size</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">Samples</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {apiStatus === 'online' && liveHealth && (
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-xs font-medium">System</p>
-              <Link href="/monitoring" className="text-[10px] text-primary hover:text-primary/80 ml-auto">Details →</Link>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Card>
+            <CardContent className="py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs font-medium">System</p>
+                <Link href="/monitoring" className="text-[10px] text-primary hover:text-primary/80 ml-auto">Details →</Link>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '—'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">CPU</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '—'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Memory</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tabular-nums">{(liveHealth.request_count ?? 0).toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground">Requests</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Uptime</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="rounded-lg border border-border/60 p-3 sm:p-4 flex flex-col justify-between">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-2">How it works</div>
+              <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground/70">
+                  Mix and match AI models with personalities. Each one has its own voice and style.
+                </p>
+                <p className="text-[11px] text-muted-foreground/70">
+                  Import text, files, or conversations. The AI learns from your data and gets better over time.
+                </p>
+              </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <p className="text-sm font-semibold tabular-nums">
-                  {liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '—'}
-                </p>
-                <p className="text-[10px] text-muted-foreground">CPU</p>
-              </div>
-              <div>
-                <p className="text-sm font-semibold tabular-nums">
-                  {liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '—'}
-                </p>
-                <p className="text-[10px] text-muted-foreground">Memory</p>
-              </div>
-              <div>
-                <p className="text-sm font-semibold tabular-nums">{liveHealth.request_count.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground">Requests</p>
-              </div>
-              <div>
-                <p className="text-sm font-semibold tabular-nums">
-                  {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
-                </p>
-                <p className="text-[10px] text-muted-foreground">Uptime</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
         <Link
           href="/chat"
-          className="group relative overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-3 sm:p-5 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30"
+          className="group relative overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
               <IconChat className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">Start chatting</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Ask anything, get answers instantly</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Ask anything, get answers</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-            <IconChevronRight className="h-4 w-4 sm:h-6 sm:w-6" />
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </Link>
         <Link
           href="/models"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-5 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-accent/15 text-accent">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
               <IconModels className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">Personalities</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Switch your agent&apos;s personality</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Switch your agent&apos;s personality</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-            <IconChevronRight className="h-4 w-4 sm:h-6 sm:w-6" />
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </Link>
         <Link
           href="/datasets"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-5 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-muted-foreground/15 text-muted-foreground">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-muted-foreground/15 text-muted-foreground">
               <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">Datasets</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Manage training data</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Manage training data</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-            <IconChevronRight className="h-4 w-4 sm:h-6 sm:w-6" />
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </Link>
         <Link
           href="/training"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-5 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-accent/15 text-accent">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
               <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">Teach me</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Train from your writing</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Train from your writing</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-            <IconChevronRight className="h-4 w-4 sm:h-6 sm:w-6" />
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </Link>
         <Link
           href="/monitoring"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-5 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 col-span-2 sm:col-span-1"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-success/15 text-success">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-success/15 text-success">
               <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">System Health</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Monitor API and resources</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Monitor API and resources</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-            <IconChevronRight className="h-4 w-4 sm:h-6 sm:w-6" />
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+          </div>
+        </Link>
+        <Link
+          href="/knowledge"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-semibold">Knowledge</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Facts the AI remembers</p>
+            </div>
+          </div>
+          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </Link>
       </div>
 
       {apiStatus === 'online' && (
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           <div className="rounded-lg border border-border/60 p-3 sm:p-4">
             <div className="text-xs font-medium text-muted-foreground mb-1">How it works</div>
             <p className="text-[11px] text-muted-foreground/70">
@@ -669,35 +656,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {recentSessions.length > 0 && (
-        <Card className="flex flex-col min-h-0">
-          <CardHeader className="shrink-0">
-            <CardTitle className="text-base">Recent conversations</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 min-h-0 overflow-y-auto max-h-[300px] custom-scrollbar">
-            <div className="divide-y divide-border/30">
-              {recentSessions.map(s => (
-                <Link key={s.id} href={`/chat?id=${s.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
-                  <IconMessage className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm truncate">{s.name}</span>
-                      {s.starred && <span className="text-[10px] shrink-0">★</span>}
-                      {s.pinned && <span className="text-[10px] text-primary shrink-0">📌</span>}
-                    </div>
-                    {s.message_count != null && s.message_count > 0 && (
-                      <p className="text-[10px] text-muted-foreground">{s.message_count} messages</p>
-                    )}
-                  </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">
-                    {new Date(s.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

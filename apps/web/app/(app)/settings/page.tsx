@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PUBLIC_API_URL } from '@/lib/config'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,26 +32,29 @@ import { systemController, type DetailedHealth, type SystemMetrics, type DiskUsa
 import { modelController } from '@/lib/model-controller'
 import { formatUptime } from '@/lib/chat-utils'
 import { downloadJson, importFile } from '@/lib/download-utils'
+import { extractErrorMessage } from '@/lib/error-utils'
+import { settingsSchema } from '@/lib/validation-schemas'
 
 function SettingsSlider({
   label, value, onChange, min, max, step, formatValue,
 }: {
   label: string
-  value: number
+  value: number | undefined
   onChange: (v: number) => void
   min?: number
   max?: number
   step?: number
   formatValue?: (v: number) => string
 }) {
-  const display = formatValue ? formatValue(value) : value.toString()
+  const safeValue = value ?? 0
+  const display = formatValue ? formatValue(safeValue) : safeValue.toString()
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium">{label}</label>
         <span className="text-sm text-muted-foreground">{display}</span>
       </div>
-      <Slider value={[value]} onValueChange={([v]: number[]) => onChange(v)} min={min} max={max} step={step} />
+      <Slider value={[safeValue]} onValueChange={([v]: number[]) => onChange(v)} min={min} max={max} step={step} />
     </div>
   )
 }
@@ -66,6 +70,7 @@ export default function SettingsPage() {
   const [disk, setDisk] = useState<DiskUsage | null>(null)
   const [info, setInfo] = useState<SystemInfo | null>(null)
   const [connectionTest, setConnectionTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'error'; latency?: number; error?: string }>({ status: 'idle' })
+  const [settingsErrors, setSettingsErrors] = useState<{ apiUrl?: string; hfToken?: string }>({})
 
   const fetchHealth = useCallback(async () => {
     const [d, m, dk, inf] = await Promise.allSettled([
@@ -98,8 +103,8 @@ export default function SettingsPage() {
       } else {
         setConnectionTest({ status: 'error', error: 'Unexpected response' })
       }
-    } catch (e: any) {
-      setConnectionTest({ status: 'error', error: e?.message || 'Connection failed' })
+    } catch (e: unknown) {
+      setConnectionTest({ status: 'error', error: extractErrorMessage(e, 'Connection failed') })
     }
   }
 
@@ -110,7 +115,7 @@ export default function SettingsPage() {
 
   const resetAllSettings = () => {
     updateSettings({
-      apiUrl: 'http://localhost:8000',
+      apiUrl: PUBLIC_API_URL,
       hfToken: '',
       defaultModel: 'gpt2',
       defaultTemp: 0.8,
@@ -151,6 +156,20 @@ export default function SettingsPage() {
               <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
               <ToggleGroupItem value="system">System</ToggleGroupItem>
             </ToggleGroupRadix>
+            <div className="mt-3 p-3 rounded-lg border border-border/50 bg-card">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-3 w-3 rounded-full bg-primary" />
+                <div className="h-2 w-16 rounded bg-muted" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-2 w-full rounded bg-muted/50" />
+                <div className="h-2 w-3/4 rounded bg-muted/50" />
+              </div>
+              <div className="flex gap-1.5 mt-2">
+                <div className="h-5 px-2 rounded bg-primary text-[8px] text-primary-foreground flex items-center justify-center">Button</div>
+                <div className="h-5 px-2 rounded bg-muted text-[8px] text-muted-foreground flex items-center justify-center">Secondary</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -189,11 +208,27 @@ export default function SettingsPage() {
               <label className="text-sm font-medium">API URL</label>
               <Input
                 value={settings.apiUrl}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSettings({ apiUrl: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  updateSettings({ apiUrl: e.target.value })
+                  if (settingsErrors.apiUrl) setSettingsErrors(prev => ({ ...prev, apiUrl: undefined }))
+                }}
+                onBlur={() => {
+                  if (settings.apiUrl) {
+                    const result = settingsSchema.shape.apiUrl.safeParse(settings.apiUrl)
+                    if (!result.success) {
+                      setSettingsErrors(prev => ({ ...prev, apiUrl: result.error.issues[0]?.message }))
+                    }
+                  }
+                }}
                 placeholder="http://localhost:8000"
-                className="font-mono text-xs"
+                className={`font-mono text-xs ${settingsErrors.apiUrl ? 'border-destructive ring-destructive/20' : ''}`}
                 aria-label="API server URL"
+                aria-invalid={!!settingsErrors.apiUrl}
+                aria-describedby={settingsErrors.apiUrl ? 'apiurl-error' : undefined}
               />
+              {settingsErrors.apiUrl && (
+                <p id="apiurl-error" className="text-[10px] text-destructive" role="alert">{settingsErrors.apiUrl}</p>
+              )}
               <p className="text-[11px] text-muted-foreground">Backend server address. Changes take effect on next request.</p>
             </div>
             <div className="space-y-2">
@@ -238,7 +273,7 @@ export default function SettingsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <SettingsSlider
                 label="Temperature"
                 value={settings.defaultTemp}
@@ -256,7 +291,7 @@ export default function SettingsPage() {
                 step={50}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <SettingsSlider
                 label="Top-P"
                 value={settings.defaultTopP}
@@ -407,7 +442,7 @@ export default function SettingsPage() {
             </KpiGrid>
 
             {/* Resource rows */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="CPU"
                 value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : '...'}</span>}
@@ -415,14 +450,14 @@ export default function SettingsPage() {
               />
               <StatCard
                 label="Memory"
-                value={<span className="font-mono">{metrics ? `${metrics.memory_used_gb.toFixed(1)} / ${metrics.memory_total_gb.toFixed(0)} GB` : '...'}</span>}
+                value={<span className="font-mono">{metrics ? `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB` : '...'}</span>}
                 icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="Disk"
-                value={<span className="font-mono">{disk ? `${disk.used_gb.toFixed(0)} / ${disk.total_gb.toFixed(0)} GB` : '...'}</span>}
+                value={<span className="font-mono">{disk ? `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB` : '...'}</span>}
                 icon={<span className={`inline-block w-2 h-2 rounded-full ${(disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
               />
               <StatCard
