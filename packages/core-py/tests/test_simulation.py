@@ -12,7 +12,7 @@ from domains.shell.simulation import (
     WorldGrid, WorldCell, WorldParams,
     cell_update_diffusion, cell_update_waves,
     cell_update_energy_conservation, cell_update_default,
-    Entity, EntityType, Perceptron, CellWrite, BabyAction,
+    Entity, EntityType, Perceptron, Perception, CellWrite, BabyAction,
     SimBaby, SimScene, Simulation,
     MATERIAL_AIR, MATERIAL_STONE, MATERIAL_ORGANIC, MATERIAL_SIGNAL,
     NUM_MATERIALS,
@@ -460,3 +460,266 @@ class TestSimulation:
         assert len(sim.tick_log) == 0
         sim.run()
         assert len(sim.tick_log) == 5
+
+    def test_summary_empty_tick_log(self):
+        sim = Simulation(SimScene(params=_SIM_PARAMS))
+        summary = sim.summary()
+        assert summary == {"total_ticks": 0, "total_actions": 0}
+
+    def test_nearby_cells_negative_radius_returns_empty(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        out = scene.world.get_nearby_cells(3, 2, 3, radius=-0.5)
+        assert out["count"] == 0
+        assert out["material"].shape == (0,)
+
+    def test_step_verbose_logs(self, caplog):
+        import logging
+
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=10, verbose=True)
+        with caplog.at_level(logging.INFO, logger="slo.sim"):
+            sim.step()
+        assert any("tick=" in r.message for r in caplog.records)
+
+    def test_step_skips_dead_baby_in_device_list(self):
+        class _UnfilteredScene(SimScene):
+            @property
+            def alive_babies(self):
+                return list(self._devices)
+
+        scene = _UnfilteredScene(params=_SIM_PARAMS)
+        baby = SimBaby(initial_energy=1.0, params=_SIM_PARAMS)
+        baby.entity.energy = 0.0
+        baby.entity.alive = False
+        scene.add_baby(baby)
+        sim = Simulation(scene, max_ticks=10)
+        results = sim.step()
+        assert results == []
+        assert all(not e.alive for e in scene.entities)
+
+    def test_run_breaks_when_stopped(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=50)
+
+        def _step_once_then_stop():
+            sim.stop()
+            return []
+
+        sim.step = _step_once_then_stop
+        results = sim.run()
+        assert results == []
+        assert not sim._running
+
+
+# ── Additional Coverage ──────────────────────────────────────────────────────
+
+
+class TestEntityExtra:
+    def test_distance_to_same_point(self):
+        e1 = Entity(position=np.array([1.0, 2.0, 3.0]))
+        e2 = Entity(position=np.array([1.0, 2.0, 3.0]))
+        assert e1.distance_to(e2) == 0.0
+
+    def test_distance_to_different_point(self):
+        e1 = Entity(position=np.array([0.0, 0.0, 0.0]))
+        e2 = Entity(position=np.array([3.0, 4.0, 0.0]))
+        assert abs(e1.distance_to(e2) - 5.0) < 1e-6
+
+    def test_distance_to_point(self):
+        e = Entity(position=np.array([1.0, 0.0, 0.0]))
+        assert abs(e.distance_to_point(np.array([4.0, 0.0, 0.0])) - 3.0) < 1e-6
+
+    def test_distance_to_point_zero(self):
+        e = Entity(position=np.array([5.0, 5.0, 5.0]))
+        assert e.distance_to_point(np.array([5.0, 5.0, 5.0])) == 0.0
+
+
+class TestPerceptron:
+    def test_output_shape(self):
+        p = Perceptron(4, 3)
+        out = p.forward(np.array([1.0, 0.5, 0.2, 0.8]))
+        assert out.shape == (3,)
+
+    def test_output_in_01_range(self):
+        p = Perceptron(4, 3)
+        out = p.forward(np.array([1.0, 0.5, 0.2, 0.8]))
+        assert np.all(out >= 0.0) and np.all(out <= 1.0)
+
+    def test_update_changes_weights(self):
+        p = Perceptron(4, 3)
+        w_before = p.W.copy()
+        x = np.array([1.0, 0.5, 0.2, 0.8])
+        p.update(x, np.array([1.0, -1.0, 0.5]), lr=0.1)
+        assert not np.array_equal(p.W, w_before)
+
+    def test_sigmoid_bounds(self):
+        assert Perceptron._sigmoid(np.array([100.0]))[0] > 0.999
+        assert Perceptron._sigmoid(np.array([-100.0]))[0] < 0.001
+
+
+class TestSimBabyExtra:
+    def test_perceive_reduces_energy(self):
+        baby = SimBaby(initial_energy=100.0,
+                       position=np.array([4.0, 2.0, 4.0]))
+        grid = WorldGrid((8, 4, 8))
+        before = baby.energy
+        baby.perceive(grid)
+        assert baby.energy <= before
+
+    def test_feel_positive(self):
+        baby = SimBaby(initial_energy=100.0)
+        baby.entity.energy = 110.0
+        delta = baby.feel(100.0)
+        assert delta == 10.0
+
+    def test_feel_negative(self):
+        baby = SimBaby(initial_energy=100.0)
+        baby.entity.energy = 90.0
+        delta = baby.feel(100.0)
+        assert delta == -10.0
+
+    def test_react_writes_when_energy_high(self):
+        baby = SimBaby(initial_energy=100.0,
+                       position=np.array([4.0, 2.0, 4.0]))
+        p = Perception()
+        action = baby.react(p, 0.0)
+        assert len(action.writes) == 3
+
+    def test_react_no_writes_when_energy_low(self):
+        baby = SimBaby(initial_energy=5.0,
+                       position=np.array([4.0, 2.0, 4.0]))
+        p = Perception()
+        action = baby.react(p, 0.0)
+        assert len(action.writes) == 0
+
+    def test_apply_action_returns_count(self):
+        baby = SimBaby(initial_energy=100.0,
+                       position=np.array([4.0, 2.0, 4.0]))
+        grid = WorldGrid((8, 4, 8))
+        action = BabyAction(writes=[
+            CellWrite(4, 2, 4, MATERIAL_STONE, 1.0),
+            CellWrite(0, 0, 0, MATERIAL_ORGANIC, 5.0),
+        ])
+        count = baby.apply_action(action, grid)
+        assert count == 2
+
+    def test_absorb_energy_from_organic(self):
+        baby = SimBaby(initial_energy=50.0,
+                       position=np.array([4.0, 2.0, 4.0]))
+        grid = WorldGrid((8, 4, 8))
+        grid.place_material(4, 2, 4, MATERIAL_ORGANIC, energy=10.0)
+        absorbed = baby.absorb_energy(grid)
+        assert absorbed > 0.0
+        assert absorbed <= 10.0
+
+    def test_absorb_energy_no_organic(self):
+        baby = SimBaby(initial_energy=50.0,
+                       position=np.array([4.0, 2.0, 4.0]))
+        grid = WorldGrid((8, 4, 8))
+        absorbed = baby.absorb_energy(grid)
+        assert absorbed == 0.0
+
+    def test_learn_positive_delta(self):
+        baby = SimBaby(initial_energy=100.0)
+        w_before = baby.perceptron_body.W.copy()
+        baby.learn(10.0)
+        assert not np.array_equal(baby.perceptron_body.W, w_before)
+
+    def test_tick_count(self):
+        baby = SimBaby(initial_energy=100.0)
+        assert baby.tick_count == 0
+        baby._total_ticks = 5
+        assert baby.tick_count == 5
+
+
+class TestCellUpdateWaves:
+    def test_signal_propagates(self):
+        g = WorldGrid((8, 4, 8))
+        g.signal[g.idx(4, 2, 4)] = 10.0
+        cell_update_waves(g, WorldParams(grid_size=(8, 4, 8)))
+        center = g.signal[g.idx(4, 2, 4)]
+        neighbor = g.signal[g.idx(5, 2, 4)]
+        assert center < 10.0
+        assert neighbor > 0.0
+
+
+class TestCellUpdateDefault:
+    def test_runs_without_error(self):
+        g = WorldGrid((8, 4, 8))
+        g.signal[g.idx(4, 2, 4)] = 10.0
+        cell_update_default(g, WorldParams(grid_size=(8, 4, 8)))
+        assert g.total_signal >= 0.0
+
+
+class TestPerception:
+    def test_default_fields(self):
+        p = Perception()
+        assert p.nearby_cells == {}
+        assert p.nearby_entities == []
+        assert p.agent_body == {}
+        assert p.time_ms == 0.0
+
+
+class TestCellWrite:
+    def test_defaults(self):
+        cw = CellWrite()
+        assert cw.x == 0
+        assert cw.y == 0
+        assert cw.z == 0
+        assert cw.material == MATERIAL_AIR
+        assert cw.energy == 0.0
+
+
+class TestBabyAction:
+    def test_default_empty(self):
+        ba = BabyAction()
+        assert ba.writes == []
+
+    def test_with_writes(self):
+        cw = CellWrite(x=1, y=2, z=3, material=2, energy=5.0)
+        ba = BabyAction(writes=[cw])
+        assert len(ba.writes) == 1
+        assert ba.writes[0].x == 1
+
+
+class TestSimulationExtra:
+    def test_multiple_steps(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=10)
+        for _ in range(5):
+            sim.step()
+        assert scene.tick == 5
+        assert len(sim.tick_log) == 5
+
+    def test_dead_baby_removed_after_step(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        baby = SimBaby(initial_energy=1.0, params=_SIM_PARAMS)
+        scene.add_baby(baby)
+        baby.entity.energy = 0.0
+        baby.entity.alive = False
+        sim = Simulation(scene, max_ticks=10)
+        sim.step()
+        assert len(scene.entities) == 0
+
+    def test_tick_log_property(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=10)
+        assert sim.tick_log == []
+        sim.step()
+        assert len(sim.tick_log) == 1
+        assert sim.tick_log[0]["tick"] == 1
+
+    def test_summary_with_ticks(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=10)
+        sim.step()
+        s = sim.summary()
+        assert s["total_ticks"] == 1
+        assert s["total_baby_ticks"] == 1
+        assert "alive_at_end" in s
+        assert "deaths" in s

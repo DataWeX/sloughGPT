@@ -97,6 +97,69 @@ class TestAsmConstants:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Assembly program execution
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestAsmProgramExecution:
+    def test_classical_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(CLASSICAL_ASM)
+        assert out == ['62', '880', '38']
+
+    def test_loop_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(LOOP_ASM)
+        assert len(out) > 0
+
+    def test_function_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(FUNCTION_ASM)
+        assert len(out) > 0
+
+    def test_mixed_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(MIXED_ASM)
+        assert len(out) > 0
+
+    def test_npu_program_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        with pytest.raises(Exception):
+            r.assemble_and_run(NPU_PROGRAM_ASM)
+
+    def test_boot_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(BOOT_ASM)
+        assert isinstance(out, list)
+
+    def test_shell_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(SHELL_ASM)
+        assert len(out) > 0
+
+    def test_tensor_math_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(TENSOR_MATH_ASM)
+        assert len(out) >= 3
+
+    def test_matrix_mul_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(MATRIX_MUL_ASM)
+        assert len(out) >= 2
+
+    def test_neural_net_asm(self):
+        from domains.shell.vm import VMRunner
+        r = VMRunner()
+        out = r.assemble_and_run(NEURAL_NET_ASM)
+        assert len(out) >= 3
 # self_test()
 # ══════════════════════════════════════════════════════════════════════════════
 
