@@ -13,6 +13,7 @@ import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Breadcrumbs } from '@sloughgpt/strui'
 import dynamicNext from 'next/dynamic'
 import type { LossPoint, RewardPoint } from '@/components/training/LossChart'
 
@@ -22,14 +23,15 @@ import { trainingJobsController, type TrainingJob } from '@/lib/training-control
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
+import { MS_PER_SECOND, MS_PER_MINUTE, MS_PER_HOUR } from '@/lib/format-bytes'
 
 function formatDuration(start: number | string, end?: number | string): string {
   const s = new Date(start).getTime()
   const e = end ? new Date(end).getTime() : Date.now()
   const ms = e - s
-  if (ms < 60000) return `${Math.floor(ms / 1000)}s`
-  if (ms < 3600000) return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`
-  return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`
+  if (ms < MS_PER_MINUTE) return `${Math.floor(ms / MS_PER_SECOND)}s`
+  if (ms < MS_PER_HOUR) return `${Math.floor(ms / MS_PER_MINUTE)}m ${Math.floor((ms % MS_PER_MINUTE) / MS_PER_SECOND)}s`
+  return `${Math.floor(ms / MS_PER_HOUR)}h ${Math.floor((ms % MS_PER_HOUR) / MS_PER_MINUTE)}m`
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'error' }> = {
@@ -146,12 +148,16 @@ export default function TrainingJobDetailPage() {
 
   return (
     <div className="sl-page mx-auto max-w-4xl">
+      <Breadcrumbs
+        items={[
+          { label: 'Training', href: '/training' },
+          { label: loading ? '...' : job?.name || jobId },
+        ]}
+        className="mb-3"
+      />
       <AppRouteHeader
         left={
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/training')} className="h-7 px-1.5 text-xs text-muted-foreground hover:text-foreground">
-              ← Training
-            </Button>
             <AppRouteHeaderLead title={loading ? '...' : job?.name || jobId} />
           </div>
         }
@@ -294,13 +300,39 @@ export default function TrainingJobDetailPage() {
                   <StatCard label="Epochs" value={job.epochs != null ? `${job.current_epoch ?? 0} / ${job.epochs}` : '—'} />
                   <StatCard label="Steps" value={job.global_step != null ? String(job.global_step) : '—'} />
                 </KpiGrid>
+                {job.status === 'running' && job.global_step && job.created_at && (() => {
+                  const elapsed = (Date.now() - new Date(job.created_at).getTime()) / 1000
+                  const stepsPerMin = elapsed > 0 ? (job.global_step / elapsed) * 60 : 0
+                  return stepsPerMin > 0 ? (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">Speed:</span>
+                      <span className="text-[10px] font-mono text-primary">{stepsPerMin.toFixed(1)} steps/min</span>
+                    </div>
+                  ) : null
+                })()}
               </CardContent>
             </Card>
 
             {/* Loss card */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Loss &amp; Reward</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Loss &amp; Reward</CardTitle>
+                  {job.loss_history && job.loss_history.length >= 3 && (() => {
+                    const recent = job.loss_history.slice(-5)
+                    const firstHalf = recent.slice(0, Math.floor(recent.length / 2))
+                    const secondHalf = recent.slice(Math.floor(recent.length / 2))
+                    const avgFirst = firstHalf.reduce((s, p) => s + p.value, 0) / firstHalf.length
+                    const avgSecond = secondHalf.reduce((s, p) => s + p.value, 0) / secondHalf.length
+                    const improving = avgSecond < avgFirst
+                    const pctChange = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100).toFixed(1) : '0'
+                    return (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${improving ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                        {improving ? '↓' : '↑'} {Math.abs(Number(pctChange))}%
+                      </span>
+                    )
+                  })()}
+                </div>
               </CardHeader>
               <CardContent>
                 <KpiGrid columns={job.reward_history?.length ? 4 : 3}>
@@ -327,7 +359,7 @@ export default function TrainingJobDetailPage() {
                 <CardTitle className="text-base">Details</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-xs text-muted-foreground">Job ID</p>
                     <p className="font-mono text-xs mt-0.5">{job.id}</p>

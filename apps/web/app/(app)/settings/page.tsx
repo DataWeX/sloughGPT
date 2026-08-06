@@ -494,7 +494,7 @@ export default function SettingsPage() {
               <CardDescription>Detailed platform and environment details</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Platform</p>
                   <p className="text-sm font-medium mt-0.5">{info.platform} {info.platform_release}</p>
