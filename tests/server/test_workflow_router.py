@@ -218,3 +218,110 @@ class TestWorkflowTrigger:
     def test_trigger_import_error(self, _):
         resp = client.post("/workflow/trigger/aggregate")
         assert resp.status_code == 503
+
+
+class TestWorkflowStartConfigPassthrough:
+    """POST /workflow/start config passthrough edge cases."""
+
+    @patch(WF_TARGET)
+    def test_config_passthrough_partial(self, mock_get_wf):
+        wf = _make_workflow()
+        mock_get_wf.return_value = wf
+
+        resp = client.post("/workflow/start", json={"aggregate_interval_minutes": 90})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["config"]["aggregate_interval_minutes"] == 90
+        assert data["config"]["prune_interval_minutes"] == 120
+
+    @patch(WF_TARGET)
+    def test_config_passthrough_negative(self, mock_get_wf):
+        wf = _make_workflow()
+        mock_get_wf.return_value = wf
+
+        resp = client.post("/workflow/start", json={"aggregate_interval_minutes": -5})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["config"]["aggregate_interval_minutes"] == -5
+
+    @patch(WF_TARGET)
+    def test_config_passthrough_zero(self, mock_get_wf):
+        wf = _make_workflow()
+        mock_get_wf.return_value = wf
+
+        resp = client.post("/workflow/start", json={"prune_interval_minutes": 0})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["config"]["prune_interval_minutes"] == 0
+
+    @patch(WF_TARGET)
+    def test_config_assigned_to_workflow(self, mock_get_wf):
+        wf = _make_workflow()
+        mock_get_wf.return_value = wf
+
+        client.post("/workflow/start", json={"health_check_interval_seconds": 5})
+        assert wf.config.health_check_interval_seconds == 5
+        assert wf.config.aggregate_interval_minutes == 60
+
+
+class TestWorkflowTriggerMethods:
+    """POST /workflow/trigger/{action} method + error coverage."""
+
+    def test_trigger_get_method_405(self):
+        resp = client.get("/workflow/trigger/aggregate")
+        assert resp.status_code == 405
+
+    @patch(WF_TARGET)
+    def test_trigger_export_passthrough(self, mock_get_wf):
+        wf = _make_workflow()
+        wf.trigger_export.return_value = {"status": "exported", "path": "/tmp/x.json"}
+        mock_get_wf.return_value = wf
+
+        resp = client.post("/workflow/trigger/export")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "exported"
+        assert data["path"] == "/tmp/x.json"
+        wf.trigger_export.assert_called_once()
+
+    @patch(WF_TARGET)
+    def test_trigger_export_error(self, mock_get_wf):
+        wf = _make_workflow()
+        wf.trigger_export.side_effect = Exception("export failed")
+        mock_get_wf.return_value = wf
+
+        resp = client.post("/workflow/trigger/export")
+        assert resp.status_code == 500
+
+    @patch(WF_TARGET)
+    def test_trigger_empty_action(self, mock_get_wf):
+        mock_get_wf.return_value = _make_workflow()
+
+        resp = client.post("/workflow/trigger/")
+        assert resp.status_code == 404
+
+
+class TestWorkflowStatusDetail:
+    """GET /workflow/status data passthrough."""
+
+    @patch(WF_TARGET)
+    def test_status_passthrough_all_fields(self, mock_get_wf):
+        wf = _make_workflow()
+        mock_get_wf.return_value = wf
+
+        resp = client.get("/workflow/status")
+        data = resp.json()["data"]
+        assert data["aggregate_count"] == 5
+        assert data["prune_count"] == 2
+        assert data["export_count"] == 1
+        assert data["last_aggregate"] == "2026-01-01T00:00:00"
+        assert data["last_prune"] is None
+        assert data["last_export"] is None
+
+    def test_status_wrong_method_405(self):
+        resp = client.post("/workflow/status")
+        assert resp.status_code == 405
+
+
+class TestWorkflowStopMethod:
+    def test_stop_wrong_method_405(self):
+        resp = client.get("/workflow/stop")
+        assert resp.status_code == 405

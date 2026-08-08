@@ -105,3 +105,57 @@ class TestGetConfigControllerSingleton:
         c1 = get_config_controller()
         c2 = get_config_controller()
         assert c1 is c2
+
+
+class TestNonNoneFalsyValues:
+    def test_zero_temperature_applies(self, ctrl):
+        result = ctrl.update_generation_config(temperature=0)
+        assert result["temperature"] == 0
+
+    def test_zero_top_k_applies(self, ctrl):
+        result = ctrl.update_generation_config(top_k=0)
+        assert result["top_k"] == 0
+
+    def test_zero_max_tokens_applies(self, ctrl):
+        result = ctrl.update_generation_config(max_new_tokens=0)
+        assert result["max_new_tokens"] == 0
+
+    def test_empty_string_applies(self, ctrl):
+        result = ctrl.update_generation_config(repetition_penalty="")
+        assert result["repetition_penalty"] == ""
+
+
+class TestConfigShape:
+    def test_exact_key_set(self, ctrl):
+        result = ctrl.get_generation_config()
+        assert set(result.keys()) == {
+            "temperature", "top_p", "top_k", "repetition_penalty",
+            "max_new_tokens", "max_context_length",
+        }
+
+    def test_values_are_scalars(self, ctrl):
+        result = ctrl.get_generation_config()
+        for key, value in result.items():
+            assert isinstance(value, (int, float)), key
+
+    def test_independent_instances(self):
+        a = ConfigController()
+        b = ConfigController()
+        a.update_generation_config(temperature=0.2)
+        assert b.get_generation_config()["temperature"] == 0.8
+
+    def test_repeated_update_cumulative(self, ctrl):
+        ctrl.update_generation_config(temperature=0.4)
+        ctrl.update_generation_config(top_k=15)
+        config = ctrl.get_generation_config()
+        assert config["temperature"] == 0.4
+        assert config["top_k"] == 15
+
+    def test_update_only_mutates_supplied_keys(self, ctrl):
+        before = ctrl.get_generation_config()
+        ctrl.update_generation_config(max_new_tokens=64)
+        after = ctrl.get_generation_config()
+        assert after["max_new_tokens"] == 64
+        assert after["temperature"] == before["temperature"]
+        assert after["top_p"] == before["top_p"]
+        assert after["top_k"] == before["top_k"]

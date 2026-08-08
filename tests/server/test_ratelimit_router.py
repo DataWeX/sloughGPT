@@ -157,3 +157,59 @@ class TestRateLimiterInternal:
             router._rate_limiter.is_allowed("client-a")
         assert len(router._rate_limiter._history) == 1
         assert len(router._rate_limiter._history["client-a"]) == 3
+
+
+class TestMethodCoverage:
+    def test_status_wrong_method_405(self, client):
+        resp = client.post("/rate-limit/status")
+        assert resp.status_code == 405
+
+    def test_check_wrong_method_405(self, client):
+        resp = client.post("/rate-limit/check")
+        assert resp.status_code == 405
+
+
+class TestRateLimiterEdgeCases:
+    def test_is_allowed_records_timestamps(self):
+        from apps.api.server.routers.ratelimit import _RateLimiter
+        limiter = _RateLimiter(requests_per_minute=60, burst_size=10)
+        ok = limiter.is_allowed("k")
+        assert ok is True
+        assert len(limiter._history["k"]) == 1
+        assert isinstance(limiter._history["k"][0], float)
+
+    def test_is_allowed_blocks_at_exact_limit(self):
+        from apps.api.server.routers.ratelimit import _RateLimiter
+        limiter = _RateLimiter(requests_per_minute=1, burst_size=1)
+        assert limiter.is_allowed("k") is True
+        assert limiter.is_allowed("k") is False
+        assert limiter.get_wait_time("k") > 0.0
+
+    def test_burst_does_not_exceed_requests_per_minute(self):
+        from apps.api.server.routers.ratelimit import _RateLimiter
+        limiter = _RateLimiter(requests_per_minute=10, burst_size=1000)
+        allowed = [limiter.is_allowed("k") for _ in range(12)]
+        assert sum(allowed) == 10
+
+    def test_wait_time_zero_for_unknown_key(self):
+        from apps.api.server.routers.ratelimit import _RateLimiter
+        limiter = _RateLimiter(requests_per_minute=60, burst_size=10)
+        assert limiter.get_wait_time("fresh-key") == 0.0
+
+    def test_wait_time_bounded_at_window(self):
+        from apps.api.server.routers.ratelimit import _RateLimiter
+        limiter = _RateLimiter(requests_per_minute=1, burst_size=1)
+        limiter._history["k"] = [time.time()]
+        wait = limiter.get_wait_time("k")
+        assert 0.0 < wait <= 60.0
+
+    def test_is_allowed_with_zero_rate(self):
+        from apps.api.server.routers.ratelimit import _RateLimiter
+        limiter = _RateLimiter(requests_per_minute=0, burst_size=0)
+        assert limiter.is_allowed("k") is False
+
+    def test_check_endpoint_wait_zero_after_burst_expires(self, router, client):
+        router._rate_limiter._history.clear()
+        for _ in range(60):
+            router._rate_limiter.is_allowed("test")
+        assert router._rate_limiter.get_wait_time("test") > 0.0

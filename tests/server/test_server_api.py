@@ -78,9 +78,36 @@ class TestInfoEndpoints:
         assert "loaded" in model
         assert isinstance(model["loaded"], bool)
 
+    def test_info_includes_host_block(self):
+        response = client.get("/info")
+        data = response.json()
+        host = data.get("host", {})
+        assert "platform" in host
+        assert "python_version" in host
+
     def test_info_soul_ok(self):
         response = client.get("/info/soul")
         assert response.status_code == 200
+
+
+class TestUnknownRoute:
+    def test_unknown_route_404(self):
+        response = client.get("/nonexistent-path-xyz")
+        assert response.status_code == 404
+
+    def test_unknown_route_post_404(self):
+        response = client.post("/nonexistent-path-xyz", json={})
+        assert response.status_code == 404
+
+
+class TestInvalidRequests:
+    def test_generate_missing_payload_422(self):
+        response = client.post("/inference/generate", json={})
+        assert response.status_code == 422
+
+    def test_generate_no_prompt_422(self):
+        response = client.post("/inference/generate")
+        assert response.status_code == 422
 
 
 class TestProvidersEndpoints:
@@ -88,6 +115,30 @@ class TestProvidersEndpoints:
         response = client.get("/providers")
         assert response.status_code == 200
         assert "data" in response.json()
+
+    def test_providers_has_status(self):
+        response = client.get("/providers")
+        assert "status" in response.json()
+
+
+class TestKnowledgeStatsDetails:
+    def test_knowledge_stats_topics(self):
+        response = client.get("/knowledge/stats")
+        data = response.json().get("data", {})
+        assert isinstance(data.get("topics", {}), dict)
+        assert isinstance(data.get("topic_count", 0), int)
+
+
+class TestTokenizerStatsDetails:
+    def test_tokenizer_vocab_size_int(self):
+        response = client.get("/tokenizer/stats")
+        data = response.json().get("data", response.json())
+        assert isinstance(data["vocab_size"], int)
+
+    def test_tokenizer_has_merges(self):
+        response = client.get("/tokenizer/stats")
+        data = response.json().get("data", response.json())
+        assert "merged_subwords" in data or "num_merges" in data
 
 
 class TestSystemEndpoints:

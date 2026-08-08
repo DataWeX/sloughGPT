@@ -24,6 +24,22 @@
   ],
   "cards": [
     {
+      "id": "20260808_061344_server-test-batch-training-controller-training-e2e-souls-rou",
+      "title": "Server test batch: training_controller, training_e2e, souls_router",
+      "description": "Thickened 3 thin server router suites. training_controller 17->28 (filesystem checkpoints/datasets, jobs persistence, corrupt jobs, kwargs merge). training_e2e 17->30 (deterministic 422 validation for start bounds, status/log shape). souls_router 18->36 (save/load/delete weight snapshots, save_trait_weights flatten, checkpoint_name switch flow, error paths). FOUND+FIXED BUG: souls.py all 10 error handlers passed invalid code= kwarg to error_response -> every error path 500'd as 'Internal Server Error' instead of JSON; same pattern fixed in models.py:386. Full suite: 1244 passed, 68 deselected.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "tests",
+        "server"
+      ],
+      "created_at": "2026-08-08T06:13:44.363946+00:00",
+      "updated_at": "2026-08-08T06:13:44.363946+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260808_060949_sdk-fake-module-removal-real-registrysecurity-methods",
       "title": "SDK fake-module removal + real registry/security methods",
       "description": "Deleted 5 fake SDK modules (billing/webhooks/dashboard/auth/registry). Added real methods for /security/keys and /registry/* (models, models/{id}, best, stats) to sync + async Python clients and TS client with StandardResponse envelope unwrapping. Rewrote CLI registry subcommand. Removed fake test classes + benchmark, added 8 py + 5 ts tests. Rewrote sdk-py README, added docs/API.md, regenerated stale egg-info PKG-INFO. Verified: 78 py tests, 70 ts tests, 1244 server tests, tsc client clean.",
