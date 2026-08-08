@@ -457,31 +457,29 @@ class TestUserAdapters:
         assert np.all(a.up_proj.weight.data == 0)
         assert net._user_adapters["u2"] is a
 
-    def test_load_from_npz(self, monkeypatch, tmp_path):
+    def test_load_from_npz(self, tmp_path):
         net = SloNet([SloLinear(4, 2, "lin")])
         ref = net.get_user_adapter("u3", dim=4, rank=2)
         dw = np.ones_like(ref.down_proj.weight.data)
         uw = np.ones_like(ref.up_proj.weight.data)
-        monkeypatch.chdir(tmp_path)
-        out_dir = tmp_path / "data" / "user_adapters"
+        out_dir = tmp_path / "user_adapters"
         out_dir.mkdir(parents=True)
         np.savez(str(out_dir / "u3_adapter.npz"), down_weight=dw, up_weight=uw)
         net._user_adapters.clear()
-        a = net.get_user_adapter("u3", dim=4, rank=2)
+        a = net.get_user_adapter("u3", dim=4, rank=2, data_dir=tmp_path)
         assert np.allclose(a.down_proj.weight.data, dw)
         assert np.allclose(a.up_proj.weight.data, uw)
 
-    def test_shape_mismatch_keeps_fresh(self, monkeypatch, tmp_path):
+    def test_shape_mismatch_keeps_fresh(self, tmp_path):
         net = SloNet([SloLinear(4, 2, "lin")])
         ref = net.get_user_adapter("u4", dim=4, rank=2)
         dw = np.ones((2, 2), dtype=np.float32)
         uw = np.ones((4, 2), dtype=np.float32)
-        monkeypatch.chdir(tmp_path)
-        out_dir = tmp_path / "data" / "user_adapters"
+        out_dir = tmp_path / "user_adapters"
         out_dir.mkdir(parents=True)
         np.savez(str(out_dir / "u4_adapter.npz"), down_weight=dw, up_weight=uw)
         net._user_adapters.clear()
-        a = net.get_user_adapter("u4", dim=4, rank=2)
+        a = net.get_user_adapter("u4", dim=4, rank=2, data_dir=tmp_path)
         assert a.down_proj.weight.data.shape == ref.down_proj.weight.data.shape
         assert np.all(a.up_proj.weight.data == 0)
 

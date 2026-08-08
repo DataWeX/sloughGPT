@@ -14,7 +14,7 @@ import math
 import time
 import threading
 import numpy as np
-from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence
+from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
 from pathlib import Path
 import logging
 
@@ -2926,12 +2926,26 @@ class SloNet:
         """Set the active user for per-user adapter application."""
         self._active_user_id = user_id
 
-    def get_user_adapter(self, user_id: str, dim: int = 768, rank: int = 8) -> SloAdapterLayer:
+    def get_user_adapter(self, user_id: str, dim: int = 768, rank: int = 8, data_dir: Optional[Union[str, Path]] = None) -> SloAdapterLayer:
         """Get or create a per-user adapter layer.
 
-        Checks in-memory cache first, then tries to load from disk
-        (``data/user_adapters/{user_id}_adapter.npz``), and finally
-        creates a fresh identity-initialized adapter.
+        Checks the in-memory cache first, then tries to load a persisted
+        adapter from ``{data_dir}/user_adapters/{user_id}_adapter.npz``,
+        and finally creates a fresh identity-initialized adapter.
+
+        Args:
+            user_id: Stable identifier for the user's adapter.
+            dim: Input/output width of the adapter projection.
+            rank: Bottleneck rank of the adapter.
+            data_dir: Directory containing ``user_adapters/``. Defaults to
+                ``<repo_root>/data`` (matching ``PerUserLORAStore``).
+
+        Returns:
+            The cached or newly created adapter.
+
+        Side effects:
+            - Mutates ``self._user_adapters``.
+            - Reads ``{data_dir}/user_adapters/{user_id}_adapter.npz`` if present.
         """
         if user_id in self._user_adapters:
             return self._user_adapters[user_id]
@@ -2939,7 +2953,9 @@ class SloNet:
         adapter = SloAdapterLayer(dim=dim, rank=rank, name=f"adapter_{user_id}")
         try:
             from pathlib import Path
-            path = Path(__file__).resolve().parents[4] / "data" / "user_adapters" / f"{user_id}_adapter.npz"
+            if data_dir is None:
+                data_dir = Path(__file__).resolve().parents[4] / "data"
+            path = Path(data_dir) / "user_adapters" / f"{user_id}_adapter.npz"
             if path.exists():
                 data = np.load(str(path))
                 if "down_weight" in data and "up_weight" in data:

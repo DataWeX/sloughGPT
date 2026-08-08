@@ -24,6 +24,22 @@
   ],
   "cards": [
     {
+      "id": "20260808_111231_slonet-backward-pass-broadcast-bug-fixes",
+      "title": "SloNet backward-pass broadcast bug fixes",
+      "description": "Roadmap #1 investigation: the SloNet backward-pass broadcast failures cited in ROADMAP.md are already resolved (test_tokenizer.py, test_slonet_broadcast.py, test_slonet_bidirectional_dag.py all pass). Full training/slonet/tokenizer sweep surfaced one remaining bug: SloNet.get_user_adapter() hardcoded the npz load path to <repo_root>/data/user_adapters while the two legacy tests wrote CWD-relative data/user_adapters, so persisted adapters were never reloaded (silently fell back to fresh random weights). Fixed by adding a data_dir override param (defaults to repo-root /data, matching PerUserLORAStore.store_path convention) and updated test_load_from_npz + test_shape_mismatch_keeps_fresh to pass a hermetic tmp_path. Verified: full slonet+training+tokenizer+feedback/lora/workflow sweep green, py_compile OK.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "slonet"
+      ],
+      "created_at": "2026-08-08T11:12:31.312922+00:00",
+      "updated_at": "2026-08-08T11:12:31.312922+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260808_061344_server-test-batch-training-controller-training-e2e-souls-rou",
       "title": "Server test batch: training_controller, training_e2e, souls_router",
       "description": "Thickened 3 thin server router suites. training_controller 17->28 (filesystem checkpoints/datasets, jobs persistence, corrupt jobs, kwargs merge). training_e2e 17->30 (deterministic 422 validation for start bounds, status/log shape). souls_router 18->36 (save/load/delete weight snapshots, save_trait_weights flatten, checkpoint_name switch flow, error paths). FOUND+FIXED BUG: souls.py all 10 error handlers passed invalid code= kwarg to error_response -> every error path 500'd as 'Internal Server Error' instead of JSON; same pattern fixed in models.py:386. Full suite: 1244 passed, 68 deselected.",
