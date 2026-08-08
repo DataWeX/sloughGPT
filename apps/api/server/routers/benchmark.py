@@ -55,7 +55,14 @@ class BenchmarkRouter:
                     import torch
                     memory_mb = torch.cuda.memory_allocated() / (1024 * 1024) if torch.cuda.is_available() else 0
                 except Exception:
-                    memory_mb = 500  # Rough estimate
+                    pass
+                if memory_mb == 0:
+                    try:
+                        import psutil
+                        process = psutil.Process()
+                        memory_mb = process.memory_info().rss / (1024 * 1024)
+                    except Exception:
+                        memory_mb = 0
 
             return {
                 "model": model,
@@ -106,7 +113,10 @@ class BenchmarkRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="benchmark")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_quality_metrics(
         self,
@@ -125,7 +135,10 @@ class BenchmarkRouter:
             bench = get_benchmark_domain()
             return success_response(data=bench.evaluate_latest(limit=limit))
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="benchmark")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_logged_responses(
         self,
@@ -154,7 +167,10 @@ class BenchmarkRouter:
                 "count": len(responses),
             })
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="benchmark")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_tracker_stats(self) -> Dict[str, Any]:
         """Get response tracker statistics - uses BenchmarkDomain."""
@@ -164,7 +180,10 @@ class BenchmarkRouter:
             bench = get_benchmark_domain()
             return success_response(data=bench.get_stats())
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="benchmark")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def clear_history(self) -> dict:
         """Clear benchmark history and logged responses."""
@@ -175,7 +194,10 @@ class BenchmarkRouter:
             bench.clear_history()
             return success_response(data={"status": "ok", "cleared": True})
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="benchmark")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
 
 router = BenchmarkRouter().router

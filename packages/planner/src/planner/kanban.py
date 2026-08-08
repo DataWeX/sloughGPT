@@ -174,11 +174,20 @@ class KanbanStore:
     def _find_one(self, board: Board, prefix: str) -> Card | None:
         lower = prefix.lower()
         matches = [c for c in board.cards if c.id.lower().startswith(lower)]
-        if len(matches) != 1:
-            if len(matches) > 1:
-                logger.warning("Ambiguous id '%s': %s", prefix, [m.short_id for m in matches])
-            return None
-        return matches[0]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            matches.sort(
+                key=lambda c: c.updated_at or c.created_at or c.id,
+                reverse=True,
+            )
+            chosen = matches[0]
+            logger.warning(
+                "Ambiguous id '%s' (%d matches); using most recently updated: %s",
+                prefix, len(matches), chosen.id,
+            )
+            return chosen
+        return None
 
     def add_card(self, title: str, column: str = "", priority: str = "medium",
                  description: str = "", tags: list[str] | None = None,

@@ -133,10 +133,6 @@ html.dark {
   border-color: rgb(var(--border));
 }
 
-.shadow-primary {
-  box-shadow: inset 3px 0 0 0 rgb(var(--primary)) !important;
-}
-
 body {
   color: rgb(var(--foreground));
   background: rgb(var(--background));
@@ -202,7 +198,7 @@ html {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* Mobile header — visible below lg, fixed height */
@@ -319,49 +315,9 @@ html {
   .sl-page { padding: 2rem; }
 }
 
-/*
- * sl-main-container — constrains content width on large screens
- * Use inside sl-page for pages that shouldn't stretch full width.
- */
-.sl-main-container {
-  width: 100%;
-  max-width: var(--content-max-width);
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/*
- * sl-card-grid — responsive card grid
- * Auto-fills cards based on available width.
- */
-.sl-card-grid {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: 1fr;
-}
-@media (min-width: 640px) {
-  .sl-card-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (min-width: 1024px) {
-  .sl-card-grid { grid-template-columns: repeat(3, 1fr); }
-}
-@media (min-width: 1280px) {
-  .sl-card-grid { grid-template-columns: repeat(4, 1fr); }
-}
-
-  /**
-   * Chat message list — flat notebook canvas (matches @man/strui).
-   * `.str-chat-thread` is applied by strui `ChatThread`; `.sl-chat-thread` is legacy/alternate hook.
-   */
-  .sl-chat-thread,
-  .str-chat-thread {
-    scroll-padding-bottom: 1.25rem;
-    background-color: rgb(var(--background));
-  }
-
   /**
    * Chat history column — flat wash + one edge line (no lattice gradient:
-   * avoids banding / “striped blocks” next to the thread).
+   * avoids banding / "striped blocks" next to the thread).
    */
   .sl-chat-rail {
     border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 58%, transparent);
@@ -374,157 +330,9 @@ html {
     border-right-color: color-mix(in srgb, rgb(var(--border)) 55%, transparent);
   }
 
-  /**
-   * Chat toolbar — compact status notes (flat wash + inset bar + mono label;
-   * same language as sidebar nav rows / dialog section headers).
-   */
-  .sl-chat-toolbar-note {
-    @apply rounded-lg border border-border/70 text-left transition-colors duration-200 ease-smooth;
-    background-color: color-mix(in srgb, rgb(var(--background)) 82%, rgb(var(--muted)) 18%);
-    padding: 0.5rem 0.625rem 0.5rem 0.75rem;
-  }
-
-  .dark .sl-chat-toolbar-note {
-    background-color: color-mix(in srgb, rgb(var(--card)) 78%, transparent);
-    border-color: color-mix(in srgb, rgb(var(--border)) 75%, transparent);
-  }
-
-  .sl-chat-toolbar-note--hint {
-    box-shadow: inset 3px 0 0 0 color-mix(in srgb, rgb(var(--primary)) 50%, transparent);
-  }
-
-  .sl-chat-toolbar-note--warn {
-    box-shadow: inset 3px 0 0 0 color-mix(in srgb, rgb(var(--warning)) 72%, transparent);
-  }
-
-  .sl-chat-toolbar-note--err {
-    box-shadow: inset 3px 0 0 0 color-mix(in srgb, rgb(var(--destructive)) 58%, transparent);
-  }
-
-  .sl-chat-toolbar-note__label {
-    @apply mb-1 font-mono text-[10px] uppercase tracking-wider text-foreground/55;
-  }
-
-  .sl-chat-inline-code {
-    @apply rounded-md border border-border/80 px-1 py-px font-mono text-[0.6875rem] text-foreground;
-    background-color: color-mix(in srgb, rgb(var(--muted)) 42%, transparent);
-  }
-
-  /** Monitoring SYS.LOG — subtle scanlines + primary wash (matches shell “lattice” look) */
-  .sl-log-feed {
-    background-color: color-mix(in srgb, rgb(var(--card)) 88%, rgb(var(--muted)));
-    background-image:
-      linear-gradient(180deg, color-mix(in srgb, rgb(var(--primary)) 7%, transparent) 0%, transparent 42%),
-      repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 22px,
-        color-mix(in srgb, rgb(var(--border)) 28%, transparent) 22px,
-        color-mix(in srgb, rgb(var(--border)) 28%, transparent) 23px
-      );
-  }
-
-    .sl-card {
-      @apply rounded-lg border border-border text-card-foreground shadow-sm transition-all duration-200 ease-smooth;
-      background-color: color-mix(in srgb, rgb(var(--card)) 96%, transparent);
-    }
-
-    .sl-card-solid {
-      @apply rounded-lg border border-border bg-card text-card-foreground shadow-sm transition-all duration-200 ease-smooth;
-    }
-
-  /* Typography hierarchy: h1 > h2 > subtitle > body > caption */
-  /* Use these utility classes everywhere for consistency */
-
   /* Headings */
   .sl-h1 {
     @apply text-2xl md:text-3xl font-semibold tracking-tight text-foreground;
-  }
-
-  .sl-h2 {
-    @apply text-lg md:text-xl font-semibold text-foreground;
-  }
-
-  /* Text utilities - use these in components */
-  .sl-text-title {
-    @apply text-lg md:text-xl font-semibold text-foreground;
-  }
-
-  .sl-text-subtitle {
-    @apply text-base md:text-lg font-medium text-foreground;
-  }
-
-  .sl-text-body {
-    @apply text-sm md:text-base text-foreground;
-  }
-
-  .sl-text-caption {
-    @apply text-xs md:text-sm text-muted-foreground;
-  }
-
-  /* Shorthand aliases */
-  .sl-subtitle { @apply text-base md:text-lg font-medium text-foreground; }
-  .sl-body { @apply text-sm md:text-base text-foreground; }
-  .sl-caption { @apply text-xs md:text-sm text-muted-foreground; }
-  .sl-muted { @apply text-muted-foreground text-sm md:text-base; }
-
-  /* Label: form labels, small caps */
-  .sl-label {
-    @apply block text-xs md:text-sm font-medium text-muted-foreground mb-1.5 uppercase tracking-wider;
-  }
-
-  /* Input field */
-  .sl-input {
-    @apply w-full rounded-lg border border-input px-3 py-2 text-sm md:text-base text-foreground placeholder:text-muted-foreground transition-colors duration-200 ease-smooth focus:outline-none;
-    background-color: color-mix(in srgb, rgb(var(--card)) 88%, rgb(var(--muted)));
-  }
-
-  .sl-input:focus-visible {
-    border-color: rgb(var(--ring));
-    box-shadow: 0 0 0 3px color-mix(in srgb, rgb(var(--ring)) 20%, transparent);
-  }
-
-  .sl-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm md:text-base font-medium transition-all duration-200 ease-smooth disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98];
-  }
-
-  .sl-btn-primary {
-    @apply sl-btn bg-primary text-primary-foreground shadow-sm hover:opacity-90;
-  }
-
-  .sl-btn-secondary {
-    @apply sl-btn bg-secondary text-secondary-foreground border border-border hover:bg-muted;
-  }
-
-  .sl-btn-ghost {
-    @apply sl-btn bg-transparent text-muted-foreground hover:text-foreground;
-  }
-
-  .sl-btn-ghost:hover {
-    background-color: color-mix(in srgb, rgb(var(--muted)) 55%, transparent);
-  }
-
-  .sl-code {
-    @apply font-mono text-sm rounded-md border border-border px-2 py-0.5 text-foreground;
-    background-color: color-mix(in srgb, rgb(var(--muted)) 50%, transparent);
-  }
-
-  /**
-   * Typing indicator dots — synced with @man/strui TypingIndicator (str-dot-*).
-   * Uses rgb(var(--primary)) to match web token triples.
-   */
-  .str-dot {
-    height: 0.5rem;
-    width: 0.5rem;
-    border-radius: 9999px;
-    background-color: color-mix(in srgb, rgb(var(--primary)) 60%, transparent);
-    animation: str-dot-bounce 1.2s ease-in-out infinite;
-  }
-  .str-dot-2 {
-    animation-delay: 0.15s;
-  }
-  .str-dot-3 {
-    animation-delay: 0.3s;
   }
 }
 
@@ -614,6 +422,10 @@ html {
 
 .sl-toast__close {
   @apply -mr-1 -mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md opacity-40 hover:opacity-100 hover:bg-muted/60 transition-all;
+}
+
+.sl-toast__undo {
+  @apply ml-1 shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors;
 }
 
 .sl-toast__verbose-block {
@@ -872,23 +684,6 @@ html.dark {
  *   min-h-[60px] = 60px (textareas)
  */
 
-/*
- * sl-hover-primary: accent color hover state
- */
-.sl-hover-primary {
-  background-color: transparent;
-  transition: background-color 150ms ease, color 150ms ease;
-}
-
-.sl-hover-primary:hover {
-  background-color: rgb(var(--secondary));
-  color: rgb(var(--primary));
-}
-
-.dark .sl-hover-primary:hover {
-  background-color: color-mix(in srgb, rgb(var(--secondary)) 60%, transparent);
-}
-
 .sl-sidebar-surface {
   background-color: color-mix(in srgb, rgb(var(--background)) 96%, rgb(var(--card)) 4%);
   background-image:
@@ -921,69 +716,4 @@ html.dark {
     radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 60%),
     radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
   border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
-}
-
-.gradient-bg {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, rgb(var(--primary)) 85%, white) 0%,
-    color-mix(in srgb, rgb(var(--accent)) 70%, rgb(var(--primary))) 100%
-  );
-}
-
-.sl-hover-primary {
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-}
-.sl-hover-primary:hover {
-  background-color: color-mix(in srgb, rgb(var(--primary)) 12%, transparent);
-  color: rgb(var(--primary));
-}
-.sl-hover-primary:hover:not([class*="border"]) {
-  border-color: color-mix(in srgb, rgb(var(--primary)) 30%, transparent);
-}
-
-.dark .sl-hover-primary:hover {
-  background-color: color-mix(in srgb, rgb(var(--primary)) 18%, transparent);
-}
-
-@keyframes mood-orb-breathe {
-  0%, 100% { transform: scale(0.88); }
-  50% { transform: scale(1.0); }
-}
-.mood-orb-pulse {
-  animation: mood-orb-breathe 3s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .mood-orb-pulse {
-    animation: none;
-    transform: scale(0.94);
-  }
-}
-
-/* Voice chat listening animation */
-@keyframes listening-pulse {
-  0%, 100% { transform: scale(var(--ring-base, 1.2)); opacity: 0.1; }
-  50% { transform: scale(calc(var(--ring-base, 1.2) + 0.15)); opacity: 0.25; }
-}
-@keyframes listening-ripple {
-  0% { transform: scale(0.8); opacity: 0.4; }
-  100% { transform: scale(2.5); opacity: 0; }
-}
-@keyframes listening-bar {
-  0%, 100% { transform: scaleY(0.3); }
-  50% { transform: scaleY(1); }
-}
-.listening-ring {
-  animation: listening-pulse 2s ease-in-out infinite;
-}
-.listening-ripple {
-  animation: listening-ripple 1.5s ease-out infinite;
-}
-.listening-bar {
-  animation: listening-bar 0.8s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .listening-ring, .listening-ripple, .listening-bar {
-    animation: none;
-  }
 }

@@ -150,7 +150,9 @@ describe('MessageActions', () => {
 
   it('does not render any buttons with no handlers', () => {
     const { container } = render(<MessageActions content="text" messageId="m1" />)
-    expect(container.querySelectorAll('button')).toHaveLength(0)
+    const btns = container.querySelectorAll('button')
+    const nonReactionBtns = Array.from(btns).filter(b => b.getAttribute('aria-label') !== 'Add reaction')
+    expect(nonReactionBtns).toHaveLength(0)
   })
 
   it('renders all handlers simultaneously', () => {

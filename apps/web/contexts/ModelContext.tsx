@@ -5,6 +5,7 @@ import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
 import { useLiveStatus, useApiReady } from '@/hooks/useLiveStatus'
 import { logger } from '@/lib/dev-log'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 const _log = logger.child('model-context')
 
@@ -109,12 +110,17 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
-      await modelController.load(modelId, opts?.device)
+      const data = await modelController.load(modelId, opts?.device)
+      if (data && (data.status === 'error' || data.error)) {
+        const error = String(data.error ?? data.status)
+        setError(error)
+        return { success: false, error }
+      }
       await refreshModels()
       await refreshHealth()
       return { success: true }
     } catch (err) {
-      const error = err instanceof Error ? err.message : 'Unknown error'
+      const error = extractErrorMessage(err)
       setError(error)
       return { success: false, error }
     } finally {
@@ -140,7 +146,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
       await refreshHealth()
       return { success: true }
     } catch (err) {
-      const error = err instanceof Error ? err.message : 'Unknown error'
+      const error = extractErrorMessage(err)
       setError(error)
       return { success: false, error }
     } finally {
@@ -161,7 +167,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
       await refreshHealth()
       return { success: true }
     } catch (err) {
-      const error = err instanceof Error ? err.message : 'Unknown error'
+      const error = extractErrorMessage(err)
       setError(error)
       return { success: false, error }
     } finally {

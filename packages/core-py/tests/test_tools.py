@@ -45,7 +45,10 @@ class TestToolRegistryInit:
     def test_default_tools_registered(self, registry):
         tools = registry.list_tools()
         names = {t["name"] for t in tools}
-        assert names == {"calculator", "current_time", "web_search", "run_code"}
+        assert names == {
+            "calculator", "current_time", "web_search", "run_code",
+            "file_read", "knowledge_retrieval", "image_analysis", "data_analysis",
+        }
 
     def test_get_returns_spec(self, registry):
         spec = registry.get("calculator")

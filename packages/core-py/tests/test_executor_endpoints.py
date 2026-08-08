@@ -13,6 +13,9 @@ for _p in (_repo_root, _server_dir):
         sys.path.insert(0, _p)
 
 import pytest
+
+pytest.importorskip("fastapi")
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

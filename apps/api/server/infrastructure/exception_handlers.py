@@ -2,14 +2,13 @@
 Exception handlers extracted from main.py.
 
 Provides FastAPI exception handlers for:
-- SloughGPTDomainError (internal domain errors)
+- AppError (structured error taxonomy from domains.infrastructure.errors)
+- SloughGPTDomainError (domain-layer errors)
 - ValidationError (Pydantic)
 - HTTPException (FastAPI)
-- BaseException / unhandled errors (catch-all)
+- BaseException / unhandled errors (catch-all, classified via classify_exception)
 
-All handlers use structured error codes from ``domains.logging.base.ErrorCode``
-and attach type tags for consistent terminal output.
-
+All handlers emit error events on the EventBus and use structured error codes.
 Register via ``register_all_handlers(app)``.
 """
 
@@ -137,12 +136,34 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
 
 
 async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Catch-all for unexpected errors — returns 500 with correlation ID."""
+    """Catch-all — classify raw exceptions into AppError, emit event, return structured response."""
     corr_id = getattr(request.state, "correlation_id", "-")
+
+    # Classify into the error taxonomy
+    try:
+        from domains.infrastructure.errors import classify_exception, emit_error_event
+        classified = classify_exception(exc)
+        emit_error_event(classified, source=f"{request.method} {request.url.path}")
+    except ImportError:
+        classified = None
+
     logger.exception(
         "Unhandled error on %s %s [%s]", request.method, request.url.path, corr_id,
         extra={"context": {"corr": corr_id, "status": 500}},
     )
+
+    if classified is not None:
+        return JSONResponse(
+            status_code=classified.http_status,
+            content=_error_response(
+                classified.http_status,
+                classified.user_message,
+                classified.code,
+                details=classified.details if logger.isEnabledFor(logging.DEBUG) else None,
+                correlation_id=corr_id,
+            ),
+        )
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=_error_response(
@@ -155,6 +176,38 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
 
 def register_all_handlers(app: FastAPI):
     """Register all exception handlers on a FastAPI instance."""
+    # AppError — structured taxonomy with codes, user messages, EventBus events
+    try:
+        from domains.infrastructure.errors import AppError
+
+        async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+            corr_id = getattr(request.state, "correlation_id", "-")
+            try:
+                from domains.infrastructure.errors import emit_error_event
+                emit_error_event(exc, source=f"{request.method} {request.url.path}")
+            except Exception:
+                pass
+            log_fn = logger.warning if exc.http_status >= 500 else logger.info
+            log_fn(
+                "%s [%s] on %s %s", exc.code, exc.message, request.method, request.url.path,
+                extra={"context": {"corr": corr_id, "code": exc.code, "status": exc.http_status}},
+            )
+            return JSONResponse(
+                status_code=exc.http_status,
+                content=_error_response(
+                    exc.http_status,
+                    exc.user_message,
+                    exc.code,
+                    details=exc.details if logger.isEnabledFor(logging.DEBUG) else None,
+                    correlation_id=corr_id,
+                ),
+            )
+
+        app.add_exception_handler(AppError, _app_error_handler)
+    except ImportError:
+        pass
+
+    # Domain errors (legacy hierarchy)
     try:
         from domains.core.base import SloughGPTDomainError
         app.add_exception_handler(SloughGPTDomainError, _domain_error_handler)

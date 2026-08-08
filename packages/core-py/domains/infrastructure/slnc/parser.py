@@ -188,6 +188,27 @@ class SLNCParser:
         """Get all weights as a dict (backward compatibility)."""
         return {name: self.get_tensor(name) for name in self._tensor_map}
 
+    def release_file_pages(self) -> bool:
+        """Discard resident file-backed pages back to the OS.
+
+        ``get_tensor()`` returns copies of the mmap data, so after all
+        tensors have been loaded the mmap pages hold no live references.
+        Dropping them (``MADV_DONTNEED``) frees their resident-set memory
+        without affecting correctness; a later read re-faults the pages
+        from disk.
+
+        Returns:
+            True if resident pages were released, False if unsupported.
+        """
+        if self._mm is None:
+            return False
+        try:
+            self._mm.madvise(mmap.MADV_DONTNEED)
+            return True
+        except Exception:
+            logger.debug("release_file_pages: madvise not supported", extra={"tag": "INFRA"})
+            return False
+
     def verify_all(self) -> bool:
         """Verify all tensor checksums. Returns True if all pass."""
         import zlib
@@ -214,9 +235,60 @@ class SLNCParser:
     def tensor_count(self) -> int:
         return len(self._tensor_map)
 
+    @property
+    def param_count(self) -> int:
+        """Total number of model parameters (sum of tensor elements).
+
+        Computed from the tensor table only — no weight pages are faulted
+        into memory, so this is cheap and safe to call before any tensor
+        access.
+        """
+        return int(sum(np.prod(shape) for (_, shape, _, _) in self._tensor_map.values()))
+
+    @property
+    def n_layer(self) -> int:
+        return self._n_layer
+
+    @property
+    def n_embd(self) -> int:
+        return self._n_embd
+
+    @property
+    def n_head(self) -> int:
+        return self._n_head
+
+    @property
+    def vocab_size(self) -> int:
+        return self._vocab_size
+
+    @property
+    def n_positions(self) -> int:
+        return self._n_positions
+
+    def close(self) -> None:
+        """Close the mmap and file descriptor, releasing the header pages.
+
+        Safe to call multiple times; a no-op once already closed. Frees the
+        small resident footprint of the header/tensor-table read.
+        """
+        try:
+            if self._mm is not None:
+                self._mm.close()
+        except Exception:
+            pass
+        try:
+            os.close(self._fd)
+        except Exception:
+            pass
+        self._mm = None
+
     def __del__(self):
         try:
-            self._mm.close()
+            if self._mm is not None:
+                self._mm.close()
+        except Exception:
+            pass
+        try:
             os.close(self._fd)
         except Exception:
             pass

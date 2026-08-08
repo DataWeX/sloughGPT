@@ -8,6 +8,8 @@ from domains.infrastructure.health_flow import (
     _check_errors,
     _check_latency,
     _check_throughput,
+    _check_model,
+    _check_uptime,
     run_health_flow,
 )
 
@@ -38,6 +40,11 @@ class TestCheckErrors:
         d = _check_errors(100, 10)
         assert d.severity == Severity.CRITICAL
         assert "failing" in d.message
+
+    def test_rare_error_rate(self):
+        d = _check_errors(1000, 5)
+        assert d.severity == Severity.OK
+        assert "rare" in d.message
 
 
 class TestCheckLatency:
@@ -153,3 +160,41 @@ class TestRunHealthFlow:
         )
         assert isinstance(result.summary, str)
         assert len(result.summary) > 0
+
+
+class TestCheckModel:
+    def test_loaded_with_type(self):
+        d = _check_model(True, "gpt2")
+        assert d.severity == Severity.OK
+        assert d.score == 100
+        assert "gpt2 loaded" in d.message
+
+    def test_loaded_without_type(self):
+        d = _check_model(True, "")
+        assert d.severity == Severity.OK
+        assert d.message == "Model loaded."
+
+    def test_not_loaded(self):
+        d = _check_model(False, "")
+        assert d.severity == Severity.WARN
+        assert d.score == 40
+        assert "No model loaded" in d.message
+
+
+class TestCheckUptime:
+    def test_hours(self):
+        d = _check_uptime(7200)
+        assert d.severity == Severity.OK
+        assert "Up 2.0h" in d.message
+
+    def test_minutes(self):
+        d = _check_uptime(120)
+        assert "Up 2m" in d.message
+
+    def test_warming(self):
+        d = _check_uptime(30)
+        assert d.message == "Warming up."
+
+    def test_just_booted(self):
+        d = _check_uptime(5)
+        assert d.message == "Just booted."

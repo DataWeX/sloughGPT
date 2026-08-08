@@ -136,6 +136,10 @@ _SKIP_ENV_KEYS: frozenset[str] = frozenset({
     "SLO_GUARD_MEMORY_LIMIT_MB",
     "SLO_GUARD_MAX_RESTARTS",
     "SLO_GUARD_RESTART_DELAY",
+    "SLO_LAZY_GUARD_AUTOLOAD",
+    # faulthandler stack-dump drill instrumentation (main.py)
+    "SLO_DUMP_STACKS",
+    "SLO_DUMP_STACKS_INTERVAL",
     # Server feature flags consumed directly in main.py lifecycle
     "SLO_HEALTH_MONITOR",
     "SLO_WATCHDOG",

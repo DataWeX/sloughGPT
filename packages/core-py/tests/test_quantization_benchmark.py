@@ -12,7 +12,7 @@ import time
 import numpy as np
 import pytest
 
-from domains.infrastructure.quantization import QuantEngine, TensorInfo
+from domains.infrastructure.quantization import Quantine, TensorInfo
 
 
 def _require_c_matmul():
@@ -63,7 +63,7 @@ class TestQuantizationBenchmark:
 
     def test_int8_quantization_quality(self, gpt2_weights):
         """Quantized weights should have high cosine similarity with originals."""
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
 
         cos_sims = []
         for name, arr in gpt2_weights.items():
@@ -78,8 +78,8 @@ class TestQuantizationBenchmark:
 
     def test_int8_with_clip_quality(self, gpt2_weights):
         """Clipping should improve quality for weights with outliers."""
-        engine_noclip = QuantEngine(bits=8, mode="symmetric")
-        engine_clip = QuantEngine(bits=8, mode="symmetric", clip_percentile=0.999)
+        engine_noclip = Quantine(bits=8, mode="symmetric")
+        engine_clip = Quantine(bits=8, mode="symmetric", clip_percentile=0.999)
 
         for name, arr in gpt2_weights.items():
             info_noclip = engine_noclip.quantize(name, arr)
@@ -92,7 +92,7 @@ class TestQuantizationBenchmark:
     def test_quantization_speedup(self, gpt2_weights):
         """Quantized matmul should be faster than float32 matmul."""
         # Prepare a quantized weight
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         weight_name = "blocks.0.attn.q_proj.weight"
         arr = gpt2_weights[weight_name]
         info = engine.quantize(weight_name, arr)
@@ -128,7 +128,7 @@ class TestQuantizationBenchmark:
 
     def test_full_model_quantization_report(self, gpt2_weights):
         """Full model quantization should produce a complete report."""
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
 
         quantized = 0
         skipped = 0
@@ -149,8 +149,8 @@ class TestQuantizationBenchmark:
 
     def test_int4_vs_int8_quality(self, gpt2_weights):
         """Int8 should be more accurate than int4."""
-        engine8 = QuantEngine(bits=8, mode="symmetric")
-        engine4 = QuantEngine(bits=4, mode="symmetric")
+        engine8 = Quantine(bits=8, mode="symmetric")
+        engine4 = Quantine(bits=4, mode="symmetric")
 
         cos8_list = []
         cos4_list = []
@@ -168,7 +168,7 @@ class TestQuantizationBenchmark:
 
     def test_int4_memory_savings(self, gpt2_weights):
         """Int4 should achieve ~8x compression across the model."""
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
 
         total_original = 0
         total_quantized = 0
@@ -186,7 +186,7 @@ class TestQuantizationBenchmark:
         """AVX2 int4 GEMM should be faster than unpack→numpy path."""
         _require_c_matmul()
 
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         weight_name = "blocks.0.attn.q_proj.weight"
         arr = gpt2_weights[weight_name]
         info = engine.quantize(weight_name, arr)
@@ -234,8 +234,8 @@ class TestQuantizationBenchmark:
         """Int4 C matmul should be similar speed to int8 C matmul."""
         _require_c_matmul()
 
-        engine4 = QuantEngine(bits=4, mode="symmetric")
-        engine8 = QuantEngine(bits=8, mode="symmetric")
+        engine4 = Quantine(bits=4, mode="symmetric")
+        engine8 = Quantine(bits=8, mode="symmetric")
         weight_name = "blocks.0.attn.q_proj.weight"
         arr = gpt2_weights[weight_name]
         info4 = engine4.quantize(weight_name, arr)
@@ -276,4 +276,40 @@ class TestQuantizationBenchmark:
         # Int4 should be within 2x of int8 speed (packed unpack overhead)
         assert t_int4 < t_int8 * 2, (
             f"int4 {t_int4*1000:.1f}ms too slow vs int8 {t_int8*1000:.1f}ms"
+        )
+
+    def test_fused_int8_linear_faster_than_unfused(self, gpt2_weights):
+        """Fused quantize+GEMM+dequantize must not regress the hot path."""
+        import domains.infrastructure.quantization as Q
+
+        _require_c_matmul()
+        assert Q.matmul_int8_f32_c is not None, "fused kernel not wired"
+
+        engine = Quantine(bits=8, mode="symmetric")
+        name = "blocks.0.attn.q_proj.weight"
+        info = engine.quantize(name, gpt2_weights[name])
+        w = info.array.astype(np.int8)
+        bscale = info.meta.scale
+        bias = np.random.RandomState(7).randn(w.shape[0]).astype(np.float32)
+        x = np.random.RandomState(8).randn(1, w.shape[1]).astype(np.float32)
+
+        def _time_it(fn, iters=200):
+            fn()  # warmup
+            t0 = time.perf_counter()
+            for _ in range(iters):
+                fn()
+            return (time.perf_counter() - t0) / iters
+
+        fused = Q.quantized_linear(x, w, bscale, 0, bias)
+        t_fused = _time_it(lambda: Q.quantized_linear(x, w, bscale, 0, bias))
+        saved = Q.matmul_int8_f32_c
+        Q.matmul_int8_f32_c = None
+        try:
+            unfused = Q.quantized_linear(x, w, bscale, 0, bias)
+            t_unfused = _time_it(lambda: Q.quantized_linear(x, w, bscale, 0, bias))
+        finally:
+            Q.matmul_int8_f32_c = saved
+        np.testing.assert_array_equal(fused, unfused)
+        assert t_fused < t_unfused * 1.5, (
+            f"fused {t_fused*1000:.2f}ms not faster than unfused {t_unfused*1000:.2f}ms"
         )

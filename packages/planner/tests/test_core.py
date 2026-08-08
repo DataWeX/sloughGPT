@@ -76,6 +76,34 @@ def test_new_rejects_bad_status(cli_env):
     assert exc.value.code == 2
 
 
+def test_todo_status_is_valid(cli_env, capsys):
+    note_id = _new(cli_env, capsys, "Backlog item", "--status", "todo")
+    code, out = _run(cli_env, capsys, "show", note_id)
+    assert code == 0
+    assert "status: todo" in out
+    code, out = _run(cli_env, capsys, "list", "--status", "todo")
+    assert code == 0
+    assert "Backlog item" in out
+
+
+def test_edit_accepts_todo_status(cli_env, capsys):
+    note_id = _new(cli_env, capsys, "Move to backlog", "--status", "wip")
+    code, out = _run(cli_env, capsys, "edit", note_id, "--status", "todo")
+    assert code == 0
+    code, out = _run(cli_env, capsys, "show", note_id)
+    assert code == 0
+    assert "status: todo" in out
+
+
+def test_status_summary_lists_review_and_todo(cli_env, capsys):
+    _new(cli_env, capsys, "Review item", "--status", "review")
+    _new(cli_env, capsys, "Todo item", "--status", "todo")
+    code, out = _run(cli_env, capsys, "status")
+    assert code == 0
+    assert "review" in out
+    assert "todo" in out
+
+
 def test_list_filters_by_tag_and_status(cli_env, capsys):
     _new(cli_env, capsys, "A", "--tags", "x", "--status", "open")
     _new(cli_env, capsys, "B", "--tags", "y", "--status", "done")
@@ -98,6 +126,32 @@ def test_show_displays_note_fields(cli_env, capsys):
 
 def test_show_unknown_returns_1(cli_env, capsys):
     code, out = _run(cli_env, capsys, "show", "00000000_000000_nope")
+    assert code == 1
+    assert "not found" in out
+
+
+def test_show_ambiguous_prefix_resolves_to_most_recent(cli_env, capsys):
+    first = _new(cli_env, capsys, "First note", "--body", "oldest body")
+    _new(cli_env, capsys, "Second note", "--body", "latest body")
+    code, out = _run(cli_env, capsys, "show", first)
+    assert code == 0
+    assert "Second note" in out
+    assert "latest body" in out
+    assert "(matched" in out
+
+
+def test_edit_ambiguous_prefix_updates_most_recent(cli_env, capsys):
+    first = _new(cli_env, capsys, "First note")
+    _new(cli_env, capsys, "Second note")
+    code, out = _run(cli_env, capsys, "edit", first, "--title", "Renamed latest")
+    assert code == 0
+    assert "Renamed latest" in out
+
+
+def test_delete_ambiguous_prefix_refuses(cli_env, capsys):
+    first = _new(cli_env, capsys, "First note")
+    _new(cli_env, capsys, "Second note")
+    code, out = _run(cli_env, capsys, "delete", first)
     assert code == 1
     assert "not found" in out
 
@@ -176,6 +230,36 @@ def test_today_shows_created_note(cli_env, capsys, monkeypatch):
     code, out = _run(cli_env, capsys, "today")
     assert code == 0
     assert "Today item" in out
+
+
+def test_list_today_flag_filters_to_today(cli_env, capsys, monkeypatch):
+    today = _dt.date.today()
+
+    class _FakeDT(_dt.datetime):
+        _fixed = None
+
+        @classmethod
+        def now(cls, tz=None):
+            if cls._fixed is None:
+                return _dt.datetime.now(tz)
+            if tz is None:
+                return cls._fixed.replace(tzinfo=None)
+            return cls._fixed.astimezone(tz)
+
+    _FakeDT._fixed = _dt.datetime.combine(
+        today - _dt.timedelta(days=1), _dt.time(10, 0),
+        tzinfo=_dt.timezone.utc,
+    )
+    monkeypatch.setattr(core_module, "datetime", _FakeDT)
+    _new(cli_env, capsys, "Yesterday item")
+    _FakeDT._fixed = _dt.datetime.combine(
+        today, _dt.time(10, 0), tzinfo=_dt.timezone.utc,
+    )
+    _new(cli_env, capsys, "Today item")
+    code, out = _run(cli_env, capsys, "list", "--today")
+    assert code == 0
+    assert "Today item" in out
+    assert "Yesterday item" not in out
 
 
 def test_export_writes_markdown(cli_env, capsys, tmp_path):

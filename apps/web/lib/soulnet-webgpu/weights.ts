@@ -113,6 +113,8 @@ export function inferArch(buffer: ArrayBuffer): SoulNetArch {
         }
         const count = shape.reduce((a, b) => a * b, 1)
         sizes[name] = count
+        // Align to 4 bytes (writer adds padding before float data)
+        while (offset % 4 !== 0) offset++
         offset += count * 4
       }
     } else {
@@ -189,6 +191,8 @@ export function parseSou(buffer: ArrayBuffer): SoulCheckpoint {
         shape.push(view.getUint32(offset, true)); offset += 4
       }
       const count = shape.reduce((a, b) => a * b, 1)
+      // Align to 4 bytes for Float32Array (writer adds padding)
+      while (offset % 4 !== 0) offset++
       const arr = new Float32Array(buffer, offset, count)
       weights[name as `p${number}`] = new Float32Array(arr)
       totalElements += count

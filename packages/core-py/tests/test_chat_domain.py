@@ -190,6 +190,62 @@ class TestRespond:
             assert resp.tokens_generated == 0
 
 
+# ── Session-id threading ────────────────────────────────────────────────
+
+class TestSessionIdThreading:
+
+    @pytest.fixture
+    def domain(self):
+        tmp = tempfile.mkdtemp()
+        d = ChatDomain(log_dir=tmp)
+        yield d
+
+    @pytest.mark.asyncio
+    async def test_respond_passes_session_id_to_generate(self, domain):
+        """respond() must forward session_id into _generate() for KV reuse."""
+        captured = {}
+        async def _fake_generate(**kwargs):
+            captured.update(kwargs)
+            return "Hello"
+        with patch.object(domain, "_generate", new=_fake_generate):
+            await domain.respond(
+                messages=[{"role": "user", "content": "Hi"}],
+                session_id="sess-kv",
+            )
+        assert captured["session_id"] == "sess-kv"
+
+    @pytest.mark.asyncio
+    async def test_generate_passes_session_id_to_provider_chat(self, domain):
+        """_generate() must thread session_id into provider.chat()."""
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value="Hello back")
+        with patch("domains.models.provider.get_provider", return_value=provider):
+            result = await domain._generate(
+                user_msg="Hi",
+                system_prompt="",
+                model="gpt2",
+                temperature=0.8,
+                max_tokens=16,
+                session_id="sess-kv",
+            )
+        assert result == "Hello back"
+        _, kwargs = provider.chat.call_args
+        assert kwargs["session_id"] == "sess-kv"
+
+    @pytest.mark.asyncio
+    async def test_generate_defaults_session_id(self, domain):
+        """_generate() must default session_id so direct callers still work."""
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value="ok")
+        with patch("domains.models.provider.get_provider", return_value=provider):
+            await domain._generate(
+                user_msg="Hi", system_prompt="", model="gpt2",
+                temperature=0.8, max_tokens=16,
+            )
+        _, kwargs = provider.chat.call_args
+        assert kwargs["session_id"] == "default"
+
+
 # ── Factories / dataclasses ─────────────────────────────────────────────
 
 class TestChatRequest:

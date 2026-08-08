@@ -102,6 +102,19 @@ def test_create_note_rejects_bad_status(server):
     assert r.status_code == 400
 
 
+def test_create_note_accepts_todo_status(server):
+    with _client() as c:
+        r = c.post(server.base_url + "/api/notes", json={
+            "title": "Backlog", "status": "todo",
+        })
+        assert r.status_code == 200
+        assert r.json()["note"]["status"] == "todo"
+        r = c.put(server.base_url + "/api/notes/" + r.json()["note"]["id"],
+                  json={"status": "todo"})
+        assert r.status_code == 200
+        assert r.json()["note"]["status"] == "todo"
+
+
 def test_update_note(server):
     with _client() as c:
         created = c.post(server.base_url + "/api/notes", json={

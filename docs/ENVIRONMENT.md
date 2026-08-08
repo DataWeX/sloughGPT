@@ -102,6 +102,8 @@ the model is served from a worker process so a crash (OOM, segfault) cannot
 take down the API server; the guard auto-restarts the worker up to
 `SLO_GUARD_MAX_RESTARTS` times.
 
+Can also be toggled at runtime via `POST /models/process-guard` (`{"enabled": true/false}`).
+
 ```bash
 SLO_ENABLE_PROCESS_GUARD=true  # Default: true
 ```

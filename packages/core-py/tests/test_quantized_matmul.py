@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from domains.infrastructure.quantization import (
-    QuantEngine,
+    Quantine,
     TensorInfo,
     quantize_activation,
     int8_matmul,
@@ -118,7 +118,7 @@ class TestQuantizedLinear:
         w = np.random.randn(8, 16).astype(np.float32) * 0.02
 
         # Quantize weight
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
 
         # Float32 reference
@@ -137,7 +137,7 @@ class TestQuantizedLinear:
         w = np.random.randn(8, 16).astype(np.float32) * 0.02
         bias = np.random.randn(8).astype(np.float32) * 0.01
 
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
 
         y_fp32 = x @ w.T + bias
@@ -153,7 +153,7 @@ class TestQuantizedLinear:
         x = np.random.randn(4, 128, 768).astype(np.float32)
         w = np.random.randn(768, 768).astype(np.float32) * 0.02
 
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
 
         y_fp32 = x @ w.T
@@ -170,7 +170,7 @@ class TestQuantizedLinear:
         x = np.random.randn(1, 128, 768).astype(np.float32)
         w = np.random.randn(768, 768).astype(np.float32) * 0.02
 
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
 
         y_fp32 = x @ w.T
@@ -197,7 +197,7 @@ class TestSloLinearQuantized:
         y_float = layer.forward_numpy(x.data)
 
         # Quantize weight
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize(layer.name, layer.weight.data.copy())
         assert info.is_quantized
         layer.set_quantized_weight(info)
@@ -219,7 +219,7 @@ class TestSloLinearQuantized:
         x = Tensor(np.random.randn(1, 16).astype(np.float32))
 
         # Quantize
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize(layer.name, layer.weight.data.copy())
         assert info.is_quantized
         layer.set_quantized_weight(info)
@@ -244,7 +244,7 @@ class TestSloLinearQuantized:
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(2, 16).astype(np.float32))
 
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize(layer.name, layer.weight.data.copy())
         layer.set_quantized_weight(info)
 
@@ -294,7 +294,7 @@ class TestQuantizedSloLinearBenchmark:
         x = rng.randn(4, 128, 768).astype(np.float32) * 0.5
 
         # Quantize
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("gpt2.test", layer.weight.data.copy())
         layer.set_quantized_weight(info)
 
@@ -330,7 +330,7 @@ class TestQuantizedSloLinearBenchmark:
         layer.weight.data = rng.randn(4096, 4096).astype(np.float32) * 0.01
         x = rng.randn(1, 4096).astype(np.float32) * 0.5
 
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("med.test", layer.weight.data.copy())
         layer.set_quantized_weight(info)
 

@@ -132,7 +132,7 @@ $(<command>)                    # Command substitution
 | `datasets` | List datasets (tab-completes names) |
 | `knowledge` | List knowledge base entries |
 | `checkpoints` | List training checkpoints (tab-completes names) |
-| `finetuned` | List fine-tuned model paths (tab-completes names) |
+| `finetuned` | List fine-tuned models; `finetuned load <name>` loads one for chat, `finetuned rm <name>` deletes it |
 | `tokenizer` | Show tokenizer vocabulary stats |
 
 ### Process Management
@@ -413,7 +413,7 @@ terminal width; the caret always stays visible.
 | `switch` | Soul names from `/souls` API |
 | `datasets` | Dataset names from `/datasets` API |
 | `checkpoints` | Checkpoint names from `/auto-train/checkpoints` API |
-| `finetuned` | Fine-tuned model names from `/training/finetuned-models` API |
+| `finetuned` | Subcommands (`load`, `rm`, `del`, `delete`); model names after `load`/`rm`/`del`/`delete` from `/training/finetuned-models` API |
 | `source`, `less`, `tee`, `pushd`, `sort`, `uniq` | File/directory path completion (fallback) |
 
 ### Path Completion

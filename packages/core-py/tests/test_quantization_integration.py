@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 import time
 
-from domains.infrastructure.quantization import QuantEngine
-from domains.training.slonet import SloTransformer
+from domains.infrastructure.quantization import Quantine
+from domains.training.slonet import SloTransformer, SloTransformerBlock
 
 
 def _walk_linear_layers(model):
@@ -92,7 +92,7 @@ class TestQuantizationIntegration:
 
     def test_quantize_all_linears_int8(self, tiny_model, sample_input):
         """Quantize all SloLinear layers to int8 and verify inference works."""
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
 
         # Float32 baseline
         logits_fp32 = _run_model(tiny_model, sample_input)
@@ -127,7 +127,7 @@ class TestQuantizationIntegration:
 
     def test_quantize_all_linears_int4(self, tiny_model, sample_input):
         """Quantize all SloLinear layers to int4 and verify inference works."""
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
 
         logits_fp32 = _run_model(tiny_model, sample_input)
 
@@ -153,7 +153,7 @@ class TestQuantizationIntegration:
 
     def test_quantize_during_inference_no_crash(self, tiny_model, sample_input):
         """Quantizing layers while model is in use shouldn't crash."""
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
 
         # First pass (float32)
         _run_model(tiny_model, sample_input)
@@ -176,7 +176,7 @@ class TestQuantizationIntegration:
         fp32_bytes = _count_linear_params(tiny_model)
         assert fp32_bytes > 0
 
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         layers = _walk_linear_layers(tiny_model)
         for name, module in layers.items():
             if 'norm' in name:
@@ -194,7 +194,7 @@ class TestQuantizationIntegration:
         fp32_bytes = _count_linear_params(tiny_model)
         assert fp32_bytes > 0
 
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         layers = _walk_linear_layers(tiny_model)
         for name, module in layers.items():
             if 'norm' in name:
@@ -215,7 +215,7 @@ class TestQuantizationIntegration:
         norm_names = {n for n in layers if 'norm' in n}
 
         # int8
-        engine8 = QuantEngine(bits=8, mode="symmetric")
+        engine8 = Quantine(bits=8, mode="symmetric")
         for name, module in layers.items():
             if name in norm_names:
                 continue
@@ -229,7 +229,7 @@ class TestQuantizationIntegration:
             module._quant_info = None
 
         # int4
-        engine4 = QuantEngine(bits=4, mode="symmetric")
+        engine4 = Quantine(bits=4, mode="symmetric")
         for name, module in layers.items():
             if name in norm_names:
                 continue
@@ -265,7 +265,7 @@ class TestQuantizationIntegration:
         )
 
         # Quantize all SloLinear layers int8
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         layers = _walk_linear_layers(model)
         for name, module in layers.items():
             if 'norm' in name:
@@ -327,7 +327,7 @@ class TestQuantizeEndpoint:
 
     def test_quantize_endpoint_smoke(self, tiny_model, sample_input):
         """Simulate the quantize endpoint logic directly."""
-        from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
+        from domains.infrastructure.quantization import Quantine, walk_slo_linears
 
         # Walk layers
         layers = walk_slo_linears(tiny_model)
@@ -336,7 +336,7 @@ class TestQuantizeEndpoint:
         assert layers['lm_head'].weight.data.shape[0] == 100  # vocab_size
 
         # Quantize all layers int8
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         quantized_count = 0
         for name, module in layers.items():
             info = engine.quantize(f"{name}.weight", module.weight.data.copy())
@@ -368,7 +368,7 @@ class TestQuantizeEndpoint:
         This test verifies every parameter finds its module. Prevents
         regression of the naming mismatch bug (q_proj vs W_q).
         """
-        from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
+        from domains.infrastructure.quantization import Quantine, walk_slo_linears
 
         linear_map = walk_slo_linears(tiny_model)
         param_names = dict(tiny_model.named_parameters())
@@ -390,7 +390,7 @@ class TestQuantizeEndpoint:
                     break
 
         # Quantize using object-identity matching
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         quantized_count = 0
         for pname, param in param_names.items():
             if pname not in param_to_module:
@@ -418,3 +418,219 @@ class TestQuantizeEndpoint:
             assert out.shape[0] == 1
             assert not np.any(np.isnan(out.data)), f"NaN in output at step {i}"
             assert not np.any(np.isinf(out.data)), f"Inf in output at step {i}"
+
+
+class TestGenerateNumpyPackedInt4:
+    """Packed int4 fused GEMM path in generate_numpy / generate_numpy_stream.
+
+    The fused QKV/FFN projections must keep int4 weights packed (no lazy
+    int8 unpack, no memory loss) while producing output identical to the
+    per-layer path.
+    """
+
+    def _quantize(self, model, bits, mode="symmetric"):
+        engine = Quantine(bits=bits, mode=mode)
+        layers = _walk_linear_layers(model)
+        count = 0
+        for name, module in layers.items():
+            if "norm" in name:
+                continue
+            info = engine.quantize(f"{name}.weight", module.weight.data.copy())
+            if info.is_quantized:
+                module.set_quantized_weight(info)
+                count += 1
+        assert count > 0, "No layers were quantized"
+        return count
+
+    def _int4_unpacked_layers(self, model):
+        """Names of int4 linears whose lazy int8 unpack cache got materialized."""
+        return [
+            name for name, module in _walk_linear_layers(model).items()
+            if module._quant_info is not None and module._quant_info.meta.bits == 4
+            and module._quant_unpacked is not None
+        ]
+
+    def _first_block(self, model):
+        for l in model.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                return l
+        raise AssertionError("No transformer block found")
+
+    def test_int4_fuse_builder_returns_packed(self, tiny_model):
+        """_fuse_quant_weights_int4 returns a packed (N, K//2) matrix on int4."""
+        from domains.training.slonet import _fuse_quant_weights_int4
+
+        self._quantize(tiny_model, 4, "symmetric")
+        block = self._first_block(tiny_model)
+        f = _fuse_quant_weights_int4((block.attn.W_q, block.attn.W_k, block.attn.W_v))
+        assert f is not None, "int4 fused builder should succeed on an int4 model"
+        Wp, Sp, zp, Bp = f
+        K = block.attn.W_q._quant_info.meta.original_shape[-1]
+        assert Wp.ndim == 2 and Wp.shape[1] == K // 2, (Wp.shape, K)
+        assert zp == 0
+        assert Sp.shape[0] == Wp.shape[0]
+
+    def test_int4_generate_matches_perlinear_without_unpack(self, tiny_model, sample_input, monkeypatch):
+        """generate_numpy uses the packed fused path and never unpacks int4."""
+        from domains.training import slonet as S
+
+        self._quantize(tiny_model, 4, "symmetric")
+        out_packed = tiny_model.generate_numpy(sample_input, max_new_tokens=8, temperature=0.0)
+        assert self._int4_unpacked_layers(tiny_model) == [], (
+            "Packed fused path materialized the int8 unpack cache"
+        )
+
+        # Per-layer reference: disable both fuse builders.
+        monkeypatch.setattr(S, "_fuse_quant_weights_int4", lambda linears: None)
+        monkeypatch.setattr(S, "_fuse_quant_weights", lambda linears: None)
+        out_perlinear = tiny_model.generate_numpy(sample_input, max_new_tokens=8, temperature=0.0)
+
+        assert out_packed.shape == out_perlinear.shape
+        np.testing.assert_array_equal(out_packed, out_perlinear)
+
+    def test_int4_stream_matches_generate_numpy(self, tiny_model, sample_input):
+        """generate_numpy_stream uses the packed fused path, no unpack."""
+        self._quantize(tiny_model, 4, "symmetric")
+        out = tiny_model.generate_numpy(sample_input, max_new_tokens=8, temperature=0.0)
+        toks = list(tiny_model.generate_numpy_stream(sample_input, max_new_tokens=8, temperature=0.0))
+        assert len(toks) == 8
+        assert list(out[0, 8:]) == toks, "stream tokens differ from generate_numpy"
+        assert self._int4_unpacked_layers(tiny_model) == [], (
+            "Stream path materialized the int8 unpack cache"
+        )
+
+    def test_int8_symmetric_fuse_still_active(self, tiny_model, sample_input):
+        """Symmetric int8 still fuses (zero_point guard passes) and does not unpack."""
+        from domains.training.slonet import _fuse_quant_weights
+
+        self._quantize(tiny_model, 8, "symmetric")
+        block = self._first_block(tiny_model)
+        assert _fuse_quant_weights((block.attn.W_q, block.attn.W_k, block.attn.W_v)) is not None
+        out = tiny_model.generate_numpy(sample_input, max_new_tokens=8, temperature=0.0)
+        assert out.shape[0] == 1
+        assert not np.any(np.isnan(out))
+
+    def test_asymmetric_int8_guard_falls_back(self, tiny_model, sample_input):
+        """Asymmetric int8 is rejected by the fused builder (zero_point != 0)."""
+        from domains.training.slonet import _fuse_quant_weights
+
+        self._quantize(tiny_model, 8, "asymmetric")
+        block = self._first_block(tiny_model)
+        assert _fuse_quant_weights((block.attn.W_q, block.attn.W_k, block.attn.W_v)) is None, (
+            "Asymmetric int8 must not fuse with a hardcoded zero_point"
+        )
+        out = tiny_model.generate_numpy(sample_input, max_new_tokens=8, temperature=0.0)
+        assert out.shape[0] == 1
+        assert not np.any(np.isnan(out))
+        assert not np.any(np.isinf(out))
+
+
+def _quantize_all_linears(model, bits, mode="symmetric"):
+    """Quantize every SloLinear weight (skip norms). Returns count."""
+    engine = Quantine(bits=bits, mode=mode)
+    count = 0
+    for name, module in _walk_linear_layers(model).items():
+        if "norm" in name:
+            continue
+        info = engine.quantize(f"{name}.weight", module.weight.data.copy())
+        if info.is_quantized:
+            module.set_quantized_weight(info)
+            count += 1
+    assert count > 0, "No layers were quantized"
+    return count
+
+
+class TestInt8QuantizedKvCache:
+    """int8 quantized KV cache for the numpy generation paths.
+
+    ``generate_numpy``/``generate_numpy_stream`` accept ``quantize_kv``
+    (None = auto-enable on quantized models, True = force int8 cache,
+    False = force float32 cache). K/V is stored per-token-per-head with a
+    float32 scale (~4x memory reduction), dequantized to float32 on read.
+    """
+
+    def test_kv_quantize_roundtrip_bound(self):
+        """quantize_kv_tensor returns int8 + scale, dequant is loss-bounded."""
+        from domains.infrastructure.quantization import (
+            dequantize_kv_tensor,
+            quantize_kv_tensor,
+        )
+
+        rng = np.random.default_rng(0)
+        x = rng.standard_normal((1, 16, 2, 8)).astype(np.float32)
+        qi, sc = quantize_kv_tensor(x)
+        assert qi.dtype == np.int8
+        assert sc.dtype == np.float32
+        assert qi.shape == x.shape
+        assert sc.shape == (1, 16, 2, 1)
+
+        xd = dequantize_kv_tensor(qi, sc)
+        assert xd.shape == x.shape and xd.dtype == np.float32
+        err = np.abs(xd - x).max()
+        assert err < 1.0 / 64.0, f"roundtrip error {err} exceeds bound"
+
+    def test_kv_quantize_zero_vector_guard(self):
+        """Zero rows don't divide by zero; they quantize and dequantize to zero."""
+        from domains.infrastructure.quantization import (
+            dequantize_kv_tensor,
+            quantize_kv_tensor,
+        )
+
+        x = np.zeros((1, 3, 2, 8), dtype=np.float32)
+        qi, sc = quantize_kv_tensor(x)
+        assert np.all(np.isfinite(sc))
+        assert np.all(qi == 0)
+        xd = dequantize_kv_tensor(qi, sc)
+        assert np.array_equal(xd, x)
+
+    def test_quantized_model_auto_enables_kvq(self, tiny_model, sample_input):
+        """Auto (None) on an int4 model matches explicit True, bit-exact."""
+        _quantize_all_linears(tiny_model, 4, "symmetric")
+        G = dict(temperature=0.0, max_new_tokens=16)
+        auto = tiny_model.generate_numpy(sample_input, **G)
+        explicit = tiny_model.generate_numpy(sample_input, quantize_kv=True, **G)
+        assert np.array_equal(auto, explicit)
+
+    def test_fp32_model_kvq_agrees_with_fp32_cache(self, tiny_model, sample_input):
+        """int8 KV cache on a float32 model keeps greedy output nearly identical."""
+        G = dict(temperature=0.0, max_new_tokens=20)
+        fp32 = tiny_model.generate_numpy(sample_input, quantize_kv=False, **G)
+        kvq = tiny_model.generate_numpy(sample_input, quantize_kv=True, **G)
+        agree = np.mean(fp32 == kvq)
+        assert agree >= 0.7, f"greedy token agreement {agree:.3f} too low"
+
+    def test_stream_matches_generate_numpy_with_kvq(self, tiny_model, sample_input):
+        """Stream and batch paths produce identical tokens with int8 cache."""
+        _quantize_all_linears(tiny_model, 4, "symmetric")
+        G = dict(temperature=0.0, max_new_tokens=12, quantize_kv=True)
+        out = tiny_model.generate_numpy(sample_input, **G)
+        toks = list(tiny_model.generate_numpy_stream(sample_input, **G))
+        assert len(toks) == 12
+        assert list(out[0, 8:]) == toks, "stream tokens differ from generate_numpy"
+
+    def test_kvq_deterministic(self, tiny_model, sample_input):
+        """Two kvq runs with greedy sampling are bit-identical."""
+        G = dict(temperature=0.0, max_new_tokens=16, quantize_kv=True)
+        a = tiny_model.generate_numpy(sample_input, **G)
+        b = tiny_model.generate_numpy(sample_input, **G)
+        assert np.array_equal(a, b)
+
+    def test_kvq_finite_on_quantized_model(self, tiny_model, sample_input):
+        """int4 + int8 KV cache produces finite, well-shaped output."""
+        _quantize_all_linears(tiny_model, 4, "symmetric")
+        out = tiny_model.generate_numpy(sample_input, max_new_tokens=16, temperature=0.0)
+        assert out.shape == (1, 24)
+        assert not np.any(np.isnan(out))
+        assert not np.any(np.isinf(out))
+
+    def test_kv_cache_memory_ratio(self, tiny_model):
+        """int8 data buffers are exactly 4x smaller; realistic E gives ~3.76x total."""
+        kb_k, kb_v, ks_k, ks_v, kl = tiny_model._alloc_kv_cache(2, 48, [2, 2], 64, True)
+        fb_k, fb_v, fs_k, fs_v, fl = tiny_model._alloc_kv_cache(2, 48, [2, 2], 64, False)
+        assert kb_k[0].dtype == np.int8 and fb_k[0].dtype == np.float32
+        assert fb_k[0].nbytes == 4 * kb_k[0].nbytes
+        qbytes = kb_k[0].nbytes + kb_v[0].nbytes + ks_k[0].nbytes + ks_v[0].nbytes
+        fbytes = fb_k[0].nbytes + fb_v[0].nbytes
+        ratio = fbytes / qbytes
+        assert ratio > 3.5, f"total KV memory ratio {ratio:.2f}x should exceed 3.5x"
+        assert fs_k[0] is None and kl == fl == [0, 0]

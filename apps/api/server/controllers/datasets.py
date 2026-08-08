@@ -97,7 +97,7 @@ class DatasetsController:
         }
 
     def get_dataset_stats(self, dataset_id: str) -> Optional[Dict[str, Any]]:
-        """Get dataset statistics with plain-language description."""
+        """Get dataset statistics matching the frontend DatasetStats interface."""
         path = self.datasets_dir / dataset_id
         if not path.exists():
             return None
@@ -105,21 +105,76 @@ class DatasetsController:
         files = list(path.glob("*.jsonl"))
         total_size = sum(f.stat().st_size for f in files)
 
-        # Also check for input.txt
         input_file = path / "input.txt"
         if input_file.exists() and not files:
             total_size = input_file.stat().st_size
             files = [input_file]
 
-        # Build plain-language description
-        description = self._describe_dataset(path, files, total_size)
+        sample_file = path / "corpus.jsonl"
+        if not sample_file.exists():
+            sample_file = path / "input.txt"
+
+        lines_list: list[str] = []
+        total_chars = 0
+        is_jsonl = False
+        is_messages = False
+        has_dialogue = False
+        dialogue_markers = ["user:", "assistant:", "human:", "<|user|>", "<|assistant|>"]
+        sample_preview: list[str] = []
+
+        if sample_file.exists():
+            try:
+                with open(sample_file, "r", encoding="utf-8", errors="replace") as f:
+                    raw = f.read()
+                lines_list = [l.strip() for l in raw.split("\n") if l.strip()]
+                total_chars = len(raw)
+                sample_preview = lines_list[:5]
+
+                for line in lines_list[:20]:
+                    if line.startswith("{"):
+                        is_jsonl = True
+                        try:
+                            import json
+                            obj = json.loads(line)
+                            if "messages" in obj or "conversations" in obj:
+                                is_messages = True
+                        except Exception:
+                            pass
+                    lower = line.lower()
+                    if any(lower.startswith(m) or f" {m}" in lower for m in dialogue_markers):
+                        has_dialogue = True
+            except Exception:
+                pass
+
+        num_lines = len(lines_list)
+        avg_length = (total_chars / num_lines) if num_lines > 0 else 0
+
+        if is_messages:
+            fmt = "messages"
+            suggested = "distill"
+        elif is_jsonl:
+            fmt = "jsonl"
+            suggested = "finetune"
+        elif has_dialogue:
+            fmt = "dialogue"
+            suggested = "distill"
+        else:
+            fmt = "text"
+            suggested = "distill"
+
+        if total_size > 1024 * 1024:
+            suggested = "finetune"
 
         return {
-            "dataset_id": dataset_id,
-            "files": len(files),
-            "size_bytes": total_size,
-            "size": total_size,
-            "description": description,
+            "format": fmt,
+            "samples": num_lines,
+            "chars": total_chars,
+            "avg_length": avg_length,
+            "has_messages": is_messages,
+            "sample_preview": sample_preview,
+            "lines": num_lines,
+            "suggested_method": suggested,
+            "file_type": "jsonl" if is_jsonl else "txt",
         }
 
     def _describe_dataset(self, path: Path, files: list, total_size: int) -> str:
@@ -206,14 +261,43 @@ class DatasetsController:
         }
 
     def update_dataset(self, dataset_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Update dataset metadata (name is the directory name)"""
+        """Update dataset metadata. Renames directory if name changes, persists description."""
         path = self.datasets_dir / dataset_id
         if not path.exists():
             return None
+
+        new_name = updates.get("name")
+        new_desc = updates.get("description")
+
+        # Rename directory if name changed
+        if new_name and new_name != dataset_id:
+            new_path = self.datasets_dir / new_name
+            if new_path.exists():
+                return None  # target name already taken
+            path.rename(new_path)
+            dataset_id = new_name
+            path = new_path
+
+        # Persist description to metadata file
+        if new_desc is not None:
+            meta_path = path / ".metadata.json"
+            meta = {}
+            if meta_path.exists():
+                try:
+                    import json as _json
+                    with open(meta_path, "r") as f:
+                        meta = _json.load(f)
+                except Exception:
+                    pass
+            meta["description"] = new_desc
+            import json as _json
+            with open(meta_path, "w") as f:
+                _json.dump(meta, f, indent=2)
+
         return {
             "id": dataset_id,
-            "name": updates.get("name", dataset_id),
-            "description": updates.get("description", ""),
+            "name": dataset_id,
+            "description": new_desc or "",
             "path": str(path),
         }
 

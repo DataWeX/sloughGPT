@@ -91,6 +91,28 @@ describe('StatusBar', () => {
     expect(screen.getByText(/Offline/)).toBeDefined()
   })
 
+  it('does not re-fetch soul on health-only ticks', async () => {
+    const { rerender } = render(<StatusBar />)
+    await screen.findAllByText('The Optimist')
+    expect(mockGetCurrent).toHaveBeenCalledTimes(1)
+    rerender(<StatusBar />)
+    rerender(<StatusBar />)
+    await waitFor(() => {
+      expect(mockGetCurrent).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('re-fetches soul when the active soul changes', async () => {
+    const { rerender } = render(<StatusBar />)
+    await screen.findAllByText('The Optimist')
+    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 15, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'curious' })
+    mockGetCurrent.mockResolvedValue({ name: 'curious', description: 'Curious soul' })
+    rerender(<StatusBar />)
+    await waitFor(() => {
+      expect(mockGetCurrent).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('links to monitoring page', () => {
     render(<StatusBar />)
     const link = screen.getByRole('link')

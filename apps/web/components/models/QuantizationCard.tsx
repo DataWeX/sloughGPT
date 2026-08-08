@@ -6,6 +6,7 @@ import { Button } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelController, type QuantizationResult } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 type TensorEntry = { scale: number; zero_point: number; cosine_sim: number }
 
@@ -43,7 +44,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
       setResult(res)
       addToast(`${res.bits}-bit ${mode} quantization applied (${res.layers_quantized} layers)`, 'success')
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Quantization failed', 'error')
+      addToast(extractErrorMessage(err, 'Quantization failed'), 'error')
     } finally {
       setQuantizing(false)
     }
@@ -57,7 +58,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
       setShowLayers(false)
       addToast('Reset to float32', 'success')
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Reset failed', 'error')
+      addToast(extractErrorMessage(err, 'Reset failed'), 'error')
     } finally {
       setResetting(false)
     }

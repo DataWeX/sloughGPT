@@ -9,6 +9,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { multimodalController } from '@/lib/controllers'
 import type { MultimodalCapabilities, TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { apiPost } from '@/lib/http-client'
 import { logger } from '@/lib/dev-log'
 import dynamicNext from 'next/dynamic'
@@ -39,7 +40,7 @@ export default function MultimodalPage() {
   const [creatingDataset, setCreatingDataset] = useState(false)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [dpoStatus, setDpoStatus] = useState<string>('idle')
-  const [dpoResult, setDpoResult] = useState<any>(null)
+  const [dpoResult, setDpoResult] = useState<Record<string, unknown> | null>(null)
   const [dpoError, setDpoError] = useState<string | null>(null)
   const [dpoAccepted, setDpoAccepted] = useState(0)
   const [dpoRejected, setDpoRejected] = useState(0)
@@ -135,7 +136,7 @@ export default function MultimodalPage() {
       const result = await multimodalController.trainBatchFromDir(dirPath)
       addToast(`Training started: ${result.total_images} images from ${dirPath}`, 'success')
       startPolling()
-    } catch (err: unknown) { addToast(err instanceof Error ? err.message : 'Training failed', 'error')
+    } catch (err: unknown) { addToast(extractErrorMessage(err, 'Training failed'), 'error')
     } finally { setBatchUploading(false) }
   }
 
@@ -149,7 +150,7 @@ export default function MultimodalPage() {
         auto_caption: true,
       })
       addToast(`Dataset "${result.dataset}" created: ${result.entries} entries`, 'success')
-    } catch (err: unknown) { addToast(err instanceof Error ? err.message : 'Dataset creation failed', 'error')
+    } catch (err: unknown) { addToast(extractErrorMessage(err, 'Dataset creation failed'), 'error')
     } finally { setCreatingDataset(false) }
   }
 
@@ -160,7 +161,7 @@ export default function MultimodalPage() {
       const result = await apiPost<{ status: string }>('/multimodal/dpo')
       addToast(`DPO training started: ${result.status || ''}`, 'success')
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'DPO trigger failed'
+      const msg = extractErrorMessage(err, 'DPO trigger failed')
       setDpoError(msg); setDpoStatus('error'); setDpoRunning(false); addToast(msg, 'error')
     }
   }

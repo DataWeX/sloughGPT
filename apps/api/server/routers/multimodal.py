@@ -217,7 +217,10 @@ class MultimodalRouter:
                 "supervised": label is not None and label.strip() != "",
             })
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_caption")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def train_batch(
         self,
@@ -327,7 +330,7 @@ class MultimodalRouter:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
             checkpoints = list_video_checkpoints()
             if not checkpoints:
-                checkpoints = list_video_checkpoints(str(Path("models/video-training")))
+                checkpoints = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
             if not checkpoints:
                 raise HTTPException(status_code=400, detail="No trained video model. Train via /multimodal/train-video first.")
             latest = checkpoints[0]
@@ -339,7 +342,10 @@ class MultimodalRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_video_generate")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── DPO ────────────────────────────────────────────────────────────
 
@@ -374,10 +380,13 @@ class MultimodalRouter:
                 "pairs_trained": result.get("pairs_trained", 0), "elapsed_seconds": round(elapsed, 1),
             })
         except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_dpo")
             with self._dpo_lock:
                 self._dpo_state["status"] = "error"
                 self._dpo_state["result"] = {"error": str(e)}
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Analysis ──────────────────────────────────────────────────────
 
@@ -403,7 +412,10 @@ class MultimodalRouter:
                 "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
             })
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_analyze_image")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def analyze_pdf(
         self,
@@ -429,7 +441,10 @@ class MultimodalRouter:
                 "method": "vlm" if processor._get_vlm() is not None else "text_extract",
             })
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"PDF analysis failed: {e}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_analyze_pdf")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
         finally:
             os.unlink(tmp_path)
 
@@ -455,7 +470,10 @@ class MultimodalRouter:
             finally:
                 os.unlink(tmp_path)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Video processing failed: {e}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_process_video")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Speech ────────────────────────────────────────────────────────
 
@@ -470,7 +488,10 @@ class MultimodalRouter:
             return success_response(data={"text": result.text, "confidence": result.confidence,
                     "language": result.language or language, "duration": result.duration})
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_transcribe")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def synthesize_speech(self, text: str = Form(...)):
         try:
@@ -489,7 +510,10 @@ class MultimodalRouter:
             return success_response(data={"status": "success", "audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                     "text": text, "duration_sec": len(waveform) / tts.sample_rate})
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"TTS failed: {e}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_tts")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Generation ────────────────────────────────────────────────────
 
@@ -517,7 +541,10 @@ class MultimodalRouter:
             return success_response(data={"status": "success", "image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                     "prompt": prompt, "steps": steps})
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_generate_image")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Dataset ───────────────────────────────────────────────────────
 
@@ -566,7 +593,7 @@ class MultimodalRouter:
             from domains.training.video_trainer import list_video_checkpoints
             ckpts = list_video_checkpoints()
             if not ckpts:
-                ckpts = list_video_checkpoints(str(Path("models/video-training")))
+                ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
             return ckpts
         except Exception:
             return []
@@ -576,7 +603,7 @@ class MultimodalRouter:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
             ckpts = list_video_checkpoints()
             if not ckpts:
-                ckpts = list_video_checkpoints(str(Path("models/video-training")))
+                ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
             match = [c for c in ckpts if c["name"] == name]
             if not match:
                 raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
@@ -586,14 +613,17 @@ class MultimodalRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_load_checkpoint")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def delete_checkpoint(self, name: str):
         try:
             from domains.training.video_trainer import list_video_checkpoints
             ckpts = list_video_checkpoints()
             if not ckpts:
-                ckpts = list_video_checkpoints(str(Path("models/video-training")))
+                ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
             match = [c for c in ckpts if c["name"] == name]
             if not match:
                 raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
@@ -605,7 +635,10 @@ class MultimodalRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="multimodal_delete_checkpoint")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Reset ─────────────────────────────────────────────────────────
 

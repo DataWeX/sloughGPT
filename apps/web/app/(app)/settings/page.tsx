@@ -25,7 +25,7 @@ import { Switch } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { useSettings, useUpdateSettings } from '@/lib/store'
+import { useSettings, useUpdateSettings, DEFAULT_SETTINGS } from '@/lib/store'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale, LOCALES } from '@/hooks/useLocale'
 import { systemController, type DetailedHealth, type SystemMetrics, type DiskUsage, type SystemInfo } from '@/lib/system-controller'
@@ -47,7 +47,7 @@ function SettingsSlider({
   formatValue?: (v: number) => string
 }) {
   const safeValue = value ?? 0
-  const display = formatValue ? formatValue(safeValue) : safeValue.toString()
+  const display = formatValue ? formatValue(safeValue) : `${safeValue}`
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -71,6 +71,7 @@ export default function SettingsPage() {
   const [info, setInfo] = useState<SystemInfo | null>(null)
   const [connectionTest, setConnectionTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'error'; latency?: number; error?: string }>({ status: 'idle' })
   const [settingsErrors, setSettingsErrors] = useState<{ apiUrl?: string; hfToken?: string }>({})
+  const [processGuard, setProcessGuard] = useState<import('@/lib/system-controller').ProcessGuardStatus | null>(null)
 
   const fetchHealth = useCallback(async () => {
     const [d, m, dk, inf] = await Promise.allSettled([
@@ -86,6 +87,25 @@ export default function SettingsPage() {
   }, [])
 
   useEffect(() => { fetchHealth() }, [fetchHealth])
+
+  const fetchProcessGuard = useCallback(async () => {
+    try {
+      const status = await systemController.getProcessGuardStatus()
+      setProcessGuard(status)
+    } catch { /* unavailable */ }
+  }, [])
+
+  useEffect(() => { fetchProcessGuard() }, [fetchProcessGuard])
+
+  const handleToggleProcessGuard = async (enabled: boolean) => {
+    try {
+      const status = await systemController.setProcessGuardEnabled(enabled)
+      setProcessGuard(status)
+      addToast(enabled ? 'Process isolation enabled' : 'Process isolation disabled', 'success')
+    } catch (e: unknown) {
+      addToast(extractErrorMessage(e, 'Failed to toggle process guard'), 'error')
+    }
+  }
 
   const isOnline = apiHealth !== null && apiHealth !== 'offline'
   const apiOk = isOnline && (apiHealth.status === 'healthy' || detailed?.status === 'healthy')
@@ -114,19 +134,7 @@ export default function SettingsPage() {
   }
 
   const resetAllSettings = () => {
-    updateSettings({
-      apiUrl: PUBLIC_API_URL,
-      hfToken: '',
-      defaultModel: 'gpt2',
-      defaultTemp: 0.8,
-      defaultMaxTokens: 200,
-      defaultTopP: 0.9,
-      defaultTopK: 50,
-      theme: 'light',
-      streaming: true,
-      customContext: '',
-      collapsibleMessageLength: 500,
-    })
+    updateSettings(DEFAULT_SETTINGS)
     addToast('Settings reset to defaults', 'success')
   }
 
@@ -220,7 +228,7 @@ export default function SettingsPage() {
                     }
                   }
                 }}
-                placeholder="http://localhost:8000"
+                placeholder={PUBLIC_API_URL}
                 className={`font-mono text-xs ${settingsErrors.apiUrl ? 'border-destructive ring-destructive/20' : ''}`}
                 aria-label="API server URL"
                 aria-invalid={!!settingsErrors.apiUrl}
@@ -265,8 +273,8 @@ export default function SettingsPage() {
                 <CardTitle className="text-base">Chat defaults</CardTitle>
                 <CardDescription>Default model and generation settings</CardDescription>
               </div>
-              {(settings.defaultTemp !== 0.8 || settings.defaultMaxTokens !== 200 || settings.defaultTopP !== 0.9 || settings.defaultTopK !== 50) && (
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateSettings({ defaultTemp: 0.8, defaultMaxTokens: 200, defaultTopP: 0.9, defaultTopK: 50 })}>
+              {(settings.defaultTemp !== DEFAULT_SETTINGS.defaultTemp || settings.defaultMaxTokens !== DEFAULT_SETTINGS.defaultMaxTokens || settings.defaultTopP !== DEFAULT_SETTINGS.defaultTopP || settings.defaultTopK !== DEFAULT_SETTINGS.defaultTopK) && (
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateSettings({ defaultTemp: DEFAULT_SETTINGS.defaultTemp, defaultMaxTokens: DEFAULT_SETTINGS.defaultMaxTokens, defaultTopP: DEFAULT_SETTINGS.defaultTopP, defaultTopK: DEFAULT_SETTINGS.defaultTopK })}>
                   Reset
                 </Button>
               )}
@@ -541,7 +549,6 @@ export default function SettingsPage() {
                   const valid: Record<string, unknown> = {}
                   if (typeof raw.apiUrl === 'string') valid.apiUrl = raw.apiUrl
                   if (typeof raw.hfToken === 'string') valid.hfToken = raw.hfToken
-                  if (typeof raw.defaultModel === 'string') valid.defaultModel = raw.defaultModel
                   if (typeof raw.defaultTemp === 'number') valid.defaultTemp = raw.defaultTemp
                   if (typeof raw.defaultMaxTokens === 'number') valid.defaultMaxTokens = raw.defaultMaxTokens
                   if (typeof raw.defaultTopP === 'number') valid.defaultTopP = raw.defaultTopP
@@ -558,6 +565,48 @@ export default function SettingsPage() {
                 }
               }}>Import settings</Button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Process isolation */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Process isolation</CardTitle>
+                <CardDescription>Run model inference in a separate process for crash safety</CardDescription>
+              </div>
+              {processGuard && (
+                <Switch
+                  checked={processGuard.enabled}
+                  onCheckedChange={handleToggleProcessGuard}
+                  aria-label="Toggle process isolation"
+                />
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {processGuard ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className={processGuard.active ? 'text-success' : 'text-muted-foreground'}>
+                    {processGuard.active ? 'Active' : processGuard.enabled ? 'Enabled (not running)' : 'Disabled'}
+                  </span>
+                </div>
+                {processGuard.model_id && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Model</span>
+                    <span className="font-mono text-xs">{processGuard.model_id}</span>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground pt-1">
+                  Process isolation runs the model in a subprocess. If it crashes, the server survives and restarts it automatically. Uses ~2 GB more RAM.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            )}
           </CardContent>
         </Card>
 

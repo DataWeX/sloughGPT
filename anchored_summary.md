@@ -3,6 +3,48 @@
 ## Current Task
 No active task. Last commit: be30e120 feat: feature flags system with CI protection
 
+## Session 2026-08-06 (cont. 5) — Contexts + Barrels Test Coverage
+- Covered `contexts/` (all 4 files) + 3 small barrel/config surfaces + `lib/controllers.ts` barrel — 8 new test files / 60 tests.
+- `ConvSidebarContext.test.tsx` (11) — default state, localStorage read/persist (true/false/ignore non-true), toggles, setters, storage-throw tolerance, throw outside provider, hook API re-render.
+- `ChatContext.test.tsx` (9) — render children, all 3 hooks + `useChatContext` throw outside provider, per-context value exposure, combined merge, nested independent consumption.
+- `ChatToolbarContext.test.tsx` (5) — throw outside provider, all 9 groups' values, group callback invocation, live value update via harness re-render.
+- `ModelContext.test.tsx` (19) — real `@/hooks/useLiveStatus` store driven via `liveStatusStore` (no mock); `@/lib/model-controller` mocked via `vi.hoisted`. Covers: initial state, no refresh until `ready`, refresh+field mapping (type default `huggingface`, `size_mb→sizeMb`), list failure, loadModel/loadModelPath/unloadModel success+error+backend-error-field, clearError, live-health sync gated on `connectionStatus==='connected'`, `currentModel` from health, `useCurrentModel`/`useModelById`/`useLocalModels`/`useHuggingFaceModels`.
+- `compare-config.test.ts` (6) — METRIC_COLUMNS 6 columns, keys on `BenchmarkResult`, fmt/accessor per column, lowerBetter set, Infinity fallback for missing p95/p99.
+- `NavIcons.test.tsx` (3) — all 28 exports callable, `IconClose === IconX`.
+- `controllers-barrel.test.ts` (4) — identity of 19 controller exports + download helpers vs source modules; `vmController.run/builtins` functions.
+- `chat-barrel.test.ts` (3) — identity of 22 chat component exports; `ChatScreen` is memo/forwardRef (object, not function).
+- `vitest.config.ts`: `contexts/**/*.test.{ts,tsx}` added to `include` AND jsdom `environmentMatchGlobs`.
+- Full suite: 225 files / 2286 tests all pass; tsc exit 0.
+
+## Session 2026-08-06 (cont. 4) — WebGPU Test Coverage
+- Covered `lib/soulnet-webgpu/*` with 5 test files / 40 tests: `weights.test.ts` (11, v3 binary/v2 JSON round-trips, `inferArch`, `guessShapes`), `cache.test.ts` (6, fake IndexedDB), `engine.test.ts` (9, real hybrid CPU/GPU forward via fake `GPUDevice`), `transformer-engine.test.ts` (8), `worker.test.ts` (7, `SoulEngineWorker` + real `worker.ts` protocol).
+- Config: jsdom `environmentMatchGlobs` entry for `lib/soulnet-webgpu/**/*.test.ts`; helper gained `makeWebGPU` (fake device with queue + MAP_READ readback), `stubWorker`, IDB installer, `.sou` builders.
+- Root-cause fixes: v3 `.sou` builder omitted the 4-byte alignment padding before float data that `parseSou` requires (weights.ts:195 `while (offset % 4) offset++`); worker protocol tests needed `vi.resetModules()` for the 2nd dynamic import and token emission *after* `gen.next()`; fake pipeline needed `getBindGroupLayout`; non-JSON test buffer was 5 bytes for an 8-byte string; LSTM nl=2 param indices corrected.
+- Full suite: 214 files / 2168 tests all pass; tsc exit 0.
+
+## Session 2026-08-06 — Monitoring Expansion + Settings Crash Fix
+- `/monitoring` complete: SSE-driven cards, trend-history recording (`record_trend_snapshots`, 5s throttle), resilience fallback with `mapDetailedToSnapshot` — fixed a `num_parameters: null` data-loss bug. Full frontend suite 1934 tests green, tsc exit 0.
+- `/settings` production TypeError root cause: legacy persisted `man-store` replaces whole `settings` object (zustand shallow merge) → `defaultTemp` etc. `undefined`; `?? 0` guard was stripped by SWC (TS `number` type). Fixed: deep-merge in persist `merge` + `SettingsSlider` prop typed `number | undefined`. New `store.migration.test.ts` (3 tests); 462 lib/app tests green, tsc exit 0.
+
+## Session 2026-08-06 (cont.) — Monitoring Test Completion + DPOCard Type Fix
+- Closed monitoring coverage gap: 10 new test files (LatencyCard, AlertPanel, ResourceCard, KnowledgeCard, AutoTrainCard, QualityCard, FeedbackCard, TrainingHistory, ExecutorPool, KvCacheCard) = 76 tests. Every monitoring component now has a test file.
+- Completed pre-existing in-progress `DPOCard.tsx` typing change (`any` → `Record<string, unknown>`) with `typeof` guards — 5 tsc errors fixed, rendering preserved.
+- Full suite: 198 files / 2013 tests all pass; tsc exit 0.
+
+## Session 2026-08-06 (cont. 3) — Query Layer Test Coverage
+- Covered the custom query system (`lib/query/*`) with 3 test files / 35 tests:
+  - `lib/query/client.test.ts` (16) — `serializeKey`, `fetchQuery` cache hit/dedup-in-flight/retry-success/retry-exhausted/error-storage/fetchingKeys, `invalidateQuery`, `isStale`/`getQueryState`, `subscribeQuery` GC (delete-after-unsub, keep-while-subscribed, cancel-on-resubscribe via fake timers)
+  - `lib/query/hooks.test.ts` (13) — `useQuery` mount fetch/enabled=false skips/onSuccess/onError/refetch/refetch-after-invalidation, `useMutation` success+onSuccess/error+onError+onSettled/invalidateKeys/mutate-swallows/reset, `useInvalidate`, `useIsFetching`
+  - `lib/query/api-hooks.test.ts` (6) — `@/lib/model-controller` + `@/lib/souls-controller` mocked via `vi.hoisted`; `useModels`/`useSouls`/`useCurrentSoul`/`useCheckpoints` fetchers, `useLoadModel` invalidates `models`, `useSwitchSoul` invalidates souls/current-soul/checkpoints
+- `vitest.config.ts`: jsdom `environmentMatchGlobs` entries added for `lib/query/hooks.test.ts` + `lib/query/api-hooks.test.ts`.
+- Lesson: `useMutation(fn)` infers `V = void` — passing a string to `mutateAsync` needs explicit `useMutation<string, string>`.
+- Full suite: 207 files / 2092 tests all pass; tsc exit 0.
+
+## Session 2026-08-06 (cont. 2) — Remaining Test Coverage Gap
+- 6 new test files (48 tests): `lib/sse-client` (9, with reconnect/abort/chunk-buffering), `lib/conversations-utils` (11), `lib/download-utils` (6, DOM via new environmentMatchGlobs entries), `lib/reaction-store` (10), `hooks/useApiHealth` (2), `components/DatasetInlineImportModal` (10).
+- Lesson: `vi.mock` factories run at module instantiation → module-level `const`s referenced from them are TDZ; use `vi.hoisted` or state defined inside the factory. jsdom-created anchors are never in the DOM → capture via `createElement` spy.
+- Full suite: 204 files / 2057 tests all pass; tsc exit 0.
+
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
 ### Problem
@@ -105,7 +147,7 @@ Server: MogDB (mobile_training_store.py) → HFFineTuner → checkpoint
 - **Training**: Char LSTM, distill GPT-2→SloTransformer, HF fine-tune+LoRA, auto-train SSE, online LoRA, distributed DDP, **on-device training (server-assisted)**
 - **Serving**: ModelServer (semaphore, circuit breaker, MPS OOM recovery, ONNX backend), ModelRegistry, ProcessGuard, torch.inference_mode, CPU thread optimization
 - **API**: 20+ FastAPI routers, SSE standard envelope, 31+ CLI commands, shell REPL (40+ commands, pipelines, tab completion)
-- **Frontend**: Next.js 25+ pages, Strui component library, 2000+ vitest tests, 6 Cypress E2E specs
+- **Frontend**: Next.js 25+ pages, Strui component library, 2250+ vitest tests (223 files, all pass), 6 Cypress E2E specs
 - **Mobile**: React Native 11 screens, 22 services, on-device inference (JS SloNet + native Metal), **on-device training (server-assisted, MogDB + Zustand stores)**, offline cache
 - **Quantization**: int8/int4 AVX2 GEMM kernels, SloLinear quantized forward, SLNC persistence, frontend QuantizationCard
 - **Infrastructure**: Rate limiting (sliding window), Prometheus metrics (/metrics + /metrics/prometheus), flash attention config, ONNX backend integration

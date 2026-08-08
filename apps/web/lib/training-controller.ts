@@ -5,6 +5,10 @@
 import { apiGet, apiPost, apiDelete, apiPatch } from './http-client'
 import type { Checkpoint } from './souls-controller'
 
+function getAuthToken(): string | null {
+  return localStorage.getItem('auth_token')
+}
+
 export interface TrainingJob {
   id: string
   name: string
@@ -14,6 +18,7 @@ export interface TrainingJob {
   finished_at?: string
   model?: string
   dataset?: string
+  method?: string
   epochs?: number
   current_epoch?: number
   global_step?: number
@@ -78,6 +83,26 @@ export interface AutoTrainStartResponse {
 export interface WebhookStats {
   total: number
   success_rate: number
+}
+
+export interface FineTunedModel {
+  name: string
+  model_path: string
+  size_mb: number
+  size_bytes?: number
+  created_at?: string
+  model: string
+  dataset: string
+  model_name?: string
+  final_loss?: number | null
+  epochs?: number
+}
+
+export interface FineTunedModelLoadResponse {
+  status: string
+  name: string
+  model_path: string
+  model_id?: string
 }
 
 export interface TrainingBuild {
@@ -168,6 +193,21 @@ export const trainingJobsController = {
   async listBuilds(): Promise<TrainingBuild[]> {
     const data = await apiGet<{ builds: TrainingBuild[] }>('/training/builds')
     return data.builds || []
+  },
+
+  async listFineTuned(): Promise<FineTunedModel[]> {
+    try {
+      const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>('/training/finetuned-models')
+      return Array.isArray(data) ? data : (data?.models ?? [])
+    } catch { return [] }
+  },
+
+  async loadFineTuned(name: string): Promise<FineTunedModelLoadResponse> {
+    return apiPost(`/training/finetuned-models/${encodeURIComponent(name)}/load`)
+  },
+
+  async deleteFineTuned(name: string): Promise<{ status: string; name: string }> {
+    return apiDelete(`/training/finetuned-models/${encodeURIComponent(name)}`)
   },
 
   async get(id: string): Promise<TrainingJob | null> {
@@ -324,9 +364,33 @@ export const trainingJobsController = {
     return apiDelete(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
   },
 
+  async downloadCheckpoint(name: string): Promise<Blob> {
+    const { PUBLIC_API_URL } = await import('./config')
+    const token = getAuthToken()
+    const res = await fetch(`${PUBLIC_API_URL}/auto-train/checkpoints/${encodeURIComponent(name)}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(`Download failed (${res.status})`)
+    return res.blob()
+  },
+
+  async exportMetrics(): Promise<Blob> {
+    const { PUBLIC_API_URL } = await import('./config')
+    const token = getAuthToken()
+    const res = await fetch(`${PUBLIC_API_URL}/auto-train/metrics/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(`Export failed (${res.status})`)
+    return res.blob()
+  },
+
+  async getCheckpointInfo(name: string): Promise<Record<string, unknown>> {
+    return apiGet<Record<string, unknown>>(`/auto-train/checkpoints/${encodeURIComponent(name)}/info`)
+  },
+
   async downloadTrainingJob(jobId: string): Promise<Blob> {
     const { PUBLIC_API_URL } = await import('./config')
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    const token = getAuthToken()
     const res = await fetch(`${PUBLIC_API_URL}/training/export/${jobId}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -352,7 +416,7 @@ export const trainingJobsController = {
     message: string
   }> {
     const { PUBLIC_API_URL } = await import('./config')
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    const token = getAuthToken()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) headers['Authorization'] = `Bearer ${token}`
 
@@ -578,7 +642,7 @@ export const trainingJobsController = {
     limit?: number
   }): Promise<Blob> {
     const { PUBLIC_API_URL } = await import('./config')
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    const token = getAuthToken()
     const query = new URLSearchParams()
     if (params?.min_quality != null) query.set('min_quality', String(params.min_quality))
     if (params?.session_id) query.set('session_id', params.session_id)

@@ -5,6 +5,7 @@ import { ChatInputAccessories } from './ChatInputAccessories'
 import { ChatInputField } from './ChatInputField'
 import { ChatSendButton } from './ChatSendButton'
 import { SlashCommandMenu } from './SlashCommandMenu'
+import { MentionMenu } from './MentionMenu'
 import { cn } from '@sloughgpt/strui'
 import type { ChatCommand } from '@/lib/chat-commands'
 
@@ -35,9 +36,12 @@ export function ChatInputRow({
 }: ChatInputRowProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false)
+  const [showMentionMenu, setShowMentionMenu] = useState(false)
+  const [mentionMenuDismissed, setMentionMenuDismissed] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const showSlash = showSlashMenu && value.startsWith('/')
+  const showMention = showMentionMenu && value.startsWith('@')
 
   const handleExecuteCommand = useCallback((cmd: ChatCommand, args: string[]) => {
     if (onExecuteCommand) {
@@ -54,17 +58,30 @@ export function ChatInputRow({
     setSlashMenuDismissed(true)
   }, [])
 
+  const handleCloseMention = useCallback(() => {
+    setShowMentionMenu(false)
+    setMentionMenuDismissed(true)
+  }, [])
+
   const handleChange = useCallback((newVal: string) => {
     onChange(newVal)
     if (newVal.startsWith('/') && !slashMenuDismissed) {
       setShowSlashMenu(true)
+      setShowMentionMenu(false)
+    } else if (newVal.startsWith('@') && !mentionMenuDismissed) {
+      setShowMentionMenu(true)
+      setShowSlashMenu(false)
     } else {
       setShowSlashMenu(false)
+      setShowMentionMenu(false)
     }
     if (!newVal.startsWith('/')) {
       setSlashMenuDismissed(false)
     }
-  }, [onChange, slashMenuDismissed])
+    if (!newVal.startsWith('@')) {
+      setMentionMenuDismissed(false)
+    }
+  }, [onChange, slashMenuDismissed, mentionMenuDismissed])
 
   return (
     <div className="flex flex-col w-full" ref={containerRef}>
@@ -77,6 +94,13 @@ export function ChatInputRow({
             onExecute={handleExecuteCommand}
           />
         )}
+        {showMention && (
+          <MentionMenu
+            value={value}
+            onInsert={onChange}
+            onClose={handleCloseMention}
+          />
+        )}
       </div>
       <div className="flex items-end gap-1.5 w-full rounded-xl border border-border/40 bg-muted/10 px-2.5 py-1.5 focus-within:border-primary/30 focus-within:bg-muted/15 transition-all duration-200" role="group" aria-label="Message composition">
       <ChatInputAccessories
@@ -87,6 +111,9 @@ export function ChatInputRow({
         onGeneratedImage={onGeneratedImage}
         onPDFAnalysis={onPDFAnalysis}
         onPDFError={onPDFError}
+        textareaRef={textareaRef}
+        value={value}
+        onChange={onChange}
       />
       <ChatInputField
         value={value}
@@ -95,7 +122,7 @@ export function ChatInputRow({
         placeholder={placeholder}
         disabled={disabled}
         textareaRef={textareaRef}
-        suppressEnter={showSlash}
+        suppressEnter={showSlash || showMention}
       />
       {value.length > 0 && (
         <span
@@ -105,9 +132,9 @@ export function ChatInputRow({
           )}
           aria-live="polite"
           aria-atomic="true"
-          aria-label={`Characters typed: ${value.length}`}
+          aria-label={`Estimated ${Math.ceil(value.length / 4)} tokens`}
         >
-          {value.length} chars
+          ~{Math.ceil(value.length / 4)} tokens
         </span>
       )}
       <ChatSendButton

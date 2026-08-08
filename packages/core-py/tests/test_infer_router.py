@@ -6,6 +6,9 @@ Uses mocked providers and models — no real inference.
 """
 import json
 import pytest
+
+pytest.importorskip("fastapi")
+
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 
@@ -35,16 +38,18 @@ class FakeModel:
         return np.array([0.1, 0.2, 0.3, 0.4])
 
     def info(self):
-        from domains.models import ModelInfo
-        return ModelInfo(
+        from types import SimpleNamespace
+        return SimpleNamespace(
             model_id="test-model",
             model_type="MockModel",
             num_parameters=1000,
             vocab_size=256,
             max_context=128,
+            num_layers=0,
             has_tokenizer=True,
             has_streaming=True,
             has_embedding=True,
+            extra={},
         )
 
     def forward(self, input_ids, targets=None, **kwargs):
@@ -95,11 +100,11 @@ def client(app):
 
 
 def _patch_state(model=None, phase="ready"):
-    """Return list of context managers that mock state.model and STARTUP_PHASE."""
+    """Return list of context managers that mock the router's model accessors."""
     import apps.api.server.routers.infer as infer_mod
     return [
-        patch.object(infer_mod, "_get_model", return_value=model),
-        patch.object(infer_mod, "_get_model_interface", return_value=model),
+        patch.object(infer_mod.InferRouter, "_get_model", return_value=model),
+        patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=model),
     ]
 
 
@@ -241,8 +246,8 @@ class TestInferGenerate:
         """Generate returns 503 when model not ready."""
         import apps.api.server.routers.infer as infer_mod
         patches = [
-            patch.object(infer_mod, "_get_model", return_value=None),
-            patch.object(infer_mod, "_get_model_interface", return_value=None),
+            patch.object(infer_mod.InferRouter, "_get_model", return_value=None),
+            patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=None),
         ]
         for p in patches:
             p.start()
@@ -261,8 +266,8 @@ class TestInferGenerate:
 
         import apps.api.server.routers.infer as infer_mod
         patches = [
-            patch.object(infer_mod, "_get_model", return_value=fake),
-            patch.object(infer_mod, "_get_model_interface", return_value=fake),
+            patch.object(infer_mod.InferRouter, "_get_model", return_value=fake),
+            patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=fake),
             patch("domains.models.provider.get_provider", return_value=mock_provider),
         ]
         for p in patches:

@@ -1,9 +1,10 @@
 'use client'
 
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect, memo } from 'react'
 import { ImagePreview, type ImageAttachment } from './ImageUpload'
 import { ChatInputRow } from './ChatInputRow'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
+import type { ChatCommand } from '@/lib/chat-commands'
 
 export interface ChatInputProps {
   value: string
@@ -19,10 +20,10 @@ export interface ChatInputProps {
   onGeneratedImage?: (dataUrl: string, prompt: string) => void
   onPDFAnalysis?: (analysis: string, filename: string) => void
   onPDFError?: (error: string) => void
-  onExecuteCommand?: (cmd: any, args: string[]) => void
+  onExecuteCommand?: (cmd: ChatCommand, args: string[]) => void
 }
 
-export function ChatInput({
+export const ChatInput = memo(function ChatInput({
   value,
   onChange,
   onSend,
@@ -39,6 +40,7 @@ export function ChatInput({
   onExecuteCommand,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const pendingSendRef = useRef(false)
 
   const handleSend = useCallback(() => {
     onSend()
@@ -49,11 +51,22 @@ export function ChatInput({
 
   const handleVoiceTranscript = useCallback((text: string) => {
     onChange(value ? `${value} ${text}` : text)
+    pendingSendRef.current = true
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`
     }
   }, [value, onChange])
+
+  useEffect(() => {
+    if (pendingSendRef.current && value.trim().length > 0) {
+      pendingSendRef.current = false
+      onSend()
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    } else if (pendingSendRef.current && value.trim().length === 0) {
+      pendingSendRef.current = false
+    }
+  }, [value, onSend])
 
   const handleAddImage = useCallback((dataUrl: string) => {
     if (onAddImage) {
@@ -78,7 +91,7 @@ export function ChatInput({
 
   return (
     <section
-      className="shrink-0 bg-background/95 backdrop-blur-sm px-3 sm:px-4 pb-3"
+      className="shrink-0 bg-background/95 backdrop-blur-sm px-3 sm:px-4 pb-2"
       style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
       <div className="mx-auto max-w-2xl">
@@ -125,4 +138,4 @@ export function ChatInput({
       </div>
     </section>
   )
-}
+})

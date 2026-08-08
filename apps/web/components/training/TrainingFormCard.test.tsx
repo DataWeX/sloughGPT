@@ -18,6 +18,7 @@ vi.mock('@/components/training/TrainingStatus', () => ({
 }))
 vi.mock('@/lib/controllers', () => ({
   modelController: { loadModelPath: vi.fn(), loadVisualModel: vi.fn() },
+  trainingJobsController: { loadFineTuned: vi.fn().mockResolvedValue({ status: 'loaded' }) },
 }))
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: () => vi.fn(),
@@ -166,6 +167,16 @@ describe('TrainingFormCard', () => {
     expect(screen.getByText(/0\.3200/)).toBeDefined()
   })
 
+  it('routes "Load model for chat" through the fine-tuned load endpoint', async () => {
+    const loadFineTuned = (await import('@/lib/controllers')).trainingJobsController.loadFineTuned as ReturnType<typeof vi.fn>
+    renderCard({}, {
+      phase: 'complete', trainingRunning: false,
+      finetunedModelPath: '/repos/sloughGPT/models/hf-finetuned/gpt2__dataset_1',
+    })
+    fireEvent.click(screen.getByText('Load model for chat'))
+    expect(loadFineTuned).toHaveBeenCalledWith('gpt2__dataset_1')
+  })
+
   it('shows completion banner with distill checkpoint', () => {
     renderCard({}, {
       phase: 'complete', trainingRunning: false,
@@ -252,9 +263,9 @@ describe('TrainingFormCard', () => {
 
   it('shows dataset preview when available', () => {
     renderCard({}, {}, {
-      datasetPreview: { samples: [{ content: 'Hello world' }, { content: 'Test line' }], total_samples: 2 },
+      datasetPreview: { dataset_id: 'test', samples: [{ content: 'Hello world', path: '', language: 'en', size: 11 }, { content: 'Test line', path: '', language: 'en', size: 9 }], total_samples: 2, total_chars: 20, languages: { en: 2 } },
     })
-    expect(screen.getByText(/Preview/)).toBeDefined()
+    expect(screen.getByText('Dataset preview')).toBeDefined()
     expect(screen.getByText('Hello world')).toBeDefined()
   })
 

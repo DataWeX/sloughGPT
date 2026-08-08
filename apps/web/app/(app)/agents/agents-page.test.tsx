@@ -19,6 +19,14 @@ vi.mock('@sloughgpt/strui', () => {
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div><span>{label}</span><span>{String(value)}</span></div>,
     IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconClock: iconMock('clock'),
+    AlertDialog: ({ children, open, onOpenChange }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+    AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
+    AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
+    AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+    AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    AlertDialogAction: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   }
 })
 

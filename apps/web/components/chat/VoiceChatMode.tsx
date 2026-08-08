@@ -123,6 +123,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               <label className="text-xs font-medium text-muted-foreground">Auto-resume Listening</label>
               <button
                 onClick={() => updateSettings({ autoResume: !settings.autoResume })}
+                role="switch"
+                aria-checked={settings.autoResume}
+                aria-label="Auto-resume listening"
                 className={`w-9 h-5 rounded-full transition-colors ${
                   settings.autoResume ? 'bg-primary' : 'bg-muted-foreground/30'
                 }`}

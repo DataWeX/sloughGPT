@@ -16,9 +16,9 @@ Design:
   routes accordingly. No changes needed to the model's forward pass.
 
 Usage:
-    from domains.infrastructure.quantization import QuantEngine, TensorInfo
+    from domains.infrastructure.quantization import Quantine, TensorInfo
 
-    engine = QuantEngine(bits=8, mode="asymmetric", clip_percentile=0.999)
+    engine = Quantine(bits=8, mode="asymmetric", clip_percentile=0.999)
     info = engine.quantize(name="blocks.0.q_proj.weight", arr=weight_array)
 
     # In the forward pass:
@@ -121,13 +121,13 @@ _c_matmul_int4 = _int4_numpy_fallback
 logger = logging.getLogger("slo.infrastructure.quantization")
 
 try:
-    from domains.infrastructure.quant_core.wrapper import matmul_int8_c, matmul_int4_c, HAS_AVX2
+    from domains.infrastructure.quant_core.wrapper import matmul_int8_c, matmul_int4_c, matmul_int8_f32_c, HAS_AVX2
     if HAS_AVX2:
         _c_matmul = matmul_int8_c
         _c_matmul_int4 = matmul_int4_c
         logger.info("Using AVX2 int8 + int4 GEMM (quant_core)", extra={"tag": "INFRA"})
 except Exception:
-    pass
+    matmul_int8_f32_c = None
 
 
 class QuantMode(Enum):
@@ -266,7 +266,7 @@ class TensorInfo:
         return original / max(self.quantized_bytes(), 1)
 
 
-class QuantEngine:
+class Quantine:
     """Per-tensor quantization engine with calibration support.
 
     Each tensor gets independently quantized with its own scale/zero_point.
@@ -308,7 +308,7 @@ class QuantEngine:
         self._error_report: Dict[str, QuantMeta] = {}
 
         logger.info(
-            "QuantEngine: bits=%d, mode=%s, clip=%.3f, error_threshold=%.3f",
+            "Quantine: bits=%d, mode=%s, clip=%.3f, error_threshold=%.3f",
             bits, mode, clip_percentile or 0.0, skip_quantize_if_error_above, extra={"tag": "INFRA"}
         )
 
@@ -342,9 +342,11 @@ class QuantEngine:
         # Per-channel quantization for 2D weight matrices in symmetric mode.
         # A single per-tensor scale collapses the whole matrix to one scale,
         # which destroys LLM logits (a few outlier rows dominate). One scale
-        # per output row matches GPTQ/AWQ-style weight schemes.
+        # per output row matches GPTQ/AWQ-style weight schemes. Applies to
+        # both int8 and int4 — per-tensor int4 measured a forward logit
+        # cosine of -0.40 on Qwen (weight cosine 0.44 on down-projections).
         if (
-            self._bits == 8
+            self._bits in (8, 4)
             and self._mode == QuantMode.SYMMETRIC
             and arr.ndim == 2
             and arr.shape[0] > 1
@@ -384,7 +386,7 @@ class QuantEngine:
         relative_mse = mse / max(var, 1e-10)
         if relative_mse > self._error_threshold:
             logger.warning(
-                "QuantEngine: skipping %s — rel_mse %.4f > threshold %.4f (var=%.6f)",
+                "Quantine: skipping %s — rel_mse %.4f > threshold %.4f (var=%.6f)",
                 name, relative_mse, self._error_threshold, var, extra={"tag": "INFRA"}
             )
             return TensorInfo(name=name, array=arr)
@@ -411,33 +413,54 @@ class QuantEngine:
         return TensorInfo(name=name, array=quantized_reshaped, meta=meta)
 
     def _quantize_per_channel(self, name: str, arr: np.ndarray) -> TensorInfo:
-        """Quantize a 2D weight matrix with one int8 scale per output row.
+        """Quantize a 2D weight matrix with one scale per output row.
 
         Each row (output feature) gets its own scale computed from that row's
         absolute max, so outlier rows no longer force a coarse global scale
         across the entire matrix. This is what restores LLM logit quality under
-        int8 weight-only quantization.
+        int8 and int4 weight-only quantization.
+
+        For int4 the per-row grid is packed two values per byte (low nibble =
+        even index, high nibble = odd index), matching ``_pack_int4``.
 
         Args:
             name: tensor name (e.g. "blocks.0.q_proj.weight")
             arr: float32 2D weight array (out_features, in_features)
 
         Returns:
-            TensorInfo with int8 ``(N, K)`` array and per-row scale metadata
+            TensorInfo with int8 ``(N, K)`` or packed int4 ``(N, K // 2)``
+            array and per-row scale metadata
         """
         arr = arr.astype(np.float32)
 
         # Per-row scale from the TRUE row maximum (no percentile clipping).
         # Clipping here would clamp outlier weights to the 99.9th percentile,
-        # then the raw outlier overflows int8 and is clipped to +/-127, losing
-        # its true magnitude. A single outlier weight aligned with a large
+        # then the raw outlier overflows the grid and is clipped to +/-qmax,
+        # losing its true magnitude. A single outlier weight aligned with a large
         # activation can destroy that output channel (measured forward cosine
         # drop 0.9999 -> 0.67 on Qwen FFN down-projections).
+        qmax = (2 ** (self._bits - 1)) - 1  # 127 for int8, 7 for int4
+        qmin = -qmax - 1                    # -128 for int8, -8 for int4
         max_abs = np.maximum(np.max(np.abs(arr), axis=1, keepdims=True), 1e-10)
-        scale = (max_abs / 127.0).astype(np.float32)  # (N, 1)
+        scale = (max_abs / qmax).astype(np.float32)  # (N, 1)
 
-        quantized = np.clip(np.round(arr / scale), -128, 127).astype(np.int8)
-        dequantized = quantized.astype(np.float32) * scale
+        quantized = np.clip(np.round(arr / scale), qmin, qmax).astype(np.int8)
+        if self._bits == 4:
+            # Pack per row: two signed int4 values per byte. This preserves the
+            # low-nibble-even / high-nibble-odd layout that int4_matmul and the
+            # C kernel expect, so per-channel int4 stays fused-path compatible.
+            if arr.shape[1] % 2 != 0:
+                quantized = np.pad(quantized, ((0, 0), (0, 1)))
+            packed = (
+                (quantized[:, 1::2].astype(np.uint8) << 4)
+                | (quantized[:, ::2].astype(np.uint8) & 0x0F)
+            )
+            quantized = packed.astype(np.int8)
+            dequantized = _dequantize(
+                quantized, scale, 0, self._bits, arr.shape, signed=True,
+            )
+        else:
+            dequantized = quantized.astype(np.float32) * scale
 
         flat = arr.flatten()
         dequantized_flat = dequantized.flatten()
@@ -449,7 +472,7 @@ class QuantEngine:
         relative_mse = mse / max(var, 1e-10)
         if relative_mse > self._error_threshold:
             logger.warning(
-                "QuantEngine: skipping %s — rel_mse %.4f > threshold %.4f (var=%.6f)",
+                "Quantine: skipping %s — rel_mse %.4f > threshold %.4f (var=%.6f)",
                 name, relative_mse, self._error_threshold, var, extra={"tag": "INFRA"}
             )
             return TensorInfo(name=name, array=arr)
@@ -625,13 +648,13 @@ class QuantEngine:
         """Save quantization metadata to JSON file."""
         report = {name: meta.to_dict() for name, meta in self._error_report.items()}
         Path(path).write_text(json.dumps(report, indent=2))
-        logger.info("QuantEngine: saved metadata for %d tensors to %s", len(report), path, extra={"tag": "INFRA"})
+        logger.info("Quantine: saved metadata for %d tensors to %s", len(report), path, extra={"tag": "INFRA"})
 
     def load_metadata(self, path: str):
         """Load quantization metadata from JSON file."""
         raw = json.loads(Path(path).read_text())
         self._error_report = {name: QuantMeta.from_dict(d) for name, d in raw.items()}
-        logger.info("QuantEngine: loaded metadata for %d tensors from %s", len(self._error_report), path, extra={"tag": "INFRA"})
+        logger.info("Quantine: loaded metadata for %d tensors from %s", len(self._error_report), path, extra={"tag": "INFRA"})
 
     def save_weights(self, path: str, tensor_infos: Dict[str, TensorInfo]):
         """Save quantized weight arrays + metadata to .npz archive.
@@ -651,7 +674,7 @@ class QuantEngine:
                 arrays[f"_meta_{name}"] = np.array(json.dumps(info.meta.to_dict()), dtype=object)
         np.savez_compressed(path, **arrays)
         logger.info(
-            "QuantEngine: saved %d quantized weight arrays to %s",
+            "Quantine: saved %d quantized weight arrays to %s",
             sum(1 for k in arrays if not k.startswith("_meta_")), path,
             extra={"tag": "INFRA"},
         )
@@ -674,7 +697,7 @@ class QuantEngine:
         for name in sorted(names):
             meta_key = f"_meta_{name}"
             if meta_key not in data:
-                logger.warning("QuantEngine: missing metadata for %s, skipping", name, extra={"tag": "INFRA"})
+                logger.warning("Quantine: missing metadata for %s, skipping", name, extra={"tag": "INFRA"})
                 continue
             meta_dict = json.loads(str(data[meta_key].item()))
             meta = QuantMeta.from_dict(meta_dict)
@@ -682,9 +705,11 @@ class QuantEngine:
             # Ensure array is contiguous (npz may return read-only views)
             arr = np.asarray(arr).copy(order='C')
             result[name] = TensorInfo(name=name, array=arr, meta=meta)
+            # Track error metrics so summary() reflects the loaded weights
+            self._error_report[name] = meta
         data.close()
         logger.info(
-            "QuantEngine: loaded %d quantized weight arrays from %s",
+            "Quantine: loaded %d quantized weight arrays from %s",
             len(result), path, extra={"tag": "INFRA"},
         )
         return result
@@ -889,8 +914,13 @@ def _dequantize(
     if isinstance(scale, np.ndarray):
         # Per-channel scale: one scale per output row (N, K array).
         s = scale.reshape(-1, 1).astype(np.float32)
-        grid = quantized if quantized.ndim >= 2 else quantized.reshape(original_shape)
-        grid = grid.astype(np.float32)
+        if bits == 4:
+            # Packed int4 was unpacked into `flat` above — reshape to the
+            # original (N, K) grid before applying the per-row scale.
+            grid = flat.reshape(original_shape).astype(np.float32)
+        else:
+            grid = quantized if quantized.ndim >= 2 else quantized.reshape(original_shape)
+            grid = grid.astype(np.float32)
         if zero_point != 0:
             return (grid - zero_point) * s
         return grid * s
@@ -942,7 +972,7 @@ def quantize_state_dict(
     Returns:
         Dict mapping name → TensorInfo (quantized or original)
     """
-    engine = QuantEngine(bits=bits, mode=mode, clip_percentile=clip_percentile)
+    engine = Quantine(bits=bits, mode=mode, clip_percentile=clip_percentile)
     result = {}
     for name, arr in state_dict.items():
         result[name] = engine.quantize(name, arr)
@@ -990,6 +1020,44 @@ def quantize_activation(
         return np.clip(np.round(x / scale) + zero_point, -128, 127).astype(np.int8)
 
 
+def quantize_kv_tensor(x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Per-token, per-head symmetric int8 quantization for KV cache entries.
+
+    Each (token, head) vector of the input is quantized with its own scale so
+    the cache can be stored as int8 (4x less memory than float32) and
+    dequantized exactly with a broadcast multiply.
+
+    Args:
+        x: float32 array of shape ``(B, T, K_H, E)`` — K or V for a block.
+
+    Returns:
+        Tuple of ``(x_int8, scale)`` where ``x_int8`` has shape
+        ``(B, T, K_H, E)`` (int8) and ``scale`` has shape ``(B, T, K_H, 1)``
+        (float32).         Dequantization is ``x_int8.astype(np.float32) * scale``.
+        Zero vectors use a guard scale of ``1/127`` so no division by zero
+        occurs and the row quantizes to zero (dequantizing returns zero).
+    """
+    max_abs = np.max(np.abs(x), axis=-1, keepdims=True)
+    safe_max = np.where(max_abs > 0.0, max_abs, np.float32(1.0))
+    scale = (safe_max / np.float32(127.0)).astype(np.float32)
+    x_int8 = np.clip(np.round(x / scale), -128, 127).astype(np.int8)
+    return x_int8, scale
+
+
+def dequantize_kv_tensor(x_int8: np.ndarray, scale: np.ndarray) -> np.ndarray:
+    """Dequantize an int8 KV cache tensor back to float32.
+
+    Args:
+        x_int8: int8 array of shape ``(B, T, K_H, E)``.
+        scale: float32 scale array of shape ``(B, T, K_H, 1)`` produced by
+            :func:`quantize_kv_tensor`.
+
+    Returns:
+        float32 array of shape ``(B, T, K_H, E)``.
+    """
+    return x_int8.astype(np.float32) * scale
+
+
 def _ensure_2d_packed(b_packed: np.ndarray, orig_k: int) -> np.ndarray:
     """Reshape packed int4 array from 1D ``(N * K // 2,)`` to 2D ``(N, K // 2)``."""
     if b_packed.ndim == 1:
@@ -1033,15 +1101,13 @@ def int4_matmul(
         accum = _c_matmul_int4(a, b_packed, orig_k)
         return accum.astype(np.float32) * (a_scale * b_scale)
     else:
+        # Vectorized unpack: nibble split across the whole packed array
+        # (low nibble = even index, high nibble = odd index), sign-extended
+        # with (nib ^ 8) - 8 — identical to the C kernel's signed layout.
         N = b_packed.shape[0]
-        b_unpacked = np.zeros((N, orig_k), dtype=np.int8)
-        for j in range(N):
-            for k in range(orig_k):
-                if k % 2 == 0:
-                    nib = int(b_packed[j, k // 2]) & 0x0F
-                else:
-                    nib = (int(b_packed[j, k // 2]) >> 4) & 0x0F
-                b_unpacked[j, k] = np.int8((nib ^ 8) - 8)
+        b_unpacked = _unpack_int4(
+            b_packed.ravel(), N * orig_k, signed=True
+        ).reshape(N, orig_k)
         return int8_matmul(a, b_unpacked, a_scale, b_scale, a_zero_point, b_zero_point)
 
 
@@ -1066,7 +1132,7 @@ def int8_matmul(
 
     Args:
         a: int8 matrix (M, K) — activations
-        b: int8 matrix (N, K) — weights (stored transposed, as produced by QuantEngine)
+        b: int8 matrix (N, K) — weights (stored transposed, as produced by Quantine)
         a_scale: scale for matrix a
         b_scale: scale for matrix b (float or per-row ``(N,)`` array)
         a_zero_point: zero point for a (0 for symmetric)
@@ -1114,7 +1180,7 @@ def quantized_linear(
 
     Args:
         x: float32 input (..., in_features)
-        weight_int8: int8 weight matrix (out_features, in_features) — as stored by QuantEngine
+        weight_int8: int8 weight matrix (out_features, in_features) — as stored by Quantine
         weight_scale: quantization scale for weight (float or per-row ``(N,)`` array)
         weight_zero_point: zero point for weight
         bias: optional float32 bias (out_features,)
@@ -1126,6 +1192,20 @@ def quantized_linear(
     """
     orig_shape = x.shape
     x_flat = x.reshape(-1, x.shape[-1])  # (M, K)
+
+    # Fused fast path: per-token symmetric W8A8, one C call for
+    # quantize → GEMM → dequantize → bias (skips the numpy elementwise
+    # passes and the extra int32→float32 round trip).
+    if (
+        x_scale is None
+        and x_zero_point == 0
+        and weight_zero_point == 0
+        and weight_int8.dtype == np.int8
+        and matmul_int8_f32_c is not None
+    ):
+        fused = matmul_int8_f32_c(x_flat, weight_int8, weight_scale, bias)
+        if fused is not None:
+            return fused.reshape(orig_shape[:-1] + (weight_int8.shape[0],))
 
     # Compute activation scale dynamically from x (weight-only quantization)
     if x_scale is not None:

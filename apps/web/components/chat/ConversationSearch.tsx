@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { cn, Input } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
 import { IconSearch, IconX, IconMessage } from '@sloughgpt/strui'
 import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
 import { sessionController, type SearchResult as RemoteSearchResult } from '@/lib/session-controller'
@@ -30,8 +29,8 @@ function snippet(content: string, query: string, maxLen = 100): React.ReactNode 
   const start = Math.max(0, idx - 40)
   const end = Math.min(content.length, idx + q.length + 40)
   let s = content.slice(start, end)
-  if (start > 0) s = '…' + s
-  if (end < content.length) s = s + '…'
+  if (start > 0) s = `…${s}`
+  if (end < content.length) s = `${s}…`
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const parts = s.split(new RegExp(`(${escaped})`, 'gi'))
   return parts.map((part, i) =>
@@ -128,7 +127,7 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
             className="border-0 shadow-none h-8 text-sm px-0 focus-visible:ring-0"
           />
           {query && (
-            <button onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus() }} className="text-muted-foreground hover:text-foreground p-0.5" aria-label="Clear">
+            <button type="button" onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus() }} className="text-muted-foreground hover:text-foreground p-0.5" aria-label="Clear">
               <IconX className="h-4 w-4" />
             </button>
           )}

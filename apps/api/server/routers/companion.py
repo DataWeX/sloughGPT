@@ -5,7 +5,7 @@ Endpoints to manage and chat with the AI companion.
 """
 import logging
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 
 from schemas.common import success_response
@@ -14,26 +14,36 @@ logger = logging.getLogger("slo.routers.companion")
 
 
 class SetPersonalityRequest(BaseModel):
-    """Set companion personality."""
-    name: str = "Friend"
-    warmth: float = 0.7
-    curiosity: float = 0.6
-    creativity: float = 0.5
-    confidence: float = 0.5
-    humor: float = 0.4
+    """Set companion personality (full replacement)."""
+    name: str = Field(default="Friend", max_length=100)
+    warmth: float = Field(default=0.7, ge=0.0, le=1.0)
+    curiosity: float = Field(default=0.6, ge=0.0, le=1.0)
+    creativity: float = Field(default=0.5, ge=0.0, le=1.0)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    humor: float = Field(default=0.4, ge=0.0, le=1.0)
+
+
+class PatchPersonalityRequest(BaseModel):
+    """Partial update to companion personality (only provided fields are updated)."""
+    name: Optional[str] = Field(default=None, max_length=100)
+    warmth: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    curiosity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    creativity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    humor: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class PresetRequest(BaseModel):
     """Use a preset personality."""
-    name: str = "Friend"
-    preset: str = "warm"  # warm, curious, playful, balanced
+    name: str = Field(default="Friend", max_length=100)
+    preset: str = Field(default="warm", max_length=50)
 
 
 class ChatRequest(BaseModel):
     """Chat with companion."""
-    message: str
-    user_name: Optional[str] = None
-    user_mood: Optional[str] = None
+    message: str = Field(max_length=10000)
+    user_name: Optional[str] = Field(default=None, max_length=100)
+    user_mood: Optional[str] = Field(default=None, max_length=100)
     include_system_prompt: bool = True
 
 
@@ -53,7 +63,9 @@ class CompanionRouter:
 
     def _register_routes(self):
         self.router.add_api_route("/", self.get_companion_info, methods=["GET"])
+        self.router.add_api_route("/", self.reset_companion, methods=["DELETE"])
         self.router.add_api_route("/personality", self.set_personality, methods=["POST"])
+        self.router.add_api_route("/personality", self.patch_personality, methods=["PATCH"])
         self.router.add_api_route("/preset", self.use_preset, methods=["POST"])
         self.router.add_api_route("/prompt", self.get_prompt, methods=["GET"])
         self.router.add_api_route("/chat", self.chat, methods=["POST"], response_model=ChatResponse)
@@ -72,7 +84,7 @@ class CompanionRouter:
         return success_response(data=comp.to_dict())
 
     async def set_personality(self, req: SetPersonalityRequest):
-        """Set companion personality."""
+        """Set companion personality (full replacement)."""
         comp = self._get_companion()
         comp.set_personality(
             name=req.name,
@@ -83,6 +95,28 @@ class CompanionRouter:
             humor=req.humor,
         )
         return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
+
+    async def patch_personality(self, req: PatchPersonalityRequest):
+        """Partial update to companion personality (only provided fields are changed)."""
+        comp = self._get_companion()
+        current = comp.to_dict()["traits"]
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        merged = {**current, **updates}
+        comp.set_personality(
+            name=merged.get("name", current.get("name", "Friend")),
+            warmth=merged.get("warmth", current.get("warmth", 0.7)),
+            curiosity=merged.get("curiosity", current.get("curiosity", 0.6)),
+            creativity=merged.get("creativity", current.get("creativity", 0.5)),
+            confidence=merged.get("confidence", current.get("confidence", 0.5)),
+            humor=merged.get("humor", current.get("humor", 0.4)),
+        )
+        return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
+
+    async def reset_companion(self):
+        """Reset companion to default personality."""
+        from domains.companion import create_companion
+        self._companion = create_companion()
+        return success_response(data={"status": "ok", "traits": self._companion.to_dict()["traits"]})
 
     async def use_preset(self, req: PresetRequest):
         """Use preset personality."""
@@ -145,14 +179,13 @@ class CompanionRouter:
 
     async def list_presets(self):
         """List available presets."""
-        return success_response(data={
-            "presets": [
-                {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive"},
-                {"id": "curious", "name": "Curious Friend", "description": "Interested in everything"},
-                {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous"},
-                {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded"},
-            ]
-        })
+        presets = [
+            {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}},
+            {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}},
+            {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}},
+            {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}},
+        ]
+        return success_response(data={"presets": presets})
 
 
 _companion_router = CompanionRouter()

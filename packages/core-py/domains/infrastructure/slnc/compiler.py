@@ -129,7 +129,77 @@ class SLNCCompiler:
         if safetensors_path is None:
             raise FileNotFoundError(f"No .safetensors for {model_id}")
 
-        # Load all weights — read raw bytes to handle bfloat16
+        weights = self._read_weights(safetensors_path)
+
+        # Determine output path
+        if output is None:
+            repo_root = Path(__file__).resolve().parents[4]
+            models_dir = repo_root / "models"
+            models_dir.mkdir(exist_ok=True)
+            output = str(models_dir / f"{model_id.replace('/', '_')}.slnc")
+
+        # Auto-protect: chmod444 + manifest + marker
+        try:
+            from domains.infrastructure.model_protector import protect_model
+            protect_model(model_id, [output])
+        except Exception as e:
+            logger.debug("Could not protect .slnc file: %s", e)
+
+        return self.compile_from_dict(config, weights, output)
+
+    def compile_from_directory(
+        self,
+        model_dir: str,
+        output: str,
+        config_path: Optional[str] = None,
+    ) -> str:
+        """Compile a local fine-tuned model directory to .slnc.
+
+        Reads ``config.json`` and ``model.safetensors`` directly from a local
+        directory (no HuggingFace cache lookup), so fine-tuned model output from
+        the training pipeline can be served by SloNet.
+
+        Args:
+            model_dir: Local directory containing config.json + model.safetensors
+            output: Output .slnc file path
+            config_path: Optional explicit path to config.json (defaults to
+                ``model_dir/config.json``)
+
+        Returns:
+            Path to created .slnc file
+
+        Raises:
+            FileNotFoundError: When config.json or model.safetensors is missing
+        """
+        directory = Path(model_dir)
+        if not directory.is_dir():
+            raise FileNotFoundError(f"Model directory not found: {model_dir}")
+
+        cfg_path = Path(config_path) if config_path else directory / "config.json"
+        if not cfg_path.exists():
+            raise FileNotFoundError(f"No config.json in {model_dir}")
+        with open(cfg_path) as f:
+            config = json.load(f)
+
+        from domains.infrastructure.safetensors_loader import _find_safetensors
+        safetensors_path = _find_safetensors(directory)
+        if safetensors_path is None:
+            raise FileNotFoundError(f"No .safetensors in {model_dir}")
+        weights = self._read_weights(safetensors_path)
+
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        return self.compile_from_dict(config, weights, str(out_path))
+
+    def _read_weights(self, safetensors_path: Path) -> Dict[str, np.ndarray]:
+        """Read all weight arrays from a safetensors file (handles BF16/F16/F32).
+
+        Args:
+            safetensors_path: Path to a .safetensors file
+
+        Returns:
+            Dict mapping tensor names to float32 numpy arrays
+        """
         import json as _json
         weights = {}
         with open(str(safetensors_path), "rb") as f:
@@ -153,22 +223,7 @@ class SLNCCompiler:
                     weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"]).astype(np.float32)
                 else:
                     weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-
-        # Determine output path
-        if output is None:
-            repo_root = Path(__file__).resolve().parents[4]
-            models_dir = repo_root / "models"
-            models_dir.mkdir(exist_ok=True)
-            output = str(models_dir / f"{model_id.replace('/', '_')}.slnc")
-
-        # Auto-protect: chmod444 + manifest + marker
-        try:
-            from domains.infrastructure.model_protector import protect_model
-            protect_model(model_id, [output])
-        except Exception as e:
-            logger.debug("Could not protect .slnc file: %s", e)
-
-        return self.compile_from_dict(config, weights, output)
+        return weights
 
     def compile_from_dict(
         self,

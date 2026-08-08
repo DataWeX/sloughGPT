@@ -44,6 +44,17 @@ if _server_parent not in _sys.path:
     _sys.path.insert(0, _server_parent)
 
 
+def _model_ready() -> bool:
+    """True when a model or a lazy guard-backed provider is available.
+
+    Lazy mode deliberately leaves ``server_state.model`` as ``None`` while the
+    ProcessGuard worker serves inference — readiness must also accept a
+    registered provider so guarded inference is not blocked.
+    """
+    import state as server_state
+    return server_state.model is not None or server_state.provider is not None
+
+
 class CreateSessionRequest(BaseModel):
     """Schema for creating a new chat session."""
     session_id: Optional[str] = None
@@ -375,7 +386,7 @@ class InferenceRouter:
         from startup_progress import STARTUP_PHASE
         import state as _gen_state
 
-        if STARTUP_PHASE.get("phase") != "ready" or _gen_state.model is None:
+        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
             raise HTTPException(status_code=503, detail="Model still loading — please wait.")
 
         provider = get_provider("default")
@@ -422,13 +433,16 @@ class InferenceRouter:
                 logger.debug("Failed to capture conversation: %s", e)
             return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="generate")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def generate_stream(self, req: GenerateRequest, request: Request) -> StreamingResponse:
         from startup_progress import STARTUP_PHASE
         import state as _stream_state
 
-        if STARTUP_PHASE.get("phase") != "ready" or _stream_state.model is None:
+        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
             async def error_stream() -> AsyncIterator[str]:
                 yield sse_error("generate", "IDLE", "Model still loading — please wait.")
             return StreamingResponse(error_stream(), media_type="text/event-stream")
@@ -461,7 +475,10 @@ class InferenceRouter:
                         collected.append(token)
                         yield sse_token("generate", token)
             except Exception as e:
-                yield sse_error("generate", "STREAMING", str(e))
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="generate_stream")
+                yield sse_error("generate", "STREAMING", err.user_message)
                 return
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:
@@ -495,7 +512,7 @@ class InferenceRouter:
             "api_version": "1.0.0",
             "model": {
                 "type": server_state.model_type,
-                "loaded": server_state.model is not None,
+                "loaded": server_state.model is not None or server_state.provider is not None,
             },
         }
 
@@ -580,7 +597,7 @@ class InferenceRouter:
         from startup_progress import STARTUP_PHASE
 
         import state as _check_state
-        if STARTUP_PHASE.get("phase") != "ready" or _check_state.model is None:
+        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
             phase = STARTUP_PHASE.get("phase", "unknown")
             if phase == "ready":
                 msg = "Model still loading — please wait."
@@ -658,11 +675,18 @@ class InferenceRouter:
             if ctx_core and req.use_context_core and not skip_context:
                 ctx_core.set_session_id(session_id)
                 ctx_core.add_message("user", user_msg)
-                frame = await ctx_core.build_context_frame(
-                    include_rag=True,
-                    include_memory=True,
-                    query=user_msg,
-                )
+                try:
+                    frame = await asyncio.wait_for(
+                        ctx_core.build_context_frame(
+                            include_rag=True,
+                            include_memory=True,
+                            query=user_msg,
+                        ),
+                        timeout=5.0,
+                    )
+                except asyncio.TimeoutError:
+                    logger.debug("Context frame building timed out, proceeding without context")
+                    frame = None
                 context_info = {
                     "layers": [l.layer_type for l in frame.layers],
                     "total_tokens": frame.total_tokens,
@@ -766,6 +790,8 @@ class InferenceRouter:
                 if provider is not None:
                     full_response_parts: list[str] = []
                     logger.debug("chat_stream: about to call provider.chat_stream()")
+                    _token_gen_start = datetime.datetime.now()
+                    _max_token_wait_s = 30.0
                     try:
                         try:
                             async for token in provider.chat_stream(
@@ -778,6 +804,7 @@ class InferenceRouter:
                                 cancel_event=cancel_event,
                                 session_id=session_id,
                             ):
+                                _token_gen_start = datetime.datetime.now()
                                 if await request.is_disconnected():
                                     cancel_event.set()
                                     logger.info("Client disconnected from chat stream (request)", extra={"tag": "INF", "context": {"session_id": session_id}})
@@ -785,14 +812,24 @@ class InferenceRouter:
                                 if token:
                                     full_response_parts.append(token)
                                     yield sse_token("chat", token)
+                                    _token_gen_start = datetime.datetime.now()
+                                elapsed_since_token = (datetime.datetime.now() - _token_gen_start).total_seconds()
+                                if elapsed_since_token > _max_token_wait_s:
+                                    logger.warning("Token generation stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
+                                    cancel_event.set()
+                                    yield sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                                    return
                             yield sse_token("chat", "", done=True)
                         except GeneratorExit:
                             cancel_event.set()
                             logger.info("Client disconnected from chat stream", extra={"tag": "INF", "context": {"session_id": session_id}})
                             return
                     except Exception as e:
-                        logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e)}})
-                        yield sse_error("chat", "ERROR", f"Generation failed: {e}")
+                        from domains.infrastructure.errors import classify_exception, emit_error_event
+                        err = classify_exception(e)
+                        emit_error_event(err, source="chat_stream_provider")
+                        logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e), "error_code": err.code}})
+                        yield sse_error("chat", err.code, err.user_message)
                         return
                 else:
                     yield sse_error("chat", "STREAMING", "No inference provider loaded")
@@ -880,7 +917,10 @@ class InferenceRouter:
                 logger.info("Chat stream: generated %d chars", len(full_response), extra={"tag": "INF", "context": {"char_count": len(full_response), "session_id": session_id}})
 
             except Exception as e:
-                yield sse_error("chat", "STREAMING", str(e))
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="chat_stream_outer")
+                yield sse_error("chat", err.code, err.user_message)
                 yield sse_token("chat", "", done=True)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
@@ -922,7 +962,7 @@ class InferenceRouter:
         from startup_progress import STARTUP_PHASE
         import state as _chat_state
 
-        if STARTUP_PHASE.get("phase") != "ready" or _chat_state.model is None:
+        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
             raise HTTPException(status_code=503, detail="Model still loading — please wait.")
 
         try:
@@ -979,15 +1019,25 @@ class InferenceRouter:
         except Exception as e:
             logger.debug("Knowledge enrichment failed: %s", e)
 
-        result = await chat_domain.respond(
-            messages=messages,
-            model=_chat_state.model_type or req.model,
-            system_prompt=system_prompt,
-            temperature=req.temperature,
-            max_tokens=req.max_tokens,
-            session_id=req.session_id or "default",
-            user_id=req.user_id or "default",
-        )
+        try:
+            result = await asyncio.wait_for(
+                chat_domain.respond(
+                    messages=messages,
+                    model=_chat_state.model_type or req.model,
+                    system_prompt=system_prompt,
+                    temperature=req.temperature,
+                    max_tokens=req.max_tokens,
+                    session_id=req.session_id or "default",
+                    user_id=req.user_id or "default",
+                ),
+                timeout=60.0,
+            )
+        except asyncio.TimeoutError:
+            return ChatResponse(
+                message="Generation timed out. Try a shorter prompt or fewer tokens.",
+                session_id=req.session_id or "default",
+                done=True,
+            )
 
         try:
             from domains.infrastructure.server_state import get_server_state
@@ -1105,8 +1155,11 @@ class InferenceRouter:
             await self._flush_session_to_disk(session_id)
             return success_response(data={"session_id": session_id}, message="created")
         except Exception as exc:
-            logger.error("create_session failed: %s", exc, exc_info=True, extra={"tag": "REQ"})
-            raise HTTPException(status_code=500, detail=f"Session creation failed: {exc}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(exc)
+            emit_error_event(err, source="create_session")
+            logger.error("create_session failed: %s", exc, exc_info=True, extra={"tag": "REQ", "error_code": err.code})
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_session(self, session_id: str):
         data = self._get_session(session_id)
@@ -1119,8 +1172,27 @@ class InferenceRouter:
             self._session_memory_cache.pop(session_id, None)
             self._session_dirty.discard(session_id)
             self._session_deleted.add(session_id)
+            self._clear_session_kv(session_id)
             return success_response(data={"session_id": session_id}, message="deleted")
         raise HTTPException(status_code=404, detail="Session not found")
+
+    def _clear_session_kv(self, session_id: str):
+        """Drop cross-turn KV state for a deleted session.
+
+        The KV cache is keyed by session_id inside the SloNet provider; a
+        deleted session's cached keys/values would otherwise persist until
+        TTL eviction and risk stale-context reuse if the id is recycled.
+        """
+        try:
+            from domains.models.provider import get_provider
+            provider = get_provider("slonet-native")
+            if provider is None:
+                provider = get_provider("slonet")
+            if provider is not None and hasattr(provider, "clear_session"):
+                provider.clear_session(session_id)
+        except Exception as exc:
+            logger.warning("Failed to clear KV state for session %s: %s",
+                           session_id, exc, extra={"tag": "KV"})
 
     async def chat_suggestions(self):
         return success_response(data=[

@@ -19,6 +19,7 @@ continue to work unchanged.
 
 from __future__ import annotations
 
+import faulthandler
 import logging
 import os
 import sys
@@ -119,6 +120,7 @@ except Exception as exc:
 @asynccontextmanager
 async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
+    _install_stack_dump_timer()
     try:
         from infrastructure.startup import StartupOrchestrator
 
@@ -152,6 +154,37 @@ async def lifespan(app_inst: FastAPI):
         logger.critical("Startup failed: %s", exc, exc_info=True)
         yield
         raise
+    finally:
+        _cancel_stack_dump_timer()
+
+
+def _install_stack_dump_timer() -> None:
+    """Periodically dump all thread stacks to stderr when ``SLO_DUMP_STACKS=1``.
+
+    Hang diagnosis aid: when a request stalls, the periodic dump shows which
+    thread and source line is blocked (e.g. a sync call hogging the event
+    loop). Off by default; interval configurable via ``SLO_DUMP_STACKS_INTERVAL``
+    seconds (default 30).
+
+    Side effects:
+        - registers a faulthandler repeating timer dumping to stderr
+    """
+    if os.environ.get("SLO_DUMP_STACKS", "0").lower() not in ("1", "true", "yes"):
+        return
+    try:
+        interval = float(os.environ.get("SLO_DUMP_STACKS_INTERVAL", "30"))
+        faulthandler.dump_traceback_later(interval, repeat=True)
+        logger.info("faulthandler stack dump active every %ss (SLO_DUMP_STACKS=1)", interval, extra={"tag": "START"})
+    except Exception as exc:
+        logger.warning("faulthandler stack dump not installed: %s", exc, extra={"tag": "START"})
+
+
+def _cancel_stack_dump_timer() -> None:
+    """Cancel the faulthandler dump timer installed by ``_install_stack_dump_timer``."""
+    try:
+        faulthandler.cancel_dump_traceback_later()
+    except Exception:
+        pass
 
 
 # ── FastAPI application ─────────────────────────────────────────────

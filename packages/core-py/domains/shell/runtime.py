@@ -20,7 +20,6 @@ import time
 import json
 import shlex
 import signal
-import itertools
 import logging
 import threading
 import subprocess
@@ -105,8 +104,22 @@ class APIServerProcess:
             result["uptime"] = time.time() - _shared_started_at if _shared_started_at else 0
         return result
 
-    def start(self, timeout: float = 120.0) -> dict:
-        """Launch the API server in a subprocess. Blocks until healthy or timeout."""
+    def start(self, timeout: float = 30.0) -> dict:
+        """Launch the API server in a subprocess and wait for it to become healthy.
+
+        Returns once the health probe succeeds or the timeout elapses.
+
+        Args:
+            timeout: seconds to wait for the API to come up before giving up.
+
+        Returns:
+            dict: ``{"ok": True, "message": "ready (<model_id>)"}`` on success,
+            ``{"ok": False, "error": ...}`` if launch fails or health times out.
+
+        Side effects:
+            - spawns ``apps.api.server.main`` as a shared subprocess (singleton)
+            - sets ``_shared_proc`` / ``_shared_started_at`` module globals
+        """
         global _shared_proc, _shared_started_at
 
         with _shared_lock:
@@ -121,7 +134,7 @@ class APIServerProcess:
             proc = subprocess.Popen(
                 cmd,
                 cwd=str(repo_root),
-                stdout=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
                 preexec_fn=os.setsid if hasattr(os, "setsid") else None,
@@ -140,28 +153,19 @@ class APIServerProcess:
                     logger.info("[api] %s", line.rstrip())
         threading.Thread(target=_log_stderr, daemon=True).start()
 
-        # Wait for health check with polling
-        deadline = time.time() + timeout
-        spinner = itertools.cycle(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-        last_line = ""
+        # Wait for the API to become healthy (bounded by timeout)
+        deadline = time.time() + max(timeout, 0.0)
+        model_id = None
         while time.time() < deadline:
-            result = _probe_api(self._api_url, timeout=1)
-            if result["available"]:
-                return {"ok": True, "message": f"ready ({result.get('model_id', 'unknown')})", "status": result}
-            # Spinner feedback
-            spin = next(spinner)
-            elapsed = time.time() - _shared_started_at
-            msg = f"\r  {spin} waiting for API server ({elapsed:.0f}s / {timeout:.0f}s)"
-            if msg != last_line:
-                sys.stdout.write(msg + "\033[K")
-                sys.stdout.flush()
-                last_line = msg
-            time.sleep(1)
-        # Clear spinner line
-        sys.stdout.write("\r" + " " * 80 + "\r")
-        sys.stdout.flush()
+            probe = _probe_api(self._api_url)
+            if probe.get("available"):
+                model_id = probe.get("model_id")
+                break
+            time.sleep(0.25)
+        else:
+            return {"ok": False, "error": f"Timed out waiting for API ({timeout:.1f}s)"}
 
-        return {"ok": False, "error": f"Timed out after {timeout:.0f}s"}
+        return {"ok": True, "message": f"ready ({model_id})" if model_id else "ready"}
 
     def stop(self) -> dict:
         """Stop the API server process."""

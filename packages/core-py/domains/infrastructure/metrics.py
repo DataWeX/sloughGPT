@@ -17,7 +17,10 @@ import threading
 from collections import defaultdict
 from typing import Dict, List, Optional
 
-import psutil
+try:  # pragma: no cover - psutil is optional (system metrics only)
+    import psutil
+except ImportError:  # pragma: no cover
+    psutil = None
 
 
 class MetricsCollector:
@@ -142,15 +145,16 @@ class MetricsCollector:
             lines.append(f"sloughgpt_model_loaded {1 if self._model_loaded else 0}")
 
             # System metrics (from psutil)
-            cpu_pct = psutil.cpu_percent(interval=None)
-            mem = psutil.virtual_memory()
-            lines.append("# HELP sloughgpt_system_cpu_usage CPU usage percentage.")
-            lines.append("# TYPE sloughgpt_system_cpu_usage gauge")
-            lines.append(f"sloughgpt_system_cpu_usage {cpu_pct:.1f}")
+            if psutil is not None:
+                cpu_pct = psutil.cpu_percent(interval=None)
+                mem = psutil.virtual_memory()
+                lines.append("# HELP sloughgpt_system_cpu_usage CPU usage percentage.")
+                lines.append("# TYPE sloughgpt_system_cpu_usage gauge")
+                lines.append(f"sloughgpt_system_cpu_usage {cpu_pct:.1f}")
 
-            lines.append("# HELP sloughgpt_system_memory_percent Memory usage percentage.")
-            lines.append("# TYPE sloughgpt_system_memory_percent gauge")
-            lines.append(f"sloughgpt_system_memory_percent {mem.percent:.1f}")
+                lines.append("# HELP sloughgpt_system_memory_percent Memory usage percentage.")
+                lines.append("# TYPE sloughgpt_system_memory_percent gauge")
+                lines.append(f"sloughgpt_system_memory_percent {mem.percent:.1f}")
 
         return "\n".join(lines) + "\n"
 

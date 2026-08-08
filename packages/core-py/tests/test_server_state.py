@@ -201,6 +201,27 @@ class TestServerState:
         violations = state.get_rate_limit_violations()
         assert len(violations) >= 1
 
+    def test_trend_snapshots_record(self):
+        state = ServerState()
+        state.record_trend_snapshots(interval_s=0)
+        assert len(state.get_health_history()) >= 1
+        assert len(state.get_memory_history()) >= 1
+
+    def test_trend_snapshots_throttled(self):
+        state = ServerState()
+        state.record_trend_snapshots(interval_s=60)
+        assert len(state.get_health_history()) >= 1
+        state.record_trend_snapshots(interval_s=60)
+        assert len(state.get_health_history()) == 1
+
+    def test_trend_snapshots_oldest_first(self):
+        state = ServerState()
+        for _ in range(3):
+            state.record_trend_snapshots(interval_s=0)
+            time.sleep(0.01)
+        history = state.get_health_history(20)
+        assert history == sorted(history, key=lambda h: h["ts"])
+
     def test_singleton(self):
         s1 = get_server_state()
         s2 = get_server_state()

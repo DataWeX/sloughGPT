@@ -2,6 +2,8 @@
 
 import { useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ComposedChart } from 'recharts'
+import { downloadBlob } from '@/lib/download-utils'
+import { todayDateString } from '@/lib/format-bytes'
 
 export interface LossPoint {
   step: number
@@ -21,9 +23,28 @@ export interface LossChartProps {
   showLegend?: boolean
   live?: boolean
   windowSize?: number
+  onExportData?: () => void
 }
 
-export function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40 }: LossChartProps) {
+function exportLossCSV(data: LossPoint[], rewardData?: RewardPoint[]) {
+  const allSteps = new Set<number>()
+  data.forEach(d => allSteps.add(d.step))
+  rewardData?.forEach(d => allSteps.add(d.step))
+  const steps = [...allSteps].sort((a, b) => a - b)
+
+  const headers = ['step', 'train_loss', 'eval_loss', 'reward']
+  const rows = steps.map(s => {
+    const train = data.find(d => d.step === s && d.type === 'train')
+    const eval_ = data.find(d => d.step === s && d.type === 'eval')
+    const reward = rewardData?.find(d => d.step === s)
+    return [s, train?.value ?? '', eval_?.value ?? '', reward?.value ?? ''].join(',')
+  })
+
+  const csv = [headers.join(','), ...rows].join('\n')
+  downloadBlob(csv, `loss-data-${todayDateString()}.csv`, 'text/csv')
+}
+
+export function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40, onExportData }: LossChartProps) {
   const hasReward = Boolean(rewardData?.length)
 
   // Build union of all steps
@@ -57,7 +78,16 @@ export function LossChart({ data, rewardData, height = 200, showLegend = true, l
   const Chart = hasReward ? ComposedChart : LineChart
 
   return (
-    <div className="w-full">
+    <div className="w-full relative group">
+      {(data.length > 5) && (
+        <button
+          onClick={() => onExportData ?? exportLossCSV(data, rewardData)}
+          className="absolute top-1 right-1 z-10 h-5 w-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-muted/60"
+          aria-label="Export chart data as CSV"
+        >
+          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+      )}
       <ResponsiveContainer width="100%" height={height}>
         <Chart data={chartData} margin={{ top: 8, right: hasReward ? 48 : 8, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
@@ -95,6 +125,8 @@ export function LossChart({ data, rewardData, height = 200, showLegend = true, l
               fontSize: '12px',
             }}
             labelStyle={{ color: 'hsl(var(--foreground))' }}
+            labelFormatter={(label) => `Step ${label}`}
+            formatter={(value: number, name: string) => [value.toFixed(4), name]}
           />
           {showLegend && <Legend />}
           {hasTrain && (

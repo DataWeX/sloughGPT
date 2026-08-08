@@ -756,6 +756,7 @@ async def test_get_results_preview_list():
 @pytest.mark.asyncio
 async def test_lifecycle_endpoint():
     """Verify /system/lifecycle returns expected fields via TestClient."""
+    pytest.importorskip("fastapi")
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 

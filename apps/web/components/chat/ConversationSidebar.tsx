@@ -10,6 +10,7 @@ import {
 import type { Conversation } from '@/lib/session-controller'
 import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 import { downloadJson, downloadMarkdown } from '@/lib/download-utils'
+import { MS_PER_DAY } from '@/lib/format-bytes'
 
 interface ConversationSidebarProps {
   conversations: Conversation[]
@@ -125,7 +126,7 @@ function SidebarContent({
   function recencyGroup(dateStr: string | undefined): string {
     if (!dateStr) return 'Older'
     const diff = Date.now() - new Date(dateStr).getTime()
-    const days = diff / 86400000
+    const days = diff / MS_PER_DAY
     if (days < 1) return 'Today'
     if (days < 2) return 'Yesterday'
     if (days < 7) return 'Last 7 days'
@@ -284,7 +285,7 @@ function SidebarContent({
           />
         </div>
       )}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-1">
+      <div className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-1 pb-4">
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-6 px-3 gap-2">
             <IconChat className="h-5 w-5 text-muted-foreground/30" />

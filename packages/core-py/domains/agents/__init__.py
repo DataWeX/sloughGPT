@@ -91,10 +91,13 @@ class SecurityBoundary:
 class ToolCapability(Enum):
     """Tool capability levels."""
     CODE_EXECUTION = "code_execution"
+    FILE_READ = "file_read"
     FILE_SEARCH = "file_search"
     WEB_SEARCH = "web_search"
+    KNOWLEDGE_RETRIEVAL = "knowledge_retrieval"
+    IMAGE_ANALYSIS = "image_analysis"
+    DATA_ANALYSIS = "data_analysis"
     CITATION = "citation"
-    MEMORY = "memory"
 
 
 @dataclass
@@ -142,12 +145,20 @@ class ToolRunner:
         # Route to correct tool
         if tool_name == ToolCapability.CODE_EXECUTION.value:
             return await self._run_code(args, context)
+        elif tool_name == ToolCapability.FILE_READ.value:
+            return await self._run_file_read(args, context)
         elif tool_name == ToolCapability.FILE_SEARCH.value:
             return await self._run_file_search(args, context)
         elif tool_name == ToolCapability.WEB_SEARCH.value:
             return await self._run_web_search(args, context)
         elif tool_name == ToolCapability.CITATION.value:
             return await self._run_citation(args, context)
+        elif tool_name == ToolCapability.KNOWLEDGE_RETRIEVAL.value:
+            return await self._run_knowledge_retrieval(args, context)
+        elif tool_name == ToolCapability.IMAGE_ANALYSIS.value:
+            return await self._run_image_analysis(args, context)
+        elif tool_name == ToolCapability.DATA_ANALYSIS.value:
+            return await self._run_data_analysis(args, context)
         else:
             return {"error": f"Unknown tool: {tool_name}", "success": False}
 
@@ -344,6 +355,146 @@ class ToolRunner:
 
         return sorted(citations, key=lambda x: x["relevance"], reverse=True)
 
+    async def _run_file_read(
+        self,
+        args: Dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> Dict[str, Any]:
+        """Read a file's contents."""
+        path = args.get("path", "")
+        if not path:
+            return {"error": "path required", "success": False}
+        try:
+            if not os.path.exists(path):
+                return {"error": f"File not found: {path}", "success": False}
+            if os.path.getsize(path) > 1_000_000:
+                return {"error": "File too large (>1MB)", "success": False}
+            with open(path, "r", errors="replace") as f:
+                content = f.read()
+            return {"success": True, "content": content}
+        except Exception as e:
+            return {"error": str(e), "success": False}
+
+    async def _run_knowledge_retrieval(
+        self,
+        args: Dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> Dict[str, Any]:
+        """Search knowledge base for relevant information."""
+        query = args.get("query", "")
+        if not query:
+            return {"error": "query required", "success": False}
+        try:
+            import glob as globmod
+            workspace = os.environ.get("WORKSPACE_ROOT", ".")
+            patterns = ["docs/**/*.md", "README*", "*.md"]
+            files = []
+            for p in patterns:
+                files.extend(globmod.glob(os.path.join(workspace, p), recursive=True))
+            matches = []
+            query_lower = query.lower()
+            for fp in files[:50]:
+                try:
+                    with open(fp, "r", errors="replace") as f:
+                        text = f.read(8192)
+                    if query_lower in text.lower():
+                        matches.append({"file": os.path.relpath(fp, workspace), "snippet": text[:500].strip()})
+                except Exception:
+                    continue
+            return {"success": True, "matches": matches, "count": len(matches)}
+        except Exception as e:
+            return {"error": str(e), "success": False}
+
+    async def _run_image_analysis(
+        self,
+        args: Dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> Dict[str, Any]:
+        """Analyze an image using VisionCNN — embedding, caption, and object detection."""
+        image_path = args.get("image_path", "")
+        if not image_path:
+            return {"error": "image_path required", "success": False}
+        try:
+            if not os.path.exists(image_path):
+                return {"error": f"Image not found: {image_path}", "success": False}
+
+            size = os.path.getsize(image_path)
+            ext = os.path.splitext(image_path)[1].lower()
+
+            try:
+                from domains.multimodal.vision import VisionCNN
+                vision = VisionCNN()
+                caption_result = vision.caption(image_path)
+                objects = vision.detect(image_path)
+                embedding = vision.get_embedding(image_path)
+
+                return {
+                    "success": True,
+                    "format": ext,
+                    "size_bytes": size,
+                    "caption": caption_result.text,
+                    "confidence": round(caption_result.confidence, 3),
+                    "tags": caption_result.tags,
+                    "objects": [
+                        {"label": obj.label, "confidence": round(obj.confidence, 3)}
+                        for obj in objects
+                    ],
+                    "embedding_dim": len(embedding),
+                    "embedding_stats": {
+                        "mean": round(float(embedding.mean()), 4),
+                        "std": round(float(embedding.std()), 4),
+                        "l2_norm": round(float((embedding ** 2).sum() ** 0.5), 4),
+                    },
+                }
+            except ImportError:
+                return {
+                    "success": True,
+                    "format": ext,
+                    "size_bytes": size,
+                    "note": "Vision model not available — install SloNet dependencies",
+                }
+            except Exception as ve:
+                logger.warning(f"VisionCNN analysis failed, falling back to metadata: {ve}")
+                return {
+                    "success": True,
+                    "format": ext,
+                    "size_bytes": size,
+                    "note": f"Vision analysis error: {ve}",
+                }
+        except Exception as e:
+            return {"error": str(e), "success": False}
+
+    async def _run_data_analysis(
+        self,
+        args: Dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> Dict[str, Any]:
+        """Analyze a data file (CSV/JSON/JSONL)."""
+        data_path = args.get("data_path", "")
+        operation = args.get("operation", "summary")
+        if not data_path:
+            return {"error": "data_path required", "success": False}
+        try:
+            if not os.path.exists(data_path):
+                return {"error": f"Data file not found: {data_path}", "success": False}
+            with open(data_path, "r", errors="replace") as f:
+                raw = f.read(500_000)
+            ext = os.path.splitext(data_path)[1].lower()
+            if ext == ".csv":
+                lines = raw.strip().split("\n")
+                headers = lines[0].split(",") if lines else []
+                return {"success": True, "rows": len(lines) - 1, "columns": len(headers), "headers": headers}
+            elif ext in (".json", ".jsonl"):
+                import json
+                data = json.loads(raw) if ext == ".json" else [json.loads(l) for l in raw.strip().split("\n") if l]
+                if isinstance(data, list):
+                    keys = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+                    return {"success": True, "items": len(data), "keys": keys}
+                return {"success": True, "keys": list(data.keys())}
+            return {"success": True, "lines": len(raw.strip().split("\n")), "chars": len(raw)}
+        except Exception as e:
+            return {"error": str(e), "success": False}
+
 
 # ============ Agent ============
 
@@ -353,8 +504,9 @@ class AgentConfig:
     tools: List[ToolCapability] = field(
         default_factory=lambda: [
             ToolCapability.CODE_EXECUTION,
-            ToolCapability.FILE_SEARCH,
-            ToolCapability.CITATION,
+            ToolCapability.FILE_READ,
+            ToolCapability.WEB_SEARCH,
+            ToolCapability.KNOWLEDGE_RETRIEVAL,
         ]
     )
     security: Optional[SecurityConfig] = None
@@ -498,11 +650,53 @@ class Agent:
                     {"query": query.group(1)},
                 ))
 
-        if "cite" in lower or "source" in lower:
-            plan.append((
-                ToolCapability.CITATION.value,
-                {"text": request, "sources": []},
-            ))
+        if "web" in lower or "online" in lower or "internet" in lower or "browser" in lower:
+            query = re.search(r"['\"](.+?)['\"]", lower)
+            if query:
+                plan.append((
+                    ToolCapability.WEB_SEARCH.value,
+                    {"query": query.group(1)},
+                ))
+
+        if "cite" in lower or "citation" in lower or "source" in lower:
+            cite_match = re.search(r"(?:cite|citation)\s+(?:your\s+)?(?:sources?\s+)?(.+)$", lower)
+            if cite_match:
+                plan.append((
+                    ToolCapability.CITATION.value,
+                    {"text": cite_match.group(1).strip()},
+                ))
+
+        if "read" in lower or "open" in lower or "show" in lower:
+            path_match = re.search(r"(?:read|open|show)\s+(?:file\s+)?['\"](.+?)['\"]", lower)
+            if path_match:
+                plan.append((
+                    ToolCapability.FILE_READ.value,
+                    {"path": path_match.group(1)},
+                ))
+
+        if "knowledge" in lower or "recall" in lower:
+            query_match = re.search(r"(?:knowledge|recall)\s+(.+)$", lower)
+            if query_match:
+                plan.append((
+                    ToolCapability.KNOWLEDGE_RETRIEVAL.value,
+                    {"query": query_match.group(1).strip()},
+                ))
+
+        if "analyze" in lower or "data" in lower or "stats" in lower:
+            data_match = re.search(r"(?:analyze|stats|data)\s+(.+)$", lower)
+            if data_match:
+                plan.append((
+                    ToolCapability.DATA_ANALYSIS.value,
+                    {"data_path": data_match.group(1).strip()},
+                ))
+
+        if "image" in lower or "photo" in lower or "picture" in lower:
+            img_match = re.search(r"(?:image|photo|picture)\s+(.+)$", lower)
+            if img_match:
+                plan.append((
+                    ToolCapability.IMAGE_ANALYSIS.value,
+                    {"image_path": img_match.group(1).strip()},
+                ))
 
         return plan
 

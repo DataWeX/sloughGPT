@@ -28,6 +28,10 @@ class TestMorphTokenizerGPT2:
     def test_vocab_size(self, tok):
         assert tok.vocab_size == 50257
 
+    def test_chat_stop_ids_plain_eos_only(self, tok):
+        stop = tok.chat_stop_ids()
+        assert stop == (tok.eos_token_id,)
+
     def test_byte_level_detected(self, tok):
         assert tok.byte_level is True
 
@@ -111,6 +115,17 @@ class TestMorphTokenizerQwen2:
     def test_eos_token_id(self, tok):
         assert tok.eos_token_id > 0
 
+    def test_chat_stop_ids_includes_im_end(self, tok):
+        stop = tok.chat_stop_ids()
+        assert 50256 in stop
+        assert tok.added_tokens["<|im_end|>"] in stop
+        assert tok.added_tokens["<|endoftext|>"] in stop
+
+    def test_chat_stop_ids_ordered_tuple(self, tok):
+        stop = tok.chat_stop_ids()
+        assert isinstance(stop, tuple)
+        assert stop == tuple(sorted(stop))
+
 
 class TestMorphologicalAnalysis:
     """Linguistic rule-based morphological tests."""
@@ -141,6 +156,10 @@ class TestMorphologicalAnalysis:
 
     def test_stem_cats(self, tok):
         assert tok.stem("cats") == "cat"
+
+    def test_stem_ies_suffix(self, tok):
+        assert tok.stem("cries") == "crie"
+        assert tok.stem("spies") == "spie"
 
     def test_stem_better(self, tok):
         assert tok.stem("better") == "good"
@@ -189,3 +208,21 @@ class TestMorphologicalAnalysis:
         words = ["running", "jumping", "swimming", "walking"]
         div = tok.morphological_diversity(words)
         assert 0.0 < div <= 1.0
+
+
+class TestMorphTokenizerLocalDir:
+    def test_loads_from_local_directory(self, tmp_path):
+        import json
+
+        tok_data = {
+            "model": {
+                "vocab": {"a": 0, "b": 1, "c": 2, " ": 3},
+                "merges": [],
+                "eos_token_id": 3,
+            },
+            "pre_tokenizer": {"type": "Whitespace"},
+        }
+        (tmp_path / "tokenizer.json").write_text(json.dumps(tok_data))
+        tok = MorphTokenizer.from_pretrained(str(tmp_path))
+        assert tok.vocab_size == 4
+        assert tok.encode("abc") == [0, 1, 2]

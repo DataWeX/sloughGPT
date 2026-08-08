@@ -237,6 +237,18 @@ export class SloughGPTClient {
     }
   }
 
+  private unwrap(data: unknown): unknown {
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      (data as Record<string, unknown>).status === 'success' &&
+      'data' in (data as Record<string, unknown>)
+    ) {
+      return (data as Record<string, unknown>).data;
+    }
+    return data;
+  }
+
   // ============ Health & Info ============
 
   async health(): Promise<HealthStatus> {
@@ -743,11 +755,50 @@ export class SloughGPTClient {
   // ============ Security ============
 
   async getAuditLog(): Promise<Record<string, unknown>[]> {
-    return this.request<Record<string, unknown>[]>('GET', '/security/audit');
+    const data = await this.request<Record<string, unknown>>('GET', '/security/audit');
+    const unwrapped = this.unwrap(data);
+    if (Array.isArray(unwrapped)) {
+      return unwrapped as Record<string, unknown>[];
+    }
+    const obj = (unwrapped ?? data) as Record<string, unknown>;
+    return (obj.logs as Record<string, unknown>[]) ?? (obj as unknown as Record<string, unknown>[]);
   }
 
   async getSecurityKeys(): Promise<Record<string, unknown>[]> {
-    return this.request<Record<string, unknown>[]>('GET', '/security/keys');
+    const data = await this.request<Record<string, unknown>>('GET', '/security/keys');
+    const unwrapped = this.unwrap(data);
+    if (Array.isArray(unwrapped)) {
+      return unwrapped as Record<string, unknown>[];
+    }
+    const obj = (unwrapped ?? data) as Record<string, unknown>;
+    return (obj.keys as Record<string, unknown>[]) ?? (obj as unknown as Record<string, unknown>[]);
+  }
+
+  // ============ Model Registry ============
+
+  async listRegistryModels(): Promise<Record<string, unknown>[]> {
+    const data = await this.request<Record<string, unknown>>('GET', '/registry/models');
+    const unwrapped = this.unwrap(data);
+    if (Array.isArray(unwrapped)) {
+      return unwrapped as Record<string, unknown>[];
+    }
+    const obj = (unwrapped ?? data) as Record<string, unknown>;
+    return (obj.models as Record<string, unknown>[]) ?? (obj as unknown as Record<string, unknown>[]);
+  }
+
+  async getRegistryModel(modelId: string): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', `/registry/models/${modelId}`);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async getRegistryBest(): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', '/registry/best');
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async getRegistryStats(): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', '/registry/stats');
+    return this.unwrap(data) as Record<string, unknown>;
   }
 
   // ============ Auth ============

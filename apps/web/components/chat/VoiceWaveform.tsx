@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useMemo } from 'react'
+import { useRef, useMemo } from 'react'
 
 interface VoiceWaveformProps {
   /** 0–1 mic or speaker level from useVoiceChat */

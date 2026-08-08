@@ -2,16 +2,19 @@
 import { logger } from '@/lib/dev-log'
 export const dynamic = 'force-dynamic'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
-import { StatCard, KpiGrid, Skeleton, KeyValueList, StatusDot, SettingsRow } from '@sloughgpt/strui'
+import { StatCard, KpiGrid, Skeleton, KeyValueList, SettingsRow } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
-import { IconRefresh, IconTrash, IconCheck, IconCopy } from '@sloughgpt/strui'
+import { Breadcrumbs } from '@sloughgpt/strui'
+import { IconRefresh, IconTrash } from '@sloughgpt/strui'
+import { QuantizeCard } from '@/components/model/QuantizeCard'
 import { modelController, type ModelInfo, type HealthStatus } from '@/lib/model-controller'
+import { trainingJobsController } from '@/lib/training-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { generationConfigController, type GenerationConfig } from '@/lib/generation-config-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -24,11 +27,12 @@ export default function ModelDetailPage() {
   const modelId = decodeURIComponent((params.id as string) || '')
 
   const [model, setModel] = useState<ModelInfo | null>(null)
+  const [isFineTuned, setIsFineTuned] = useState(false)
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [benchmark, setBenchmark] = useState<BenchmarkResult | null>(null)
   const [benchmarking, setBenchmarking] = useState(false)
-  const [modelLogs, setModelLogs] = useState<any[]>([])
+  const [modelLogs, setModelLogs] = useState<string[]>([])
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [uptime, setUptime] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval>>()
@@ -50,10 +54,31 @@ export default function ModelDetailPage() {
       ])
       setHealth(h)
       setModelLogs(logsRes.logs)
-      const m = models.find(m => m.id === modelId || m.name === modelId) || null
-      setModel(m)
-      setLoadState(h?.model_loaded && (h.model_type?.includes(modelId) ?? false) ? 'loaded' : 'idle')
-    } catch (e) {
+      const m = models.find(m => m.id === modelId || m.name === modelId)
+      if (m) {
+        setModel(m)
+        setIsFineTuned(false)
+        setLoadState(h?.model_loaded && (h.model_type?.includes(modelId) ?? false) ? 'loaded' : 'idle')
+        return
+      }
+      const ft = (await trainingJobsController.listFineTuned()).find(x => x.name === modelId || x.model_name === modelId)
+      if (ft) {
+        setIsFineTuned(true)
+        setModel({
+          id: ft.name,
+          name: ft.name,
+          source: 'finetuned',
+          description: `Fine-tuned from ${ft.model}${ft.dataset ? ` on ${ft.dataset}` : ''} · final loss ${ft.final_loss ?? '—'}`,
+          size_mb: ft.size_mb,
+          params: ft.epochs ? `${ft.epochs} epochs` : undefined,
+        })
+        setLoadState(h?.model_loaded && (h.model_type?.includes(modelId) ?? false) ? 'loaded' : 'idle')
+        return
+      }
+      setModel(null)
+      setIsFineTuned(false)
+      setLoadState('idle')
+    } catch {
       addToast('Something went wrong loading the model', 'error')
     } finally {
       setLoading(false)
@@ -86,10 +111,13 @@ export default function ModelDetailPage() {
   const handleLoad = async () => {
     setLoadState('loading')
     try {
-      const result = await modelController.load(modelId)
+      const result = isFineTuned
+        ? await trainingJobsController.loadFineTuned(modelId)
+        : await modelController.load(modelId)
       setLoadState('loaded')
-      setHealth(prev => prev ? { ...prev, model_loaded: true, model_type: modelId, device: result.device || prev.device } : null)
-      addToast(`Model ready: ${modelId} (${result.device || 'cpu'})`, 'success')
+      const device = (result as { device?: string }).device || 'cpu'
+      setHealth(prev => prev ? { ...prev, model_loaded: true, model_type: modelId, device } : null)
+      addToast(`Model ready: ${modelId} (${device})`, 'success')
     } catch {
       setLoadState('error')
       addToast(`Something went wrong loading ${modelId}`, 'error')
@@ -140,7 +168,7 @@ export default function ModelDetailPage() {
     if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`
-    return n.toString()
+    return `${n}`
   }
 
   if (!modelId) return null
@@ -150,12 +178,16 @@ export default function ModelDetailPage() {
 
   return (
     <div className="sl-page mx-auto max-w-4xl">
+      <Breadcrumbs
+        items={[
+          { label: 'Models', href: '/models' },
+          { label: model?.name || modelId },
+        ]}
+        className="mb-3"
+      />
       <AppRouteHeader
         left={
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/models')} className="h-7 px-1.5 text-xs text-muted-foreground hover:text-foreground">
-              ← Models
-            </Button>
             <AppRouteHeaderLead title={model?.name || modelId} />
           </div>
         }
@@ -241,7 +273,7 @@ export default function ModelDetailPage() {
                 ) : benchmark ? (
                   <div className="space-y-4">
                     <KpiGrid columns={4}>
-                      <StatCard label="Parameters" value={formatParamCount(benchmark.num_parameters) || benchmark.num_parameters.toLocaleString()} />
+                      <StatCard label="Parameters" value={formatParamCount(benchmark.num_parameters) || (benchmark.num_parameters ?? 0).toLocaleString()} />
                       <StatCard label="Memory" value={`${benchmark.memory_mb.toFixed(0)} MB`} />
                       <StatCard label="Throughput" value={`${benchmark.throughput_tokens_per_sec.toFixed(1)} tok/s`} />
                       <StatCard label="Avg latency" value={`${benchmark.inference_time_ms.toFixed(0)} ms`} />
@@ -315,6 +347,16 @@ export default function ModelDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Quantize card */}
+            {isLoaded && (
+              <QuantizeCard
+                isLoaded={isLoaded}
+                modelId={modelId}
+                health={health}
+                onQuantized={fetchData}
+              />
+            )}
+
             {/* Details card */}
             <Card>
               <CardHeader>
@@ -356,8 +398,8 @@ export default function ModelDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                  {modelLogs.map((log: any, i: number) => (
-                    <p key={i} className="text-[11px] font-mono text-muted-foreground/70 truncate">{typeof log === 'string' ? log : log.message || JSON.stringify(log)}</p>
+                  {modelLogs.map((log) => (
+                    <p key={log} className="text-[11px] font-mono text-muted-foreground/70 truncate">{log}</p>
                   ))}
                 </div>
               </CardContent>
@@ -384,7 +426,7 @@ function ModelTestPrompt({ modelId }: { modelId: string }) {
       const { generateController } = await import('@/lib/generate-controller')
       const data = await generateController.generate({ prompt: prompt.trim(), max_new_tokens: 200 })
       setOutput(data.text || '')
-    } catch (err) {
+    } catch {
       addToast('Test failed — is the model loaded?', 'error')
     } finally {
       setLoading(false)

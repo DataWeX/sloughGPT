@@ -6,7 +6,7 @@ import { Button } from '@sloughgpt/strui'
 interface DPOCardProps {
   dpoRunning: boolean
   dpoStatus: string
-  dpoResult: any
+  dpoResult: { status?: string; steps?: number; avg_loss?: number; ppl_before?: number; ppl_after?: number; ppl_delta_pct?: number; pairs_trained?: number; elapsed_seconds?: number; error?: string } | null
   dpoError: string | null
   dpoAccepted: number
   dpoRejected: number
@@ -38,12 +38,12 @@ export default function DPOCard({ dpoRunning, dpoStatus, dpoResult, dpoError, dp
         {dpoResult && dpoResult.status === 'accepted' && (
           <div className="space-y-1 p-2 rounded bg-success/10 border border-success/20 text-xs">
             <p className="text-success font-medium">✓ DPO accepted — model updated</p>
-            {dpoResult.steps > 0 && <p className="text-muted-foreground">{dpoResult.steps} steps · avg loss {dpoResult.avg_loss?.toFixed(4)}</p>}
-            {dpoResult.ppl_before != null && (
-              <p className="text-muted-foreground">PPL: {dpoResult.ppl_before?.toFixed(2)} → {dpoResult.ppl_after?.toFixed(2)} ({dpoResult.ppl_delta_pct > 0 ? '+' : ''}{dpoResult.ppl_delta_pct?.toFixed(1)}%)</p>
+            {typeof dpoResult.steps === 'number' && dpoResult.steps > 0 && <p className="text-muted-foreground">{dpoResult.steps} steps · avg loss {typeof dpoResult.avg_loss === 'number' ? dpoResult.avg_loss.toFixed(4) : '...'}</p>}
+            {typeof dpoResult.ppl_before === 'number' && (
+              <p className="text-muted-foreground">PPL: {dpoResult.ppl_before.toFixed(2)} → {typeof dpoResult.ppl_after === 'number' ? dpoResult.ppl_after.toFixed(2) : '...'} ({typeof dpoResult.ppl_delta_pct === 'number' && dpoResult.ppl_delta_pct > 0 ? '+' : ''}{typeof dpoResult.ppl_delta_pct === 'number' ? dpoResult.ppl_delta_pct.toFixed(1) : '...'}%)</p>
             )}
-            {dpoResult.pairs_trained > 0 && <p className="text-muted-foreground">{dpoResult.pairs_trained} pairs trained</p>}
-            {dpoResult.elapsed_seconds > 0 && <p className="text-muted-foreground">Took {dpoResult.elapsed_seconds}s</p>}
+            {typeof dpoResult.pairs_trained === 'number' && dpoResult.pairs_trained > 0 && <p className="text-muted-foreground">{dpoResult.pairs_trained} pairs trained</p>}
+            {typeof dpoResult.elapsed_seconds === 'number' && dpoResult.elapsed_seconds > 0 && <p className="text-muted-foreground">Took {dpoResult.elapsed_seconds}s</p>}
           </div>
         )}
         {dpoResult && dpoResult.status === 'rejected' && (

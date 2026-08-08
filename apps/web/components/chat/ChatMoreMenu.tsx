@@ -5,9 +5,14 @@ import { Button } from '@sloughgpt/strui'
 import { IconMore, IconSettings, IconSearch, IconCopy, IconExport, IconDocument } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
+function ShortcutHint({ keys }: { keys: string }) {
+  return <span className="ml-auto text-[9px] text-muted-foreground/50 font-mono">{keys}</span>
+}
+
 export function ChatMoreMenu() {
   const ctx = useChatToolbarContext()
   const { onVoiceMode, onToggleTools, onExportMarkdown, onCopyMarkdown, onSaveAsDataset, onSystemPrompt, onSearchConversations, hasMessages } = ctx.actions
+  const onNewChat = ctx.conversations.onNewChat
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -15,7 +20,15 @@ export function ChatMoreMenu() {
           <IconMore className="h-3.5 w-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[180px]">
+      <DropdownMenuContent align="end" className="min-w-[200px]">
+        <DropdownMenuItem onSelect={onNewChat}>
+          <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <span className="flex-1">New Conversation</span>
+          <ShortcutHint keys="Ctrl+N" />
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
         {ctx.agent.agents.length > 0 && (
           <>
             <div className="px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -72,11 +85,13 @@ export function ChatMoreMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onToggleTools}>
           <IconSettings className="mr-2 h-4 w-4" />
-          Tools Panel
+          <span className="flex-1">Tools Panel</span>
+          <ShortcutHint keys="Ctrl+." />
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSearchConversations}>
           <IconSearch className="mr-2 h-4 w-4" />
-          Search
+          <span className="flex-1">Search</span>
+          <ShortcutHint keys="Ctrl+F" />
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSystemPrompt}>
           <IconDocument className="mr-2 h-4 w-4" />
@@ -87,12 +102,14 @@ export function ChatMoreMenu() {
 
         <DropdownMenuItem onSelect={onExportMarkdown} disabled={!hasMessages}>
           <IconExport className="mr-2 h-4 w-4" />
-          Export Markdown
+          <span className="flex-1">Export Markdown</span>
+          <ShortcutHint keys="Ctrl+Shift+E" />
         </DropdownMenuItem>
         {onCopyMarkdown && (
           <DropdownMenuItem onSelect={onCopyMarkdown} disabled={!hasMessages}>
             <IconCopy className="mr-2 h-4 w-4" />
-            Copy
+            <span className="flex-1">Copy</span>
+            <ShortcutHint keys="Ctrl+Shift+C" />
           </DropdownMenuItem>
         )}
         {onSaveAsDataset && (

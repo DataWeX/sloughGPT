@@ -131,6 +131,46 @@ def list_providers() -> List[str]:
     return list(_providers.keys())
 
 
+def clear_providers() -> None:
+    """Remove all registered providers (model unload path).
+
+    Drops every provider (including the ``default`` router) so chat and
+    generation calls fail fast with ``no provider`` until a model is
+    reloaded. Side effects:
+        - clears the provider registry
+        - leaves processor registry intact (cheap, reused on next load)
+    """
+    _providers.clear()
+
+
+def attach_process_guard_to_provider(process_guard: Any) -> bool:
+    """Attach a ProcessGuard to the registered slonet-native provider's server.
+
+    After a runtime guard rebuild (enable toggle, re-adoption) the provider's
+    ``SloNetServer`` still references the old, stopped guard, so generation
+    falls back in-process. This swaps the server's guard reference so
+    subsequent generations delegate to the guarded subprocess again.
+
+    Args:
+        process_guard: A started ProcessGuard instance, or None to detach.
+
+    Returns:
+        True when a slonet-native provider with an attached server was updated,
+        False otherwise (no-op).
+    """
+    provider = get_provider("slonet-native")
+    if provider is None:
+        return False
+    server = getattr(provider, "get_server", lambda: None)()
+    if server is None:
+        return False
+    setter = getattr(server, "set_process_guard", None)
+    if setter is None:
+        return False
+    setter(process_guard)
+    return True
+
+
 # =============================================================================
 # Processor registry
 # =============================================================================
@@ -754,31 +794,23 @@ class SloTransformerProvider:
         import numpy as np
         inp = np.array([input_ids], dtype=np.int64)
         loop = asyncio.get_event_loop()
-        chunk_size = min(8, max_tokens)
-        generated = 0
-        while generated < max_tokens:
-            if cancel_event is not None and cancel_event.is_set():
-                break
-            to_gen = min(chunk_size, max_tokens - generated)
 
-            def _gen():
-                return self._model.generate(inp, max_new_tokens=to_gen, temperature=temperature)
+        def _gen():
+            return self._model.generate(inp, max_new_tokens=max_tokens, temperature=temperature)
 
-            try:
-                out = await loop.run_in_executor(None, _gen)
-            except Exception as e:
-                logger.warning(f"SloTransformer generation error: {e}", extra={"tag": "MODEL"})
-                break
-            if out is None:
-                break
-            out_ids = out.data.flatten().tolist()
-            text = self._decode(out_ids)
-            if text:
-                yield text
-            generated += len(out_ids)
-            inp = np.array([input_ids + out_ids], dtype=np.int64)
-            if self._eos in out_ids:
-                break
+        try:
+            out = await loop.run_in_executor(None, _gen)
+        except Exception as e:
+            logger.warning(f"SloTransformer generation error: {e}", extra={"tag": "MODEL"})
+            return
+        if out is None:
+            return
+        out_ids = out.data.flatten().tolist()
+        if self._eos in out_ids:
+            out_ids = out_ids[:out_ids.index(self._eos)]
+        text = self._decode(out_ids)
+        if text:
+            yield text
 
     async def chat(self, messages, max_tokens=512, temperature=0.8, **kwargs):
         chunks = []
@@ -898,6 +930,7 @@ def setup_providers(
     quant_bits: int = 8,
     quant_mode: str = "symmetric",
     personality_traits: Optional[Dict[str, float]] = None,
+    slonet_path: Optional[str] = None,
 ) -> None:
     """Register providers and build the default processor pipeline.
 
@@ -921,7 +954,8 @@ def setup_providers(
     and handled by the caller (inference.py) via ``apply_processors()``.
 
     Args:
-        slonet_hf_id: HuggingFace model ID for SloNet model
+        slonet_hf_id: HuggingFace model ID for SloNet model (used as the
+            tokenizer model ID when ``slonet_path`` is given)
         slonet_provider: Pre-loaded provider (skips re-loading)
         slonet_server: ``SloNetServer`` instance for concurrency/circuit-breaker
         model_registry: Optional ModelRegistry for lifecycle management
@@ -931,6 +965,8 @@ def setup_providers(
         quant_bits: Quantization bit width
         quant_mode: Quantization mode
         personality_traits: Optional personality traits dict
+        slonet_path: Direct path to a local .slnc file (e.g. a compiled
+            fine-tuned model) to load via ``SloNetChatProvider.from_slnc``
     """
     text_provider_name = None
 
@@ -961,6 +997,32 @@ def setup_providers(
                     getattr(slonet_provider, '_model_id', '?'),
                     ', server-backed' if slonet_server else '',
                     extra={"tag": "MODEL"})
+    elif slonet_path:
+        try:
+            from domains.inference.slonet_provider import SloNetChatProvider
+            slonet_provider = SloNetChatProvider.from_slnc(
+                slonet_path,
+                model_id=slonet_hf_id or "gpt2",
+                quantize=quantize,
+                quant_bits=quant_bits,
+                quant_mode=quant_mode,
+                free_quantized_originals=True,
+            )
+            # Attach SloNetServer if provided, else build one from the guard
+            if slonet_server is None and process_guard is not None:
+                slonet_server = _server_from_provider(slonet_provider, process_guard)
+            if slonet_server is not None and hasattr(slonet_provider, 'set_server'):
+                slonet_provider.set_server(slonet_server)
+            register_provider("slonet-native", slonet_provider)
+            text_provider_name = "slonet-native"
+            logger.info("Registered slonet-native provider from local .slnc: %s (quant=%s%s)",
+                        slonet_path,
+                        f"int{quant_bits}" if quantize else "none",
+                        ', server-backed' if slonet_server else '',
+                        extra={"tag": "MODEL"})
+        except Exception as e:
+            logger.warning("Failed to load slonet-native provider from %s: %s",
+                           slonet_path, e, extra={"tag": "MODEL"})
     elif slonet_hf_id:
         try:
             from domains.inference.slonet_provider import SloNetChatProvider
@@ -975,6 +1037,7 @@ def setup_providers(
                 quantize=quantize,
                 quant_bits=quant_bits,
                 quant_mode=quant_mode,
+                free_quantized_originals=True,
             )
             # Attach SloNetServer if provided, else build one from the guard
             if slonet_server is None and process_guard is not None:
@@ -1008,6 +1071,7 @@ def setup_providers(
                         quantize=quantize,
                         quant_bits=quant_bits,
                         quant_mode=quant_mode,
+                        free_quantized_originals=True,
                     )
                     if slonet_server is not None and hasattr(auto_provider, 'set_server'):
                         auto_provider.set_server(slonet_server)
@@ -1021,7 +1085,12 @@ def setup_providers(
     # Build default ProviderRouter with full processor pipeline
     existing = _providers.get("default")
     _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
-    if not _is_slonet:
+    # Rebuild the default router only when a text provider was successfully
+    # registered, or when no default router exists yet. If the requested model
+    # failed to load (text_provider_name is None) and a working default router
+    # already exists, keep it — otherwise the failed load would clobber the
+    # active model's router with an empty one, breaking inference.
+    if not _is_slonet and (text_provider_name or existing is None):
         router = ProviderRouter()
         vision_proc = VisionProcessor("multimodal")
         tool_proc = ToolUseProcessor()
@@ -1079,6 +1148,7 @@ __all__ = [
     "register_provider",
     "get_provider",
     "list_providers",
+    "clear_providers",
     "register_processor",
     "get_processor",
     "list_processors",

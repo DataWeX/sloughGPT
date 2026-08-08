@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 from typing import Any, Optional
 
 from fastapi import FastAPI
@@ -37,6 +38,31 @@ _TIMEOUT_MODEL_REGISTRY = 10.0
 _TIMEOUT_ROUTERS = 30.0
 _TIMEOUT_STARTUP_TOTAL = 120.0
 _TIMEOUT_SHUTDOWN = 30.0
+
+# Modules the background model-load thread imports while the main thread is
+# registering routers. First-time imports from two threads concurrently are
+# the root cause of the intermittent startup EBADF (importlib.get_data →
+# OSError: [Errno 9] Bad file descriptor) and partial ImportError races.
+# Pre-importing this full graph up front (main thread, before the task is
+# created) turns every later ``from X import Y`` in the thread into a cached
+# sys.modules lookup — no file reads, no race.
+_PREWARM_MODEL_LOAD_IMPORTS = [
+    "state",
+    "config",
+    "domains.infrastructure.safetensors_loader",
+    "domains.inference.slonet_provider",
+    "domains.infrastructure.process_guard",
+    "domains.infrastructure.server_state",
+    "controllers.models",
+    "domains.infrastructure.model_registry",
+    "domains.models.provider",
+    "domains.inference.slo_manager",
+    "domains.slolib.gpu",
+    "domains.infrastructure.model_catalog",
+    "domains.infrastructure.task_queue",
+    "domains.infrastructure.training_queue",
+    "domains.api.sse_envelope",
+]
 _TIMEOUT_REGISTER_GENERATE = 120.0
 
 
@@ -52,6 +78,27 @@ class StartupProfileSelector:
         if hasattr(config, "startup_profile"):
             return config.startup_profile
         return "full"
+
+
+def _preload_model_imports() -> None:
+    """Import the background model-load dependency graph in the main thread.
+
+    Called once at the start of ``_phase2_model_load``, before the background
+    task is created. Without this, the model-load thread and the
+    router-registration code path both perform first-time module imports
+    concurrently, which intermittently fails in the import machinery
+    (``importlib`` ``get_data`` → ``OSError: [Errno 9] Bad file descriptor``
+    or a partial ``ImportError``). After preloading, every ``from X import Y``
+    in the thread hits ``sys.modules`` and performs zero file reads.
+
+    Side effects:
+        - Populates ``sys.modules`` with the model-load dependency graph.
+    """
+    for mod in _PREWARM_MODEL_LOAD_IMPORTS:
+        try:
+            __import__(mod)
+        except Exception as e:
+            logger.warning("Preload import failed for %s: %s", mod, e, extra={"tag": "START"})
 
 
 class StartupOrchestrator:
@@ -129,7 +176,7 @@ class StartupOrchestrator:
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "model_load", self._phase2_model_load,
-                    depends_on=[], timeout=_TIMEOUT_MODEL_LOAD, critical=False,
+                    depends_on=["config"], timeout=_TIMEOUT_MODEL_LOAD, critical=False,
                     profiles=full_only,
                 ),
             )
@@ -181,6 +228,9 @@ class StartupOrchestrator:
             )
             self._lifecycle.register_shutdown_hook(
                 ShutdownHook("executor_shutdown", self._shutdown_executor, depends_on=[], timeout=10.0),
+            )
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook("process_guard_shutdown", self._shutdown_process_guard, depends_on=[], timeout=_TIMEOUT_CONFIG),
             )
 
             # Health gates
@@ -242,6 +292,12 @@ class StartupOrchestrator:
         """
         cfg = self._config
 
+        # Serialize first-time imports: the background load thread and the
+        # main thread (router registration, phase 6) must never import fresh
+        # modules at the same instant. Pre-import the thread's full dependency
+        # graph here so its later imports are cache hits.
+        _preload_model_imports()
+
         raw = cfg.autoload_model
         if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
             logger.info("Phase: autoload disabled (%r)", raw, extra={"tag": "START"})
@@ -252,6 +308,21 @@ class StartupOrchestrator:
 
         def _load_and_register():
             """Load model then register with registry/providers."""
+            import state as server_state
+
+            # Lazy-guard fast path (default): with a ProcessGuard + .slnc
+            # available, defer the parent weight load entirely. The guard's
+            # worker process owns the weights and serves inference; the parent
+            # stays near-idle and materializes weights lazily only if the
+            # guard dies.
+            if _try_lazy_guard_autoload(cfg):
+                _sync_soul_traits()
+                logger.info(
+                    "Lazy-guard autoload ready: %s (parent weights deferred)",
+                    cfg.autoload_model, extra={"tag": "START"},
+                )
+                return
+
             try:
                 _autoload_model(cfg)
             except Exception as e:
@@ -260,82 +331,8 @@ class StartupOrchestrator:
 
             # After model is loaded, register with registry + providers
             try:
-                import state as server_state
-                from domains.infrastructure.model_registry import get_model_registry
-                from domains.models.provider import setup_providers
-
-                registry = get_model_registry()
-
-                # Create process guard if enabled
-                process_guard = None
-                if cfg.enable_process_guard:
-                    try:
-                        from domains.infrastructure.process_guard import ProcessGuard
-                        from domains.infrastructure.safetensors_loader import _get_model_dir
-
-                        slnc_path = str(_get_model_dir(server_state.model_type) / "model.slnc")
-                        if os.path.exists(slnc_path):
-                            process_guard = ProcessGuard(
-                                slnc_path=slnc_path,
-                                model_id=server_state.model_type,
-                                worker_id=f"slo-{server_state.model_type.split('/')[-1]}",
-                                max_restarts=3,
-                                restart_delay=2.0,
-                                generate_timeout=120.0,
-                                quantize=cfg.quantize_slonet,
-                                quant_bits=cfg.quant_bits,
-                                quant_mode=cfg.quant_mode,
-                                quant_clip=cfg.quant_clip,
-                            )
-                            process_guard.start()
-                            logger.info("ProcessGuard started for %s", server_state.model_type,
-                                extra={"tag": "START"})
-                        else:
-                            logger.info("ProcessGuard skipped: no .slnc file at %s", slnc_path,
-                                extra={"tag": "START"})
-                    except Exception as e:
-                        logger.warning("ProcessGuard creation failed: %s", e, extra={"tag": "START"})
-
-                if server_state.model is not None and server_state.tokenizer is not None:
-                    registry.register(
-                        server_state.model_type, server_state.model, server_state.tokenizer,
-                        make_default=True, generate_timeout=120.0,
-                        process_guard=process_guard,
-                    )
-
-                slonet_id = cfg.autoload_model if cfg.autoload_model else None
-                # Pass pre-loaded provider to avoid duplicate SLNC load (~6s)
-                preloaded = getattr(server_state, 'provider', None)
-                setup_providers(
-                    slonet_hf_id=server_state.model_type,
-                    slonet_provider=preloaded,
-                    model_registry=registry,
-                    process_guard=process_guard,
-                    quantize=cfg.quantize_slonet,
-                    quant_bits=cfg.quant_bits,
-                    quant_mode=cfg.quant_mode,
-                )
-
-                # Auto-select precision on GPU (fp16 benchmark)
-                try:
-                    from domains.slolib.gpu import set_accelerator_precision
-                    active = set_accelerator_precision("auto")
-                    if active == "fp16":
-                        logger.info("GPU precision set to fp16 (auto-selected via benchmark)",
-                                    extra={"tag": "START"})
-                except Exception:
-                    pass
-                # Sync current soul traits to PersonalityProcessor
-                try:
-                    from domains.inference.slo_manager import get_slo_manager
-                    from domains.models.provider import update_personality_traits
-                    mgr = get_slo_manager()
-                    current = mgr.get_current_soul()
-                    if current and hasattr(current, "personality") and current.personality:
-                        update_personality_traits(current.personality)
-                except Exception as e:
-                    logger.debug("Failed to sync soul traits to personality processor: %s", e, extra={"tag": "START"})
-                logger.info("Model loaded + providers registered: %s", server_state.model_type, extra={"tag": "START"})
+                process_guard = _build_guard_for_model(cfg, server_state.model_type)
+                _register_loaded(cfg, process_guard)
             except Exception as e:
                 logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"})
 
@@ -434,43 +431,77 @@ class StartupOrchestrator:
 
         Skips any routers already registered before lifespan (e.g.
         health/status which are needed during model load).
+
+        A first-time import can transiently fail with ``OSError`` errno 9
+        (EBADF) or a partial ``ImportError`` if another thread is importing
+        concurrently; in that case the whole pass is retried once. Failed
+        imports are rolled back out of ``sys.modules`` by importlib, so a
+        retry re-imports cleanly and skips any routers already included.
         """
         STARTUP_PHASE.update(phase="registering_routers", step=8, total=9, message="Registering routes...")
-        try:
-            from routers import get_all_routers
-            # Collect prefixes already registered (health/status are
-            # registered pre-lifespan in main.py).
-            existing = set()
-            for route in self._app.routes:
-                if hasattr(route, "path") and hasattr(route, "methods"):
-                    existing.add(route.path)
-            for r in get_all_routers():
-                # Skip if this router's prefix already has routes
-                prefix = getattr(r, "prefix", "")
-                if prefix and any(p.startswith(prefix) for p in existing):
-                    logger.debug("Skipping already-registered router: %s", prefix)
-                    continue
-                self._app.include_router(r)
-                if prefix:
-                    existing.add(prefix)
+        last_exc: Optional[BaseException] = None
+        for attempt in (1, 2):
             try:
-                from training.router import router as training_router
-                self._app.include_router(training_router)
-            except Exception as exc:
-                logger.warning("Phase: training router failed: %s", exc, extra={"tag": "START"})
-            logger.info(
-                "Phase: all routers registered (%d routes)",
-                len(self._app.routes),
-                extra={"tag": "START"},
-            )
-            self._routers_registered = True
-        except Exception as e:
-            self._routers_registered = False
-            logger.error("Phase: router registration failed: %s", e, extra={"tag": "START"})
-            raise
+                from routers import get_all_routers
+                # Collect prefixes already registered (health/status are
+                # registered pre-lifespan in main.py).
+                existing = set()
+                for route in self._app.routes:
+                    if hasattr(route, "path") and hasattr(route, "methods"):
+                        existing.add(route.path)
+                for r in get_all_routers():
+                    # Skip if this router's prefix already has routes
+                    prefix = getattr(r, "prefix", "")
+                    if prefix and any(p.startswith(prefix) for p in existing):
+                        logger.debug("Skipping already-registered router: %s", prefix)
+                        continue
+                    self._app.include_router(r)
+                    if prefix:
+                        existing.add(prefix)
+                try:
+                    from training.router import router as training_router
+                    self._app.include_router(training_router)
+                except Exception as exc:
+                    logger.warning("Phase: training router failed: %s", exc, extra={"tag": "START"})
+                logger.info(
+                    "Phase: all routers registered (%d routes)",
+                    len(self._app.routes),
+                    extra={"tag": "START"},
+                )
+                self._routers_registered = True
+                return
+            except Exception as e:
+                last_exc = e
+                transient = isinstance(e, ImportError) or (
+                    isinstance(e, OSError) and getattr(e, "errno", None) == 9
+                )
+                if attempt == 1 and transient:
+                    logger.warning(
+                        "Phase: router registration transient import failure (%s) — retrying",
+                        e, extra={"tag": "START"},
+                    )
+                    import traceback as _tb
+                    import faulthandler as _fth
+                    try:
+                        _fth.dump_traceback(all_threads=True, file=sys.stderr)
+                    except Exception:
+                        pass
+                    _tb.print_exc(file=sys.stderr)
+                    await asyncio.sleep(0.5)
+                    continue
+                self._routers_registered = False
+                import traceback as _tb
+                import faulthandler as _fth
+                try:
+                    _fth.dump_traceback(all_threads=True, file=sys.stderr)
+                except Exception:
+                    pass
+                _tb.print_exc(file=sys.stderr)
+                logger.error("Phase: router registration failed: %s", last_exc, exc_info=True, extra={"tag": "START"})
+                raise
 
     async def _phase_task_queue(self):
-        """Initialize the background task queue."""
+        """Initialize the background task queue and register training handlers."""
         STARTUP_PHASE.update(phase="task_queue", step=2, total=9, message="Initializing task queue...")
         try:
             from domains.infrastructure.task_queue import get_task_queue
@@ -478,6 +509,12 @@ class StartupOrchestrator:
             logger.info("Task queue initialized", extra={"tag": "START"})
         except Exception as e:
             logger.warning("Task queue init failed: %s", e, extra={"tag": "START"})
+        try:
+            from domains.infrastructure.training_queue import register_training_handlers
+            register_training_handlers()
+            logger.info("Training handlers registered with task queue", extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("Training handler registration failed: %s", e, extra={"tag": "START"})
 
     async def _phase_config(self):
         """Validate and warm the config system + init ResourceManager."""
@@ -545,6 +582,16 @@ class StartupOrchestrator:
         except Exception as e:
             logger.debug("Registry reset failed during shutdown: %s", e)
 
+    async def _shutdown_process_guard(self):
+        """Stop any active ProcessGuard so worker subprocesses exit cleanly."""
+        try:
+            from controllers.models import get_models_controller
+            ctrl = get_models_controller()
+            if hasattr(ctrl, "_stop_process_guard"):
+                ctrl._stop_process_guard()
+        except Exception as e:
+            logger.debug("ProcessGuard shutdown failed: %s", e)
+
     async def _shutdown_pool(self):
         """Shut down inference pool."""
         try:
@@ -580,6 +627,231 @@ class StartupOrchestrator:
         await self._shutdown_registry()
         await self._shutdown_pool()
         await self._shutdown_executor()
+        await self._shutdown_process_guard()
+
+
+def _sync_soul_traits():
+    """Sync current soul traits to the PersonalityProcessor (best-effort)."""
+    try:
+        from domains.inference.slo_manager import get_slo_manager
+        from domains.models.provider import update_personality_traits
+        mgr = get_slo_manager()
+        current = mgr.get_current_soul()
+        if current and hasattr(current, "personality") and current.personality:
+            update_personality_traits(current.personality)
+    except Exception as e:
+        logger.debug("Failed to sync soul traits to personality processor: %s", e, extra={"tag": "START"})
+
+
+def _try_lazy_guard_autoload(cfg) -> bool:
+    """Defer the parent weight load when a ProcessGuard + .slnc are available.
+
+    Creates a header-only lazy ``SloNetChatProvider`` (no weight pages faulted
+    into the parent) and a ``ProcessGuard`` whose worker process loads the
+    weights. The parent process stays near-idle; inference is served by the
+    guard worker; if the guard dies, the parent materializes weights on demand
+    via the lazy provider's ``_get_model()``.
+
+    Returns:
+        True when the lazy fast path was applied, False to fall back to the
+        eager autoload.
+    """
+    import state as server_state
+
+    if server_state.model is not None:
+        return False
+    if not cfg.lazy_guard_autoload:
+        return False
+    try:
+        from config import get_process_guard_enabled
+        if not get_process_guard_enabled():
+            return False
+    except Exception:
+        return False
+
+    model_type = cfg.autoload_model
+    if not model_type:
+        return False
+    try:
+        from domains.infrastructure.safetensors_loader import _get_model_dir
+        slnc_path = str(_get_model_dir(model_type) / "model.slnc")
+        if not os.path.exists(slnc_path):
+            logger.info("Lazy-guard autoload skipped: no .slnc at %s", slnc_path, extra={"tag": "START"})
+            return False
+    except Exception as e:
+        logger.warning("Lazy-guard autoload: slnc resolution failed (%s)", e, extra={"tag": "START"})
+        return False
+
+    try:
+        from domains.inference.slonet_provider import SloNetChatProvider
+        provider = SloNetChatProvider.lazy_from_slnc(
+            slnc_path,
+            model_id=model_type,
+            quantize=cfg.quantize_slonet,
+            quant_bits=cfg.quant_bits,
+            quant_mode=cfg.quant_mode,
+            quant_clip=cfg.quant_clip,
+        )
+    except Exception as e:
+        logger.warning("Lazy-guard autoload: lazy provider creation failed (%s)", e, extra={"tag": "START"})
+        return False
+
+    try:
+        from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+        process_guard = ProcessGuard(
+            slnc_path=slnc_path,
+            model_id=model_type,
+            worker_id=f"slo-{model_type.split('/')[-1]}",
+            max_restarts=3,
+            restart_delay=2.0,
+            generate_timeout=120.0,
+            memory_limit_mb=resolve_memory_limit_mb(slnc_path, cfg.process_guard_memory_limit_mb),
+            quantize=cfg.quantize_slonet,
+            quant_bits=cfg.quant_bits,
+            quant_mode=cfg.quant_mode,
+            quant_clip=cfg.quant_clip,
+        )
+        process_guard.start()
+    except Exception as e:
+        logger.warning(
+            "Lazy-guard autoload: guard start failed (%s) — falling back to eager load",
+            e, extra={"tag": "START"},
+        )
+        return False
+
+    server_state.model_type = model_type
+    server_state.model = None
+    server_state.provider = provider
+    server_state.tokenizer = getattr(provider, "_tokenizer", None)
+
+    # Mirror to the core ServerState singleton — the source for
+    # get_health_score() — so /health/detailed health_score reports a
+    # loaded model (provider-backed) instead of "No model loaded".
+    # Mirrors the manual-load path in controllers/models.py.
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        core = get_server_state()
+        core.model.set(provider)
+        core.model_type.set(model_type)
+    except Exception as e:
+        logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
+
+    # Track the guard so /models/process-guard status and the runtime toggle
+    # can manage it (autoload path bypasses the controller).
+    try:
+        from controllers.models import get_models_controller
+        get_models_controller().adopt_process_guard(process_guard, model_type)
+    except Exception as e:
+        logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"tag": "START"})
+
+    try:
+        from domains.infrastructure.model_registry import get_model_registry
+        from domains.models.provider import setup_providers
+        setup_providers(
+            slonet_provider=provider,
+            model_registry=get_model_registry(),
+            process_guard=process_guard,
+            quantize=cfg.quantize_slonet,
+            quant_bits=cfg.quant_bits,
+            quant_mode=cfg.quant_mode,
+        )
+    except Exception as e:
+        logger.error("Lazy-guard autoload: registration failed (%s)", e, exc_info=True, extra={"tag": "START"})
+        return False
+
+    logger.info(
+        "Lazy-guard autoload active for %s (worker: %s) — parent weights deferred",
+        model_type, process_guard.worker_id, extra={"tag": "START"},
+    )
+    return True
+
+
+def _build_guard_for_model(cfg, model_type: str):
+    """Create and start a ProcessGuard for a loaded model's .slnc (or None).
+
+    Args:
+        cfg: ServerConfig with process-guard + quantization settings
+        model_type: Model id (used for the .slnc path and worker naming)
+
+    Returns:
+        A started ProcessGuard, or None when disabled / no .slnc / failure.
+    """
+    try:
+        from config import get_process_guard_enabled
+        if not get_process_guard_enabled():
+            return None
+        from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+        from domains.infrastructure.safetensors_loader import _get_model_dir
+
+        slnc_path = str(_get_model_dir(model_type) / "model.slnc")
+        if not os.path.exists(slnc_path):
+            logger.info("ProcessGuard skipped: no .slnc file at %s", slnc_path, extra={"tag": "START"})
+            return None
+        process_guard = ProcessGuard(
+            slnc_path=slnc_path,
+            model_id=model_type,
+            worker_id=f"slo-{model_type.split('/')[-1]}",
+            max_restarts=3,
+            restart_delay=2.0,
+            generate_timeout=120.0,
+            memory_limit_mb=resolve_memory_limit_mb(slnc_path, cfg.process_guard_memory_limit_mb),
+            quantize=cfg.quantize_slonet,
+            quant_bits=cfg.quant_bits,
+            quant_mode=cfg.quant_mode,
+            quant_clip=cfg.quant_clip,
+        )
+        process_guard.start()
+        logger.info("ProcessGuard started for %s", model_type, extra={"tag": "START"})
+        # Track the guard so /models/process-guard status and the runtime toggle
+        # can manage it (autoload path bypasses the controller).
+        try:
+            from controllers.models import get_models_controller
+            get_models_controller().adopt_process_guard(process_guard, model_type)
+        except Exception as e:
+            logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"tag": "START"})
+        return process_guard
+    except Exception as e:
+        logger.warning("ProcessGuard creation failed: %s", e, extra={"tag": "START"})
+        return None
+
+
+def _register_loaded(cfg, process_guard) -> None:
+    """Register a fully-loaded (eager) model with registry + providers."""
+    import state as server_state
+    from domains.infrastructure.model_registry import get_model_registry
+    from domains.models.provider import setup_providers
+
+    registry = get_model_registry()
+
+    if server_state.model is not None and server_state.tokenizer is not None:
+        registry.register(
+            server_state.model_type, server_state.model, server_state.tokenizer,
+            make_default=True, generate_timeout=120.0,
+            process_guard=process_guard,
+        )
+
+    # Pass pre-loaded provider to avoid duplicate SLNC load (~6s)
+    preloaded = getattr(server_state, 'provider', None)
+    setup_providers(
+        slonet_hf_id=server_state.model_type,
+        slonet_provider=preloaded,
+        model_registry=registry,
+        process_guard=process_guard,
+        quantize=cfg.quantize_slonet,
+        quant_bits=cfg.quant_bits,
+        quant_mode=cfg.quant_mode,
+    )
+
+    # Auto-select precision on GPU (fp16 benchmark)
+    try:
+        from domains.slolib.gpu import set_accelerator_precision
+        active = set_accelerator_precision("auto")
+        if active == "fp16":
+            logger.info("GPU precision set to fp16 (auto-selected via benchmark)", extra={"tag": "START"})
+    except Exception:
+        pass
+    _sync_soul_traits()
+    logger.info("Model loaded + providers registered: %s", server_state.model_type, extra={"tag": "START"})
 
 
 def _autoload_model(cfg: ServerConfig):
@@ -588,6 +860,24 @@ def _autoload_model(cfg: ServerConfig):
 
     if server_state.model is not None:
         return
+
+    # 0) Explicit native .soul path — skip HuggingFace entirely
+    if cfg.native_soul_path:
+        from pathlib import Path
+        soul_path = Path(cfg.native_soul_path)
+        if soul_path.exists():
+            try:
+                from domains.inference.slonet_provider import SloNetChatProvider
+                provider = SloNetChatProvider.from_soul(str(soul_path), model_id="native-soul")
+                server_state.model = provider._model
+                server_state.model_type = "native-soul"
+                server_state.provider = provider
+                logger.info("Autoload native soul: %s", soul_path, extra={"tag": "START"})
+                return
+            except Exception as e:
+                logger.warning("Native soul load failed (%s), falling back to standard autoload", e, extra={"tag": "START"})
+        else:
+            logger.warning("Native soul path %s not found, falling back to standard autoload", soul_path, extra={"tag": "START"})
 
     model_id = cfg.autoload_model
 

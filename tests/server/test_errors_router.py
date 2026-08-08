@@ -48,6 +48,27 @@ class TestLogErrors:
         })
         assert resp.json()["data"]["logged"] == 3
 
+    def test_logs_error_with_metadata(self, client):
+        resp = client.post("/errors/log", json={
+            "errors": [{
+                "message": "auth failed",
+                "source": "web",
+                "url": "https://example.com/page",
+                "line": 42,
+                "col": 10,
+                "metadata": {"user_agent": "test"},
+            }],
+        })
+        assert resp.status_code == 200
+        assert resp.json()["data"]["logged"] == 1
+
+    def test_log_empty_message(self, client):
+        resp = client.post("/errors/log", json={
+            "errors": [{"message": "", "source": "web"}],
+        })
+        assert resp.status_code == 200
+        assert resp.json()["data"]["logged"] == 1
+
 
 class TestRecentErrors:
     """GET /errors/recent"""
@@ -71,6 +92,34 @@ class TestRecentErrors:
         resp = client.get("/errors/recent?limit=3&offset=0")
         assert len(resp.json()["data"]["errors"]) == 3
 
+    def test_recent_empty_buffer(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        resp = client.get("/errors/recent")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["errors"] == []
+        assert data["total"] == 0
+
+    def test_recent_with_large_limit(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        for i in range(5):
+            router_instance._error_buffer.append({
+                "id": f"e{i}", "message": f"err{i}", "source": "web", "fingerprint": f"fp{i}",
+            })
+        resp = client.get("/errors/recent?limit=1000")
+        assert resp.status_code == 200
+        assert len(resp.json()["data"]["errors"]) == 5
+
+    def test_recent_offset(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        for i in range(5):
+            router_instance._error_buffer.append({
+                "id": f"e{i}", "message": f"err{i}", "source": "web", "fingerprint": f"fp{i}",
+            })
+        resp = client.get("/errors/recent?limit=2&offset=2")
+        data = resp.json()["data"]
+        assert len(data["errors"]) == 2
+
 
 class TestGroupedErrors:
     """GET /errors/grouped"""
@@ -91,6 +140,14 @@ class TestGroupedErrors:
         assert counts.get("fp_abc") == 3
         assert counts.get("fp_xyz") == 1
 
+    def test_grouped_empty(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        resp = client.get("/errors/grouped")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["groups"] == []
+        assert data["total_groups"] == 0
+
 
 class TestErrorTrends:
     """GET /errors/trends"""
@@ -102,6 +159,26 @@ class TestErrorTrends:
         assert "trends" in data
         assert len(data["trends"]) == 4
 
+    def test_trends_default_hours(self, client):
+        resp = client.get("/errors/trends")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert len(data["trends"]) == 24
+
+    def test_trends_count_accumulates(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        for _ in range(5):
+            router_instance._error_buffer.append({
+                "id": "e1", "message": "err", "source": "web",
+                "fingerprint": "fp", "timestamp": now,
+            })
+        resp = client.get("/errors/trends?hours=1")
+        data = resp.json()["data"]
+        total_count = sum(t["count"] for t in data["trends"])
+        assert total_count >= 5
+
 
 class TestExportErrors:
     """GET /errors/export"""
@@ -110,6 +187,17 @@ class TestExportErrors:
         resp = client.get("/errors/export")
         assert resp.status_code == 200
         assert "errors" in resp.json()
+
+    def test_export_includes_metadata(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        router_instance._error_buffer.append({
+            "id": "e1", "message": "test", "source": "web",
+            "fingerprint": "fp", "url": "https://example.com",
+        })
+        resp = client.get("/errors/export")
+        body = resp.json()
+        assert body["total"] >= 1
+        assert body["exported"] >= 1
 
 
 class TestClearErrors:
@@ -123,6 +211,19 @@ class TestClearErrors:
         assert resp.json()["data"]["cleared"] is True
         assert len(router_instance._error_buffer) == 0
 
+    def test_clear_resets_unread_count(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        router_instance._error_count_since_clear = 10
+        resp = client.delete("/errors/clear")
+        assert resp.status_code == 200
+        assert router_instance._error_count_since_clear == 0
+
+    def test_clear_already_empty(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        resp = client.delete("/errors/clear")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["cleared"] is True
+
 
 class TestUnreadCount:
     """GET /errors/unread"""
@@ -133,3 +234,9 @@ class TestUnreadCount:
         resp = client.get("/errors/unread")
         assert resp.status_code == 200
         assert resp.json()["data"]["unread_count"] == 5
+
+    def test_unread_zero_after_clear(self, client, router_instance):
+        router_instance._error_buffer.clear()
+        router_instance._error_count_since_clear = 0
+        resp = client.get("/errors/unread")
+        assert resp.json()["data"]["unread_count"] == 0

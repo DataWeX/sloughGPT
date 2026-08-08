@@ -8,35 +8,35 @@ This router just exposes manager methods as HTTP endpoints.
 import urllib.request
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from domains.training.tokenizer_manager import get_tokenizer_manager
 from schemas.common import success_response
 
 
 class TokenizeRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=50000)
 
 
 class DetokenizeRequest(BaseModel):
-    ids: list[int]
+    ids: list[int] = Field(max_length=10000)
 
 
 class AnalyzeRequest(BaseModel):
-    texts: list[str]
+    texts: list[str] = Field(max_length=500)
 
 
 class PretokenizeRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=50000)
 
 
 class DecomposeRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=50000)
 
 
 class TrainTokenizerRequest2(BaseModel):
-    vocab_size: int = 512
-    texts: list[str] = []
+    vocab_size: int = Field(default=512, ge=32, le=100000)
+    texts: list[str] = Field(default=[], max_length=1000)
 
 
 class TokenizerRouter:

@@ -87,6 +87,78 @@ class TestSetPersonality:
             creativity=0.5, confidence=0.5, humor=0.4,
         )
 
+    def test_set_personality_warmth_out_of_range(self):
+        resp = client.post("/companion/personality", json={
+            "name": "Bad",
+            "warmth": 1.5,
+        })
+        assert resp.status_code == 422
+
+    def test_set_personality_negative_curiosity(self):
+        resp = client.post("/companion/personality", json={
+            "name": "Bad",
+            "curiosity": -0.1,
+        })
+        assert resp.status_code == 422
+
+
+class TestPatchPersonality:
+    """PATCH /companion/personality"""
+
+    @patch(COMPANION_TARGET)
+    def test_patch_single_field(self, mock_get):
+        comp = _mock_companion()
+        mock_get.return_value = comp
+
+        resp = client.patch("/companion/personality", json={"warmth": 0.95})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"]["status"] == "ok"
+        comp.set_personality.assert_called_once()
+
+    @patch(COMPANION_TARGET)
+    def test_patch_multiple_fields(self, mock_get):
+        comp = _mock_companion()
+        mock_get.return_value = comp
+
+        resp = client.patch("/companion/personality", json={
+            "name": "Patched",
+            "humor": 0.9,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"]["status"] == "ok"
+
+    def test_patch_out_of_range_value(self):
+        resp = client.patch("/companion/personality", json={"confidence": 2.0})
+        assert resp.status_code == 422
+
+    @patch(COMPANION_TARGET)
+    def test_patch_empty_body(self, mock_get):
+        comp = _mock_companion()
+        mock_get.return_value = comp
+
+        resp = client.patch("/companion/personality", json={})
+        assert resp.status_code == 200
+        comp.set_personality.assert_called_once()
+
+
+class TestResetCompanion:
+    """DELETE /companion/"""
+
+    @patch("domains.companion.create_companion")
+    @patch(COMPANION_TARGET)
+    def test_reset_companion(self, mock_get, mock_create):
+        new_comp = _mock_companion()
+        mock_create.return_value = new_comp
+        mock_get.return_value = _mock_companion()
+
+        resp = client.delete("/companion/")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"]["status"] == "ok"
+        assert "traits" in body["data"]
+
 
 class TestPreset:
     """POST /companion/preset"""
@@ -107,6 +179,17 @@ class TestPreset:
         assert data["preset"] == "playful"
         assert "traits" in data
         mock_create.assert_called_once_with(name="Buddy", personality="playful")
+
+    @patch("domains.companion.create_companion")
+    @patch(COMPANION_TARGET)
+    def test_use_preset_warm(self, mock_get, mock_create):
+        new_comp = _mock_companion()
+        mock_create.return_value = new_comp
+        mock_get.return_value = _mock_companion()
+
+        resp = client.post("/companion/preset", json={"name": "Sage", "preset": "warm"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["preset"] == "warm"
 
 
 class TestPrompt:
@@ -164,6 +247,30 @@ class TestChat:
         data = resp.json()
         assert data["system_prompt"] == ""
 
+    @patch(COMPANION_TARGET)
+    def test_chat_with_user_name(self, mock_get):
+        comp = _mock_companion()
+        mock_get.return_value = comp
+
+        resp = client.post("/companion/chat", json={
+            "message": "Hi there",
+            "user_name": "Alice",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "response" in data
+
+    @patch(COMPANION_TARGET)
+    def test_chat_provider_error(self, mock_get):
+        comp = _mock_companion()
+        mock_get.return_value = comp
+
+        with patch("domains.models.provider.get_provider", side_effect=Exception("model crash")):
+            resp = client.post("/companion/chat", json={"message": "Hello"})
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "Error" in data["response"] or "error" in data["response"].lower()
+
 
 class TestListPresets:
     """GET /companion/presets"""
@@ -180,3 +287,11 @@ class TestListPresets:
         assert "curious" in ids
         assert "playful" in ids
         assert "balanced" in ids
+
+    def test_presets_have_required_fields(self):
+        resp = client.get("/companion/presets")
+        presets = resp.json()["data"]["presets"]
+        for p in presets:
+            assert "id" in p
+            assert "name" in p
+            assert "description" in p

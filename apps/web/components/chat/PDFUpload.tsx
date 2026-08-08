@@ -4,6 +4,8 @@ import { useRef, useState, useCallback } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { IconDocument } from '@sloughgpt/strui'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { extractErrorMessage } from '@/lib/error-utils'
+import { PDF_ANALYSIS_MAX_TOKENS } from '@/lib/format-bytes'
 
 interface PDFUploadProps {
   onAnalysis: (analysis: string, filename: string) => void
@@ -32,7 +34,7 @@ export function PDFUpload({ onAnalysis, onError, disabled }: PDFUploadProps) {
       form.append('file', file)
       form.append('question', 'Analyze this document and summarize its contents.')
       form.append('per_page', 'false')
-      form.append('max_new_tokens', '512')
+      form.append('max_new_tokens', String(PDF_ANALYSIS_MAX_TOKENS))
 
       const res = await fetch(`${PUBLIC_API_URL}/multimodal/pdf/upload`, {
         method: 'POST',
@@ -44,8 +46,8 @@ export function PDFUpload({ onAnalysis, onError, disabled }: PDFUploadProps) {
       }
       const data = await res.json()
       onAnalysis(data.analysis || JSON.stringify(data), file.name)
-    } catch (err: any) {
-      onError(err.message || 'Failed to analyze PDF')
+    } catch (err: unknown) {
+      onError(extractErrorMessage(err, 'Failed to analyze PDF'))
     } finally {
       setUploading(false)
       setFilename(null)

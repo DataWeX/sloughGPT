@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
-import { soulsController } from '@/lib/souls-controller'
+import { soulsController, type Soul } from '@/lib/souls-controller'
 import { sessionController } from '@/lib/session-controller'
 import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
@@ -62,8 +62,8 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
 
   const ready = useApiReady()
 
-  const inferenceCount = health && health !== 'offline' ? (health as HealthStatus).inference_count ?? 0 : null
-  const healthSummary = health && health !== 'offline' ? (health as HealthStatus).model_type ?? null : null
+  const inferenceCount = health && health !== 'offline' ? health.inference_count ?? 0 : null
+  const healthSummary = health && health !== 'offline' ? health.model_type ?? null : null
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     soulsController.list().then(data => {
       if (!cancelled.current) {
         const active = data.current_soul
-          ? data.souls?.find((s: any) => s.name === data.current_soul)
+          ? data.souls?.find((s: Soul) => s.name === data.current_soul)
           : null
         setCurrentSoul(active || null)
       }

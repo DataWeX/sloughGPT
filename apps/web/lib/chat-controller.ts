@@ -78,15 +78,21 @@ export const chatController = {
     const modelStatus = await modelController.status()
     if (!modelStatus.loaded) { yield '[No model loaded]'; return }
 
-    const res = await fetch(`${PUBLIC_API_URL}/chat/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: message }],
-        max_new_tokens: options?.max_tokens ?? 100,
-        temperature: options?.temperature ?? 0.8,
-      }),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${PUBLIC_API_URL}/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: message }],
+          max_new_tokens: options?.max_tokens ?? 100,
+          temperature: options?.temperature ?? 0.8,
+        }),
+      })
+    } catch (err) {
+      yield `[Connection error: ${err instanceof Error ? err.message : 'unknown'}]`
+      return
+    }
 
     const reader = res.body?.getReader()
     if (!reader) { yield '[Stream error]'; return }
@@ -121,11 +127,17 @@ export const chatController = {
   },
 
   async *regenerateStream(sessionId: string, messages: ChatMessage[]): AsyncGenerator<{ token?: string; done?: boolean; error?: string }> {
-    const res = await fetch(`${PUBLIC_API_URL}/session/${sessionId}/regenerate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ session_id: sessionId, messages, regenerate: true }),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${PUBLIC_API_URL}/session/${sessionId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ session_id: sessionId, messages, regenerate: true }),
+      })
+    } catch (err) {
+      yield { error: `Connection error: ${err instanceof Error ? err.message : 'unknown'}` }
+      return
+    }
     const reader = res.body?.getReader()
     if (!reader) { yield { error: 'Stream error' }; return }
     const decoder = new TextDecoder()

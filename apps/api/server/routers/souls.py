@@ -5,7 +5,7 @@ Encapsulates router state in ``SloRouterState`` dataclass rather than module-lev
 mutable globals. Actual soul state lives in ``SloManager`` singleton.
 """
 from dataclasses import dataclass
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict
 from pydantic import BaseModel
@@ -95,6 +95,7 @@ class SoulsRouter:
         self.router.add_api_route("/weights/snapshot/{name}/load", self.load_weight_snapshot, methods=["POST"])
         self.router.add_api_route("/weights/snapshot/{name}", self.delete_weight_snapshot, methods=["DELETE"])
         self.router.add_api_route("/stats", self.get_soul_stats, methods=["GET"])
+        self.router.add_api_route("/{soul_name}", self.get_soul, methods=["GET"])
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -207,7 +208,10 @@ class SoulsRouter:
 
             return {"status": "no_target_model"}
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="load_checkpoint_into_model")
+            return {"status": "error", "error": err.user_message, "code": err.code}
 
     def _build_soul_system_prompt(self, soul_info) -> str:
         """Build system prompt from soul personality traits."""
@@ -317,8 +321,10 @@ Be yourself — let your personality shape how you respond."""
             return StreamingResponse(stream(), media_type="text/event-stream")
 
         except Exception as e:
-            logger.debug("soul chat error", exc_info=True)
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_chat")
+            return error_response(message=err.user_message)
 
     async def switch_soul(
         self,
@@ -388,7 +394,10 @@ Be yourself — let your personality shape how you respond."""
 
             return success_response(data=result)
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="switch_soul")
+            return error_response(message=err.user_message)
 
     async def list_souls(self):
         """
@@ -418,6 +427,30 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             return success_response(data=[], meta={"current_soul": None, "error": str(e)})
 
+    async def get_soul(self, soul_name: str):
+        """Get details for a specific soul by name."""
+        try:
+            from domains.inference.slo_manager import get_slo_manager
+            manager = get_slo_manager()
+            souls = manager.list_souls()
+            for s in souls:
+                if s.name == soul_name:
+                    return success_response(data={
+                        "name": s.name,
+                        "path": s.path,
+                        "description": s.description,
+                        "personality": getattr(s, "personality", {}),
+                        "traits": getattr(s, "traits", []),
+                    })
+            raise HTTPException(status_code=404, detail=f"Soul '{soul_name}' not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="get_soul")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
+
     async def get_trait_weights(self):
         """
         Get the current trait weight attributes from the active model checkpoint.
@@ -440,7 +473,10 @@ Be yourself — let your personality shape how you respond."""
             weights = manager.get_trait_weights()
             return success_response(data=weights)
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_handler")
+            return error_response(message=err.user_message)
 
     async def save_trait_weights(self, body: SaveWeightsRequest):
         """
@@ -466,7 +502,10 @@ Be yourself — let your personality shape how you respond."""
             config.set_many(flat)
             return success_response(message="saved")
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_handler")
+            return error_response(message=err.user_message)
 
     async def get_trait_modes(self):
         """
@@ -498,7 +537,10 @@ Be yourself — let your personality shape how you respond."""
                 "task": TaskManager(config).get_mode(),
             })
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_handler")
+            return error_response(message=err.user_message)
 
     async def get_current_soul(self):
         """
@@ -522,7 +564,10 @@ Be yourself — let your personality shape how you respond."""
                 })
             return success_response(data={"name": None})
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_handler")
+            return error_response(message=err.user_message)
 
     async def list_weight_snapshots(self):
         """
@@ -560,7 +605,10 @@ Be yourself — let your personality shape how you respond."""
             path = config.save_snapshot(name)
             return success_response(data={"path": path}, message="saved")
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_handler")
+            return error_response(message=err.user_message)
 
     async def load_weight_snapshot(self, name: str):
         """
@@ -581,7 +629,10 @@ Be yourself — let your personality shape how you respond."""
             count = config.load_snapshot(name)
             return success_response(data={"traits_loaded": count}, message="loaded")
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_handler")
+            return error_response(message=err.user_message)
 
     async def delete_weight_snapshot(self, name: str):
         """
@@ -602,7 +653,10 @@ Be yourself — let your personality shape how you respond."""
             ok = config.delete_snapshot(name)
             return success_response(data={"deleted": ok})
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_handler")
+            return error_response(message=err.user_message)
 
     async def get_soul_stats(self):
         """
@@ -618,7 +672,10 @@ Be yourself — let your personality shape how you respond."""
             from domains.inference.slo_manager import get_slo_manager
             return success_response(data=get_slo_manager().get_stats())
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="soul_handler")
+            return error_response(message=err.user_message)
 
 
 router = SoulsRouter().router

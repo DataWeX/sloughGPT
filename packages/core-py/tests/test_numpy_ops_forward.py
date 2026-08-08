@@ -199,6 +199,18 @@ def make_llama_arch(n_layers=1, n_embed=8, n_head=4, n_kv=2):
     return build_arch("llama", config, keys)
 
 
+def make_llama_weights_with_bias(vocab=8, n_embed=8, n_head=4, n_kv=2, n_layers=1):
+    W = make_llama_weights(vocab, n_embed, n_head, n_kv, n_layers)
+    rng = np.random.default_rng(2)
+    kv_dim = (n_embed // n_head) * n_kv
+    for i in range(n_layers):
+        p = f"model.layers.{i}."
+        W[p + "self_attn.q_proj.bias"] = rng.standard_normal((n_embed,)).astype(np.float32)
+        W[p + "self_attn.k_proj.bias"] = rng.standard_normal((kv_dim,)).astype(np.float32)
+        W[p + "self_attn.v_proj.bias"] = rng.standard_normal((kv_dim,)).astype(np.float32)
+    return W
+
+
 class TestNormFn:
     def test_rms(self):
         arch = make_gpt2_arch()
@@ -282,6 +294,41 @@ class TestForwardGpt2:
         logits = forward(W, arch, [0, 1])
         assert np.allclose(logits, logits[0])
 
+    def test_forward_cached_lm_head_override(self):
+        arch = make_gpt2_arch()
+        W = make_gpt2_weights()
+        W["lm_head.weight"] = np.full((8, 4), 5.0, dtype=np.float32)
+        logits = forward_cached(lambda n: W[n], arch, [0, 1])
+        assert np.allclose(logits, logits[0])
+
+    def test_forward_fast_lm_head_override(self):
+        arch = make_gpt2_arch()
+        W = make_gpt2_weights()
+        rw = pre_extract_weights(arch, W)
+        rw["lm_head.weight"] = np.full((8, 4), 5.0, dtype=np.float32)
+        logits = forward_fast(rw, arch, [0, 1])
+        assert np.allclose(logits, logits[0])
+
+    def test_forward_cached_missing_optional_weight(self):
+        arch = make_gpt2_arch()
+        W = make_gpt2_weights()
+        del W["h.0.attn.c_proj.bias"]
+        logits = forward_cached(lambda n: W[n], arch, [0, 1, 2])
+        assert np.isfinite(logits).all()
+
+    def test_forward_fast_incremental_kv_cache(self):
+        arch = make_gpt2_arch()
+        W = make_gpt2_weights()
+        tokens = [0, 1, 2, 3]
+        rw = pre_extract_weights(arch, W)
+        full = forward_fast(rw, arch, tokens)
+        kv = KVCache(arch.n_layers)
+        forward_fast(rw, arch, [tokens[0]], kv_cache=kv)
+        last = None
+        for i in range(1, len(tokens)):
+            last = forward_fast(rw, arch, [tokens[i]], kv_cache=kv, start_pos=i)
+        assert np.allclose(last, full, atol=1e-5)
+
 
 class TestForwardLlama:
     def test_gqa_swiglu_rope(self):
@@ -314,3 +361,16 @@ class TestForwardLlama:
         for i in range(1, len(tokens)):
             last = forward_cached(get, arch, [tokens[i]], kv_cache=kv, start_pos=i)
         assert np.allclose(last, full, atol=1e-5)
+
+    def test_separate_qkv_with_bias_all_paths(self):
+        arch = make_llama_arch()
+        W = make_llama_weights_with_bias()
+        logits = forward(W, arch, [0, 1, 2])
+        assert np.isfinite(logits).all()
+        cached = forward_cached(lambda n: W[n], arch, [0, 1, 2])
+        assert np.allclose(cached, logits, atol=1e-5)
+        rw = pre_extract_weights(arch, W)
+        fast = forward_fast(rw, arch, [0, 1, 2])
+        assert np.allclose(fast, logits, atol=1e-5)
+        plain = forward(make_llama_weights(), arch, [0, 1, 2])
+        assert not np.allclose(logits, plain, atol=1e-5)

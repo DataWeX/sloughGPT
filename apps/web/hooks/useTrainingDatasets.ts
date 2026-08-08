@@ -2,17 +2,17 @@
 
 import { useState, useCallback } from 'react'
 import { datasetController } from '@/lib/controllers'
-import type { Dataset } from '@/lib/dataset-controller'
+import type { Dataset, DatasetPreview } from '@/lib/dataset-controller'
 
 export interface UseTrainingDatasetsReturn {
   datasets: Dataset[]
   selectedDataset: string
   loadingDatasets: boolean
   importModalOpen: boolean
-  datasetPreview: { samples: Array<{ content: string }>; total_samples: number } | null
+  datasetPreview: DatasetPreview | null
   setSelectedDataset: (id: string) => void
   setImportModalOpen: (open: boolean) => void
-  setDatasetPreview: (p: { samples: Array<{ content: string }>; total_samples: number } | null) => void
+  setDatasetPreview: (p: DatasetPreview | null) => void
   fetchDatasets: () => Promise<void>
 }
 
@@ -21,7 +21,7 @@ export function useTrainingDatasets(addToast: (msg: string, type?: 'success' | '
   const [selectedDataset, setSelectedDataset] = useState('')
   const [loadingDatasets, setLoadingDatasets] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
-  const [datasetPreview, setDatasetPreview] = useState<{ samples: Array<{ content: string }>; total_samples: number } | null>(null)
+  const [datasetPreview, setDatasetPreview] = useState<DatasetPreview | null>(null)
 
   const fetchDatasets = useCallback(async () => {
     setLoadingDatasets(true)

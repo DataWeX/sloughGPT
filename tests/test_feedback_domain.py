@@ -383,8 +383,82 @@ class TestLoRAEvaluatorCompare:
             history = evaluator.get_history()
             assert history == []
 
+    def test_compare_none_perplexity_no_keyerror(self):
+        evaluator = LoRAEvaluator()
+        common = dict(timestamp="t", adapter_path=None, prompts=1, references=0,
+                      avg_response_len=1, inference_time_sec=1.0)
+        baseline = EvalResult(perplexity=None, bleu=0.5, tokens_per_sec=1.0,
+                              personality_score=0.5, **common)
+        with_adapter = EvalResult(perplexity=None, bleu=0.6, tokens_per_sec=1.2,
+                                  personality_score=0.6, **common)
+        delta = evaluator.compare(baseline, with_adapter)
+        assert "perplexity_delta" not in delta
+        assert delta["bleu_delta"] > 0
+        assert "verdict" in delta
 
-class TestLoRAEvaluatorScorePersonality:
+    def test_compare_with_report_none_metrics_renders_n_a(self):
+        evaluator = LoRAEvaluator()
+        common = dict(timestamp="t", adapter_path=None, prompts=1, references=0,
+                      avg_response_len=1, inference_time_sec=1.0)
+        baseline = EvalResult(perplexity=None, bleu=0.5, tokens_per_sec=1.0,
+                              personality_score=0.5, **common)
+        with_adapter = EvalResult(perplexity=None, bleu=0.6, tokens_per_sec=1.2,
+                                  personality_score=0.6, **common)
+        report = evaluator.compare_with_report(baseline, with_adapter)
+        assert "n/a" in report
+        assert "VERDICT" in report
+
+    def test_available_false_without_model_or_generator(self):
+        evaluator = LoRAEvaluator()
+        with patch("domains.models.provider.get_provider", return_value=None):
+            assert evaluator.available() is False
+
+    def test_available_true_with_injected_generator(self):
+        evaluator = LoRAEvaluator(generator=lambda prompt: "real")
+        assert evaluator.available() is True
+
+    def test_available_true_with_existing_base_model(self):
+        with tempfile.NamedTemporaryFile(delete=True) as tmp:
+            evaluator = LoRAEvaluator(base_model=tmp.name)
+            assert evaluator.available() is True
+
+
+
+class TestLoRAEvaluatorLiveGenerator:
+    def test_generate_uses_injected_generator(self):
+        calls = []
+        def fake_gen(prompt):
+            calls.append(prompt)
+            return "Hello! I am a real generated response."
+        evaluator = LoRAEvaluator(generator=fake_gen)
+        text, latency, tps = evaluator._generate("Hello", None)
+        assert calls == ["Hello"]
+        assert "Hello! I am a real generated response." == text
+        assert latency > 0
+        assert tps > 0
+
+    def test_empty_generator_text_falls_back_to_simulate(self):
+        evaluator = LoRAEvaluator(generator=lambda prompt: "")
+        with patch.object(evaluator, "_load_inference_engine"):
+            text, latency, tps = evaluator._generate("Hello", None)
+        assert "[simulated response" in text
+
+    def test_resolve_live_generator_wires_provider(self):
+        class FakeProvider:
+            def _generate_sync(self, messages, max_tokens=512, temperature=0.8,
+                               top_k=None, top_p=None, repetition_penalty=1.0, session_id=None):
+                assert messages == [{"role": "user", "content": "hi"}]
+                return "real provider text"
+        evaluator = LoRAEvaluator()
+        with patch("domains.models.provider.get_provider", return_value=FakeProvider()):
+            gen = evaluator._resolve_live_generator()
+        assert gen is not None
+        assert gen("hi") == "real provider text"
+
+    def test_resolve_live_generator_none_without_provider(self):
+        evaluator = LoRAEvaluator()
+        with patch("domains.models.provider.get_provider", return_value=None):
+            assert evaluator._resolve_live_generator() is None
     def test_default_soul(self):
         evaluator = LoRAEvaluator()
         ps = evaluator._score_personality("thank you for your help", "assistant")
@@ -446,9 +520,9 @@ class TestLoRAEvaluatorSimulate:
         evaluator._model = None
         evaluator._tokenizer = None
         with patch.object(evaluator, "_load_inference_engine"):
+            # No real char-level model → perplexity is honestly None (not fabricated).
             pp = evaluator._compute_perplexity("the cat sat on the mat", "hello")
-            assert pp is not None
-            assert 1.0 <= pp <= 31.0
+            assert pp is None
 
     def test_simulate_compute_perplexity_unique(self):
         evaluator = LoRAEvaluator()
@@ -456,7 +530,7 @@ class TestLoRAEvaluatorSimulate:
         evaluator._tokenizer = None
         with patch.object(evaluator, "_load_inference_engine"):
             pp = evaluator._compute_perplexity("abc def ghi jkl mno pqr stu vwx yz", "prompt")
-            assert pp <= 2.0  # low perplexity for unique words
+            assert pp is None  # no fabricated metric without a real model
 
 
 # =============================================================================
@@ -757,6 +831,24 @@ class TestPerUserLoRAStore:
             result = store.aggregate_best_adapters(top_k=5, min_feedback_count=3)
             assert "error" in result
             assert result["count"] == 0
+
+    def test_aggregate_best_adapters_skips_eval_without_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = PerUserLoRAStore(
+                store_path=tmp,
+                model_dim=64,
+                adapter_rank=4,
+                min_feedback_for_aggregation=1,
+                run_eval=True,
+            )
+            store.update_adapter("u1", feedback_signal=1.0)
+            store.create_adapter("u1")
+            result = store.aggregate_best_adapters(top_k=2, min_feedback_count=1)
+            assert result.get("eval") == {
+                "skipped": True,
+                "reason": "No model loaded for evaluation",
+            }
+            assert result.get("eval_verdict") is None
 
     def test_update_adapter_triggers_incremental_auto_aggregate(self):
         with tempfile.TemporaryDirectory() as tmp:

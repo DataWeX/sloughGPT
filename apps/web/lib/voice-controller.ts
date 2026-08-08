@@ -1,45 +1,41 @@
-import { apiPost, apiGet } from '@/lib/http-client'
+/**
+ * Voice Controller — API for TTS/voice operations.
+ */
 
-export interface TTSResponse {
-  audio: string
-  sample_rate: number
-  duration_ms: number
-  backend: 'hf-model' | 'browser-fallback'
-}
+import { apiGet, apiPost } from './http-client'
 
-export interface VoiceStatusResponse {
+export interface VoiceStatus {
   server_tts: boolean
   model: string | null
   error: string | null
 }
 
-export const voiceController = {
-  /** Convert text to speech audio. Returns base64 WAV or browser-fallback signal. */
-  async tts(text: string): Promise<TTSResponse> {
-    return apiPost<TTSResponse>('/voice/tts', { text })
-  },
-
-  /** Check if server-side TTS model is loaded. */
-  async status(): Promise<VoiceStatusResponse> {
-    return apiGet<VoiceStatusResponse>('/voice/status')
-  },
-
-  /** Play base64 WAV audio data through an Audio element. Returns a cleanup fn. */
-  playAudio(base64Wav: string, sampleRate: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        const binary = atob(base64Wav)
-        const bytes = new Uint8Array(binary.length)
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-        const blob = new Blob([bytes], { type: 'audio/wav' })
-        const url = URL.createObjectURL(blob)
-        const audio = new Audio(url)
-        audio.onended = () => { URL.revokeObjectURL(url); resolve() }
-        audio.onerror = (e) => { URL.revokeObjectURL(url); reject(e) }
-        audio.play()
-      } catch (e) {
-        reject(e)
-      }
-    })
-  },
+export interface TTSResult {
+  audio?: string
+  duration_ms: number
+  backend: string
+  sample_rate: number
+  detail?: string
 }
+
+class VoiceController {
+  async getStatus(): Promise<VoiceStatus> {
+    const data = await apiGet<{ data?: VoiceStatus } | VoiceStatus>('/voice/status')
+    return (data && 'data' in data && data.data) ? data.data : (data as VoiceStatus)
+  }
+
+  async tts(text: string): Promise<TTSResult> {
+    return apiPost('/voice/tts', { text })
+  }
+
+  async playAudio(base64Audio: string, sampleRate: number): Promise<void> {
+    const audio = new Audio(`data:audio/wav;base64,${base64Audio}`)
+    return new Promise((resolve, reject) => {
+      audio.onended = () => resolve()
+      audio.onerror = (e) => reject(e)
+      audio.play().catch(reject)
+    })
+  }
+}
+
+export const voiceController = new VoiceController()

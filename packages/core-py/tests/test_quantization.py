@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from domains.infrastructure.quantization import (
-    QuantEngine,
+    Quantine,
     QuantMeta,
     QuantizedLinear,
     TensorInfo,
@@ -68,11 +68,11 @@ class TestTensorInfo:
         assert info.compression_ratio() == pytest.approx(4.0)
 
 
-class TestQuantEngineSymmetric:
+class TestQuantineSymmetric:
     """Test symmetric quantization mode."""
 
     def test_int8_symmetric_basic(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.array([-1.0, 0.0, 1.0], dtype=np.float32)
         info = engine.quantize("test", arr)
 
@@ -81,7 +81,7 @@ class TestQuantEngineSymmetric:
         np.testing.assert_allclose(result, arr, atol=0.02)
 
     def test_int8_symmetric_scale(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.array([-2.0, 0.0, 2.0], dtype=np.float32)
         info = engine.quantize("test", arr)
 
@@ -89,7 +89,7 @@ class TestQuantEngineSymmetric:
         assert info.meta.zero_point == 0
 
     def test_int8_symmetric_error_low(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(1000).astype(np.float32) * 0.5
         info = engine.quantize("test", arr)
 
@@ -97,7 +97,7 @@ class TestQuantEngineSymmetric:
         assert info.meta.cosine_sim > 0.99
 
     def test_int4_symmetric(self):
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         arr = np.array([-1.0, 0.0, 1.0], dtype=np.float32)
         info = engine.quantize("test", arr)
 
@@ -105,11 +105,11 @@ class TestQuantEngineSymmetric:
         assert info.meta.bits == 4
 
 
-class TestQuantEnginePerChannel:
+class TestQuantinePerChannel:
     """Test per-channel int8 quantization for 2D weight matrices."""
 
     def test_2d_symmetric_uses_per_channel(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(64, 128).astype(np.float32) * 0.5
         info = engine.quantize("blocks.0.w.weight", arr)
 
@@ -120,7 +120,7 @@ class TestQuantEnginePerChannel:
         assert info.array.dtype == np.int8
 
     def test_per_channel_scale_from_true_row_max(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.array([[1.0, 2.0, 3.0], [10.0, -20.0, 30.0]], dtype=np.float32)
         info = engine.quantize("blocks.0.w.weight", arr)
 
@@ -129,7 +129,7 @@ class TestQuantEnginePerChannel:
 
     def test_outlier_row_does_not_destroy_other_rows(self):
         # A single huge outlier in row 0 must not compress row 1's scale.
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.array([[1.0, 2.0, 3.0], [10.0, -20.0, 30.0]], dtype=np.float32)
         info = engine.quantize("blocks.0.w.weight", arr)
 
@@ -140,7 +140,7 @@ class TestQuantEnginePerChannel:
         # No percentile clipping on the per-channel path: the raw outlier must
         # survive quantization instead of overflowing to +/-127 after a clipped
         # scale (the clip-then-quantize inconsistency that wrecked LLM logits).
-        engine = QuantEngine(bits=8, mode="symmetric", clip_percentile=0.99)
+        engine = Quantine(bits=8, mode="symmetric", clip_percentile=0.99)
         arr = np.array([[1.0, 2.0, 3.0], [5.0, 10.0, 1000.0]], dtype=np.float32)
         info = engine.quantize("blocks.0.w.weight", arr)
 
@@ -151,7 +151,7 @@ class TestQuantEnginePerChannel:
         np.testing.assert_allclose(dequant[0], arr[0], atol=0.3)
 
     def test_per_channel_error_metrics(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(32, 64).astype(np.float32) * 0.5
         info = engine.quantize("blocks.0.w.weight", arr)
 
@@ -159,7 +159,7 @@ class TestQuantEnginePerChannel:
         assert info.meta.max_abs_error < 0.02
 
     def test_1d_does_not_use_per_channel(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(100).astype(np.float32) * 0.5
         info = engine.quantize("some.vec", arr)
 
@@ -167,7 +167,7 @@ class TestQuantEnginePerChannel:
         assert not info.meta.is_per_channel
 
     def test_asymmetric_2d_does_not_use_per_channel(self):
-        engine = QuantEngine(bits=8, mode="asymmetric")
+        engine = Quantine(bits=8, mode="asymmetric")
         arr = np.random.randn(16, 32).astype(np.float32) * 2.0 + 10.0
         info = engine.quantize("blocks.0.w.weight", arr)
 
@@ -176,11 +176,11 @@ class TestQuantEnginePerChannel:
         assert not info.meta.is_per_channel
 
 
-class TestQuantEngineAsymmetric:
+class TestQuantineAsymmetric:
     """Test asymmetric quantization mode."""
 
     def test_int8_asymmetric_positive_only(self):
-        engine = QuantEngine(bits=8, mode="asymmetric")
+        engine = Quantine(bits=8, mode="asymmetric")
         arr = np.random.randn(10000).astype(np.float32) * 2.0 + 10.0
         info = engine.quantize("test", arr)
 
@@ -195,7 +195,7 @@ class TestQuantEngineAsymmetric:
         # Asymmetric should at least produce valid quantization
         arr = np.random.randn(10000).astype(np.float32) * 2.0 + 10.0
 
-        asym = QuantEngine(bits=8, mode="asymmetric")
+        asym = Quantine(bits=8, mode="asymmetric")
         info = asym.quantize("test", arr)
 
         # Whether quantized or skipped, should not crash
@@ -215,8 +215,8 @@ class TestOutlierClipping:
         outliers = np.array([100.0, -100.0])
         arr = np.concatenate([main_dist, outliers])
 
-        engine_noclip = QuantEngine(bits=8, mode="symmetric")
-        engine_clip = QuantEngine(bits=8, mode="symmetric", clip_percentile=0.999)
+        engine_noclip = Quantine(bits=8, mode="symmetric")
+        engine_clip = Quantine(bits=8, mode="symmetric", clip_percentile=0.999)
 
         info_noclip = engine_noclip.quantize("test", arr)
         info_clip = engine_clip.quantize("test", arr)
@@ -240,7 +240,7 @@ class TestOutlierClipping:
         assert mse_clip_main < mse_noclip_main
 
     def test_clip_percentile_0_999(self):
-        engine = QuantEngine(bits=8, mode="symmetric", clip_percentile=0.999)
+        engine = Quantine(bits=8, mode="symmetric", clip_percentile=0.999)
         arr = np.random.randn(10000).astype(np.float32)
         info = engine.quantize("test", arr)
 
@@ -252,28 +252,28 @@ class TestSkipSensitiveTensors:
     """Test that embedding and norm layers are skipped."""
 
     def test_skip_token_embedding(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(50257, 768).astype(np.float32)
         info = engine.quantize("tok_emb.weight", arr)
 
         assert not info.is_quantized
 
     def test_skip_positional_embedding(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(1024, 768).astype(np.float32)
         info = engine.quantize("pos_emb.weight", arr)
 
         assert not info.is_quantized
 
     def test_skip_final_norm(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(768).astype(np.float32)
         info = engine.quantize("norm.weight", arr)
 
         assert not info.is_quantized
 
     def test_quantize_linear_weights(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(768, 768).astype(np.float32) * 0.02
         info = engine.quantize("blocks.0.q_proj.weight", arr)
 
@@ -284,7 +284,7 @@ class TestErrorMetrics:
     """Test quantization error metrics."""
 
     def test_perfect_quantization_has_zero_mse(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.zeros(100, dtype=np.float32)
         info = engine.quantize("test", arr)
 
@@ -292,14 +292,14 @@ class TestErrorMetrics:
         assert info.meta.cosine_sim == 1.0
 
     def test_cosine_similarity_range(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(100).astype(np.float32)
         info = engine.quantize("test", arr)
 
         assert 0.0 <= info.meta.cosine_sim <= 1.0
 
     def test_error_report(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(100).astype(np.float32)
         engine.quantize("tensor_a", arr)
         engine.quantize("tensor_b", arr)
@@ -310,7 +310,7 @@ class TestErrorMetrics:
         assert "mse" in report["tensor_a"]
 
     def test_summary(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(100).astype(np.float32)
         engine.quantize("tensor_a", arr)
 
@@ -353,14 +353,14 @@ class TestMetadataSaveLoad:
     """Test saving and loading quantization metadata."""
 
     def test_save_load_roundtrip(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(100).astype(np.float32)
         engine.quantize("test_tensor", arr)
 
         with tempfile.NamedTemporaryFile(suffix=".json", mode="w") as f:
             engine.save_metadata(f.name)
 
-            engine2 = QuantEngine(bits=8, mode="symmetric")
+            engine2 = Quantine(bits=8, mode="symmetric")
             engine2.load_metadata(f.name)
 
             report = engine2.error_report()
@@ -374,7 +374,7 @@ class TestEdgeCases:
     """Test edge cases."""
 
     def test_zero_variance_tensor(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.zeros(100, dtype=np.float32)
         info = engine.quantize("test", arr)
 
@@ -382,7 +382,7 @@ class TestEdgeCases:
         assert info.is_quantized
 
     def test_single_element(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.array([42.0], dtype=np.float32)
         info = engine.quantize("test", arr)
 
@@ -391,7 +391,7 @@ class TestEdgeCases:
         np.testing.assert_allclose(result, arr, atol=1.0)
 
     def test_multidimensional(self):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(12, 64, 64).astype(np.float32) * 0.02
         info = engine.quantize("test", arr)
 
@@ -400,11 +400,11 @@ class TestEdgeCases:
 
     def test_invalid_bits_raises(self):
         with pytest.raises(ValueError):
-            QuantEngine(bits=16, mode="symmetric")
+            Quantine(bits=16, mode="symmetric")
 
     def test_invalid_mode_raises(self):
         with pytest.raises(ValueError):
-            QuantEngine(bits=8, mode="invalid")
+            Quantine(bits=8, mode="invalid")
 
 
 class TestCosineSimFunction:
@@ -459,7 +459,7 @@ class TestInt4Quantization:
     """Test int4 per-tensor quantization."""
 
     def test_symmetric_quantize_dequantize(self):
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         arr = np.random.randn(8, 8).astype(np.float32)
         info = engine.quantize("test", arr)
         assert info.is_quantized
@@ -472,7 +472,7 @@ class TestInt4Quantization:
 
     def test_asymmetric_quantize_dequantize(self):
         """Asymmetric int4 works well for non-negative data."""
-        engine = QuantEngine(bits=4, mode="asymmetric")
+        engine = Quantine(bits=4, mode="asymmetric")
         # Non-negative data where asymmetric quantization shines
         arr = np.random.rand(8, 8).astype(np.float32) * 10.0
         info = engine.quantize("test", arr)
@@ -480,7 +480,7 @@ class TestInt4Quantization:
         assert info.meta.bits == 4
 
     def test_as_float_restores_shape(self):
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         arr = np.random.randn(16, 32).astype(np.float32)
         info = engine.quantize("test", arr)
         deq = info.as_float()
@@ -491,20 +491,20 @@ class TestInt4Quantization:
         """At GPT-2 scale, int4 should have reasonable accuracy."""
         rng = np.random.RandomState(42)
         w = rng.randn(768, 768).astype(np.float32) * 0.02
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         info = engine.quantize("test", w)
         assert info.meta.cosine_sim > 0.95, f"cosine={info.meta.cosine_sim}"
 
     def test_skip_prefixes_respected(self):
         """Tensors matching skip prefixes should not be quantized."""
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         arr = np.random.randn(10, 10).astype(np.float32)
         info = engine.quantize("tok_emb.test", arr)
         assert not info.is_quantized
 
     def test_compression_ratio(self):
         """int4 should give ~8x compression."""
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         arr = np.random.randn(100, 100).astype(np.float32)
         info = engine.quantize("test", arr)
         ratio = info.compression_ratio()
@@ -512,7 +512,7 @@ class TestInt4Quantization:
 
     def test_dequantize_preserves_values(self):
         """Dequantized int4 should be close to original."""
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         arr = np.array([[1.0, -2.0], [3.0, -4.0]], dtype=np.float32)
         info = engine.quantize("test", arr)
         deq = info.as_float()
@@ -528,7 +528,7 @@ class TestQuantizedLinear:
     def test_create_from_quantized_data(self):
         """QuantizedLinear stores int8 data and dequantizes correctly."""
         w = np.random.randn(32, 32).astype(np.float32) * 0.02
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test.weight", w)
         assert info.is_quantized
 
@@ -549,7 +549,7 @@ class TestQuantizedLinear:
     def test_forward_numpy_shape(self):
         """numpy forward produces correct output shape."""
         w = np.random.randn(16, 32).astype(np.float32) * 0.02
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test.weight", w)
 
         ql = QuantizedLinear(
@@ -570,7 +570,7 @@ class TestQuantizedLinear:
         """numpy forward includes bias when present."""
         w = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
         b = np.array([0.5, -0.5], dtype=np.float32)
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test.weight", w)
 
         ql = QuantizedLinear(
@@ -596,7 +596,7 @@ class TestQuantizedLinear:
             pytest.skip("torch not installed")
 
         w = np.random.randn(8, 16).astype(np.float32) * 0.02
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test.weight", w)
 
         ql = QuantizedLinear(
@@ -626,7 +626,7 @@ class TestQuantizedLinear:
             pytest.skip("torch not installed")
 
         linear = nn.Linear(16, 8, bias=True)
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         w = linear.weight.data.cpu().numpy().astype(np.float32).copy()
         info = engine.quantize("test.weight", w)
         assert info.is_quantized
@@ -644,7 +644,7 @@ class TestQuantizedLinear:
             pytest.skip("torch not installed")
 
         linear = nn.Linear(16, 8, bias=False)
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         w = linear.weight.data.cpu().numpy().astype(np.float32).copy()
         info = engine.quantize("test.weight", w)
 
@@ -654,7 +654,7 @@ class TestQuantizedLinear:
     def test_int4_quantized_linear(self):
         """QuantizedLinear works with int4 quantization."""
         w = np.random.randn(32, 32).astype(np.float32) * 0.02
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         info = engine.quantize("test.weight", w)
 
         ql = QuantizedLinear(
@@ -674,7 +674,7 @@ class TestQuantizedLinear:
     def test_asymmetric_mode(self):
         """QuantizedLinear works with asymmetric quantization."""
         w = np.random.randn(16, 16).astype(np.float32) * 0.02
-        engine = QuantEngine(bits=8, mode="asymmetric")
+        engine = Quantine(bits=8, mode="asymmetric")
         info = engine.quantize("test.weight", w)
 
         ql = QuantizedLinear(
@@ -693,10 +693,10 @@ class TestQuantizedLinear:
 
 
 class TestSuggestFormat:
-    """Tests for QuantEngine.suggest_format() CPU precision auto-selection."""
+    """Tests for Quantine.suggest_format() CPU precision auto-selection."""
 
     def test_returns_expected_keys(self):
-        result = QuantEngine.suggest_format()
+        result = Quantine.suggest_format()
         assert "format" in result
         assert "bits" in result
         assert "reason" in result
@@ -705,42 +705,42 @@ class TestSuggestFormat:
         assert result["bits"] in (32, 8, 4)
 
     def test_fp32_always_in_benchmark(self):
-        result = QuantEngine.suggest_format()
+        result = Quantine.suggest_format()
         assert "fp32" in result["benchmark"]
         assert result["benchmark"]["fp32"]["cosine_sim"] == 1.0
         assert result["benchmark"]["fp32"]["bits"] == 32
 
     def test_int8_in_benchmark(self):
-        result = QuantEngine.suggest_format()
+        result = Quantine.suggest_format()
         assert "int8" in result["benchmark"]
         assert result["benchmark"]["int8"]["cosine_sim"] > 0.9
         assert result["benchmark"]["int8"]["bits"] == 8
 
     def test_int4_in_benchmark(self):
-        result = QuantEngine.suggest_format()
+        result = Quantine.suggest_format()
         assert "int4" in result["benchmark"]
         assert result["benchmark"]["int4"]["bits"] == 4
 
     def test_benchmark_timing_non_negative(self):
-        result = QuantEngine.suggest_format()
+        result = Quantine.suggest_format()
         for fmt in ("fp32", "int8", "int4"):
             assert result["benchmark"][fmt]["time_s"] > 0
 
     def test_custom_sample_weight(self):
         w = np.random.randn(64, 64).astype(np.float32)
-        result = QuantEngine.suggest_format(sample_weight=w)
+        result = Quantine.suggest_format(sample_weight=w)
         assert result["format"] in ("fp32", "int8", "int4")
 
     def test_low_quality_threshold_prefers_int8(self):
-        result = QuantEngine.suggest_format(quality_threshold=0.5, min_speed_ratio=0.1)
+        result = Quantine.suggest_format(quality_threshold=0.5, min_speed_ratio=0.1)
         assert "benchmark" in result
 
 
 class TestSaveLoadWeights:
-    """Tests for QuantEngine.save_weights() / load_weights() round-trip."""
+    """Tests for Quantine.save_weights() / load_weights() round-trip."""
 
     def test_round_trip_preserves_values(self, tmp_path: Path):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         w = np.random.randn(16, 32).astype(np.float32)
         info = engine.quantize("test_w", w)
         path = str(tmp_path / "quant.npz")
@@ -752,7 +752,7 @@ class TestSaveLoadWeights:
         np.testing.assert_array_equal(loaded["test_w"].array, info.array)
 
     def test_round_trip_multiple_tensors(self, tmp_path: Path):
-        engine = QuantEngine(bits=8, mode="asymmetric")
+        engine = Quantine(bits=8, mode="asymmetric")
         infos = {}
         for name in ("w1", "w2", "b1"):
             w = np.random.randn(8, 16).astype(np.float32)
@@ -767,7 +767,7 @@ class TestSaveLoadWeights:
             assert loaded[name].meta.mode == infos[name].meta.mode
 
     def test_skips_non_quantized_tensors(self, tmp_path: Path):
-        engine = QuantEngine(bits=8, mode="symmetric")
+        engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("good", np.random.randn(8, 8).astype(np.float32))
         non_quant = TensorInfo(name="skip", array=np.zeros((4, 4), dtype=np.float32))
         path = str(tmp_path / "skip.npz")
@@ -779,19 +779,19 @@ class TestSaveLoadWeights:
     def test_load_empty_archive_returns_empty(self, tmp_path: Path):
         path = str(tmp_path / "empty.npz")
         np.savez_compressed(path)
-        engine = QuantEngine()
+        engine = Quantine()
         result = engine.load_weights(path)
         assert result == {}
 
     def test_missing_metadata_logs_warning(self, tmp_path: Path):
         path = str(tmp_path / "bad.npz")
         np.savez_compressed(path, w=np.array([1, 2, 3], dtype=np.int8))
-        engine = QuantEngine()
+        engine = Quantine()
         result = engine.load_weights(path)
         assert result == {}
 
     def test_int4_round_trip(self, tmp_path: Path):
-        engine = QuantEngine(bits=4, mode="symmetric")
+        engine = Quantine(bits=4, mode="symmetric")
         w = np.random.randn(8, 16).astype(np.float32)
         info = engine.quantize("w4", w)
         path = str(tmp_path / "int4.npz")
@@ -801,6 +801,6 @@ class TestSaveLoadWeights:
         np.testing.assert_array_equal(loaded["w4"].array, info.array)
 
     def test_load_rejects_nonexistent_path(self):
-        engine = QuantEngine()
+        engine = Quantine()
         with pytest.raises((FileNotFoundError, OSError)):
             engine.load_weights("/nonexistent/path.npz")

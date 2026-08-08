@@ -229,7 +229,7 @@ This codebase replaces most standard ML/DL libraries with custom implementations
 | **sentence-transformers** | **N-gram TF-IDF** + **SloTextEmbedder** | `vector_store.py`, `slo_embedder.py` | ~2GB eliminated. Zero-dependency embeddings. |
 | **torchvision** | **VisionCNN** (SloNet Conv2D layers) | `multimodal/vision.py` | 24K params, learns from uploaded images at runtime. |
 | **HuggingFace tokenizers** | **MorphTokenizer** (pure Python BPE) | `morph_tokenizer.py` | No Rust binary. Morphological analysis (stemming, decomposition). |
-| **bitsandbytes** (int8/int4) | **QuantEngine** (per-tensor quant) | `quantization.py` | Pure NumPy. Works on CPU (no CUDA required). |
+| **bitsandbytes** (int8/int4) | **Quantine** (per-tensor quant) | `quantization.py` | Pure NumPy. Works on CPU (no CUDA required). |
 | **transformers generation** | **SloNet `generate_numpy_stream()`** | `slonet.py` | Token-by-token streaming, KV cache, greedy/sampling. No transformers dependency. |
 | **Pinecone/ChromaDB** | **InMemoryVectorStore** + **MogDB** | `vector_store.py` | Zero external DB servers. Cosine-similarity in pure Python. |
 | **PyTorch checkpoints** (`.pt`/`.bin`) | **`.sou` format** | `sou_format.py`, `slonet.py` | Soul metadata (traits, system prompt) embedded in checkpoint. |
@@ -242,7 +242,7 @@ This codebase replaces most standard ML/DL libraries with custom implementations
 3. **No external model downloads at runtime** — SloNet models train from scratch. HuggingFace models are converted to `.slnc` format on first load.
 4. **`safetensors` is optional** — `model_loader.py` reads raw bytes as fallback. `.slnc` is the preferred format.
 5. **Embeddings are zero-dependency** — `vector_store.py:_ngram_embed()` or `slo_embedder.py:SloTextEmbedder`. Never `pip install sentence-transformers`.
-6. **Quantization is pure NumPy** — `QuantEngine` with `quantized_linear()` kernel. Never `pip install bitsandbytes`.
+6. **Quantization is pure NumPy** — `Quantine` with `quantized_linear()` kernel. Never `pip install bitsandbytes`.
 7. **`.sou` checkpoints** — Export via `export_to_sou()`, load via `import_from_sou()`. Contains soul metadata + weights.
 8. **Accelerator dispatch** — `_accel_op()` in `slonet.py` dispatches to Metal/CUDA/OpenCL/CPU. Never import GPU frameworks directly.
 9. **Generation is pure NumPy** — `generate_numpy_stream()` yields tokens one at a time. KV cache, fused QKV, RoPE, GQA all implemented in numpy. No `model.generate()` from transformers.
@@ -487,6 +487,58 @@ Key state variables: `trainingPhase`, `trainingMethod`, `inputMode`, `trainingLo
 - **EventSource reconnect**: Auto-reconnect up to 3 times on connection errors before marking as failed
 - **Disabled Metal accelerator during training**: Metal GPU dispatch overhead was 6x slower than CPU numpy for embed_dim≤128. `train_step()`, `train_batch()`, and `contrastive_step()` now disable the accelerator during the forward/backward pass and restore it afterward. Result: embed_dim=64 training drops from 257ms to 92ms per sample (~3x faster).
 - **Torch-free training**: `SloughGPTTrainer` works without PyTorch installed. `_create_optimizer()` uses `SloAdam` instead of `torch.optim.AdamW`; `train_step()` uses `step(params)` and manual grad zeroing; `get_batch()` handles SloNet Tensor float indices. Verified: loss 5.95→4.54 in 100 steps on pure numpy.
+
+### Native Model Training (SloNet-native)
+
+SloNet can train models from scratch — no HuggingFace weights involved. The pipeline produces `.soul` checkpoints with char-level vocab in metadata.
+
+#### Training
+```bash
+cd sloughGPT
+PYTHONPATH=packages/core-py python3 -c "
+from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+config = TrainerConfig(
+    vocab_size=0,        # auto-detect from data
+    n_embed=128,         # embedding dimension
+    n_layer=4,           # transformer layers
+    n_head=4,            # attention heads
+    block_size=128,      # context window
+    batch_size=16,
+    epochs=10,
+    learning_rate=1e-3,
+    checkpoint_dir='models/slonet-native',
+)
+trainer = SloughGPTTrainer(
+    data_path='datasets/api_conversations/input.txt',
+    config=config,
+    soul_name='sloughgpt-native',
+)
+trainer.train()
+"
+```
+
+#### Loading trained model
+```python
+from domains.inference.slonet_provider import SloNetChatProvider
+
+provider = SloNetChatProvider.from_soul(
+    "models/slonet-native/<checkpoint>.soul",
+    model_id="my-trained-model",
+)
+```
+
+#### Server autoload (via env var)
+```bash
+SLO_NATIVE_SOUL_PATH=models/slonet-native/<checkpoint>.soul python3 apps/api/server/main.py
+```
+
+#### Key files
+| File | Purpose |
+|------|---------|
+| `domains/training/train_pipeline.py` | `SloughGPTTrainer` — trains `SloughGPTModel`, saves `.soul` checkpoints |
+| `domains/models/__init__.py` | `SloughGPTModel(SloTransformer)` — the model class |
+| `domains/inference/slonet_provider.py` | `SloNetChatProvider.from_soul()` — loads `.soul` for inference |
+| `domains/infrastructure/model_loader.py` | `ModelLoader._try_load_soul()` — auto-discovers `.soul` in `models/slonet-native/` |
 
 ### Parallel Execution Architecture
 
@@ -3243,3 +3295,192 @@ Fix order: (1) Block MPS on Intel Mac → models load on CPU and survive. (2) Re
 | `apps/api/server/routers/inference.py` | session_id param in /chat/stream |
 | `apps/api/server/routers/session.py` | session_id in regeneration |
 | `apps/api/server/infrastructure/startup.py` | Autoload rewritten: ModelRegistry + setup_providers instead of register_provider |
+
+## Session 2026-08-06 — Monitoring Expansion + Settings Crash Fix
+
+### Summary
+Completed the `/monitoring` expansion: all SSE-driven cards built, trend-history recording wired and verified, resilience path tested with a data-loss bug fixed. Then debugged and fixed the production `/settings` TypeError (`n.toString` on `undefined`).
+
+### Monitoring
+- **Trend recording**: `ServerState.record_trend_snapshots(interval_s=5.0)` throttles health+memory history recording (default 5s, `_last_trend_ts` guard under `_lock`); called from `HealthController.get_detailed_health()` BEFORE reading histories. Regression test `test_detailed_health_records_trend_snapshots` forces cache+throttle open and asserts histories grow.
+- **StatusCard** surfaces previously-unrendered SSE signals: `num_parameters` (model KPI), `is_inferencing` (live pulse), `model_loading`, `soul`. 8th KPI keeps grid symmetric.
+- **Resilience**: `initLiveStatus` fallback HTTP poll uses `mapDetailedToSnapshot(d)`. Fixed BUG: `num_parameters` was hardcoded `null` in the mapper, silently dropping the value on the fallback path — now `d.num_parameters != null ? Number(d.num_parameters) : null`. 6 new tests caught it.
+- Full frontend suite: 1934 tests all pass; tsc exit 0. Removed redundant `TrainingPoolCard.tsx` (duplicate of rendered `ExecutorPool`).
+
+### Settings Crash — Root Cause & Fix
+- **Root cause**: `apps/web/lib/store.ts` persisted Zustand store (`name: 'man-store'`). zustand `persist` shallow-merges persisted state over current state, so a store saved before `defaultTemp`/`defaultMaxTokens`/`defaultTopP`/`defaultTopK`/`collapsibleMessageLength` existed replaces the whole `settings` object → those fields `undefined`. `SettingsSlider`'s `value ?? 0` guard was stripped by SWC minification (TS `value: number`), so `undefined.toString()` threw in production only.
+- **Fix (2 layers)**:
+  1. `lib/store.ts` — custom persist `merge` deep-merges persisted settings over `DEFAULT_SETTINGS`, migrating legacy stores.
+  2. `app/(app)/settings/page.tsx` — `SettingsSlider` prop typed `number | undefined` so the `?? 0` guard survives compilation.
+- **Tests**: new `lib/store.migration.test.ts` (3 tests) seeds legacy localStorage before dynamic import and verifies defaults fill missing fields, persisted values win, non-settings state preserved. 12/12 store tests pass; 462 lib+app tests pass; tsc exit 0.
+
+## Session 2026-08-06 (cont.) — Monitoring Test Completion + DPOCard Type Fix
+
+### Summary
+Closed the last monitoring coverage gap (10 components with no tests) and completed a pre-existing in-progress typing change on `DPOCard` that had broken `tsc`.
+
+### Monitoring test completion (10 new files, 76 tests)
+- `LatencyCard.test.tsx` (6) — null/empty history, zero/missing latency filtering, avg/min/max, p95 on 25-sample set
+- `AlertPanel.test.tsx` (8) — sliders + values, change callbacks, alert cap at 5, Notification toggle (stubbed `window.Notification`)
+- `ResourceCard.test.tsx` (6) — liveHealth precedence over metrics, fallbacks, `...` placeholders, GB formatting
+- `KnowledgeCard.test.tsx` (8) — stats, Trained/Not adapter, facts line, placeholder/zero states
+- `AutoTrainCard.test.tsx` (7) — Running/Off, queue/trains/loss, last-train line, sessions·logs·interval line
+- `QualityCard.test.tsx` (6) — non-ok returns null, scores, repetition %, avg/empty/tokens
+- `FeedbackCard.test.tsx` (9) — null-render, statuses, run-feedback → `apiPost('/multimodal/dpo')` + onRefresh, running-state toggling, error path logs + skips refresh, disabled state
+- `TrainingHistory.test.tsx` (7) — empty, names/ids, badges, loss 3-decimals, epochs, slice(0,6) + `+N more`
+- `ExecutorPool.test.tsx` (11) — uninitialized null, counts, purge/cancel via mocked `systemController`, `+N more`
+- `KvCacheCard.test.tsx` (8) — disabled null, counts, TTL minutes, oldest age, LRU cap, cross-turn badge
+
+### Test-write lessons
+- `1.2345.toFixed(3)` → `"1.234"` in JS (float repr) — use clean decimal inputs (e.g. `1.5` → `'1.500'`) in assertions
+- `p95` of small sets equals max (index `floor(0.95n)` hits the last element for `n≤20`) — assert p95 vs max on a 25-sample set
+- `getByText('...')`/duplicate values need `getAllByText(...).length` matchers
+- `ExecutorPool` cancel buttons appear for running AND queued non-cancelling jobs; `window.Notification` is undefined in jsdom so the toggle must be stubbed
+
+### DPOCard type fix (pre-existing worktree change, not ours)
+- `apps/web/components/multimodal/DPOCard.tsx` had `dpoResult` re-typed `any` → `Record<string, unknown> | null` but the JSX body still did un-narrowed `.toFixed()` / `> 0` on `unknown` → 5 tsc errors
+- Fixed with `typeof dpoResult.X === 'number'` guards preserving exact rendered output (same visibility as the old `any` truthiness paths)
+
+### Verification
+- `npx tsc --noEmit` → exit 0
+- Full frontend suite: **198 files / 2013 tests all pass** (was 187 files / 1934; +11 files, +79 tests)
+
+## Session 2026-08-06 (cont. 2) — Remaining Test Coverage Gap
+
+### Summary
+Covered the last real testless surface outside app routes: the shared SSE client, three lib utilities, the reaction store, the health-hook type export, and the inline dataset import modal. 6 files, 48 tests. Full suite now 204 files / 2057 tests.
+
+### New test files
+| File | Tests | Notes |
+|------|-------|-------|
+| `lib/sse-client.test.ts` | 9 | Mocked `./config` (PUBLIC_API_URL) + `./auth` (useAuthStore) via `vi.hoisted`; `fetch` stub returning `ReadableStream` bodies. Covers envelope parsing, chunk buffering, malformed-line skip, bearer token, non-ok error, reconnect+recover, maxReconnects exhaustion, `stop()` abort (AbortError → onClose, no reconnect), `connected` getter |
+| `lib/conversations-utils.test.ts` | 11 | `formatDate` relative-time buckets frozen via `vi.setSystemTime`; `truncateMessage` first-line/ellipsis/custom-max |
+| `lib/download-utils.test.ts` | 6 | jsdom via `environmentMatchGlobs` (new entries in `vitest.config.ts`). Stubbed `URL.createObjectURL/revokeObjectURL` via `vi.stubGlobal('URL', {...URL, ...})`; anchors/inputs captured through a `document.createElement` spy (element never enters the DOM, so `querySelector` cannot find it). `importFile` resolves file/null via `Object.defineProperty(input, 'files')` + `change` event |
+| `lib/reaction-store.test.ts` | 10 | localStorage CRUD, dedup, key cleanup on empty, toggle, corrupt-JSON fallback, per-message isolation |
+| `hooks/useApiHealth.test.ts` | 2 | Type-only module (re-exports `ApiHealth | 'offline' | null`) — contract tests |
+| `components/DatasetInlineImportModal.test.tsx` | 10 | Mocked `@sloughgpt/strui`, `@/lib/dataset-controller`, `@/lib/toast-store`. Per-source imports (local/github/huggingface/url), default vs custom name, empty-field error toast, failure toast, disabled button + spinner during pending promise, Done-close |
+
+### Test-write lessons
+- `lib/` runs node by default; DOM-using lib tests need an `environmentMatchGlobs` entry in `vitest.config.ts` (pattern: `sync-html-theme`), not a per-file `@vitest-environment` directive.
+- `vi.mock` factory runs during module instantiation (before the test body), so ANY module-level `const` referenced from the factory is a TDZ `ReferenceError`. Use only `vi.hoisted` values or define state inside the factory. For mocked tabs, a module-scoped `tabApi` object works because React renders `Tabs` before its `TabsContent` children.
+- jsdom `document.createElement('a')` never attaches to the DOM — capture created elements via a `createElement` spy instead of `querySelector`.
+- Typing `let x: ReturnType<typeof vi.spyOn>` mismatches the concrete MockContext — use `ReturnType<typeof vi.fn>` (plain `MockInstance`) or `vi.stubGlobal` with plain `vi.fn`.
+- `vi.fn(() => null)` infers param type `null` — declare `vi.fn<() => string | null>(() => null)` when the mock must later accept values.
+
+### Verification
+- `npx tsc --noEmit` → exit 0
+- Full frontend suite: **204 files / 2057 tests all pass** (was 198 / 2013; +6 files, +44 tests — 48 written, minor count variance from suite accounting)
+
+## Session 2026-08-06 (cont. 3) — Query Layer Test Coverage
+
+### Summary
+Covered the custom query system (`lib/query/*`) with 3 test files / 35 tests. Full suite now 207 files / 2092 tests.
+
+### New test files
+| File | Tests | Notes |
+|------|-------|-------|
+| `lib/query/client.test.ts` | 16 | `serializeKey`; `fetchQuery` cache-hit / dedup-in-flight / retry-success / retry-exhausted / error-storage / fetchingKeys tracking; `invalidateQuery` no-op + updatedAt reset; `isStale`/`getQueryState`; `subscribeQuery` GC — delete-after-unsub, keep-while-subscribed, cancel-on-resubscribe (fake timers) |
+| `lib/query/hooks.test.ts` | 13 | `useQuery` mount fetch / `enabled: false` skips / `onSuccess` / `onError` / `refetch()` / refetch-after-invalidation; `useMutation` success+onSuccess+onSettled / error+onError+onSettled / `invalidateKeys` / mutate-swallows / `reset()`; `useInvalidate`; `useIsFetching` counts in-flight |
+| `lib/query/api-hooks.test.ts` | 6 | `@/lib/model-controller` + `@/lib/souls-controller` mocked via `vi.hoisted`; `useModels`/`useSouls`/`useCurrentSoul`/`useCheckpoints` fetchers; `useLoadModel` invalidates `models`; `useSwitchSoul` invalidates souls/current-soul/checkpoints |
+
+### Config
+- `vitest.config.ts`: jsdom `environmentMatchGlobs` entries for `lib/query/hooks.test.ts` + `lib/query/api-hooks.test.ts` (both use `renderHook`).
+
+### Test-write lessons
+- `useMutation(fn)` infers `V = void` — a string-typed `mutateAsync` argument requires explicit generics: `useMutation<string, string>(...)`.
+- `@testing-library/react` `renderHook` works with zustand `useSyncExternalStore` hooks; `afterEach(cleanup)` required to avoid leaked subscriptions.
+- Query key `updatedAt` reset by `invalidateQuery` → `isStale` flips without any fetch.
+
+### Verification
+- `npx tsc --noEmit` → exit 0
+- Full frontend suite: **207 files / 2092 tests all pass** (was 204 / 2057; +3 files, +35 tests)
+
+## Session 2026-08-06 (cont. 4) — WebGPU Test Coverage
+
+### Summary
+Covered `lib/soulnet-webgpu/*` (weights/parse + engines + cache + worker) with 5 test files / 40 tests. Full suite now 214 files / 2168 tests.
+
+### New test files
+| File | Tests | Notes |
+|------|-------|-------|
+| `lib/soulnet-webgpu/weights.test.ts` | 11 | `makeSou` round-trip, `parseSou` v3 binary/v2 JSON/metadata-only/non-JSON-throws/invalid-magic, LSTM param layout, `inferArch` lstm/transformer, `guessShapes` |
+| `lib/soulnet-webgpu/cache.test.ts` | 6 | IndexedDB get/set/delete/list/miss (fake IDB via `installFakeIndexedDB`) |
+| `lib/soulnet-webgpu/engine.test.ts` | 9 | init (idempotent/unavailable), load (buffer + URL fetch), forward logits = h·Wfcᵀ+bfc, generate argmax, destroy frees buffers |
+| `lib/soulnet-webgpu/transformer-engine.test.ts` | 8 | load/URL/forward/generate/KV advance/missing-param error/destroy |
+| `lib/soulnet-webgpu/worker.test.ts` | 7 | `SoulEngineWorker` message protocol, `createSoulEngine` URL load + generate, `worker.ts` real module protocol + generate-before-init error |
+
+### Config / infra
+- `vitest.config.ts`: jsdom `environmentMatchGlobs` entry for `lib/soulnet-webgpu/**/*.test.ts` (WebGPU globals + `navigator.gpu` stubbing). Note: `environmentMatchGlobs` is deprecated in vitest 3.2.4 — kept for config consistency.
+- `__test-helper.ts`: `makeWebGPU` (fake `GPUDevice` with writeBuffer/submit/onSubmittedWorkDone + readback buffers), `stubWorker` (fake `Worker` + message pump), `installFakeIndexedDB`, `makeLstmSou`/`makeTransformerSou`/`makeSou`/`makeSouV2` (v3/v2 `.sou` builders).
+
+### Key bugs found & fixed
+- **`Invalid typed array length: 846200832` at weights.ts:186** — `makeSou` wrote param data with no 4-byte alignment; `parseSou` aligns `offset` before each `Float32Array` (`while (offset % 4) offset++`). The real v3 writer pads to 4 bytes before float data (spec comment at weights.ts:194). Fixed `makeSou` to insert alignment padding after the shape before data.
+- **worker.test.ts module cache** — `await import('./worker')` only runs once; second protocol test must call `vi.resetModules()` before re-import (else `self.onmessage` never reassigned → `onmessage is not a function`).
+- **Worker generate ordering** — tokens must be emitted *after* `gen.next()` is called (real worker backpressure); test emitted before → promise never resolved → 30s timeout.
+- **fake pipeline missing `getBindGroupLayout`** — real engine `forward()` calls `pipeline.getBindGroupLayout(0)`; mock now returns a stub.
+- **`throws on non-JSON metadata` test bug** — `'not json'` is 8 bytes but buffer allocated 5; `bytes.set` threw `offset is out of bounds` inside the test itself.
+- LSTM param-index assertions wrong for nl=2 (p9=W_hh_b=16, p10=fc_w=12, p11=fc_b=3).
+
+### Test-write lessons
+- When a production module reads CPU/GPU state through a fake WebGPU device, the mock must cover the real call graph (`pipeline.getBindGroupLayout`, `queue.onSubmittedWorkDone`, staging `MAP_READ` buffer readback) — the engine's `forward()` is a real hybrid CPU/GPU pass.
+- `self` is not a DOM global in jsdom — `vi.stubGlobal('self', { postMessage, onmessage })` + dynamic import runs the worker module body, letting tests drive `self.onmessage` directly.
+
+### Verification
+- `npx tsc --noEmit` → exit 0
+- Full frontend suite: **214 files / 2168 tests all pass** (was 207 / 2092; +7 files, +76 tests)
+
+## Session 2026-08-06 (cont. 5) — Contexts + Barrels Test Coverage
+
+### Summary
+Covered `contexts/` (all 4 files) plus the remaining small untested surfaces (compare config, NavIcons, both barrels). 8 new test files / 60 tests. Full suite now 225 files / 2286 tests.
+
+### New test files
+| File | Tests | Notes |
+|------|-------|-------|
+| `contexts/ConvSidebarContext.test.tsx` | 11 | Default state, localStorage read/persist (true/false/ignore non-true), toggles, setters, storage-throw tolerance, throw outside provider, hook API re-render |
+| `contexts/ChatContext.test.tsx` | 9 | Render children, all 3 sub-hooks + `useChatContext` throw outside provider, per-context value exposure, combined merge, nested independent consumption |
+| `contexts/ChatToolbarContext.test.tsx` | 5 | Throw outside provider, all 9 groups' values, group callback invocation, live value update via harness re-render |
+| `contexts/ModelContext.test.tsx` | 19 | Real `@/hooks/useLiveStatus` store driven via `liveStatusStore` (not mocked); `@/lib/model-controller` mocked via `vi.hoisted`. Initial state, refresh gated on `ready`, field mapping (`type`→`huggingface` default, `size_mb`→`sizeMb`), list failure, loadModel/loadModelPath/unloadModel success/error/backend-error-field, clearError, live-health sync gated on `connectionStatus==='connected'`, `currentModel` from health, `useCurrentModel`/`useModelById`/`useLocalModels`/`useHuggingFaceModels` |
+| `components/compare/compare-config.test.ts` | 6 | METRIC_COLUMNS 6 columns, keys on `BenchmarkResult`, fmt/accessor per column, lowerBetter set, Infinity fallback for missing p95/p99 |
+| `components/icons/NavIcons.test.tsx` | 3 | All 28 exports callable, `IconClose === IconX` |
+| `lib/controllers-barrel.test.ts` | 4 | Identity of 19 controller exports + download helpers vs source modules; `vmController.run/builtins` functions |
+| `components/chat/chat-barrel.test.ts` | 3 | Identity of 22 chat component exports; `ChatScreen` is memo/forwardRef (object, not function) |
+
+### Config
+- `vitest.config.ts`: `contexts/**/*.test.{ts,tsx}` added to BOTH `include` and jsdom `environmentMatchGlobs` — contexts were previously outside the test glob entirely.
+
+### Test-write lessons
+- `renderHook` wrappers are called with NO props — a provider requiring a prop (`ChatToolbarProvider` needs `value`) needs a custom `function wrapper({children})` closure, not the bare component.
+- React `memo`/`forwardRef` components are objects, not functions — barrel contract tests must accept `['function','object']`.
+- zustand vanilla stores (`liveStatusStore`) are real and testable: drive state with `getState().setReady(true)`/`setHealth()`/`setConnectionStatus()` inside `act`, then `await act(async () => {})` to flush effect-triggered async fetches.
+- `ModelContext`'s live-health sync is gated on `connectionStatus === 'connected'` — set the store's connection status or the effect is a no-op.
+- `lowerBetter` on `CompareMetricColumn` is optional (`undefined` on the 3 non-latency columns).
+
+### Verification
+- `npx tsc --noEmit` → exit 0
+- Full frontend suite: **225 files / 2286 tests all pass** (was 214 / 2168; +11 files, +118 tests)
+
+## Session 2026-08-06 (cont. 6) — Mobile Toolchain Audit + Web Suite Re-Verification
+
+### Summary
+Attempted to close the last mobile test gap (untested `src/services/` + `src/navigation/`). Discovered `apps/mobile` has **no `node_modules`** (jest, react-native, typescript all absent; only `apps/web` and `packages/strui` have installed deps), so mobile tests cannot be run or type-checked in this environment. Per user decision, mobile test-writing was skipped; the completed web suite was re-verified instead. The prior session's recorded counts (225 files / 2286 tests) were inflated — the verified reality is **224 test files on disk → 223 collected / 2250 tests all pass**.
+
+### Mobile scan findings (unverified, for future)
+| File | Surface | Needs |
+|------|---------|-------|
+| `src/navigation/tabs.ts` | `ALL_TABS` (Chat/Models/Settings, `stack: true`, `component: null as any`) | — |
+| `src/services/clipboard.ts` | iOS/android both `setString`, returns bool, catches | `react-native` `Clipboard` mock |
+| `src/services/file-upload.ts` | `pickDocument`, `isTextFile`/`isImageFile`/`formatFileSize`, require-guard | virtual mock `expo-document-picker` |
+| `src/services/image-upload.ts` | `pickImage`/`takePhoto`/`analyzeImage`/`imageDataUrl`, permission flow | virtual mock `expo-image-picker`, `fetch` spy |
+| `src/services/voice-input.ts` | `startRecording`→stop fn, `transcribeAudio` | virtual mock `expo-av`, fake timers for duration |
+| `src/services/training-service.ts` | 9 API wrappers + `streamTraining` (SSE) | `api-client` + `sse-client` mocks |
+| `src/services/llama-rn-service.ts` | download/load/chat/stream, `_buildChatTemplate`, NativeModules `LlamaContext` (already stubbed in `jest-setup.js`) | `react-native-fs` mock (already mapped), AsyncStorage |
+| `src/services/onnx-inference-service.ts` | `loadCheckpoint`/`isLoaded`/`unload`/`generate`; internal matMul/rmsNorm/RoPE/`_offsetWeights` pure funcs | tiny fake checkpoint via `_decodeWeights` for a full forward pass |
+
+Existing mobile jest infra (from `jest.config.js`/`jest-setup.js`): `@react-native/jest-preset`, `react-native-fs` → `src/__mocks__/react-native-fs.ts`, AsyncStorage auto-mock at `__mocks__/@react-native-async-storage/`, `NativeModules.LlamaContext`/`Onnxruntime` stubbed. Conventions: `src/**/__tests__/foo.test.ts(x)`.
+
+### Verification (web re-run, 2026-08-06)
+- `npx tsc --noEmit` → exit 0
+- Full suite: **223 files / 2250 tests all pass** (91s; 224 files on disk, `app/(app)/model/[id]/ModelDetailPage.test.tsx` excluded by design — its `setInterval` uptime timer keeps the fork pool alive; attempted isolated run timed out at 120s, confirming the documented hang)
+- **Correction**: cont. 5 journal said 225 files / 2286 tests; actual verified count is 223 / 2250. Difference trace: `222 files` is the correct additive total from cont. 4 (214+8); cont. 5's "+11 files / +118 tests" delta was erroneous.
+- **Toolchain state**: `apps/web` + `packages/strui` have deps (vitest 3.2.4); root `node_modules` and `apps/mobile/node_modules` are empty. Mobile testing requires `npm install` in `apps/mobile` (~500-1000 MB download — needs bandwidth approval first).

@@ -2,14 +2,14 @@
 
   Usage:
     // Generic data fetching
-    const { data: models, isLoading } = useQuery('models', () => api.getModels())
+    const { data: models, isLoading } = useQuery('models', () => modelController.list())
 
     // With params key — re-fetches when key changes
-    const { data } = useQuery(['checkpoints', soulName], () => api.listCheckpoints(soulName))
+    const { data } = useQuery(['checkpoints', soulName], () => soulsController.listCheckpoints())
 
     // Mutations with auto-invalidation
-    const { mutate: deleteModel, isLoading: deleting } = useMutation(
-      (id: string) => api.deleteModel(id),
+    const { mutate: loadModel, isLoading: loading } = useMutation(
+      (id: string) => modelController.load(id),
       { invalidateKeys: ['models'] }
     )
 

@@ -83,3 +83,22 @@ jobs:
         with:
           name: test-results
           path: tests/
+
+  quantization-gate:
+    # Quantization regression gate: tiny-fixture validate + baseline check.
+    # Deterministic in-process fixture (np.random.seed(0), no model downloads),
+    # so quality/compression gates are machine-stable. Tiny speed metrics are
+    # informational only; the committed quantization_baseline.json (tiny
+    # int8/int4) is the reference.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+      - name: Quantization validate + baseline gate
+        run: python scripts/benchmark_quantization.py --validate --bits 8,4 --baseline quantization_baseline.json

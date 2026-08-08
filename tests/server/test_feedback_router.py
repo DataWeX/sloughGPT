@@ -77,6 +77,40 @@ class TestRecordFeedback:
         resp = client.post("/feedback", json={"rating": "thumbs_up"})
         assert resp.status_code == 422
 
+    def test_rejects_neutral_rating(self, mock_get_ctrl, client):
+        resp = client.post("/feedback", json={
+            "message_id": "msg-1",
+            "rating": "neutral",
+        })
+        assert resp.status_code == 422
+
+    def test_records_feedback_with_session_id(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.record_feedback.return_value = dict(FEEDBACK_RESPONSE)
+        mock_get_ctrl.return_value = ctrl
+        resp = client.post("/feedback", json={
+            "message_id": "msg-1",
+            "rating": "thumbs_down",
+            "session_id": "sess-1",
+        })
+        assert resp.status_code == 200
+        ctrl.record_feedback.assert_called_once()
+        call_kwargs = ctrl.record_feedback.call_args
+        assert call_kwargs.kwargs["session_id"] == "sess-1"
+
+    def test_records_feedback_with_content(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.record_feedback.return_value = dict(FEEDBACK_RESPONSE)
+        mock_get_ctrl.return_value = ctrl
+        resp = client.post("/feedback", json={
+            "message_id": "msg-1",
+            "rating": "thumbs_up",
+            "message_content": "Great response!",
+            "user_message": "Tell me about AI",
+            "assistant_response": "AI is artificial intelligence.",
+        })
+        assert resp.status_code == 200
+
 
 @patch("apps.api.server.routers.feedback.get_feedback_controller")
 class TestRecordFeedbackWorkflow:
@@ -108,6 +142,29 @@ class TestRecordFeedbackWorkflow:
         })
         assert resp.status_code == 422
 
+    def test_workflow_with_long_messages(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.record_feedback.return_value = {"feedback_id": "fb-wf-2"}
+        mock_get_ctrl.return_value = ctrl
+        resp = client.post("/feedback/workflow-record", json={
+            "conversation_id": "conv-1",
+            "rating": "thumbs_down",
+            "assistant_response": "x" * 5000,
+            "user_message": "y" * 5000,
+        })
+        assert resp.status_code == 200
+        assert resp.json()["data"]["workflow_active"] is True
+
+    def test_workflow_rejects_thumbs_down_rating(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.record_feedback.return_value = {"feedback_id": "fb-wf-3"}
+        mock_get_ctrl.return_value = ctrl
+        resp = client.post("/feedback/workflow-record", json={
+            "conversation_id": "conv-1",
+            "rating": "thumbs_down",
+        })
+        assert resp.status_code == 200
+
 
 @patch("apps.api.server.routers.feedback.get_feedback_controller")
 class TestFeedbackStats:
@@ -122,6 +179,16 @@ class TestFeedbackStats:
         body = resp.json()
         assert body["thumbs_up"] == 10
         assert body["total"] == 12
+
+    def test_returns_empty_stats(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_stats.return_value = {"thumbs_up": 0, "thumbs_down": 0, "total": 0, "up_ratio": 0.0}
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/feedback/stats/summary")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 0
+        assert body["up_ratio"] == 0.0
 
 
 @patch("apps.api.server.routers.feedback.get_feedback_controller")
@@ -143,6 +210,14 @@ class TestConversations:
         resp = client.get("/feedback/conversations")
         assert resp.status_code == 200
         assert len(resp.json()) == 1
+
+    def test_list_conversations_custom_limit(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.list_conversations.return_value = [dict(CONV_RESPONSE)] * 3
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/feedback/conversations?limit=10")
+        assert resp.status_code == 200
+        ctrl.list_conversations.assert_called_once_with(limit=10)
 
     def test_get_conversation_found(self, mock_get_ctrl, client):
         ctrl = MagicMock()
@@ -175,12 +250,33 @@ class TestConversations:
         resp = client.patch("/feedback/conversations/nonexistent", json={"name": "Nope"})
         assert resp.status_code == 404
 
+    def test_update_conversation_partial_pinned(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        updated = {**CONV_RESPONSE, "pinned": True}
+        ctrl.update_conversation.return_value = updated
+        mock_get_ctrl.return_value = ctrl
+        resp = client.patch("/feedback/conversations/conv-1", json={"pinned": True})
+        assert resp.status_code == 200
+        assert resp.json()["pinned"] is True
+
     def test_delete_conversation(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         mock_get_ctrl.return_value = ctrl
         resp = client.delete("/feedback/conversations/conv-1")
         assert resp.status_code == 200
         assert resp.json()["status"] == "deleted"
+
+    def test_create_conversation_with_session_id(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        conv = {**CONV_RESPONSE, "session_id": "sess-42"}
+        ctrl.create_conversation.return_value = conv
+        mock_get_ctrl.return_value = ctrl
+        resp = client.post("/feedback/conversations", json={
+            "name": "My Chat",
+            "session_id": "sess-42",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["session_id"] == "sess-42"
 
 
 @patch("apps.api.server.routers.feedback.get_feedback_controller")
@@ -201,3 +297,13 @@ class TestGetFeedback:
         mock_get_ctrl.return_value = ctrl
         resp = client.get("/feedback/nonexistent")
         assert resp.status_code == 404
+
+    def test_get_feedback_different_message(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        fb = {**FEEDBACK_RESPONSE, "message_id": "msg-99", "rating": "thumbs_down"}
+        ctrl.get_feedback.return_value = fb
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/feedback/msg-99")
+        assert resp.status_code == 200
+        assert resp.json()["message_id"] == "msg-99"
+        assert resp.json()["rating"] == "thumbs_down"

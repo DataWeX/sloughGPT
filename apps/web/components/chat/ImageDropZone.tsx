@@ -3,14 +3,35 @@
 import { useState, useCallback, useEffect, type ReactNode } from 'react'
 import { cn } from '@sloughgpt/strui'
 
-interface ImageDropZoneProps {
+const TEXT_EXTENSIONS = new Set([
+  'txt', 'md', 'json', 'js', 'jsx', 'ts', 'tsx', 'py', 'rb', 'go', 'rs',
+  'java', 'c', 'cpp', 'h', 'hpp', 'css', 'scss', 'html', 'xml', 'yaml',
+  'yml', 'toml', 'ini', 'cfg', 'conf', 'sh', 'bash', 'zsh', 'fish',
+  'sql', 'csv', 'log', 'env', 'gitignore', 'dockerfile', 'makefile',
+  'csv', 'tsv', 'rtf', 'tex', 'bib', 'r', 'R', 'swift', 'kt', 'scala',
+  'php', 'pl', 'lua', 'vim', 'el', 'clj', 'hs', 'ml', 'fs', 'ex', 'exs',
+])
+
+function isTextFile(file: File): boolean {
+  if (file.type.startsWith('text/')) return true
+  if (file.type === 'application/json' || file.type === 'application/xml') return true
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  return ext ? TEXT_EXTENSIONS.has(ext) : false
+}
+
+function isPDF(file: File): boolean {
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+}
+
+interface FileDropZoneProps {
   onImageDropped: (file: File) => void
+  onTextDropped?: (content: string, filename: string) => void
+  onPDFDropped?: (file: File) => void
   children: ReactNode
 }
 
-export function ImageDropZone({ onImageDropped, children }: ImageDropZoneProps) {
+export function ImageDropZone({ onImageDropped, onTextDropped, onPDFDropped, children }: FileDropZoneProps) {
   const [dragOver, setDragOver] = useState(false)
-  const [imageCount, setImageCount] = useState(0)
 
   useEffect(() => {
     if (!dragOver) return
@@ -39,11 +60,31 @@ export function ImageDropZone({ onImageDropped, children }: ImageDropZoneProps) 
     e.stopPropagation()
     setDragOver(false)
 
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+    const files = Array.from(e.dataTransfer.files)
     if (files.length === 0) return
-    setImageCount(files.length)
-    files.forEach(f => onImageDropped(f))
-  }, [onImageDropped])
+
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        onImageDropped(file)
+      } else if (isPDF(file) && onPDFDropped) {
+        onPDFDropped(file)
+      } else if (isTextFile(file) && onTextDropped) {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const content = reader.result as string
+          const MAX_TEXT_LENGTH = 50000
+          if (content.length > MAX_TEXT_LENGTH) {
+            onTextDropped(content.slice(0, MAX_TEXT_LENGTH), file.name)
+          } else {
+            onTextDropped(content, file.name)
+          }
+        }
+        reader.readAsText(file)
+      } else {
+        onImageDropped(file)
+      }
+    }
+  }, [onImageDropped, onTextDropped, onPDFDropped])
 
   return (
     <div
@@ -66,10 +107,12 @@ export function ImageDropZone({ onImageDropped, children }: ImageDropZoneProps) 
             'animate-in fade-in zoom-in-95 duration-200',
           )}>
             <svg className="h-8 w-8 text-primary/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
             </svg>
-            <span className="text-sm font-medium">Drop image to attach</span>
-            <span className="text-xs text-muted-foreground">Release to add image to your message</span>
+            <span className="text-sm font-medium">Drop files to attach</span>
+            <span className="text-xs text-muted-foreground">
+              Images, PDFs, text, and code files supported
+            </span>
           </div>
         </div>
       )}

@@ -111,6 +111,51 @@ class ToolRegistry:
                 requires_approval=True,
             )
         )
+        self.register(
+            ToolSpec(
+                name="file_read",
+                description="Read contents of a file",
+                parameters=[
+                    ToolParam("path", "string", "File path to read", required=True),
+                ],
+                execute=self._run_file_read,
+                pattern=re.compile(r"^(?:read|open|show|cat|view)\s+(?:file\s+)?(.+)$", re.IGNORECASE),
+            )
+        )
+        self.register(
+            ToolSpec(
+                name="knowledge_retrieval",
+                description="Search knowledge base for relevant information",
+                parameters=[
+                    ToolParam("query", "string", "What to search for in the knowledge base", required=True),
+                ],
+                execute=self._run_knowledge_retrieval,
+                pattern=re.compile(r"^(?:knowledge|recall|remember|look up in docs?)\s+(.+)$", re.IGNORECASE),
+            )
+        )
+        self.register(
+            ToolSpec(
+                name="image_analysis",
+                description="Analyze an image and describe its contents",
+                parameters=[
+                    ToolParam("image_path", "string", "Path or URL of the image to analyze", required=True),
+                ],
+                execute=self._run_image_analysis,
+                pattern=re.compile(r"^(?:analyze|describe|what's in|look at)\s+(?:image|photo|picture)\s+(.+)$", re.IGNORECASE),
+            )
+        )
+        self.register(
+            ToolSpec(
+                name="data_analysis",
+                description="Analyze a dataset and compute statistics",
+                parameters=[
+                    ToolParam("data_path", "string", "Path to the data file (CSV, JSON, JSONL)", required=True),
+                    ToolParam("operation", "string", "Analysis to perform: summary, statistics, columns, head, or a custom expression", required=False),
+                ],
+                execute=self._run_data_analysis,
+                pattern=re.compile(r"^(?:analyze|stats|summarize|describe)\s+(?:data|dataset|csv|json)\s+(.+)$", re.IGNORECASE),
+            )
+        )
 
     def register(self, spec: ToolSpec) -> None:
         self._tools[spec.name] = spec
@@ -148,6 +193,14 @@ class ToolRegistry:
                     elif name == "run_code":
                         lang = m.group(1) or "python"
                         return name, {"language": lang, "code": m.group(2).strip()}
+                    elif name == "file_read":
+                        return name, {"path": m.group(1).strip()}
+                    elif name == "knowledge_retrieval":
+                        return name, {"query": m.group(1).strip()}
+                    elif name == "image_analysis":
+                        return name, {"image_path": m.group(1).strip()}
+                    elif name == "data_analysis":
+                        return name, {"data_path": m.group(1).strip(), "operation": "summary"}
         return None
 
     async def execute(self, name: str, args: Dict[str, Any]) -> ToolResult:
@@ -244,6 +297,115 @@ class ToolRegistry:
                 os.unlink(fname)
             except Exception:
                 pass
+
+    async def _run_file_read(self, path: str) -> Dict[str, Any]:
+        """Read a file from the workspace."""
+        import os
+        try:
+            resolved = os.path.abspath(path)
+            if not os.path.exists(resolved):
+                return {"output": "", "error": f"File not found: {path}"}
+            if os.path.getsize(resolved) > 1_000_000:
+                return {"output": "", "error": "File too large (>1MB limit)"}
+            with open(resolved, "r", errors="replace") as f:
+                content = f.read()
+            return {"output": content}
+        except Exception as e:
+            return {"output": "", "error": str(e)}
+
+    async def _run_knowledge_retrieval(self, query: str) -> Dict[str, Any]:
+        """Search the knowledge base (docs/*.md, README, etc.)."""
+        import os
+        import glob
+        try:
+            workspace = os.environ.get("WORKSPACE_ROOT", ".")
+            patterns = ["docs/**/*.md", "README*", "*.md", "CHANGELOG*"]
+            files = []
+            for p in patterns:
+                files.extend(glob.glob(os.path.join(workspace, p), recursive=True))
+            matches = []
+            query_lower = query.lower()
+            for fp in files[:50]:
+                try:
+                    with open(fp, "r", errors="replace") as f:
+                        text = f.read(8192)
+                    if query_lower in text.lower():
+                        snippet = text[:500].strip()
+                        matches.append(f"**{os.path.relpath(fp, workspace)}**:\n{snippet}")
+                except Exception:
+                    continue
+            if matches:
+                return {"output": f"Found {len(matches)} relevant documents:\n\n" + "\n\n---\n\n".join(matches[:5])}
+            return {"output": f"No documents found matching '{query}'."}
+        except Exception as e:
+            return {"output": "", "error": str(e)}
+
+    async def _run_image_analysis(self, image_path: str) -> Dict[str, Any]:
+        """Analyze an image using VisionCNN — embedding, caption, and object detection."""
+        import os
+        try:
+            if not os.path.exists(image_path):
+                return {"output": "", "error": f"Image not found: {image_path}"}
+            size = os.path.getsize(image_path)
+            ext = os.path.splitext(image_path)[1].lower()
+
+            try:
+                from domains.multimodal.vision import VisionCNN
+                vision = VisionCNN()
+                caption_result = vision.caption(image_path)
+                objects = vision.detect(image_path)
+                embedding = vision.get_embedding(image_path)
+
+                lines = [
+                    f"Image: {os.path.basename(image_path)}",
+                    f"Format: {ext or 'unknown'}  |  Size: {size:,} bytes",
+                    f"Caption: {caption_result.text}",
+                    f"Confidence: {caption_result.confidence:.1%}",
+                ]
+                if caption_result.tags:
+                    lines.append(f"Tags: {', '.join(caption_result.tags)}")
+                if objects:
+                    lines.append("Objects:")
+                    for obj in objects:
+                        lines.append(f"  - {obj.label} ({obj.confidence:.1%})")
+                lines.append(f"Embedding: {len(embedding)}-dim, L2={float((embedding**2).sum()**0.5):.3f}")
+                return {"output": "\n".join(lines)}
+            except ImportError:
+                return {"output": f"Image: {os.path.basename(image_path)}\nFormat: {ext}\nSize: {size:,} bytes\n\n(Vision model not available)"}
+            except Exception as ve:
+                return {"output": f"Image: {os.path.basename(image_path)}\nFormat: {ext}\nSize: {size:,} bytes\n\nVision error: {ve}"}
+        except Exception as e:
+            return {"output": "", "error": str(e)}
+
+    async def _run_data_analysis(self, data_path: str, operation: str = "summary") -> Dict[str, Any]:
+        """Analyze a CSV/JSON/JSONL data file."""
+        import os
+        import json
+        try:
+            if not os.path.exists(data_path):
+                return {"output": "", "error": f"Data file not found: {data_path}"}
+            with open(data_path, "r", errors="replace") as f:
+                raw = f.read(500_000)
+            ext = os.path.splitext(data_path)[1].lower()
+            if ext == ".csv":
+                lines = raw.strip().split("\n")
+                headers = lines[0].split(",") if lines else []
+                return {"output": f"CSV: {len(lines)-1} rows, {len(headers)} columns\nHeaders: {', '.join(headers)}\nFirst row: {lines[1] if len(lines) > 1 else '(empty)'}"}
+            elif ext in (".json",):
+                data = json.loads(raw)
+                if isinstance(data, list):
+                    return {"output": f"JSON array: {len(data)} items\nFirst item keys: {list(data[0].keys()) if data and isinstance(data[0], dict) else '(not dict)'}"}
+                return {"output": f"JSON object: {len(data)} keys\nKeys: {', '.join(list(data.keys())[:20])}"}
+            elif ext == ".jsonl":
+                lines = raw.strip().split("\n")
+                sample = json.loads(lines[0]) if lines else {}
+                keys = list(sample.keys()) if isinstance(sample, dict) else []
+                return {"output": f"JSONL: {len(lines)} lines\nSample keys: {', '.join(keys)}\nFirst line preview: {lines[0][:300]}"}
+            else:
+                lines = raw.strip().split("\n")
+                return {"output": f"Plain text: {len(lines)} lines, {len(raw)} chars\nFirst line: {lines[0][:200] if lines else '(empty)'}"}
+        except Exception as e:
+            return {"output": "", "error": str(e)}
 
 
 _registry: Optional[ToolRegistry] = None

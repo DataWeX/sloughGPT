@@ -274,11 +274,12 @@ def test_add_card_invalid_priority_falls_back_to_medium(board_dir):
     assert card.priority == "medium"
 
 
-def test_find_one_ambiguous_prefix_returns_none(board_dir):
+def test_find_one_ambiguous_prefix_resolves_to_most_recent(board_dir):
     store = KanbanStore(board_dir=board_dir)
-    store.add_card("Alpha one")
-    store.add_card("Alpha two")
-    assert store.get_card("alpha") is None
+    first = store.add_card("Alpha one")
+    second = store.add_card("Alpha two")
+    date_prefix = first.id[:8]
+    assert store.get_card(date_prefix).id == second.id
 
 
 def test_update_card_ignores_unknown_keys(board_dir):

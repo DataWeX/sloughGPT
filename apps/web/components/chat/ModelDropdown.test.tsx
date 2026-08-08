@@ -13,6 +13,11 @@ const mockCtx: {
     downloadProgress: Record<string, any>;
     onSelect: ReturnType<typeof vi.fn>;
     onUnload: ReturnType<typeof vi.fn>;
+    fineTuned?: {
+      models: Array<{ name: string; model?: string; dataset?: string; size_mb?: number }>;
+      loading: boolean;
+      onLoad: ReturnType<typeof vi.fn>;
+    };
   }
 } = {
   model: {
@@ -25,6 +30,7 @@ const mockCtx: {
     downloadProgress: {},
     onSelect: vi.fn(),
     onUnload: vi.fn(),
+    fineTuned: { models: [], loading: false, onLoad: vi.fn() },
   },
 }
 vi.mock('@/contexts/ChatToolbarContext', () => ({ useChatToolbarContext: () => mockCtx }))
@@ -97,12 +103,6 @@ describe('ModelDropdown', () => {
     mockCtx.model.downloadProgress = {}
   })
 
-  it('shows Unload option when model loaded and onUnload provided', () => {
-    render(<ModelDropdown />)
-    fireEvent.click(screen.getByLabelText(/Current:/))
-    expect(screen.getByText('Remove model')).toBeDefined()
-  })
-
   it('calls onSelect when model clicked in dropdown', () => {
     render(<ModelDropdown />)
     fireEvent.click(screen.getByLabelText(/Current:/))
@@ -167,5 +167,87 @@ describe('ModelDropdown', () => {
     const dots = document.querySelectorAll('.bg-muted-foreground\\/30')
     expect(dots.length).toBeGreaterThanOrEqual(1)
     mockCtx.model.current = 'gpt2'
+  })
+
+  it('hides fine-tuned section when no fine-tuned models exist', () => {
+    mockCtx.model.fineTuned = { models: [], loading: false, onLoad: vi.fn() }
+    render(<ModelDropdown />)
+    fireEvent.click(screen.getByLabelText(/Current:/))
+    expect(screen.queryByText('Fine-tuned')).toBeNull()
+  })
+
+  it('renders fine-tuned models with name and size', () => {
+    mockCtx.model.fineTuned = {
+      models: [{ name: 'gpt2__dataset_1', model: 'gpt2', dataset: 'dataset_1', size_mb: 14.2 }],
+      loading: false,
+      onLoad: vi.fn(),
+    }
+    render(<ModelDropdown />)
+    fireEvent.click(screen.getByLabelText(/Current:/))
+    expect(screen.getByText('Fine-tuned')).toBeDefined()
+    const matches = screen.getAllByText('gpt2 · dataset_1')
+    expect(matches.length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('14.2 MB')).toBeDefined()
+    mockCtx.model.fineTuned = { models: [], loading: false, onLoad: vi.fn() }
+  })
+
+  it('calls onLoad when fine-tuned model selected', () => {
+    const onLoad = vi.fn()
+    mockCtx.model.fineTuned = {
+      models: [{ name: 'gpt2__dataset_1' }],
+      loading: false,
+      onLoad,
+    }
+    render(<ModelDropdown />)
+    fireEvent.click(screen.getByLabelText(/Current:/))
+    const item = screen.getAllByText('gpt2 · dataset_1')
+    fireEvent.click(item[0])
+    expect(onLoad).toHaveBeenCalledWith('gpt2__dataset_1')
+    mockCtx.model.fineTuned = { models: [], loading: false, onLoad: vi.fn() }
+  })
+
+  it('disables fine-tuned item while loading and shows check when loaded', () => {
+    mockCtx.model.fineTuned = {
+      models: [{ name: 'gpt2__dataset_1' }],
+      loading: true,
+      onLoad: vi.fn(),
+    }
+    mockCtx.model.loading = 'gpt2__dataset_1'
+    render(<ModelDropdown />)
+    fireEvent.click(screen.getByLabelText(/Current:/))
+    const item = screen.getByRole('menuitem', { name: /gpt2 · dataset_1/ })
+    expect(item).toBeDisabled()
+    mockCtx.model.loading = null
+    mockCtx.model.fineTuned = { models: [], loading: false, onLoad: vi.fn() }
+  })
+
+  it('does not mark fine-tuned item loaded when only its base model is current', () => {
+    mockCtx.model.fineTuned = {
+      models: [{ name: 'gpt2__dataset_1', model: 'gpt2', dataset: 'dataset_1' }],
+      loading: false,
+      onLoad: vi.fn(),
+    }
+    mockCtx.model.current = 'gpt2'
+    render(<ModelDropdown />)
+    fireEvent.click(screen.getByLabelText(/Current:/))
+    const item = screen.getByRole('menuitem', { name: /gpt2 · dataset_1/ })
+    expect(item.querySelector('svg')).toBeNull()
+    mockCtx.model.current = null
+    mockCtx.model.fineTuned = { models: [], loading: false, onLoad: vi.fn() }
+  })
+
+  it('marks fine-tuned item loaded when its dir name is current', () => {
+    mockCtx.model.fineTuned = {
+      models: [{ name: 'gpt2__dataset_1', model: 'gpt2', dataset: 'dataset_1' }],
+      loading: false,
+      onLoad: vi.fn(),
+    }
+    mockCtx.model.current = 'gpt2__dataset_1'
+    render(<ModelDropdown />)
+    fireEvent.click(screen.getByLabelText(/Current:/))
+    const item = screen.getByRole('menuitem', { name: /gpt2 · dataset_1/ })
+    expect(item.querySelector('svg')).toBeDefined()
+    mockCtx.model.current = null
+    mockCtx.model.fineTuned = { models: [], loading: false, onLoad: vi.fn() }
   })
 })

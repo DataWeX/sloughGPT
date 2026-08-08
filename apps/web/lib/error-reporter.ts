@@ -13,11 +13,9 @@ const BATCH_INTERVAL_MS = 5000
 const MAX_BATCH_SIZE = 10
 
 import { chatDB } from '@/lib/db'
+import { PUBLIC_API_URL } from '@/lib/config'
 
-const API_URL =
-  (typeof window !== 'undefined' && window.__NEXT_PUBLIC_API_URL) ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:8000'
+const API_URL = PUBLIC_API_URL
 
 let _logger: { warn: (msg: string, ctx?: unknown) => void } | null = null
 function getLogger() {
@@ -42,9 +40,7 @@ const EXTENSION_RE =
   /metamask|chrome-extension|moz-extension|safari-web-extension|webextension|extension.*inject|content.?script/i
 
 function isExtensionError(message: string, url?: string): boolean {
-  if (EXTENSION_RE.test(message)) return true
-  if (url && EXTENSION_RE.test(url)) return true
-  return false
+  return EXTENSION_RE.test(message) || !!(url && EXTENSION_RE.test(url))
 }
 
 let batch: ErrorReport[] = []
@@ -98,21 +94,14 @@ export function reportError(
   })
 }
 
-function handleOnError(
-  event: Event | string,
-  source?: string,
-  lineno?: number,
-  colno?: number,
-  error?: Error,
-) {
-  const message = typeof event === 'string' ? event : event.type
+function handleOnError(event: ErrorEvent) {
   push({
-    message,
+    message: event.message || event.type,
     source: 'window.onerror',
-    stack: error?.stack || null,
-    url: source || window.location.href,
-    line: lineno,
-    col: colno,
+    stack: event.error?.stack || null,
+    url: event.filename || window.location.href,
+    line: event.lineno,
+    col: event.colno,
     timestamp: new Date().toISOString(),
   })
 }
@@ -136,8 +125,8 @@ export function initErrorReporter() {
   if (initialized || typeof window === 'undefined') return
   initialized = true
 
-  window.addEventListener('error', handleOnError as any)
-  window.addEventListener('unhandledrejection', handleRejection as any)
+  window.addEventListener('error', handleOnError)
+  window.addEventListener('unhandledrejection', handleRejection)
 
   // Persist critical unhandled errors to Dexie for crash recovery
   // (hydration errors are handled separately by ErrorLifecycle)

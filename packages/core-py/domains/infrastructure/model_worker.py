@@ -8,6 +8,14 @@ Two worker backends:
   - ``_hf_worker_main``: Legacy HuggingFace/PyTorch path (deprecated)
   - ``_slo_worker_main``: SloNet pure-NumPy path (preferred)
 
+IPC protocol: every request carries a unique ``session_id`` (parent→worker
+via req_q). The worker tags each resp_q message ``(type, session_id, data)``
+so the parent can discard stale results from abandoned sessions. Worker-side
+queue writes are bounded (``_STREAM_PUT_TIMEOUT_S``) so a full pipe cannot
+block the feeder thread forever; the parent treats a silent worker as wedged
+(``WorkerStreamStalledError`` after ``_STALL_TIMEOUT_S``) so the guard can
+restart it.
+
 Architecture::
 
     API Process                Worker Process
@@ -24,6 +32,7 @@ Architecture::
     └──────────────┘
 """
 
+import itertools
 import multiprocessing as mp
 import time
 import logging
@@ -39,6 +48,30 @@ from dataclasses import dataclass, field
 logger = logging.getLogger("slo.infrastructure.model_worker")
 
 _ctx = mp.get_context("spawn")  # spawn avoids fork-safety issues with torch
+
+# Worker-side cap on a single queue write. If the parent stops draining
+# resp_q (abandoned stream) the pipe fills; a bounded put prevents the
+# worker's feeder thread from blocking forever in anon_pipe_write.
+_STREAM_PUT_TIMEOUT_S = 30.0
+
+# Parent-side: if the worker produces no message for this long mid-request,
+# treat it as wedged (stale resp_q data + blocked feeder) and restart it.
+_STALL_TIMEOUT_S = 30.0
+
+_session_ids = itertools.count(1)
+
+
+def _new_session_id() -> str:
+    """Monotonic per-request id tagging IPC messages in resp_q.
+
+    Lets the parent discard messages belonging to abandoned/other sessions
+    instead of treating stale queue data as its own response.
+    """
+    return f"req-{os.getpid()}-{next(_session_ids)}"
+
+
+class WorkerStreamStalledError(RuntimeError):
+    """Raised when a worker stops producing messages mid-request (wedge)."""
 
 
 @dataclass
@@ -66,12 +99,15 @@ def _worker_loop(
     """Shared request loop for both HF and SloNet workers.
 
     Args:
-        req_q: Request queue (commands from parent)
-        resp_q: Response queue (tokens/results to parent)
+        req_q: Request queue (commands from parent). Payloads are
+            ``(session_id, prompt, kwargs)`` triples.
+        resp_q: Response queue (tokens/results to parent). Messages are
+            ``(type, session_id, data)`` triples.
         hb_q: Heartbeat queue (health signals to parent)
         worker_id: Human-readable worker name
         generate_fn: ``fn(prompt, **kwargs) -> dict`` for non-streaming
-        stream_fn: ``fn(prompt, resp_q, **kwargs)`` for streaming (puts tokens directly)
+        stream_fn: ``fn(prompt, resp_q, session_id=..., **kwargs)`` for
+            streaming (puts tagged tokens directly)
         cleanup_fn: Optional cleanup callable on shutdown
     """
     hb_q.put_nowait(("ready", os.getpid()))
@@ -90,36 +126,41 @@ def _worker_loop(
             break
 
         if cmd == "generate":
+            session_id = None
             try:
-                prompt, kwargs = payload
+                session_id, prompt, kwargs = payload
                 result = generate_fn(prompt, **kwargs)
                 try:
-                    resp_q.put_nowait(("result", result))
+                    resp_q.put_nowait(("result", session_id, result))
                 except Exception as put_e:
                     logger.error("Worker[%s]: resp_q.put failed: %s", worker_id, put_e,
                         extra={"tag": "INFRA"})
-                    resp_q.put_nowait(("error", f"put failed: {put_e}"))
+                    try:
+                        resp_q.put_nowait(("error", session_id, f"put failed: {put_e}"))
+                    except Exception:
+                        pass
                 requests_served += 1
             except Exception as e:
                 tb = traceback.format_exc()
                 logger.error("Worker[%s]: generate error: %s\n%s", worker_id, e, tb,
                     extra={"tag": "INFRA"})
                 try:
-                    resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
+                    resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
                     pass
 
         if cmd == "generate_stream":
+            session_id = None
             try:
-                prompt, kwargs = payload
-                stream_fn(prompt, resp_q, **kwargs)
+                session_id, prompt, kwargs = payload
+                stream_fn(prompt, resp_q, session_id=session_id, **kwargs)
                 requests_served += 1
             except Exception as e:
                 tb = traceback.format_exc()
                 logger.error("Worker[%s]: stream error: %s\n%s", worker_id, e, tb,
                     extra={"tag": "INFRA"})
                 try:
-                    resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
+                    resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
                     pass
 
@@ -176,6 +217,7 @@ def _slo_worker_main(
             quant_bits=quant_bits,
             quant_mode=quant_mode,
             quant_clip=quant_clip,
+            free_quantized_originals=True,
         )
         logger.info("Worker[%s]: SloNet model loaded (%s)", worker_id, model_id,
             extra={"tag": "INFRA"})
@@ -208,6 +250,7 @@ def _slo_worker_main(
             top_p=top_p,
             repetition_penalty=repetition_penalty,
             eos_token=provider._tokenizer.eos_token_id or 0,
+            extra_stop_ids=getattr(provider._tokenizer, "chat_stop_ids", lambda: ())(),
         )
         elapsed_ms = (time.time() - start) * 1000
         generated = result[0].tolist()
@@ -226,6 +269,7 @@ def _slo_worker_main(
     def _stream(
         prompt: str,
         resp_q_inner: mp.Queue,
+        session_id: Optional[str] = None,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
         top_p: float = 0.9,
@@ -243,6 +287,7 @@ def _slo_worker_main(
             input_ids,
             max_new_tokens=max_new_tokens,
             eos_token=provider._tokenizer.eos_token_id or 0,
+            extra_stop_ids=getattr(provider._tokenizer, "chat_stop_ids", lambda: ())(),
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
@@ -251,18 +296,18 @@ def _slo_worker_main(
             decoded = provider._tokenizer.decode([tok_id])
             if decoded:
                 try:
-                    resp_q_inner.put_nowait(("token", decoded))
+                    resp_q_inner.put(("token", session_id, decoded), timeout=_STREAM_PUT_TIMEOUT_S)
                 except Exception:
                     break
                 tokens_generated += 1
 
         elapsed_ms = (time.time() - start) * 1000
         try:
-            resp_q_inner.put_nowait(("result", {
+            resp_q_inner.put(("result", session_id, {
                 "text": "",
                 "tokens_generated": tokens_generated,
                 "elapsed_ms": round(elapsed_ms, 1),
-            }))
+            }), timeout=_STREAM_PUT_TIMEOUT_S)
         except Exception:
             pass
 
@@ -369,6 +414,7 @@ def _hf_worker_main(
     def _stream(
         prompt: str,
         resp_q_inner: mp.Queue,
+        session_id: Optional[str] = None,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
         top_p: float = 0.9,
@@ -413,7 +459,7 @@ def _hf_worker_main(
         start = time.time()
         for text_chunk in streamer:
             try:
-                resp_q_inner.put_nowait(("token", text_chunk))
+                resp_q_inner.put(("token", session_id, text_chunk), timeout=_STREAM_PUT_TIMEOUT_S)
             except Exception:
                 break
             tokens_generated += 1
@@ -422,11 +468,11 @@ def _hf_worker_main(
         elapsed_ms = (time.time() - start) * 1000
 
         try:
-            resp_q_inner.put_nowait(("result", {
+            resp_q_inner.put(("result", session_id, {
                 "text": "",
                 "tokens_generated": tokens_generated,
                 "elapsed_ms": round(elapsed_ms, 1),
-            }))
+            }), timeout=_STREAM_PUT_TIMEOUT_S)
         except Exception:
             pass
 
@@ -466,6 +512,7 @@ class ModelWorkerProcess:
         self,
         worker_id: str = "worker",
         generate_timeout: float = 120.0,
+        stall_timeout: float = _STALL_TIMEOUT_S,
         extra_sys_paths: Optional[list] = None,
         # SloNet mode (preferred)
         slnc_path: Optional[str] = None,
@@ -480,6 +527,7 @@ class ModelWorkerProcess:
     ):
         self.worker_id = worker_id
         self._generate_timeout = generate_timeout
+        self._stall_timeout = stall_timeout
         self._extra_sys_paths = extra_sys_paths or []
 
         # SloNet params
@@ -695,6 +743,7 @@ class ModelWorkerProcess:
         if not self.alive:
             raise RuntimeError(f"Worker[{self.worker_id}] is not alive")
 
+        session_id = _new_session_id()
         payload = dict(
             max_new_tokens=max_new_tokens,
             temperature=temperature,
@@ -705,13 +754,14 @@ class ModelWorkerProcess:
         )
 
         try:
-            self._req_q.put_nowait(("generate", (prompt, payload)))
+            self._req_q.put_nowait(("generate", (session_id, prompt, payload)))
         except Exception as e:
             self._health.errors += 1
             raise RuntimeError(f"Failed to send request to worker: {e}")
 
         # Wait for response
         deadline = time.time() + self._generate_timeout
+        last_activity = time.time()
         while time.time() < deadline:
             # Check worker alive
             if not self.alive:
@@ -720,8 +770,23 @@ class ModelWorkerProcess:
                 raise RuntimeError(f"Worker[{self.worker_id}] crashed during generation")
 
             try:
-                msg, data = self._resp_q.get(timeout=0.2)
+                msg, *rest = self._resp_q.get(timeout=0.2)
             except queue.Empty:
+                if time.time() - last_activity > self._stall_timeout:
+                    self._health.errors += 1
+                    raise WorkerStreamStalledError(
+                        f"Worker[{self.worker_id}] stalled for {self._stall_timeout}s "
+                        f"during generation"
+                    )
+                continue
+            last_activity = time.time()
+
+            msg_session, data = self._split_resp(msg, rest)
+            if msg_session is not None and msg_session != session_id:
+                logger.warning(
+                    "Worker[%s]: discarding stale response from session %s",
+                    self.worker_id, msg_session, extra={"tag": "INFRA"},
+                )
                 continue
 
             if msg == "result":
@@ -739,6 +804,18 @@ class ModelWorkerProcess:
         raise TimeoutError(
             f"Worker[{self.worker_id}] generation timed out after {self._generate_timeout}s"
         )
+
+    @staticmethod
+    def _split_resp(msg: str, rest: list) -> tuple[Optional[str], Any]:
+        """Split a response message into ``(session_id, data)``.
+
+        Back-compat: legacy 2-tuples ``(type, data)`` yield session_id None
+        (always accepted); new 3-tuples ``(type, session_id, data)`` yield
+        the tagged session id.
+        """
+        if len(rest) == 1:
+            return None, rest[0]
+        return rest[0], rest[1]
 
     # ── Generate (streaming) ────────────────────────────────────────────
 
@@ -763,6 +840,7 @@ class ModelWorkerProcess:
         if not self.alive:
             raise RuntimeError(f"Worker[{self.worker_id}] is not alive")
 
+        session_id = _new_session_id()
         payload = dict(
             max_new_tokens=max_new_tokens,
             temperature=temperature,
@@ -773,7 +851,7 @@ class ModelWorkerProcess:
         )
 
         try:
-            self._req_q.put_nowait(("generate_stream", (prompt, payload)))
+            self._req_q.put_nowait(("generate_stream", (session_id, prompt, payload)))
         except Exception as e:
             self._health.errors += 1
             raise RuntimeError(f"Failed to send stream request to worker: {e}")
@@ -781,6 +859,7 @@ class ModelWorkerProcess:
         # Read tokens from response queue until result or error
         deadline = time.time() + self._generate_timeout
         final_result: dict = {}
+        last_activity = time.time()
 
         while time.time() < deadline:
             if not self.alive:
@@ -791,8 +870,23 @@ class ModelWorkerProcess:
                 )
 
             try:
-                msg, data = self._resp_q.get(timeout=0.2)
+                msg, *rest = self._resp_q.get(timeout=0.2)
             except queue.Empty:
+                if time.time() - last_activity > self._stall_timeout:
+                    self._health.errors += 1
+                    raise WorkerStreamStalledError(
+                        f"Worker[{self.worker_id}] stalled for {self._stall_timeout}s "
+                        f"during streaming generation"
+                    )
+                continue
+            last_activity = time.time()
+
+            msg_session, data = self._split_resp(msg, rest)
+            if msg_session is not None and msg_session != session_id:
+                logger.warning(
+                    "Worker[%s]: discarding stale response from session %s",
+                    self.worker_id, msg_session, extra={"tag": "INFRA"},
+                )
                 continue
 
             if msg == "token":

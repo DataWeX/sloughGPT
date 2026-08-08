@@ -61,7 +61,7 @@ export default function PersonalitiesCard({
                 <div className="flex items-center gap-1.5 shrink-0">
                   {soulCheckpoints.length > 0 ? (
                     <Select
-                      value={isCurrent && activeCheckpoint ? activeCheckpoint : ''}
+                      value={(isCurrent && activeCheckpoint) || ''}
                       onValueChange={(val) => {
                         if (val === '__base__') onSwitch(s.name)
                         else if (val) onSwitch(s.name, val)

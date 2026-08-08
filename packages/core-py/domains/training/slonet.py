@@ -14,7 +14,7 @@ import math
 import time
 import threading
 import numpy as np
-from typing import Optional, List, Dict, Any, Tuple, Callable
+from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence
 from pathlib import Path
 import logging
 
@@ -45,7 +45,6 @@ try:
         gqa_expand as _nb_gqa_expand,
         nb_rmsnorm as _nb_rmsnorm,
         lm_head_argmax as _nb_lm_head_argmax,
-        lm_head_argmax_int8 as _nb_lm_head_argmax_int8,
     )
     _KERNELS_AVAILABLE = True
 except ImportError:
@@ -1195,8 +1194,11 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
     if top_p is not None and top_p < 1.0:
         logits = _apply_top_p(logits, top_p)
 
-    # Fast path: greedy (temp≈0, no penalties, no top_p) → argmax
-    if temperature < 1e-6 and top_p is None:
+    # Fast path: greedy (temp≈0) → argmax of the penalized/filtered logits.
+    # top_k/top_p filtering cannot change the argmax (the max token is always
+    # within the top-k and within the nucleus), so temperature 0 is
+    # deterministic greedy even when those sampling knobs are set.
+    if temperature < 1e-6:
         return int(np.argmax(logits[0]))
 
     probs = np.exp(logits - logits.max(axis=-1, keepdims=True))
@@ -1257,6 +1259,14 @@ class SloLinear(SloLayer):
         self._quant_unpacked = None  # lazy int4→int8 unpack cache
         self._lock = threading.Lock()  # thread safety for lazy int4 unpack
         self._point_weight = None  # PointWeight: function-based weight representation
+        self._freed_shape = None  # original (out,in) shape after free_quantized_originals()
+
+    def __deepcopy__(self, memo):
+        new = self.__class__.__new__(self.__class__)
+        new.__dict__.update({k: v for k, v in self.__dict__.items() if k != '_lock'})
+        new._lock = threading.Lock()
+        memo[id(self)] = new
+        return new
 
     def _get_weight_T(self) -> Tensor:
         if self._weight_T is None:
@@ -1305,12 +1315,40 @@ class SloLinear(SloLayer):
                         from domains.infrastructure.quantization import _unpack_int4
                         signed = self._quant_info.meta.mode == "symmetric"
                         n_total = int(np.prod(self._quant_info.meta.original_shape))
-                        unpacked_1d = _unpack_int4(self._quant_info.array, n_total, signed=signed)
+                        arr = self._quant_info.array
+                        packed_flat = arr.ravel() if arr.ndim == 2 else arr
+                        unpacked_1d = _unpack_int4(packed_flat, n_total, signed=signed)
                         self._quant_unpacked = unpacked_1d.reshape(self._quant_info.meta.original_shape).astype(np.int8)
                 finally:
                     self._lock.release()
             return self._quant_unpacked
         return self._quant_info.array
+
+    def free_quantized_originals(self) -> bool:
+        """Release the float32 weight backing a quantized or point layer.
+
+        When a quantized (or Point) weight is authoritative for forward(),
+        the original float32 ``weight.data`` is only needed for training
+        gradients. For inference-only loads it can be dropped to reclaim
+        memory. The original shape is remembered so ``num_parameters()``
+        still reports the true parameter count.
+
+        Safe only when ``_quant_info`` or ``_point_weight`` is set — the
+        float32 weight is then bypassed by the forward path. Idempotent.
+
+        Returns:
+            True if the float32 weight was released, False if the layer
+            has no quantized/point weight or was already freed.
+        """
+        if self._quant_info is None and self._point_weight is None:
+            return False
+        if self._freed_shape is not None:
+            return True
+        self._freed_shape = tuple(self.weight.data.shape)
+        self.weight.data = np.zeros((1,), dtype=np.float32)
+        self._weight_T = None
+        self._weight_T_contig = None
+        return True
 
     def set_point_weight(self, point_weight):
         """Set a PointWeight for this layer.
@@ -2005,6 +2043,119 @@ def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> Tup
     return Q_out, K_out
 
 
+def _fuse_quant_weights(linears):
+    """Concatenate quantized int8 weight rows of ``linears`` into one matrix.
+
+    Merges several per-layer projections that share the same float32 input
+    into a single ``(N, K)`` int8 GEMM so one fused C call replaces several.
+    Output rows are identical to the separate calls: each output row depends
+    only on its own weight row, scale row, and bias entry, and the per-token
+    activation scale is shared because the input row is shared.
+
+    Args:
+        linears: sequence of SloLinear with quantized weights.
+
+    Returns:
+        ``(weight (N, K) int8, scale (N,) float32, bias (N,) float32 or None)``
+        or None when any linear is unquantized, input dims differ, the zero
+        points are not all zero (the fused call applies one zero point to the
+        whole output block), or the bias layout is inconsistent (some layers
+        have bias, others do not).
+    """
+    infos = [l._quant_info for l in linears]
+    if any(qi is None or not getattr(qi, "is_quantized", False) for qi in infos):
+        return None
+    zps = [qi.meta.zero_point for qi in infos]
+    if any(z != 0 for z in zps):
+        return None
+    arrs = [l._get_quant_array() for l in linears]
+    if any(a is None for a in arrs):
+        return None
+    K = arrs[0].shape[1]
+    if any(a.shape[1] != K for a in arrs):
+        return None
+    biases = []
+    for l in linears:
+        b = l.bias.data if getattr(l, "use_bias", False) else None
+        biases.append(None if b is None else np.ascontiguousarray(b, dtype=np.float32))
+    if any(b is not None for b in biases) and any(b is None for b in biases):
+        return None
+    fused_bias = np.concatenate(biases) if biases[0] is not None else None
+    scales = []
+    for a, l in zip(arrs, linears):
+        sc = l._quant_info.meta.scale
+        if np.isscalar(sc):
+            scales.append(np.full(a.shape[0], sc, dtype=np.float32))
+        else:
+            s = np.asarray(sc, dtype=np.float32).ravel()
+            if s.shape[0] != a.shape[0]:
+                return None
+            scales.append(s)
+    W = np.concatenate(arrs, axis=0)
+    S = np.concatenate(scales)
+    return W, S, fused_bias
+
+
+def _fuse_quant_weights_int4(linears):
+    """Concatenate packed int4 weight rows of ``linears`` into one packed matrix.
+
+    Same contract as ``_fuse_quant_weights`` but keeps the weights packed
+    (two int4 values per byte) so the packed int4 GEMM and its ~8x memory
+    compression survive the fused path. The packed matrix rows are laid out
+    in the same order as the inputs (``[w_q;w_k;w_v]`` / ``[w1;w3]``).
+
+    Fusing is valid only when every linear is int4-quantized with the same
+    zero point and even input dims (packed row boundaries). Returns None
+    otherwise so callers fall back to the int8 fused path or the per-layer
+    path.
+
+    Args:
+        linears: sequence of SloLinear with packed int4 quantized weights.
+
+    Returns:
+        ``(weight (N, K//2) int8, scale (N,) float32, zero_point int,
+        bias (N,) float32 or None)`` or None when any linear is not int4,
+        the zero points differ, an input dim is odd, or the bias layout is
+        inconsistent (some layers have bias, others do not).
+    """
+    infos = [l._quant_info for l in linears]
+    if any(qi is None or not getattr(qi, "is_quantized", False) for qi in infos):
+        return None
+    if any(qi.meta.bits != 4 for qi in infos):
+        return None
+    zps = [qi.meta.zero_point for qi in infos]
+    if any(z != zps[0] for z in zps):
+        return None
+    from domains.infrastructure.quantization import _ensure_2d_packed
+    K = infos[0].meta.original_shape[-1]
+    if K % 2 != 0:
+        return None
+    arrs = [_ensure_2d_packed(qi.array, K) for qi in infos]
+    if any(a.shape[1] != K // 2 for a in arrs):
+        return None
+    biases = []
+    for l in linears:
+        b = l.bias.data if getattr(l, "use_bias", False) else None
+        biases.append(None if b is None else np.ascontiguousarray(b, dtype=np.float32))
+    if any(b is not None for b in biases) and any(b is None for b in biases):
+        return None
+    fused_bias = np.concatenate(biases) if biases[0] is not None else None
+    scales = []
+    for qi in infos:
+        sc = qi.meta.scale
+        n_rows = qi.meta.original_shape[0]
+        if np.isscalar(sc):
+            scales.append(np.full(n_rows, sc, dtype=np.float32))
+        else:
+            s = np.asarray(sc, dtype=np.float32).ravel()
+            if s.shape[0] != n_rows:
+                return None
+            scales.append(s)
+    W = np.concatenate(arrs, axis=0).astype(np.int8, copy=False)
+    S = np.concatenate(scales)
+    return W, S, int(zps[0]), fused_bias
+
+
 class SloMultiHeadAttention(SloLayer):
     def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
                  use_rope: bool = False, max_seq_len: int = 2048, rope_base: float = 10000.0, name="", _lazy=False):
@@ -2120,9 +2271,18 @@ class SloMultiHeadAttention(SloLayer):
                       start_pos: int = 0) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         B, N, C = q.shape
         H, E, K_H = self.n_heads, self.head_dim, self.n_kv_head
-        Q_r = self.W_q.forward_numpy(q).reshape(B, N, H, E)
-        K_r = self.W_k.forward_numpy(k).reshape(B, N, K_H, E)
-        V_r = self.W_v.forward_numpy(v).reshape(B, N, K_H, E)
+        fused = self._fused_qkv()
+        if fused is not None and q is k and k is v:
+            from domains.infrastructure.quantization import quantized_linear
+            W, S, B_f, qd, kd = fused
+            qkv = quantized_linear(q, W, S, 0, B_f)  # (B, N, qd + 2*kd)
+            Q_r = qkv[..., :qd].reshape(B, N, H, E)
+            K_r = qkv[..., qd:qd + kd].reshape(B, N, K_H, E)
+            V_r = qkv[..., qd + kd:].reshape(B, N, K_H, E)
+        else:
+            Q_r = self.W_q.forward_numpy(q).reshape(B, N, H, E)
+            K_r = self.W_k.forward_numpy(k).reshape(B, N, K_H, E)
+            V_r = self.W_v.forward_numpy(v).reshape(B, N, K_H, E)
         if self.use_rope:
             cos, sin = self.rope.forward(N, start_pos)
             cos_a, sin_a = cos.reshape(1, N, 1, E), sin.reshape(1, N, 1, E)
@@ -2212,6 +2372,31 @@ class SloMultiHeadAttention(SloLayer):
         if self.use_rope:
             ps += self.rope.parameters()
         return ps
+
+    def _fused_qkv(self):
+        """Cached fused ``[W_q; W_k; W_v]`` quantized weight pack, or None.
+
+        Returns ``(weight (N, C) int8, scale (N,) float32, bias (N,) or None,
+        q_out, k_out)`` built from the three projections when all are
+        quantized and share the same activation input (q is k is v in
+        forward_numpy). The pack is rebuilt automatically if any of the three
+        projections is re-quantized (quant_info identity changes).
+        """
+        qis = (self.W_q._quant_info, self.W_k._quant_info, self.W_v._quant_info)
+        cached = getattr(self, "_fused_qkv_work", None)
+        if cached is not None and cached[0] == qis:
+            return cached[1]
+        fused = _fuse_quant_weights((self.W_q, self.W_k, self.W_v))
+        pack = None
+        if fused is not None:
+            W, S, B = fused
+            qd = self.W_q.out_features
+            kd = self.W_k.out_features
+            if W.shape[0] == qd + 2 * kd:
+                pack = (W, S, B, qd, kd)
+        self._fused_qkv_work = (qis, pack)
+        return pack
+
 
 
 class SloCrossAttention(SloLayer):
@@ -2314,7 +2499,38 @@ class SloFeedForward(SloLayer):
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5}
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
+        fused = self._fused_gate_up()
+        if fused is not None:
+            from domains.infrastructure.quantization import quantized_linear
+            W, S, B, mid = fused
+            gu = quantized_linear(x, W, S, 0, B)  # (..., mid + mid)
+            g = gu[..., :mid]
+            u = gu[..., mid:]
+            return self.w2.forward_numpy(self.act_np(g) * u)
         return self.w2.forward_numpy(self.act_np(self.w1.forward_numpy(x)) * self.w3.forward_numpy(x))
+
+    def _fused_gate_up(self):
+        """Cached fused ``[w1; w3]`` quantized weight pack, or None.
+
+        Returns ``(weight (2*dim_ff, C) int8, scale (2*dim_ff,) float32,
+        bias or None, dim_ff)``. The two gated-FFN branches share the input
+        activation so one fused GEMM replaces the separate gate/up calls;
+        each output row is bit-identical to the unfused path. Rebuilt when
+        either projection is re-quantized.
+        """
+        qis = (self.w1._quant_info, self.w3._quant_info)
+        cached = getattr(self, "_fused_gate_up_work", None)
+        if cached is not None and cached[0] == qis:
+            return cached[1]
+        fused = _fuse_quant_weights((self.w1, self.w3))
+        pack = None
+        if fused is not None:
+            W, S, B = fused
+            mid = self.w1.out_features
+            if W.shape[0] == 2 * mid:
+                pack = (W, S, B, mid)
+        self._fused_gate_up_work = (qis, pack)
+        return pack
 
     def forward(self, x: Tensor) -> Tensor:
         return self.w2.forward(self.act(self.w1.forward(x)) * self.w3.forward(x))
@@ -2723,7 +2939,7 @@ class SloNet:
         adapter = SloAdapterLayer(dim=dim, rank=rank, name=f"adapter_{user_id}")
         try:
             from pathlib import Path
-            path = Path("data/user_adapters") / f"{user_id}_adapter.npz"
+            path = Path(__file__).resolve().parents[4] / "data" / "user_adapters" / f"{user_id}_adapter.npz"
             if path.exists():
                 data = np.load(str(path))
                 if "down_weight" in data and "up_weight" in data:
@@ -3548,6 +3764,59 @@ def train_char_lstm_from_gpt(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8
 # SOUL TRANSFORMER — Native SloNet Decoder-Only Causal LM
 # =============================================================================
 
+class NumpyKVState:
+    """Persistent KV cache state for cross-turn generation.
+
+    Created via ``SloTransformer.new_kv_state()`` and passed to
+    ``generate_numpy`` / ``generate_numpy_stream`` through the ``kv_state``
+    argument. The cache and the last output survive across calls, so a new
+    turn whose token prefix equals the previous output only recomputes the
+    appended suffix (start_pos resume) instead of the whole prompt.
+
+    The object is mutated in place by generation calls: buffers are grown when
+    needed and ``prev_ids`` / ``kv_len`` are updated on completion. Callers
+    never construct buffers themselves; ``reset()`` drops all cached state.
+
+    Attributes:
+        kv_buf_k / kv_buf_v: per-block K/V buffers (``(1, capacity, nkv, E)``).
+        kv_scale_k / kv_scale_v: per-block int8 scales (None when float32).
+        kv_len: per-block current fill length.
+        prev_ids: ``(1, L)`` ids of the last completed output, or None when
+            the state is empty or was invalidated (e.g. an abandoned stream).
+        quantize_kv: quantize mode of the cached buffers.
+        capacity: length of the allocated buffers.
+    """
+
+    __slots__ = ("kv_buf_k", "kv_buf_v", "kv_scale_k", "kv_scale_v",
+                 "kv_len", "prev_ids", "quantize_kv", "capacity")
+
+    def __init__(self):
+        self.kv_buf_k = []
+        self.kv_buf_v = []
+        self.kv_scale_k = []
+        self.kv_scale_v = []
+        self.kv_len = []
+        self.prev_ids = None
+        self.quantize_kv = False
+        self.capacity = 0
+
+    def reset(self) -> None:
+        """Drop all cached KV buffers, scales, and the last output."""
+        self.kv_buf_k = []
+        self.kv_buf_v = []
+        self.kv_scale_k = []
+        self.kv_scale_v = []
+        self.kv_len = []
+        self.prev_ids = None
+        self.quantize_kv = False
+        self.capacity = 0
+
+    def __repr__(self) -> str:
+        filled = self.kv_len[0] if self.kv_len else 0
+        return (f"NumpyKVState(capacity={self.capacity}, filled={filled}, "
+                f"quantize_kv={self.quantize_kv}, valid={self.prev_ids is not None})")
+
+
 class SloTransformer(SloNet):
     """Native SloNet decoder-only Transformer: embedding → blocks → norm → lm_head.
 
@@ -3642,6 +3911,40 @@ class SloTransformer(SloNet):
             if isinstance(l, SloTransformerBlock):
                 blocks.append(l)
         return blocks
+
+    def free_quantized_originals(self) -> int:
+        """Free the float32 weight originals of all quantized/point layers.
+
+        Delegates to ``SloLinear.free_quantized_originals()`` on every
+        linear layer found by ``walk_slo_linears``. Plain float32 layers
+        are untouched. Intended for inference-only loads where the
+        original float32 weights are not needed for training gradients.
+
+        Returns:
+            Number of layers whose float32 weights were released.
+        """
+        from domains.infrastructure.quantization import walk_slo_linears
+        freed = 0
+        for lin in walk_slo_linears(self).values():
+            if lin.free_quantized_originals():
+                freed += 1
+        return freed
+
+    def num_parameters(self) -> int:
+        """Return the total parameter count, accounting for freed weights.
+
+        Freed linear weights keep only a (1,) stub so the base
+        ``SloNet.num_parameters()`` undercounts them; this override adds
+        back the released element count from each layer's
+        ``_freed_shape``.
+        """
+        total = sum(p.data.size for p in self.parameters())
+        from domains.infrastructure.quantization import walk_slo_linears
+        for lin in walk_slo_linears(self).values():
+            shape = getattr(lin, "_freed_shape", None)
+            if shape is not None:
+                total += int(np.prod(shape)) - 1
+        return total
 
     @property
     def norm(self) -> SloRMSNorm:
@@ -3741,6 +4044,7 @@ class SloTransformer(SloNet):
         top_k: Optional[int] = None,
         top_p: Optional[float] = None,
         eos_token: Optional[int] = None,
+        extra_stop_ids: Optional[Sequence[int]] = None,
         repetition_penalty: float = 1.0,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
@@ -3759,6 +4063,9 @@ class SloTransformer(SloNet):
         prompt_len = tokens.shape[1]
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
+        _stop_ids = {eos_token} if eos_token is not None else set()
+        if extra_stop_ids:
+            _stop_ids.update(extra_stop_ids)
         for step in range(max_gen):
             if step == 0:
                 idx = tokens[:, -self.block_size:]
@@ -3795,10 +4102,116 @@ class SloTransformer(SloNet):
                 generated_ids=generated,
             )
             tokens = np.concatenate([tokens, np.array([[next_id]], dtype=np.int64)], axis=1)
-            if next_id == eos_token:
+            if next_id in _stop_ids:
                 break
         self.clear_kv_cache()
         return Tensor(tokens)
+
+    def _alloc_kv_cache(self, n_blocks: int, total_len: int, nkv: List[int],
+                        head_dim: int, quantized: bool):
+        """Pre-allocate KV cache buffers for the numpy generation paths.
+
+        Args:
+            n_blocks: number of transformer blocks.
+            total_len: maximum cache length (prompt + generated tokens).
+            nkv: per-block number of KV heads.
+            head_dim: per-head dimension E.
+            quantized: when True the K/V buffers are int8 with per-token-head
+                float32 scale buffers (4x less memory than float32); when
+                False they are plain float32.
+
+        Returns:
+            Tuple of ``(kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len)``
+            where the scale buffers are ``None`` when ``quantized`` is False
+            and ``kv_len`` is a list of per-block fill lengths (all zero).
+        """
+        dtype = np.int8 if quantized else np.float32
+        kv_buf_k = [np.zeros((1, total_len, nkv[i], head_dim), dtype=dtype) for i in range(n_blocks)]
+        kv_buf_v = [np.zeros((1, total_len, nkv[i], head_dim), dtype=dtype) for i in range(n_blocks)]
+        if quantized:
+            kv_scale_k = [np.zeros((1, total_len, nkv[i], 1), dtype=np.float32) for i in range(n_blocks)]
+            kv_scale_v = [np.zeros((1, total_len, nkv[i], 1), dtype=np.float32) for i in range(n_blocks)]
+        else:
+            kv_scale_k = [None] * n_blocks
+            kv_scale_v = [None] * n_blocks
+        return kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, [0] * n_blocks
+
+    def new_kv_state(self) -> NumpyKVState:
+        """Create an empty persistent KV cache state for cross-turn generation.
+
+        Returns:
+            A fresh ``NumpyKVState`` that can be passed as ``kv_state`` to
+            ``generate_numpy`` / ``generate_numpy_stream`` and reused across
+            calls. The same state object must not be shared across threads.
+        """
+        return NumpyKVState()
+
+    def _resolve_kv_state(self, state, n_blocks: int, total_len: int,
+                          nkv: List[int], head_dim: int, use_kvq: bool,
+                          input_ids: np.ndarray, prompt_len: int):
+        """Bind KV buffers for one generation call, resuming a cached prefix.
+
+        When ``state`` holds a completed output whose token prefix matches the
+        start of ``input_ids``, the cached K/V for that shared prefix is kept
+        and only the appended suffix is recomputed (``start`` = prefix length).
+        The buffers are grown in place when ``total_len`` exceeds the current
+        capacity; the prefix data is preserved on growth.
+
+        Falls back to a fresh allocation (``start`` = 0) when the state is
+        missing, invalid, empty, quantize mode differs from ``use_kvq``, the
+        model dims changed, or the input shares no usable prefix.
+
+        Side effects:
+            - Mutates ``state`` in place (buffers, scales, kv_len, capacity,
+              quantize_kv). ``prev_ids`` is left untouched here; generation
+              methods update it on completion.
+        """
+        if state is not None and state.prev_ids is not None and \
+                state.quantize_kv == use_kvq and \
+                len(state.kv_buf_k) == n_blocks and \
+                state.kv_buf_k[0].shape[-1] == head_dim:
+            prev = state.prev_ids.reshape(1, -1)
+            lim = min(prev.shape[1], prompt_len)
+            s = 0
+            while s < lim and int(prev[0, s]) == int(input_ids[0, s]):
+                s += 1
+            # The last generated token is never cached (KV not computed for
+            # it), so cap start at the actual cache fill length.
+            cache_filled = state.kv_len[0] if state.kv_len else 0
+            s = min(s, cache_filled)
+            if 0 < s < prompt_len:
+                start = s
+            else:
+                start = 0
+        else:
+            start = 0
+
+        if start == 0:
+            kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len = \
+                self._alloc_kv_cache(n_blocks, total_len, nkv, head_dim, use_kvq)
+            if state is not None:
+                state.kv_buf_k = kv_buf_k
+                state.kv_buf_v = kv_buf_v
+                state.kv_scale_k = kv_scale_k
+                state.kv_scale_v = kv_scale_v
+                state.kv_len = kv_len
+                state.capacity = total_len
+                state.quantize_kv = use_kvq
+            return kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len, start
+
+        # Resume: reuse cached buffers, growing capacity when required.
+        if state.capacity < total_len:
+            cap = total_len
+            pad = ((0, 0), (0, cap - start), (0, 0), (0, 0))
+            state.kv_buf_k = [np.pad(b[:, :start], pad) for b in state.kv_buf_k]
+            state.kv_buf_v = [np.pad(b[:, :start], pad) for b in state.kv_buf_v]
+            if use_kvq:
+                state.kv_scale_k = [np.pad(b[:, :start], pad) for b in state.kv_scale_k]
+                state.kv_scale_v = [np.pad(b[:, :start], pad) for b in state.kv_scale_v]
+            state.capacity = cap
+        state.kv_len = [start] * n_blocks
+        return (state.kv_buf_k, state.kv_buf_v, state.kv_scale_k,
+                state.kv_scale_v, state.kv_len, start)
 
     def generate_numpy(
         self,
@@ -3809,6 +4222,9 @@ class SloTransformer(SloNet):
         top_p: Optional[float] = None,
         repetition_penalty: float = 1.0,
         eos_token: Optional[int] = None,
+        extra_stop_ids: Optional[Sequence[int]] = None,
+        quantize_kv: Optional[bool] = None,
+        kv_state: Optional[NumpyKVState] = None,
     ) -> np.ndarray:
         """Fully inlined numpy generation — maximum inference speed.
 
@@ -3824,6 +4240,32 @@ class SloTransformer(SloNet):
         - Flat tuple indexing (eliminates dict hash lookups in hot loop)
         - Pre-allocated scratch buffers (avoids per-step allocation)
         - Inlined greedy sampling (avoids function call + logits copy)
+        - int8 KV cache (quantize_kv=True): K/V stored as int8 with per-token
+          head scales — 4x less KV cache memory, dequantized on read.
+
+        Args:
+            input_ids: (1, seq_len) token ids.
+            max_new_tokens: Number of new tokens to generate.
+            temperature: Sampling temperature. <1e-6 selects greedy argmax.
+            top_k: If set, restrict sampling to the top-k highest logits.
+            top_p: If set, nucleus sampling — smallest set of logits whose
+                cumulative probability exceeds top_p.
+            repetition_penalty: Penalty > 1.0 applied to already-generated ids.
+            eos_token: Stop when this token is produced.
+            extra_stop_ids: Additional token ids that also stop generation.
+            quantize_kv: When True the KV cache is stored as int8 with
+                per-token-head scales (4x memory reduction). When None it
+                auto-enables for quantized models; when False it is float32.
+            kv_state: Optional persistent KV state (from ``new_kv_state()``).
+                When the state holds a completed output that is a strict
+                prefix of ``input_ids``, the cached K/V for that prefix is
+                reused and only the appended tokens are computed. The state
+                object is updated in place (buffers grown as needed, the
+                latest output stored) and may be passed to the next call.
+                Pass a fresh state to start a new conversation.
+
+        Returns:
+            (1, prompt_len + generated) token id array.
         """
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
@@ -3837,6 +4279,10 @@ class SloTransformer(SloNet):
         _use_kernels = _KERNELS_AVAILABLE
         _is_greedy = temperature < 1e-6 and top_p is None and repetition_penalty == 1.0
 
+        _stop_ids = {eos_token} if eos_token is not None else set()
+        if extra_stop_ids:
+            _stop_ids.update(extra_stop_ids)
+
         # Detect quantization — if any SloLinear has _quant_info, use quantized path.
         _is_quantized = False
         for l in self.layers[1:-2]:
@@ -3844,6 +4290,13 @@ class SloTransformer(SloNet):
                 if getattr(l.attn.W_q, '_quant_info', None) is not None:
                     _is_quantized = True
                     break
+
+        # int8 KV cache: auto-enabled for quantized models, forceable either way.
+        _use_kvq = _is_quantized if quantize_kv is None else bool(quantize_kv)
+        if _use_kvq:
+            from domains.infrastructure.quantization import (
+                quantize_kv_tensor as _qkv_t, dequantize_kv_tensor as _dqkv_t,
+            )
 
         # Flatten block weights into parallel lists — eliminates dict hash lookups.
         # Each block is indexed by integer; inner loop uses direct list indexing.
@@ -3898,6 +4351,38 @@ class SloTransformer(SloNet):
                     m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
         n_blocks = len(m_wqkv)
+        # Fused quantized packs: [w_q;w_k;w_v] and [w1;w3] shared-input GEMMs.
+        # Prefer the packed int4 fusion — it keeps int4 weights packed (no
+        # unpack cache, no memory loss). The int8 fusion is only built when
+        # the int4 fusion is unavailable for that block (odd input dim,
+        # differing zero points, or an int8 layer), because building it would
+        # force int4 layers through ``_get_quant_array`` and unpack them.
+        _ql = None
+        _ql4 = None
+        f_qkv = []
+        f_ff = []
+        f_qkv4 = []
+        f_ff4 = []
+        if _is_quantized:
+            from domains.infrastructure.quantization import (
+                quantized_linear as _ql, int4_quantized_linear as _ql4,
+            )
+            for _fb in self.layers[1:-2]:
+                if isinstance(_fb, SloTransformerBlock):
+                    _fq4 = _fuse_quant_weights_int4((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v))
+                    _ff4 = _fuse_quant_weights_int4((_fb.ff.w1, _fb.ff.w3))
+                    f_qkv4.append(_fq4)
+                    f_ff4.append(_ff4)
+                    f_qkv.append(None if _fq4 is not None else _fuse_quant_weights((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v)))
+                    f_ff.append(None if _ff4 is not None else _fuse_quant_weights((_fb.ff.w1, _fb.ff.w3)))
+                else:
+                    f_qkv.append(None); f_ff.append(None)
+                    f_qkv4.append(None); f_ff4.append(None)
+        else:
+            f_qkv = [None] * n_blocks
+            f_ff = [None] * n_blocks
+            f_qkv4 = [None] * n_blocks
+            f_ff4 = [None] * n_blocks
         tok_emb_w = self.layers[0].weight.data
         pos_emb_w = self.pos_emb.weight.data if self.pos_emb is not None else None
         pos_emb_n = self.pos_emb.num_embeddings if self.pos_emb is not None else 0
@@ -3935,10 +4420,12 @@ class SloTransformer(SloNet):
         _he = H * E
         _khe = K_H * E
 
-        # Pre-allocate KV cache
-        kv_buf_k = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
-        kv_buf_v = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
-        kv_len = [0] * n_blocks
+        # Pre-allocate KV cache (int8 + per-token-head scales when _use_kvq).
+        # Cross-turn reuse: resume from a cached prefix when kv_state matches.
+        kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len, _start_pos = \
+            self._resolve_kv_state(kv_state, n_blocks, total_len, _nkv, E,
+                                   _use_kvq, input_ids, prompt_len)
+        _prefill = prompt_len - _start_pos
 
         # RoPE — detect and pre-compute cos/sin cache
         _use_rope = False
@@ -3964,9 +4451,11 @@ class SloTransformer(SloNet):
 
         for step in range(max_gen):
             if step == 0:
-                idx = out_buf[:, :prompt_len]
-                pos = 0
-                seq_len = prompt_len
+                # First step: only the new suffix is recomputed; the shared
+                # prefix (0.._start_pos) comes from the persisted KV cache.
+                idx = out_buf[:, _start_pos:_start_pos + _prefill]
+                pos = _start_pos
+                seq_len = _prefill
             else:
                 idx = out_buf[:, step + prompt_len - 1:step + prompt_len]
                 pos = step + prompt_len - 1
@@ -4003,12 +4492,25 @@ class SloTransformer(SloNet):
 
                 # QKV projection
                 if _is_quantized:
-                    q = q_wq[bi].forward_numpy(h)
-                    k = q_wk[bi].forward_numpy(h)
-                    v = q_wv[bi].forward_numpy(h)
-                    q = q.reshape(1, seq_len, H, E)
-                    k = k.reshape(1, seq_len, K_H, E)
-                    v = v.reshape(1, seq_len, K_H, E)
+                    if f_qkv4[bi] is not None:
+                        Wp, Sp, zp, Bp = f_qkv4[bi]
+                        qkv = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, he + 2*khe)
+                        q = qkv[..., :_he].reshape(1, seq_len, H, E)
+                        k = qkv[..., _he:_he + _khe].reshape(1, seq_len, K_H, E)
+                        v = qkv[..., _he + _khe:].reshape(1, seq_len, K_H, E)
+                    elif f_qkv[bi] is not None:
+                        Wq, Sq, Bq = f_qkv[bi]
+                        qkv = _ql(h, Wq, Sq, 0, Bq)  # (1, seq_len, he + 2*khe)
+                        q = qkv[..., :_he].reshape(1, seq_len, H, E)
+                        k = qkv[..., _he:_he + _khe].reshape(1, seq_len, K_H, E)
+                        v = qkv[..., _he + _khe:].reshape(1, seq_len, K_H, E)
+                    else:
+                        q = q_wq[bi].forward_numpy(h)
+                        k = q_wk[bi].forward_numpy(h)
+                        v = q_wv[bi].forward_numpy(h)
+                        q = q.reshape(1, seq_len, H, E)
+                        k = k.reshape(1, seq_len, K_H, E)
+                        v = v.reshape(1, seq_len, K_H, E)
                 else:
                     qkv = h @ m_wqkv[bi]
                     if _use_bias_bqkv:
@@ -4026,11 +4528,22 @@ class SloTransformer(SloNet):
 
                 # KV cache
                 new_len = kv_len[bi] + seq_len
-                kv_buf_k[bi][:, kv_len[bi]:new_len] = k
-                kv_buf_v[bi][:, kv_len[bi]:new_len] = v
-                kv_len[bi] = new_len
-                k = kv_buf_k[bi][:, :new_len]
-                v = kv_buf_v[bi][:, :new_len]
+                if _use_kvq:
+                    _qk, _sk = _qkv_t(k)
+                    _qv, _sv = _qkv_t(v)
+                    kv_buf_k[bi][:, kv_len[bi]:new_len] = _qk
+                    kv_buf_v[bi][:, kv_len[bi]:new_len] = _qv
+                    kv_scale_k[bi][:, kv_len[bi]:new_len] = _sk
+                    kv_scale_v[bi][:, kv_len[bi]:new_len] = _sv
+                    kv_len[bi] = new_len
+                    k = _dqkv_t(kv_buf_k[bi][:, :new_len], kv_scale_k[bi][:, :new_len])
+                    v = _dqkv_t(kv_buf_v[bi][:, :new_len], kv_scale_v[bi][:, :new_len])
+                else:
+                    kv_buf_k[bi][:, kv_len[bi]:new_len] = k
+                    kv_buf_v[bi][:, kv_len[bi]:new_len] = v
+                    kv_len[bi] = new_len
+                    k = kv_buf_k[bi][:, :new_len]
+                    v = kv_buf_v[bi][:, :new_len]
 
                 if _use_gqa:
                     if _use_kernels:
@@ -4046,11 +4559,21 @@ class SloTransformer(SloNet):
                     k = k.transpose(0, 2, 1, 3)
                     v = v.transpose(0, 2, 1, 3)
 
+                # einsum needs (1, new_len, H, E) but the kernel paths above
+                # produced (1, H, new_len, E).  Transpose back when we are
+                # actually going to use einsum (not the fused kernels).
+                _use_einsum = not (step > 0 and _use_kernels) and not (
+                    step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0
+                )
+                if _use_einsum and k.ndim == 4 and k.shape[1] == H:
+                    k = k.transpose(0, 2, 1, 3)
+                    v = v.transpose(0, 2, 1, 3)
+
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
                     _ao_flat = _nb_fused_attention_single(q[0, 0], k[0], v[0], scale, H, E)
                     ao = _ao_flat.reshape(1, 1, _he)
-                elif step == 0 and seq_len > 1 and _use_kernels:
+                elif step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0:
                     _q = q.reshape(seq_len, H, E)
                     _ao = _nb_fused_attention_multi(_q, k[0], v[0], scale, H, E)
                     ao = _ao.reshape(1, seq_len, _he)
@@ -4058,6 +4581,12 @@ class SloTransformer(SloNet):
                     scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
                     if step == 0 and seq_len > 1:
                         _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
+                        if _start_pos > 0:
+                            # Cross-turn resume: query i (global _start_pos + i)
+                            # may attend to cache position j <= _start_pos + i.
+                            _rows = np.arange(seq_len, dtype=np.int64)[:, None]
+                            _cols = np.arange(new_len, dtype=np.int64)[None, :]
+                            _cm = np.where(_cols <= _rows + _start_pos, np.float32(0.0), _cm)
                         scores = scores + _cm
                     attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
                     attn = attn / attn.sum(axis=-1, keepdims=True)
@@ -4093,12 +4622,31 @@ class SloTransformer(SloNet):
 
                 # FFN
                 if _is_quantized:
-                    h1 = q_w1[bi].forward_numpy(h)
-                    h3 = q_w3[bi].forward_numpy(h)
-                    if _use_kernels:
-                        h = _nb_swi_glu_mul(h1, h3)
+                    if f_ff4[bi] is not None:
+                        Wp, Sp, zp, Bp = f_ff4[bi]
+                        h13 = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, 2*ff_dim)
+                        if _use_kernels:
+                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                        else:
+                            h1 = h13[..., :_ff_dim]
+                            h3 = h13[..., _ff_dim:]
+                            h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
+                    elif f_ff[bi] is not None:
+                        Wf, Sf, Bf = f_ff[bi]
+                        h13 = _ql(h, Wf, Sf, 0, Bf)  # (1, seq_len, 2*ff_dim)
+                        if _use_kernels:
+                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                        else:
+                            h1 = h13[..., :_ff_dim]
+                            h3 = h13[..., _ff_dim:]
+                            h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     else:
-                        h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
+                        h1 = q_w1[bi].forward_numpy(h)
+                        h3 = q_w3[bi].forward_numpy(h)
+                        if _use_kernels:
+                            h = _nb_swi_glu_mul(h1, h3)
+                        else:
+                            h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
                 else:
                     h13 = h @ m_w13[bi]
@@ -4131,40 +4679,39 @@ class SloTransformer(SloNet):
                     rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + norm_eps)
                     x = x * (norm_w / rms)
 
-            # LM head — use fused argmax kernel for greedy decoding
-            if _is_greedy and _use_kernels:
-                qi = lm_head_mod._quant_info if _is_quantized else None
-                if qi is not None and qi.is_quantized and qi.meta.bits == 8 and not qi.meta.is_per_channel:
-                    next_id = _nb_lm_head_argmax_int8(
-                        x[:, -1, :], qi.array,
-                        np.float32(qi.meta.scale),
-                        np.int32(qi.meta.zero_point),
-                    )
-                elif _is_quantized:
-                    logits = lm_head_mod.forward_numpy(x[:, -1, :])
-                    next_id = int(np.argmax(logits[0]))
-                else:
-                    next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
+            # LM head — AVX2 int8 GEMM + argmax for greedy decoding. The int8
+            # matmul path (forward_numpy) is 18x faster than the numpy-dequant
+            # fused-argmax kernel when numba is unavailable, and it applies the
+            # correct per-row scale for both per-tensor and per-channel weights.
+            if _is_quantized:
+                logits = lm_head_mod.forward_numpy(x[:, -1, :])
+                next_id = int(np.argmax(logits[0]))
+            elif _use_kernels:
+                next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
             else:
+                logits = x[:, -1, :] @ lm_w_T
+                next_id = int(np.argmax(logits[0]))
+
+            # Non-greedy sampling
+            if not _is_greedy:
                 if _is_quantized:
                     logits = lm_head_mod.forward_numpy(x[:, -1, :])
                 else:
                     logits = x[:, -1, :] @ lm_w_T
-
-                # Greedy sampling
-                if _is_greedy:
-                    next_id = int(np.argmax(logits[0]))
-                else:
-                    next_id = _sample_from_logits(
+                next_id = _sample_from_logits(
                         logits, temperature=temperature,
                         top_k=top_k, top_p=top_p,
                         repetition_penalty=repetition_penalty,
                         generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
                     )
             out_buf[0, prompt_len + step] = next_id
-            if next_id == eos_token:
+            if next_id in _stop_ids:
+                if kv_state is not None:
+                    kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
                 return out_buf[:, :prompt_len + step + 1]
 
+        if kv_state is not None:
+            kv_state.prev_ids = out_buf.copy()
         return out_buf
 
     def generate_numpy_stream(
@@ -4172,10 +4719,13 @@ class SloTransformer(SloNet):
         input_ids,
         max_new_tokens=50,
         eos_token=None,
+        extra_stop_ids: Optional[Sequence[int]] = None,
         temperature: float = 1.0,
         top_k: Optional[int] = None,
         top_p: Optional[float] = None,
         repetition_penalty: float = 1.0,
+        quantize_kv: Optional[bool] = None,
+        kv_state: Optional[NumpyKVState] = None,
     ):
         """Generator version of generate_numpy — yields token ids one at a time.
 
@@ -4186,10 +4736,22 @@ class SloTransformer(SloNet):
             input_ids: (1, seq_len) token ids.
             max_new_tokens: Number of new tokens to generate.
             eos_token: Stop when this token is produced.
+            extra_stop_ids: Additional token ids that also stop generation
+                (e.g. chat-template turn-end markers).
             temperature: Sampling temperature (>0). Low = greedy, high = random.
             top_k: Keep only top-k logits before sampling.
             top_p: Nucleus threshold — keep tokens with cumulative prob <= p.
             repetition_penalty: Scale factor for repeated tokens (>1 = penalize).
+            quantize_kv: When True the KV cache is stored as int8 with
+                per-token-head scales (4x memory reduction). When None it
+                auto-enables for quantized models; when False it is float32.
+            kv_state: Optional persistent KV state (from ``new_kv_state()``).
+                When the state holds a completed output that is a strict
+                prefix of ``input_ids``, the cached K/V for that prefix is
+                reused and only the appended tokens are computed. The state
+                is updated in place on each yield; if the generator is
+                abandoned (closed before exhaustion) the state is invalidated
+                so the next call falls back to a fresh computation.
 
         Yields:
             Each generated token id.
@@ -4206,12 +4768,23 @@ class SloTransformer(SloNet):
         _use_kernels = _KERNELS_AVAILABLE
         _is_greedy = temperature < 1e-6 and top_p is None and repetition_penalty == 1.0
 
+        _stop_ids = {eos_token} if eos_token is not None else set()
+        if extra_stop_ids:
+            _stop_ids.update(extra_stop_ids)
+
         _is_quantized = False
         for l in self.layers[1:-2]:
             if isinstance(l, SloTransformerBlock):
                 if getattr(l.attn.W_q, '_quant_info', None) is not None:
                     _is_quantized = True
                     break
+
+        # int8 KV cache: auto-enabled for quantized models, forceable either way.
+        _use_kvq = _is_quantized if quantize_kv is None else bool(quantize_kv)
+        if _use_kvq:
+            from domains.infrastructure.quantization import (
+                quantize_kv_tensor as _qkv_t, dequantize_kv_tensor as _dqkv_t,
+            )
 
         n_an_w = []; n_an_b = []; n_an_e = []
         n_fn_w = []; n_fn_b = []; n_fn_e = []
@@ -4263,6 +4836,36 @@ class SloTransformer(SloNet):
                     m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
         n_blocks = len(m_wqkv)
+        # Fused quantized packs: [w_q;w_k;w_v] and [w1;w3] shared-input GEMMs.
+        # Prefer the packed int4 fusion — it keeps int4 weights packed (no
+        # unpack cache, no memory loss). The int8 fusion is only built when
+        # the int4 fusion is unavailable for that block.
+        _ql = None
+        _ql4 = None
+        f_qkv = []
+        f_ff = []
+        f_qkv4 = []
+        f_ff4 = []
+        if _is_quantized:
+            from domains.infrastructure.quantization import (
+                quantized_linear as _ql, int4_quantized_linear as _ql4,
+            )
+            for _fb in self.layers[1:-2]:
+                if isinstance(_fb, SloTransformerBlock):
+                    _fq4 = _fuse_quant_weights_int4((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v))
+                    _ff4 = _fuse_quant_weights_int4((_fb.ff.w1, _fb.ff.w3))
+                    f_qkv4.append(_fq4)
+                    f_ff4.append(_ff4)
+                    f_qkv.append(None if _fq4 is not None else _fuse_quant_weights((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v)))
+                    f_ff.append(None if _ff4 is not None else _fuse_quant_weights((_fb.ff.w1, _fb.ff.w3)))
+                else:
+                    f_qkv.append(None); f_ff.append(None)
+                    f_qkv4.append(None); f_ff4.append(None)
+        else:
+            f_qkv = [None] * n_blocks
+            f_ff = [None] * n_blocks
+            f_qkv4 = [None] * n_blocks
+            f_ff4 = [None] * n_blocks
         tok_emb_w = self.layers[0].weight.data
         pos_emb_w = self.pos_emb.weight.data if self.pos_emb is not None else None
         pos_emb_n = self.pos_emb.num_embeddings if self.pos_emb is not None else 0
@@ -4298,9 +4901,12 @@ class SloTransformer(SloNet):
         _he = H * E
         _khe = K_H * E
 
-        kv_buf_k = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
-        kv_buf_v = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
-        kv_len = [0] * n_blocks
+        # Pre-allocate KV cache (int8 + per-token-head scales when _use_kvq).
+        # Cross-turn reuse: resume from a cached prefix when kv_state matches.
+        kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len, _start_pos = \
+            self._resolve_kv_state(kv_state, n_blocks, total_len, _nkv, E,
+                                   _use_kvq, input_ids, prompt_len)
+        _prefill = prompt_len - _start_pos
 
         _use_rope = False
         _rope_inv_freq = None
@@ -4325,9 +4931,11 @@ class SloTransformer(SloNet):
 
         for step in range(max_gen):
             if step == 0:
-                idx = out_buf[:, :prompt_len]
-                pos = 0
-                seq_len = prompt_len
+                # First step: only the new suffix is recomputed; the shared
+                # prefix (0.._start_pos) comes from the persisted KV cache.
+                idx = out_buf[:, _start_pos:_start_pos + _prefill]
+                pos = _start_pos
+                seq_len = _prefill
             else:
                 idx = out_buf[:, step + prompt_len - 1:step + prompt_len]
                 pos = step + prompt_len - 1
@@ -4359,12 +4967,25 @@ class SloTransformer(SloNet):
                         h = x * (n_an_w[bi] / rms)
 
                 if _is_quantized:
-                    q = q_wq[bi].forward_numpy(h)
-                    k = q_wk[bi].forward_numpy(h)
-                    v = q_wv[bi].forward_numpy(h)
-                    q = q.reshape(1, seq_len, H, E)
-                    k = k.reshape(1, seq_len, K_H, E)
-                    v = v.reshape(1, seq_len, K_H, E)
+                    if f_qkv4[bi] is not None:
+                        Wp, Sp, zp, Bp = f_qkv4[bi]
+                        qkv = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, he + 2*khe)
+                        q = qkv[..., :_he].reshape(1, seq_len, H, E)
+                        k = qkv[..., _he:_he + _khe].reshape(1, seq_len, K_H, E)
+                        v = qkv[..., _he + _khe:].reshape(1, seq_len, K_H, E)
+                    elif f_qkv[bi] is not None:
+                        Wq, Sq, Bq = f_qkv[bi]
+                        qkv = _ql(h, Wq, Sq, 0, Bq)  # (1, seq_len, he + 2*khe)
+                        q = qkv[..., :_he].reshape(1, seq_len, H, E)
+                        k = qkv[..., _he:_he + _khe].reshape(1, seq_len, K_H, E)
+                        v = qkv[..., _he + _khe:].reshape(1, seq_len, K_H, E)
+                    else:
+                        q = q_wq[bi].forward_numpy(h)
+                        k = q_wk[bi].forward_numpy(h)
+                        v = q_wv[bi].forward_numpy(h)
+                        q = q.reshape(1, seq_len, H, E)
+                        k = k.reshape(1, seq_len, K_H, E)
+                        v = v.reshape(1, seq_len, K_H, E)
                 else:
                     qkv = h @ m_wqkv[bi]
                     if _use_bias_bqkv:
@@ -4380,11 +5001,22 @@ class SloTransformer(SloNet):
                     k = k * _rope_cs + np.concatenate([-k[..., E//2:], k[..., :E//2]], axis=-1) * _rope_sn
 
                 new_len = kv_len[bi] + seq_len
-                kv_buf_k[bi][:, kv_len[bi]:new_len] = k
-                kv_buf_v[bi][:, kv_len[bi]:new_len] = v
-                kv_len[bi] = new_len
-                k = kv_buf_k[bi][:, :new_len]
-                v = kv_buf_v[bi][:, :new_len]
+                if _use_kvq:
+                    _qk, _sk = _qkv_t(k)
+                    _qv, _sv = _qkv_t(v)
+                    kv_buf_k[bi][:, kv_len[bi]:new_len] = _qk
+                    kv_buf_v[bi][:, kv_len[bi]:new_len] = _qv
+                    kv_scale_k[bi][:, kv_len[bi]:new_len] = _sk
+                    kv_scale_v[bi][:, kv_len[bi]:new_len] = _sv
+                    kv_len[bi] = new_len
+                    k = _dqkv_t(kv_buf_k[bi][:, :new_len], kv_scale_k[bi][:, :new_len])
+                    v = _dqkv_t(kv_buf_v[bi][:, :new_len], kv_scale_v[bi][:, :new_len])
+                else:
+                    kv_buf_k[bi][:, kv_len[bi]:new_len] = k
+                    kv_buf_v[bi][:, kv_len[bi]:new_len] = v
+                    kv_len[bi] = new_len
+                    k = kv_buf_k[bi][:, :new_len]
+                    v = kv_buf_v[bi][:, :new_len]
 
                 if _use_gqa:
                     if _use_kernels:
@@ -4400,11 +5032,21 @@ class SloTransformer(SloNet):
                     k = k.transpose(0, 2, 1, 3)
                     v = v.transpose(0, 2, 1, 3)
 
+                # einsum needs (1, new_len, H, E) but the kernel paths above
+                # produced (1, H, new_len, E).  Transpose back when we are
+                # actually going to use einsum (not the fused kernels).
+                _use_einsum = not (step > 0 and _use_kernels) and not (
+                    step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0
+                )
+                if _use_einsum and k.ndim == 4 and k.shape[1] == H:
+                    k = k.transpose(0, 2, 1, 3)
+                    v = v.transpose(0, 2, 1, 3)
+
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
                     _ao_flat = _nb_fused_attention_single(q[0, 0], k[0], v[0], scale, H, E)
                     ao = _ao_flat.reshape(1, 1, _he)
-                elif step == 0 and seq_len > 1 and _use_kernels:
+                elif step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0:
                     _q = q.reshape(seq_len, H, E)
                     _ao = _nb_fused_attention_multi(_q, k[0], v[0], scale, H, E)
                     ao = _ao.reshape(1, seq_len, _he)
@@ -4412,6 +5054,12 @@ class SloTransformer(SloNet):
                     scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
                     if step == 0 and seq_len > 1:
                         _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
+                        if _start_pos > 0:
+                            # Cross-turn resume: query i (global _start_pos + i)
+                            # may attend to cache position j <= _start_pos + i.
+                            _rows = np.arange(seq_len, dtype=np.int64)[:, None]
+                            _cols = np.arange(new_len, dtype=np.int64)[None, :]
+                            _cm = np.where(_cols <= _rows + _start_pos, np.float32(0.0), _cm)
                         scores = scores + _cm
                     attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
                     attn = attn / attn.sum(axis=-1, keepdims=True)
@@ -4443,12 +5091,31 @@ class SloTransformer(SloNet):
                         h = x * (n_fn_w[bi] / rms)
 
                 if _is_quantized:
-                    h1 = q_w1[bi].forward_numpy(h)
-                    h3 = q_w3[bi].forward_numpy(h)
-                    if _use_kernels:
-                        h = _nb_swi_glu_mul(h1, h3)
+                    if f_ff4[bi] is not None:
+                        Wp, Sp, zp, Bp = f_ff4[bi]
+                        h13 = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, 2*ff_dim)
+                        if _use_kernels:
+                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                        else:
+                            h1 = h13[..., :_ff_dim]
+                            h3 = h13[..., _ff_dim:]
+                            h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
+                    elif f_ff[bi] is not None:
+                        Wf, Sf, Bf = f_ff[bi]
+                        h13 = _ql(h, Wf, Sf, 0, Bf)  # (1, seq_len, 2*ff_dim)
+                        if _use_kernels:
+                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                        else:
+                            h1 = h13[..., :_ff_dim]
+                            h3 = h13[..., _ff_dim:]
+                            h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     else:
-                        h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
+                        h1 = q_w1[bi].forward_numpy(h)
+                        h3 = q_w3[bi].forward_numpy(h)
+                        if _use_kernels:
+                            h = _nb_swi_glu_mul(h1, h3)
+                        else:
+                            h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
                 else:
                     h13 = h @ m_w13[bi]
@@ -4478,30 +5145,26 @@ class SloTransformer(SloNet):
                 rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + norm_eps)
                 x = x * (norm_w / rms)
 
-            # lm_head — use fused argmax kernel for greedy decoding (no logits allocation)
-            if _is_greedy and _use_kernels:
-                qi = lm_head_mod._quant_info if _is_quantized else None
-                if qi is not None and qi.is_quantized and qi.meta.bits == 8 and not qi.meta.is_per_channel:
-                    next_id = _nb_lm_head_argmax_int8(
-                        x[:, -1, :], qi.array,
-                        np.float32(qi.meta.scale),
-                        np.int32(qi.meta.zero_point),
-                    )
-                elif _is_quantized:
-                    logits = lm_head_mod.forward_numpy(x[:, -1, :])
-                    next_id = int(np.argmax(logits[0]))
-                else:
-                    next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
+            # lm_head — AVX2 int8 GEMM + argmax for greedy decoding. The int8
+            # matmul path (forward_numpy) is 18x faster than the numpy-dequant
+            # fused-argmax kernel when numba is unavailable, and it applies the
+            # correct per-row scale for both per-tensor and per-channel weights.
+            if _is_quantized:
+                logits = lm_head_mod.forward_numpy(x[:, -1, :])
+                next_id = int(np.argmax(logits[0]))
+            elif _use_kernels:
+                next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
             else:
+                logits = x[:, -1, :] @ lm_w_T
+                next_id = int(np.argmax(logits[0]))
+
+            # Non-greedy sampling
+            if not _is_greedy:
                 if _is_quantized:
                     logits = lm_head_mod.forward_numpy(x[:, -1, :])
                 else:
                     logits = x[:, -1, :] @ lm_w_T
-
-                if _is_greedy:
-                    next_id = int(np.argmax(logits[0]))
-                else:
-                    next_id = _sample_from_logits(
+                next_id = _sample_from_logits(
                         logits, temperature=temperature,
                         top_k=top_k, top_p=top_p,
                         repetition_penalty=repetition_penalty,
@@ -4509,7 +5172,9 @@ class SloTransformer(SloNet):
                     )
 
             out_buf[0, prompt_len + step] = next_id
-            if next_id == eos_token and step > 0:
+            if kv_state is not None:
+                kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
+            if next_id in _stop_ids and step > 0:
                 return
             yield next_id
 

@@ -8,7 +8,10 @@ import { Chip } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { IconSend, IconBrain, IconCopy, IconX } from '@sloughgpt/strui'
 import { Spinner } from '@sloughgpt/strui'
+
+const OUTPUT_PREVIEW_CHARS = 300
 import { generateController } from '@/lib/generate-controller'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { useToastStore } from '@/lib/toast-store'
 import type { ModelEntry } from '@/lib/types/models'
 
@@ -41,20 +44,24 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
   const runOutputComparison = useCallback(async () => {
     if (!outputPrompt.trim() || selectedForOutput.size < 1) return
     setOutputLoading(true); setOutputResults({})
-    const prompt = outputPrompt.trim()
-    const promises = Array.from(selectedForOutput).map(async (modelId) => {
-      const reqStart = Date.now()
-      try {
-        const res = await generateController.generate({ prompt, model: modelId, max_new_tokens: 128 })
-        return { model: modelId, text: res.text || '(empty response)', tokens: res.tokens_generated ?? 0, elapsedMs: Date.now() - reqStart } as OutputResult
-      } catch (e: any) {
-        return { model: modelId, text: '', tokens: 0, elapsedMs: Date.now() - reqStart, error: String(e?.message || e) } as OutputResult
-      }
-    })
-    const results = await Promise.all(promises)
-    const map: Record<string, OutputResult> = {}
-    for (const r of results) map[r.model] = r
-    setOutputResults(map); setOutputLoading(false)
+    try {
+      const prompt = outputPrompt.trim()
+      const promises = Array.from(selectedForOutput).map(async (modelId) => {
+        const reqStart = Date.now()
+        try {
+          const res = await generateController.generate({ prompt, model: modelId, max_new_tokens: 128 })
+          return { model: modelId, text: res.text || '(empty response)', tokens: res.tokens_generated ?? 0, elapsedMs: Date.now() - reqStart } as OutputResult
+        } catch (e: unknown) {
+          return { model: modelId, text: '', tokens: 0, elapsedMs: Date.now() - reqStart, error: extractErrorMessage(e, String(e)) } as OutputResult
+        }
+      })
+      const results = await Promise.all(promises)
+      const map: Record<string, OutputResult> = {}
+      for (const r of results) map[r.model] = r
+      setOutputResults(map)
+    } finally {
+      setOutputLoading(false)
+    }
   }, [outputPrompt, selectedForOutput])
 
   const copyOutputResult = (text: string) => {
@@ -88,13 +95,15 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
           </Button>
           {outputLoading && <span className="text-xs text-muted-foreground animate-pulse">Querying {selectedForOutput.size} model{selectedForOutput.size !== 1 ? 's' : ''}…</span>}
         </div>
-        {Object.keys(outputResults).length > 0 && (
+        {(() => {
+          const entries = Object.entries(outputResults)
+          return entries.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-            {Object.entries(outputResults).map(([modelId, r]) => {
+            {entries.map(([modelId, r]) => {
               const modelName = models.find(m => m.id === modelId)?.name || modelId
               const isExpanded = outputExpanded.has(modelId)
               const textLen = r.text.length
-              const truncated = textLen > 300 && !isExpanded
+              const truncated = textLen > OUTPUT_PREVIEW_CHARS && !isExpanded
               return (
                 <div key={modelId} className={cn("rounded-lg border p-3 space-y-2", r.error ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-card/50")}>
                   <div className="flex items-center justify-between">
@@ -110,7 +119,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
                   </div>
                   {r.error ? <p className="text-xs text-destructive">{r.error}</p> : (
                     <div>
-                      <p className="text-xs leading-relaxed whitespace-pre-wrap">{truncated ? r.text.slice(0, 300) + '…' : r.text}</p>
+                      <p className="text-xs leading-relaxed whitespace-pre-wrap">{truncated ? r.text.slice(0, OUTPUT_PREVIEW_CHARS) + '…' : r.text}</p>
                       {truncated && <Button variant="ghost" size="sm" className="h-6 text-xs mt-1 px-0" onClick={() => setOutputExpanded(prev => { const n = new Set(prev); n.add(modelId); return n })}>Show all ({textLen} chars)</Button>}
                     </div>
                   )}
@@ -118,7 +127,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
               )
             })}
           </div>
-        )}
+        )})()}
       </CardContent>
     </Card>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-export function downloadBlob(data: Blob | BlobPart, filename: string, mimeType = 'application/octet-stream') {
+export function downloadBlob(data: Blob | BlobPart, filename: string, mimeType = 'application/octet-stream'): void {
   const blob = data instanceof Blob ? data : new Blob([data], { type: mimeType })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -10,9 +10,13 @@ export function downloadBlob(data: Blob | BlobPart, filename: string, mimeType =
   URL.revokeObjectURL(url)
 }
 
-export function downloadJson(data: unknown, filename: string) {
+export function downloadJson(data: unknown, filename: string): void {
   const text = JSON.stringify(data, null, 2)
   downloadBlob(text, filename, 'application/json')
+}
+
+export function downloadMarkdown(content: string, filename: string): void {
+  downloadBlob(content, filename, 'text/markdown')
 }
 
 export function importFile(accept: string): Promise<File | null> {

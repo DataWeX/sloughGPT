@@ -340,3 +340,57 @@ describe('trainingJobsController.deleteCheckpoint', () => {
     expect(apiClient.apiDelete).toHaveBeenCalledWith('/auto-train/checkpoints/old-checkpoint')
   })
 })
+
+describe('trainingJobsController.listFineTuned', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('returns models from /training/finetuned-models', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      models: [{ name: 'gpt2_dataset_1', model: 'gpt2', dataset: 'dataset_1', size_mb: 1.2, model_path: '/tmp/x' }],
+    })
+    const result = await trainingJobsController.listFineTuned()
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/training/finetuned-models')
+    expect(result).toHaveLength(1)
+    expect(result[0].model).toBe('gpt2')
+  })
+
+  it('accepts a bare array response', async () => {
+    apiClient.apiGet.mockResolvedValue([{ name: 'gpt2_dataset_1', model: 'gpt2', dataset: '', size_mb: 0, model_path: '/tmp/x' }])
+    const result = await trainingJobsController.listFineTuned()
+    expect(result).toHaveLength(1)
+  })
+
+  it('returns empty array on error', async () => {
+    apiClient.apiGet.mockRejectedValue(new Error('boom'))
+    const result = await trainingJobsController.listFineTuned()
+    expect(result).toEqual([])
+  })
+})
+
+describe('trainingJobsController.loadFineTuned', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs to /training/finetuned-models/{name}/load', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', name: 'gpt2_dataset_1', model_path: '/tmp/x', model_id: 'gpt2' })
+    const result = await trainingJobsController.loadFineTuned('gpt2_dataset_1')
+    expect(result.model_id).toBe('gpt2')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/finetuned-models/gpt2_dataset_1/load')
+  })
+
+  it('URL-encodes special characters in name', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', name: 'a b', model_path: '/tmp/x' })
+    await trainingJobsController.loadFineTuned('a b')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/finetuned-models/a%20b/load')
+  })
+})
+
+describe('trainingJobsController.deleteFineTuned', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('DELETEs /training/finetuned-models/{name}', async () => {
+    apiClient.apiDelete.mockResolvedValue({ status: 'deleted', name: 'gpt2_dataset_1' })
+    const result = await trainingJobsController.deleteFineTuned('gpt2_dataset_1')
+    expect(result.status).toBe('deleted')
+    expect(apiClient.apiDelete).toHaveBeenCalledWith('/training/finetuned-models/gpt2_dataset_1')
+  })
+})

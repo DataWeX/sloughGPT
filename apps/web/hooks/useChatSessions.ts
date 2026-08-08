@@ -37,7 +37,7 @@ export function useChatSessions(opts: {
   setSessionSaved: (v: boolean) => void
   setSessionLoading: (v: boolean) => void
   sessionIdRef: React.MutableRefObject<string>
-  showToast: (message: string, type?: string) => void
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }): UseChatSessionsReturn {
   const { setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef, showToast } = opts
 
@@ -48,7 +48,7 @@ export function useChatSessions(opts: {
       const first = msgs.find(m => m.role === 'user')?.content || ''
       if (!first) return 'New Chat'
       const cleaned = first.replace(/^(hey|hi|hello|yo|sup)[\s,!.]*/i, '').trim()
-      const sentence = cleaned.split(/[.!?\n]/).filter(Boolean)[0]?.trim() || cleaned
+      const sentence = cleaned.split(/[.!?\n]/).find(Boolean)?.trim() || cleaned
       const maxLen = 42
       return sentence.length > maxLen ? sentence.slice(0, maxLen).trimEnd() + '…' : sentence
     })()
@@ -168,9 +168,9 @@ export function useChatSessions(opts: {
     }
   }, [showToast])
 
-  const archivedCount = (Array.isArray(sessions) ? sessions : []).filter(s => s.archived).length
+  const archivedCount = sessions.filter(s => s.archived).length
 
-  const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions : [])
+  const sidebarConversations: Conversation[] = sessions
     .filter(s => !s.archived)
     .map(s => ({
     id: s.id, name: s.name || 'Untitled', session_id: s.id,

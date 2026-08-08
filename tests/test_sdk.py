@@ -21,16 +21,6 @@ from sloughgpt_sdk import (
     ChatMessage,
     GenerateRequest,
     GenerationResult,
-    APIKeyManager,
-    APIKey,
-    KeyTier,
-    WebhookManager,
-    WebhookEvent,
-    BillingManager,
-    BillingCycle,
-    Plan,
-    Subscription,
-    UsageDashboard,
 )
 
 
@@ -92,393 +82,6 @@ class TestGenerateRequest(unittest.TestCase):
         data = req.to_dict()
         self.assertEqual(data["prompt"], "Hello")
         self.assertEqual(data["max_new_tokens"], 50)
-
-
-class TestAPIKeyManager(unittest.TestCase):
-    """Tests for API key management."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        self.temp_file.close()
-        self.manager = APIKeyManager(storage_path=self.temp_file.name)
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        try:
-            os.unlink(self.temp_file.name)
-        except:
-            pass
-
-    def test_create_key(self):
-        """Test creating an API key."""
-        key, key_data = self.manager.create_key(name="Test Key")
-
-        self.assertTrue(key.startswith("sk_"))
-        self.assertIsNotNone(key_data)
-        self.assertEqual(key_data.name, "Test Key")
-        self.assertEqual(key_data.tier, KeyTier.FREE)
-        self.assertTrue(key_data.is_active)
-
-    def test_create_key_with_tier(self):
-        """Test creating key with specific tier."""
-        key, key_data = self.manager.create_key(
-            name="Pro Key",
-            tier=KeyTier.PRO,
-        )
-
-        self.assertEqual(key_data.tier, KeyTier.PRO)
-        self.assertEqual(key_data.quota_daily, 10000)
-
-    def test_validate_key(self):
-        """Test validating an API key."""
-        key, key_data = self.manager.create_key(name="Test")
-
-        is_valid, reason, validated_key = self.manager.validate_key(key)
-
-        self.assertTrue(is_valid)
-        self.assertEqual(reason, "OK")
-        self.assertIsNotNone(validated_key)
-
-    def test_validate_invalid_key(self):
-        """Test validating an invalid key."""
-        is_valid, reason, key = self.manager.validate_key("invalid_key")
-
-        self.assertFalse(is_valid)
-        self.assertEqual(reason, "Invalid API key")
-        self.assertIsNone(key)
-
-    def test_revoke_key(self):
-        """Test revoking an API key."""
-        key, key_data = self.manager.create_key(name="Test")
-
-        result = self.manager.revoke_key(key_data.key_id)
-
-        self.assertTrue(result)
-
-        is_valid, reason, _ = self.manager.validate_key(key)
-        self.assertFalse(is_valid)
-        self.assertEqual(reason, "API key is deactivated")
-
-    def test_record_usage(self):
-        """Test recording usage."""
-        key, key_data = self.manager.create_key(name="Test")
-
-        result = self.manager.record_usage(key, requests_count=5)
-
-        self.assertTrue(result)
-
-        stats = self.manager.get_usage_stats(key_data.key_id)
-        self.assertEqual(stats["total_requests"], 5)
-
-    def test_list_keys(self):
-        """Test listing keys."""
-        self.manager.create_key(name="Key 1")
-        self.manager.create_key(name="Key 2")
-
-        keys = self.manager.list_keys()
-
-        self.assertEqual(len(keys), 2)
-
-    def test_rotate_key(self):
-        """Test key rotation."""
-        key1, key_data1 = self.manager.create_key(name="Test")
-
-        new_key, new_key_data = self.manager.rotate_key(key_data1.key_id)
-
-        self.assertNotEqual(key1, new_key)
-        self.assertEqual(new_key_data.name, "Test")
-
-        is_valid, _, _ = self.manager.validate_key(key1)
-        self.assertFalse(is_valid)
-
-        is_valid, _, _ = self.manager.validate_key(new_key)
-        self.assertTrue(is_valid)
-
-
-class TestWebhookManager(unittest.TestCase):
-    """Tests for webhook management."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        self.temp_file.close()
-        self.manager = WebhookManager(storage_path=self.temp_file.name)
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        try:
-            os.unlink(self.temp_file.name)
-        except:
-            pass
-
-    def test_create_webhook(self):
-        """Test creating a webhook."""
-        webhook = self.manager.create_webhook(
-            url="https://example.com/webhook",
-            events=[WebhookEvent.KEY_CREATED],
-        )
-
-        self.assertTrue(webhook.id.startswith("wh_"))
-        self.assertEqual(webhook.url, "https://example.com/webhook")
-        self.assertIn(WebhookEvent.KEY_CREATED, webhook.events)
-        self.assertTrue(webhook.is_active)
-
-    def test_get_webhook(self):
-        """Test getting a webhook."""
-        webhook = self.manager.create_webhook(
-            url="https://example.com/webhook",
-            events=[WebhookEvent.KEY_CREATED],
-        )
-
-        retrieved = self.manager.get_webhook(webhook.id)
-
-        self.assertIsNotNone(retrieved)
-        self.assertEqual(retrieved.id, webhook.id)
-
-    def test_list_webhooks(self):
-        """Test listing webhooks."""
-        self.manager.create_webhook(
-            url="https://example1.com/webhook",
-            events=[WebhookEvent.KEY_CREATED],
-        )
-        self.manager.create_webhook(
-            url="https://example2.com/webhook",
-            events=[WebhookEvent.QUOTA_EXCEEDED],
-        )
-
-        webhooks = self.manager.list_webhooks()
-        self.assertEqual(len(webhooks), 2)
-
-        filtered = self.manager.list_webhooks(WebhookEvent.KEY_CREATED)
-        self.assertEqual(len(filtered), 1)
-
-    def test_delete_webhook(self):
-        """Test deleting a webhook."""
-        webhook = self.manager.create_webhook(
-            url="https://example.com/webhook",
-            events=[WebhookEvent.KEY_CREATED],
-        )
-
-        result = self.manager.delete_webhook(webhook.id)
-
-        self.assertTrue(result)
-        self.assertIsNone(self.manager.get_webhook(webhook.id))
-
-    def test_verify_signature(self):
-        """Test signature verification."""
-        payload = '{"test": "data"}'
-        secret = "test_secret"
-
-        signature = WebhookManager._generate_signature(payload, secret)
-
-        self.assertTrue(signature.startswith("sha256="))
-        self.assertTrue(WebhookManager.verify_signature(signature, payload, secret))
-        self.assertFalse(WebhookManager.verify_signature("invalid", payload, secret))
-
-
-class TestBillingManager(unittest.TestCase):
-    """Tests for billing management."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        self.temp_file.close()
-        self.manager = BillingManager(storage_path=self.temp_file.name)
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        try:
-            os.unlink(self.temp_file.name)
-        except:
-            pass
-
-    def test_default_plans(self):
-        """Test that default plans are created."""
-        plans = self.manager.list_plans()
-
-        self.assertGreaterEqual(len(plans), 4)
-
-        plan_ids = [p.id for p in plans]
-        self.assertIn("free", plan_ids)
-        self.assertIn("starter", plan_ids)
-        self.assertIn("pro", plan_ids)
-        self.assertIn("enterprise", plan_ids)
-
-    def test_create_customer(self):
-        """Test creating a customer."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        self.assertTrue(customer["id"].startswith("cus_"))
-        self.assertEqual(customer["email"], "test@example.com")
-        self.assertEqual(customer["name"], "Test User")
-
-    def test_create_subscription(self):
-        """Test creating a subscription."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        subscription = self.manager.create_subscription(
-            customer_id=customer["id"],
-            plan_id="pro",
-            billing_cycle=BillingCycle.MONTHLY,
-        )
-
-        self.assertTrue(subscription.id.startswith("sub_"))
-        self.assertEqual(subscription.plan_id, "pro")
-        self.assertEqual(subscription.billing_cycle, BillingCycle.MONTHLY)
-        self.assertTrue(subscription.is_active())
-
-    def test_cancel_subscription(self):
-        """Test cancelling a subscription."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        subscription = self.manager.create_subscription(
-            customer_id=customer["id"],
-            plan_id="pro",
-        )
-
-        result = self.manager.cancel_subscription(subscription.id)
-
-        self.assertTrue(result)
-        self.assertFalse(subscription.is_active())
-
-    def test_record_usage(self):
-        """Test recording usage."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        record = self.manager.record_usage(
-            customer_id=customer["id"],
-            key_id="sk_test",
-            requests=10,
-            tokens=500,
-        )
-
-        self.assertTrue(record.id.startswith("use_"))
-        self.assertEqual(record.requests, 10)
-        self.assertEqual(record.tokens_used, 500)
-
-    def test_get_customer_subscription(self):
-        """Test getting customer subscription."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        subscription = self.manager.create_subscription(
-            customer_id=customer["id"],
-            plan_id="pro",
-        )
-
-        retrieved = self.manager.get_customer_subscription(customer["id"])
-
-        self.assertIsNotNone(retrieved)
-        self.assertEqual(retrieved.id, subscription.id)
-
-
-class TestUsageDashboard(unittest.TestCase):
-    """Tests for usage dashboard."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        self.temp_file.close()
-        self.dashboard = UsageDashboard(storage_path=self.temp_file.name)
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        try:
-            os.unlink(self.temp_file.name)
-        except:
-            pass
-
-    def test_record_request(self):
-        """Test recording a request."""
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            tokens=100,
-            latency_ms=50,
-            success=True,
-        )
-
-        metrics = self.dashboard.get_metrics("1d")
-
-        self.assertEqual(metrics.total_requests, 1)
-        self.assertEqual(metrics.total_tokens, 100)
-
-    def test_get_metrics(self):
-        """Test getting metrics."""
-        for i in range(5):
-            self.dashboard.record_request(
-                key_id="sk_test",
-                customer_id="cus_test",
-                tokens=100,
-                latency_ms=50,
-            )
-
-        metrics = self.dashboard.get_metrics("1d")
-
-        self.assertEqual(metrics.total_requests, 5)
-        self.assertEqual(metrics.total_tokens, 500)
-        self.assertGreater(metrics.success_rate, 0)
-
-    def test_get_usage_breakdown(self):
-        """Test getting usage breakdown."""
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            endpoint="/generate",
-        )
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            endpoint="/chat",
-        )
-
-        breakdown = self.dashboard.get_usage_breakdown("1d", "endpoint")
-
-        self.assertEqual(len(breakdown), 2)
-
-    def test_generate_report(self):
-        """Test generating a report."""
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            tokens=100,
-        )
-
-        report = self.dashboard.generate_report("7d")
-
-        self.assertIn("metrics", report)
-        self.assertIn("breakdown", report)
-        self.assertIn("top_customers", report)
-        self.assertIn("top_keys", report)
-
-    def test_export_csv(self):
-        """Test CSV export."""
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            tokens=100,
-        )
-
-        csv = self.dashboard.export_csv("1d")
-
-        self.assertIn("timestamp", csv)
-        self.assertIn("customer_id", csv)
-        self.assertIn("sk_test", csv)
 
 
 class TestSloughGPTClient(unittest.TestCase):
@@ -958,6 +561,50 @@ class TestNewSDKEndpoints(unittest.TestCase):
     def test_get_audit_log(self):
         self._client().get_audit_log()
         self._assert_called('GET', '/security/audit')
+
+    def test_get_security_keys(self):
+        self._client().get_security_keys()
+        self._assert_called('GET', '/security/keys')
+
+    def test_get_security_keys_unwraps_keys_field(self):
+        self.mock_response.json.return_value = {"status": "success", "data": {"keys": [{"id": "k1"}]}}
+        result = self._client().get_security_keys()
+        self.assertEqual(result, [{"id": "k1"}])
+
+    def test_get_security_keys_accepts_flat_list(self):
+        self.mock_response.json.return_value = [{"id": "k1"}]
+        result = self._client().get_security_keys()
+        self.assertEqual(result, [{"id": "k1"}])
+
+    # === Registry ===
+
+    def test_list_registry_models(self):
+        self._client().list_registry_models()
+        self._assert_called('GET', '/registry/models')
+
+    def test_list_registry_models_unwraps_models_field(self):
+        self.mock_response.json.return_value = {
+            "status": "success",
+            "data": {"models": [{"model_id": "gpt2"}], "count": 1},
+        }
+        result = self._client().list_registry_models()
+        self.assertEqual(result, [{"model_id": "gpt2"}])
+
+    def test_get_registry_model(self):
+        self._client().get_registry_model('gpt2')
+        self._assert_called('GET', '/registry/models/gpt2')
+
+    def test_get_registry_best(self):
+        self.mock_response.json.return_value = {
+            "status": "success",
+            "data": {"models": 2, "loaded": 1},
+        }
+        result = self._client().get_registry_best()
+        self.assertEqual(result, {"models": 2, "loaded": 1})
+
+    def test_get_registry_stats(self):
+        self._client().get_registry_stats()
+        self._assert_called('GET', '/registry/stats')
 
     # === Detailed Health ===
 

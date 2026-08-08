@@ -114,6 +114,46 @@ class TestListModels:
         loaded = [m for m in data if m["status"] == "loaded"][0]
         assert loaded["vocab_size"] == 50257
 
+    def test_list_non_integral_parameters_coerced_to_int(self, mock_controller):
+        """Regression: HF Hub num_parameters can be a fractional float; int field
+        must not raise ValidationError (int_from_float) → 422 fields=1."""
+        mock_controller.list_hf_models.return_value = [
+            {"model_id": "gpt2-xl", "parameters": 1558000000.5, "vocab_size": 50257.0},
+        ]
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        data = _data(resp)
+        m = [x for x in data if x["model_id"] == "gpt2-xl"][0]
+        assert m["parameters"] == 1558000000
+        assert isinstance(m["parameters"], int)
+        assert m["vocab_size"] == 50257
+
+    def test_list_none_parameters_coerced_to_int(self, mock_controller):
+        """Regression: None parameters must not raise int_type validation error."""
+        mock_controller.list_hf_models.return_value = [
+            {"model_id": "gpt2-medium", "parameters": None, "vocab_size": None},
+        ]
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        data = _data(resp)
+        m = [x for x in data if x["model_id"] == "gpt2-medium"][0]
+        assert m["parameters"] == 0
+        assert m["vocab_size"] == 0
+
+    def test_list_string_parameters_coerced_to_int(self, mock_controller):
+        """Regression: string parameters must not crash _describe_model (< int)."""
+        mock_controller.list_hf_models.return_value = [
+            {"model_id": "gpt2-xl", "parameters": "1558000000", "vocab_size": "50257"},
+        ]
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        data = _data(resp)
+        m = [x for x in data if x["model_id"] == "gpt2-xl"][0]
+        assert m["parameters"] == 1558000000
+        assert isinstance(m["parameters"], int)
+        assert m["vocab_size"] == 50257
+        assert len(m["description"]) > 5
+
 
 # ── GET /models/current ────────────────────────────────────────────────────
 
@@ -201,3 +241,142 @@ class TestExportFormats:
             assert isinstance(key, str)
             assert isinstance(desc, str)
             assert len(desc) > 5
+
+
+# ── POST /models/load ───────────────────────────────────────────────────────
+
+class TestLoadModel:
+
+    LOADED = {
+        "status": "loaded",
+        "model_id": "gpt2",
+        "type": "slonet",
+        "device": "cpu",
+        "loaded_at": "2025-01-01T00:00:00",
+    }
+
+    def test_load_returns_envelope_with_real_data(self, mock_controller):
+        mock_controller.load_model.return_value = self.LOADED
+        resp = client.post("/models/load", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        body = resp.json()
+        # Envelope must be preserved — the controller result must NOT be
+        # stripped by response_model (regression for Bug A).
+        assert body["status"] == "success"
+        data = _data(resp)
+        assert data["model_id"] == "gpt2"
+        assert data["status"] == "loaded"
+        assert data["type"] == "slonet"
+        assert data["device"] == "cpu"
+        assert data["loaded_at"] == "2025-01-01T00:00:00"
+
+    def test_load_preserves_controller_error(self, mock_controller):
+        mock_controller.load_model.return_value = {"status": "error", "error": "boom"}
+        resp = client.post("/models/load", json={"model_id": "gpt2"})
+        data = _data(resp)
+        assert data["status"] == "error"
+        assert data["error"] == "boom"
+
+    def test_load_records_load_event_on_success(self, mock_controller):
+        mock_controller.load_model.return_value = self.LOADED
+        ss = MagicMock()
+        with patch("domains.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/load", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("load", "gpt2", "device=cpu")
+
+    def test_load_event_records_requested_device_when_result_has_none(self, mock_controller):
+        loaded = dict(self.LOADED)
+        loaded["device"] = None
+        mock_controller.load_model.return_value = loaded
+        ss = MagicMock()
+        with patch("domains.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/load", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("load", "gpt2", "device=auto")
+
+    def test_load_records_error_event_on_failure(self, mock_controller):
+        mock_controller.load_model.return_value = {"status": "error", "error": "boom"}
+        ss = MagicMock()
+        with patch("domains.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/load", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("error", "gpt2", "boom")
+
+    def test_load_calls_controller_with_args(self, mock_controller):
+        mock_controller.load_model.return_value = self.LOADED
+        client.post("/models/load", json={"model_id": "gpt2", "device": "cpu", "quantize": "q8"})
+        mock_controller.load_model.assert_called_once_with("gpt2", "cpu", "q8")
+
+
+# ── POST /models/unload ─────────────────────────────────────────────────────
+
+class TestUnloadModel:
+
+    def test_unload_records_event_with_model_id(self, mock_controller):
+        mock_controller._current_model = "Qwen/Qwen2.5-0.5B-Instruct"
+        ss = MagicMock()
+        with patch("domains.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/unload")
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("unload", "Qwen/Qwen2.5-0.5B-Instruct")
+
+    def test_unload_falls_back_to_registry_default(self, mock_controller):
+        mock_controller._current_model = None
+        registry = MagicMock()
+        registry.default_id = "Qwen/Qwen2.5-0.5B-Instruct"
+        ss = MagicMock()
+        with patch("domains.infrastructure.server_state.get_server_state", return_value=ss), \
+             patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry):
+            resp = client.post("/models/unload")
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("unload", "Qwen/Qwen2.5-0.5B-Instruct")
+
+
+# ── GET/POST /models/process-guard ────────────────────────────────────────
+
+class TestProcessGuard:
+
+    def test_get_returns_status(self, mock_controller):
+        mock_controller.get_process_guard_status.return_value = {
+            "enabled": False, "active": False, "model_id": None, "health": None,
+        }
+        resp = client.get("/models/process-guard")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["enabled"] is False
+        assert data["active"] is False
+
+    def test_get_when_enabled_and_active(self, mock_controller):
+        mock_controller.get_process_guard_status.return_value = {
+            "enabled": True, "active": True, "model_id": "gpt2",
+            "health": {"alive": True, "memory_mb": 512, "restarts": 0},
+        }
+        resp = client.get("/models/process-guard")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["enabled"] is True
+        assert data["active"] is True
+        assert data["model_id"] == "gpt2"
+
+    def test_enable_calls_controller(self, mock_controller):
+        mock_controller.set_process_guard_enabled.return_value = {
+            "enabled": True, "active": False, "model_id": "gpt2", "health": None,
+        }
+        resp = client.post("/models/process-guard", json={"enabled": True})
+        assert resp.status_code == 200
+        mock_controller.set_process_guard_enabled.assert_called_once_with(True)
+        data = _data(resp)
+        assert data["enabled"] is True
+
+    def test_disable_calls_controller(self, mock_controller):
+        mock_controller.set_process_guard_enabled.return_value = {
+            "enabled": False, "active": False, "model_id": None, "health": None,
+        }
+        resp = client.post("/models/process-guard", json={"enabled": False})
+        assert resp.status_code == 200
+        mock_controller.set_process_guard_enabled.assert_called_once_with(False)
+
+    def test_rejects_non_boolean(self, mock_controller):
+        resp = client.post("/models/process-guard", json={"enabled": "yes"})
+        assert resp.status_code == 422

@@ -64,9 +64,9 @@ class LearnerRouter:
 
     @staticmethod
     def learn_feed(
-        action: str = Query(...),        # "subscribe", "unsubscribe", "list"
-        url: Optional[str] = Query(None),
-        poll_interval: int = 3600,
+        action: str = Query(..., max_length=20),
+        url: Optional[str] = Query(None, max_length=2000),
+        poll_interval: int = Query(3600, ge=60, le=86400),
     ):
         """Manage RSS feed subscriptions.
 
@@ -95,7 +95,7 @@ class LearnerRouter:
         return error_response("unknown action")
 
     @staticmethod
-    def learn_ingest_url(url: str = Query(...)):
+    def learn_ingest_url(url: str = Query(..., min_length=1, max_length=2000)):
         """Ingest a single URL: scrape article, store facts, fine-tune.
 
         Args:
@@ -111,9 +111,9 @@ class LearnerRouter:
 
     @staticmethod
     def learn_knowledge(
-        topic: Optional[str] = Query(None),
-        query: Optional[str] = Query(None),
-        top_k: int = 10,
+        topic: Optional[str] = Query(None, max_length=100),
+        query: Optional[str] = Query(None, max_length=1000),
+        top_k: int = Query(10, ge=1, le=100),
     ):
         """Query learned knowledge by topic or keyword search.
 

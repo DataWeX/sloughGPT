@@ -1,6 +1,9 @@
 """Tests for the auto-ingestion pipeline: RepoScanner, CodeChunker, AutoIngester."""
 
+import asyncio
 import os
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +13,7 @@ from domains.infrastructure.auto_ingest import (
     FileChunk,
     RepoScanner,
     DEFAULT_IGNORE_DIRS,
+    main,
 )
 
 
@@ -114,6 +118,28 @@ class TestRepoScanner:
         results = list(scanner.iter_files())
         assert len(results) == 1
         assert results[0][1] == "[Binary or unreadable file]"
+
+    def test_iter_files_skips_stat_errors(self, tmp_path, monkeypatch):
+        from pathlib import Path
+        target = tmp_path / "locked.txt"
+        target.write_text("x")
+        original_stat = Path.stat
+        original_is_file = Path.is_file
+
+        def fake_stat(self, *args, **kwargs):
+            if str(self) == str(target):
+                raise OSError("permission denied")
+            return original_stat(self, *args, **kwargs)
+
+        def fake_is_file(self):
+            if str(self) == str(target):
+                return True
+            return original_is_file(self)
+
+        monkeypatch.setattr(Path, "stat", fake_stat)
+        monkeypatch.setattr(Path, "is_file", fake_is_file)
+        scanner = RepoScanner(root_path=str(tmp_path))
+        assert list(scanner.iter_files()) == []
 
 
 class TestCodeChunker:
@@ -254,6 +280,88 @@ class TestAutoIngester:
         stats = await ingester.ingest(dry_run=False)
         assert stats["chunks_created"] >= 1
         assert stats["files_ingested"] == 0
+
+    @pytest.mark.asyncio
+    async def test_ingest_chunk_error_increments_stats(self, tmp_path, monkeypatch):
+        (tmp_path / "a.py").write_text("def f():\n    return 1\n")
+        ingester = AutoIngester(root_path=str(tmp_path))
+
+        def boom(path, content):
+            raise RuntimeError("chunk fail")
+
+        monkeypatch.setattr(ingester.chunker, "chunk_file", boom)
+
+        async def no_store():
+            return None
+
+        monkeypatch.setattr(ingester, "get_vector_store", no_store)
+        stats = await ingester.ingest(dry_run=False)
+        assert stats["files_scanned"] == 1
+        assert stats["errors"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_vector_store_in_memory(self, tmp_path):
+        ingester = AutoIngester(root_path=str(tmp_path), provider="in_memory")
+        store = await ingester.get_vector_store()
+        assert store is not None
+        assert await store.connect() is True
+
+    @pytest.mark.asyncio
+    async def test_ingest_single_file_with_store(self, tmp_path, monkeypatch):
+        (tmp_path / "one.py").write_text("def f():\n    return 1\n")
+        ingester = AutoIngester(root_path=str(tmp_path), provider="in_memory")
+        count = await ingester.ingest_single_file(str(tmp_path / "one.py"))
+        assert count >= 1
+        assert ingester.stats["files_scanned"] == 1
+        assert ingester.stats["chunks_created"] >= 1
+
+    def test_query_relevant_with_store(self, tmp_path, monkeypatch):
+        (tmp_path / "doc.txt").write_text("knowledge about cats\n")
+        ingester = AutoIngester(root_path=str(tmp_path), provider="in_memory")
+        shared = {}
+
+        async def fake_get_store():
+            from domains.inference.vector_store import create_vector_store
+            if shared.get("store") is None:
+                shared["store"] = await create_vector_store(provider="in_memory", dimension=384)
+            return shared["store"]
+
+        monkeypatch.setattr(ingester, "get_vector_store", fake_get_store)
+
+        async def seed():
+            await ingester.ingest_single_file(str(tmp_path / "doc.txt"))
+
+        asyncio.run(seed())
+        results = ingester.query_relevant("cats", top_k=5)
+        assert isinstance(results, list)
+        assert len(results) >= 1
+        assert results[0]["file"] == "doc.txt"
+
+    def test_main_dry_run(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv",
+                            ["auto_ingest", "--path", str(tmp_path), "--dry-run"])
+        asyncio.run(main())
+        out = capsys.readouterr().out
+        assert "Done" in out
+
+    def test_main_file(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "one.py").write_text("def f():\n    return 1\n")
+        monkeypatch.setattr(sys, "argv",
+                            ["auto_ingest", "--path", str(tmp_path), "--file", str(tmp_path / "one.py")])
+        asyncio.run(main())
+        out = capsys.readouterr().out
+        assert "Ingested" in out
+
+    def test_module_main_block(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["auto_ingest", "--path", str(tmp_path), "--dry-run"])
+        module_path = os.path.abspath(os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "domains",
+                         "infrastructure", "auto_ingest.py")))
+        with open(module_path) as fh:
+            source = fh.read()
+        exec(compile(source, module_path, "exec"), {"__name__": "__main__", "__file__": module_path})
+        out = capsys.readouterr().out
+        assert "Done" in out
 
     @pytest.mark.asyncio
     async def test_ingest_single_file_missing_returns_zero(self, tmp_path):

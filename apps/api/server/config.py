@@ -77,7 +77,10 @@ class ServerConfig:
     enable_health_monitor: bool = True
     health_monitor_interval: int = 300
 
-    enable_process_guard: bool = True
+    native_soul_path: str = ""  # path to .soul file for native-trained model
+    enable_process_guard: bool = False
+    lazy_guard_autoload: bool = True  # defer parent weight load when a ProcessGuard + .slnc are available
+    process_guard_memory_limit_mb: float = 0.0  # 0 = auto-size from model file
     enable_web: bool = False
 
     jwt_secret: str = ""  # auto-generated if empty
@@ -103,7 +106,10 @@ class ServerConfig:
             inference_pool_size=int(os.getenv("SLO_INFERENCE_POOL_SIZE", str(max(1, multiprocessing.cpu_count() // 2)))),
             request_timeout_seconds=float(os.getenv("SLO_REQUEST_TIMEOUT", "120.0")),
             enable_watchdog=os.getenv("SLO_WATCHDOG", "true").lower() == "true",
-            enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower() in ("1", "true", "yes"),
+            native_soul_path=os.getenv("SLO_NATIVE_SOUL_PATH", "").strip(),
+            enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "false").lower() in ("1", "true", "yes"),
+            lazy_guard_autoload=os.getenv("SLO_LAZY_GUARD_AUTOLOAD", "true").lower() in ("1", "true", "yes"),
+            process_guard_memory_limit_mb=float(os.getenv("SLO_PROCESS_GUARD_MEMORY_LIMIT_MB", "0")),
             enable_workflow=os.getenv("SLO_AUTO_WORKFLOW", "true").lower() == "true",
             enable_health_monitor=os.getenv("SLO_HEALTH_MONITOR", "true").lower() == "true",
             health_monitor_interval=int(os.getenv("SLO_HEALTH_INTERVAL", "300")),
@@ -115,3 +121,18 @@ class ServerConfig:
 
 
 gen_config = GenerationConfig.from_env()
+
+# ── Runtime ProcessGuard toggle ──────────────────────────────────────
+# Defaults to the env var value but can be changed via POST /models/process-guard.
+_runtime_process_guard_enabled: bool = os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower() in ("1", "true", "yes")
+
+
+def get_process_guard_enabled() -> bool:
+    """Return the current runtime ProcessGuard enabled state."""
+    return _runtime_process_guard_enabled
+
+
+def set_process_guard_enabled(enabled: bool) -> None:
+    """Set the runtime ProcessGuard enabled state (persists until restart)."""
+    global _runtime_process_guard_enabled
+    _runtime_process_guard_enabled = enabled

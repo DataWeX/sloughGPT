@@ -22,6 +22,7 @@ Backends:
 
 import asyncio
 import heapq
+import inspect
 import logging
 import time
 import gc
@@ -201,6 +202,8 @@ class PriorityRequestQueue:
         async with self._lock:
             if len(self._heap) >= self._max_queue:
                 logger.warning("Queue full", max_queue=self._max_queue, request_id=request_id)
+                if inspect.iscoroutine(coro):
+                    coro.close()
                 raise RuntimeError(f"Queue full ({self._max_queue} items)")
             future: asyncio.Future = asyncio.get_running_loop().create_future()
             item = _QueueItem(
@@ -217,6 +220,28 @@ class PriorityRequestQueue:
                       queue_depth=len(self._heap))
         self._wake_event.set()
         return await future
+
+    def close(self) -> None:
+        """Discard all pending (not yet started) submissions.
+
+        Closes heap-resident coroutines and cancels their result futures so
+        callers still awaiting :meth:`submit` unblock with ``CancelledError``.
+        Safe once workers have stopped; a concurrent worker may still start a
+        just-popped item, which is then awaited normally.
+
+        Side effects:
+            - closes every enqueued-but-unstarted coroutine
+            - cancels every enqueued result future
+            - clears the heap
+        """
+        items = list(self._heap)
+        self._heap.clear()
+        for item in items:
+            if inspect.iscoroutine(item.coro):
+                item.coro.close()
+            if not item.future.done():
+                item.future.cancel()
+        self._wake_event.set()
 
     def _pop(self) -> Optional[_QueueItem]:
         """Pop highest-priority item (caller must hold ``_lock``)."""
@@ -1020,6 +1045,7 @@ class ModelServer:
         self._max_concurrent = max_concurrent
         self._request_queue: Optional[PriorityRequestQueue] = None
         self._queue_task: Optional[asyncio.Task] = None
+        self._queue_loop: Optional[asyncio.AbstractEventLoop] = None
 
         # Read/write separation — readers (tokenize, health) can run concurrently;
         # writers (generate) get exclusive access.
@@ -1092,33 +1118,53 @@ class ModelServer:
 
         Runs in a daemon thread so it never blocks startup. Warmup failures
         are logged but never raised — they don't prevent the model from serving.
+
+        Warmup deliberately bypasses the async priority queue: it runs on a
+        throwaway thread, and submitting to the queue there would bind the
+        queue to a loop that closes when warmup finishes, racing with live
+        requests from other threads and cancelling their in-flight futures.
+        Metrics are still recorded so warmup activity stays observable.
         """
+        with self._metrics_lock:
+            self.metrics.requests_total += 1
         try:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(self.generate(
-                    prompt=self._warmup_prompt,
-                    max_new_tokens=5,
-                    temperature=0.7,
-                ))
-            finally:
-                loop.close()
+            start = time.time()
+            result = self._generate_sync(
+                prompt=self._warmup_prompt,
+                max_new_tokens=5,
+                temperature=0.7,
+                top_p=0.9,
+                top_k=50,
+                repetition_penalty=1.0,
+            )
+            elapsed_ms = (time.time() - start) * 1000
+            tokens = result.get("tokens_generated", 0)
+            with self._metrics_lock:
+                self.metrics.record_success(elapsed_ms, tokens)
             with self._warmup_lock:
                 self._warmup_completed = True
             logger.info("ModelServer[%s]: warmup completed", self.model_id, extra={"tag": "MODEL"})
-            # Apply torch.compile after warmup (enhances JIT cache)
-            if not self._compiled and self._model_ref is not None:
-                compiled = _torch_compile_model(self._model_ref, self.model_id)
-                if compiled is not self._model_ref:
-                    self._compiled = True
-                    self._model_ref = compiled
-                    if self._local_backend is not None:
-                        self._local_backend._model_ref = compiled
+            # Apply torch.compile after warmup (enhances JIT cache).  Re-validate
+            # the model reference under the swap lock: a concurrent swap_model()
+            # may have replaced it while compile was running, and clobbering the
+            # new model with a stale compiled ref would silently revert the swap.
+            if not self._compiled:
+                ref = self._model_ref
+                if ref is not None:
+                    compiled = _torch_compile_model(ref, self.model_id)
+                    if compiled is not ref:
+                        with self._lock:
+                            if self._model_ref is ref:
+                                self._compiled = True
+                                self._model_ref = compiled
+                                if self._local_backend is not None:
+                                    self._local_backend._model_ref = compiled
         except Exception as e:
             with self._warmup_lock:
                 self._warmup_error = f"{type(e).__name__}: {e}"
+            with self._metrics_lock:
+                self.metrics.record_failure(f"{type(e).__name__}: {e}")
+            self._on_generation_error(e)
             # Don't warn for expected failures (missing torch on CPU-only, etc.)
             if "No module named" in str(e):
                 logger.debug("ModelServer[%s]: warmup skipped: %s", self.model_id, e)
@@ -1220,17 +1266,34 @@ class ModelServer:
     async def _ensure_queue(self) -> PriorityRequestQueue:
         """Lazily create the priority queue and worker tasks on first call.
 
-        Workers run as asyncio tasks on the current event loop.
+        Workers run asyncio tasks on the current event loop.
+
+        The queue is bound to the event loop it was first created on.  Warmup
+        runs ``self.generate()`` inside its own throwaway loop, so the queue
+        may end up bound to that loop after it has been closed — submitting to
+        it would hang forever.  When called from a different loop, rebuild the
+        queue here so the current loop's submits are always processed.
         """
+        loop = asyncio.get_running_loop()
         if self._request_queue is not None:
-            return self._request_queue
+            if self._queue_loop is None:
+                # Queue injected externally (tests) — assume it lives on the
+                # current loop.
+                self._queue_loop = loop
+                return self._request_queue
+            if self._queue_loop is loop:
+                return self._request_queue
+            # Bound to a different (likely closed) loop — rebuild below.
+            self._request_queue.close()
+            self._request_queue = None
+            self._queue_task = None
+            self._queue_loop = None
         q = PriorityRequestQueue(
             max_concurrent=self._max_concurrent or 2,
             max_queue=256,
         )
         self._request_queue = q
-        # Start workers (one per slot)
-        loop = asyncio.get_running_loop()
+        self._queue_loop = loop
         self._queue_task = loop.create_task(self._run_queue_workers(q))
         return q
 
@@ -1590,16 +1653,8 @@ class ModelServer:
         aborted = False
         pump_thread = None
         try:
-            # Run the backend's sync generator in a thread pool so we
-            # don't block the event loop during generation.
-            loop = asyncio.get_event_loop()
-
-            def _gen():
-                return backend.generate_stream(
-                    prompt, max_new_tokens, temperature,
-                    top_p, top_k, repetition_penalty,
-                    cancel_event=cancel_event, **kwargs,
-                )
+            # Run the backend's sync generator in a thread so we don't block
+            # the event loop during generation.
 
             # We can't directly await a generator, so we run the
             # first-token generation in a thread and then iterate
@@ -1775,10 +1830,7 @@ class ModelServer:
             self._local_backend._model_ref = new_model
         # Clean up old model
         if old is not None and old is not new_model:
-            try:
-                del old
-            except Exception:
-                pass
+            del old
             _schedule_gc()
         self._check_device()
         self.set_status(ModelStatus.READY)
@@ -1788,8 +1840,11 @@ class ModelServer:
         logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"tag": "MODEL"})
         # Reset queue so the next generate() creates fresh workers on
         # whichever event loop it runs on (warmup thread or test).
+        if self._request_queue is not None:
+            self._request_queue.close()
         self._request_queue = None
         self._queue_task = None
+        self._queue_loop = None
         # Re-warmup with new model
         with self._warmup_lock:
             self._warmup_completed = False

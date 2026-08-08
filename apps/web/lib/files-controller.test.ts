@@ -1,112 +1,91 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-vi.mock('./auth', () => ({
-  useAuthStore: {
-    getState: () => ({ token: null as string | null }),
-  },
-}))
-
-vi.mock('./config', () => ({
-  PUBLIC_API_URL: 'http://127.0.0.1:9',
-}))
-
-import { setupApiMocks, apiClient } from './__test-helper'
-setupApiMocks()
-
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { filesController } from './files-controller'
+import * as http from './http-client'
+
+vi.mock('./http-client', () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+  apiDelete: vi.fn(),
+}))
+
+const apiGet = vi.mocked(http.apiGet)
+const apiPost = vi.mocked(http.apiPost)
+const apiDelete = vi.mocked(http.apiDelete)
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('filesController', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  const mockFiles = [
+    { id: '1', filename: 'test.txt', size: 100, content_type: 'text/plain', uploaded_at: '2026-01-01', ingested: false },
+    { id: '2', filename: 'data.csv', size: 200, content_type: 'text/csv', uploaded_at: '2026-01-02', ingested: true, chunk_count: 5 },
+  ]
 
-  it('list GETs /files', async () => {
-    apiClient.apiGet.mockResolvedValue({ files: [{ id: '1', filename: 'test.txt' }], total: 1 })
+  it('list returns files from {files} response', async () => {
+    apiGet.mockResolvedValue({ files: mockFiles })
     const result = await filesController.list()
-    expect(result.files.length).toBe(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files')
+    expect(result).toEqual(mockFiles)
+    expect(apiGet).toHaveBeenCalledWith('/files/')
   })
 
-  it('list passes sort/order/tag params', async () => {
-    apiClient.apiGet.mockResolvedValue({ files: [], total: 0 })
-    await filesController.list('name', 'asc', 'code')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files?sort=name&order=asc&tag=code')
+  it('list handles flat array response', async () => {
+    apiGet.mockResolvedValue(mockFiles)
+    const result = await filesController.list()
+    expect(result).toEqual(mockFiles)
   })
 
-  it('upload POSTs multipart form data', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: '1', filename: 'test.txt', chars: 100, pages: 1, size_bytes: 200 })
-    const file = new File(['hello'], 'test.txt', { type: 'text/plain' })
-    const result = await filesController.upload(file)
-    expect(result.id).toBe('1')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/files/upload', expect.any(FormData), { raw: true })
+  it('list handles empty response', async () => {
+    apiGet.mockResolvedValue(undefined)
+    const result = await filesController.list()
+    expect(result).toEqual([])
   })
 
-  it('upload passes tags in form data', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: '2', filename: 'doc.txt', chars: 50, pages: 1, size_bytes: 100 })
-    const file = new File(['data'], 'doc.txt')
-    await filesController.upload(file, ['code', 'docs'])
-    const callArgs = apiClient.apiPost.mock.calls[0][1] as FormData
-    expect(callArgs.get('tags')).toBe('["code","docs"]')
+  it('upload calls apiPost with raw option', async () => {
+    const formData = new FormData()
+    apiPost.mockResolvedValue({ filename: 'test.txt' })
+    const result = await filesController.upload(formData)
+    expect(result).toEqual({ filename: 'test.txt' })
+    expect(apiPost).toHaveBeenCalledWith('/files/upload', formData, { raw: true })
   })
 
-  it('get GETs /files/{id}', async () => {
-    apiClient.apiGet.mockResolvedValue({ id: '1', filename: 'test.txt', extension: '.txt', size_bytes: 200, chars: 100, pages: 1, uploaded_at: 1000, tags: [], text: 'hello' })
-    const result = await filesController.get('1')
-    expect(result.filename).toBe('test.txt')
-    expect(result.text).toBe('hello')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files/1')
+  it('delete calls apiDelete with correct path', async () => {
+    apiDelete.mockResolvedValue(undefined)
+    await filesController.delete('abc-123')
+    expect(apiDelete).toHaveBeenCalledWith('/files/abc-123')
   })
 
-  it('delete DELETEs /files/{id}', async () => {
-    apiClient.apiDelete.mockResolvedValue(undefined)
-    await filesController.delete('1')
-    expect(apiClient.apiDelete).toHaveBeenCalledWith('/files/1')
+  it('ingest calls apiPost with correct path', async () => {
+    apiPost.mockResolvedValue(undefined)
+    await filesController.ingest('abc-123')
+    expect(apiPost).toHaveBeenCalledWith('/files/abc-123/ingest')
   })
 
-  it('search GETs /files/search', async () => {
-    apiClient.apiGet.mockResolvedValue({ files: [{ id: '1', filename: 'test.txt' }], total: 1 })
-    const result = await filesController.search('hello')
-    expect(result.files.length).toBe(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files/search?q=hello')
+  it('search calls apiGet with encoded query', async () => {
+    apiGet.mockResolvedValue({ results: [mockFiles[0]] })
+    const result = await filesController.search('hello world')
+    expect(result).toEqual([mockFiles[0]])
+    expect(apiGet).toHaveBeenCalledWith('/files/search?q=hello%20world')
   })
 
-  it('search passes tag param', async () => {
-    apiClient.apiGet.mockResolvedValue({ files: [], total: 0 })
-    await filesController.search('hello', 'code')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files/search?q=hello&tag=code')
+  it('search handles flat array response', async () => {
+    apiGet.mockResolvedValue(mockFiles)
+    const result = await filesController.search('test')
+    expect(result).toEqual(mockFiles)
   })
 
-  it('ingest POSTs /files/{id}/ingest', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: '1', filename: 'test.txt', chars: 100, facts_stored: 5 })
-    const result = await filesController.ingest('1')
-    expect(result.facts_stored).toBe(5)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/files/1/ingest')
+  it('search handles empty/undefined response', async () => {
+    apiGet.mockResolvedValue(undefined)
+    const result = await filesController.search('test')
+    expect(result).toEqual([])
   })
 
-  it('extract uploads then gets file detail', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: '1', filename: 'test.txt', chars: 100, pages: 1, size_bytes: 200 })
-    apiClient.apiGet.mockResolvedValue({ id: '1', filename: 'test.txt', extension: '.txt', size_bytes: 200, chars: 100, pages: 1, uploaded_at: 1000, tags: [], text: 'extracted content' })
-    const file = new File(['hello'], 'test.txt')
+  it('extract calls apiPost with FormData and raw option', async () => {
+    const file = new File(['content'], 'test.txt', { type: 'text/plain' })
+    const expected = { text: 'content', filename: 'test.txt', chars: 7 }
+    apiPost.mockResolvedValue(expected)
     const result = await filesController.extract(file)
-    expect(result.text).toBe('extracted content')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/files/upload', expect.any(FormData), { raw: true })
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files/1')
-  })
-
-  describe('formatSize', () => {
-    it('returns B for small sizes', () => {
-      expect(filesController.formatSize(500)).toBe('500 B')
-    })
-    it('returns KB for medium sizes', () => {
-      expect(filesController.formatSize(2048)).toBe('2.0 KB')
-    })
-    it('returns MB for large sizes', () => {
-      expect(filesController.formatSize(5 * 1024 * 1024)).toBe('5.0 MB')
-    })
-  })
-
-  describe('formatDate', () => {
-    it('formats unix timestamp', () => {
-      const result = filesController.formatDate(0)
-      expect(result).toContain('1970')
-    })
+    expect(result).toEqual(expected)
+    expect(apiPost).toHaveBeenCalledWith('/files/extract', expect.any(FormData), { raw: true })
   })
 })

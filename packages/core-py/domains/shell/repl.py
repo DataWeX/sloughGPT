@@ -42,6 +42,68 @@ from .state import ShellState
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("slo.shell.repl")
 
+# ── Process-wide log handlers (shared by every ShellREPL instance) ───
+#
+# A RotatingFileHandler holds an open file descriptor, and a LogBufferHandler
+# accumulates on the shared "slo" logger. Creating one per ShellREPL instance
+# leaks one fd per instance and multiplies log writes. Both handlers are
+# created once per process and attached idempotently.
+
+_file_handler: "logging.handlers.RotatingFileHandler | None" = None
+_buf_handler: "logging.Handler | None" = None
+
+
+def _get_file_handler() -> "logging.handlers.RotatingFileHandler | None":
+    """Return the process-wide shell_infra.log handler, creating it once.
+
+    Returns:
+        The shared RotatingFileHandler, or None if it could not be created.
+
+    Side effects:
+        - creates ~/.config/sloughgpt/ and shell_infra.log on first call
+    """
+    global _file_handler
+    if _file_handler is not None and not getattr(_file_handler, "closed", False):
+        return _file_handler
+    try:
+        _log_dir = Path.home() / ".config" / "sloughgpt"
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(
+            str(_log_dir / "shell_infra.log"),
+            maxBytes=10 * 1024 * 1024,
+            backupCount=3,
+        )
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)-7s %(name)s  %(message)s"
+        ))
+        handler.setLevel(logging.DEBUG)
+        _file_handler = handler
+    except Exception:
+        return None
+    return _file_handler
+
+
+def _get_log_buffer_handler() -> "logging.Handler | None":
+    """Return the process-wide log-buffer handler, creating it once.
+
+    Returns:
+        The shared LogBufferHandler, or None if the log buffer module is
+        unavailable.
+
+    Side effects:
+        - attaches to the shared log buffer on first call
+    """
+    global _buf_handler
+    if _buf_handler is not None and not getattr(_buf_handler, "closed", False):
+        return _buf_handler
+    try:
+        from .log_buffer import get_log_buffer, LogBufferHandler
+        _buf_handler = LogBufferHandler(get_log_buffer())
+        _buf_handler.setLevel(logging.DEBUG)
+    except Exception:
+        return None
+    return _buf_handler
+
 # ── ANSI color constants (disabled via NO_COLOR env var) ─────────────
 
 _COLOR_ENABLED = not os.environ.get("NO_COLOR")
@@ -164,7 +226,10 @@ class _CaptureOutput:
             from .io import MemoryIO
             self._mem = MemoryIO()
             self._old_io = self._repl.io
+            self._old_console_io = getattr(self._repl.console, '_io', None)
             self._repl.io = self._mem
+            if self._old_console_io is not None:
+                self._repl.console._io = self._mem
         else:
             self._buf = io.StringIO()
             self._old_stdout = sys.stdout
@@ -174,6 +239,8 @@ class _CaptureOutput:
     def __exit__(self, *exc):
         if self._repl is not None and self._old_io is not None:
             self._repl.io = self._old_io
+            if self._old_console_io is not None:
+                self._repl.console._io = self._old_console_io
         elif self._old_stdout is not None:
             sys.stdout = self._old_stdout
 
@@ -238,7 +305,7 @@ class ShellREPL:
         self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
 
         # Log buffer — captures infra + API server logs for the console panel
-        from .log_buffer import get_log_buffer, LogBufferHandler, LogEntry
+        from .log_buffer import get_log_buffer, LogEntry
         self._log_buffer = get_log_buffer()
         _wrap_emit = self.log.emit
         def _buffered_emit(record):
@@ -251,29 +318,23 @@ class ShellREPL:
                 context=dict(record.context),
             ))
         self.log.emit = _buffered_emit
-        _log_buf_handler = LogBufferHandler(self._log_buffer)
-        _log_buf_handler.setLevel(logging.DEBUG)
-        logging.getLogger("slo").addHandler(_log_buf_handler)
-        # Also attach directly to child loggers that disable propagation during boot
-        for _child_name in ("slo.kernel", "slo.shell.runtime", "slo.shell.init"):
-            _child = logging.getLogger(_child_name)
-            if _log_buf_handler not in _child.handlers:
-                _child.addHandler(_log_buf_handler)
+        _log_buf_handler = _get_log_buffer_handler()
+        if _log_buf_handler is not None:
+            _slo_logger = logging.getLogger("slo")
+            if _log_buf_handler not in _slo_logger.handlers:
+                _slo_logger.addHandler(_log_buf_handler)
+            # Also attach directly to child loggers that disable propagation during boot
+            for _child_name in ("slo.kernel", "slo.shell.runtime", "slo.shell.init"):
+                _child = logging.getLogger(_child_name)
+                if _log_buf_handler not in _child.handlers:
+                    _child.addHandler(_log_buf_handler)
         _log_dir = _audit_dir = Path.home() / ".config" / "sloughgpt"
         _log_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            _file_handler = logging.handlers.RotatingFileHandler(
-                str(_log_dir / "shell_infra.log"),
-                maxBytes=10 * 1024 * 1024,
-                backupCount=3,
-            )
-            _file_handler.setFormatter(logging.Formatter(
-                "%(asctime)s %(levelname)-7s %(name)s  %(message)s"
-            ))
-            _file_handler.setLevel(logging.DEBUG)
-            logging.getLogger("slo").addHandler(_file_handler)
-        except Exception:
-            pass
+        _file_handler = _get_file_handler()
+        if _file_handler is not None:
+            _slo_logger = logging.getLogger("slo")
+            if _file_handler not in _slo_logger.handlers:
+                _slo_logger.addHandler(_file_handler)
 
         self._log_buffer_bridge_setup = True
 
@@ -665,6 +726,9 @@ class ShellREPL:
                     candidates = store.sprints()
                 else:
                     candidates = self._complete_args_for(cmd)
+            elif cmd == "finetuned" and len(parts) >= 2 and parts[1].lower() in ("load", "rm", "del", "delete") and line.endswith(" "):
+                ft = self.cmds.finetuned_models()
+                candidates = [m.get("model_name", "") for m in ft]
             else:
                 candidates = self._complete_args_for(cmd)
 
@@ -714,8 +778,7 @@ class ShellREPL:
                 cps = self.cmds.checkpoints()
                 return [cp.get("name", "") for cp in cps]
             if cmd in ("finetuned",):
-                ft = self.cmds.finetuned_models()
-                return [m.get("model_name", "") for m in ft]
+                return ["load", "rm", "del", "delete"]
             if cmd == "train":
                 return ["status", "follow", "stop", "distill", "hf", "auto", "load", "del"]
             if cmd in ("permit", "deny"):
@@ -1694,7 +1757,7 @@ class ShellREPL:
                 "remember": "  remember <fact>  — Store a fact in the knowledge base",
                 "recall": "  recall <query>  — Search the knowledge base",
                 "checkpoints": "  checkpoints  — List training checkpoints (tab-completes names)",
-                "finetuned": "  finetuned  — List fine-tuned models",
+                "finetuned": "  finetuned  — List fine-tuned models (load <name> | rm <name>)",
                 "protect": "  protect <model>  — Protect model files from accidental deletion (read-only + manifest)",
                 "unprotect": "  unprotect <model>  — Remove protection from a model's files",
                 "gen": "  gen <prompt>  — Generate text via inference",
@@ -1896,7 +1959,7 @@ Most common commands (help [cmd] for details, help for full list):
 
 {_C_CYAN}Training:{_C_RESET}
   checkpoints             List training checkpoints (tab-completes names)
-  finetuned               List fine-tuned models (tab-completes names)
+  finetuned               List fine-tuned models (load <name> | rm <name>)
 
 {_C_CYAN}Inference:{_C_RESET}
   gen <prompt>            Generate text
@@ -1966,8 +2029,9 @@ Examples:
         elif target == "-":
             target = self._env.get("OLDPWD", os.getcwd())
         try:
+            old_cwd = os.getcwd()
             os.chdir(os.path.expanduser(target))
-            self._env["OLDPWD"] = os.getcwd()
+            self._env["OLDPWD"] = old_cwd
             self._last_exit_code = 0
         except FileNotFoundError:
             self._print(f"  cd: no such file or directory: {target}")
@@ -2873,7 +2937,7 @@ Examples:
 
     def _cmd_env(self, args: str = "") -> None:
         """Print environment variables."""
-        for k, v in sorted(self._environ.items()):
+        for k, v in sorted(self._env.items()):
             self._print(f"  {k}={v}")
         self._last_exit_code = 0
 
@@ -3585,6 +3649,9 @@ Examples:
             self._print(f"  Loading {model_name}...")
             self._print("  (this may take 30-120s on CPU)")
             result = self.cmds.load_model(model_name)
+            if result is None:
+                self._print(f"  ✗ Load failed")
+                return
             status = result.get("status", "?")
             if status == "loaded":
                 self._print(f"  ✓ {model_name} loaded on {result.get('device', 'cpu')}")
@@ -4074,7 +4141,8 @@ Examples:
 
         self._print(f"  Following job {job_id} (Ctrl+C to detach)")
 
-        while True:
+        max_polls = 200
+        for poll in range(max_polls):
             try:
                 result = _api_get(f"/training/jobs/{job_id}")
                 if not result:
@@ -4082,6 +4150,9 @@ Examples:
                     return
 
                 status = result.get("status", "unknown")
+                if status == "unknown":
+                    self._print(f"  Job {job_id} has no known status — detached")
+                    return
                 progress = result.get("progress", 0)
                 epoch = result.get("current_epoch", result.get("epoch", 0))
                 epochs = result.get("epochs", 0)
@@ -4127,6 +4198,8 @@ Examples:
                 return
 
             time.sleep(3)
+
+        self._print(f"  Job {job_id} still running after {max_polls} polls — detached")
 
     def _cmd_gen(self, args: str = "") -> None:
         if not args:
@@ -4244,7 +4317,9 @@ Examples:
                 self._print("  Usage: render light x y z [r g b strength]")
                 return
             x, y, z = _f(parts[1]), _f(parts[2]), _f(parts[3])
-            r, g, b = _f(parts[4], 1.0), _f(parts[5], 1.0), _f(parts[6], 1.0)
+            r = _f(parts[4], 1.0) if len(parts) > 4 else 1.0
+            g = _f(parts[5], 1.0) if len(parts) > 5 else 1.0
+            b = _f(parts[6], 1.0) if len(parts) > 6 else 1.0
             s = _f(parts[7], 5.0) if len(parts) > 7 else 5.0
             idx = dev.call("add_light", x, y, z, r, g, b, s)
             self._print(f"  Added light #{idx[0]}: ({x},{y},{z}) color=({r:.1f},{g:.1f},{b:.1f}) strength={s}")
@@ -4373,7 +4448,7 @@ Examples:
 
     def _cmd_agents(self, args: str = "") -> None:
         """Multi-agent orchestration: agents <goal> or agents list."""
-        from domains.agents.multi import get_orchestrator
+        from domains.agents.multi import get_orchestrator, SpecializedAgent
         orch = get_orchestrator()
         parts = args.strip().split(maxsplit=1)
         verb = parts[0].lower() if parts else ""
@@ -4457,7 +4532,7 @@ Examples:
             available_commands += f"\n  {name} - {h}"
 
         # Build shell context
-        ctx_parts = [f"  Current directory: {self.os.cwd}"]
+        ctx_parts = [f"  Current directory: {os.getcwd()}"]
         model = self._get_current_model()
         soul = self._get_current_soul()
         if model:
@@ -4511,7 +4586,7 @@ Examples:
                 out = self._execute_single(cmds[0][0], "")
                 self._print(out, end="")
         else:
-            error = result.get("error", "unknown")
+            error = result.get("error", "unknown") if isinstance(result, dict) else "unexpected response"
             self._print(f"  AI interpretation failed: {error}")
             self._print("  Falling back to keyword matching...")
             self._interpret_natural(args)
@@ -4914,6 +4989,22 @@ Examples:
         source = self._piped_input if self._piped_input else ""
         file_path = args.strip() if args else ""
 
+        if file_path == "--test" or file_path == "--self-test":
+            from domains.shell.vm import self_test as _vm_self_test
+            results = _vm_self_test()
+            self._print("  VM Self-Test:")
+            for line in results:
+                self._print(line)
+            return
+
+        if file_path == "--list" or file_path == "-l":
+            self._print("  Built-in programs (use asm --test to run):")
+            self._print("    hello      Hello World")
+            self._print("    counter    Count 0..9")
+            self._print("    fib        Fibonacci 0..12")
+            self._print("    collatz    Collatz from 27")
+            return
+
         if file_path:
             try:
                 source = Path(os.path.expanduser(file_path)).read_text()
@@ -4929,25 +5020,9 @@ Examples:
             self._last_exit_code = 1
             return
 
-        if args.strip() == "--test" or args.strip() == "--self-test":
-            from domains.shell.vm import self_test as _vm_self_test
-            results = _vm_self_test()
-            self._print("  VM Self-Test:")
-            for line in results:
-                self._print(line)
-            return
-
-        if args.strip() == "--list" or args.strip() == "-l":
-            self._print("  Built-in programs (use asm --test to run):")
-            self._print("    hello      Hello World")
-            self._print("    counter    Count 0..9")
-            self._print("    fib        Fibonacci 0..12")
-            self._print("    collatz    Collatz from 27")
-            return
-
         try:
             from domains.shell.vm import VMRunner, VMFault
-            runner = VMRunner(device_manager=self.os.devices)
+            runner = VMRunner(devices=self.os.devices)
             output = runner.assemble_and_run(source)
             for line in output:
                 self._print(line)
@@ -5118,9 +5193,9 @@ nl: db 10
 
         # Check built-in programs by name
         builtins = {
-            "hello": HELLO_X86,
-            "count": FIB_X86,
-            "counter": COLLATZ_X86,
+            "hello": ShellREPL.HELLO_X86,
+            "count": ShellREPL.FIB_X86,
+            "counter": ShellREPL.COLLATZ_X86,
         }
         if file_or_name and file_or_name in builtins:
             source = builtins[file_or_name]

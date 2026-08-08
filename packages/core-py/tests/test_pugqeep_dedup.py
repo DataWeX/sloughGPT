@@ -132,6 +132,17 @@ class TestDeduplicator:
         assert result["merged"] == 0
         assert lib2.has("p2")
 
+    def test_deduplicate_skips_group_when_keep_missing(self):
+        lib = PointLibrary(name="l1")
+        lib.add(make_linear_point("p1", 1.0, 0.0))
+        lib.add(make_linear_point("p2", 1.0, 0.0))
+        d = PointDeduplicator()
+        d.add_library(lib)
+        lib.remove("p1")
+        result = d.deduplicate()
+        assert result["merged"] == 0
+        assert lib.has("p2")
+
 
 class TestPointLibrarySync:
     def test_export_import_roundtrip(self):

@@ -9,7 +9,7 @@ export function useChatBookmarks() {
   const [bookmarks, setBookmarks] = useState<BookmarkedMessage[]>([])
 
   useEffect(() => {
-    chatDB.getBookmarks().then(items => setBookmarks(items)).catch(() => {})
+    chatDB.getBookmarks().then(items => setBookmarks(items)).catch(() => setBookmarks([]))
   }, [])
 
   const addBookmark = useCallback(async (msg: { id: string; content: string; role: 'user' | 'assistant'; timestamp?: number }, sessionTitle?: string) => {

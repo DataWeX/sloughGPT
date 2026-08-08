@@ -2,12 +2,14 @@
 Tests for Error Taxonomy (errors.py).
 """
 
+import asyncio
+
 import pytest
 from domains.infrastructure.errors import (
     AppError, RecoverableError, FatalError, ValidationError,
     ConfigError, ModelError, ModelOOMError, ModelTimeoutError,
     TaskError, ResourceExhaustedError, NotFoundError, AuthError,
-    error_to_sse, classify_exception,
+    error_to_sse, classify_exception, emit_error_event,
 )
 
 
@@ -192,3 +194,36 @@ class TestClassifyException:
             except RuntimeError as wrapper:
                 err = classify_exception(wrapper)
                 assert err.cause is wrapper
+
+
+class TestEmitErrorEvent:
+    async def test_emits_via_running_loop(self):
+        emit_error_event(ModelError("boom"))
+        await asyncio.sleep(0.01)
+
+    def test_emits_silently_when_bus_unavailable(self, monkeypatch):
+        import domains.infrastructure.event_bus as eb
+
+        monkeypatch.setattr(
+            eb, "get_event_bus",
+            lambda: (_ for _ in ()).throw(RuntimeError("no bus")),
+        )
+        emit_error_event(ModelError("boom"))
+
+    def test_emits_sync_without_running_loop(self, monkeypatch):
+        import domains.infrastructure.event_bus as eb
+
+        calls = []
+
+        class _Bus:
+            def emit(self, *args, **kwargs):
+                calls.append(("emit", args, kwargs))
+
+            def emit_sync(self, *args, **kwargs):
+                calls.append(("emit_sync", args, kwargs))
+
+        monkeypatch.setattr(eb, "get_event_bus", lambda: _Bus())
+        emit_error_event(ModelError("boom"))
+        assert calls, "expected emit_sync call"
+        assert calls[0][0] == "emit_sync"
+        assert calls[0][1][0] == "error.raised"

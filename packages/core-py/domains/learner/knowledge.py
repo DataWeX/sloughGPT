@@ -33,7 +33,12 @@ from dataclasses import dataclass, field, asdict
 import numpy as np
 
 logger = logging.getLogger("slo.learner.knowledge")
-KNOWLEDGE_DIR = Path("data/knowledge")
+# Anchor to the repository root so data paths resolve deterministically
+# regardless of the process CWD. A CWD-relative path silently reads/writes
+# a different directory when the server is launched from anywhere else,
+# which previously produced a stray data/ dir and "missing facts" bugs.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+KNOWLEDGE_DIR = _REPO_ROOT / "data" / "knowledge"
 KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
 
 FEED_STATE_PATH = KNOWLEDGE_DIR / "feeds.json"

@@ -41,7 +41,7 @@ COLUMN_TO_STATUS = {
     "done": "done",
 }
 
-STATUSES = ["open", "wip", "done", "blocked", "review"]
+STATUSES = ["open", "wip", "done", "blocked", "review", "todo"]
 
 
 def _walk_for_board(start: Path) -> Path | None:

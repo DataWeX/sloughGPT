@@ -3,7 +3,9 @@ Tests for Event Bus (event_bus.py).
 """
 
 import asyncio
+import logging
 import pytest
+from domains.infrastructure import event_bus as eb
 from domains.infrastructure.event_bus import (
     EventBus, Event, EventPriority,
     get_event_bus, set_event_bus,
@@ -250,6 +252,7 @@ class TestEventBus:
         bus.clear("*")
         assert bus.subscriber_count == 0
 
+    @pytest.mark.filterwarnings("ignore:coroutine .* was never awaited:RuntimeWarning")
     async def test_emit_sync_skips_async_handlers(self, bus):
         results = []
         async def async_handler(event, data):
@@ -304,3 +307,94 @@ class TestEventBus:
         bus.on("test", bad)
         n = await bus.emit("test")
         assert n == 1
+
+
+# ── Sync / once / replay / log-subscriber branch coverage ──
+
+
+class TestEventBusCoverage:
+    def test_once_wildcard_fires_once(self, bus):
+        calls = []
+
+        def h(event, data):
+            calls.append(event)
+
+        bus.once("*", h)
+        n1 = bus.emit_sync("a")
+        n2 = bus.emit_sync("b")
+        assert calls == ["a"]
+        assert n1 == 1
+        assert n2 == 0
+
+    def test_once_specific_fires_once_sync(self, bus):
+        calls = []
+
+        def h(event, data):
+            calls.append(1)
+
+        bus.once("test", h)
+        bus.emit_sync("test")
+        bus.emit_sync("test")
+        assert calls == [1]
+
+    def test_emit_sync_errored_once_handler(self, bus, caplog):
+        def bad(event, data):
+            raise ValueError("boom")
+
+        bus.once("test", bad)
+        with caplog.at_level(logging.ERROR, logger="slo.event_bus"):
+            n = bus.emit_sync("test")
+        assert n == 1
+        assert "Sync handler failed for" in caplog.text
+        assert bus.subscriber_count == 0
+
+    @pytest.mark.filterwarnings("ignore:coroutine .* was never awaited:RuntimeWarning")
+    def test_replay_async_handler_warns_filtered(self, bus):
+        async def h(event, data):
+            pass
+
+        bus.emit_sync("e", {"x": 1})
+        with pytest.warns(UserWarning, match="async handler passed to sync replay"):
+            bus.replay("e", h)
+
+    def test_replay_errored_handler_logs(self, bus, caplog):
+        def bad(event, data):
+            raise ValueError("nope")
+
+        bus.emit_sync("e", {"x": 1})
+        with caplog.at_level(logging.ERROR, logger="slo.event_bus"):
+            bus.replay("e", bad)
+        assert "Replay handler failed for" in caplog.text
+
+    def test_is_noisy(self):
+        assert eb._is_noisy("heartbeat")
+        assert eb._is_noisy("metric.cpu")
+        assert not eb._is_noisy("model.loaded")
+
+    def test_install_log_subscriber(self, monkeypatch, caplog):
+        monkeypatch.setattr(eb, "_LOG_SUBSCRIBER_INSTALLED", False)
+        b = EventBus(max_history=5)
+        eb.install_log_subscriber(b)
+        assert b.subscriber_count == 1
+        with caplog.at_level(logging.INFO, logger="slo.event_sensor"):
+            b.emit_sync("model.loaded", {"name": "gpt2"})
+            b.emit_sync("heartbeat")
+        assert "EVENT model.loaded" in caplog.text
+        assert "{'name': 'gpt2'}" in caplog.text
+        assert "EVENT heartbeat" not in caplog.text
+
+    def test_install_log_subscriber_idempotent(self, monkeypatch):
+        monkeypatch.setattr(eb, "_LOG_SUBSCRIBER_INSTALLED", False)
+        b1 = EventBus()
+        b2 = EventBus()
+        eb.install_log_subscriber(b1)
+        eb.install_log_subscriber(b2)
+        assert b1.subscriber_count == 1
+        assert b2.subscriber_count == 0
+
+    def test_install_log_subscriber_default_bus(self, monkeypatch):
+        monkeypatch.setattr(eb, "_LOG_SUBSCRIBER_INSTALLED", False)
+        b = EventBus()
+        monkeypatch.setattr(eb, "get_event_bus", lambda: b)
+        eb.install_log_subscriber()
+        assert b.subscriber_count == 1

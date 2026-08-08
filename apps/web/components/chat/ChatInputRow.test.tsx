@@ -38,25 +38,25 @@ describe('ChatInputRow', () => {
     expect(screen.getByTestId('mock-send')).toBeDefined()
   })
 
-  it('shows char count when value has text', () => {
+  it('shows token estimate when value has text', () => {
     render(<ChatInputRow {...defaultProps} value="Hello" />)
-    expect(screen.getByLabelText('Characters typed: 5')).toBeDefined()
+    expect(screen.getByLabelText('Estimated 2 tokens')).toBeDefined()
   })
 
-  it('does not show char count when empty', () => {
+  it('does not show token estimate when empty', () => {
     const { container } = render(<ChatInputRow {...defaultProps} value="" />)
-    expect(container.querySelector('[aria-label^="Characters"]')).toBeNull()
+    expect(container.querySelector('[aria-label^="Estimated"]')).toBeNull()
   })
 
   it('shows warning color at 2000 chars', () => {
     render(<ChatInputRow {...defaultProps} value={'x'.repeat(2500)} />)
-    const count = screen.getByLabelText('Characters typed: 2500')
+    const count = screen.getByLabelText('Estimated 625 tokens')
     expect(count.className).toContain('warning')
   })
 
   it('shows destructive color at 4000 chars', () => {
     render(<ChatInputRow {...defaultProps} value={'x'.repeat(4500)} />)
-    const count = screen.getByLabelText('Characters typed: 4500')
+    const count = screen.getByLabelText('Estimated 1125 tokens')
     expect(count.className).toContain('destructive')
   })
 

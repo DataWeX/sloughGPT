@@ -1,6 +1,6 @@
 'use client'
 
-import React, { forwardRef, useState, useEffect } from 'react'
+import React, { forwardRef, memo, useState, useEffect } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { EmptyState } from './EmptyState'
 import { SystemBanner } from './SystemBanner'
@@ -10,11 +10,12 @@ import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatMessage } from './types'
 import { cn } from '@sloughgpt/strui'
+import { MS_PER_DAY } from '@/lib/format-bytes'
 
 function formatDateLabel(date: Date): string {
   const now = new Date()
   const input = new Date(date)
-  const diffDays = Math.floor((now.getTime() - input.getTime()) / 86400000)
+  const diffDays = Math.floor((now.getTime() - input.getTime()) / MS_PER_DAY)
   if (diffDays === 0) return 'Today'
   if (diffDays === 1) return 'Yesterday'
   if (diffDays < 7) return input.toLocaleDateString(undefined, { weekday: 'long' })
@@ -36,7 +37,7 @@ interface ChatScreenProps {
   toolEvents?: ToolCallEvent[]
   onRefreshHealth: () => void
   onCopy: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (fromMessageId?: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
@@ -47,11 +48,12 @@ interface ChatScreenProps {
   isBookmarked?: (id: string) => boolean
   onBookmark?: (messageId: string) => void
   onDelete?: (messageId: string) => void
+  onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
 }
 
-export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, collapsibleLength }, ref) {
+export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -82,9 +84,9 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
           <div className="mx-auto w-full max-w-2xl px-3 sm:px-4 py-8 space-y-4" role="status" aria-busy="true" aria-label="Loading messages">
             <span className="sr-only">Loading conversation...</span>
             {[1, 2, 3].map(i => (
-              <div key={i} className="animate-pulse space-y-2" aria-hidden="true">
-                <div className={cn("h-8 rounded-lg", i % 2 === 0 ? "ml-12 w-3/4" : "mr-12 w-2/3 ml-auto")} style={{ backgroundColor: 'hsl(var(--muted))' }} />
-                <div className={cn("h-4 rounded", i % 2 === 0 ? "ml-12 w-1/2" : "mr-12 w-1/3 ml-auto")} style={{ backgroundColor: 'hsl(var(--muted))' }} />
+                <div key={i} className="animate-pulse space-y-2" aria-hidden="true">
+                <div className={cn("h-8 rounded-lg bg-muted", i % 2 === 0 ? "ml-12 w-3/4" : "mr-12 w-2/3 ml-auto")} />
+                <div className={cn("h-4 rounded bg-muted", i % 2 === 0 ? "ml-12 w-1/2" : "mr-12 w-1/3 ml-auto")} />
               </div>
             ))}
           </div>
@@ -104,14 +106,14 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
 
         <div
           id="chat-messages"
-          className="mx-auto w-full max-w-2xl space-y-3 sm:space-y-4 px-3 sm:px-4 pb-2"
+          className="mx-auto w-full max-w-2xl space-y-2 sm:space-y-3 px-3 sm:px-4 pb-2"
           role="feed"
           aria-label="Message history"
           aria-busy={loading}
         >
           {messages.map((message, index) => {
             const isLast = index === messages.length - 1
-            const showRegenerate = isLast && message.role === 'assistant' && onRegenerate
+            const showRegenerate = message.role === 'assistant' && onRegenerate && !loading
             const isStreaming = loading && isLast && message.role === 'assistant'
             const prevMsg = index > 0 ? messages[index - 1] : null
             const showDateDivider = !prevMsg || isDifferentDay(prevMsg.timestamp, message.timestamp)
@@ -139,7 +141,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
                 onThumbsUp={onThumbsUp}
                 onThumbsDown={onThumbsDown}
                 onEdit={onEdit}
-                onRegenerate={showRegenerate ? onRegenerate : undefined}
+                onRegenerate={showRegenerate ? () => onRegenerate?.(message.id) : undefined}
                 onSuggestionClick={onSuggestionClick}
                 searchQuery={searchQuery}
                 isStreaming={isStreaming}
@@ -148,6 +150,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
                 isBookmarked={isBookmarked?.(message.id)}
                 onBookmark={onBookmark}
                 onDelete={onDelete}
+                onSaveToKnowledge={onSaveToKnowledge}
                 collapsibleLength={collapsibleLength}
               />
               </React.Fragment>
@@ -194,4 +197,4 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
       </div>
     )
   }
-)
+))

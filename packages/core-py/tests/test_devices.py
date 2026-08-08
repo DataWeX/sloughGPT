@@ -2,6 +2,11 @@
 Tests for Shell Device Nodes — AIDevice, DeviceManager, default devices.
 """
 
+import os
+import tempfile
+import types
+from unittest.mock import patch
+
 import pytest
 from domains.shell.devices import (
     AIDevice, NullDevice, RandomDevice, LLMDevice, EmbeddingDevice,
@@ -195,3 +200,168 @@ class TestDeviceManager:
         assert mgr.get("llm") is not None
         assert mgr.get("proc") is not None
         assert len(mgr.names) >= 7
+
+
+class _Resp:
+    def __init__(self, status_code=200, body=None, exc=None):
+        self.status_code = status_code
+        self._body = body
+        self._exc = exc
+
+    def json(self):
+        return self._body
+
+
+def _fake_requests(get_resp=None, post_resp=None, get_exc=None, post_exc=None):
+    mod = types.ModuleType("requests")
+
+    def _get(url, timeout=10):
+        if get_exc:
+            raise get_exc
+        return get_resp
+
+    def _post(url, json=None, timeout=10):
+        if post_exc:
+            raise post_exc
+        return post_resp
+
+    mod.get = _get
+    mod.post = _post
+    return mod
+
+
+class TestRandomDeviceEdge:
+    def test_read_non_numeric_args_uses_default(self):
+        out = RandomDevice().read("not-a-number")
+        assert len(out) == 64
+
+
+class TestLLMDeviceFallback:
+    def _write(self, mod):
+        with patch.dict("sys.modules", {"requests": mod}):
+            return LLMDevice().write("hello")
+
+    def test_fallback_success(self):
+        out = self._write(_fake_requests(post_resp=_Resp(200, {"text": "hi"})))
+        assert out == "hi"
+
+    def test_fallback_api_error(self):
+        out = self._write(_fake_requests(post_resp=_Resp(500)))
+        assert "API error 500" in out
+
+    def test_fallback_import_error(self):
+        out = self._write(None)
+        assert "requests not available" in out
+
+    def test_fallback_generic_exception(self):
+        out = self._write(_fake_requests(post_exc=RuntimeError("boom")))
+        assert "boom" in out
+
+
+class TestEmbeddingDeviceFallback:
+    def test_compute_embedding_without_fn(self):
+        dev = EmbeddingDevice()
+        assert dev.write("hello world") == "  embedding: 64 dims"
+        assert "64 dims" in dev.read()
+
+
+class TestKnowledgeDeviceBranches:
+    def _dev(self):
+        return KnowledgeDevice(api_base="http://localhost:1")
+
+    def _patch(self, mod):
+        return patch.dict("sys.modules", {"requests": mod})
+
+    def test_read_with_facts(self):
+        mod = _fake_requests(get_resp=_Resp(200, [{"content": "fact1", "topic": "t"}]))
+        with self._patch(mod):
+            out = self._dev().read()
+        assert "[t] fact1" in out
+
+    def test_read_empty_facts(self):
+        mod = _fake_requests(get_resp=_Resp(200, []))
+        with self._patch(mod):
+            assert "empty" in self._dev().read()
+
+    def test_read_api_error(self):
+        mod = _fake_requests(get_resp=_Resp(500))
+        with self._patch(mod):
+            assert "API error 500" in self._dev().read()
+
+    def test_read_import_error(self):
+        with self._patch(None):
+            assert "requests not available" in self._dev().read()
+
+    def test_write_empty(self):
+        assert "Usage" in KnowledgeDevice(api_base="x").write("  ")
+
+    def test_write_success(self):
+        mod = _fake_requests(post_resp=_Resp(201))
+        with self._patch(mod):
+            assert "Stored: hello" in self._dev().write("hello")
+
+    def test_write_api_error(self):
+        mod = _fake_requests(post_resp=_Resp(400))
+        with self._patch(mod):
+            assert "API error 400" in self._dev().write("hello")
+
+    def test_write_import_error(self):
+        with self._patch(None):
+            assert "requests not available" in self._dev().write("hello")
+
+
+class TestVisionDeviceSuccess:
+    def test_write_real_file_delegates_to_cnn(self):
+        fake_vision = types.ModuleType("domains.multimodal.vision")
+
+        class _CNN:
+            def caption(self, img):
+                return types.SimpleNamespace(text="dog (0.9)", confidence=0.9, tags=[])
+
+        fake_vision.VisionCNN = _CNN
+
+        class _Img:
+            def convert(self, mode):
+                return self
+
+        class _PIL:
+            Image = type("Image", (), {"open": staticmethod(lambda p, **kw: _Img())})
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(b"\x89PNG\r\n\x1a\n")
+            path = f.name
+        try:
+            with patch.dict(
+                "sys.modules",
+                {"domains.multimodal.vision": fake_vision, "PIL": _PIL},
+            ):
+                out = VisionDevice().write(path)
+        finally:
+            os.unlink(path)
+        assert "Vision: dog" in out
+
+    def test_write_real_file_without_cnn(self):
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(b"\x89PNG\r\n\x1a\n")
+            path = f.name
+        size = os.path.getsize(path)
+        try:
+            with patch.dict("sys.modules", {"domains.multimodal.vision": None}):
+                out = VisionDevice().write(path)
+        finally:
+            os.unlink(path)
+        assert "file exists" in out
+        assert str(size) in out
+
+
+class TestProcDeviceNoKernel:
+    def test_stat_without_kernel(self):
+        dev = ProcDevice(get_kernel=None)
+        assert dev.read("stat") == "kernel not available"
+
+
+class TestDeviceManagerWriteHit:
+    def test_write_to_registered_device(self):
+        mgr = DeviceManager()
+        mgr.register(NullDevice())
+        assert mgr.write("/dev/null", "data") == ""

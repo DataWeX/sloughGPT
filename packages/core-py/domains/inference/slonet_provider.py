@@ -47,6 +47,44 @@ def _get_slo_layernorm():
     return _SloLayerNorm
 
 
+class _CharTokenizer:
+    """Minimal tokenizer wrapper for char-level models trained by SloNet.
+
+    Wraps stoi/itos dicts from training into the encode/decode interface
+    that SloNetChatProvider expects from a HuggingFace tokenizer.
+    """
+
+    def __init__(self, stoi: Dict[str, int], itos: Dict):
+        self._stoi = stoi
+        # JSON serializes int keys as strings — normalize to int
+        self._itos = {int(k): v for k, v in itos.items()}
+        self.eos_token_id = stoi.get("\n", 0)
+        self.pad_token_id = 0
+        self._vocab_size = max(self._itos.keys()) + 1 if self._itos else 0
+
+    @property
+    def vocab_size(self) -> int:
+        return self._vocab_size
+
+    def encode(self, text: str) -> List[int]:
+        """Encode text to token IDs (one per character)."""
+        return [int(self._stoi.get(c, 0)) for c in text]
+
+    def decode(self, token_ids) -> str:
+        """Decode token IDs back to text."""
+        return "".join(self._itos.get(int(tid), "") for tid in token_ids)
+
+    def apply_chat_template(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """Format messages as a simple chat string for char-level models."""
+        parts = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            parts.append(f"{role}: {content}")
+        parts.append("assistant:")
+        return "\n".join(parts)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Universal HF → SloTransformer converter
 # ══════════════════════════════════════════════════════════════════════════════
@@ -306,11 +344,21 @@ class SloNetChatProvider:
             SloNetServer bound to this provider's model/tokenizer.
         """
         from domains.infrastructure.slonet_server import SloNetServer
+
+        # Lazy providers (created via lazy_from_slnc) keep _model == None until
+        # first use. Hand the server a factory so it can load the weights in the
+        # parent process only if a request arrives with no guard to serve it.
+        lazy_factory = None
+        if getattr(self, "_lazy_lock", None) is not None:
+            lazy_factory = self._get_model
+
         return SloNetServer(
             model=getattr(self, "_model", None),
             tokenizer=getattr(self, "_tokenizer", None),
             model_id=getattr(self, "_model_id", "slonet"),
             process_guard=process_guard,
+            provider=self,
+            lazy_model_factory=lazy_factory,
             **kwargs,
         )
 
@@ -358,6 +406,10 @@ class SloNetChatProvider:
         quant_bits: int = 8,
         quant_mode: str = "symmetric",
         quant_clip: float = 0.999,
+        kv_max_sessions: int = 64,
+        free_quantized_originals: bool = False,
+        release_mmap_pages: bool = True,
+        trim_allocator_after_load: bool = True,
     ) -> "SloNetChatProvider":
         """Create provider from .slnc file (mmap, zero-copy).
 
@@ -368,6 +420,19 @@ class SloNetChatProvider:
             quant_bits: Bits for quantization (8 or 4)
             quant_mode: "symmetric" or "asymmetric"
             quant_clip: Outlier clipping percentile (e.g., 0.999)
+            kv_max_sessions: Max simultaneous cross-turn KV sessions before
+                least-recently-used eviction kicks in
+            free_quantized_originals: If True, release the float32 weight of
+                every quantized/point linear layer after quantization. Saves
+                ~(projection bytes) per layer; safe only for inference-only
+                loads (training gradients need the float32 originals).
+            release_mmap_pages: If True, discard the resident .slnc mmap
+                pages after all tensors have been copied out. Tensors are
+                copies (``get_tensor``), so this frees RSS with no correctness
+                impact; a later read simply re-faults from disk.
+            trim_allocator_after_load: If True, call ``malloc_trim(0)`` after
+                load (glibc/Linux only) so transient peak allocations from
+                weight conversion are returned to the OS. No-op elsewhere.
 
         Returns:
             SloNetChatProvider using mmap-backed (optionally quantized) weights
@@ -432,6 +497,13 @@ class SloNetChatProvider:
         mapped = convert_hf_to_slonet(weights_dict, n_layer=n_layer, config=config)
         model.load_state_dict(mapped)
 
+        # Drop the transient conversion buffers immediately — they are copies
+        # (2x the fp32 weight bytes) and would otherwise pin peak RSS until
+        # this method returns. load_state_dict already wrote their values into
+        # the model's parameters.
+        del weights_dict
+        del mapped
+
         # Create instance (bypass __init__)
         instance = cls.__new__(cls)
         instance._hf_model_id = model_id
@@ -450,7 +522,7 @@ class SloNetChatProvider:
         # silently skip quantization — float32 BLAS is both faster and exact.
         if quantize:
             from domains.infrastructure.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
-            from domains.infrastructure.quantization import QuantEngine, walk_slo_linears, TensorInfo
+            from domains.infrastructure.quantization import Quantine, walk_slo_linears, TensorInfo
             from pathlib import Path as PathlibPath
 
             if not bool(_HAS_AVX2):
@@ -477,7 +549,7 @@ class SloNetChatProvider:
                         param_to_module[pname] = mod_name
                         break
 
-            engine = QuantEngine(
+            engine = Quantine(
                 bits=quant_bits,
                 mode=quant_mode,
                 clip_percentile=quant_clip,
@@ -556,6 +628,35 @@ class SloNetChatProvider:
                 extra={"tag": "INF"},
             )
 
+        # Release float32 originals of quantized/point layers (inference-only).
+        # get_tensor() returns copies, so both this and the mmap release below
+        # reclaim RSS without any correctness impact.
+        if free_quantized_originals:
+            freed = model.free_quantized_originals()
+            logger.info(
+                "SloNetChatProvider.from_slnc: released float32 originals of %d quantized/point layers",
+                freed,
+                extra={"tag": "INF"},
+            )
+
+        if release_mmap_pages:
+            if parser.release_file_pages():
+                logger.info(
+                    "SloNetChatProvider.from_slnc: released .slnc mmap pages (%.1f MB file)",
+                    parser.file_size / 1e6,
+                    extra={"tag": "INF"},
+                )
+
+        # glibc keeps freed heap (peak allocations from weight conversion)
+        # resident; return it to the OS. No-op on non-glibc allocators.
+        if trim_allocator_after_load:
+            try:
+                import ctypes
+                libc = ctypes.CDLL("libc.so.6")
+                libc.malloc_trim(0)
+            except Exception:
+                pass
+
         # Apply ResourceManager compute limits (BLAS threads, OMP_NUM_THREADS, etc.)
         try:
             from domains.infrastructure.resource_manager import get_resource_manager
@@ -572,6 +673,213 @@ class SloNetChatProvider:
 
         logger.info("SloNetChatProvider.from_slnc: %s, %d layers",
                      slnc_path, n_layer, extra={"tag": "INF"})
+
+        # Cross-turn KV cache state per session (lazy NumpyKVState per session_id)
+        instance._kv_states: Dict[str, Any] = {}
+        instance._kv_last_access: Dict[str, float] = {}  # session_id → monotonic timestamp
+        instance._kv_ttl: float = 3600.0  # 1 hour default TTL for idle sessions
+        instance._kv_max_sessions: int = kv_max_sessions  # LRU cap on concurrent sessions
+        # Guard for the session KV map — mutated from to_thread workers and
+        # API routes concurrently, so check-then-set races must be serialized.
+        instance._kv_lock = threading.Lock()
+
+        return instance
+
+    @classmethod
+    def lazy_from_slnc(
+        cls,
+        slnc_path: str,
+        model_id: str = "gpt2",
+        quantize: bool = False,
+        quant_bits: int = 8,
+        quant_mode: str = "symmetric",
+        quant_clip: float = 0.999,
+        kv_max_sessions: int = 64,
+        free_quantized_originals: bool = False,
+        release_mmap_pages: bool = True,
+        trim_allocator_after_load: bool = True,
+    ) -> "SloNetChatProvider":
+        """Create a provider whose model weights load lazily on first use.
+
+        Reads only the .slnc header (config + tensor table) to build full
+        metadata, then closes the file — no weight pages are faulted into
+        memory. The complete load (``from_slnc``) runs on the first call that
+        actually needs the model (``_get_model()``), and can be undone with
+        ``release_model()``.
+
+        This is the intended construction path for the server autoload with a
+        ``ProcessGuard``: the parent stays near-idle while the guarded worker
+        serves inference; the parent only materializes weights as a fallback
+        when no guard is alive.
+
+        Args:
+            slnc_path: Path to .slnc file
+            model_id: HuggingFace model ID for tokenizer (e.g. "gpt2")
+            quantize: If True, apply per-tensor quantization on first load
+            quant_bits: Bits for quantization (8 or 4)
+            quant_mode: "symmetric" or "asymmetric"
+            quant_clip: Outlier clipping percentile (e.g., 0.999)
+            kv_max_sessions: Max simultaneous cross-turn KV sessions before
+                least-recently-used eviction kicks in
+            free_quantized_originals: Passed through to the lazy load
+            release_mmap_pages: Passed through to the lazy load
+            trim_allocator_after_load: Passed through to the lazy load
+
+        Returns:
+            Lazy SloNetChatProvider. ``_model`` is None until first use.
+        """
+        from domains.infrastructure.slnc.parser import SLNCParser
+
+        parser = SLNCParser(slnc_path)
+        try:
+            config = parser.config
+            vocab_size = config.get("vocab_size", 50257)
+            n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
+            n_embed = config.get("n_embd", config.get("hidden_size", 768))
+            n_head = config.get("n_head", config.get("num_attention_heads", 12))
+            n_positions = parser.n_positions
+            total_params = parser.param_count
+        finally:
+            parser.close()
+
+        instance = cls.__new__(cls)
+        instance._hf_model_id = model_id
+        instance._model_id = model_id
+        instance._device = "cpu"
+        instance._model = None
+        instance._parser = None
+        instance._quant_engine = None
+        instance._tokenizer = instance._load_tokenizer(Path(slnc_path).parent, config)
+        instance._slnc_path = str(slnc_path)
+        instance._load_kwargs = {
+            "quantize": quantize,
+            "quant_bits": quant_bits,
+            "quant_mode": quant_mode,
+            "quant_clip": quant_clip,
+            "kv_max_sessions": kv_max_sessions,
+            "free_quantized_originals": free_quantized_originals,
+            "release_mmap_pages": release_mmap_pages,
+            "trim_allocator_after_load": trim_allocator_after_load,
+        }
+        instance._lazy_lock = threading.Lock()
+        instance._loaded = False
+        instance._meta = {
+            "model_id": model_id,
+            "architecture": "SloTransformer",
+            "total_params": int(total_params),
+            "n_layer": int(n_layer),
+            "n_embed": int(n_embed),
+            "n_head": int(n_head),
+            "vocab_size": int(vocab_size),
+            "max_seq_len": int(n_positions),
+            "device": "cpu",
+            "quantized": bool(quantize),
+            "has_tokenizer": instance._tokenizer is not None,
+            "lazy": True,
+        }
+        instance._kv_states: Dict[str, Any] = {}
+        instance._kv_last_access: Dict[str, float] = {}
+        instance._kv_ttl: float = 3600.0
+        instance._kv_max_sessions: int = kv_max_sessions
+        instance._kv_lock = threading.Lock()
+
+        logger.info(
+            "SloNetChatProvider.lazy_from_slnc: %s (%.1f MB file, %d params) — weights deferred",
+            slnc_path, parser.file_size / 1e6, total_params,
+            extra={"tag": "INF"},
+        )
+        return instance
+
+    @classmethod
+    def from_soul(
+        cls,
+        soul_path: str,
+        model_id: str = "sloughgpt",
+        kv_max_sessions: int = 64,
+    ) -> "SloNetChatProvider":
+        """Create provider from a .soul checkpoint trained natively by SloNet.
+
+        Unlike from_slnc() which converts HuggingFace weights, this loads
+        checkpoints produced by SloughGPTTrainer or distill_gpt2.py directly.
+        The weights are already in SloNet format — no conversion needed.
+
+        Args:
+            soul_path: Path to .soul checkpoint file
+            model_id: Identifier for this model (used in health/status)
+            kv_max_sessions: Max simultaneous cross-turn KV sessions
+
+        Returns:
+            SloNetChatProvider using the trained model's weights
+
+        Raises:
+            FileNotFoundError: If soul_path does not exist
+            ValueError: If the .soul file is invalid or missing model config
+        """
+        from domains.inference.slo_format import load_soul
+        from domains.training.slonet import SloTransformer
+
+        soul, state_dict = load_soul(soul_path)
+
+        # Extract model config from soul metadata
+        cfg = soul.metadata.get("config", {})
+        vocab_size = soul.metadata.get("vocab_size", cfg.get("vocab_size", 256))
+        n_embed = cfg.get("n_embed", 128)
+        n_layer = cfg.get("n_layer", 4)
+        n_head = cfg.get("n_head", 4)
+        block_size = cfg.get("block_size", 128)
+
+        # Create SloTransformer with the trained architecture
+        model = SloTransformer(
+            vocab_size=vocab_size,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=n_head,
+            block_size=block_size,
+            dropout=0.0,
+            _lazy=True,
+        )
+
+        # Load weights directly — already in SloNet format from training
+        model.load_state_dict(state_dict)
+
+        # Create instance (bypass __init__)
+        instance = cls.__new__(cls)
+        instance._hf_model_id = model_id
+        instance._model_id = model_id
+        instance._device = "cpu"
+        instance._model = model
+        instance._parser = None
+        instance._quant_engine = None
+
+        # Apply ResourceManager compute limits
+        try:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            rm = get_resource_manager()
+            rm.apply_blas_env()
+            rm.apply_compute_limits()
+        except Exception:
+            pass
+
+        # Load tokenizer from soul metadata if available
+        stoi = soul.metadata.get("stoi")
+        itos = soul.metadata.get("itos")
+        if stoi and itos:
+            # Char-level model — create a simple tokenizer from vocab
+            instance._tokenizer = _CharTokenizer(stoi, itos)
+        else:
+            instance._tokenizer = None
+
+        logger.info(
+            "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d",
+            soul_path, n_layer, vocab_size, n_embed, extra={"tag": "INF"},
+        )
+
+        # Cross-turn KV cache state
+        instance._kv_states: Dict[str, Any] = {}
+        instance._kv_last_access: Dict[str, float] = {}
+        instance._kv_ttl: float = 3600.0
+        instance._kv_max_sessions: int = kv_max_sessions
+        instance._kv_lock = threading.Lock()
 
         return instance
 
@@ -592,6 +900,69 @@ class SloNetChatProvider:
             "summary": summary,
             "per_tensor": self._quant_engine.error_report(),
         }
+
+    def session_stats(self) -> dict:
+        """Get cross-turn KV cache session statistics.
+
+        Returns:
+            Dict with active session count, TTL, and memory estimate.
+        """
+        import time as _time
+        with self._kv_lock:
+            n_sessions = len(self._kv_states)
+            total_tokens = 0
+            for state in self._kv_states.values():
+                kv = getattr(state, "kv_len", None)
+                if isinstance(kv, (list, tuple)):
+                    total_tokens += sum(kv)
+                elif kv is not None:
+                    total_tokens += kv
+            return {
+                "active_sessions": n_sessions,
+                "max_sessions": self._kv_max_sessions,
+                "ttl_seconds": self._kv_ttl,
+                "cached_tokens": total_tokens,
+                "oldest_session_age": max(self._kv_last_access.values()) - min(self._kv_last_access.values())
+                if len(self._kv_last_access) > 1 else 0.0,
+            }
+
+    def clear_session(self, session_id: str) -> bool:
+        """Drop the cross-turn KV state for a single session.
+
+        Used when a session is deleted so its cached keys/values are freed
+        immediately instead of waiting for TTL eviction.
+
+        Args:
+            session_id: The session whose KV state should be removed.
+
+        Returns:
+            True if a state existed and was removed, False otherwise.
+        """
+        with self._kv_lock:
+            existed = self._kv_states.pop(session_id, None) is not None
+            self._kv_last_access.pop(session_id, None)
+        if existed:
+            logger.debug("Cleared KV state for session %s", session_id,
+                         extra={"tag": "MODEL"})
+        return existed
+
+    def clear_all_sessions(self) -> int:
+        """Drop all cross-turn KV states.
+
+        Used on model unload/switch where cached keys/values from the old
+        model are no longer valid.
+
+        Returns:
+            Number of sessions cleared.
+        """
+        with self._kv_lock:
+            n = len(self._kv_states)
+            self._kv_states.clear()
+            self._kv_last_access.clear()
+        if n:
+            logger.info("Cleared KV state for %d sessions", n,
+                        extra={"tag": "MODEL"})
+        return n
 
     @property
     def model_id(self) -> str:
@@ -634,15 +1005,127 @@ class SloNetChatProvider:
         return ""  # pragma: no cover
 
     def _load_tokenizer(self, model_dir, config):
-        """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing."""
+        """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing.
+
+        Prefers a tokenizer.json shipped with a local fine-tuned model dir;
+        falls back to the base HuggingFace model id's tokenizer.
+        """
         try:
             from domains.infrastructure.morph_tokenizer import MorphTokenizer
+            if model_dir and Path(model_dir).is_dir() and (Path(model_dir) / "tokenizer.json").exists():
+                logger.info("Using fine-tuned model tokenizer from %s", model_dir,
+                            extra={"tag": "INF"})
+                return MorphTokenizer.from_pretrained(str(model_dir))
             # from_pretrained reads tokenizer.json and parses vocab+merges correctly
             return MorphTokenizer.from_pretrained(self._hf_model_id)
         except Exception as e:
             logger.warning("MorphTokenizer load failed: %s", e, extra={"tag": "INF"})
 
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
+
+    def _get_model(self):
+        """Return the loaded model, loading lazily on first access.
+
+        For an eager provider (from_slnc / from_soul) this is a plain
+        attribute read. For a lazy provider (lazy_from_slnc) the full weight
+        load is deferred until the model is actually needed; a per-provider
+        lock serializes concurrent first-access loads.
+
+        Returns:
+            The SloTransformer model, or None if not loadable.
+        """
+        model = getattr(self, "_model", None)
+        if model is not None:
+            return model
+        lock = getattr(self, "_lazy_lock", None)
+        if lock is None:
+            return None
+        with lock:
+            model = self._model
+            if model is not None:
+                return model
+            eager = self.from_slnc(
+                self._slnc_path, model_id=self._model_id, **self._load_kwargs
+            )
+            self._model = eager._model
+            self._parser = eager._parser
+            self._quant_engine = eager._quant_engine
+            self._kv_states = eager._kv_states
+            self._kv_last_access = eager._kv_last_access
+            self._kv_ttl = eager._kv_ttl
+            self._kv_max_sessions = eager._kv_max_sessions
+            self._kv_lock = eager._kv_lock
+            self._loaded = True
+            if self._meta is not None:
+                self._meta["quantized"] = eager._quant_engine is not None
+                self._meta["lazy"] = True
+            logger.info(
+                "SloNetChatProvider: %s weights now resident in parent (lazy load)",
+                self._model_id, extra={"tag": "INF"},
+            )
+            return self._model
+
+    def release_model(self) -> bool:
+        """Drop the resident model and return its memory to the OS.
+
+        Frees the model weights, clears cross-turn KV states, and calls
+        ``malloc_trim(0)`` so allocator-held memory from weight conversion is
+        actually returned (glibc/Linux only). The provider remains usable —
+        a later call to any generation/embedding method reloads weights via
+        ``_get_model()``.
+
+        Only supported for lazy providers (created via ``lazy_from_slnc``);
+        eager providers keep their model for the provider's lifetime.
+
+        Returns:
+            True if weights were resident and released, False otherwise.
+        """
+        lock = getattr(self, "_lazy_lock", None)
+        if lock is None:
+            return False
+        with lock:
+            if self._model is None and self._parser is None:
+                return False
+            self._model = None
+            self._parser = None
+            self._quant_engine = None
+            with self._kv_lock:
+                self._kv_states.clear()
+                self._kv_last_access.clear()
+            self._loaded = False
+        try:
+            import gc as _gc
+            _gc.collect()
+        except Exception:
+            pass
+        try:
+            import ctypes
+            libc = ctypes.CDLL("libc.so.6")
+            libc.malloc_trim(0)
+        except Exception:
+            pass
+        logger.info(
+            "SloNetChatProvider.release_model: %s weights released to OS",
+            self._model_id, extra={"tag": "INF"},
+        )
+        return True
+
+    def num_parameters(self) -> int:
+        """Total number of model parameters without forcing a weight load.
+
+        Lazy providers read the header-only count captured at creation;
+        eager providers count the loaded model's parameters directly.
+
+        Returns:
+            Total parameter count, or 0 if unknown.
+        """
+        meta = getattr(self, "_meta", None)
+        if meta is not None and "total_params" in meta:
+            return int(meta["total_params"])
+        model = getattr(self, "_model", None)
+        if model is not None:
+            return int(sum(p.data.size for p in model.parameters()))
+        return 0
 
     def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0,
                  top_k: int = None, top_p: float = None, repetition_penalty: float = 1.0,
@@ -653,13 +1136,14 @@ class SloNetChatProvider:
             max_tokens = max_new_tokens
         tokens = self._tokenizer.encode(prompt)
         input_ids = _np.array([tokens], dtype=_np.int64)
-        result = self._model.generate_numpy(
+        result = self._get_model().generate_numpy(
             input_ids,
             max_new_tokens=max_tokens,
             temperature=temperature,
             top_k=top_k, top_p=top_p,
             repetition_penalty=repetition_penalty,
             eos_token=self._tokenizer.eos_token_id or 0,
+            extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
         )
         return self._tokenizer.decode(result[0].tolist())
 
@@ -681,27 +1165,87 @@ class SloNetChatProvider:
                 top_k=kwargs.get('top_k', 50),
                 repetition_penalty=kwargs.get('repetition_penalty', 1.0),
                 cancel_event=kwargs.get('cancel_event'),
+                session_id=kwargs.get('session_id'),
             )
         return await asyncio.to_thread(
             self._generate_sync, messages, max_tokens, temperature if temperature is not None else 0.8,
             kwargs.get('top_k'), kwargs.get('top_p'),
             kwargs.get('repetition_penalty', 1.0),
+            session_id=kwargs.get('session_id'),
         )
 
+    def _evict_stale_sessions(self):
+        """Remove KV states for sessions idle longer than _kv_ttl seconds."""
+        import time as _time
+        now = _time.monotonic()
+        with self._kv_lock:
+            stale = [sid for sid, ts in self._kv_last_access.items()
+                     if now - ts > self._kv_ttl]
+            for sid in stale:
+                self._kv_states.pop(sid, None)
+                self._kv_last_access.pop(sid, None)
+        if stale:
+            logger.info("Evicted %d stale KV sessions (TTL=%.0fs)", len(stale), self._kv_ttl,
+                        extra={"tag": "INF"})
+
+    def _resolve_session_kv(self, session_id):
+        """Resolve KV state for a session, creating if needed, with TTL eviction."""
+        import time as _time
+        if session_id is None:
+            return None
+        self._evict_stale_sessions()
+        with self._kv_lock:
+            kv_state = self._kv_states.get(session_id)
+            if kv_state is None:
+                kv_state = self._get_model().new_kv_state()
+                self._kv_states[session_id] = kv_state
+                self._evict_lru_session(session_id)
+            self._kv_last_access[session_id] = _time.monotonic()
+        return kv_state
+
+    def _evict_lru_session(self, keep_session_id):
+        """Evict the least-recently-used session when over the session cap.
+
+        Must be called with self._kv_lock held. The session being resolved is
+        never evicted (it has no timestamp yet), so LRU is chosen among the
+        remaining entries.
+
+        Args:
+            keep_session_id: The session that is being resolved/created.
+        """
+        if len(self._kv_states) <= self._kv_max_sessions:
+            return
+        evictable = {sid: ts for sid, ts in self._kv_last_access.items()
+                     if sid != keep_session_id}
+        if not evictable:
+            return
+        lru_id = min(evictable, key=evictable.get)
+        self._kv_states.pop(lru_id, None)
+        self._kv_last_access.pop(lru_id, None)
+        logger.info("Evicted least-recently-used KV session %s (max=%d)",
+                    lru_id, self._kv_max_sessions, extra={"tag": "INF"})
+
     def _generate_sync(self, messages, max_tokens=512, temperature=0.8,
-                       top_k=None, top_p=None, repetition_penalty=1.0):
+                       top_k=None, top_p=None, repetition_penalty=1.0,
+                       session_id=None):
         """Synchronous generate with KV cache — called from chat() via to_thread."""
         import numpy as _np
         prompt = self._build_prompt(messages)
         tokens = self._tokenizer.encode(prompt)
         input_ids = _np.array([tokens], dtype=_np.int64)
-        result = self._model.generate_numpy(
+
+        # Cross-turn KV cache: resolve or create state for this session
+        kv_state = self._resolve_session_kv(session_id)
+
+        result = self._get_model().generate_numpy(
             input_ids,
             max_new_tokens=max_tokens,
             temperature=temperature,
             top_k=top_k, top_p=top_p,
             repetition_penalty=repetition_penalty,
             eos_token=self._tokenizer.eos_token_id or 0,
+            extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
+            kv_state=kv_state,
         )
         return self._tokenizer.decode(result[0].tolist())
 
@@ -753,6 +1297,7 @@ class SloNetChatProvider:
                 top_k=kwargs.get('top_k', 50),
                 repetition_penalty=kwargs.get('repetition_penalty', 1.0),
                 cancel_event=kwargs.get('cancel_event'),
+                session_id=kwargs.get('session_id'),
             ):
                 yield token
             return
@@ -765,6 +1310,10 @@ class SloNetChatProvider:
         repetition_penalty = kwargs.get('repetition_penalty', 1.0)
         cancel_event = kwargs.get('cancel_event')
         priority = kwargs.get('priority', 1)  # default MEDIUM
+        session_id = kwargs.get('session_id')
+
+        # Cross-turn KV cache: resolve or create state for this session
+        kv_state = self._resolve_session_kv(session_id)
 
         def _stream_generate():
             """Token-by-token streaming using generate_numpy_stream().
@@ -772,17 +1321,19 @@ class SloNetChatProvider:
             Yields decoded tokens as they are produced — true streaming
             without waiting for full generation to complete.
             """
-            m = self._model
+            m = self._get_model()
             input_ids = _np.array([token_ids], dtype=_np.int64)
 
             for tok_id in m.generate_numpy_stream(
                 input_ids,
                 max_new_tokens=max_tokens,
                 eos_token=eos_id,
+                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
                 temperature=temperature if temperature is not None else 0.8,
                 top_k=top_k,
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
+                kv_state=kv_state,
             ):
                 decoded = self._tokenizer.decode([tok_id])
                 if decoded:
@@ -898,7 +1449,7 @@ class SloNetChatProvider:
         eos_id = self._tokenizer.eos_token_id or 0
 
         # Copy model weights for reference
-        m = self._model
+        m = self._get_model()
         logprobs_list = []
 
         # Use the streaming path to capture logits
@@ -906,6 +1457,7 @@ class SloNetChatProvider:
             input_ids,
             max_new_tokens=max_tokens,
             eos_token=eos_id,
+            extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
@@ -971,10 +1523,11 @@ class SloNetChatProvider:
         generated_ids = []
         buffer = ""
 
-        for tok_id in self._model.generate_numpy_stream(
+        for tok_id in self._get_model().generate_numpy_stream(
             input_ids,
             max_new_tokens=max_tokens,
             eos_token=eos_id,
+            extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
@@ -1048,7 +1601,7 @@ class SloNetChatProvider:
         """
         tokens = self._tokenizer.encode(text)
         input_ids = np.array([tokens], dtype=np.int64)
-        m = self._model
+        m = self._get_model()
 
         # Forward pass through the model
         x = m.layers[0].forward_numpy(input_ids)  # token embedding
@@ -1077,10 +1630,18 @@ class SloNetChatProvider:
     def metadata(self) -> Dict:
         """Get model metadata and runtime stats.
 
+        Lazy providers return the header-only metadata captured at creation
+        (no weight load triggered). Eager providers compute metadata from the
+        loaded model on first call and cache it.
+
         Returns:
             Dict with model_id, architecture, parameters, vocab_size, etc.
         """
-        m = self._model
+        cached = getattr(self, "_meta", None)
+        if cached is not None:
+            return dict(cached)
+
+        m = self._get_model()
         config = m._config if hasattr(m, '_config') else {}
 
         # Count parameters
@@ -1093,7 +1654,7 @@ class SloNetChatProvider:
         n_embed = config.get("n_embd", config.get("hidden_size", 0))
         n_head = config.get("n_head", config.get("num_attention_heads", 0))
 
-        return {
+        result = {
             "model_id": self._model_id,
             "architecture": "SloTransformer",
             "total_params": int(total_params),
@@ -1106,6 +1667,8 @@ class SloNetChatProvider:
             "quantized": self._quant_engine is not None,
             "has_tokenizer": self._tokenizer is not None,
         }
+        self._meta = result
+        return dict(result)
 
     def count_tokens(self, text: str) -> int:
         """Count tokens in text using the model's tokenizer.

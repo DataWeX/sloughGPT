@@ -180,3 +180,125 @@ class TestParseHelpers:
         ops = pt_loader._parse_pickle_ops(buf.getvalue())
         assert all(len(op) == 3 for op in ops)
         assert ops[0][0] == "PROTO"
+
+    def test_extract_param_names_sees_rebuild_marker(self):
+        ops = [
+            ("SHORT_BINUNICODE", "_rebuild_tensor_v2", 0),
+            ("SHORT_BINUNICODE", "model.weight", 1),
+        ]
+        names = pt_loader._extract_param_names(ops)
+        assert "model.weight" in names
+
+    def test_extract_param_names_skips_dotless(self):
+        ops = [("SHORT_BINUNICODE", "embed", 0)]
+        assert pt_loader._extract_param_names(ops) == []
+
+
+class TestUnpicklerInternals:
+    def test_persistent_load_passthrough(self):
+        up = pt_loader._PTUnpickler(io.BytesIO(b""), {})
+        assert up.persistent_load(("other", 1)) == ("other", 1)
+
+    def test_find_class_storage_returns_noop(self):
+        up = pt_loader._PTUnpickler(io.BytesIO(b""), {})
+        fn = up.find_class("torch", "FloatStorage")
+        assert fn(1, 2) is None
+
+    def test_find_class_delegates_to_super(self):
+        up = pt_loader._PTUnpickler(io.BytesIO(b""), {})
+        assert up.find_class("numpy", "ndarray") is np.ndarray
+
+    def test_rebuild_non_storage_returns_as_is(self):
+        up = pt_loader._PTUnpickler(io.BytesIO(b""), {})
+        assert up._rebuild(("not-storage",), 0, (2,), None) == ("not-storage",)
+
+    def test_rebuild_zero_bytes_defaults_f32(self):
+        up = pt_loader._PTUnpickler(io.BytesIO(b""), {})
+        arr = up._rebuild(("__storage__", "k", b""), 0, (3,), None)
+        assert arr.dtype == np.float32
+
+    def test_rebuild_offset_slices(self):
+        up = pt_loader._PTUnpickler(io.BytesIO(b""), {})
+        raw = np.arange(6, dtype=np.float64).tobytes()
+        arr = up._rebuild(("__storage__", "k", raw), 2, (6,), None)
+        assert arr.dtype == np.float64
+        assert arr[0] == 2.0
+
+    def test_rebuild_reshape_mismatch_keeps_flat(self):
+        up = pt_loader._PTUnpickler(io.BytesIO(b""), {})
+        arr = up._rebuild(("__storage__", "k", bytes(range(6))), 0, (4,), None)
+        assert arr.shape == (6,)
+
+
+class TestNestedCheckpoints:
+    def test_plain_dict_model_state_dict_returned(self, tmp_path):
+        payload = {"model_state_dict": {"w": np.array([5.0], dtype=np.float32)}}
+        buf = io.BytesIO()
+        _TorchPickler(buf).dump(payload)
+        path = tmp_path / "msd.pt"
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("archive/data.pkl", buf.getvalue())
+        result = pt_loader.load_pt_checkpoint(path)
+        assert "model_state_dict" in result
+
+    def test_plain_dict_model_returned(self, tmp_path):
+        payload = {"model": {"w": np.array([1.0], dtype=np.float32)}}
+        buf = io.BytesIO()
+        _TorchPickler(buf).dump(payload)
+        path = tmp_path / "model.pt"
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("archive/data.pkl", buf.getvalue())
+        result = pt_loader.load_pt_checkpoint(path)
+        assert "w" in result
+        assert np.array_equal(result["w"], np.array([1.0], dtype=np.float32))
+
+    def test_plain_dict_returned_as_is(self, tmp_path):
+        buf = io.BytesIO()
+        _TorchPickler(buf).dump({"tag": "x"})
+        path = tmp_path / "plain.pt"
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("archive/data.pkl", buf.getvalue())
+        result = pt_loader.load_pt_checkpoint(path)
+        assert result == {"tag": "x"}
+
+    def test_top_level_tensor_wrapped_in_state_dict(self, tmp_path):
+        data_arrays = {"0": np.arange(3, dtype=np.float32).tobytes()}
+        record = _TensorRecord(_StorageStub("0"), 0, (3,), None, False)
+        buf = io.BytesIO()
+        _TorchPickler(buf).dump(record)
+        path = tmp_path / "top.pt"
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("archive/data.pkl", buf.getvalue())
+            z.writestr("data/0", data_arrays["0"])
+        result = pt_loader.load_pt_checkpoint(path)
+        assert "state_dict" in result
+        assert np.array_equal(result["state_dict"], np.arange(3, dtype=np.float32))
+
+    def test_no_dot_tensor_name_kept_as_metadata(self, tmp_path):
+        state = OrderedDict([
+            ("model.weight", np.array([1.0, 2.0], dtype=np.float32)),
+            ("embed", np.array([9.0, 8.0], dtype=np.float32)),
+        ])
+        path = tmp_path / "nodot.pt"
+        _build_pt(path, state)
+        result = pt_loader.load_pt_checkpoint(path)
+        assert np.array_equal(result["embed"], np.array([9.0, 8.0], dtype=np.float32))
+
+    def test_state_dict_nested_model(self, tmp_path):
+        path = tmp_path / "nested_model.pt"
+        _build_pt(path, OrderedDict([
+            ("model", {"w": np.array([1.0, 2.0], dtype=np.float32)}),
+            ("step", 3),
+        ]))
+        result = pt_loader.load_pt_state_dict(path)
+        assert np.array_equal(result["w"], np.array([1.0, 2.0], dtype=np.float32))
+
+    def test_state_dict_nested_model_state_dict(self, tmp_path):
+        payload = {"model_state_dict": {"w": np.array([5.0], dtype=np.float32)}}
+        buf = io.BytesIO()
+        _TorchPickler(buf).dump(payload)
+        path = tmp_path / "msd.pt"
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("archive/data.pkl", buf.getvalue())
+        result = pt_loader.load_pt_state_dict(path)
+        assert np.array_equal(result["w"], np.array([5.0], dtype=np.float32))

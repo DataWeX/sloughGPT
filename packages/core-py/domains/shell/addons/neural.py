@@ -520,7 +520,7 @@ class MultiHeadAttentionDevice(DeviceDriver):
                            v: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
         self._compute_count += 1
         d_k = q.shape[-1]
-        scores = np.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
+        scores = np.matmul(q, np.swapaxes(k, -2, -1)) / math.sqrt(d_k)
         if mask is not None:
             scores = np.where(mask, scores, -1e9)
         attn = np.exp(scores - np.max(scores, axis=-1, keepdims=True))

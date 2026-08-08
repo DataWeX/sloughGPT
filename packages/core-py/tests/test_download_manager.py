@@ -81,6 +81,12 @@ class TestCacheHelpers:
         assert dm._has_weight_files(cache) is False
         assert dm._has_weight_files(tmp_path / "nope") is False
 
+    def test_has_weight_files_skips_stat_errors(self, tmp_path):
+        cache = tmp_path / "cache"
+        (cache / "snapshots" / "x").mkdir(parents=True)
+        (cache / "snapshots" / "x" / "model.safetensors").symlink_to(tmp_path / "missing")
+        assert dm._has_weight_files(cache) is False
+
     def test_has_incomplete_downloads_incomplete_marker(self, tmp_path):
         cache = tmp_path / "cache"
         (cache / "blob").mkdir(parents=True)
@@ -107,6 +113,11 @@ class TestCacheHelpers:
     def test_get_snapshot_ref_missing(self, tmp_path):
         assert dm._get_snapshot_ref(tmp_path / "nope") is None
 
+    def test_get_snapshot_ref_read_error(self, tmp_path):
+        cache = tmp_path / "cache"
+        (cache / "refs" / "main").mkdir(parents=True)
+        assert dm._get_snapshot_ref(cache) is None
+
     def test_has_complete_snapshot(self, tmp_path):
         cache = tmp_path / "cache"
         (cache / "refs").mkdir(parents=True)
@@ -125,6 +136,12 @@ class TestCacheHelpers:
     def test_has_complete_snapshot_no_ref(self, tmp_path):
         cache = tmp_path / "cache"
         (cache / "snapshots" / "abc123").mkdir(parents=True)
+        assert dm._has_complete_snapshot(cache) is False
+
+    def test_has_complete_snapshot_missing_snapshot_dir(self, tmp_path):
+        cache = tmp_path / "cache"
+        (cache / "refs").mkdir(parents=True)
+        (cache / "refs" / "main").write_text("abc123")
         assert dm._has_complete_snapshot(cache) is False
 
 
@@ -284,6 +301,89 @@ class TestDownloadManager:
         result = asyncio.run(mgr.download("gpt2"))
         assert result["status"] == "cancelled"
 
+    def test_is_cached(self, monkeypatch):
+        mgr = dm.DownloadManager()
+        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: True)
+        assert mgr.is_cached("gpt2") is True
+
+    def test_cancel_downloading_cancels_task(self):
+        mgr = dm.DownloadManager()
+        mgr._set_progress("gpt2", status=dm.DownloadStatus.DOWNLOADING)
+
+        async def scenario():
+            t = asyncio.create_task(asyncio.sleep(10))
+            mgr._tasks["gpt2"] = t
+            ok = mgr.cancel("gpt2")
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+            return ok
+
+        assert asyncio.run(scenario()) is True
+        assert mgr.get_progress("gpt2")["status"] == "cancelled"
+
+    def test_download_cleans_incomplete_markers(self, tmp_path, monkeypatch):
+        cache = tmp_path / "cache"
+        (cache / "blob").mkdir(parents=True)
+        (cache / "blob" / "f.incomplete").write_bytes(b"x")
+        (cache / "blob" / "f.lock").write_bytes(b"x")
+        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
+        monkeypatch.setattr(dm, "list_model_files", lambda mid: [])
+        monkeypatch.setattr(dm, "_cache_dir", lambda mid: cache)
+        monkeypatch.setattr(dm, "sg_state", None)
+
+        async def fake_worker(self, model_id, hint):
+            return {"status": "complete", "model_id": model_id}
+
+        monkeypatch.setattr(dm.DownloadManager, "_download_worker", fake_worker)
+        mgr = dm.DownloadManager()
+        result = asyncio.run(mgr.download("gpt2"))
+        assert result["status"] == "complete"
+        assert not (cache / "blob" / "f.incomplete").exists()
+        assert not (cache / "blob" / "f.lock").exists()
+
+    def test_download_ignores_unlink_errors(self, tmp_path, monkeypatch):
+        cache = tmp_path / "cache"
+        (cache / "blob").mkdir(parents=True)
+        (cache / "blob" / "f.incomplete").write_bytes(b"x")
+        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
+        monkeypatch.setattr(dm, "list_model_files", lambda mid: [])
+        monkeypatch.setattr(dm, "_cache_dir", lambda mid: cache)
+        monkeypatch.setattr(dm, "sg_state", None)
+
+        def broken_unlink(self):
+            raise OSError("permission denied")
+
+        monkeypatch.setattr(Path, "unlink", broken_unlink)
+
+        async def fake_worker(self, model_id, hint):
+            return {"status": "complete", "model_id": model_id}
+
+        monkeypatch.setattr(dm.DownloadManager, "_download_worker", fake_worker)
+        mgr = dm.DownloadManager()
+        result = asyncio.run(mgr.download("gpt2"))
+        assert result["status"] == "complete"
+
+    def test_download_estimate_fallback_on_error(self, monkeypatch):
+        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
+
+        def hub_down(mid):
+            raise RuntimeError("hub down")
+
+        monkeypatch.setattr(dm, "list_model_files", hub_down)
+        monkeypatch.setattr(dm, "_cache_dir", lambda mid: Path("/tmp/nonexistent-cache-xyz"))
+        monkeypatch.setattr(dm, "sg_state", None)
+
+        async def fake_worker(self, model_id, hint):
+            return {"status": "complete", "model_id": model_id, "hint": hint}
+
+        monkeypatch.setattr(dm.DownloadManager, "_download_worker", fake_worker)
+        mgr = dm.DownloadManager()
+        result = asyncio.run(mgr.download("gpt2", total_bytes_hint=1234))
+        assert result["status"] == "complete"
+        assert mgr.get_progress("gpt2")["total_bytes"] == 1234
+
     def test_worker_updates_progress_and_result(self, monkeypatch):
         fake, calls = _make_fake_downcraft()
         monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub", fake)
@@ -325,3 +425,22 @@ class TestSingleton:
         a = dm.get_download_manager()
         b = dm.get_download_manager()
         assert a is b
+
+
+class TestImportFallback:
+    def test_downcraft_missing_falls_back(self, monkeypatch):
+        import importlib
+
+        monkeypatch.setitem(sys.modules, "downcraft", None)
+        monkeypatch.setitem(sys.modules, "downcraft.downloader", None)
+        monkeypatch.setitem(sys.modules, "downcraft.state", None)
+        mod = importlib.reload(dm)
+        assert mod.sg_downloader is None
+        assert mod.sg_state is None
+        assert mod.get_cache_dir("org/model").endswith("models--org--model")
+        assert mod.hf_is_download_complete("gpt2") is False
+        assert mod.list_model_files("gpt2") == []
+        sys.modules.pop("downcraft", None)
+        sys.modules.pop("downcraft.downloader", None)
+        sys.modules.pop("downcraft.state", None)
+        importlib.reload(dm)

@@ -22,6 +22,8 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
 logger = logging.getLogger("slo.infrastructure.model_loader")
 
 
@@ -45,7 +47,7 @@ class ModelLoader:
     """
 
     def __init__(self, models_dir: Optional[Path] = None):
-        self.models_dir = models_dir or Path("models")
+        self.models_dir = models_dir or _REPO_ROOT / "models"
 
     def load(
         self,
@@ -91,14 +93,22 @@ class ModelLoader:
             tracker.finish(model_id)
             return result
 
+        # Try native .soul checkpoint (trained by SloNet, not converted from HF)
+        soul_result = self._try_load_soul(model_id)
+        if soul_result is not None:
+            if verify and soul_result.success:
+                self._verify_model(soul_result)
+            tracker.finish(model_id)
+            return soul_result
+
         if not has_slnc:
-            tracker.fail(model_id, "No .slnc file found")
+            tracker.fail(model_id, "No .slnc or .soul file found")
 
         return LoadResult(
             success=False,
             model_id=model_id,
             model_type="slonet",
-            error=f"No .slnc file found for {model_id}",
+            error=f"No .slnc or .soul file found for {model_id}",
         )
 
     def _try_load_slnc(
@@ -135,6 +145,7 @@ class ModelLoader:
                 quantize=quantize,
                 quant_bits=quant_bits,
                 quant_mode=quant_mode,
+                free_quantized_originals=True,
             )
 
             return LoadResult(
@@ -158,6 +169,52 @@ class ModelLoader:
                 model_type="slonet",
                 error=str(e),
             )
+
+    def _try_load_soul(self, model_id: str) -> Optional[LoadResult]:
+        """Try to load a .soul checkpoint from the native training directory.
+
+        Searches models/slonet-native/ for the most recent .soul file matching
+        the model_id or containing 'sloughgpt' in the name.
+
+        Returns LoadResult or None if no .soul found.
+        """
+        from pathlib import Path
+
+        native_dir = _REPO_ROOT / "models" / "slonet-native"
+        if not native_dir.exists():
+            return None
+
+        # Find all .soul files, sorted by modification time (newest first)
+        soul_files = sorted(native_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not soul_files:
+            return None
+
+        soul_path = str(soul_files[0])
+        logger.info("Found native .soul checkpoint: %s", soul_path, extra={"tag": "MODEL"})
+
+        try:
+            from domains.inference.slonet_provider import SloNetChatProvider
+
+            provider = SloNetChatProvider.from_soul(
+                soul_path,
+                model_id=model_id,
+            )
+
+            return LoadResult(
+                success=True,
+                model_id=model_id,
+                model_type="slonet-native",
+                provider=provider,
+                model=provider._model,
+                tokenizer=getattr(provider, "_tokenizer", None),
+                metrics={
+                    "soul_path": soul_path,
+                    "source": "native-trained",
+                },
+            )
+        except Exception as e:
+            logger.warning("Native .soul load failed: %s", e, extra={"tag": "MODEL"})
+            return None
 
     def _try_convert_to_slnc(self, cache_dir: Path, model_id: str) -> Optional[Path]:
         """Try to convert safetensors to .slnc format.

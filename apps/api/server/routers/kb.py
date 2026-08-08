@@ -28,47 +28,47 @@ class KnowledgeItemOut(BaseModel):
 
 
 class KnowledgeCreate(BaseModel):
-    content: str = Field(..., min_length=1)
-    topic: str = "general"
-    source: str = "manual"
-    importance: float = 0.7
+    content: str = Field(..., min_length=1, max_length=10000)
+    topic: str = Field(default="general", max_length=100)
+    source: str = Field(default="manual", max_length=100)
+    importance: float = Field(default=0.7, ge=0.0, le=1.0)
     auto_tag: bool = False
 
 
 class KnowledgeUpdate(BaseModel):
-    content: Optional[str] = None
-    topic: Optional[str] = None
-    importance: Optional[float] = None
+    content: Optional[str] = Field(default=None, max_length=10000)
+    topic: Optional[str] = Field(default=None, max_length=100)
+    importance: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class KnowledgeBatchItem(BaseModel):
-    content: str
-    source: str = "injected"
-    tags: List[str] = []
+    content: str = Field(max_length=10000)
+    source: str = Field(default="injected", max_length=100)
+    tags: List[str] = Field(default=[], max_length=20)
 
 
 class KnowledgeBatchRequest(BaseModel):
-    items: List[KnowledgeBatchItem]
+    items: List[KnowledgeBatchItem] = Field(max_length=100)
 
 
 class BatchDeleteRequest(BaseModel):
-    ids: List[str]
+    ids: List[str] = Field(max_length=100)
 
 
 class SuggestTopicRequest(BaseModel):
-    content: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1, max_length=10000)
 
 
 class UrlIngestRequest(BaseModel):
-    url: str = Field(..., min_length=1)
-    source: str = "direct"
+    url: str = Field(..., min_length=1, max_length=2000)
+    source: str = Field(default="direct", max_length=100)
 
 
 class FileSearchRequest(BaseModel):
-    query: str = Field(..., min_length=1)
-    path: str = "."
-    extensions: Optional[List[str]] = None
-    top_k: int = 10
+    query: str = Field(..., min_length=1, max_length=1000)
+    path: str = Field(default=".", max_length=500)
+    extensions: Optional[List[str]] = Field(default=None, max_length=20)
+    top_k: int = Field(default=10, ge=1, le=100)
 
 
 class DuplicateCheckRequest(BaseModel):
@@ -81,10 +81,10 @@ class CategorizeRequest(BaseModel):
 
 
 class BulkIngestRequest(BaseModel):
-    items: List[str]
-    topic: str = "imported"
-    source: str = "bulk"
-    dedup_threshold: float = 0.85
+    items: List[str] = Field(max_length=500)
+    topic: str = Field(default="imported", max_length=100)
+    source: str = Field(default="bulk", max_length=100)
+    dedup_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
 
 
 class KBRouter:
@@ -222,8 +222,11 @@ class KBRouter:
             source=req.source,
             importance=req.importance,
         )
-        memory.add_fact(fact)
-        return success_response(data={"status": "stored", "content": req.content, "topic": topic, "label": label})
+        is_new = memory.add_fact(fact)
+        import hashlib
+        content_hash = hashlib.md5(req.content.encode()).hexdigest()
+        item_id = f"fact_{memory._fact_counter}_{content_hash[:8]}"
+        return success_response(data={"status": "stored" if is_new else "duplicate", "id": item_id, "content": req.content, "topic": topic, "label": label})
 
     def update_knowledge(self, item_id: str, req: KnowledgeUpdate):
         """Update a knowledge item's content, topic, or importance."""
@@ -355,7 +358,10 @@ class KBRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="kb_ingest")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     def batch_delete_knowledge(self, req: BatchDeleteRequest):
         """Delete multiple knowledge items by ID."""

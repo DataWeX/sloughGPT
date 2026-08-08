@@ -76,6 +76,7 @@ class TestBasicExecution:
             await wk
         except (asyncio.CancelledError, RuntimeError):
             pass
+        q.close()
         errors = []
         for t in done:
             try:

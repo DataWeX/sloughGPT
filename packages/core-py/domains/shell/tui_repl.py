@@ -417,6 +417,28 @@ class TuiRepl:
         """Move the caret to the end of the line."""
         self._input_cursor = len(self._input_buf)
 
+    def _history_back(self) -> None:
+        """Step to the previous (older) history entry, filling the input row.
+
+        No-op at the oldest entry; mirrors readline ``previous-history``.
+        """
+        if self._cmd_history and self._history_pos > 0:
+            self._history_pos -= 1
+            self._input_buf = list(self._cmd_history[self._history_pos])
+            self._input_cursor = len(self._input_buf)
+
+    def _history_fwd(self) -> None:
+        """Step to the next (newer) history entry; past the newest clears
+        the input row (readline ``next-history``)."""
+        if self._cmd_history and self._history_pos < len(self._cmd_history) - 1:
+            self._history_pos += 1
+            self._input_buf = list(self._cmd_history[self._history_pos])
+            self._input_cursor = len(self._input_buf)
+        else:
+            self._history_pos = len(self._cmd_history)
+            self._input_buf.clear()
+            self._input_cursor = 0
+
     def _move_word_forward(self) -> None:
         """Move the caret to the end of the next word (Alt+F / Ctrl+Right).
 
@@ -734,6 +756,7 @@ class TuiRepl:
         _init_pairs()
         curses.curs_set(1)
         curses.raw()
+        stdscr.keypad(True)
         try:
             curses.set_escdelay(25)
         except Exception:
@@ -741,6 +764,7 @@ class TuiRepl:
 
         rows, cols = stdscr.getmaxyx()
         self._rows = rows
+        self._cols = cols
         self._input_buf: list[str] = []
         self._input_cursor = 0
         self._history_pos = len(self._cmd_history)
@@ -781,12 +805,59 @@ class TuiRepl:
         def _redraw() -> None:
             self._render_all(regions, win_console, win_output, win_status, win_input)
 
+        def _resize(nrows: int, ncols: int) -> None:
+            """Rebuild the layout and windows at ``nrows`` x ``ncols``.
+
+            The terminal size changed (ncurses KEY_RESIZE or a poll-detected
+            ``SIGWINCH`` that readline claimed); recompute pane regions, size
+            the surfaces, recreate the curses windows and redraw everything.
+            """
+            nonlocal regions, win_console, win_output, win_status, win_input
+            self._rows = nrows
+            self._cols = ncols
+            regions = self._layout.compute(nrows, ncols)
+            self._log_surface.set_width(regions["console"].cols)
+            self._output_surface.set_width(regions["output"].cols)
+            win_console = curses.newwin(regions["console"].rows, regions["console"].cols, regions["console"].top, regions["console"].left)
+            win_output = curses.newwin(regions["output"].rows, regions["output"].cols, regions["output"].top, regions["output"].left)
+            win_status = curses.newwin(regions["status"].rows, regions["status"].cols, regions["status"].top, regions["status"].left)
+            win_input = curses.newwin(regions["input"].rows, regions["input"].cols, regions["input"].top, regions["input"].left)
+            _redraw()
+
+        def _detect_resize(stdscr) -> bool:
+            """Return True and resync curses when the kernel window size
+            changed but ncurses never reported KEY_RESIZE.
+
+            ``readline`` (imported by the shell for line-mode history) claims
+            SIGWINCH before curses starts, so ncurses skips its own handler and
+            getch() never returns KEY_RESIZE.  Polling the terminal size each
+            poll tick recovers the event.  Without readline this is a no-op
+            because KEY_RESIZE is delivered normally.
+            """
+            try:
+                ts = os.get_terminal_size()
+            except OSError:
+                return False
+            nrows, ncols = ts.lines, ts.columns
+            if nrows <= 0 or ncols <= 0:
+                return False
+            if nrows == self._rows and ncols == self._cols:
+                return False
+            try:
+                curses.resizeterm(nrows, ncols)
+            except curses.error:
+                return False
+            self._rows = nrows
+            self._cols = ncols
+            return True
+
         _redraw()
 
         while self._running:
             try:
                 ch = stdscr.getch()
             except KeyboardInterrupt:
+                self._running = False
                 break
 
             if ch == -1:
@@ -795,6 +866,8 @@ class TuiRepl:
                 if self._active_thread is not None and not self._active_thread.is_alive():
                     self._active_cmd = None
                     self._active_thread = None
+                if _detect_resize(stdscr):
+                    _resize(self._rows, self._cols)
                 self._blit(win_output, self._output_surface.render(regions["output"].rows, self._out_scroll))
                 self._blit(win_console, self._log_surface.render(regions["console"].rows, self._log_scroll))
                 self._render_status(win_status, regions["status"].cols)
@@ -872,24 +945,13 @@ class TuiRepl:
                     self._active_thread.start()
                 _redraw()
 
-            elif ch == curses.KEY_UP:
-                if self._cmd_history and self._history_pos > 0:
-                    self._history_pos -= 1
-                    self._input_buf = list(self._cmd_history[self._history_pos])
-                    self._input_cursor = len(self._input_buf)
-                    _redraw()
+            elif ch in (curses.KEY_UP, 16):  # UP / Ctrl+P — previous history
+                self._history_back()
+                _redraw()
 
-            elif ch == curses.KEY_DOWN:
-                if self._cmd_history and self._history_pos < len(self._cmd_history) - 1:
-                    self._history_pos += 1
-                    self._input_buf = list(self._cmd_history[self._history_pos])
-                    self._input_cursor = len(self._input_buf)
-                    _redraw()
-                else:
-                    self._history_pos = len(self._cmd_history)
-                    self._input_buf.clear()
-                    self._input_cursor = 0
-                    _redraw()
+            elif ch in (curses.KEY_DOWN, 14):  # DOWN / Ctrl+N — next history
+                self._history_fwd()
+                _redraw()
 
             elif ch == curses.KEY_LEFT:
                 if self._input_cursor > 0:
@@ -980,16 +1042,7 @@ class TuiRepl:
                 _redraw()
 
             elif ch == curses.KEY_RESIZE:
-                rows, cols = stdscr.getmaxyx()
-                self._rows = rows
-                regions = self._layout.compute(rows, cols)
-                self._log_surface.set_width(regions["console"].cols)
-                self._output_surface.set_width(regions["output"].cols)
-                win_console = curses.newwin(regions["console"].rows, regions["console"].cols, regions["console"].top, regions["console"].left)
-                win_output = curses.newwin(regions["output"].rows, regions["output"].cols, regions["output"].top, regions["output"].left)
-                win_status = curses.newwin(regions["status"].rows, regions["status"].cols, regions["status"].top, regions["status"].left)
-                win_input = curses.newwin(regions["input"].rows, regions["input"].cols, regions["input"].top, regions["input"].left)
-                _redraw()
+                _resize(*stdscr.getmaxyx())
 
             elif ch in (1, curses.KEY_HOME):  # Ctrl+A / Home — start of line
                 self._move_home()

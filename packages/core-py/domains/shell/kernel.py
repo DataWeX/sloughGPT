@@ -437,13 +437,15 @@ class Kernel:
 
     def run(self, max_ticks: int = 100) -> list[dict]:
         """Run the kernel for up to max_ticks, returning tick results."""
+        from .kernel_process import ProcessState
         results = []
         for _ in range(max_ticks):
             if not self._running:
                 break
             result = self.tick()
             results.append(result)
-            if not self._processes:
+            if not any(p.state not in (ProcessState.ZOMBIE, ProcessState.STOPPED)
+                       for p in self._processes.values()):
                 break
         return results
 

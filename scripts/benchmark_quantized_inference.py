@@ -20,7 +20,7 @@ import numpy as np
 sys.path.insert(0, "packages/core-py")
 
 from domains.training.slonet import SloTransformer
-from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
+from domains.infrastructure.quantization import Quantine, walk_slo_linears
 
 
 def create_model(vocab=32000, embed=256, layers=4, heads=8, seq_len=128):
@@ -43,7 +43,7 @@ def create_model(vocab=32000, embed=256, layers=4, heads=8, seq_len=128):
 
 def quantize_model(model, bits, mode="symmetric"):
     """Quantize all SloLinear layers in-place. Returns (engine, count)."""
-    engine = QuantEngine(bits=bits, mode=mode)
+    engine = Quantine(bits=bits, mode=mode)
     layers = walk_slo_linears(model)
     count = 0
     for name, module in layers.items():
@@ -191,7 +191,7 @@ def main():
     from pathlib import Path
 
     model = create_model(embed=128, layers=4, heads=4)
-    engine = QuantEngine(bits=8, mode="symmetric")
+    engine = Quantine(bits=8, mode="symmetric")
     layers = walk_slo_linears(model)
     tensor_infos = {}
     for name, module in layers.items():

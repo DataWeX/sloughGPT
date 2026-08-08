@@ -48,6 +48,7 @@ function makeConfig(overrides = {}) {
       availableModels: [], model: '', loadingModel: null, modelInfoMap: {},
       downloadProgress: {}, handleSelectModel: vi.fn(), handleUnloadModel: vi.fn(),
       souls: [], currentSoul: null, handleSelectSoul: vi.fn(),
+      fineTuned: [], fineTunedLoading: false, handleLoadFineTuned: vi.fn(),
     },
     chat,
     health: { model_loaded: true, model_type: 'gpt2', summary: 'Ready' },
@@ -83,6 +84,15 @@ describe('useChatToolbarValue', () => {
     expect(result.current.model.current).toBe(config.model.model)
     expect(result.current.model.loading).toBe(config.model.loadingModel)
     expect(result.current.model.onSelect).toBe(config.model.handleSelectModel)
+  })
+
+  it('wires fine-tuned group into model group', () => {
+    const config = makeConfig()
+    const { result } = renderHook(() => useChatToolbarValue(config))
+    expect(result.current.model.fineTuned).toBeDefined()
+    expect(result.current.model.fineTuned?.models).toBe(config.model.fineTuned)
+    expect(result.current.model.fineTuned?.loading).toBe(config.model.fineTunedLoading)
+    expect(result.current.model.fineTuned?.onLoad).toBe(config.model.handleLoadFineTuned)
   })
 
   it('returns soul group', () => {

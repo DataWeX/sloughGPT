@@ -62,7 +62,7 @@ describe('useTrainingDatasets', () => {
 
   it('setDatasetPreview stores preview data', () => {
     const { result } = renderHook(() => useTrainingDatasets(noop))
-    const preview = { samples: [{ content: 'test' }], total_samples: 1 }
+    const preview = { dataset_id: 'test', samples: [{ content: 'test', path: '', language: 'en', size: 4 }], total_samples: 1, total_chars: 4, languages: { en: 1 } }
     act(() => result.current.setDatasetPreview(preview))
     expect(result.current.datasetPreview).toEqual(preview)
   })

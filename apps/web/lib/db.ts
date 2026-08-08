@@ -17,6 +17,7 @@ export interface ChatSession {
   starred: boolean
   pinned: boolean
   archived?: boolean
+  unread?: boolean
 }
 
 export interface KnowledgeItem {
@@ -61,6 +62,7 @@ interface StoredChatSession {
   pinned: boolean
   starred: boolean
   archived?: boolean
+  unread?: boolean
 }
 
 interface PendingMessage {
@@ -192,6 +194,10 @@ export const chatDB = {
 
   async markSynced(id: string): Promise<void> {
     await db.sessions.update(id, { synced: true })
+  },
+
+  async markUnread(id: string, unread: boolean): Promise<void> {
+    await db.sessions.update(id, { unread })
   },
 
   async savePendingMessage(msg: PendingMessage): Promise<void> {

@@ -4,7 +4,7 @@ Auth Router - JWT token management + login/register/me/logout endpoints
 import uuid, json, os, hashlib, secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Header, Request, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from schemas.common import success_response
@@ -16,7 +16,7 @@ USERS_FILE = os.path.join(_REPO_ROOT, "data", "users.json")
 # ---------- request / response models ----------
 
 class TokenRequest(BaseModel):
-    api_key: str
+    api_key: str = Field(max_length=500)
 
 
 class TokenResponse(BaseModel):
@@ -26,14 +26,14 @@ class TokenResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=500)
 
 
 class RegisterRequest(BaseModel):
-    username: str
-    email: str
-    password: str
+    username: str = Field(max_length=100)
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=500)
 
 
 class UserInfo(BaseModel):

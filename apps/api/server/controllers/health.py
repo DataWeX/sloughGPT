@@ -26,6 +26,16 @@ def _get_executor_stats() -> Optional[Dict[str, Any]]:
         return None
 
 
+def _get_process_guard_status() -> Optional[Dict[str, Any]]:
+    """Get ProcessGuard status from the ModelsController if available."""
+    try:
+        from controllers.models import get_models_controller
+        ctrl = get_models_controller()
+        return ctrl.get_process_guard_status()
+    except Exception:
+        return None
+
+
 def _get_mps_monitor_info() -> Optional[Dict[str, Any]]:
     """Get MPS GPU memory monitor status if available."""
     try:
@@ -48,6 +58,8 @@ def _is_model_loading() -> bool:
     try:
         import state as server_state
         if server_state.model is not None:
+            return False
+        if server_state.provider is not None:
             return False
         uptime = (datetime.now() - _health_start_time).total_seconds()
         return uptime < 90
@@ -90,10 +102,44 @@ def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]
         import state as server_state
         if server_state.model is not None:
             return True, server_state.model_type, registry_health
+        if server_state.provider is not None:
+            return True, server_state.model_type, registry_health
     except ImportError:
         pass
 
     return False, None, registry_health
+
+
+def _get_model_device() -> Optional[str]:
+    """Resolve the active model's device string for health reporting.
+
+    Order: models controller first (authoritative — it holds the resolved
+    device after availability validation in ``_resolve_device``), then the
+    ModelRegistry default model, then ``None``.
+
+    Returns:
+        The resolved device string (e.g. ``"cpu"``, ``"mps"``, ``"cuda"``),
+        or None when no model is loaded.
+    """
+    try:
+        from controllers.models import get_models_controller
+        ctrl = get_models_controller()
+        current = ctrl.get_current_model()
+        if current and current.get("device"):
+            return current["device"]
+    except ImportError:
+        pass
+    try:
+        from domains.infrastructure.model_registry import get_model_registry
+        registry = get_model_registry()
+        health = registry.health_summary()
+        if health.get("healthy"):
+            for m in health.get("models", []):
+                if m.get("is_default") and m.get("device"):
+                    return m["device"]
+    except Exception:
+        pass
+    return None
 
 
 def _get_lifecycle_info() -> Dict[str, Any]:
@@ -133,8 +179,9 @@ def _get_quantization_info() -> Dict[str, Any]:
     """Get quantization status from the active provider."""
     try:
         from domains.models.provider import get_provider
-        # Try slonet first, then hf-default
-        provider = get_provider("slonet")
+        provider = get_provider("slonet-native")
+        if provider is None:
+            provider = get_provider("slonet")
         if provider is None:
             provider = get_provider("hf-default")
         if provider is not None and hasattr(provider, 'quantization_report'):
@@ -142,6 +189,26 @@ def _get_quantization_info() -> Dict[str, Any]:
         return {}
     except Exception:
         return {}
+
+
+def _get_kv_session_info() -> Dict[str, Any]:
+    """Get cross-turn KV cache session stats from the active provider.
+
+    Surfaces ``SloNetChatProvider.session_stats()`` (active sessions, cached
+    tokens, TTL). Returns ``{"enabled": False}`` when no provider exposes it.
+    """
+    try:
+        from domains.models.provider import get_provider
+        provider = get_provider("slonet-native")
+        if provider is None:
+            provider = get_provider("slonet")
+        if provider is not None and hasattr(provider, "session_stats"):
+            stats = provider.session_stats()
+            stats["enabled"] = True
+            return stats
+        return {"enabled": False}
+    except Exception:
+        return {"enabled": False}
 
 
 def _build_status_message(
@@ -202,6 +269,42 @@ def _get_resource_allocation() -> Dict[str, Any]:
         return {}
 
 
+def _get_process_info() -> Dict[str, Any]:
+    """Compute real process metrics for the current server process.
+
+    Uses psutil for file descriptors/threads/memory and the stdlib ``gc``
+    module for garbage-collector generation counts. Returns ``{}`` (the
+    frontend falls back to placeholder values) when any read fails.
+
+    Returns:
+        dict with keys open_files, threads, process_cpu_percent,
+        process_memory_percent, rss_mb, gc_gen0, gc_gen1, gc_gen2.
+
+    Side effects:
+        - reads process stats via psutil and gc (no mutation)
+    """
+    try:
+        import gc
+        proc = psutil.Process()
+        info: Dict[str, Any] = {
+            "open_files": len(proc.open_files()),
+            "threads": proc.num_threads(),
+            "process_cpu_percent": round(proc.cpu_percent(interval=None), 1),
+            "process_memory_percent": round(proc.memory_percent(), 1),
+            "rss_mb": proc.memory_info().rss // (1024 * 1024),
+        }
+        try:
+            gen0, gen1, gen2 = gc.get_count()
+            info["gc_gen0"] = gen0
+            info["gc_gen1"] = gen1
+            info["gc_gen2"] = gen2
+        except Exception:
+            pass
+        return info
+    except Exception:
+        return {}
+
+
 class HealthController:
     """Controller for system health"""
 
@@ -223,6 +326,7 @@ class HealthController:
             "model_loaded": model_loaded,
             "model_loading": model_loading,
             "model_type": model_type,
+            "device": _get_model_device(),
             "is_inferencing": inference_stats.get("is_inferencing", False),
             "inference_count": inference_stats.get("inference_count", 0),
             "lifecycle": lifecycle,
@@ -240,6 +344,10 @@ class HealthController:
                     model = server_state.model
                     if hasattr(model, "parameters") and callable(getattr(model, "parameters", None)):
                         result["num_parameters"] = sum(p.numel() for p in model.parameters())
+                elif server_state.provider is not None:
+                    meta = server_state.provider.metadata()
+                    if meta and meta.get("total_params"):
+                        result["num_parameters"] = meta["total_params"]
             except Exception:
                 pass
 
@@ -247,6 +355,11 @@ class HealthController:
         quant_info = _get_quantization_info()
         if quant_info:
             result["quantization"] = quant_info
+
+        # Cross-turn KV cache session stats
+        kv_sessions = _get_kv_session_info()
+        if kv_sessions.get("enabled"):
+            result["kv_sessions"] = kv_sessions
 
         # Training executor pool status
         executor_stats = _get_executor_stats()
@@ -303,6 +416,7 @@ class HealthController:
             health_score = ss.get_health_score()
             model_metrics = ss.get_model_metrics()
             model_events = ss.get_model_events(10)
+            ss.record_trend_snapshots()
             health_history = ss.get_health_history(20)
             memory_history = ss.get_memory_history(10)
             rate_violations = ss.get_rate_limit_violations(5)
@@ -351,19 +465,23 @@ class HealthController:
                 "cpu_percent": round(cpu, 1),
                 "memory_percent": round(mem.percent, 1),
                 "memory_available_mb": mem.available // (1024 * 1024),
+                **_get_process_info(),
             },
             "gpu": gpu_info,
             "mps_monitor": _get_mps_monitor_info(),
             "model_loaded": model_loaded,
             "model_loading": model_loading,
             "model_type": model_type,
+            "device": _get_model_device(),
             "soul": current_soul,
             "inference": inference_stats,
             "registry": registry_health,
             "quantization": _get_quantization_info(),
+            "kv_sessions": _get_kv_session_info(),
             "lifecycle": lifecycle,
             "training_pool": _get_executor_stats(),
             "resource_allocation": _get_resource_allocation(),
+            "process_guard": _get_process_guard_status(),
             "status_message": _build_status_message(
                 model_loaded, model_type, model_loading, current_soul,
                 request_count, error_count, lifecycle,

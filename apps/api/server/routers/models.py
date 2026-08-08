@@ -56,7 +56,7 @@ class ModelsRouter:
 
     def _register_routes(self):
         self.router.add_api_route(path="", endpoint=self.list_models, methods=["GET"], response_model=StandardResponse[List[ModelInfo]])
-        self.router.add_api_route(path="/load", endpoint=self.load_model, methods=["POST"], response_model=LoadModelResponse)
+        self.router.add_api_route(path="/load", endpoint=self.load_model, methods=["POST"], response_model=StandardResponse[LoadModelResponse])
         self.router.add_api_route(path="/unload", endpoint=self.unload_model, methods=["POST"])
         self.router.add_api_route(path="/current", endpoint=self.current_model, methods=["GET"])
         self.router.add_api_route(path="/hf", endpoint=self.list_hf_models, methods=["GET"])
@@ -78,6 +78,8 @@ class ModelsRouter:
         self.router.add_api_route(path="/catalog", endpoint=self.get_catalog, methods=["GET"])
         self.router.add_api_route(path="/catalog/stats", endpoint=self.get_catalog_stats, methods=["GET"])
         self.router.add_api_route(path="/conversion-status", endpoint=self.get_conversion_status, methods=["GET"])
+        self.router.add_api_route(path="/process-guard", endpoint=self.get_process_guard, methods=["GET"])
+        self.router.add_api_route(path="/process-guard", endpoint=self.set_process_guard, methods=["POST"])
 
     def _describe_model(self, model_id: str, parameters: int, loaded: bool) -> str:
         """Generate a plain-language description of a model."""
@@ -181,14 +183,16 @@ class ModelsRouter:
 
         # Add currently loaded model
         if current:
+            params = int(current.get("parameters", 0) or 0)
+            vocab = int(current.get("vocab_size", 0) or 0)
             models.append(ModelInfo(
                 model_id=current["model_id"],
                 status=ModelStatus.LOADED,
                 device=current["device"],
-                parameters=current.get("parameters", 0),
-                vocab_size=current.get("vocab_size", 0),
+                parameters=params,
+                vocab_size=vocab,
                 loaded_at=current.get("loaded_at"),
-                description=self._describe_model(current["model_id"], current.get("parameters", 0), loaded=True),
+                description=self._describe_model(current["model_id"], params, loaded=True),
             ))
 
         # Add available HuggingFace models (skip if already listed as loaded)
@@ -197,14 +201,16 @@ class ModelsRouter:
         for entry in hf_models:
             model_id = entry["model_id"]
             if model_id not in loaded_ids:
+                params = int(entry.get("parameters", 0) or 0)
+                vocab = int(entry.get("vocab_size", 0) or 0)
                 models.append(ModelInfo(
                     model_id=model_id,
                     status=ModelStatus.AVAILABLE,
                     device="cpu",
-                    parameters=entry.get("parameters", 0),
-                    vocab_size=entry.get("vocab_size", 0),
+                    parameters=params,
+                    vocab_size=vocab,
                     loaded_at=None,
-                    description=self._describe_model(model_id, entry.get("parameters", 0), loaded=False),
+                    description=self._describe_model(model_id, params, loaded=False),
                 ))
 
         return success_response(data=[m.model_dump() for m in models])
@@ -220,8 +226,9 @@ class ModelsRouter:
         try:
             from domains.infrastructure.server_state import get_server_state
             ss = get_server_state()
-            if result.get("success"):
-                ss.record_model_event("load", req.model_id, f"device={req.device.value}")
+            if result.get("status") == "loaded":
+                resolved_device = result.get("device") or req.device.value
+                ss.record_model_event("load", req.model_id, f"device={resolved_device}")
             else:
                 ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
         except Exception as e:
@@ -231,11 +238,18 @@ class ModelsRouter:
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)):
         """Unload current model"""
         ctrl = get_models_controller()
+        model_id = ctrl._current_model
+        if not model_id:
+            try:
+                from domains.infrastructure.model_registry import get_model_registry
+                model_id = get_model_registry().default_id
+            except Exception:
+                pass
         result = ctrl.unload_model()
         try:
             from domains.infrastructure.server_state import get_server_state
             ss = get_server_state()
-            ss.record_model_event("unload", ctrl._current_model or "unknown")
+            ss.record_model_event("unload", model_id or "unknown")
         except Exception as e:
             logger.debug("Failed to record model unload event: %s", e)
         return success_response(data=result)
@@ -366,7 +380,10 @@ class ModelsRouter:
             results = do_export(config, server_state.model, server_state.tokenizer)
             return success_response(data={"format": request.format, "files": results}, message="exported")
         except Exception as e:
-            return error_response(message=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="export_model")
+            return error_response(message=err.user_message)
 
     async def get_export_formats(self):
         """Get list of supported export formats."""
@@ -462,7 +479,10 @@ class ModelsRouter:
                 "size_on_disk": size_str,
             }
         except Exception as e:
-            return {"status": "error", "model_id": model_id, "error": str(e)}
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="verify_download")
+            return {"status": "error", "model_id": model_id, "error": err.user_message, "code": err.code}
 
     async def retry_download(self, model_id: str) -> Dict[str, Any]:
         """Redownload a cached model (cleanup + fresh download)."""
@@ -533,7 +553,10 @@ class ModelsRouter:
             logger.info("GGUF downloaded and cached: %s", cached_path, extra={"tag": "MODEL"})
             return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Failed to download GGUF model: {e}")
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="download_gguf")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def visual_model_load(self, model_dir: str = "", model_id: str = ""):
         """Load a vision / multimodal model from a local directory.
@@ -565,7 +588,7 @@ class ModelsRouter:
         Returns:
             Quantization report with per-tensor error metrics and aggregate summary.
         """
-        from domains.infrastructure.quantization import QuantEngine
+        from domains.infrastructure.quantization import Quantine
         from domains.infrastructure.quant_core.wrapper import HAS_AVX2
         import numpy as np
 
@@ -602,7 +625,7 @@ class ModelsRouter:
             from domains.infrastructure.quantization import walk_hf_linears
             layers = walk_hf_linears(model)
 
-        engine = QuantEngine(bits=bits, mode=mode)
+        engine = Quantine(bits=bits, mode=mode)
         quantized_count = 0
         tensor_infos = {}
         for name, module in layers.items():
@@ -740,9 +763,9 @@ class ModelsRouter:
         }
 
         if acc.name == "cpu":
-            # CPU path: use QuantEngine to select best format
-            from domains.infrastructure.quantization import QuantEngine
-            suggestion = QuantEngine.suggest_format()
+            # CPU path: use Quantine to select best format
+            from domains.infrastructure.quantization import Quantine
+            suggestion = Quantine.suggest_format()
             result["precision"] = suggestion["format"]
             result["bits"] = suggestion["bits"]
             result["reason"] = suggestion["reason"]
@@ -757,8 +780,8 @@ class ModelsRouter:
                     model = getattr(provider, "_model", None)
                     if model is not None:
                         # Re-use existing quantize logic
-                        from domains.infrastructure.quantization import QuantEngine, walk_slo_linears, walk_hf_linears
-                        engine = QuantEngine(bits=suggestion["bits"], mode="symmetric")
+                        from domains.infrastructure.quantization import Quantine, walk_slo_linears, walk_hf_linears
+                        engine = Quantine(bits=suggestion["bits"], mode="symmetric")
                         if hasattr(model, "layers"):
                             layers = walk_slo_linears(model)
                         else:
@@ -813,6 +836,29 @@ class ModelsRouter:
             return success_response(data=status)
 
         return success_response(data=tracker.get_active())
+
+    async def get_process_guard(self):
+        """Get ProcessGuard status.
+
+        Returns enabled state, whether a guard is actively running, the
+        guarded model id, and the guard health snapshot.
+        """
+        ctrl = get_models_controller()
+        return success_response(data=ctrl.get_process_guard_status())
+
+    async def set_process_guard(self, request: Dict[str, Any]):
+        """Enable or disable ProcessGuard at runtime.
+
+        Body: ``{"enabled": true}`` or ``{"enabled": false}``
+
+        Disabling stops any active guard. Enabling starts the guard for the
+        currently loaded model if a .slnc file exists.
+        """
+        enabled = request.get("enabled")
+        if not isinstance(enabled, bool):
+            raise HTTPException(status_code=422, detail="`enabled` must be a boolean")
+        ctrl = get_models_controller()
+        return success_response(data=ctrl.set_process_guard_enabled(enabled))
 
 
 router = ModelsRouter().router

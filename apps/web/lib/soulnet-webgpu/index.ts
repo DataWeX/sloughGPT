@@ -16,6 +16,7 @@
  */
 
 import { SoulNetWebGPU } from './engine'
+import type { SoulNetConfig } from './engine'
 export type { SoulNetConfig } from './engine'
 export { SoulNetWebGPU }
 import { SoulTransformerWebGPU } from './transformer-engine'
@@ -77,7 +78,7 @@ export class SoulEngineWorker {
     })
   }
 
-  load(url: string, config: Record<string, unknown>): Promise<unknown> {
+  load(url: string, config: SoulNetConfig): Promise<unknown> {
     return this._send('loaded', { url, config })
   }
 

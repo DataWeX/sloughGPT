@@ -15,6 +15,10 @@ interface KeyboardDeps {
   handleRegenerateRef: React.MutableRefObject<(() => Promise<void>) | null>
   searchInputRef?: React.RefObject<HTMLInputElement | null>
   handleSearchChange?: (v: string) => void
+  onRenameConversation?: () => void
+  onExportMarkdown?: () => void
+  onDuplicateConversation?: () => void
+  onToggleBookmarks?: () => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {
@@ -23,6 +27,8 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     setToolPanelOpen, setShowSettings, setLoading, setCurrentError,
     loadingRef, newChatRef, handleRegenerateRef,
     searchInputRef, handleSearchChange,
+    onRenameConversation, onExportMarkdown,
+    onDuplicateConversation, onToggleBookmarks,
   } = deps
 
   const depsRef = useRef(deps)
@@ -41,11 +47,11 @@ export function useChatKeyboard(deps: KeyboardDeps) {
           d.setShowSettings(prev => !prev)
         }
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
         e.preventDefault()
         d.setToolPanelOpen(prev => !prev)
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && !e.shiftKey) {
         e.preventDefault()
         d.setToolPanelOpen(prev => !prev)
       }
@@ -72,6 +78,22 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if (e.key === '/' && !(e.metaKey || e.ctrlKey) && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
         e.preventDefault()
         d.searchInputRef?.current?.focus()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'r' && e.shiftKey) {
+        e.preventDefault()
+        d.onRenameConversation?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'e' && e.shiftKey) {
+        e.preventDefault()
+        d.onExportMarkdown?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && e.shiftKey) {
+        e.preventDefault()
+        d.onDuplicateConversation?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
+        e.preventDefault()
+        d.onToggleBookmarks?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)

@@ -39,6 +39,10 @@ class SloNetServer:
         warmup_prompt: Short prompt for warmup generation
         process_guard: Optional ``ProcessGuard`` — when set and alive, generation
             is delegated to the guarded subprocess with in-process fallback.
+        quantize_kv: Optional bool forwarded to ``generate_numpy`` /
+            ``generate_numpy_stream``. True = int8 KV cache (4x memory
+            reduction), False = float32, None = auto (int8 for quantized
+            models only). Cross-turn session reuse works in all modes.
     """
 
     def __init__(
@@ -53,11 +57,16 @@ class SloNetServer:
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",
         process_guard: Any = None,
+        provider: Any = None,
+        quantize_kv: Optional[bool] = None,
+        lazy_model_factory: Optional[Callable[[], Any]] = None,
     ):
         self._tokenizer = tokenizer
         self._model_id = model_id
+        self._quantize_kv = quantize_kv
         self._generate_timeout = generate_timeout
         self._warmup_prompt = warmup_prompt
+        self._provider = provider
         self._max_workers = max_workers
 
         self._read_semaphores: dict[int, asyncio.Semaphore] = {}
@@ -71,6 +80,13 @@ class SloNetServer:
         self._warmup_lock = threading.Lock()
         self._warmup_completed = False
         self._warmup_error: Optional[str] = None
+
+        # Lazy single-model mode: the model is materialized in this process on
+        # first need (guard dead / no guard) via ``lazy_model_factory`` and
+        # cached here. Distinct from ``model_factory`` pool mode, which would
+        # materialize up to ``max_workers`` model copies.
+        self._lazy_model_factory = lazy_model_factory
+        self._lazy_lock = threading.Lock()
 
         # Process-guard delegation (crash → circuit breaker open, restart → half-open)
         self._process_guard = process_guard
@@ -104,7 +120,22 @@ class SloNetServer:
 
     def _acquire_model(self, timeout: float = 30.0) -> Any:
         if not self._pool_mode:
-            return self._model
+            if self._model is not None:
+                return self._model
+            # Lazy single-model mode: materialize once on first need.
+            if self._lazy_model_factory is not None:
+                with self._lazy_lock:
+                    if self._model is None:
+                        model = self._lazy_model_factory()
+                        if model is None:
+                            raise RuntimeError(
+                                f"Lazy model factory returned None for '{self._model_id}'"
+                            )
+                        self._model = model
+                    return self._model
+            raise RuntimeError(
+                f"SloNetServer '{self._model_id}' has no model and no lazy factory"
+            )
         try:
             return self._model_pool.get_nowait()
         except queue.Empty:
@@ -160,6 +191,13 @@ class SloNetServer:
     # ------------------------------------------------------------------
 
     def _run_warmup(self) -> None:
+        # Lazy mode + no live guard: skip warmup rather than force a parent
+        # model load at startup. The guard (if starting) warms itself up; a
+        # lazy parent load only happens as a dead-guard fallback.
+        if self._lazy_model_factory is not None and not self._use_guard():
+            with self._warmup_lock:
+                self._warmup_completed = True
+            return
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -191,6 +229,26 @@ class SloNetServer:
         """
         return self._process_guard is not None and self._process_guard.alive
 
+    def set_process_guard(self, process_guard: Any) -> None:
+        """Swap the attached ProcessGuard (e.g. after a runtime rebuild).
+
+        Generation delegates to the newly attached guard when alive. Crash
+        and restart callbacks are rewired to the circuit breaker so a
+        subprocess crash still opens / half-opens the breaker.
+
+        Side effects:
+            - replaces ``_process_guard``
+            - registers crash/restart callbacks on the new guard
+        """
+        self._process_guard = process_guard
+        if process_guard is not None and self._circuit_breaker is not None:
+            process_guard.on_crash(
+                lambda w: self._circuit_breaker.record_failure()
+            )
+            process_guard.on_restart(
+                lambda w: self._circuit_breaker.record_success()
+            )
+
     def _guard_health(self) -> Optional[dict]:
         """Guard health snapshot, or None when no guard is attached."""
         if self._process_guard is None:
@@ -209,6 +267,7 @@ class SloNetServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event: Optional[threading.Event] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         if cancel_event and cancel_event.is_set():
             raise RuntimeError("Generation cancelled before start")
@@ -233,6 +292,7 @@ class SloNetServer:
         try:
             tokens = self._tokenizer.encode(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
+            kv_state = self._resolve_kv_state(session_id)
             result = model.generate_numpy(
                 input_ids,
                 max_new_tokens=max_new_tokens,
@@ -241,6 +301,9 @@ class SloNetServer:
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
                 eos_token=self._tokenizer.eos_token_id or 0,
+                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
+                kv_state=kv_state,
+                quantize_kv=self._quantize_kv,
             )
             return self._tokenizer.decode(result[0].tolist())
         finally:
@@ -255,6 +318,7 @@ class SloNetServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event: Optional[threading.Event] = None,
+        session_id: Optional[str] = None,
     ) -> Iterator[str]:
         if self._use_guard():
             for token in self._process_guard.generate_stream(
@@ -275,15 +339,19 @@ class SloNetServer:
             tokens = self._tokenizer.encode(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
             eos_id = self._tokenizer.eos_token_id or 0
+            kv_state = self._resolve_kv_state(session_id)
 
             for tok_id in model.generate_numpy_stream(
                 input_ids,
                 max_new_tokens=max_new_tokens,
                 eos_token=eos_id,
+                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
                 temperature=temperature,
                 top_k=top_k,
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
+                kv_state=kv_state,
+                quantize_kv=self._quantize_kv,
             ):
                 if cancel_event and cancel_event.is_set():
                     return
@@ -292,6 +360,20 @@ class SloNetServer:
                     yield decoded
         finally:
             self._release_model(model)
+
+    def _resolve_kv_state(self, session_id: Optional[str]):
+        """Resolve cross-turn KV state for a session via the bound provider.
+
+        The provider owns the session → NumpyKVState map (with TTL eviction).
+        Returns None when no provider is bound or no session_id is given, which
+        falls back to a fresh state each call (no cross-turn reuse).
+        """
+        if session_id is None:
+            return None
+        provider = getattr(self, "_provider", None)
+        if provider is None or not hasattr(provider, "_resolve_session_kv"):
+            return None
+        return provider._resolve_session_kv(session_id)
 
     # ------------------------------------------------------------------
     # Async generation (public API)
@@ -306,6 +388,7 @@ class SloNetServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event: Optional[threading.Event] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         if cancel_event and cancel_event.is_set():
             raise asyncio.CancelledError("Generation cancelled before start")
@@ -323,6 +406,7 @@ class SloNetServer:
                     prompt, max_new_tokens,
                     temperature, top_p, top_k, repetition_penalty,
                     cancel_event,
+                    session_id,
                 ),
                 timeout=self._generate_timeout,
             )
@@ -356,6 +440,7 @@ class SloNetServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event: Optional[threading.Event] = None,
+        session_id: Optional[str] = None,
     ) -> AsyncIterator[str]:
         with self._metrics_lock:
             self._metrics.requests_total += 1
@@ -371,7 +456,7 @@ class SloNetServer:
             try:
                 for token in self._generate_stream_sync(
                     prompt, max_new_tokens, temperature, top_p, top_k,
-                    repetition_penalty, cancel_event,
+                    repetition_penalty, cancel_event, session_id,
                 ):
                     q_buf.put(token)
             except Exception as e:
@@ -450,6 +535,21 @@ class SloNetServer:
         n_head = config.get("n_head", config.get("num_attention_heads", 0))
         vocab = int(m.layers[0].weight.shape[0]) if m else 0
         max_seq = int(m.max_seq_len) if m else 0
+
+        # Lazy mode: model not resident — prefer the provider's header-only
+        # metadata so observability never forces a weight load.
+        if m is None and self._lazy_model_factory is not None and self._provider is not None:
+            try:
+                pmeta = self._provider.metadata()
+                total_params = int(pmeta.get("total_params", 0))
+                n_layer = int(pmeta.get("n_layer", 0))
+                n_embed = int(pmeta.get("n_embed", 0))
+                n_head = int(pmeta.get("n_head", 0))
+                vocab = int(pmeta.get("vocab_size", 0))
+                max_seq = int(pmeta.get("max_seq_len", 0))
+            except Exception:
+                pass
+
         cb_state = (
             self._circuit_breaker.state.value
             if self._circuit_breaker
@@ -473,7 +573,20 @@ class SloNetServer:
             "dispatch": "pool" if self._pool_mode else "single",
             "workers": self._max_workers if self._pool_mode else 1,
             "process_guard": self._guard_health(),
+            "kv_sessions": self._kv_session_stats(),
         }
+
+    def _kv_session_stats(self) -> dict:
+        """Cross-turn KV cache session stats, if a provider exposes them."""
+        p = self._provider
+        if p is None or not hasattr(p, "session_stats"):
+            return {"enabled": False}
+        try:
+            stats = p.session_stats()
+            stats["enabled"] = True
+            return stats
+        except Exception:
+            return {"enabled": False, "error": "stats unavailable"}
 
     def health(self) -> dict:
         m = self.get_metrics()
@@ -489,4 +602,5 @@ class SloNetServer:
             "circuit_breaker": cb_state,
             "metrics": m,
             "pool": self.pool_stats(),
+            "kv_sessions": self._kv_session_stats(),
         }

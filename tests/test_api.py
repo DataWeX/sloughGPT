@@ -102,14 +102,14 @@ class TestQuantizationEndpoints:
         assert req.quantization_type == "fp16"
 
     def test_quantization_type_validation(self):
-        """Test quantization modes and dtypes exposed by QuantEngine."""
-        from domains.infrastructure.quantization import QuantDtype, QuantMode, QuantEngine
+        """Test quantization modes and dtypes exposed by Quantine."""
+        from domains.infrastructure.quantization import QuantDtype, QuantMode, Quantine
 
         assert "symmetric" in [m.value for m in QuantMode]
         assert "asymmetric" in [m.value for m in QuantMode]
         assert "int8" in [d.value for d in QuantDtype]
         assert "int4" in [d.value for d in QuantDtype]
-        assert QuantEngine is not None
+        assert Quantine is not None
 
 
 class TestBenchmarkEndpoints:

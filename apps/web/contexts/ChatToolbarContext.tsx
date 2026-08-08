@@ -4,6 +4,7 @@ import { createContext, useContext, type ReactNode } from 'react'
 import type { Soul } from '@/lib/souls-controller'
 import type { AgentDef } from '@/lib/agents'
 import type { Conversation } from '@/lib/session-controller'
+import type { FineTunedModel } from '@/lib/training-controller'
 
 type DownloadProgressInfo = {
   percentage: number; status: string; speed_mb_per_sec?: number; eta_seconds?: number;
@@ -43,6 +44,11 @@ interface ModelGroup {
   downloadProgress: Record<string, DownloadProgressInfo>
   onSelect: (model: string) => void
   onUnload?: () => void
+  fineTuned?: {
+    models: FineTunedModel[]
+    loading: boolean
+    onLoad: (name: string) => Promise<void>
+  }
 }
 
 interface SoulGroup {

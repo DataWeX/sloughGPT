@@ -2,9 +2,10 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
-const { mockPush, mockSessionList } = vi.hoisted(() => ({
+const { mockPush, mockSessionList, mockModelList } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockSessionList: vi.fn(),
+  mockModelList: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -12,11 +13,16 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/lib/model-controller', () => ({
-  modelController: {},
+  modelController: { list: mockModelList },
 }))
 
 vi.mock('@/lib/session-controller', () => ({
   sessionController: { list: mockSessionList },
+}))
+
+vi.mock('@/lib/store', () => ({
+  useSettings: () => ({ theme: 'light' }),
+  useUpdateSettings: () => vi.fn(),
 }))
 
 import { CommandPalette } from './CommandPalette'
@@ -25,6 +31,7 @@ describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSessionList.mockResolvedValue([])
+    mockModelList.mockResolvedValue([])
   })
   afterEach(cleanup)
 
@@ -36,14 +43,14 @@ describe('CommandPalette', () => {
   it('opens on Cmd+K', () => {
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
-    expect(screen.getByPlaceholderText('Search conversations, models, pages...')).toBeDefined()
+    expect(screen.getByPlaceholderText('Search pages, models, actions...')).toBeDefined()
   })
 
   it('closes on Escape', () => {
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
     fireEvent.keyDown(window, { key: 'Escape' })
-    expect(screen.queryByPlaceholderText('Search conversations, models, pages...')).toBeNull()
+    expect(screen.queryByPlaceholderText('Search pages, models, actions...')).toBeNull()
   })
 
   it('closes on backdrop click', () => {
@@ -52,13 +59,13 @@ describe('CommandPalette', () => {
     const backdrop = document.querySelector('.fixed.inset-0')
     expect(backdrop).not.toBeNull()
     fireEvent.click(backdrop!)
-    expect(screen.queryByPlaceholderText('Search conversations, models, pages...')).toBeNull()
+    expect(screen.queryByPlaceholderText('Search pages, models, actions...')).toBeNull()
   })
 
   it('filters actions by query', () => {
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
-    const input = screen.getByPlaceholderText('Search conversations, models, pages...')
+    const input = screen.getByPlaceholderText('Search pages, models, actions...')
     fireEvent.change(input, { target: { value: 'New' } })
     expect(screen.getByText('New Chat')).toBeDefined()
     expect(screen.queryByText('Export Chat')).toBeNull()
@@ -67,7 +74,7 @@ describe('CommandPalette', () => {
   it('shows "No results" for unmatched query', () => {
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
-    const input = screen.getByPlaceholderText('Search conversations, models, pages...')
+    const input = screen.getByPlaceholderText('Search pages, models, actions...')
     fireEvent.change(input, { target: { value: 'zzzznotfound' } })
     expect(screen.getByText(/No results/)).toBeDefined()
   })
@@ -75,12 +82,12 @@ describe('CommandPalette', () => {
   it('navigates with arrow keys and enters', () => {
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
-    const input = screen.getByPlaceholderText('Search conversations, models, pages...')
+    const input = screen.getByPlaceholderText('Search pages, models, actions...')
+    // selectedIdx starts at 0; ArrowDown twice → index 2 = Training
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
-    // Second ArrowDown selects "Search Conversations" (index 1), Enter runs it
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockPush).toHaveBeenCalledWith('/training')
   })
 
   it('loads recent sessions on mount', () => {

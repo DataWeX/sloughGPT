@@ -2420,8 +2420,8 @@ class X86Assembler:
         "jb": 0x2, "jnae": 0x2, "jbe": 0x6, "jna": 0x6,
         "js": 0x8, "jns": 0x9, "jo": 0x0, "jno": 0x1,
         "jp": 0xa, "jpe": 0xa, "jnp": 0xb, "jpo": 0xb,
-        "loop": 0xe0, "loope": 0xe1, "loopz": 0xe1,
-        "loopne": 0xe2, "loopnz": 0xe2, "jcxz": 0xe3,
+        "loop": 0xe2, "loope": 0xe1, "loopz": 0xe1,
+        "loopne": 0xe0, "loopnz": 0xe0, "jcxz": 0xe3, "jecxz": 0xe3,
     }
 
     def __init__(self):
@@ -2980,7 +2980,13 @@ class X86Assembler:
     def _emit_mov(self, ops):
         if len(ops) < 2:
             return
-        dst, src = ops[0].lower().strip(), ops[1].strip()
+        dst = ops[0].lower().strip()
+        # Don't lowercase character literals like 'A'
+        src_raw = ops[1].strip()
+        if (src_raw.startswith("'") and src_raw.endswith("'")) or (src_raw.startswith('"') and src_raw.endswith('"')):
+            src = src_raw
+        else:
+            src = src_raw.lower()
 
         # MOV reg, reg (must check before reg, imm)
         if dst in self._SEG_REGS and src in self._REG16:
@@ -3151,9 +3157,9 @@ class X86Assembler:
 
     def _emit_modrm_mem(self, reg, mem):
         """Emit ModR/M byte for [memory] operand."""
-        inner = mem.strip("[]").strip()
+        inner = mem.strip("[]").strip().lower()
         # Resolve register encoding (works for both 8-bit and 32-bit registers)
-        reg_enc = self._REG32.get(reg, self._REG8.get(reg, 0))
+        reg_enc = self._REG32.get(reg.lower(), self._REG8.get(reg.lower(), 0))
         if inner in self._REG32:
             # [reg]
             modrm = (0x00 | (reg_enc << 3) | self._REG32[inner])
@@ -3178,8 +3184,13 @@ class X86Assembler:
                     self._output.append(modrm)
                     self._output.extend((disp & 0xFFFFFFFF).to_bytes(4, "little"))
             elif other in self._REG32:
-                # [reg + label] — swapped order like "input_buf + ebx"
+                # [reg + label] or [label + reg + imm] — swapped order
                 disp = self._parse_imm(base) if base else 0
+                # Check for third part (e.g. [arr + EDX + 1])
+                if len(parts) > 2:
+                    extra = parts[2].strip()
+                    if extra:
+                        disp += self._parse_imm(extra)
                 if disp == 0:
                     modrm = (0x00 | (reg_enc << 3) | self._REG32[other])
                     self._output.append(modrm)
@@ -3234,7 +3245,7 @@ class X86Assembler:
     def _emit_alu(self, op, ops):
         if len(ops) < 2:
             return
-        dst, src = ops[0].lower().strip(), ops[1].strip()
+        dst, src = ops[0].lower().strip(), ops[1].lower().strip()
         alu_op = {"add": 0, "or": 1, "adc": 2, "sbb": 3,
                   "and": 4, "sub": 5, "xor": 6, "cmp": 7, "test": 0}
 
@@ -3646,6 +3657,11 @@ class X86Assembler:
             return self._org + len(self._output)
         if text in self._labels:
             return self._labels[text]
+        # Case-insensitive label fallback
+        text_lower = text.lower()
+        for k, v in self._labels.items():
+            if k.lower() == text_lower:
+                return v
         # Always resolve numeric literals (hex, binary, decimal) even in pass 1
         if text.startswith("0x") or text.startswith("0X"):
             return int(text, 16)
@@ -3719,6 +3735,11 @@ class X86Assembler:
             return self._org + len(self._output)
         if text in self._labels:
             return self._labels[text]
+        # Case-insensitive label fallback
+        text_lower = text.lower()
+        for k, v in self._labels.items():
+            if k.lower() == text_lower:
+                return v
         # Try arithmetic expression with label references
         expr = text
         for name, addr in self._labels.items():
@@ -3857,6 +3878,8 @@ class X86CPU:
     """
 
     def __init__(self, memory_size: int = 1024 * 1024):
+        self._trace: list[dict] = []
+        self._trace_enabled = False
         self._mem = bytearray(memory_size)
         self._mem_size = memory_size
         self.reset()
@@ -3878,6 +3901,7 @@ class X86CPU:
         self._io_in: dict[int, callable] = {}
         self._io_out: dict[int, callable] = {}
         self._mem[:] = bytearray(len(self._mem))
+        self._trace.clear()
         # IDT / Interrupt support
         self._idt_base = 0
         self._idt_limit = 0
@@ -4125,6 +4149,11 @@ class X86CPU:
     def _write8(self, addr: int, val: int):
         self._mem[addr & 0xFFFFFFFF] = val & 0xFF
 
+    def _write16(self, addr: int, val: int):
+        a = addr & 0xFFFFFFFF
+        self._mem[a] = val & 0xFF
+        self._mem[a + 1] = (val >> 8) & 0xFF
+
     def _read32(self, addr: int) -> int:
         a = addr & 0xFFFFFFFF
         return struct.unpack_from("<I", self._mem, a)[0]
@@ -4272,6 +4301,14 @@ class X86CPU:
         self._check_pending_irqs()
         start_eip = self._eip
         try:
+            if self._trace_enabled:
+                opcode_byte = self._mem[start_eip] if start_eip < self._mem_size else 0
+                self._trace.append({
+                    "step": self._step_count,
+                    "eip": start_eip,
+                    "opcode": f"0x{opcode_byte:02X}",
+                    "operands": "",
+                })
             self._exec_one()
         except Halt:
             return False
@@ -4294,6 +4331,12 @@ class X86CPU:
         """Fetch and execute one instruction."""
         opcode = self._fetch_byte()
 
+        # ── 0x66 operand-size prefix (use 16-bit operands in 32-bit mode) ──
+        if opcode == 0x66:
+            opcode = self._fetch_byte()
+            self._exec_16bit(opcode)
+            return
+
         # ── NOP ──
         if opcode == 0x90:
             return
@@ -4311,6 +4354,29 @@ class X86CPU:
             self._set_flag(FLAG_DF, False); return
         if opcode == 0xFD:
             self._set_flag(FLAG_DF, True); return
+
+        # ── LOOP / LOOPE / LOOPNE / JECXZ (E0-E3) ──
+        if opcode in (0xE0, 0xE1, 0xE2, 0xE3):
+            offset = self._fetch_byte()
+            if offset >= 128:
+                offset -= 256  # sign extend
+            target = (self._eip + offset) & 0xFFFFFFFF
+            if opcode == 0xE3:  # JECXZ: jump if ECX==0 (does NOT decrement ECX)
+                if self._regs[1] == 0:
+                    self._eip = target
+            else:
+                ecx = (self._regs[1] - 1) & 0xFFFFFFFF
+                self._regs[1] = ecx
+                if opcode == 0xE0:  # LOOPNE: loop while ECX!=0 and ZF=0
+                    if ecx != 0 and not self._flag(FLAG_ZF):
+                        self._eip = target
+                elif opcode == 0xE1:  # LOOPE: loop while ECX!=0 and ZF=1
+                    if ecx != 0 and self._flag(FLAG_ZF):
+                        self._eip = target
+                elif opcode == 0xE2:  # LOOP: loop while ECX!=0
+                    if ecx != 0:
+                        self._eip = target
+            return
 
         # ── PUSHAD / POPAD ──
         if opcode == 0x60:
@@ -5239,7 +5305,7 @@ class X86CPU:
                     raise InsFault("IDIV by zero")
                 ax = self._get16(0)
                 if ax & 0x8000:
-                    ax |= 0xFFFF0000
+                    ax = ax - 0x10000
                 a_s = a if a < 0x80 else a - 0x100
                 q = int(ax / a_s)
                 r = ax - q * a_s
@@ -5328,7 +5394,7 @@ class X86CPU:
                     raise InsFault("IDIV by zero")
                 dividend = (self._get32(2) << 32) | self._get32(0)
                 d_s = divisor if divisor < 0x80000000 else divisor - 0x100000000
-                dd_s = dividend if dividend < 0x10000000000000000 else dividend
+                dd_s = dividend if dividend < 0x8000000000000000 else dividend - 0x10000000000000000
                 quotient = int(dd_s / d_s)
                 remainder = dd_s - quotient * d_s
                 self._set32(0, quotient & 0xFFFFFFFF)
@@ -5338,6 +5404,123 @@ class X86CPU:
 
         # ── Unknown opcode — skip 1 byte and try again ──
         logger.warning(f"CPU: unknown opcode 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}")
+        self._eip = (self._eip + 1) & 0xFFFFFFFF
+
+    # ── 16-bit operand operations (0x66 prefix) ──────────────────────────
+
+    def _exec_16bit(self, opcode: int):
+        """Execute an instruction with 16-bit operand size (after 0x66 prefix)."""
+        # STOSW (AB) — store AX at [EDI], advance EDI by 2
+        if opcode == 0xAB:
+            edi = self._regs[7] & 0xFFFFFFFF
+            ax = self._regs[0] & 0xFFFF
+            self._write16(edi, ax)
+            if self._flag(FLAG_DF):
+                self._regs[7] = (edi - 2) & 0xFFFFFFFF
+            else:
+                self._regs[7] = (edi + 2) & 0xFFFFFFFF
+            return
+
+        # LODSW (AD) — load word from [ESI] into AX, advance ESI by 2
+        if opcode == 0xAD:
+            esi = self._regs[6] & 0xFFFFFFFF
+            val = self._read16(esi)
+            self._regs[0] = (self._regs[0] & 0xFFFF0000) | val
+            if self._flag(FLAG_DF):
+                self._regs[6] = (esi - 2) & 0xFFFFFFFF
+            else:
+                self._regs[6] = (esi + 2) & 0xFFFFFFFF
+            return
+
+        # MOVSW (A5) — copy word from [ESI] to [EDI], advance both
+        if opcode == 0xA5:
+            esi = self._regs[6] & 0xFFFFFFFF
+            edi = self._regs[7] & 0xFFFFFFFF
+            val = self._read16(esi)
+            self._write16(edi, val)
+            d = -2 if self._flag(FLAG_DF) else 2
+            self._regs[6] = (esi + d) & 0xFFFFFFFF
+            self._regs[7] = (edi + d) & 0xFFFFFFFF
+            return
+
+        # CMPSW (A7) — compare [ESI] with [EDI]
+        if opcode == 0xA7:
+            esi = self._regs[6] & 0xFFFFFFFF
+            edi = self._regs[7] & 0xFFFFFFFF
+            a = self._read16(esi)
+            b = self._read16(edi)
+            self._alu(5, a, b, 16)  # SUB without storing
+            d = -2 if self._flag(FLAG_DF) else 2
+            self._regs[6] = (esi + d) & 0xFFFFFFFF
+            self._regs[7] = (edi + d) & 0xFFFFFFFF
+            return
+
+        # SCASW (AF) — compare AX with [EDI]
+        if opcode == 0xAF:
+            edi = self._regs[7] & 0xFFFFFFFF
+            ax = self._regs[0] & 0xFFFF
+            b = self._read16(edi)
+            self._alu(5, ax, b, 16)  # SUB without storing
+            d = -2 if self._flag(FLAG_DF) else 2
+            self._regs[7] = (edi + d) & 0xFFFFFFFF
+            return
+
+        # PUSH imm16 (68) — push 16-bit immediate (not standard, but useful)
+        if opcode == 0x68:
+            lo = self._fetch_byte()
+            hi = self._fetch_byte()
+            val = lo | (hi << 8)
+            self._push32(val)
+            return
+
+        # MOV r16, imm16 (B8-BF) — move 16-bit immediate to 16-bit register
+        if 0xB8 <= opcode <= 0xBF:
+            reg = opcode - 0xB8
+            lo = self._fetch_byte()
+            hi = self._fetch_byte()
+            val = lo | (hi << 8)
+            self._regs[reg] = (self._regs[reg] & 0xFFFF0000) | val
+            return
+
+        # NOP (90) — operand-size prefix does not change length
+        if opcode == 0x90:
+            return
+
+        # MOV r/m16, r16 (89) — copy 16-bit register to r/m16
+        if opcode == 0x89:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            src = self._read_rm_reg(reg_f, 16)
+            if rm_is_reg:
+                self._write_rm_reg(rm_val, 16, src)
+            else:
+                self._write_rm_mem(rm_val, 16, src)
+            return
+
+        # MOV r16, r/m16 (8B) — copy r/m16 to 16-bit register
+        if opcode == 0x8B:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if rm_is_reg:
+                src = self._read_rm_reg(rm_val, 16)
+            else:
+                src = self._read_rm_mem(rm_val, 16)
+            self._write_rm_reg(reg_f, 16, src)
+            return
+
+        # MOV r/m16, imm16 (C7 /0) — move 16-bit immediate to r/m16
+        if opcode == 0xC7:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            lo = self._fetch_byte()
+            hi = self._fetch_byte()
+            imm = lo | (hi << 8)
+            if rm_is_reg:
+                self._write_rm_reg(rm_val, 16, imm)
+            else:
+                self._write_rm_mem(rm_val, 16, imm)
+            return
+
+        # ADD/SUB/CMP r16, imm8 (81/83 with 16-bit) — simplified: just skip
+        # For now, log and skip unknown 16-bit ops
+        logger.warning(f"CPU: unknown 16-bit opcode 0x66 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}")
         self._eip = (self._eip + 1) & 0xFFFFFFFF
 
     # ── ALU operations ───────────────────────────────────────────────────
@@ -6552,8 +6735,10 @@ class X86SyscallHandler:
             if old_pages > 0:
                 self._memory.free(current.stack_base, old_pages)
 
-        # Read and assemble the source
-        data = self._fs.read(filename)
+        # Read and assemble the source.
+        # Strip trailing NUL bytes: FlatFS pads short files to full blocks,
+        # so a genuinely empty file would otherwise assemble to NOPs.
+        data = self._fs.read(filename).rstrip(b"\x00")
         source = data.decode('utf-8', errors='replace')
 
         # Default to 32-bit mode if no BITS directive present
@@ -6567,6 +6752,13 @@ class X86SyscallHandler:
             return -1
 
         if not code:
+            return -1
+
+        # The assembler silently emits NOP (0x90) placeholders for unknown
+        # mnemonics. A program that assembles to nothing but NOPs is garbage
+        # (e.g. unrecognised text or an empty file) — reject it rather than
+        # pretending the exec succeeded.
+        if not any(b != 0x90 for b in code):
             return -1
 
         code_size = len(code)
@@ -6611,6 +6803,9 @@ class X86SyscallHandler:
                 current.children.remove(child_pid)
                 self._ptable.remove(child_pid)
                 return child_pid
+        # No children at all — ECHILD, never block a childless process
+        if not current.children:
+            return -1
         # No terminated child — block until one exits
         self._scheduler.block_current(self._cpu)
         return 0

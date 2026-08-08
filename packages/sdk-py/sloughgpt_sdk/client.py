@@ -44,6 +44,23 @@ else:
     MetricsData = models.MetricsData
 
 
+def _unwrap_response(data: Any) -> Any:
+    """Unwrap the StandardResponse envelope ``{"status": "success", "data": ...}``.
+
+    Returns the payload verbatim when the response is not enveloped
+    (e.g. a bare list or dict), keeping the SDK tolerant of both shapes.
+
+    Args:
+        data: raw JSON decoded from the API response.
+
+    Returns:
+        The inner ``data`` payload when enveloped, otherwise ``data`` unchanged.
+    """
+    if isinstance(data, dict) and data.get("status") == "success" and "data" in data:
+        return data["data"]
+    return data
+
+
 def _build_training_start_payload(
     model_name: str,
     dataset_id: str,
@@ -730,8 +747,38 @@ class SloughGPTClient:
     def get_audit_log(self) -> List[Dict[str, Any]]:
         """Get the security audit log."""
         response = self._request("GET", "/security/audit")
-        data = response.json()
+        data = _unwrap_response(response.json())
         return data if isinstance(data, list) else data.get("logs", data)
+
+    def get_security_keys(self) -> List[Dict[str, Any]]:
+        """List registered security/API keys."""
+        response = self._request("GET", "/security/keys")
+        data = _unwrap_response(response.json())
+        return data if isinstance(data, list) else data.get("keys", data)
+
+    # ============ Registry ============
+
+    def list_registry_models(self) -> List[Dict[str, Any]]:
+        """List models registered in the live model registry."""
+        response = self._request("GET", "/registry/models")
+        data = _unwrap_response(response.json())
+        return data.get("models", data)
+
+    def get_registry_model(self, model_id: str) -> Dict[str, Any]:
+        """Get a single registered model's details."""
+        response = self._request("GET", f"/registry/models/{model_id}")
+        data = _unwrap_response(response.json())
+        return data if isinstance(data, dict) else data.get("data", data)
+
+    def get_registry_best(self) -> Dict[str, Any]:
+        """Get best performing model by live registry metrics."""
+        response = self._request("GET", "/registry/best")
+        return _unwrap_response(response.json())
+
+    def get_registry_stats(self) -> Dict[str, Any]:
+        """Get live model registry statistics."""
+        response = self._request("GET", "/registry/stats")
+        return _unwrap_response(response.json())
 
     # ============ Benchmark ============
 
@@ -940,6 +987,29 @@ class AsyncSloughGPTClient:
     async def list_auto_train_checkpoints(self) -> List[Dict[str, Any]]:
         data = await self._request("GET", "/auto-train/checkpoints")
         return data.get("checkpoints", data) if isinstance(data, dict) else data
+
+    async def get_security_keys(self) -> List[Dict[str, Any]]:
+        """List registered security/API keys."""
+        data = _unwrap_response(await self._request("GET", "/security/keys"))
+        return data if isinstance(data, list) else data.get("keys", data)
+
+    async def list_registry_models(self) -> List[Dict[str, Any]]:
+        """List models registered in the live model registry."""
+        data = _unwrap_response(await self._request("GET", "/registry/models"))
+        return data.get("models", data)
+
+    async def get_registry_model(self, model_id: str) -> Dict[str, Any]:
+        """Get a single registered model's details."""
+        data = _unwrap_response(await self._request("GET", f"/registry/models/{model_id}"))
+        return data if isinstance(data, dict) else data.get("data", data)
+
+    async def get_registry_best(self) -> Dict[str, Any]:
+        """Get best performing model by live registry metrics."""
+        return _unwrap_response(await self._request("GET", "/registry/best"))
+
+    async def get_registry_stats(self) -> Dict[str, Any]:
+        """Get live model registry statistics."""
+        return _unwrap_response(await self._request("GET", "/registry/stats"))
 
     async def __aenter__(self):
         return self

@@ -130,11 +130,11 @@ class EventBus:
         )
         self._store_history(event, evt)
 
-        subs = list(self._subscriptions.get(event, []))
-        subs.extend(self._wildcards)
+        subs = [(event, s) for s in self._subscriptions.get(event, [])]
+        subs.extend(("*", s) for s in self._wildcards)
 
         called = 0
-        for sub in subs:
+        for target, sub in subs:
             called += 1
             try:
                 result = sub.handler(event, data or {})
@@ -148,7 +148,7 @@ class EventBus:
                     extra={"tag": "INFRA"},
                 )
             if sub.once:
-                self.off(event, sub.handler)
+                self.off(target, sub.handler)
         return called
 
     def emit_sync(
@@ -165,11 +165,11 @@ class EventBus:
         )
         self._store_history(event, evt)
 
-        subs = list(self._subscriptions.get(event, []))
-        subs.extend(self._wildcards)
+        subs = [(event, s) for s in self._subscriptions.get(event, [])]
+        subs.extend(("*", s) for s in self._wildcards)
 
         called = 0
-        for sub in subs:
+        for target, sub in subs:
             called += 1
             try:
                 result = sub.handler(event, data or {})
@@ -183,7 +183,7 @@ class EventBus:
                     extra={"tag": "INFRA"},
                 )
             if sub.once:
-                self.off(event, sub.handler)
+                self.off(target, sub.handler)
         return called
 
     # ── History / replay ──
@@ -282,7 +282,7 @@ def install_log_subscriber(bus: EventBus | None = None) -> None:
         if _is_noisy(event):
             return
         _LOG_SENSOR_LOGGER.info(
-            "EVENT %s%s%s",
+            "EVENT %s%s",
             event,
             f"  {data}" if data else "",
             extra={"tag": "EVENT", "event_name": event},

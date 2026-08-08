@@ -95,15 +95,3 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children
   }
 }
-
-export function useErrorHandler() {
-  return (error: Error) => {
-    logger.error('Error', { exception: error.message })
-    // Show as toast for non-fatal errors
-    if (isNonFatalError(error)) {
-      useToastStore.getState().addToast('Something went wrong. Try refreshing the page.', 'error')
-    } else {
-      throw error
-    }
-  }
-}

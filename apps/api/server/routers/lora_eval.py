@@ -65,9 +65,15 @@ class LoraEvalRouter:
                 "note": "No adapter found — run aggregate first",
             })
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="lora_eval_run")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
-    async def get_eval_history(self, limit: int = 20):
+    async def get_eval_history(
+        self,
+        limit: int = Query(default=20, ge=1, le=100),
+    ):
         """
         Retrieve recent evaluation history.
 
@@ -138,7 +144,10 @@ class LoraEvalRouter:
                 "total_feedback": result["total_feedback"],
             })
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="lora_eval_aggregate")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
 
 router = LoraEvalRouter().router

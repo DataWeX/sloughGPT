@@ -72,19 +72,24 @@ class MockModel:
 
     def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0,
                               temperature=1.0, top_k=None, top_p=None,
-                              repetition_penalty=1.0):
-        """Yields sequential token IDs, stops at eos or max."""
+                              repetition_penalty=1.0, extra_stop_ids=None):
+        """Yields sequential token IDs, stops at eos, extra stop ids, or max."""
+        stop_ids = {eos_token} | set(extra_stop_ids or ())
         for i in range(max_new_tokens):
             tok = (self._counter + i) % self.vocab_size
             self._counter += 1
-            if tok == eos_token:
+            if tok in stop_ids:
                 break
             yield tok
 
     def generate_numpy(self, input_ids, max_new_tokens=50, temperature=1.0,
-                       top_k=None, top_p=None, repetition_penalty=1.0, eos_token=0):
+                       top_k=None, top_p=None, repetition_penalty=1.0,
+                       eos_token=0, extra_stop_ids=None):
         """Returns all generated token IDs as array."""
-        tokens = list(self.generate_numpy_stream(input_ids, max_new_tokens, eos_token))
+        tokens = list(self.generate_numpy_stream(
+            input_ids, max_new_tokens, eos_token, temperature, top_k, top_p,
+            repetition_penalty, extra_stop_ids,
+        ))
         if not tokens:
             return input_ids
         return np.array([tokens], dtype=np.int64)

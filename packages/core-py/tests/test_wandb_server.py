@@ -12,6 +12,16 @@ import domains.ops.wandb_server as ws
 from domains.infrastructure.config import get_config
 
 
+async def _wait_until_logged(log_payload, timeout=2.0):
+    """Await the background loop's first payload, tolerant of scheduler load."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while not log_payload.called:
+        if loop.time() > deadline:
+            break
+        await asyncio.sleep(0.01)
+
+
 @pytest.fixture(autouse=True)
 def _reset_counters():
     ws._inference_total = 0
@@ -108,7 +118,7 @@ def test_background_loop_flushes(wandb_enabled, monkeypatch):
         task = await ws.start_wandb_server_background(HttpMetrics())
         assert task is not None
         ws.record_inference_call(0.5, 10)
-        await asyncio.sleep(0.08)
+        await _wait_until_logged(log_payload)
         task.cancel()
         try:
             await task
@@ -147,7 +157,7 @@ def test_background_loop_extra_metrics_failure_ignored(wandb_enabled, monkeypatc
             type("HM", (), {"wandb_aggregate": lambda self: {"http/requests": 1}})(),
             extra_metrics=bad_extra,
         )
-        await asyncio.sleep(0.08)
+        await _wait_until_logged(log_payload)
         task.cancel()
         try:
             await task

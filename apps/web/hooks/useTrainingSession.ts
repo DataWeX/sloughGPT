@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { trainingJobsController } from '@/lib/controllers'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { logger } from '@/lib/dev-log'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 const _log = logger.child('training-session')
 
@@ -306,8 +307,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         setTurboResult(result); setTurboPhase('complete')
         addToast('Turbo training complete!', 'success')
       }
-    }).catch((e: any) => {
-      setTurboError(e?.message || 'Training request failed'); setTurboPhase('error')
+    }).catch((e: unknown) => {
+      setTurboError(extractErrorMessage(e, 'Training request failed')); setTurboPhase('error')
     })
   }, [])
 

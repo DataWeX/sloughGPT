@@ -88,8 +88,6 @@ def discover() -> dict[str, CmdModule]:
     cmd_map: dict[str, CmdModule] = {}
     pkg_path = __path__[0]
     for _, mod_name, _ in pkgutil.iter_modules([pkg_path]):
-        if mod_name == "__init__":
-            continue
         mod = CmdModule(mod_name)
         names = _MODULE_NAMES.get(mod_name, [mod_name])
         for n in names:

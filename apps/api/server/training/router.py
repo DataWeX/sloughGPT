@@ -802,6 +802,14 @@ async def start_hf_training(request: HFTrainingRequest):
             training_jobs[jid]["result"] = result
             model_path = result.get("model_path", "")
 
+            _write_finetuned_metadata(
+                output_dir,
+                req.model,
+                req.dataset or "",
+                final_loss=result.get("final_loss"),
+                epochs=req.epochs,
+            )
+
             # Build plain-language explanation
             from domains.training.auto_config import plain_language_verdict
             final_loss = result.get("final_loss")
@@ -938,7 +946,7 @@ async def start_visual_training(request: VisualTrainRequest):
     data_path_str = str(data_path)
 
     out_stem = request.name or f"vlm_{job_id}"
-    output_dir = Path("models/video-training/checkpoints")
+    output_dir = Path(__file__).resolve().parents[4] / "models" / "video-training" / "checkpoints"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     job: dict[str, Any] = {
@@ -1142,6 +1150,10 @@ async def start_distillation(request: DistillStartRequest):
                 def __init__(self, model, tokenizer):
                     self._model = model
                     self._tokenizer = tokenizer
+                def parameters(self):
+                    return []
+                def eval(self):
+                    pass
                 def __call__(self, x):
                     import torch
                     import numpy as np
@@ -1295,7 +1307,7 @@ async def quick_train(request: QuickTrainRequest):
         "current_epoch": 0,
         "global_step": 0,
         "loss": None,
-        "output_dir": str(_repo_root / f"models/hf-finetuned/{request.dataset}_{int(time.time())}"),
+        "output_dir": str(_repo_root / f"models/hf-finetuned/{config.model.replace('/', '--')}_{request.dataset or 'custom'}_{int(time.time())}"),
         "loss_history": [],
         "reward_history": [],
     }
@@ -1369,6 +1381,14 @@ async def quick_train(request: QuickTrainRequest):
             training_jobs[jid]["status"] = "completed"
             training_jobs[jid]["progress"] = 100
             training_jobs[jid]["result"] = result
+
+            _write_finetuned_metadata(
+                job["output_dir"],
+                config.model,
+                request.dataset or "",
+                final_loss=result.get("final_loss"),
+                epochs=config.epochs,
+            )
 
             # Build plain-language completion message
             from domains.training.auto_config import plain_language_verdict
@@ -1447,7 +1467,7 @@ async def train_from_feedback():
 
         # Export feedback data
         timestamp = int(time.time())
-        export_dir = Path("data/training_exports")
+        export_dir = Path(__file__).resolve().parents[4] / "data" / "training_exports"
         export_dir.mkdir(parents=True, exist_ok=True)
 
         # Export as SFT format for training
@@ -1983,6 +2003,120 @@ async def list_builds():
                 })
 
     return {"builds": builds}
+
+
+def _finetuned_dir() -> Path:
+    """Absolute path to the HF fine-tuned models directory."""
+    return Path(__file__).resolve().parents[4] / "models" / "hf-finetuned"
+
+
+def _write_finetuned_metadata(model_dir: str | Path, model: str, dataset: str,
+                              final_loss: float | None = None,
+                              epochs: int | None = None) -> None:
+    """Persist authoritative model/dataset metadata inside a fine-tuned model dir.
+
+    The directory name is not a reliable source of truth: datasets can contain
+    underscores and legacy quick-train runs omit the model prefix entirely.
+
+    Args:
+        model_dir: Fine-tuned model directory (``output_dir``)
+        model: Base HuggingFace model id (e.g. ``gpt2``)
+        dataset: Dataset name used for training (may be empty)
+        final_loss: Final training loss if known
+        epochs: Number of epochs trained if known
+
+    Side effects:
+        - Writes ``metadata.json`` into ``model_dir``
+    """
+    try:
+        meta = {
+            "model": model,
+            "dataset": dataset,
+            "final_loss": final_loss,
+            "epochs": epochs,
+        }
+        (Path(model_dir) / "metadata.json").write_text(json.dumps(meta, indent=2))
+    except Exception as e:  # metadata is best-effort, never fail the job
+        logger.debug("Failed to write fine-tuned metadata: %s", e)
+
+
+def _read_finetuned_metadata(model_dir: Path) -> dict[str, Any]:
+    """Read persisted metadata from a fine-tuned model dir, or ``{}``.
+
+    Args:
+        model_dir: Fine-tuned model directory
+
+    Returns:
+        Dict with ``model``/``dataset``/``final_loss``/``epochs`` keys as present
+    """
+    try:
+        return json.loads((model_dir / "metadata.json").read_text())
+    except Exception:
+        return {}
+
+
+
+def _resolve_finetuned(name: str) -> Path:
+    """Resolve a fine-tuned model name to its directory, guarding against path traversal."""
+    base = _finetuned_dir().resolve()
+    target = (base / name).resolve()
+    if base not in target.parents:
+        raise HTTPException(status_code=400, detail="Invalid fine-tuned model name")
+    if not target.is_dir():
+        raise HTTPException(status_code=404, detail=f"Fine-tuned model not found: {name}")
+    return target
+
+
+@router.get("/training/finetuned-models")
+async def list_finetuned_models():
+    """List HF fine-tuned model directories under ``models/hf-finetuned/``."""
+    base = _finetuned_dir()
+    models = []
+    if base.is_dir():
+        for d in sorted(base.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not d.is_dir():
+                continue
+            size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+            meta = _read_finetuned_metadata(d)
+            display_name = d.name.split("_")[0].replace("--", "/")
+            models.append({
+                "name": d.name,
+                "model_path": str(d),
+                "size_mb": round(size_bytes / (1024 * 1024), 1),
+                "size_bytes": size_bytes,
+                "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
+                "model": meta.get("model") or display_name,
+                "dataset": meta.get("dataset") or (d.name.split("_")[1] if "_" in d.name else ""),
+                # Legacy keys consumed by the shell `finetuned` command table.
+                "model_name": d.name,
+                "final_loss": meta.get("final_loss"),
+                "epochs": meta.get("epochs") or 0,
+            })
+    return {"models": models}
+
+
+@router.post("/training/finetuned-models/{name}/load")
+async def load_finetuned_model(name: str):
+    """Load a fine-tuned model directory into chat (device=cpu).
+
+    Compiles the local fine-tuned model to .slnc on first load, then registers
+    it as the ``slonet-native`` provider via ``ModelsController.load_model_path``.
+    """
+    target = _resolve_finetuned(name)
+    from controllers.models import get_models_controller
+    result = get_models_controller().load_model_path(str(target), "cpu", identity=name)
+    if result.get("status") != "loaded":
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to load fine-tuned model"))
+    return {"status": "loaded", "name": name, "model_path": str(target),
+            "model_id": result.get("model_id")}
+
+
+@router.delete("/training/finetuned-models/{name}")
+async def delete_finetuned_model(name: str):
+    """Delete a fine-tuned model directory."""
+    target = _resolve_finetuned(name)
+    shutil.rmtree(str(target))
+    return {"status": "deleted", "name": name}
 
 
 # ===== JOB RECOVERY =====

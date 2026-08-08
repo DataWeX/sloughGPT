@@ -329,3 +329,62 @@ class TestDaitRuntimeStatus:
         marker = object()
         rt._devices = marker
         assert rt.devices is marker
+
+
+class TestDaitRuntimeBoot:
+    def test_boot_completes(self):
+        rt = DaitRuntime()
+        log, status = rt.boot()
+        assert isinstance(log, str)
+        assert isinstance(status, dict)
+        assert rt._boot_complete
+        assert rt.init_system is not None
+        assert rt.devices is not None
+        assert rt.vfs is not None
+
+    def test_shutdown_flips_flag(self):
+        rt = DaitRuntime()
+        rt.boot()
+        log = rt.shutdown()
+        assert isinstance(log, str)
+        assert not rt._boot_complete
+
+    def test_api_property(self):
+        rt = DaitRuntime()
+        assert isinstance(rt.api, APIServerProcess)
+
+    def test_api_status_sets_model_flags(self):
+        rt = DaitRuntime()
+        rt._api = MagicMock()
+        rt._api.status.return_value = {
+            "available": True,
+            "model_loaded": True,
+            "model_id": "gpt2",
+        }
+        result = rt.api_status
+        assert result["available"]
+        assert rt._model_loaded
+        assert rt._model_name == "gpt2"
+
+
+class TestAPIServerProcessStatusShared:
+    def test_status_reports_running_and_uptime(self):
+        import time
+
+        import domains.shell.runtime as runtime_mod
+
+        probe = {"available": True, "status": "success", "model_loaded": False}
+        saved_proc = runtime_mod._shared_proc
+        saved_started = runtime_mod._shared_started_at
+        try:
+            runtime_mod._shared_proc = object()
+            runtime_mod._shared_started_at = time.time() - 100
+            api = APIServerProcess(api_url="http://unused:1")
+            with patch.object(runtime_mod, "_probe_api", return_value=probe):
+                result = api.status()
+        finally:
+            runtime_mod._shared_proc = saved_proc
+            runtime_mod._shared_started_at = saved_started
+        assert result["running"] is True
+        assert result["uptime"] > 99.0
+        assert result["available"] is True

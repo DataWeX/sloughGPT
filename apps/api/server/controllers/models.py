@@ -38,13 +38,35 @@ class ModelsController:
         self._is_inferencing: bool = False
 
     def _resolve_device(self, device: str) -> str:
-        """Resolve device string for PyTorch model placement: mps > cuda > cpu."""
+        """Resolve device string for model placement: mps > cuda > cpu.
+
+        Validates explicit ``cuda``/``mps`` requests against actual hardware
+        availability and falls back to ``cpu`` (with a warning) when the
+        requested backend is not present. A requested accelerator must never
+        be reported as the active device when no such device exists.
+
+        Args:
+            device: Requested device (``auto``, ``cpu``, ``mps``, ``cuda``, or None).
+
+        Returns:
+            The resolved, actually-usable device string.
+        """
         if device is None or device == "auto":
             try:
                 from domains.infrastructure.ml_types import auto_device
                 return auto_device()
             except Exception:
                 return "cpu"
+        try:
+            from domains.infrastructure.ml_types import _cuda_available, _mps_available
+        except Exception:
+            _cuda_available = _mps_available = None
+        if device == "cuda" and (_cuda_available is None or not _cuda_available()):
+            logger.warning("device='cuda' requested but CUDA unavailable — falling back to cpu")
+            return "cpu"
+        if device == "mps" and (_mps_available is None or not _mps_available()):
+            logger.warning("device='mps' requested but MPS unavailable — falling back to cpu")
+            return "cpu"
         return device
 
     def _find_model_path(self, model_id: str) -> Optional[Path]:
@@ -114,13 +136,66 @@ class ModelsController:
             return self._load_gguf_model(model_id, device)
 
         import state as server_state
-        server_state.model_type = model_id
 
         logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"})
         try:
             from domains.models.provider import setup_providers
-            from domains.infrastructure.config import get_config
-            cfg = get_config()
+            from config import ServerConfig
+            cfg = ServerConfig.from_env()
+
+            # Lazy guard-backed path: defer parent weight load when a
+            # ProcessGuard + .slnc are available. The guard worker materializes
+            # weights; the parent only loads on guard death (lazy _get_model).
+            try:
+                from config import get_process_guard_enabled
+                from domains.infrastructure.safetensors_loader import _get_model_dir
+                _slnc = _get_model_dir(model_id) / "model.slnc"
+                use_lazy = (
+                    cfg.lazy_guard_autoload
+                    and get_process_guard_enabled()
+                    and _slnc.exists()
+                )
+            except Exception:
+                use_lazy = False
+            if use_lazy:
+                process_guard = self._build_process_guard(model_id)
+                if process_guard is None:
+                    raise RuntimeError(
+                        f"Lazy load requested for {model_id} but ProcessGuard "
+                        "could not be started"
+                    )
+                from domains.inference.slonet_provider import SloNetChatProvider
+                lazy_provider = SloNetChatProvider.lazy_from_slnc(
+                    str(_slnc),
+                    model_id=model_id,
+                    quantize=cfg.quantize_slonet,
+                    quant_bits=cfg.quant_bits,
+                    quant_mode=cfg.quant_mode,
+                    quant_clip=cfg.quant_clip,
+                )
+                setup_providers(
+                    slonet_provider=lazy_provider,
+                    process_guard=process_guard,
+                    quantize=cfg.quantize_slonet,
+                    quant_bits=cfg.quant_bits,
+                    quant_mode=cfg.quant_mode,
+                )
+                # Publish to server_state — provider set, model deliberately
+                # None so the parent advertises no resident weights.
+                server_state.provider = lazy_provider
+                server_state.model_type = model_id
+                server_state.model = None
+                logger.info("SloNet provider registered lazily (guard-backed): %s", model_id,
+                            extra={"tag": "MODEL"})
+                return {
+                    "model_id": model_id,
+                    "type": "slonet",
+                    "device": "cpu",
+                    "total_parameters": 0,
+                    "tokenizer_type": "SloNetChatProvider",
+                    "lazy": True,
+                }
+
             process_guard = self._build_process_guard(model_id)
             setup_providers(
                 slonet_hf_id=model_id,
@@ -145,6 +220,37 @@ class ModelsController:
             logger.error("Failed to register SloNet provider for %s: %s", model_id, e, extra={"tag": "MODEL"})
             raise
 
+        # Publish the SloNet provider to server_state so the inference/chat
+        # readiness guards (``state.model is not None``) accept the loaded
+        # model. Mirrors the autoload path in startup._autoload_model.
+        try:
+            from domains.models.provider import get_provider
+            slonet_provider = get_provider("slonet-native") or get_provider("slonet")
+            # setup_providers() logs-and-continues when the requested model fails
+            # to load (e.g. missing .slnc), leaving a stale provider registered
+            # from a previous load. Verify the provider actually belongs to the
+            # requested model before publishing it to server_state.
+            if slonet_provider is None or getattr(slonet_provider, "_model_id", None) != model_id:
+                raise RuntimeError(
+                    f"SloNet provider for {model_id} not registered after setup_providers "
+                    f"(found: {getattr(slonet_provider, '_model_id', None)})"
+                )
+            server_state.model = slonet_provider
+            server_state.provider = slonet_provider
+            server_state.model_type = model_id
+
+            # Mirror to the core ServerState singleton — the source for
+            # get_health_score() — so /health/detailed reports a loaded model
+            # consistently across both model slots (Bug D).
+            from domains.infrastructure.server_state import get_server_state
+            core = get_server_state()
+            core.model.set(slonet_provider)
+            core.model_type.set(model_id)
+            logger.info("SloNet provider published to server_state and ServerState: %s", model_id, extra={"tag": "MODEL"})
+        except Exception as e:
+            logger.error("Failed to publish SloNet provider for %s to server_state: %s", model_id, e, extra={"tag": "MODEL"})
+            raise
+
         return {
             "model_id": model_id,
             "type": "slonet",
@@ -156,9 +262,9 @@ class ModelsController:
     def _build_process_guard(self, model_id: str) -> Optional[Any]:
         """Build and start a ``ProcessGuard`` for the given model, if enabled.
 
-        Reads ``SLO_ENABLE_PROCESS_GUARD`` via ``ServerConfig``; skips when the
-        model has no compiled ``.slnc`` file. Any existing guard is stopped
-        first to avoid orphan worker subprocesses on reload.
+        Reads the runtime ProcessGuard toggle; skips when the model has no
+        compiled ``.slnc`` file. Any existing guard is stopped first to avoid
+        orphan worker subprocesses on reload.
 
         Args:
             model_id: HuggingFace model ID to guard
@@ -173,22 +279,16 @@ class ModelsController:
                 pass
             self._process_guard = None
 
-        try:
-            from config import ServerConfig
-            server_cfg = ServerConfig.from_env()
-        except Exception:
-            server_cfg = None
-        enabled = bool(
-            server_cfg.enable_process_guard
-            if server_cfg is not None
-            else os.getenv("SLO_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes")
-        )
-        if not enabled:
+        from config import get_process_guard_enabled
+        if not get_process_guard_enabled():
             return None
 
         try:
-            from domains.infrastructure.process_guard import ProcessGuard
+            from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
             from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domains.models.provider import attach_process_guard_to_provider
+            from config import ServerConfig
+            cfg = ServerConfig.from_env()
 
             slnc_path = str(_get_model_dir(model_id) / "model.slnc")
             if not os.path.exists(slnc_path):
@@ -202,13 +302,15 @@ class ModelsController:
                 max_restarts=3,
                 restart_delay=2.0,
                 generate_timeout=120.0,
-                quantize=getattr(server_cfg, "quantize_slonet", False),
-                quant_bits=getattr(server_cfg, "quant_bits", 8),
-                quant_mode=getattr(server_cfg, "quant_mode", "symmetric"),
-                quant_clip=getattr(server_cfg, "quant_clip", 0.999),
+                memory_limit_mb=resolve_memory_limit_mb(slnc_path, cfg.process_guard_memory_limit_mb),
+                quantize=cfg.quantize_slonet,
+                quant_bits=cfg.quant_bits,
+                quant_mode=cfg.quant_mode,
+                quant_clip=cfg.quant_clip,
             )
             guard.start()
             self._process_guard = guard
+            attach_process_guard_to_provider(guard)
             logger.info("ProcessGuard started for %s", model_id, extra={"tag": "MODEL"})
             return guard
         except Exception as e:
@@ -274,8 +376,311 @@ class ModelsController:
                 "error": str(e),
             }
 
+    def _stop_process_guard(self) -> None:
+        """Stop and drop any active ProcessGuard (orphan worker cleanup)."""
+        if self._process_guard is not None:
+            try:
+                self._process_guard.stop()
+            except Exception as e:
+                logger.debug("ProcessGuard stop failed: %s", e)
+            self._process_guard = None
+
+    def _resolve_active_model_id(self) -> Optional[str]:
+        """Resolve the currently active model id across load paths.
+
+        Order: controller state, then the ModelRegistry default (the autoload
+        path registers directly with the registry, bypassing the controller),
+        then ``server_state.model_type`` as a final fallback.
+
+        Returns:
+            Active model id, or None when no model is loaded.
+        """
+        if self._current_model:
+            return self._current_model
+        try:
+            from domains.infrastructure.model_registry import get_model_registry
+            mid = get_model_registry().default_id
+            if mid:
+                return mid
+        except Exception:
+            pass
+        try:
+            import state as server_state
+            if getattr(server_state, "model_type", None):
+                return server_state.model_type
+        except Exception:
+            pass
+        return None
+
+    def adopt_process_guard(self, guard: Any, model_id: Optional[str] = None) -> None:
+        """Adopt a ProcessGuard created outside this controller (autoload path).
+
+        Any previously held guard is stopped first so a manual reload replaces
+        it cleanly. When the controller has no loaded model of its own (models
+        autoloaded via the registry bypass the controller), ``_current_model``
+        is set from ``model_id`` so status reporting and unload work.
+
+        Args:
+            guard: A started ProcessGuard instance.
+            model_id: The model id the guard protects.
+        """
+        self._stop_process_guard()
+        self._process_guard = guard
+        try:
+            from domains.models.provider import attach_process_guard_to_provider
+            attach_process_guard_to_provider(guard)
+        except Exception as e:
+            logger.debug("ProcessGuard provider attach failed: %s", e)
+        if model_id and self._current_model is None:
+            self._current_model = model_id
+            self._current_device = getattr(guard, "device", "cpu") or "cpu"
+            if self._loaded_at is None:
+                from datetime import datetime
+                self._loaded_at = datetime.now()
+        logger.info("ProcessGuard adopted for %s", model_id or guard.worker_id, extra={"tag": "MODEL"})
+
+    def get_process_guard_status(self) -> Dict[str, Any]:
+        """Return current ProcessGuard state.
+
+        Returns:
+            Dict with ``enabled`` (runtime toggle), ``active`` (guard running),
+            ``model_id`` (guarded model, if any), and ``health`` (guard health snapshot).
+        """
+        from config import get_process_guard_enabled
+        active = self._process_guard is not None and getattr(self._process_guard, "alive", False)
+        health = None
+        if self._process_guard is not None:
+            try:
+                health = self._process_guard.health()
+            except Exception:
+                health = {"alive": False}
+        return {
+            "enabled": get_process_guard_enabled(),
+            "active": active,
+            "model_id": self._current_model or self._resolve_active_model_id(),
+            "health": health,
+        }
+
+    def set_process_guard_enabled(self, enabled: bool) -> Dict[str, Any]:
+        """Enable or disable ProcessGuard at runtime.
+
+        When disabling, stops any active guard. When enabling and a model is
+        loaded with a .slnc file, starts the guard immediately.
+
+        Args:
+            enabled: True to enable, False to disable
+
+        Returns:
+            Status dict with new enabled state.
+        """
+        from config import set_process_guard_enabled
+        set_process_guard_enabled(enabled)
+
+        if not enabled:
+            self._stop_process_guard()
+            logger.info("ProcessGuard disabled at runtime", extra={"tag": "MODEL"})
+        else:
+            logger.info("ProcessGuard enabled at runtime", extra={"tag": "MODEL"})
+            # Try to start guard for the active model (manual or autoload path)
+            active_model = self._resolve_active_model_id()
+            if active_model and self._process_guard is None:
+                try:
+                    self._build_process_guard(active_model)
+                except Exception as e:
+                    logger.debug("ProcessGuard startup on enable failed: %s", e)
+
+        return self.get_process_guard_status()
+
+    def _resolve_base_model_id(self, target: Path) -> Optional[str]:
+        """Derive the base HuggingFace model id from a fine-tuned config.json.
+
+        Prefers ``_name_or_path`` (recorded by transformers during fine-tuning),
+        falling back to ``_hf_text_config._name_or_path``. Returns None when the
+        base id cannot be determined.
+
+        Args:
+            target: Local fine-tuned model directory
+
+        Returns:
+            Base HF model id string, or None
+        """
+        try:
+            cfg_path = target / "config.json"
+            if not cfg_path.exists():
+                return None
+            import json as _json
+            cfg = _json.loads(cfg_path.read_text())
+            name = cfg.get("_name_or_path")
+            if name:
+                return str(name)
+            name = (cfg.get("_hf_text_config") or {}).get("_name_or_path")
+            if name:
+                return str(name)
+        except Exception as e:
+            logger.debug("Could not resolve base model id from %s: %s", target, e)
+        return None
+
+    def load_model_path(self, model_path: str, device: str = "cpu",
+                        base_model_id: Optional[str] = None,
+                        identity: Optional[str] = None) -> Dict[str, Any]:
+        """Load a local fine-tuned model directory into chat via SloNet.
+
+        Compiles ``config.json`` + ``model.safetensors`` to ``model.slnc`` on
+        first load (mmap-backed, pure NumPy), then registers it as the
+        ``slonet-native`` provider. The base tokenizer is resolved from
+        ``base_model_id``, else from the ``_name_or_path`` recorded in the
+        fine-tuned config.
+
+        Args:
+            model_path: Local directory containing a fine-tuned HF model
+            device: Device hint (SloNet inference always runs on CPU)
+            base_model_id: Base HuggingFace model ID for the tokenizer
+            identity: Reported model identity. Defaults to the base model id,
+                but callers loading a specific fine-tuned directory should pass
+                the directory name so health/UI can distinguish the variant
+                from the plain base model
+
+        Returns:
+            Dict with status/type/device/loaded_at (status ``"loaded"``) or
+            status ``"error"`` with a message on failure
+        """
+        target = Path(model_path)
+        if not target.is_dir():
+            return {"status": "error", "error": f"Not a directory: {model_path}"}
+
+        try:
+            from config import ServerConfig
+            cfg = ServerConfig.from_env()
+
+            from domains.infrastructure.slnc.compiler import SLNCCompiler
+            slnc_path = target / "model.slnc"
+            if not slnc_path.exists():
+                logger.info("Compiling fine-tuned model %s to .slnc ...",
+                            model_path, extra={"tag": "MODEL"})
+                SLNCCompiler().compile_from_directory(str(target), output=str(slnc_path))
+
+            if base_model_id is None:
+                base_model_id = self._resolve_base_model_id(target)
+            tokenizer_model_id = base_model_id or target.name
+            model_id = identity or tokenizer_model_id
+
+            import state as server_state
+            server_state.model_type = model_id
+
+            process_guard = self._build_process_guard_for_path(slnc_path, model_id)
+
+            from domains.models.provider import setup_providers
+            setup_providers(
+                slonet_hf_id=tokenizer_model_id,
+                slonet_path=str(slnc_path),
+                process_guard=process_guard,
+                quantize=cfg.quantize_slonet,
+                quant_bits=cfg.quant_bits,
+                quant_mode=cfg.quant_mode,
+            )
+            logger.info("SloNet provider registered from local .slnc: %s (quant=%s)",
+                        model_id, f"int{cfg.quant_bits}" if cfg.quantize_slonet else "none",
+                        extra={"tag": "MODEL"})
+
+            self._current_model = model_id
+            self._current_device = "cpu"
+            self._loaded_at = datetime.now()
+
+            # The SloNet fine-tuned provider is served by the controller, not the
+            # ModelRegistry. Drop any previously autoloaded/registered HF model
+            # from the registry so the health endpoint (registry-first) reflects
+            # this model instead of a stale default.
+            try:
+                from domains.infrastructure.model_registry import get_model_registry
+                registry = get_model_registry()
+                stale = registry.default_id
+                if stale is not None and stale != model_id:
+                    registry.unregister(stale)
+                    logger.info("Unregistered stale registry model %s after fine-tuned load",
+                                stale, extra={"tag": "MODEL"})
+            except Exception as e:
+                logger.debug("Registry stale-model cleanup failed: %s", e)
+
+            return {
+                "status": "loaded",
+                "model_id": model_id,
+                "type": "slonet",
+                "device": "cpu",
+                "loaded_at": self._loaded_at.isoformat(),
+                "model_path": str(target),
+                "slnc_path": str(slnc_path),
+            }
+        except Exception as e:
+            logger.error("Failed to load fine-tuned model %s: %s", model_path, e,
+                         extra={"tag": "MODEL"})
+            return {"status": "error", "error": str(e)}
+
+    def _build_process_guard_for_path(self, slnc_path: Path, model_id: str) -> Optional[Any]:
+        """Build and start a ProcessGuard for an explicit .slnc path (if enabled).
+
+        Unlike ``_build_process_guard`` (which resolves the .slnc from the HF
+        cache), this uses the given file path directly, so it works for locally
+        compiled fine-tuned models.
+
+        Args:
+            slnc_path: Path to the .slnc file to guard
+            model_id: Model id used for the worker name
+
+        Returns:
+            Started ProcessGuard, or None when disabled/unavailable
+        """
+        self._stop_process_guard()
+
+        from config import get_process_guard_enabled
+        if not get_process_guard_enabled():
+            return None
+        try:
+            from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+            from config import ServerConfig
+            cfg = ServerConfig.from_env()
+            guard = ProcessGuard(
+                slnc_path=str(slnc_path),
+                model_id=model_id,
+                worker_id=f"slo-{Path(model_id).name}-finetuned",
+                max_restarts=3,
+                restart_delay=2.0,
+                generate_timeout=120.0,
+                memory_limit_mb=resolve_memory_limit_mb(str(slnc_path), cfg.process_guard_memory_limit_mb),
+                quantize=cfg.quantize_slonet,
+                quant_bits=cfg.quant_bits,
+                quant_mode=cfg.quant_mode,
+                quant_clip=cfg.quant_clip,
+            )
+            guard.start()
+            self._process_guard = guard
+            logger.info("ProcessGuard started for fine-tuned %s", model_id, extra={"tag": "MODEL"})
+            return guard
+        except Exception as e:
+            logger.warning("ProcessGuard creation failed: %s", e, extra={"tag": "MODEL"})
+            return None
+
     def unload_model(self) -> Dict[str, Any]:
-        """Unload current model and clean up ModelRegistry entry."""
+        """Unload current model and clean up ModelRegistry entry.
+
+        Resolves the active model id from the registry (the authoritative
+        source for autoloaded models that bypass the controller), then:
+            - stops the process guard
+            - unregisters from the registry (tears down the ModelServer)
+            - clears all registered providers so chat fails fast until reload
+            - resets ``state.model`` / ``tokenizer`` / ``model_type``
+
+        Returns:
+            Dict with the unloaded ``model_id`` and ``status: "unloaded"``.
+        """
+        # Resolve the active model: controller state > registry default.
+        model_id = self._current_model
+        try:
+            from domains.infrastructure.model_registry import get_model_registry
+            registry = get_model_registry()
+            model_id = model_id or registry.default_id
+        except Exception:
+            registry = None
+
         if self._process_guard is not None:
             try:
                 self._process_guard.stop()
@@ -288,13 +693,49 @@ class ModelsController:
             self._model_instance = None
 
         # Unregister from ModelRegistry (tears down ModelServer, releases semaphore, etc.)
-        if self._current_model:
+        if registry is not None and model_id:
             try:
-                from domains.infrastructure.model_registry import get_model_registry
-                registry = get_model_registry()
-                registry.unregister(self._current_model)
+                registry.unregister(model_id)
             except Exception as e:
                 logger.debug("Registry unregister failed: %s", e)
+
+        # Drop cross-turn KV states — keys/values from the unloaded model are invalid
+        try:
+            from domains.models.provider import get_provider
+            provider = get_provider("slonet-native")
+            if provider is None:
+                provider = get_provider("slonet")
+            if provider is not None and hasattr(provider, "clear_all_sessions"):
+                provider.clear_all_sessions()
+        except Exception as e:
+            logger.debug("Cross-turn KV state clear failed: %s", e)
+
+        # Clear all providers so chat/generation fail fast until a model reloads
+        try:
+            from domains.models.provider import clear_providers
+            clear_providers()
+        except Exception as e:
+            logger.debug("Provider clear failed: %s", e)
+
+        # Reset shared server state
+        try:
+            import state as server_state
+            server_state.model = None
+            server_state.tokenizer = None
+            server_state.model_type = None
+            server_state.provider = None
+        except Exception as e:
+            logger.debug("Server state reset failed: %s", e)
+
+        # Reset the core ServerState singleton to match
+        try:
+            from domains.infrastructure.server_state import get_server_state
+            core = get_server_state()
+            core.model.set(None)
+            core.tokenizer.set(None)
+            core.model_type.set(None)
+        except Exception as e:
+            logger.debug("ServerState singleton reset failed: %s", e)
 
         if self._hf_model is not None:
             del self._hf_model
@@ -316,7 +757,7 @@ class ModelsController:
         gc.collect()
 
         result = {
-            "model_id": self._current_model,
+            "model_id": model_id,
             "status": "unloaded",
         }
         self._current_model = None
@@ -326,13 +767,13 @@ class ModelsController:
 
     def get_current_model(self) -> Optional[Dict[str, Any]]:
         """Get current loaded model info"""
-        if not self._current_model:
+        if not self._current_model or not self._current_device:
             return None
 
         return {
             "model_id": self._current_model,
             "status": "loaded",
-            "device": self._current_device,
+            "device": self._current_device or "cpu",
             "loaded_at": self._loaded_at.isoformat() if self._loaded_at else None,
         }
 
@@ -403,8 +844,9 @@ class ModelsController:
                         if m.get("pipeline_tag") not in ("text-generation", "text2text-generation"):
                             continue
                         config = m.get("config") or {}
-                        params = m.get("num_parameters", 0) or self._estimate_params(pid)
-                        vocab_size = (config.get("vocab_size") if isinstance(config, dict) else None) or 0
+                        params = int(m.get("num_parameters", 0) or self._estimate_params(pid))
+                        vocab_raw = config.get("vocab_size") if isinstance(config, dict) else None
+                        vocab_size = int(vocab_raw or 0)
                         models.append({
                             "model_id": pid,
                             "parameters": params,

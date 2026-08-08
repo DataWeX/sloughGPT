@@ -79,10 +79,15 @@ def forward(weights: dict, arch: ArchConfig, token_ids: List[int]) -> np.ndarray
             q = h @ T(w("layers.{i}.q.weight", i))
             k = h @ T(w("layers.{i}.k.weight", i))
             v = h @ T(w("layers.{i}.v.weight", i))
-            for name in ("q", "k", "v"):
-                bias = wn(f"layers.{i}.{name}.bias", i)
-                if bias is not None:
-                    locals()[name] = locals()[name] + bias
+            q_bias = wn("layers.{i}.q.bias", i)
+            k_bias = wn("layers.{i}.k.bias", i)
+            v_bias = wn("layers.{i}.v.bias", i)
+            if q_bias is not None:
+                q = q + q_bias
+            if k_bias is not None:
+                k = k + k_bias
+            if v_bias is not None:
+                v = v + v_bias
 
         # Reshape to (seq, heads, head_dim); RoPE needs this layout
         n_h = arch.n_head
@@ -233,10 +238,15 @@ def forward_cached(
             q = h @ T(w("layers.{i}.q.weight", i))
             k = h @ T(w("layers.{i}.k.weight", i))
             v = h @ T(w("layers.{i}.v.weight", i))
-            for name in ("q", "k", "v"):
-                bias = wn(f"layers.{i}.{name}.bias", i)
-                if bias is not None:
-                    locals()[name] = locals()[name] + bias
+            q_bias = wn("layers.{i}.q.bias", i)
+            k_bias = wn("layers.{i}.k.bias", i)
+            v_bias = wn("layers.{i}.v.bias", i)
+            if q_bias is not None:
+                q = q + q_bias
+            if k_bias is not None:
+                k = k + k_bias
+            if v_bias is not None:
+                v = v + v_bias
 
         # Reshape to (seq, heads, head_dim); RoPE needs this layout
         n_h = arch.n_head
@@ -401,10 +411,15 @@ def forward_fast(
             q = h @ T(w("layers.{i}.q.weight", i))
             k = h @ T(w("layers.{i}.k.weight", i))
             v = h @ T(w("layers.{i}.v.weight", i))
-            for name in ("q", "k", "v"):
-                bias = wn(f"layers.{i}.{name}.bias", i)
-                if bias is not None:
-                    locals()[name] = locals()[name] + bias
+            q_bias = wn("layers.{i}.q.bias", i)
+            k_bias = wn("layers.{i}.k.bias", i)
+            v_bias = wn("layers.{i}.v.bias", i)
+            if q_bias is not None:
+                q = q + q_bias
+            if k_bias is not None:
+                k = k + k_bias
+            if v_bias is not None:
+                v = v + v_bias
 
         # Reshape to (seq, heads, head_dim); RoPE needs this layout
         n_h = arch.n_head

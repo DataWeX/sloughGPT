@@ -13,6 +13,7 @@ export interface Conversation {
   pinned: boolean
   starred: boolean
   archived?: boolean
+  unread?: boolean
   message_count: number
   messages?: Array<{ id: string; role: string; content: string; timestamp?: string | number }>
   user_id?: string
@@ -80,7 +81,7 @@ export const sessionController = {
     return apiPost<Session>('/chat/sessions', { name, session_id: id })
   },
 
-  async update(id: string, data: { name?: string; starred?: boolean; pinned?: boolean; archived?: boolean }): Promise<void> {
+  async update(id: string, data: { name?: string; starred?: boolean; pinned?: boolean; archived?: boolean; unread?: boolean }): Promise<void> {
     if (!id) return
     await apiPut(`/chat/sessions/${encodeURIComponent(id)}`, data)
   },

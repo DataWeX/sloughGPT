@@ -31,7 +31,7 @@ export function TestModelDialog({
       <div className="bg-background rounded-lg border border-border shadow-xl w-full max-w-lg mx-4 p-5 space-y-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">Test the model</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm" aria-label="Close">&times;</button>
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm" aria-label="Close">&times;</button>
         </div>
         <textarea
           value={prompt}

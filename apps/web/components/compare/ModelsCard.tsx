@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
@@ -18,9 +19,26 @@ interface ModelsCardProps {
 }
 
 export default function ModelsCard({ models, loading, results, running, onBenchmark, onClear }: ModelsCardProps) {
+  const [search, setSearch] = useState('')
+  const filtered = search
+    ? models.filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.id.toLowerCase().includes(search.toLowerCase()))
+    : models
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Models</CardTitle></CardHeader>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Models</CardTitle>
+          {models.length > 3 && (
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Filter..."
+              className="h-7 w-32 rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            />
+          )}
+        </div>
+      </CardHeader>
       <CardContent>
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -30,7 +48,7 @@ export default function ModelsCard({ models, loading, results, running, onBenchm
           <p className="text-sm text-muted-foreground text-center py-6">No models available. Load one in the Models page first.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {models.map(m => {
+            {filtered.map(m => {
               const result = results[m.id]
               const isRunning = running.has(m.id)
               return (

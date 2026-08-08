@@ -32,10 +32,16 @@ class MetricsRouter:
     async def get_metrics(self):
         """Get internal request metrics (JSON)."""
         c = get_metrics_collector()
+        import state as server_state
+        model_loaded = c._model_loaded
+        model_name = c._model_name
+        if server_state.model is not None or server_state.provider is not None:
+            model_loaded = True
+            model_name = server_state.model_type or model_name
         return success_response(data={
             "uptime_seconds": f"{c._start_time}",
-            "model_loaded": c._model_loaded,
-            "model_name": c._model_name,
+            "model_loaded": model_loaded,
+            "model_name": model_name,
             "active_requests": c._active_requests,
             "inferences_total": c._inference_count,
             "tokens_generated_total": c._tokens_generated,

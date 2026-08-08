@@ -19,7 +19,7 @@ interface UseChatContextValueOpts {
   vision: ReturnType<typeof useChatVision>
   ui: ReturnType<typeof useChatUI>
   chat: ReturnType<typeof useChatMessages>
-  showToast: (message: string, type?: string) => void
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }
 
 export function useChatHealthValue(opts: Pick<UseChatContextValueOpts, 'health' | 'refreshHealth'>): ChatHealthContextValue {

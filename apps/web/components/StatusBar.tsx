@@ -51,24 +51,27 @@ export function StatusBar() {
     return () => clearInterval(id)
   }, [connectionStatus, health])
 
+  const currentSoul = health?.soul ?? null
+
   useEffect(() => {
     if (health === null || connectionStatus !== 'connected') return
+    let cancelled = false
     soulsController.getCurrent().then(async (s) => {
-      if (s && 'name' in s) {
-        const name = s.name
-        setSoulName(name)
-        try {
-          const w = await soulsController.getTraitWeights()
-          if (w && !('error' in w)) {
-            const arch = deriveArchetype(w as Record<string, Record<string, number>>)
-            setArchetypeLabel(arch.label)
-          }
-        } catch {
-          logger.warning('StatusBar: failed to fetch trait weights', {})
+      if (cancelled || !s || !('name' in s)) return
+      const name = s.name
+      setSoulName(name)
+      try {
+        const w = await soulsController.getTraitWeights()
+        if (!cancelled && w && !('error' in w)) {
+          const arch = deriveArchetype(w as Record<string, Record<string, number>>)
+          setArchetypeLabel(arch.label)
         }
+      } catch {
+        logger.warning('StatusBar: failed to fetch trait weights', {})
       }
-    }).catch(() => {})
-  }, [health, connectionStatus])
+    }).catch(() => /* soul status unavailable — non-critical */ {})
+    return () => { cancelled = true }
+  }, [connectionStatus, currentSoul])
 
   const score = health?.health_score
   const dot = connectionStatus === 'connecting' ? 'bg-muted-foreground/50' :

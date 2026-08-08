@@ -6,16 +6,20 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import domains.infrastructure.numpy_engine as numpy_engine
+import domains.infrastructure.pugqeep.model_tree as model_tree_module
 from domains.infrastructure.pugqeep.model_tree import (
     ModelTree,
     save_library,
     load_library,
     load_from_points,
+    load_model_to_points,
     decompress_tree,
 )
 from domains.infrastructure.pugqeep.queue import ModelQueue
 from domains.infrastructure.pugqeep.config import QueueConfig, TreeConfig
 from domains.infrastructure.pugqeep.library import PointLibrary
+from domains.infrastructure.pugqeep.point import Point
 
 
 def _weights(n=256):
@@ -132,6 +136,23 @@ def test_tree_stats():
     assert "library" in stats
 
 
+def test_load_weights_counts_cluster_residual_bytes(monkeypatch):
+    tree = ModelTree("m1", n_clusters=4)
+    original = tree._compressor.compress_cluster
+
+    def with_residual(flat, point_id, n_clusters):
+        point = original(flat, point_id, n_clusters)
+        point.residual = np.ones(len(flat), dtype=np.float32)
+        return point
+
+    monkeypatch.setattr(tree._compressor, "compress_cluster", with_residual)
+    stats = tree.load_weights(_weights(n=256))
+    cluster = tree.library.get("m1.weight")
+    assert cluster.function_type == "cluster"
+    assert cluster.residual is not None
+    assert stats["total_compressed_bytes"] >= cluster.residual.nbytes
+
+
 # ---- save/load helpers ----------------------------------------------------
 
 
@@ -176,6 +197,52 @@ def test_decompress_tree_round_trip():
     assert weights["bias"].shape == (4,)
     assert weights["embedding"].shape == (50, 8)
     np.testing.assert_allclose(weights["bias"], w["bias"], atol=1e-6)
+
+
+def test_load_model_to_points_creates_own_library(monkeypatch):
+    def fake_load_weights(model_id):
+        return ({"arch": "test"}, {
+            "w": np.ones(32, dtype=np.float32),
+            "bias": np.zeros(4, dtype=np.float32),
+        })
+
+    monkeypatch.setattr(numpy_engine, "_load_weights", fake_load_weights)
+    tree = load_model_to_points("fake", n_clusters=4)
+    assert tree.name == "fake"
+    assert tree.library.name == "fake"
+    assert tree.library.get("fake.w").function_type == "cluster"
+    assert tree.library.get("fake.bias").function_type == "raw"
+    assert tree.is_loaded is True
+
+
+def test_load_model_to_points_uses_provided_library(monkeypatch):
+    def fake_load_weights(model_id):
+        return ({"arch": "test"}, {"w": np.ones(32, dtype=np.float32)})
+
+    monkeypatch.setattr(numpy_engine, "_load_weights", fake_load_weights)
+    lib = PointLibrary(name="custom")
+    tree = load_model_to_points("fake", library=lib, n_clusters=4)
+    assert tree.library is lib
+
+
+def test_load_from_points_nonprefixed_identity(tmp_path):
+    lib = PointLibrary(name="mymodel")
+    lib.compress_and_store(np.arange(16, dtype=np.float32), "foreign_w")
+    lib.save(tmp_path / "mymodel.points.json")
+
+    loaded, _ = load_from_points(str(tmp_path / "mymodel"))
+    assert "foreign_w" in loaded._weight_shapes
+    assert loaded._weight_shapes["foreign_w"] == ()
+
+
+def test_decompress_tree_nonprefixed_identity():
+    lib = PointLibrary(name="lib")
+    lib.compress_and_store(np.arange(16, dtype=np.float32), "foreign_w")
+    tree = ModelTree("m1", library=lib)
+    tree._weight_shapes["foreign_w"] = (16,)
+    weights = decompress_tree(tree)
+    assert "foreign_w" in weights
+    assert weights["foreign_w"].shape == (16,)
 
 
 # ---- ModelQueue ------------------------------------------------------------
@@ -280,3 +347,15 @@ def test_queue_save_and_load_all(tmp_path):
     assert q2.list_trees() == ["a"]
     assert len(q2.get_tree("a").library.list_all()) == 3
     assert q2.get_tree("a").is_loaded is True
+
+
+def test_queue_load_model(monkeypatch):
+    q = ModelQueue()
+    lib = PointLibrary(name="fake_points")
+    tree = ModelTree("fake", lib)
+    monkeypatch.setattr(model_tree_module, "load_model_to_points", lambda *a, **k: tree)
+
+    loaded = q.load_model("fake")
+    assert loaded is tree
+    assert q.get_tree("fake") is tree
+    assert q.list_trees() == ["fake"]

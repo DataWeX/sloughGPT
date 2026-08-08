@@ -1,12 +1,17 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { trainingController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
+import { downloadJson } from '@/lib/download-utils'
+import { todayDateString, MS_PER_SECOND, MS_PER_MINUTE } from '@/lib/format-bytes'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import type { TrainingJob } from '@/lib/training-controller'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 
 export function JobHistoryCard({
@@ -15,18 +20,51 @@ export function JobHistoryCard({
   loadingTimedOut,
   onRetry,
 }: {
-  allJobs: any[]
+  allJobs: TrainingJob[]
   checkpoints: UseTrainingCheckpointsReturn
   loadingTimedOut: boolean
   onRetry: () => void
 }) {
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
+  const [showComparison, setShowComparison] = useState(false)
 
   const completedJobs = allJobs.filter(j => j.status === 'completed')
   const totalLoss = completedJobs.reduce((sum, j) => sum + (j.loss ?? 0), 0)
   const avgLoss = completedJobs.length > 0 ? totalLoss / completedJobs.length : 0
   const totalEpochs = completedJobs.reduce((sum, j) => sum + (j.current_epoch ?? 0), 0)
+
+  const overlaidLossData = useMemo(() => {
+    if (completedJobs.length < 2) return null
+    const jobsWithHistory = completedJobs.filter(j => j.loss_history && j.loss_history.length > 1)
+    if (jobsWithHistory.length < 2) return null
+    const maxLen = Math.max(...jobsWithHistory.map(j => j.loss_history?.length ?? 0))
+    const data: Array<Record<string, number>> = []
+    for (let i = 0; i < maxLen; i++) {
+      const point: Record<string, number> = { step: i + 1 }
+      jobsWithHistory.forEach(j => {
+        const entry = j.loss_history?.[i]
+        if (entry) point[j.name || j.id] = entry.value
+      })
+      data.push(point)
+    }
+    const keys = jobsWithHistory.map(j => j.name || j.id)
+    return { data, keys }
+  }, [completedJobs])
+
+  const exportComparison = () => {
+    const data = completedJobs.map(j => ({
+      name: j.name || j.id,
+      model: j.model,
+      dataset: j.dataset,
+      loss: j.loss,
+      epochs: j.current_epoch,
+      method: j.method,
+      created_at: j.created_at,
+    }))
+    downloadJson(data, `training-comparison-${todayDateString()}.json`)
+    addToast(`Exported ${data.length} jobs`, 'success')
+  }
 
   const hasJobs = allJobs.length > 0 || checkpoints.loadingJobs
   if (allJobs.length === 0 && !checkpoints.loadingJobs) return (
@@ -41,7 +79,21 @@ export function JobHistoryCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Job history</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Job history</CardTitle>
+          {completedJobs.length > 1 && (
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant={showComparison ? 'default' : 'ghost'} className="h-6 text-xs" onClick={() => setShowComparison(!showComparison)}>
+                {showComparison ? 'List' : 'Compare'}
+              </Button>
+              {showComparison && (
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={exportComparison}>
+                  Export
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {completedJobs.length > 0 && (
@@ -55,15 +107,76 @@ export function JobHistoryCard({
           </div>
         )}
         <div className="p-0">
-        {checkpoints.loadingJobs ? (
-          loadingTimedOut ? (
+        {showComparison && completedJobs.length > 0 ? (
+          <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border/50 text-muted-foreground">
+                  <th className="text-left px-4 py-2 font-medium">Name</th>
+                  <th className="text-left px-4 py-2 font-medium">Model</th>
+                  <th className="text-left px-4 py-2 font-medium">Dataset</th>
+                  <th className="text-right px-4 py-2 font-medium">Loss</th>
+                  <th className="text-right px-4 py-2 font-medium">Epochs</th>
+                  <th className="text-left px-4 py-2 font-medium">Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completedJobs.map(job => {
+                  const bestLoss = Math.min(...completedJobs.map(j => j.loss ?? Infinity))
+                  const worstLoss = Math.max(...completedJobs.map(j => j.loss ?? 0))
+                  const loss = job.loss ?? 0
+                  return (
+                    <tr key={job.id} className="border-b border-border/30 hover:bg-muted/20 cursor-pointer" onClick={() => router.push(`/training/job/${job.id}`)}>
+                      <td className="px-4 py-2 font-medium truncate max-w-[150px]">{job.name || job.id}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{job.model || '—'}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{job.dataset || '—'}</td>
+                      <td className={`px-4 py-2 text-right font-mono ${loss === bestLoss && loss > 0 ? 'text-success' : loss === worstLoss ? 'text-warning' : ''}`}>
+                        {loss > 0 ? loss.toFixed(4) : '—'}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">{job.current_epoch ?? '—'}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{job.method || '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {overlaidLossData && (
+            <div className="px-4 py-3 border-t border-border/30">
+              <p className="text-xs text-muted-foreground mb-2">Loss curves overlay</p>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={overlaidLossData.data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="step" tick={{ fontSize: 10 }} stroke="var(--muted-foreground)" />
+                    <YAxis tick={{ fontSize: 10 }} stroke="var(--muted-foreground)" />
+                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid var(--border)' }} labelFormatter={(label) => `Step ${label}`} formatter={(value: number) => [value.toFixed(4), 'Loss']} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    {overlaidLossData.keys.map((key, i) => (
+                      <Line
+                        key={key}
+                        type="monotone"
+                        dataKey={key}
+                        stroke={['var(--primary)', 'var(--warning)', 'var(--accent)', 'var(--success)', 'var(--destructive)'][i % 5]}
+                        dot={false}
+                        strokeWidth={1.5}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+          </>
+        ) : loadingTimedOut ? (
             <div className="px-4 py-6 text-center space-y-2">
               <p className="text-sm text-muted-foreground">Taking longer than expected</p>
               <Button size="sm" variant="ghost" onClick={onRetry}>
                 Retry
               </Button>
             </div>
-          ) : (
+        ) : checkpoints.loadingJobs ? (
             <div className="divide-y divide-border/50">
               {[1,2,3].map(i => (
                 <div key={i} className="flex items-center justify-between px-4 py-3">
@@ -75,14 +188,13 @@ export function JobHistoryCard({
                 </div>
               ))}
             </div>
-          )
         ) : (
           <div className="divide-y divide-border/50">
             {allJobs.slice().reverse().map((job) => {
               const relativeTime = (() => {
                 if (!job.created_at) return ''
                 const diff = Date.now() - new Date(job.created_at).getTime()
-                const mins = Math.floor(diff / 60000)
+                const mins = Math.floor(diff / MS_PER_MINUTE)
                 if (mins < 1) return 'just now'
                 if (mins < 60) return `${mins}m ago`
                 const hrs = Math.floor(mins / 60)
@@ -120,6 +232,14 @@ export function JobHistoryCard({
                     {job.status_message || (
                       <>{job.status} · {relativeTime}{elapsed && <> · {elapsed}</>}</>
                     )}
+                    {job.status === 'running' && job.progress > 0 && job.created_at && (() => {
+                      const elapsedMs = Date.now() - new Date(job.created_at).getTime()
+                      const rate = job.progress / elapsedMs
+                      const remainingMs = rate > 0 ? (100 - job.progress) / rate : 0
+                      const mins = Math.floor(remainingMs / MS_PER_MINUTE)
+                      const secs = Math.floor((remainingMs % MS_PER_MINUTE) / MS_PER_SECOND)
+                      return <span className="text-warning"> · ETA {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}</span>
+                    })()}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-3" onClick={e => e.stopPropagation()}>
@@ -138,7 +258,7 @@ export function JobHistoryCard({
                     <>
                       {job.checkpoint && (
                         <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={async () => {
-                          try { await checkpoints.handleLoadCheckpoint(job.checkpoint!, addToast) }
+                          try { const cp = job.checkpoint; if (cp) await checkpoints.handleLoadCheckpoint(cp, addToast) }
                           catch { addToast('Failed to load trained version', 'error') }
                         }}>
                           Use

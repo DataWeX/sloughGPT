@@ -200,8 +200,8 @@ class VisionDevice(AIDevice):
             cnn = VisionCNN()
             from PIL import Image
             img = Image.open(path).convert("RGB")
-            result = cnn.predict(img)
-            return f"  Vision: {result}"
+            result = cnn.caption(img)
+            return f"  Vision: {result.text}"
         except ImportError:
             return f"  VisionCNN not available — file exists: {path} ({os.path.getsize(path)} bytes)"
 

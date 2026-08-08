@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { SoulNetWebGPU, SoulTransformerWebGPU, inferArch } from '@/lib/soulnet-webgpu'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { devDebug } from '@/lib/dev-log'
 
 export function useChatLocalEngine(
@@ -69,7 +70,7 @@ export function useChatLocalEngine(
       }
       return true
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'unknown error'
+      const msg = extractErrorMessage(err, 'unknown error')
       showToast(`Failed to load local AI: ${msg}`, 'error')
       devDebug('Local engine init failed', { error: msg, url: localModelUrl })
       return false

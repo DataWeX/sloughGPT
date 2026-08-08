@@ -445,6 +445,7 @@ class TestObservability:
     def test_health_ready(self, server):
         h = server.health()
         assert h["status"] == "ready"
+        assert "kv_sessions" in h
 
     def test_health_degraded_when_circuit_breaker_open(self, mock_model, mock_tokenizer):
         s = SloNetServer(mock_model, mock_tokenizer, enable_warmup=False)
@@ -472,6 +473,49 @@ class TestObservability:
         s = SloNetServer(mock_model, mock_tokenizer, enable_circuit_breaker=False, enable_warmup=False)
         md = s.metadata()
         assert md["circuit_breaker_state"] == "disabled"
+
+    def test_metadata_kv_sessions_disabled_without_provider(self, server):
+        md = server.metadata()
+        assert md["kv_sessions"]["enabled"] is False
+
+    def test_metadata_kv_sessions_reports_provider_stats(self, mock_model, mock_tokenizer):
+        """kv_sessions metadata reflects provider session_stats() when attached."""
+        class FakeProvider:
+            def __init__(self):
+                self._kv_states = {"a": object(), "b": object()}
+                self._kv_last_access = {k: 0.0 for k in ("a", "b")}
+                self._kv_ttl = 3600.0
+            def session_stats(self):
+                return {
+                    "active_sessions": len(self._kv_states),
+                    "ttl_seconds": self._kv_ttl,
+                    "cached_tokens": 42,
+                    "oldest_session_age": 0.0,
+                }
+
+        s = SloNetServer(
+            model=mock_model, tokenizer=mock_tokenizer,
+            enable_warmup=False, provider=FakeProvider(),
+        )
+        md = s.metadata()
+        assert md["kv_sessions"]["enabled"] is True
+        assert md["kv_sessions"]["active_sessions"] == 2
+        assert md["kv_sessions"]["cached_tokens"] == 42
+        assert md["kv_sessions"]["ttl_seconds"] == 3600.0
+
+    def test_metadata_kv_sessions_graceful_on_error(self, mock_model, mock_tokenizer):
+        """kv_sessions metadata survives a provider whose stats raise."""
+        class BrokenProvider:
+            def session_stats(self):
+                raise RuntimeError("boom")
+
+        s = SloNetServer(
+            model=mock_model, tokenizer=mock_tokenizer,
+            enable_warmup=False, provider=BrokenProvider(),
+        )
+        md = s.metadata()
+        assert md["kv_sessions"]["enabled"] is False
+        assert "error" in md["kv_sessions"]
 
     def test_generate_sync_cancelled_before_start(self, server):
         cancel = threading.Event()
@@ -806,6 +850,76 @@ class TestProcessGuardDelegation:
         cancel.set()
         gen = srv._generate_stream_sync("hi", cancel_event=cancel)
         assert list(gen) == []
+
+
+class TestCrossTurnKV:
+    """Cross-turn KV reuse must survive the SloNetServer serving layer."""
+
+    class _FakeProvider:
+        def __init__(self):
+            self.states = {}
+
+        def _resolve_session_kv(self, session_id):
+            if session_id is None:
+                return None
+            if session_id not in self.states:
+                self.states[session_id] = object()
+            return self.states[session_id]
+
+    @pytest.fixture
+    def kv_server(self, mock_model, mock_tokenizer):
+        provider = self._FakeProvider()
+        srv = SloNetServer(
+            model=mock_model,
+            tokenizer=mock_tokenizer,
+            model_id="test-kv",
+            enable_warmup=False,
+            provider=provider,
+        )
+        return srv, provider
+
+    async def test_generate_with_session_id_resolves_kv(self, kv_server):
+        srv, provider = kv_server
+        await srv.generate("hello", session_id="sess-1")
+        state = provider.states["sess-1"]
+        _, kwargs = srv._model.generate_numpy.call_args
+        assert kwargs["kv_state"] is state
+
+    async def test_generate_without_session_id_uses_none_kv(self, kv_server):
+        srv, _ = kv_server
+        await srv.generate("hello")
+        _, kwargs = srv._model.generate_numpy.call_args
+        assert kwargs["kv_state"] is None
+
+    async def test_generate_reuses_same_state_across_calls(self, kv_server):
+        """Same session id must reuse the identical state object across turns."""
+        srv, _ = kv_server
+        await srv.generate("first", session_id="sess-2")
+        first_state = srv._model.generate_numpy.call_args.kwargs["kv_state"]
+        await srv.generate("second", session_id="sess-2")
+        second_state = srv._model.generate_numpy.call_args.kwargs["kv_state"]
+        assert second_state is first_state
+
+    async def test_generate_distinct_states_for_distinct_sessions(self, kv_server):
+        srv, _ = kv_server
+        await srv.generate("a", session_id="s-a")
+        s_a = srv._model.generate_numpy.call_args.kwargs["kv_state"]
+        await srv.generate("b", session_id="s-b")
+        s_b = srv._model.generate_numpy.call_args.kwargs["kv_state"]
+        assert s_b is not s_a
+
+    async def test_generate_stream_with_session_id_resolves_kv(self, kv_server):
+        srv, provider = kv_server
+        _ = [t async for t in srv.generate_stream("hello", session_id="sess-3")]
+        state = provider.states["sess-3"]
+        _, kwargs = srv._model.generate_numpy_stream.call_args
+        assert kwargs["kv_state"] is state
+
+    async def test_generate_without_provider_uses_none_kv(self, mock_model, mock_tokenizer):
+        srv = SloNetServer(mock_model, mock_tokenizer, enable_warmup=False)
+        await srv.generate("hello", session_id="unbound")
+        _, kwargs = srv._model.generate_numpy.call_args
+        assert kwargs["kv_state"] is None
 
 
 

@@ -1,0 +1,260 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
+import { IconRefresh } from '@sloughgpt/strui'
+import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { benchmarkController } from '@/lib/benchmark-controller'
+import { apiPost } from '@/lib/http-client'
+import { useToastStore } from '@/lib/toast-store'
+
+type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity'
+
+interface LoggedResponse {
+  timestamp: string
+  user_message: string
+  assistant_response: string
+  model: string
+  tokens_generated: number
+  duration_ms: number
+}
+
+export default function BenchmarkPage() {
+  const [tab, setTab] = useState<Tab>('metrics')
+  const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null)
+  const [quality, setQuality] = useState<{ coherence_score: number; quality_score: number; repetition_rate: number } | null>(null)
+  const [responses, setResponses] = useState<LoggedResponse[]>([])
+  const [stats, setStats] = useState<{ total: number; avg_tokens: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+
+  const [pplxText, setPplxText] = useState('')
+  const [pplxResult, setPplxResult] = useState<{ perplexity: number; loss: number; tokens: number } | null>(null)
+  const [pplxLoading, setPplxLoading] = useState(false)
+  const addToast = useToastStore(s => s.addToast)
+
+  useEffect(() => {
+    Promise.all([
+      benchmarkController.run({ model: 'gpt2' }).catch(() => null),
+      benchmarkController.quality().catch(() => null),
+      benchmarkController.stats().catch(() => null),
+    ]).then(([m, q, s]) => {
+      setMetrics(m as Record<string, unknown> | null)
+      setQuality(q)
+      setStats(s)
+    }).finally(() => setLoading(false))
+  }, [])
+
+  const handleRefreshMetrics = async () => {
+    setRunning(true)
+    try {
+      const m = await benchmarkController.run({ model: 'gpt2' })
+      setMetrics(m as unknown as Record<string, unknown>)
+    } catch {
+      addToast('Failed to run benchmark', 'error')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const handleLoadResponses = async () => {
+    try {
+      const data = await benchmarkController.history(20)
+      setResponses(data as unknown as LoggedResponse[])
+    } catch {
+      addToast('Failed to load responses', 'error')
+    }
+  }
+
+  const handleClearHistory = async () => {
+    try {
+      await apiPost('/benchmark/history/clear', {})
+      setResponses([])
+      setStats(null)
+    } catch {
+      addToast('Failed to clear history', 'error')
+    }
+  }
+
+  const handleCalcPerplexity = async () => {
+    if (!pplxText.trim()) return
+    setPplxLoading(true)
+    try {
+      const data = await apiPost<{ perplexity: number; loss: number; tokens: number }>(
+        '/benchmark/perplexity',
+        { text: pplxText },
+      )
+      setPplxResult(data)
+    } catch {
+      addToast('Failed to calculate perplexity', 'error')
+    } finally {
+      setPplxLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="sl-page mx-auto max-w-4xl">
+        <AppRouteHeader left={<AppRouteHeaderLead title="Benchmark" subtitle="Model evaluation metrics" />} />
+        <div className="space-y-4">
+          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="sl-page mx-auto max-w-4xl">
+      <AppRouteHeader left={<AppRouteHeaderLead title="Benchmark" subtitle="Model evaluation metrics" />} />
+      <div className="space-y-4">
+        <div className="flex gap-1 border-b border-border/30 pb-0">
+          {(['metrics', 'quality', 'responses', 'perplexity'] as Tab[]).map(t => (
+            <button
+              key={t}
+              onClick={() => {
+                setTab(t)
+                if (t === 'responses') handleLoadResponses()
+              }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
+                tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'metrics' && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Model Metrics</CardTitle>
+              <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running}>
+                <IconRefresh className={`h-3.5 w-3.5 ${running ? 'animate-spin' : ''}`} />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {metrics ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {[
+                    { label: 'Model', value: String(metrics.model ?? '—') },
+                    { label: 'Inferences', value: String(metrics.inference_count ?? 0) },
+                    { label: 'Total Tokens', value: String(metrics.total_tokens ?? 0) },
+                    { label: 'Tokens/s', value: String(metrics.tokens_per_second ?? 0) },
+                    { label: 'Memory', value: `${metrics.memory_mb ?? 0} MB` },
+                    { label: 'Loaded', value: metrics.model_loaded ? 'Yes' : 'No' },
+                  ].map(s => (
+                    <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
+                      <div className="text-xs text-muted-foreground">{s.label}</div>
+                      <div className="text-sm font-mono font-medium">{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No metrics available. Is a model loaded?</p>
+              )}
+              {stats && (
+                <div className="mt-3 text-xs text-muted-foreground">
+                  {stats.total} responses logged · avg {stats.avg_tokens?.toFixed(0) ?? 0} tokens
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {tab === 'quality' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Quality Metrics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {quality ? (
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Coherence', value: `${(quality.coherence_score * 100).toFixed(1)}%`, color: 'text-success' },
+                    { label: 'Quality', value: `${(quality.quality_score * 100).toFixed(1)}%`, color: 'text-primary' },
+                    { label: 'Repetition', value: `${(quality.repetition_rate * 100).toFixed(1)}%`, color: quality.repetition_rate > 0.3 ? 'text-destructive' : 'text-muted-foreground' },
+                  ].map(s => (
+                    <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
+                      <div className="text-xs text-muted-foreground">{s.label}</div>
+                      <div className={`text-lg font-mono font-medium ${s.color}`}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No quality data yet. Chat with the model to generate responses.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {tab === 'responses' && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Logged Responses ({responses.length})</CardTitle>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" onClick={handleLoadResponses}>
+                  <IconRefresh className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={handleClearHistory}>
+                  Clear
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {responses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No responses logged yet.</p>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {responses.map((r, i) => (
+                    <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                      <div className="text-xs text-muted-foreground mb-1">
+                        {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} · {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
+                      </div>
+                      <div className="text-xs"><span className="text-muted-foreground">User:</span> {r.user_message}</div>
+                      <div className="text-xs mt-0.5"><span className="text-muted-foreground">AI:</span> {r.assistant_response}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {tab === 'perplexity' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Perplexity Calculator</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                value={pplxText}
+                onChange={e => setPplxText(e.target.value)}
+                placeholder="Enter text to calculate perplexity..."
+                rows={3}
+              />
+              <Button size="sm" onClick={handleCalcPerplexity} disabled={pplxLoading || !pplxText.trim()}>
+                {pplxLoading ? 'Calculating...' : 'Calculate'}
+              </Button>
+              {pplxResult && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground">Perplexity</div>
+                    <div className="text-lg font-mono font-medium">{pplxResult.perplexity}</div>
+                  </div>
+                  <div className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground">Loss</div>
+                    <div className="text-lg font-mono font-medium">{pplxResult.loss}</div>
+                  </div>
+                  <div className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground">Tokens</div>
+                    <div className="text-lg font-mono font-medium">{pplxResult.tokens}</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -2,6 +2,7 @@
 
 import os
 import stat
+from pathlib import Path
 
 import pytest
 
@@ -121,6 +122,25 @@ class TestUnprotectModel:
         assert result["unprotected"] == 0
 
 
+class TestErrorHandling:
+    def test_protect_chmod_error_recorded(self, model_dir, monkeypatch):
+        def boom(*args, **kwargs):
+            raise OSError("chmod denied")
+        monkeypatch.setattr(mp.os, "chmod", boom)
+        result = mp.protect_model("gpt2", [model_dir / "model.slnc"])
+        assert result["protected"] == []
+        assert len(result["errors"]) >= 1
+
+    def test_unprotect_chmod_error_recorded(self, model_dir, monkeypatch):
+        mp.protect_model("gpt2", [model_dir / "model.slnc"])
+        def boom(*args, **kwargs):
+            raise OSError("chmod denied")
+        monkeypatch.setattr(mp.os, "chmod", boom)
+        result = mp.unprotect_model("gpt2")
+        assert result["unprotected"] == 0
+        assert len(result["errors"]) >= 1
+
+
 class TestCheckModel:
     def test_all_present_returns_empty(self, model_dir):
         mp.protect_model("gpt2", [model_dir / "model.slnc"])
@@ -183,6 +203,12 @@ class TestListProtected:
     def test_empty_hub_returns_empty(self, hf_home):
         assert mp.list_protected() == []
 
+    def test_skips_regular_files_in_hub(self, hf_home):
+        hub = hf_home / "hub"
+        hub.mkdir(parents=True)
+        (hub / "models--gpt2.txt").write_text("x")
+        assert mp.list_protected() == []
+
 
 class TestPaths:
     def test_get_model_dir_uses_hf_home(self, hf_home):
@@ -192,3 +218,6 @@ class TestPaths:
     def test_get_model_dir_slashes_become_dashes(self, hf_home):
         d = mp._get_model_dir("Qwen/Qwen2.5-0.5B-Instruct")
         assert d.name == "models--Qwen--Qwen2.5-0.5B-Instruct"
+
+    def test_get_protected_dir(self):
+        assert mp._get_protected_dir() == Path.home() / ".cache" / "sloughgpt" / "models"

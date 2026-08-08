@@ -267,6 +267,11 @@ class TestCacheMemoryStore:
         assert "k0" in evicted
         assert "k3" not in evicted
 
+    def test_evict_lfu_returns_empty_when_enough_space(self):
+        store = CacheMemoryStore(max_size_bytes=1000)
+        store.put("a", 1, 10)
+        assert store.evict_lfu(target_bytes=900, access_counts={"a": 0}) == []
+
 
 # ---- DiskStore -----------------------------------------------------------
 
@@ -473,6 +478,24 @@ class TestTieredCache:
         assert cache._entries["a"].tier == Tier.MEMORY
         assert cache._entries["b"].tier == Tier.DISK
 
+    def test_get_miss_when_data_absent_from_all_tiers(self):
+        cache = self._cache()
+        cache.put("a", np.array([1, 2, 3]))
+        cache._memory.remove("a")
+        assert cache.get("a") is None
+        assert cache.stats()["misses"] == 1
+        assert cache.exists("a")
+
+    def test_lfu_hot_eviction_demotes_to_disk(self, tmp_path):
+        cache = self._cache(hot_max_mb=1, eviction_policy=EvictionPolicy.LFU, disk_dir=tmp_path)
+        cache.put("a", np.zeros(400_000, dtype=np.float32), size_bytes=400_000, tier=Tier.HOT)
+        cache.get("a")
+        cache.put("b", np.zeros(400_000, dtype=np.float32), size_bytes=400_000, tier=Tier.HOT)
+        cache.put("c", np.zeros(400_000, dtype=np.float32), size_bytes=400_000, tier=Tier.HOT)
+        assert cache._entries["b"].tier == Tier.DISK
+        assert cache.stats()["evictions"] >= 1
+        assert cache.stats()["demotions"] >= 1
+
     def test_public_evict_method(self):
         cache = self._cache(memory_max_mb=1)
         cache.put("a", np.zeros(400_000, dtype=np.float32), size_bytes=400_000)
@@ -669,6 +692,53 @@ class TestTaskQueue:
         t = Task(name="t")
         q.submit(t)
         assert (tmp_path / "q.tasks.json").exists()
+
+    def test_fail_with_storage_persists(self, tmp_path):
+        q = TaskQueue("q", storage_dir=tmp_path)
+        t = Task(name="t", max_retries=0)
+        q.submit(t)
+        q.next()
+        q.fail(t.id, "err")
+        assert (tmp_path / "q.tasks.json").exists()
+
+    def test_cancel_with_storage_persists(self, tmp_path):
+        q = TaskQueue("q", storage_dir=tmp_path)
+        t = Task(name="t")
+        q.submit(t)
+        q.cancel(t.id)
+        assert (tmp_path / "q.tasks.json").exists()
+
+    def test_clear_completed_with_storage_persists(self, tmp_path):
+        q = TaskQueue("q", storage_dir=tmp_path)
+        t = Task(name="t")
+        q.submit(t)
+        q.next()
+        q.complete(t.id)
+        q.clear_completed()
+        assert (tmp_path / "q.tasks.json").exists()
+
+    def test_persist_failure_is_swallowed(self, tmp_path, monkeypatch):
+        q = TaskQueue("q", storage_dir=tmp_path)
+
+        def boom(*args, **kwargs):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(TaskQueue, "save", boom)
+        t = Task(name="t")
+        q.submit(t)
+        assert (tmp_path / "q.tasks.json").exists() is False
+
+    def test_callback_error_is_swallowed(self):
+        q = TaskQueue("q")
+
+        def boom(task):
+            raise RuntimeError("cb failed")
+
+        q.on_complete(boom)
+        t = Task(name="t")
+        q.submit(t)
+        q.next()
+        assert q.complete(t.id).status == TaskStatus.COMPLETED
 
 
 # ---- Function stores -----------------------------------------------------
@@ -1192,6 +1262,9 @@ class TestPGQ:
         job_id = pgq.submit_training(_train, "job1")
         status = pgq.training_status(job_id)
         assert status is not None
+        deadline = time.time() + 5.0
+        while not pgq.library.has("sys.w") and time.time() < deadline:
+            time.sleep(0.01)
         assert pgq.library.has("sys.w")
 
     def test_cancel_training_unknown(self):

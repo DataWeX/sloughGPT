@@ -94,7 +94,8 @@ class TestModelLoader:
 
     def test_init_default(self):
         loader = ModelLoader()
-        assert loader.models_dir == Path("models")
+        from domains.infrastructure.model_loader import _REPO_ROOT
+        assert loader.models_dir == _REPO_ROOT / "models"
 
     def test_init_custom_dir(self, tmp_path):
         loader = ModelLoader(models_dir=tmp_path)
@@ -111,7 +112,7 @@ class TestModelLoader:
         result = loader.load("nonexistent-model")
         assert not result.success
         assert result.model_type == "slonet"
-        assert "No .slnc file" in result.error
+        assert "No .slnc or .soul file" in result.error
 
     def test_verify_model_passes_for_valid_model(self):
         """_verify_model returns True for a model that forward passes."""
@@ -189,7 +190,7 @@ class TestModelLoaderSlncLoad:
         loader = ModelLoader(models_dir=tmp_path)
         result = loader.load("gpt2")
         assert not result.success
-        assert "No .slnc file" in result.error
+        assert "No .slnc or .soul file" in result.error
 
     def test_load_success_path_with_verify(self, tmp_path, monkeypatch):
         """Full load() success: slnc exists, provider mocked, verify runs."""

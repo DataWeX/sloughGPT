@@ -79,6 +79,17 @@ class TestHealth:
         assert body["status"] == "success"
         assert body["data"]["model_loaded"] is True
 
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_health_model_not_loaded(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_basic_health.return_value = {
+            "status": "healthy", "model_loaded": False, "model_type": None,
+        }
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["model_loaded"] is False
+
 
 class TestLiveness:
     """GET /health/live"""
@@ -122,6 +133,25 @@ class TestDetailedHealth:
         assert body["uptime_seconds"] == 3600
         assert body["request_count"] == 100
 
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_detailed_has_system_info(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed()
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health/detailed")
+        body = resp.json()["data"]
+        assert "system" in body
+        assert body["system"]["cpu_percent"] == 45.0
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_detailed_has_training_pool(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed()
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health/detailed")
+        body = resp.json()["data"]
+        assert body["training_pool"]["active"] == 1
+
 
 class TestStartupProgress:
     """GET /health/startup-progress"""
@@ -157,6 +187,26 @@ class TestDebugInfo:
         assert body["cpu_percent"] == 45.0
         assert body["memory_percent"] == 60.0
         assert "health_score" in body
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_debug_has_latency_info(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed()
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health/debug")
+        body = resp.json()["data"]
+        assert "avg_latency_ms" in body
+        assert body["avg_latency_ms"] == 250
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_debug_has_token_info(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed()
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health/debug")
+        body = resp.json()["data"]
+        assert body["total_tokens"] == 5000
+        assert body["tokens_per_sec"] == 2.5
 
 
 class TestModelHealth:
@@ -211,3 +261,48 @@ class TestHealthSummary:
         assert body["status"] == "healthy"
         assert body["model_loaded"] is True
         assert body["cpu_percent"] == 45.0
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_summary_has_model_type(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed()
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health/summary")
+        body = resp.json()["data"]
+        assert body["model_type"] == "gpt2"
+        assert body["soul"] == "sage"
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_summary_has_uptime(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed()
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health/summary")
+        body = resp.json()["data"]
+        assert body["uptime_seconds"] == 3600
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_summary_has_diagnoses(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed(
+            health_score={"score": 60, "status": "degraded", "summary": "High CPU", "diagnoses": ["CPU at 95%"]}
+        )
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health/summary")
+        body = resp.json()["data"]
+        assert body["diagnoses"] == ["CPU at 95%"]
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_summary_no_model(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed(
+            model_loaded=False, model_type=None, soul=None
+        )
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health/summary")
+        body = resp.json()["data"]
+        assert body["model_loaded"] is False
+        assert body["model_type"] is None
+
+
+

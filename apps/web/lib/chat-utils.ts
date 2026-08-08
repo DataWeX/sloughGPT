@@ -1,6 +1,7 @@
 'use client'
 
 import { chatDB } from '@/lib/db'
+import { todayDateString } from '@/lib/format-bytes'
 
 export const CURRENT_SESSION_KEY = 'man_current_conversation'
 
@@ -107,7 +108,7 @@ export function exportConversationAsMarkdown(messages: ChatMessage[]): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `chat-${new Date().toISOString().slice(0, 10)}.md`
+  a.download = `chat-${todayDateString()}.md`
   a.click()
   URL.revokeObjectURL(url)
 }

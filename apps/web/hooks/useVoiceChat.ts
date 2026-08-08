@@ -6,6 +6,28 @@ import { voiceController } from '@/lib/voice-controller'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
+/** Web Speech API SpeechRecognitionEvent (no built-in TS types). */
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionResultList {
+  length: number
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean
+  length: number
+  [index: number]: SpeechRecognitionAlternative
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
+}
+
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
 
 export interface VoiceExchange {
@@ -32,7 +54,7 @@ interface SRInstance {
   onstart: (() => void) | null
   onend: (() => void) | null
   onerror: ((e: Event) => void) | null
-  onresult: ((e: any) => void) | null
+  onresult: ((e: SpeechRecognitionEvent) => void) | null
 }
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -283,7 +305,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
       }
     }
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = ''
       let final = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {

@@ -43,6 +43,7 @@ STATUS_ICONS = {
     "done": "\u25cf",
     "blocked": "\u2715",
     "review": "\u25c8",
+    "todo": "\u25cb",
 }
 
 
@@ -322,11 +323,41 @@ class NoteStore:
         return note
 
     def get(self, note_id: str) -> Note | None:
+        """
+        Resolve a note id prefix to a note.
+
+        Exact and unambiguous prefixes return their note. An ambiguous prefix
+        (e.g. a bare date like ``20260806`` matching several notes) resolves to
+        the most recently updated match so commands like ``show`` work without
+        forcing the caller to type the full id. Ambiguity is logged with the
+        full match list.
+
+        Args:
+            note_id: full id or prefix.
+
+        Returns:
+            The matching note, or ``None`` if nothing matches.
+        """
         matches = self._bk.find_by_prefix(note_id)
         if len(matches) == 1:
             return self._bk.note_by_id(matches[0])
         if len(matches) > 1:
-            logger.warning("Ambiguous id '%s': %s", note_id, matches)
+            candidates: list[Note] = []
+            for match_id in matches:
+                note = self._bk.note_by_id(match_id)
+                if note is not None:
+                    candidates.append(note)
+            if candidates:
+                candidates.sort(
+                    key=lambda n: n.updated_at or n.created_at or n.id,
+                    reverse=True,
+                )
+                chosen = candidates[0]
+                logger.warning(
+                    "Ambiguous id '%s' (%d matches); using most recently updated: %s",
+                    note_id, len(candidates), chosen.id,
+                )
+                return chosen
         return None
 
     def update(self, note_id: str, **kwargs: Any) -> Note | None:
@@ -355,10 +386,13 @@ class NoteStore:
         return True
 
     def list_notes(self, tag: str | None = None, status: str | None = None,
-                   sprint: str | None = None,
-                   limit: int = 50) -> list[Note]:
+                   sprint: str | None = None, limit: int = 50,
+                   today: bool = False) -> list[Note]:
         notes: list[Note] = []
+        today_str = date.today().isoformat() if today else ""
         for note in self._bk.all_notes():
+            if today and note.date_str != today_str:
+                continue
             if tag and tag not in note.tags:
                 continue
             if status and note.status != status:
@@ -542,6 +576,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_list.add_argument("--status", default=None, choices=config.STATUSES + [None])
     p_list.add_argument("--sprint", default=None, help="Filter by sprint")
     p_list.add_argument("--limit", type=int, default=20, help="Max results")
+    p_list.add_argument("--today", action="store_true", help="Only today's notes")
 
     p_show = sub.add_parser("show", help="Show a note")
     p_show.add_argument("note_id", help="Note id or prefix")
@@ -599,7 +634,8 @@ def cli_main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "list":
         notes = store.list_notes(tag=args.tag, status=args.status,
-                                 sprint=args.sprint, limit=args.limit)
+                                 sprint=args.sprint, limit=args.limit,
+                                 today=args.today)
         if not notes:
             print("No notes found.")
             return 0
@@ -621,6 +657,8 @@ def cli_main(argv: list[str] | None = None) -> int:
         if note is None:
             print(f"Note not found: {args.note_id}")
             return 1
+        if note.id != args.note_id:
+            print(f"  (matched {note.id})")
         tags_str = ", ".join(note.tags) if note.tags else "none"
         sprint_str = f"\n  sprint: {note.sprint}" if note.sprint else ""
         gh_str = f"\n  gh: {note.gh}" if note.gh else ""
@@ -692,7 +730,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             by_status: dict[str, list[Note]] = {}
             for n in notes:
                 by_status.setdefault(n.status, []).append(n)
-            for status in ["open", "wip", "done", "blocked"]:
+            for status in config.STATUSES:
                 items = by_status.get(status, [])
                 if not items:
                     continue
@@ -746,7 +784,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             print("No notes.")
             return 0
         icons = STATUS_ICONS
-        for s in ["open", "wip", "done", "blocked"]:
+        for s in config.STATUSES:
             count = status_counts.get(s, 0)
             if count:
                 icon = icons.get(s, "?")

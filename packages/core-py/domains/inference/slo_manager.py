@@ -49,7 +49,7 @@ class SloManager:
         self.slos_dir = Path(souls_dir)
         self._current_soul: Optional[str] = None
         self._souls_cache: Dict[str, SloInfo] = {}
-        self._preference_file = Path("data/.soul_preference")
+        self._preference_file = Path(__file__).resolve().parents[4] / "data" / ".soul_preference"
 
         # Load cached souls
         self._scan_souls()

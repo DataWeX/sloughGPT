@@ -1,13 +1,17 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { modelController } from '@/lib/model-controller'
 import { generationConfigController } from '@/lib/generation-config-controller'
 import { soulsController, type Soul } from '@/lib/souls-controller'
+import { trainingJobsController, type FineTunedModel } from '@/lib/training-controller'
 import { startDownload, getDownloadStatus } from '@/lib/download-controller'
 import { sessionStore } from '@/lib/session-store'
+import { useSettings, useUpdateSettings } from '@/lib/store'
 import type { DownloadProgressInfo } from '@/lib/chat-utils'
 import { logger } from '@/lib/dev-log'
+import { formatToastError } from '@/lib/error-utils'
+import { DEFAULT_ERROR_MESSAGE } from '@/lib/format-bytes'
 
 const _log = logger.child('chat-model-settings')
 
@@ -26,10 +30,13 @@ export function useChatModelSettings(
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void,
   refreshHealth: () => Promise<void>,
 ) {
+  const storeSettings = useSettings()
+  const updateStoreSettings = useUpdateSettings()
+
   const [model, setModel] = useState('')
   const [souls, setSouls] = useState<Soul[]>([])
-  const [temperature, setTemperature] = useState(0.8)
-  const [maxTokens, setMaxTokens] = useState(200)
+  const [temperature, setTemperature] = useState(storeSettings.defaultTemp)
+  const [maxTokens, setMaxTokens] = useState(storeSettings.defaultMaxTokens)
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelInfoMap, setModelInfoMap] = useState<Record<string, { cached?: boolean; size_gb?: number }>>({})
   const [downloadProgress, setDownloadProgress] = useState<Record<string, DownloadProgressInfo>>({})
@@ -42,9 +49,17 @@ export function useChatModelSettings(
   const [pendingDownload, setPendingDownload] = useState<string | null>(null)
   const [learnerInfo, setLearnerInfo] = useState<LearnerInfo | null>(null)
   const [learnerTraining, setLearnerTraining] = useState(false)
+  const [fineTuned, setFineTuned] = useState<FineTunedModel[]>([])
+  const [fineTunedLoading, setFineTunedLoading] = useState(false)
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const startDownloadFlowRef = useRef<(m: string, sizeGb?: number) => Promise<void>>(async () => {})
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+    }
+  }, [])
 
   const startDownloadFlow = useCallback(async (m: string, sizeGb?: number) => {
     startDownloadFlowRef.current = startDownloadFlow
@@ -66,7 +81,13 @@ export function useChatModelSettings(
             clearInterval(pi)
             pollIntervalRef.current = null
             setDownloadProgress(prev => { const r = { ...prev }; delete r[m]; return r })
-            await modelController.load(m)
+            const result = await modelController.load(m)
+            if (result && (result.status === 'error' || result.error)) {
+              setDownloadProgress(prev => { const r = { ...prev }; delete r[m]; return r })
+              showToastFn(`Model load failed: ${result.error || 'unknown reason'}`, 'error')
+              setLoadingModel(null)
+              return
+            }
             await refreshHealth()
             setModel(m)
             showToastFn(`Model ready: ${m}`, 'success')
@@ -82,7 +103,7 @@ export function useChatModelSettings(
       }, 2000)
       pollIntervalRef.current = pi
     } catch (err) {
-      showToastFn(`Something went wrong: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
+      showToastFn(formatToastError(err, DEFAULT_ERROR_MESSAGE), 'error')
       setLoadingModel(null)
     }
   }, [showToast, refreshHealth])
@@ -95,11 +116,16 @@ export function useChatModelSettings(
       showToast(`Loading ${m}...`, 'info')
       try {
         const result = await modelController.load(m)
+        if (result && (result.status === 'error' || result.error)) {
+          showToast(`Failed to load ${m}: ${result.error || 'unknown error'}`, 'error')
+          setLoadingModel(null)
+          return
+        }
         await refreshHealth()
         setModel(m)
         showToast(`Model ready: ${m} (${result.device || 'cpu'})`, 'success')
       } catch (err) {
-        showToast(`Something went wrong: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
+        showToast(formatToastError(err, DEFAULT_ERROR_MESSAGE), 'error')
       } finally {
         setLoadingModel(null)
       }
@@ -125,28 +151,60 @@ export function useChatModelSettings(
       setModel('')
       showToast('Model stopped', 'info')
     } catch (err) {
-      showToast(`Something went wrong: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
+      showToast(formatToastError(err, DEFAULT_ERROR_MESSAGE), 'error')
     } finally {
       setLoadingModel(null)
     }
   }, [model, showToast, refreshHealth])
 
+  const fetchFineTuned = useCallback(async () => {
+    setFineTunedLoading(true)
+    try {
+      const models = await trainingJobsController.listFineTuned()
+      setFineTuned(models)
+    } catch {
+      setFineTuned([])
+    } finally {
+      setFineTunedLoading(false)
+    }
+  }, [])
+
+  const handleLoadFineTuned = useCallback(async (name: string) => {
+    setLoadingModel(name)
+    try {
+      const result = await trainingJobsController.loadFineTuned(name)
+      const loaded = await trainingJobsController.listFineTuned()
+      setFineTuned(loaded)
+      setModel(result.model_id || name)
+      await refreshHealth()
+      showToast(`Fine-tuned model loaded: ${name}`, 'success')
+    } catch (err) {
+      showToast(formatToastError(err, DEFAULT_ERROR_MESSAGE), 'error')
+    } finally {
+      setLoadingModel(null)
+    }
+  }, [showToast, refreshHealth])
+
   const fetchInitialData = useCallback(async (healthModel?: string) => {
     try {
-      const [models, genConfig, soulsData, checkpointsData] = await Promise.all([
+      const [models, genConfig, soulsData, checkpointsData, fineTunedModels] = await Promise.all([
         modelController.list(),
         generationConfigController.get(),
         soulsController.list(),
         soulsController.listCheckpoints(),
+        trainingJobsController.listFineTuned(),
       ])
 
-      setAvailableModels(models.map(m => m.id))
+      const fineTunedNames = new Set(fineTunedModels.map(ft => ft.name))
+      setFineTuned(fineTunedModels)
+      setAvailableModels(models.map(m => m.id).filter(id => !fineTunedNames.has(id)))
       const infoMap: Record<string, { cached?: boolean; size_gb?: number }> = {}
       models.forEach(m => { infoMap[m.id] = { cached: m.cached, size_gb: m.size_gb } })
       setModelInfoMap(infoMap)
 
       setTemperature(genConfig.temperature)
       setMaxTokens(genConfig.max_new_tokens)
+      updateStoreSettings({ defaultTemp: genConfig.temperature, defaultMaxTokens: genConfig.max_new_tokens })
 
       setSouls(soulsData.souls || [])
       if (soulsData.current_soul) {
@@ -166,13 +224,23 @@ export function useChatModelSettings(
     } catch (err) {
       _log.error('Failed to fetch initial model data', { exception: String(err) })
     }
-  }, [setAvailableModels, setModelInfoMap, setTemperature, setMaxTokens, setSouls, setCurrentSoul, setCheckpoints, setModel])
+  }, [setAvailableModels, setModelInfoMap, setTemperature, setMaxTokens, setSouls, setCurrentSoul, setCheckpoints, setModel, updateStoreSettings])
+
+  const handleSetTemperature = useCallback((v: number) => {
+    setTemperature(v)
+    updateStoreSettings({ defaultTemp: v })
+  }, [updateStoreSettings])
+
+  const handleSetMaxTokens = useCallback((v: number) => {
+    setMaxTokens(v)
+    updateStoreSettings({ defaultMaxTokens: v })
+  }, [updateStoreSettings])
 
   return {
     model, setModel,
     souls, setSouls,
-    temperature, setTemperature,
-    maxTokens, setMaxTokens,
+    temperature, setTemperature: handleSetTemperature,
+    maxTokens, setMaxTokens: handleSetMaxTokens,
     availableModels, setAvailableModels,
     modelInfoMap, setModelInfoMap,
     downloadProgress, setDownloadProgress,
@@ -183,6 +251,7 @@ export function useChatModelSettings(
     pendingDownload, setPendingDownload,
     learnerInfo, setLearnerInfo,
     learnerTraining, setLearnerTraining,
+    fineTuned, fineTunedLoading, fetchFineTuned, handleLoadFineTuned,
     pollIntervalRef,
     startDownloadFlowRef,
     startDownloadFlow,

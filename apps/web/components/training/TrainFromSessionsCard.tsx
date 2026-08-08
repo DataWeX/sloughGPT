@@ -5,6 +5,7 @@ import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { trainingController } from '@/lib/controllers'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import type { AutoTrainStatus, ChatSession } from '@/lib/training-controller'
@@ -70,6 +71,13 @@ export function TrainFromSessionsCard() {
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [status?.enabled, fetchStatus])
+
+  // Cleanup elapsed timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [])
 
   const toggleSession = useCallback((id: string) => {
     setSelectedSessions(prev => {
@@ -154,7 +162,7 @@ export function TrainFromSessionsCard() {
         }
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Training failed'
+      const msg = extractErrorMessage(err, 'Training failed')
       addToast(msg, 'error')
       setLastResult(null)
     } finally {
@@ -455,7 +463,7 @@ export function TrainFromSessionsCard() {
                   trainingController.loadCheckpoint(name).then(() => {
                     addToast('Model loaded for chat', 'success')
                   }).catch((e: unknown) => {
-                    addToast(`Load failed: ${e instanceof Error ? e.message : 'unknown'}`, 'error')
+                    addToast(extractErrorMessage(e, 'Load failed'), 'error')
                   })
                 }}
               >

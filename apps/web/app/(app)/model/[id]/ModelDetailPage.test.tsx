@@ -1,10 +1,21 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach, beforeEach, beforeAll, afterAll } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
+
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>,
+  LineChart: ({ children }: { children: React.ReactNode }) => <div data-testid="line-chart">{children}</div>,
+  Line: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  Tooltip: () => null,
+  CartesianGrid: () => null,
+}))
 
 const {
   mockPush, mockParams, mockModelList, mockGetHealth,
   mockModelLoad, mockUnload, mockBenchRun, mockAddToast, mockApiGet,
+  mockListFineTuned, mockLoadFineTuned,
 } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockParams: vi.fn(),
@@ -15,6 +26,8 @@ const {
   mockBenchRun: vi.fn(),
   mockAddToast: vi.fn(),
   mockApiGet: vi.fn(),
+  mockListFineTuned: vi.fn(),
+  mockLoadFineTuned: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -33,6 +46,13 @@ vi.mock('@/lib/model-controller', () => ({
 
 vi.mock('@/lib/benchmark-controller', () => ({
   benchmarkController: { run: mockBenchRun },
+}))
+
+vi.mock('@/lib/training-controller', () => ({
+  trainingJobsController: {
+    listFineTuned: mockListFineTuned,
+    loadFineTuned: mockLoadFineTuned,
+  },
 }))
 
 vi.mock('@/lib/http-client', () => ({
@@ -101,9 +121,12 @@ beforeEach(() => {
   mockModelList.mockResolvedValue([mockModel])
   mockGetHealth.mockResolvedValue(mockHealthLoaded)
   mockApiGet.mockResolvedValue({ logs: [] })
+  mockListFineTuned.mockResolvedValue([])
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+})
 
 describe('ModelDetailPage', () => {
   it('renders header with model name', async () => {
@@ -192,6 +215,36 @@ describe('ModelDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/not found/)).toBeDefined()
     })
+  })
+
+  it('resolves a fine-tuned model from the catalog when not in HF list', async () => {
+    mockParams.mockReturnValue({ id: 'gpt2_dataset_x' })
+    mockModelList.mockResolvedValue([])
+    mockGetHealth.mockResolvedValue(mockHealthUnloaded)
+    mockListFineTuned.mockResolvedValue([{
+      name: 'gpt2_dataset_x', model_name: 'gpt2_dataset_x', model: 'gpt2', dataset: 'dataset_x',
+      size_mb: 2.5, final_loss: 0.3333, epochs: 2, model_path: '/tmp/x',
+    }])
+    render(<ModelDetailPage />)
+    await waitFor(() => expect(screen.getByText('gpt2_dataset_x')).toBeDefined())
+    expect(screen.getByText(/fine-tuned/i)).toBeDefined()
+    expect(screen.getByText('Load model')).toBeDefined()
+  })
+
+  it('loads a fine-tuned model via the finetuned endpoint', async () => {
+    mockParams.mockReturnValue({ id: 'my_model_dataset_x' })
+    mockModelList.mockResolvedValue([])
+    mockGetHealth.mockResolvedValue(mockHealthUnloaded)
+    mockListFineTuned.mockResolvedValue([{
+      id: 'my_model_dataset_x', model_name: 'my_model_dataset_x', model: 'gpt2', dataset: 'dataset_x',
+      size_mb: 2.5, final_loss: 0.3333, epochs: 2, model_path: '/tmp/x',
+    }])
+    mockLoadFineTuned.mockResolvedValue({ status: 'loaded', name: 'my_model_dataset_x', model_path: '/tmp/x', model_id: 'my_model_dataset_x' })
+    render(<ModelDetailPage />)
+    await waitFor(() => expect(screen.getByText('my_model_dataset_x')).toBeDefined())
+    fireEvent.click(screen.getByText('Load model'))
+    await waitFor(() => expect(mockLoadFineTuned).toHaveBeenCalledWith('my_model_dataset_x'))
+    expect(mockModelLoad).not.toHaveBeenCalled()
   })
 
   it('renders Chat with this model button when loaded', async () => {

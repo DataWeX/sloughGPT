@@ -54,7 +54,7 @@ export function useServerOutput(opts: UseServerOutputOptions = {}): UseServerOut
             })
           }
         }
-      } catch {}
+      } catch { /* stream ended or server offline — non-fatal */ }
       if (mountedRef.current) setStreaming(false)
     }
 

@@ -1,28 +1,26 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { streamChatResponse } from '@/lib/stream-chat-response'
+import { streamChatResponse, type ToolCallEvent } from '@/lib/stream-chat-response'
 import {
   cleanStreamedContent, stripAssistantPrefix, getOrCreateUserId,
   generateSessionId, CURRENT_SESSION_KEY, buildLocalPrompt,
   exportConversationAsMarkdown, copyConversationAsMarkdown,
   type ChatMessage, type ImageAttachment, type ChatSession,
 } from '@/lib/chat-utils'
-import { logger } from '@/lib/dev-log'
+import { logger, devDebug } from '@/lib/dev-log'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 const _log = logger.child('chat-messages')
 import { getErrorInfo } from '@/components/chat/ErrorBanner'
 import { chatController } from '@/lib/chat-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { multimodalController } from '@/lib/multimodal-controller'
+import { multimodalController, type MultimodalCapabilities } from '@/lib/multimodal-controller'
 import { chatDB } from '@/lib/db'
 import { useErrorStore } from '@/lib/error-store'
-import { devDebug } from '@/lib/dev-log'
 import type { SoulNetWebGPU, SoulTransformerWebGPU } from '@/lib/soulnet-webgpu'
 import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
-import type { MultimodalCapabilities } from '@/lib/multimodal-controller'
-import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { useChatSessions } from './useChatSessions'
 
@@ -37,7 +35,7 @@ interface ChatMessagesConfig {
   engineRef: React.MutableRefObject<SoulNetWebGPU | SoulTransformerWebGPU | null>
   engineLoadingRef: React.MutableRefObject<boolean>
   initLocalEngine: () => Promise<boolean>
-  showToast: (message: string, type?: string) => void
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
   recordFeedback: (params: {
     userMessage: string
     assistantResponse: string
@@ -159,16 +157,29 @@ export function useChatMessages(config: ChatMessagesConfig) {
   newChatRef.current = newChat
 
   // ── Regenerate ────────────────────────────────────────────────────────────
-  const handleRegenerate = useCallback(async () => {
+  const handleRegenerate = useCallback(async (fromMessageId?: string) => {
     const currentMessages = messagesRef.current
     if (currentMessages.length < 2) return
-    const lastAssistantIdx = currentMessages.findLastIndex(m => m.role === 'assistant')
-    if (lastAssistantIdx <= 0) return
-    const contextMessages = currentMessages.slice(0, lastAssistantIdx + 1)
-    const assistantId = currentMessages[lastAssistantIdx].id
-    setMessages(prev => prev.map(msg =>
-      msg.id === assistantId ? { ...msg, content: '', timestamp: new Date() } : msg
-    ))
+    const targetIdx = fromMessageId
+      ? currentMessages.findIndex(m => m.id === fromMessageId)
+      : currentMessages.findLastIndex(m => m.role === 'assistant')
+    if (targetIdx <= 0) return
+    const contextMessages = currentMessages.slice(0, targetIdx + 1)
+    const assistantId = currentMessages[targetIdx].id
+
+    // If regenerating from a non-last message, truncate the conversation after this point
+    if (targetIdx < currentMessages.length - 1) {
+      setMessages(prev => prev.slice(0, targetIdx).concat({
+        ...currentMessages[targetIdx],
+        content: '',
+        timestamp: new Date(),
+      }))
+    } else {
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantId ? { ...msg, content: '', timestamp: new Date() } : msg
+      ))
+    }
+
     setLoading(true)
     try {
       for await (const data of chatController.regenerateStream(
@@ -195,7 +206,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const handleThumbsUp = useCallback(async (messageId: string) => {
     const allMsgs = messagesRef.current
     const msgIdx = allMsgs.findIndex(m => m.id === messageId)
-    const assistantMsg = allMsgs[msgIdx]
+    const assistantMsg = allMsgs.find(m => m.id === messageId)
     const userMsg = msgIdx > 0 ? allMsgs[msgIdx - 1] : null
     const success = await recordFeedback({
       userMessage: userMsg?.content || '', assistantResponse: assistantMsg?.content || '',
@@ -207,7 +218,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const handleThumbsDown = useCallback(async (messageId: string) => {
     const allMsgs = messagesRef.current
     const msgIdx = allMsgs.findIndex(m => m.id === messageId)
-    const assistantMsg = allMsgs[msgIdx]
+    const assistantMsg = allMsgs.find(m => m.id === messageId)
     const userMsg = msgIdx > 0 ? allMsgs[msgIdx - 1] : null
     const success = await recordFeedback({
       userMessage: userMsg?.content || '', assistantResponse: assistantMsg?.content || '',
@@ -422,7 +433,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       if (err instanceof Error && err.name === 'AbortError') {
         devDebug('Stream aborted by user')
       } else {
-        setCurrentError(getErrorInfo(0, err instanceof Error ? err.message : 'Network error'))
+        setCurrentError(getErrorInfo(0, extractErrorMessage(err, 'Network error')))
         setMessages(prev => prev.map(msg =>
           msg.id === assistantId
             ? { ...msg, content: msg.content || '(response interrupted)', isError: true }

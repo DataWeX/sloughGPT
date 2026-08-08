@@ -852,3 +852,115 @@ class TestBlockEmit:
         b = c.last_block()
         assert b["type"] == "confirm"
         assert b["data"]["result"] is True
+
+
+class TestEdgeBranches:
+    def test_human_size_reaches_pb(self):
+        from domains.shell.console import _human_size
+        assert _human_size(1024 ** 5) == "1.0 PB"
+
+    def test_panel_title_center(self):
+        c, io = _make_c()
+        c.panel("x", title="T", title_align="center")
+        assert any("\u250c" in _visible(s) for s in io._output)
+
+    def test_panel_title_right(self):
+        c, io = _make_c()
+        c.panel("x", title="T", title_align="right")
+        assert any("\u250c" in _visible(s) for s in io._output)
+
+    def test_columns_auto_fit(self):
+        c, io = _make_c()
+        c.columns(["a", "bb", "ccc"])
+        assert "ccc" in io.get_output()
+
+    def test_paginate_default_page_size(self):
+        c, io = _make_c()
+        c.paginate(["line-%d" % i for i in range(5)])
+        assert "line-0" in io.get_output()
+
+    def test_markdown_skips_empty_block(self):
+        c, io = _make_c()
+        c.markdown("\n\ntext")
+        assert "text" in io.get_output()
+
+    def test_markdown_code_fence_roundtrip(self):
+        c, io = _make_c()
+        c.markdown("```py\n\nprint(1)\n\n```")
+        out = _visible(io.get_output())
+        assert "print(1)" in out
+
+    def test_markdown_heading_level_two(self):
+        c, io = _make_c()
+        c.markdown("## Sub")
+        assert "Sub" in _visible(io.get_output())
+
+    def test_download_bar_minute_eta(self):
+        c, io = _make_c()
+        c.download_bar("dl", current=5, total=10,
+                       bytes_done=10_000, bytes_total=100_000, speed=30)
+        out = _visible(io.get_output())
+        assert "m" in out
+
+    def test_console_has_readline(self):
+        io = MemoryIO()
+        c = Console(io, has_readline=True)
+        assert c._has_readline is True
+
+    def test_write_preserves_readline_buffer(self, monkeypatch):
+        import readline as _rl
+        monkeypatch.setattr(_rl, "get_line_buffer", lambda: "typing...")
+        io = MemoryIO()
+        c = Console(io, has_readline=True)
+        c.write("line\n")
+        out = io.get_output()
+        assert "\033[s" in out
+        assert "\033[u" in out
+
+    def test_write_falls_back_when_readline_raises(self, monkeypatch):
+        import readline as _rl
+
+        def _boom():
+            raise RuntimeError()
+
+        monkeypatch.setattr(_rl, "get_line_buffer", _boom)
+        io = MemoryIO()
+        c = Console(io, has_readline=True)
+        c.write("msg")
+        assert "msg" in io.get_output()
+
+    def test_write_with_empty_readline_buffer(self, monkeypatch):
+        import readline as _rl
+        monkeypatch.setattr(_rl, "get_line_buffer", lambda: "")
+        io = MemoryIO()
+        c = Console(io, has_readline=True)
+        c.write("plain")
+        assert "plain" in io.get_output()
+
+    def test_no_color_import_path(self, monkeypatch):
+        import importlib
+        from domains.shell import console as _console
+        monkeypatch.setenv("NO_COLOR", "1")
+        importlib.reload(_console)
+        assert _console._C_RED == ""
+        assert _console._C_RESET == ""
+        monkeypatch.delenv("NO_COLOR")
+        importlib.reload(_console)
+        assert _console._C_RED == "\033[31m"
+
+    def test_console_without_readline(self, monkeypatch):
+        import builtins
+        import sys
+        from domains.shell import console as _console
+        _orig = builtins.__import__
+
+        def _no_readline(name, *args, **kwargs):
+            if name == "readline":
+                raise ImportError("no readline")
+            return _orig(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _no_readline)
+        monkeypatch.delitem(sys.modules, "readline", raising=False)
+        io = MemoryIO()
+        c = _console.Console(io, has_readline=True)
+        assert c._has_readline is False

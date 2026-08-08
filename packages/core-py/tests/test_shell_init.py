@@ -1,6 +1,7 @@
 """Coverage tests for domains/shell/init.py."""
 
 import json
+import shlex
 import sys
 
 import pytest
@@ -97,7 +98,7 @@ def test_manager_start_real_process():
     m = ServiceManager(ServiceDef(
         name="worker",
         builtin=False,
-        command=f"{sys.executable} -c 'import time; time.sleep(60)'",
+        command=f"{shlex.quote(sys.executable)} -c 'import time; time.sleep(60)'",
     ))
     assert m.start() is True
     assert m.instance.state == "running"
@@ -128,7 +129,7 @@ def test_wait_until_healthy_no_check():
 def test_wait_until_healthy_success():
     m = ServiceManager(ServiceDef(
         name="svc",
-        health_check=f"{sys.executable} -c 'pass'",
+        health_check=f"{shlex.quote(sys.executable)} -c 'pass'",
     ))
     m.instance.state = "starting"
     assert m.wait_until_healthy() is True
@@ -366,7 +367,7 @@ def test_boot_health_success(tmp_path, monkeypatch):
         builtin=True,
         runlevel=2,
         timeout=5,
-        health_check=f"{sys.executable} -c 'pass'",
+        health_check=f"{shlex.quote(sys.executable)} -c 'pass'",
     ))
     output = init.boot(target_runlevel=2)
     assert "healthy" in output

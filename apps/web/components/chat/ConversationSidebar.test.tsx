@@ -8,6 +8,10 @@ vi.mock('next/link', () => ({
   ),
 }))
 
+vi.mock('@/lib/download-utils', () => ({
+  downloadJson: vi.fn(),
+}))
+
 vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
   return {
@@ -20,11 +24,13 @@ vi.mock('@sloughgpt/strui', () => {
     IconPin: iconMock('pin'),
     IconChat: iconMock('chat'),
     IconChevronRight: iconMock('chevron-right'),
+    IconChevronLeft: iconMock('chevron-left'),
     IconX: iconMock('x'),
     IconSearch: iconMock('search'),
     IconFolder: iconMock('folder'),
     IconSort: iconMock('sort'),
     IconCheck: iconMock('check'),
+    IconDownload: iconMock('download'),
     AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
@@ -146,7 +152,7 @@ describe('ConversationSidebar', () => {
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
     const searchInput = screen.getByLabelText('Search conversations')
     fireEvent.change(searchInput, { target: { value: 'Apple' } })
-    expect(screen.getByText('Apple pie')).toBeDefined()
+    expect(screen.getAllByText(/Apple/).length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByText('Banana bread')).toBeNull()
   })
 
@@ -219,7 +225,7 @@ describe('ConversationSidebar', () => {
   it('shows conversation metadata (msg count, date)', () => {
     const conversations = [createConv('1')]
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
-    expect(screen.getByText('1')).toBeDefined()
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows pin icon for pinned conversations', () => {

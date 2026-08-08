@@ -358,3 +358,43 @@ class TestMorphologyEdges:
         tok = _make_tok()
         index = tok.build_root_index(["running", "runs", "cats"])
         assert index == {"run": ["running", "runs"], "cat": ["cats"]}
+
+    def test_chat_stop_ids_no_eos(self):
+        tok = _make_tok(eos_token_id=None)
+        assert tok.chat_stop_ids() == ()
+
+    def test_chat_stop_ids_added_marker(self):
+        tok = _make_tok(added_tokens={"<|im_end|>": 42})
+        assert tok.chat_stop_ids() == (42, 99)
+
+    def test_stem_suffix_with_stem_form(self):
+        tok = _make_tok()
+        assert tok.stem("preation") == "preation"
+
+    def test_generate_forms_irregular_root(self):
+        tok = _make_tok()
+        forms = tok.generate_forms("run")
+        assert "ran" in forms
+        assert "running" in forms
+
+    def test_find_related_excludes_self(self):
+        tok = _make_tok()
+        related = tok.find_related("cats")
+        assert "cats" not in related
+        assert "cat" in related
+
+    def test_vocabulary_coverage_mixed(self):
+        tok = _make_tok(vocab={"hello": 1, "world": 2})
+        assert tok.vocabulary_coverage(["hello", "nope"]) == 0.5
+
+    def test_vocabulary_coverage_empty(self):
+        tok = _make_tok()
+        assert tok.vocabulary_coverage([]) == 0.0
+
+    def test_morphological_diversity_shared_root(self):
+        tok = _make_tok()
+        assert tok.morphological_diversity(["running", "runs"]) == 0.5
+
+    def test_morphological_diversity_empty(self):
+        tok = _make_tok()
+        assert tok.morphological_diversity([]) == 0.0

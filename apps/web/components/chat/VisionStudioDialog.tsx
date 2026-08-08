@@ -6,6 +6,7 @@ import { Button } from '@sloughgpt/strui'
 import { Tabs } from '@sloughgpt/strui'
 import { IconUpload, IconTrash, IconSend, IconDownload, IconX, IconRefresh } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/dev-log'
 
 interface VisionStudioDialogProps {
@@ -115,7 +116,7 @@ export function VisionStudioDialog({
       setAnalyzeResult(result)
       refreshReport()
     } catch (e) {
-      setAnalyzeError(e instanceof Error ? e.message : 'Analysis failed')
+      setAnalyzeError(extractErrorMessage(e, 'Analysis failed'))
     } finally {
       setAnalyzeLoading(false)
     }
@@ -135,7 +136,7 @@ export function VisionStudioDialog({
       setAnalyzeResult(result)
       refreshReport()
     } catch (e) {
-      setAnalyzeError(e instanceof Error ? e.message : 'Retry failed')
+      setAnalyzeError(extractErrorMessage(e, 'Retry failed'))
     } finally {
       setRetryLoading(false)
     }

@@ -1,5 +1,6 @@
 """Tests for MPSMemoryMonitor — MPS memory tracking and CPU fallback."""
 
+import logging
 import time
 
 import pytest
@@ -34,6 +35,11 @@ class TestGetDevice:
     def test_requested_device_passthrough(self, monitor):
         monitor._get_mps_usage = lambda: 0.0
         assert monitor.get_device("cuda") == "cuda"
+
+    def test_cached_unlocked_returns_requested(self, monitor):
+        monitor._last_check = time.time()
+        assert monitor.get_device("cuda") == "cuda"
+        assert monitor.get_device("auto") == "mps"
 
 
 class TestWarnThreshold:
@@ -155,10 +161,41 @@ class TestState:
     def test_clear_cache_is_safe(self, monitor):
         monitor._clear_mps_cache()
 
+    def test_clear_cache_clears_when_available(self, monkeypatch, monitor, caplog):
+        import domains.infrastructure.ml_types as ml_types
+
+        caplog.set_level(logging.INFO, logger="slo.infrastructure.mps_monitor")
+        monkeypatch.setattr(ml_types.mps, "is_available", lambda: True)
+        monkeypatch.setattr(ml_types.mps, "empty_cache", lambda: None)
+        monitor._clear_mps_cache()
+        assert "MPS cache cleared" in caplog.text
+
+    def test_clear_cache_survives_errors(self, monkeypatch, monitor):
+        monkeypatch.setattr(
+            "gc.collect", lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
+        monitor._clear_mps_cache()
+
     def test_get_mps_usage_returns_float(self, monitor):
         usage = monitor._get_mps_usage()
         assert isinstance(usage, float)
         assert 0.0 <= usage <= 1.0
+
+    def test_get_mps_usage_available_backend(self, monkeypatch, monitor):
+        import domains.infrastructure.ml_types as ml_types
+
+        monkeypatch.setattr(ml_types.mps, "is_available", lambda: True)
+        assert monitor._get_mps_usage() == 0.0
+
+    def test_get_mps_usage_handles_error(self, monkeypatch, monitor):
+        import domains.infrastructure.ml_types as ml_types
+
+        monkeypatch.setattr(
+            ml_types.mps,
+            "is_available",
+            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        assert monitor._get_mps_usage() == 0.0
 
 
 class TestGetMpsMonitor:

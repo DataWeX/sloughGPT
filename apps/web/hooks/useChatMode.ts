@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { useToastStore } from '@/lib/toast-store'
 import { imagesController } from '@/lib/images-controller'
+import { extractErrorMessage } from '@/lib/error-utils'
 import type { ImageStyle } from '@/lib/images-controller'
 import type { ChatMode } from '@/components/chat/ModeBar'
 
@@ -70,7 +71,7 @@ export function useChatMode({ chat }: UseChatModeOptions) {
     } catch (err: unknown) {
       chat.setMessages(prev => prev.map(m =>
         m.id === pendingId
-          ? { ...m, content: `❌ Sorry, I couldn't create that image. ${err instanceof Error ? err.message : 'Please try again.'}` }
+          ? { ...m, content: `❌ Sorry, I couldn't create that image. ${extractErrorMessage(err, 'Please try again.')}` }
           : m
       ))
     } finally {

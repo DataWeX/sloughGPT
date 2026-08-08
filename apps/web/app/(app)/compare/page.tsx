@@ -4,12 +4,14 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useMemo, useState } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
+import { todayDateString, getJsonItem } from '@/lib/format-bytes'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
@@ -27,12 +29,34 @@ interface ModelEntry {
   sizeGb?: number
 }
 
+interface SavedSnapshot {
+  id: string
+  name: string
+  savedAt: string
+  results: Record<string, BenchmarkResult>
+  modelNames: Record<string, string>
+}
+
+const STORAGE_KEY = 'compare-snapshots'
+
+function loadSnapshots(): SavedSnapshot[] {
+  return getJsonItem<SavedSnapshot[]>(STORAGE_KEY, [])
+}
+
+function saveSnapshots(snapshots: SavedSnapshot[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshots))
+}
+
 export default function ComparePage() {
   const [models, setModels] = useState<ModelEntry[]>([])
   const [results, setResults] = useState<Record<string, BenchmarkResult | null>>({})
   const [running, setRunning] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [snapshots, setSnapshots] = useState<SavedSnapshot[]>([])
+  const [snapshotName, setSnapshotName] = useState('')
   const addToast = useToastStore(s => s.addToast)
+
+  useEffect(() => { setSnapshots(loadSnapshots()) }, [])
 
   useEffect(() => {
     (async () => {
@@ -78,11 +102,62 @@ export default function ComparePage() {
       memory_mb: r.memory_mb,
       num_parameters: r.num_parameters,
     }))
-    downloadJson(data, `benchmark-comparison-${new Date().toISOString().slice(0, 10)}.json`)
+    downloadJson(data, `benchmark-comparison-${todayDateString()}.json`)
     addToast(`Exported ${data.length} results`, 'success')
   }
 
+  const saveSnapshot = () => {
+    if (completedResults.length === 0) return addToast('No results to save', 'error')
+    const name = snapshotName.trim() || `Comparison ${new Date().toLocaleDateString()}`
+    const modelNames: Record<string, string> = {}
+    completedResults.forEach(([id]) => { modelNames[id] = models.find(m => m.id === id)?.name || id })
+    const snap: SavedSnapshot = {
+      id: Date.now().toString(36),
+      name,
+      savedAt: new Date().toISOString(),
+      results: Object.fromEntries(completedResults),
+      modelNames,
+    }
+    const updated = [snap, ...snapshots]
+    setSnapshots(updated)
+    saveSnapshots(updated)
+    setSnapshotName('')
+    addToast(`Saved "${name}"`, 'success')
+  }
+
+  const loadSnapshot = (snap: SavedSnapshot) => {
+    setResults(snap.results)
+    addToast(`Loaded "${snap.name}"`, 'success')
+  }
+
+  const deleteSnapshot = (id: string) => {
+    const updated = snapshots.filter(s => s.id !== id)
+    setSnapshots(updated)
+    saveSnapshots(updated)
+    addToast('Snapshot deleted', 'success')
+  }
+
   const completedResults = useMemo(() => Object.entries(results).filter(([, r]) => r !== null && !r!.error) as [string, BenchmarkResult][], [results])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        runAll()
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        if (completedResults.length > 0) saveSnapshot()
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault()
+        if (completedResults.length > 0) exportResults()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [completedResults]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const bestMetrics: Record<string, number> = useMemo(() => {
     if (completedResults.length === 0) return { throughput: 0, latency: Infinity, p95: Infinity, params: 0 }
@@ -105,10 +180,23 @@ export default function ComparePage() {
         right={
           <div className="flex items-center gap-2">
             {completedResults.length > 0 && (
-              <Button variant="outline" size="sm" onClick={exportResults}>
-                <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                Export
-              </Button>
+              <>
+                <div className="flex items-center gap-1">
+                  <Input
+                    value={snapshotName}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSnapshotName(e.target.value)}
+                    placeholder="Snapshot name..."
+                    aria-label="Snapshot name"
+                    className="h-8 w-40 text-xs"
+                    onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') saveSnapshot() }}
+                  />
+                  <Button variant="outline" size="sm" onClick={saveSnapshot}>Save</Button>
+                </div>
+                <Button variant="outline" size="sm" onClick={exportResults}>
+                  <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                  Export
+                </Button>
+              </>
             )}
             <Button variant="outline" size="sm" onClick={runAll} disabled={loading || running.size > 0}>
               <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
@@ -118,6 +206,27 @@ export default function ComparePage() {
       />
 
       <div className="space-y-4">
+        {snapshots.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Saved Comparisons</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {snapshots.map(snap => (
+                  <div key={snap.id} className="flex items-center gap-1 rounded-lg border border-border/40 bg-muted/20 px-2 py-1">
+                    <button onClick={() => loadSnapshot(snap)} className="text-xs font-medium hover:text-primary transition-colors">
+                      {snap.name}
+                    </button>
+                    <span className="text-[10px] text-muted-foreground">{new Date(snap.savedAt).toLocaleDateString()}</span>
+                    <button onClick={() => deleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-[10px] text-muted-foreground hover:text-destructive ml-1">×</button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <ModelsCard models={models} loading={loading} results={results} running={running} onBenchmark={runBenchmark} onClear={clearResult} />
         {completedResults.length === 0 ? (
           <Card>
@@ -126,6 +235,11 @@ export default function ComparePage() {
               <p className="text-xs text-muted-foreground/70 max-w-md mx-auto">
                 Run benchmarks on your models to see side-by-side comparisons. Click &ldquo;Benchmark all&rdquo; or use the benchmark button on each model card above.
               </p>
+              <div className="flex items-center justify-center gap-4 text-[10px] text-muted-foreground/50 pt-2">
+                <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">R</kbd> Benchmark all</span>
+                <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">Ctrl+S</kbd> Save snapshot</span>
+                <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">Ctrl+E</kbd> Export</span>
+              </div>
             </CardContent>
           </Card>
         ) : (

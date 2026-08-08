@@ -24,6 +24,10 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Ctrl', 'N'], description: 'New chat', category: 'Chat' },
   { keys: ['Ctrl', 'Shift', 'C'], description: 'Copy last response', category: 'Chat' },
   { keys: ['Ctrl', 'Shift', 'F'], description: 'Search conversations', category: 'Chat' },
+  { keys: ['Ctrl', 'Shift', 'R'], description: 'Rename conversation', category: 'Chat' },
+  { keys: ['Ctrl', 'Shift', 'E'], description: 'Export as Markdown', category: 'Chat' },
+  { keys: ['Ctrl', 'Shift', 'D'], description: 'Duplicate conversation', category: 'Chat' },
+  { keys: ['Ctrl', 'Shift', 'B'], description: 'Toggle bookmarks panel', category: 'Chat' },
 
   // General shortcuts
   { keys: ['?'], description: 'Show keyboard shortcuts', category: 'General' },
@@ -34,11 +38,23 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Ctrl', '2'], description: 'Training', category: 'Navigation' },
   { keys: ['Ctrl', '3'], description: 'Datasets', category: 'Navigation' },
   { keys: ['Ctrl', '4'], description: 'Models', category: 'Navigation' },
+  { keys: ['Ctrl', '5'], description: 'Agents', category: 'Navigation' },
+  { keys: ['Ctrl', '6'], description: 'Compare', category: 'Navigation' },
+  { keys: ['Ctrl', '7'], description: 'System Health', category: 'Navigation' },
+  { keys: ['Ctrl', '8'], description: 'Knowledge', category: 'Navigation' },
+  { keys: ['Ctrl', '9'], description: 'Multimodal', category: 'Navigation' },
   { keys: ['Ctrl', 'Shift', 'A'], description: 'Settings', category: 'Navigation' },
 
   // Sidebar shortcuts
   { keys: ['Ctrl', '\\'], description: 'Toggle navigation sidebar', category: 'Sidebar' },
   { keys: ['Ctrl', 'Shift', '\\'], description: 'Toggle conversation sidebar', category: 'Sidebar' },
+
+  // Training shortcuts
+  { keys: ['Ctrl', 'Enter'], description: 'Start training', category: 'Training' },
+  { keys: ['T'], description: 'Switch to Train tab', category: 'Training' },
+  { keys: ['H'], description: 'Switch to History tab', category: 'Training' },
+  { keys: ['E'], description: 'Switch to Eval tab', category: 'Training' },
+  { keys: ['Ctrl', 'Shift', 'T'], description: 'Open Test Model dialog', category: 'Training' },
 ]
 
 function KeyboardKey({ k, 'aria-describedby': ariaDescribedBy }: { k: string; 'aria-describedby'?: string }) {
@@ -68,24 +84,23 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
   useEffect(() => {
     if (open !== undefined) {
       setIsOpen(open)
-      if (typeof window !== 'undefined') {
-        if (open) {
-          document.body.dataset.shortcutsOpen = 'true'
-        } else {
-          delete document.body.dataset.shortcutsOpen
-        }
+      if (open) {
+        document.body.dataset.shortcutsOpen = 'true'
+      } else {
+        delete document.body.dataset.shortcutsOpen
       }
+    }
+    return () => {
+      delete document.body.dataset.shortcutsOpen
     }
   }, [open])
 
   const handleOpenChange = (newOpen: boolean) => {
     setIsOpen(newOpen)
-    if (typeof window !== 'undefined') {
-      if (newOpen) {
-        document.body.dataset.shortcutsOpen = 'true'
-      } else {
-        delete document.body.dataset.shortcutsOpen
-      }
+    if (newOpen) {
+      document.body.dataset.shortcutsOpen = 'true'
+    } else {
+      delete document.body.dataset.shortcutsOpen
     }
     onOpenChange?.(newOpen)
   }

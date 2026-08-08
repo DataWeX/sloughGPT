@@ -5,14 +5,14 @@ import time
 
 import pytest
 
-import domains.infrastructure.watchdog as wd_module
 from domains.infrastructure.watchdog import HealthWatchdog, get_watchdog
 
 
 @pytest.fixture
 def fast_loop(monkeypatch):
-    """Make the watchdog loop spin without real sleeps."""
-    monkeypatch.setattr(wd_module.time, "sleep", lambda s: None)
+    """Make the watchdog loop spin without real sleeps, yielding the GIL."""
+    real_sleep = time.sleep
+    monkeypatch.setattr(time, "sleep", lambda s: real_sleep(0))
 
 
 @pytest.fixture
@@ -22,12 +22,15 @@ def started_watchdog(fast_loop):
     w.stop()
 
 
+_wait_yield = threading.Event()
+
+
 def _wait_until(predicate, timeout=5.0):
     deadline = time.time() + timeout
     while time.time() < deadline:
         if predicate():
             return True
-        time.sleep(0.002)
+        _wait_yield.wait(0.002)
     return False
 
 
@@ -100,7 +103,7 @@ class TestRecovery:
         started_watchdog.set_health_check_fn(health)
         started_watchdog.set_recovery_fn(lambda: recovered.append(1) or True)
         started_watchdog.start(poll_interval=1, max_failures=5)
-        time.sleep(0.1)
+        assert _wait_until(lambda: calls["n"] >= 3)
         started_watchdog.stop()
         assert recovered == []
         assert started_watchdog._consecutive_failures == 0
@@ -165,6 +168,42 @@ class TestRecovery:
         time.sleep(0.1)
         started_watchdog.stop()
         assert started_watchdog._consecutive_failures >= 0
+
+    def test_default_check_uses_state_module(self, started_watchdog, monkeypatch):
+        import types
+        import sys
+
+        fake = types.ModuleType("state")
+        fake.model = None
+        monkeypatch.setitem(sys.modules, "state", fake)
+        recovered = []
+        started_watchdog.set_recovery_fn(lambda: recovered.append(1) or True)
+        started_watchdog.start(poll_interval=1, max_failures=2)
+        assert _wait_until(lambda: bool(recovered))
+
+    def test_health_check_exception_logs_and_continues(self, started_watchdog):
+        calls = {"n": 0}
+
+        def health():
+            calls["n"] += 1
+            raise RuntimeError("boom")
+
+        started_watchdog.set_health_check_fn(health)
+        started_watchdog.set_recovery_fn(lambda: True)
+        started_watchdog.start(poll_interval=1, max_failures=3)
+        assert _wait_until(lambda: calls["n"] >= 3)
+        started_watchdog.stop()
+
+    def test_recovery_fn_failure_logs_error(self):
+        w = HealthWatchdog()
+        w.set_recovery_fn(lambda: False)
+        w._trigger_recovery()
+        w.stop()
+
+    def test_recovery_fn_not_set_logs_warning(self):
+        w = HealthWatchdog()
+        w._trigger_recovery()
+        w.stop()
 
 
 class TestGetWatchdog:

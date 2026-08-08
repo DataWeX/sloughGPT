@@ -7,7 +7,7 @@ Run: PYTHONPATH=packages/core-py .venv/bin/python -m pytest tests/test_cycles.py
 import numpy as np
 import pytest
 from domains.shell.cycles import (
-    CyclesRenderer, Scene, Camera, Material, Light, BVH,
+    CyclesRenderer, Scene, Camera, Material, Light, BVH, Mesh,
     create_sphere, create_plane, create_cube,
 )
 from domains.shell.cycles_device import CyclesDevice
@@ -412,3 +412,48 @@ class TestRenderNeuralDevice:
         neural = RenderNeuralDevice(cycles_device=cycles, num_classes=4)
         out = neural.call("process")
         assert out["probabilities"].shape == (4,)
+
+
+class TestBarycentricAndMaterials:
+    def test_mesh_without_material_idx_defaults_to_zeros(self):
+        verts = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]])
+        faces = np.array([[0, 1, 2]])
+        mesh = Mesh(vertices=verts, faces=faces)
+        assert mesh.material_idx.shape == (1,)
+        assert mesh.material_idx.dtype == np.int32
+        assert mesh.material_idx[0] == 0
+
+    def test_triangle_barycentric_interpolates(self):
+        scene = Scene(camera=Camera(origin=np.array([0, 0, 0]), look_at=np.array([0, 0, -1]), fov=50))
+        renderer = CyclesRenderer(scene, width=4, height=4, samples=1)
+        v0 = np.array([0.0, 0.0, 0.0])
+        v1 = np.array([1.0, 0.0, 0.0])
+        v2 = np.array([0.0, 1.0, 0.0])
+        bary = renderer._triangle_barycentric(
+            np.array([0.25, 0.25, 1.0]), np.array([0.0, 0.0, -1.0]), 1.0, v0, v1, v2)
+        assert np.allclose(bary, [0.5, 0.25, 0.25])
+
+    def test_triangle_barycentric_degenerate_falls_back(self):
+        scene = Scene(camera=Camera(origin=np.array([0, 0, 0]), look_at=np.array([0, 0, -1]), fov=50))
+        renderer = CyclesRenderer(scene, width=4, height=4, samples=1)
+        v = np.array([0.0, 0.0, 0.0])
+        bary = renderer._triangle_barycentric(
+            np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, -1.0]), 1.0, v, v, v)
+        assert np.allclose(bary, 1.0 / 3.0)
+
+    def test_render_transmissive_material(self):
+        scene = Scene(camera=Camera(origin=np.array([0, 2, 4]), look_at=np.array([0, 0, 0]), fov=50))
+        scene.materials = [
+            Material(base_color=np.array([0.3, 0.3, 0.3]), roughness=0.8),
+            Material(base_color=np.array([0.8, 0.8, 0.8]), roughness=0.1,
+                     transmission=0.9, ior=1.5),
+        ]
+        scene.meshes = [
+            create_plane(size=6, y=-1, mat_idx=0),
+            create_sphere(radius=0.6, center=np.array([0, 0, 0]), segments=8, mat_idx=1),
+        ]
+        renderer = CyclesRenderer(scene, width=16, height=12, samples=6)
+        scene.build_bvh()
+        img = renderer.render()
+        assert img.shape == (12, 16, 3)
+        assert np.isfinite(img).all()

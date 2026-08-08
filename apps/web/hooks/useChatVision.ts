@@ -16,15 +16,18 @@ export function useChatVision() {
       const report = await multimodalController.getTrainingReport()
       setVisionCaptionHistory(report.caption_history || [])
       setVisionVocabSize(report.vocab_size)
-    } catch {}
+    } catch (e) { logger.debug('Vision refresh failed', { exception: String(e) }) }
   }, [])
 
   useEffect(() => {
-    multimodalController.getCapabilities().then(setVisionCaps).catch((e) => logger.debug('Vision capabilities load failed', e))
+    let ignore = false
+    multimodalController.getCapabilities().then(caps => { if (!ignore) setVisionCaps(caps) }).catch((e) => logger.debug('Vision capabilities load failed', { exception: String(e) }))
     multimodalController.getTrainingReport().then(r => {
+      if (ignore) return
       setVisionCaptionHistory(r.caption_history || [])
       setVisionVocabSize(r.vocab_size)
-    }).catch(() => {})
+    }).catch(e => logger.debug('Vision training report failed', { exception: String(e) }))
+    return () => { ignore = true }
   }, [])
 
   useEffect(() => {

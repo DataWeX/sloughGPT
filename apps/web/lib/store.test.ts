@@ -24,7 +24,6 @@ describe('useAppStore', () => {
   it('has default settings', () => {
     const { settings } = useAppStore.getState()
     expect(settings.apiUrl).toBe('http://localhost:8000')
-    expect(settings.defaultModel).toBe('gpt2')
     expect(settings.defaultTemp).toBe(0.8)
     expect(settings.theme).toBe('light')
     expect(settings.streaming).toBe(true)
@@ -41,13 +40,12 @@ describe('useAppStore', () => {
       const { settings } = useAppStore.getState()
       expect(settings.defaultTemp).toBe(0.5)
       expect(settings.theme).toBe('dark')
-      expect(settings.defaultModel).toBe('gpt2')
     })
 
     it('preserves unchanged fields', () => {
-      useAppStore.getState().updateSettings({ defaultModel: 'llama' })
+      useAppStore.getState().updateSettings({ defaultMaxTokens: 500 })
       const { settings } = useAppStore.getState()
-      expect(settings.defaultModel).toBe('llama')
+      expect(settings.defaultMaxTokens).toBe(500)
       expect(settings.theme).toBe('light')
     })
   })

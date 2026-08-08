@@ -99,7 +99,7 @@ export function ErrorLifecycle() {
 
       // Hydration errors: persist to Dexie + report to backend, suppress overlay
       if (isHydration(msg, args)) {
-        chatDB.addError(msg.slice(0, 500), 'hydration').catch(() => {})
+        chatDB.addError(msg.slice(0, 500), 'hydration').catch(() => /* DB write failed — non-critical */ {})
         reportError(msg.slice(0, 500), 'hydration', { metadata: { detail: msg.slice(0, 1000) } })
         return // don't forward to Next.js overlay
       }

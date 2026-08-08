@@ -1,13 +1,15 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
-import { ProgressBar } from '@sloughgpt/strui'
 import type { GPUInfo, DiskUsage, SystemInfo } from '@/lib/system-controller'
 
 export function GpuCard({ gpu }: { gpu?: GPUInfo }) {
+  const hint = useMemo(() => {
+    if (!gpu) return null
+    try { return JSON.parse(gpu.memory_hint) } catch { return null }
+  }, [gpu])
   if (!gpu) return null
-  let hint: Record<string, any> | null = null
-  try { hint = JSON.parse(gpu.memory_hint) } catch { hint = null }
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">GPU</span>

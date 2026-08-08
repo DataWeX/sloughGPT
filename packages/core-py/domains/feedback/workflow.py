@@ -597,7 +597,7 @@ class FeedbackWorkflowManager:
                         f"User adapter rejected: PPL increased {ppl_delta:+.1f}%", extra={"tag": "INFRA"}
                     )
 
-            adapter_path = Path("data/user_adapters") / f"{user_id}_adapter.npz"
+            adapter_path = Path(__file__).resolve().parents[4] / "data" / "user_adapters" / f"{user_id}_adapter.npz"
             adapter_path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(
                 str(adapter_path),

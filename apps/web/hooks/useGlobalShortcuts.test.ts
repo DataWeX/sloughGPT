@@ -57,10 +57,10 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/models')
   })
 
-  it('Ctrl+5 does nothing (no mapping)', () => {
+  it('Ctrl+5 navigates to agents', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('5', { ctrl: true })
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockPush).toHaveBeenCalledWith('/agents')
   })
 
   it('Ctrl+n dispatches new-chat event', () => {
@@ -130,7 +130,7 @@ describe('useGlobalShortcuts', () => {
 
   it('does not navigate for unknown key', () => {
     renderHook(() => useGlobalShortcuts())
-    keydown('9', { ctrl: true })
+    keydown('0', { ctrl: true })
     expect(mockPush).not.toHaveBeenCalled()
   })
 

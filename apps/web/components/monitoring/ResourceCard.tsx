@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
@@ -22,7 +23,7 @@ function StatusDot({ value, threshold }: { value: number; threshold: number }) {
   )
 }
 
-export function ResourceCard({ liveHealth, metrics, detailed, cpuThreshold, memThreshold, loaded }: ResourceCardProps) {
+export const ResourceCard = memo(function ResourceCard({ liveHealth, metrics, detailed, cpuThreshold, memThreshold, loaded }: ResourceCardProps) {
   const cpu = liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? null
   const mem = liveHealth?.memory_percent ?? metrics?.memory_percent ?? null
 
@@ -53,4 +54,4 @@ export function ResourceCard({ liveHealth, metrics, detailed, cpuThreshold, memT
       </CardContent>
     </Card>
   )
-}
+})

@@ -8,8 +8,28 @@ import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 import { chatDB } from '@/lib/db'
 
-export type Method = 'distill' | 'finetune' | 'vlm'
+export type Method = 'distill' | 'finetune' | 'vlm' | 'native'
 export type InputMode = 'dataset' | 'text'
+
+export interface NativePreset {
+  name: string
+  description: string
+  params: string
+  embed: number
+  layers: number
+  heads: number
+  blockSize: number
+  epochs: number
+  lr: number
+  batchSize: number
+}
+
+export const NATIVE_PRESETS: NativePreset[] = [
+  { name: 'Tiny', description: 'Fast experiments, ~50K params', params: '~50K', embed: 64, layers: 2, heads: 4, blockSize: 64, epochs: 50, lr: 1e-3, batchSize: 32 },
+  { name: 'Small', description: 'Quick training, ~150K params', params: '~150K', embed: 128, layers: 2, heads: 4, blockSize: 128, epochs: 100, lr: 3e-4, batchSize: 16 },
+  { name: 'Medium', description: 'Balanced quality, ~400K params', params: '~400K', embed: 128, layers: 4, heads: 4, blockSize: 128, epochs: 200, lr: 3e-4, batchSize: 16 },
+  { name: 'Large', description: 'Best quality, ~1M params', params: '~1M', embed: 256, layers: 4, heads: 8, blockSize: 256, epochs: 300, lr: 1e-4, batchSize: 8 },
+]
 
 export interface TrainingFormState {
   method: Method
@@ -27,6 +47,10 @@ export interface TrainingFormState {
   visualLLM: string
   visualStage1Epochs: number
   visualStage2Epochs: number
+  nativeEmbed: number
+  nativeLayers: number
+  nativeHeads: number
+  nativeBlockSize: number
   loadingFinetunedModel: boolean
   allJobs: TrainingJob[]
   setMethod: (m: Method) => void
@@ -43,7 +67,12 @@ export interface TrainingFormState {
   setVlmLLM: (s: string) => void
   setVlmStage1Epochs: (n: number) => void
   setVlmStage2Epochs: (n: number) => void
+  setNativeEmbed: (n: number) => void
+  setNativeLayers: (n: number) => void
+  setNativeHeads: (n: number) => void
+  setNativeBlockSize: (n: number) => void
   setLoadingFinetunedModel: (v: boolean) => void
+  applyPreset: (preset: NativePreset) => void
   canStart: boolean
   startTraining: (checkpointName?: string) => void
 }
@@ -101,6 +130,11 @@ export function useTrainingForm(
   const [visualStage1Epochs, setVlmStage1Epochs] = useState(1)
   const [visualStage2Epochs, setVlmStage2Epochs] = useState(2)
 
+  const [nativeEmbed, setNativeEmbed] = useState(128)
+  const [nativeLayers, setNativeLayers] = useState(4)
+  const [nativeHeads, setNativeHeads] = useState(4)
+  const [nativeBlockSize, setNativeBlockSize] = useState(128)
+
   const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
 
   const [optimisticJobs, setOptimisticJobs] = useState<TrainingJob[]>([])
@@ -129,6 +163,16 @@ export function useTrainingForm(
     }).catch(() => addToast('Could not load model list — training may be limited', 'info'))
   }, [addToast])
 
+  const applyPreset = useCallback((preset: NativePreset) => {
+    setNativeEmbed(preset.embed)
+    setNativeLayers(preset.layers)
+    setNativeHeads(preset.heads)
+    setNativeBlockSize(preset.blockSize)
+    setTrainingEpochs(preset.epochs)
+    setTrainingLR(preset.lr)
+    setTrainingBatchSize(preset.batchSize)
+  }, [])
+
   const canStart = session.trainingRunning ||
     (inputMode === 'dataset' && !datasets.selectedDataset) ||
     (inputMode === 'text' && !textInput.trim()) ||
@@ -151,11 +195,23 @@ export function useTrainingForm(
       addToast('Vision model training requires a dataset with image-text pairs', 'error'); return
     }
 
+    if (method === 'native' && !hasDataset && !hasText) {
+      addToast('Select a dataset or paste text for native training', 'error'); return
+    }
+
     const body: Record<string, unknown> = { algo, epochs: trainingEpochs, learning_rate: trainingLR }
     if (trainingBatchSize) body.batch_size = trainingBatchSize
     if (checkpointName) body.checkpoint_name = checkpointName
     if (hasDataset) body.dataset_id = datasets.selectedDataset
     if (hasText) body.source_text = textInput.trim()
+
+    if (method === 'native') {
+      body.n_embed = nativeEmbed
+      body.n_layer = nativeLayers
+      body.n_head = nativeHeads
+      body.block_size = nativeBlockSize
+      body.checkpoint_dir = 'models/slonet-native'
+    }
 
     const tempId = `pending-${Date.now()}`
     const now = new Date().toISOString()
@@ -194,11 +250,16 @@ export function useTrainingForm(
   return {
     method, inputMode, textInput, showAdvanced, algo,
     trainingEpochs, trainingLR, trainingBatchSize, availableModels, selectedModel, useLoRA,
-    visualVisionEncoder, visualLLM, visualStage1Epochs, visualStage2Epochs, loadingFinetunedModel,
+    visualVisionEncoder, visualLLM, visualStage1Epochs, visualStage2Epochs,
+    nativeEmbed, nativeLayers, nativeHeads, nativeBlockSize,
+    loadingFinetunedModel,
     allJobs,
     setMethod, setInputMode, setTextInput, setShowAdvanced, setAlgo,
     setTrainingEpochs, setTrainingLR, setTrainingBatchSize, setSelectedModel, setUseLoRA,
-    setVlmVisionEncoder, setVlmLLM, setVlmStage1Epochs, setVlmStage2Epochs, setLoadingFinetunedModel,
+    setVlmVisionEncoder, setVlmLLM, setVlmStage1Epochs, setVlmStage2Epochs,
+    setNativeEmbed, setNativeLayers, setNativeHeads, setNativeBlockSize,
+    setLoadingFinetunedModel,
+    applyPreset,
     canStart, startTraining,
   }
 }

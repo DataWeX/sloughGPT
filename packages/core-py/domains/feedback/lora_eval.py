@@ -28,7 +28,7 @@ import logging
 import time
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Callable, Dict, List, Optional, Tuple, Any
 
 logger = logging.getLogger("slo.lora_eval")
 from dataclasses import dataclass
@@ -160,6 +160,7 @@ class LoRAEvaluator:
         tokenizer_path: Optional[str] = None,
         eval_dir: str = "data/eval_results",
         eval_prompts: Optional[List[str]] = None,
+        generator: Optional[Callable[[str], str]] = None,
     ):
         self.eval_dir = Path(eval_dir)
         self.eval_dir.mkdir(parents=True, exist_ok=True)
@@ -170,6 +171,9 @@ class LoRAEvaluator:
         self._stoi = None
         self._itos = None
         self._device = "cpu"
+        self._generator = generator
+        self._default_gen = None
+        self._warned_no_model = False
 
     def _load_inference_engine(self):
         """Lazy-load a native SloNet model (torch-free).
@@ -182,11 +186,14 @@ class LoRAEvaluator:
             return
 
         if not self.base_model or not Path(self.base_model).exists():
-            logger.warning(
-                "No local base model for eval (%r); using simulated generation.",
-                self.base_model,
-                extra={"tag": "INFRA"},
-            )
+            if not self._warned_no_model:
+                self._warned_no_model = True
+                logger.warning(
+                    "No local native model for char-level eval (%r); perplexity/backoff "
+                    "will be None until a model is available.",
+                    self.base_model,
+                    extra={"tag": "INFRA"},
+                )
             return
 
         try:
@@ -211,12 +218,84 @@ class LoRAEvaluator:
                 extra={"tag": "INFRA"})
             self._model = None
 
+    def _resolve_live_generator(self) -> Optional[Callable[[str], str]]:
+        """Resolve a real generator from the live registered provider (if any).
+
+        Returns a callable ``(prompt) -> text`` backed by the running SloNet model
+        (e.g. the autoloaded Qwen model), or None when no provider is registered.
+        """
+        if self._generator is not None:
+            return self._generator
+        if self._default_gen is not None:
+            return self._default_gen
+
+        try:
+            from domains.models.provider import get_provider
+        except Exception:
+            return None
+
+        for name in ("slonet-native", "default"):
+            provider = get_provider(name)
+            if provider is None or not hasattr(provider, "_generate_sync"):
+                continue
+
+            def _gen(prompt: str, _p: Any = provider, max_tokens: int = 50) -> str:
+                try:
+                    text = _p._generate_sync(
+                        [{"role": "user", "content": prompt}],
+                        max_tokens=max_tokens,
+                        temperature=0.7,
+                    )
+                    return text if isinstance(text, str) else ""
+                except Exception:
+                    logger.debug("Live eval generator failed for %r", prompt,
+                                 extra={"tag": "INFRA"})
+                    return ""
+
+            self._default_gen = _gen
+            logger.info("Wired live model into LoRA evaluator via provider %r", name,
+                        extra={"tag": "INFRA"})
+            return _gen
+        return None
+
+    def available(self) -> bool:
+        """Report whether a real (non-simulated) generator or native model is usable.
+
+        Returns True when either a live provider-backed generator resolves or a
+        native char-level model is configured and loadable. When False, ``run()``
+        callers should skip evaluation rather than fabricate metrics.
+
+        Side effects:
+            - resolves and caches the live generator on first call.
+        """
+        if self._generator is not None:
+            return True
+        if self._resolve_live_generator() is not None:
+            return True
+        if self.base_model and Path(self.base_model).exists():
+            return True
+        return False
+
     def _generate(self, prompt: str, adapter_path: Optional[str] = None, max_tokens: int = 50) -> Tuple[str, float, float]:
         """Generate response and return (text, latency_sec, tokens_per_sec)."""
+        generator = self._resolve_live_generator()
+        if generator is not None:
+            start = time.time()
+            text = ""
+            try:
+                text = generator(prompt)
+            except Exception as e:
+                logger.warning("Live eval generation error: %s", e, extra={"tag": "INFRA"})
+            text = (text or "").strip()
+            if text:
+                latency = time.time() - start
+                tps = len(text.split()) / latency if latency > 0 else 0
+                return text, latency, tps
+
         self._load_inference_engine()
 
         if self._model is None or self._stoi is None or self._itos is None:
-            # Fallback: simulate generation
+            # Fallback: simulate generation (no real model of any kind available)
             return self._simulate_generation(prompt, adapter_path)
 
         # Apply adapter if provided
@@ -281,14 +360,15 @@ class LoRAEvaluator:
         )
 
     def _compute_perplexity(self, text: str, prompt: str) -> Optional[float]:
-        """Compute perplexity as exp(negative log likelihood) on the native model."""
+        """Compute perplexity as exp(negative log likelihood) on the native model.
+
+        Only meaningful for a real char-level model; returns None when only a
+        token-level live model is available (or no model at all).
+        """
         self._load_inference_engine()
 
         if self._model is None or self._stoi is None:
-            # Simulate perplexity based on text coherence
-            words = text.split()
-            unique_ratio = len(set(words)) / max(len(words), 1)
-            return 1.0 + (1.0 - unique_ratio) * 30  # Range: 1-31
+            return None
 
         try:
             full_text = prompt + " " + text
@@ -402,9 +482,18 @@ class LoRAEvaluator:
         positive = sum(1 for v in delta.values() if isinstance(v, (int, float)) and v > 0)
         total = sum(1 for v in delta.values() if isinstance(v, (int, float)))
         delta["verdict"] = "improved" if positive > total / 2 else "degraded" if positive == 0 else "mixed"
-        delta["verdict"] = "improved" if delta["perplexity_delta"] < 0 else delta["verdict"]
+        # Lower perplexity is better; override when a real perplexity delta exists.
+        if "perplexity_delta" in delta and delta["perplexity_delta"] < 0:
+            delta["verdict"] = "improved"
 
         return delta
+
+    @staticmethod
+    def _fmt(value: Optional[float], precision: int = 2) -> str:
+        """Format a possibly-None metric; None renders as ``n/a``."""
+        if value is None:
+            return "n/a"
+        return f"{value:.{precision}f}"
 
     def compare_with_report(self, baseline: EvalResult, with_adapter: EvalResult) -> str:
         """Generate a human-readable comparison report."""
@@ -420,10 +509,10 @@ class LoRAEvaluator:
             "",
             "METRICS",
             "-" * 30,
-            f"Perplexity: {baseline.perplexity:.2f} → {with_adapter.perplexity:.2f} ({delta.get('perplexity_delta', 0):+.2f})",
-            f"BLEU:       {baseline.bleu:.1f} → {with_adapter.bleu:.1f} ({delta.get('bleu_delta', 0):+.1f})",
-            f"Throughput: {baseline.tokens_per_sec:.1f} → {with_adapter.tokens_per_sec:.1f} tok/s ({delta.get('throughput_delta', 0):+.1f}%)",
-            f"Personality: {baseline.personality_score:.3f} → {with_adapter.personality_score:.3f} ({delta.get('personality_delta', 0):+.3f})",
+            f"Perplexity: {self._fmt(baseline.perplexity)} → {self._fmt(with_adapter.perplexity)} ({self._fmt(delta.get('perplexity_delta'), 2)})",
+            f"BLEU:       {self._fmt(baseline.bleu, 1)} → {self._fmt(with_adapter.bleu, 1)} ({self._fmt(delta.get('bleu_delta'), 1)})",
+            f"Throughput: {self._fmt(baseline.tokens_per_sec, 1)} → {self._fmt(with_adapter.tokens_per_sec, 1)} tok/s ({self._fmt(delta.get('throughput_delta'), 1)}%)",
+            f"Personality: {self._fmt(baseline.personality_score, 3)} → {self._fmt(with_adapter.personality_score, 3)} ({self._fmt(delta.get('personality_delta'), 3)})",
             "",
             f"VERDICT: {delta.get('verdict', 'unknown').upper()}",
             "",
@@ -584,7 +673,8 @@ class LoRAEvaluator:
     def get_history(self, limit: int = 20) -> List[EvalResult]:
         """Load recent eval results."""
         results = []
-        for f in sorted(self.eval_dir.glob("baseline_*.json"))[-limit:]:
+        summary_files = [f for f in self.eval_dir.glob("baseline_*.json") if not f.name.endswith("_detail.json")]
+        for f in sorted(summary_files)[-limit:]:
             try:
                 with open(f) as fp:
                     data = json.load(fp)

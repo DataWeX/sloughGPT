@@ -9,7 +9,7 @@ export function TrainingProgress({ status }: { status: string }) {
     <div className="space-y-2" role="status" aria-live="polite" aria-label="Training progress">
       <p className="text-sm text-muted-foreground">{status}</p>
       <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-        <div className="h-full bg-primary animate-pulse rounded-full" style={{ width: '40%' }} />
+        <div className="h-full bg-primary animate-pulse rounded-full w-[40%]" />
       </div>
     </div>
   )

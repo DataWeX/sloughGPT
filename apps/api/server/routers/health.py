@@ -133,6 +133,9 @@ class HealthRouter:
                 "error_count": detailed.get("error_count", 0),
                 "tokens_per_sec": detailed.get("tokens_per_sec", 0),
                 "avg_latency_ms": detailed.get("avg_latency_ms", 0),
+                "requests_per_minute": detailed.get("requests_per_minute", 0),
+                "total_tokens": detailed.get("total_tokens", 0),
+                "avg_tokens_per_request": detailed.get("avg_tokens_per_request", 0),
                 "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
                 "memory_percent": detailed.get("system", {}).get("memory_percent"),
                 "health_score": hs.get("score", 0),
@@ -142,6 +145,13 @@ class HealthRouter:
                 "num_parameters": detailed.get("num_parameters"),
                 "quantization": detailed.get("quantization"),
                 "training_pool": detailed.get("training_pool"),
+                "model_metrics": detailed.get("model_metrics", []),
+                "model_events": detailed.get("model_events", []),
+                "health_history": detailed.get("health_history", []),
+                "memory_history": detailed.get("memory_history", []),
+                "rate_violations": detailed.get("rate_violations", []),
+                "path_latencies": detailed.get("path_latencies", []),
+                "recent_errors": detailed.get("recent_errors", []),
             },
             "meta": {"ts": time.time()},
             "message": hs.get("summary", ""),
@@ -155,16 +165,10 @@ class HealthRouter:
                 if await request.is_disconnected():
                     break
                 try:
+                    # _build_health_snapshot returns a complete standard envelope
+                    # {stream, phase, status, data, meta, message}; yield it directly.
                     snapshot = await asyncio.to_thread(self._build_health_snapshot, ctrl)
-                    envelope = {
-                        "stream": "health",
-                        "phase": "HEALTH",
-                        "status": "working",
-                        "data": snapshot,
-                        "meta": {},
-                        "message": "",
-                    }
-                    yield "data: " + json.dumps(envelope, default=str) + "\n\n"
+                    yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
                 except Exception:
                     pass
                 await asyncio.sleep(self.HEALTH_STREAM_INTERVAL)

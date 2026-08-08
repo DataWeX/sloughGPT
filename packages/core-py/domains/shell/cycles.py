@@ -510,58 +510,22 @@ class CyclesRenderer:
         return t_hit, face_idx, hit_point, hit_normal, mesh_idx, hit_mat_idx
 
     def _triangle_barycentric(self, orig, dire, t, v0, v1, v2):
+        """Barycentric weights of the hit point within triangle (v0, v1, v2)."""
         p = orig + dire * t
         e1, e2 = v1 - v0, v2 - v0
-        d = np.array([_dot(_cross(e1, e2), _cross(p - v0, e2)),
-                       _dot(_cross(e2, e1), _cross(p - v0, e1)),
-                       _dot(e1, _cross(e2, p - v0))])
-        denom = _dot(e1, _cross(e2, e1))
+        w = p - v0
+        d00 = _dot(e1, e1)
+        d01 = _dot(e1, e2)
+        d11 = _dot(e2, e2)
+        d20 = _dot(w, e1)
+        d21 = _dot(w, e2)
+        denom = d00 * d11 - d01 * d01
         if abs(denom) < EPSILON:
             return np.array([1/3, 1/3, 1/3])
-        bary = d / denom
+        w1 = (d11 * d20 - d01 * d21) / denom
+        w2 = (d00 * d21 - d01 * d20) / denom
+        bary = np.array([1.0 - w1 - w2, w1, w2])
         return np.clip(bary, 0, 1)
-
-    def _direct_light(self, orig, dire, t_hit, hit_point, hit_normal,
-                      hit_mesh_idx, hit_mat_idx, throughput, radiance, active):
-        """Sample direct light contribution."""
-        for light in self.scene.lights:
-            # Shadow test
-            to_light = light.position - hit_point
-            light_dist = np.linalg.norm(to_light, axis=-1)
-            light_dir = _normalize(to_light)
-            NdotL = _dot(hit_normal, light_dir)
-            mask = NdotL > EPSILON
-
-            # Simple shadow ray (single closest-hit check)
-            shadow_orig = hit_point + hit_normal * EPSILON * 2
-            for i in np.where(mask)[0]:
-                t_s, _ = self._single_intersect(shadow_orig[i], light_dir[i])
-                if t_s < light_dist[i] - EPSILON:
-                    mask[i] = False
-
-            atten = light.strength / (light_dist ** 2 + 1.0)
-            light_color = light.color * atten
-
-            active_idx = np.where(active)[0]
-            for i, idx in enumerate(active_idx):
-                if mask[i]:
-                    mat = self.scene.materials[hit_mat_idx[idx]]
-                    wo = -dire[idx]
-                    N = hit_normal[idx]
-                    wi = light_dir[idx]
-                    bsdf = mat.eval(wi, wo, N)
-                    radiance[idx] += throughput[idx] * bsdf * light_color[i] * NdotL[i]
-
-    def _single_intersect(self, orig, dire) -> tuple[float, int]:
-        """Single-ray intersection across all meshes."""
-        t_min = 1e30
-        fi_min = -1
-        for bvh in self.scene._bvh_list:
-            t, fi = bvh.intersect(orig, dire)
-            if t < t_min:
-                t_min = t
-                fi_min = fi
-        return t_min, fi_min
 
     def _sample_bsdf(self, wo, N, mat) -> np.ndarray:
         """Sample BSDF direction."""

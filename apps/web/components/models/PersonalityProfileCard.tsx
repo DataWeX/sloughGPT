@@ -9,13 +9,14 @@ import SoulVisualizer from '@/components/souls/SoulVisualizer'
 import TraitEditor from '@/components/souls/TraitEditor'
 import { soulsController } from '@/lib/souls-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 interface SnapshotMeta {
   name: string; saved_at?: string; label?: string
 }
 
 interface PersonalityProfileCardProps {
-  traitWeights: Record<string, any> | null
+  traitWeights: Record<string, Record<string, number>> | null
   currentSoulName?: string | null
   onTraitsSaved: (weights: Record<string, Record<string, number>>) => Promise<void>
   onTraitsChanged: () => Promise<void>
@@ -45,7 +46,7 @@ export default function PersonalityProfileCard({
       addToast(`Saved "${name}"`, 'success')
       await fetchSnapshots()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to save', 'error')
+      addToast(extractErrorMessage(err, 'Failed to save'), 'error')
     }
   }
 
@@ -55,7 +56,7 @@ export default function PersonalityProfileCard({
       addToast(`Loaded "${name}" (${count} traits)`, 'success')
       await onTraitsChanged()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to load', 'error')
+      addToast(extractErrorMessage(err, 'Failed to load'), 'error')
     }
   }
 
@@ -66,7 +67,7 @@ export default function PersonalityProfileCard({
       addToast(`Deleted "${name}"`, 'success')
       await fetchSnapshots()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to delete', 'error')
+      addToast(extractErrorMessage(err, 'Failed to delete'), 'error')
     }
   }
 

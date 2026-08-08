@@ -43,6 +43,36 @@ class TestJsonSerializer:
         s = JsonSerializer[dict](dict)
         assert s.deserialize({"a": 1}) == {"a": 1}
 
+    def test_model_dump_serialize(self):
+        class _M:
+            def model_dump(self):
+                return {"a": 1}
+        s = JsonSerializer[_M](_M)
+        assert s.serialize(_M()) == {"a": 1}
+
+    def test_namedtuple_serialize(self):
+        from collections import namedtuple
+        Point = namedtuple("Point", "x y")
+        s = JsonSerializer[Point](Point)
+        assert s.serialize(Point(1, 2)) == {"x": 1, "y": 2}
+
+    def test_plain_object_serialize(self):
+        s = JsonSerializer[object](object)
+        d = s.serialize(object())
+        assert set(d) == {"_value"}
+
+    def test_model_validate_deserialize(self):
+        class _M:
+            def __init__(self, data):
+                self.data = data
+
+            @classmethod
+            def model_validate(cls, data):
+                return cls(data)
+        s = JsonSerializer[_M](_M)
+        m = s.deserialize({"a": 1})
+        assert m.data == {"a": 1}
+
 
 class TestMigration:
     def test_apply(self):
@@ -86,6 +116,15 @@ class TestMigrationRunner:
         r.add(Migration(1, "a", lambda d: d))
         r.add(Migration(3, "c", lambda d: d))
         assert r.latest_version == 3
+
+    def test_failed_migration_raises(self):
+        r = MigrationRunner()
+
+        def boom(d):
+            raise RuntimeError("migration failed")
+        r.add(Migration(1, "boom", boom))
+        with pytest.raises(RuntimeError, match="migration failed"):
+            r.run({"key": "val"})
 
 
 class TestFileRepository:
@@ -206,6 +245,51 @@ class TestFileRepository:
         assert loaded is not None
         assert loaded.name == "migrated"
         assert loaded.value == 1
+
+    def test_custom_serializer_instance(self, tmp_path):
+        class _Ser:
+            def serialize(self, obj):
+                return {"value": obj}
+
+            def deserialize(self, data):
+                return data["value"]
+        repo = FileRepository(tmp_path, serializer=_Ser())
+        assert repo.save("k", 42) is True
+        assert repo.get("k") == 42
+
+    def test_default_dict_serializer(self, tmp_path):
+        repo = FileRepository[dict](tmp_path)
+        assert repo.save("d", {"a": 1}) is True
+        assert repo.get("d") == {"a": 1}
+
+    def test_disable_cache(self, tmp_path):
+        repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
+        repo.enable_cache(ttl_seconds=60)
+        repo.save("c", _RepoItem(id="c", name="cached"))
+        repo.get("c")
+        repo.disable_cache()
+        (tmp_path / "c.json").unlink()
+        assert repo.get("c") is None
+
+    def test_get_corrupt_file_returns_none(self, tmp_path):
+        repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
+        (tmp_path / "bad.json").write_text("{not json")
+        assert repo.get("bad") is None
+
+    def test_save_error_returns_false(self, tmp_path):
+        class _BoomSer:
+            def serialize(self, obj):
+                raise OSError("boom")
+
+            def deserialize(self, data):
+                return data
+        repo = FileRepository(tmp_path, serializer=_BoomSer())
+        assert repo.save("x", object()) is False
+
+    def test_delete_error_returns_false(self, tmp_path):
+        repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
+        (tmp_path / "x.json").mkdir()
+        assert repo.delete("x") is False
 
 
 class TestMemoryRepository:

@@ -85,6 +85,47 @@ describe('systemController.getDetailedHealth', () => {
     expect(result.inference?.inference_count).toBe(42)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/health/detailed', undefined, { silent: true })
   })
+
+  it('passes through kv_sessions stats when present', async () => {
+    const mockHealth = {
+      status: 'ok',
+      uptime_seconds: 1,
+      timestamp: new Date().toISOString(),
+      system: { cpu_percent: 0, memory_percent: 0, memory_available_mb: 8000 },
+      model_loaded: true,
+      model_type: 'gpt2',
+      inference: {},
+      kv_sessions: {
+        enabled: true,
+        active_sessions: 3,
+        cached_tokens: 512,
+        ttl_seconds: 3600,
+        oldest_session_age: 120.5,
+      },
+    }
+    apiClient.apiGet.mockResolvedValue(mockHealth)
+    const result = await systemController.getDetailedHealth()
+    expect(result.kv_sessions?.enabled).toBe(true)
+    expect(result.kv_sessions?.active_sessions).toBe(3)
+    expect(result.kv_sessions?.cached_tokens).toBe(512)
+  })
+
+  it('omits kv_sessions when disabled', async () => {
+    const mockHealth = {
+      status: 'ok',
+      uptime_seconds: 1,
+      timestamp: new Date().toISOString(),
+      system: { cpu_percent: 0, memory_percent: 0, memory_available_mb: 8000 },
+      model_loaded: false,
+      model_type: null,
+      inference: {},
+      kv_sessions: { enabled: false },
+    }
+    apiClient.apiGet.mockResolvedValue(mockHealth)
+    const result = await systemController.getDetailedHealth()
+    expect(result.kv_sessions?.enabled).toBe(false)
+    expect(result.kv_sessions?.active_sessions).toBeUndefined()
+  })
 })
 
 describe('systemController.getOutput', () => {
@@ -172,5 +213,29 @@ describe('systemController.getInferencePoolStatus', () => {
     expect(result.initialized).toBe(true)
     expect(result.max_workers).toBe(4)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/system/inference-pool', undefined, { silent: true })
+  })
+})
+
+describe('systemController.getProcessGuardStatus', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('GETs /models/process-guard', async () => {
+    apiClient.apiGet.mockResolvedValue({ enabled: false, active: false, model_id: null, health: null })
+    const result = await systemController.getProcessGuardStatus()
+    expect(result.enabled).toBe(false)
+    expect(result.active).toBe(false)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/models/process-guard', undefined, { silent: true })
+  })
+})
+
+describe('systemController.setProcessGuardEnabled', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('POSTs to /models/process-guard with enabled flag', async () => {
+    const { apiPost } = await import('./http-client')
+    vi.mocked(apiPost).mockResolvedValue({ enabled: true, active: false, model_id: 'gpt2', health: null })
+    const result = await systemController.setProcessGuardEnabled(true)
+    expect(result.enabled).toBe(true)
+    expect(apiPost).toHaveBeenCalledWith('/models/process-guard', { enabled: true })
   })
 })

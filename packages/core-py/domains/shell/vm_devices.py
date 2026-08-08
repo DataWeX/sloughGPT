@@ -244,7 +244,7 @@ class PythonExecDevice(Device):
         elif name in self._SAFE_BUILTINS:
             fn = self._SAFE_BUILTINS[name]
         else:
-            fn = eval(name, {"__builtins__": self._SAFE_BUILTINS}, {})
+            raise DeviceFault(f"PythonExecDevice: unknown callable: {name}")
         return fn(*args)
 
     def _py_import(self, module_name):
@@ -584,8 +584,6 @@ class SlonetTrainingDevice(Device):
 
             for step in range(steps_per_epoch):
                 batch_indices = indices[step * batch_size : (step + 1) * batch_size]
-                if len(batch_indices) == 0:
-                    continue
 
                 x_batch = np.array([token_ids[i:i + max_seq_len] for i in batch_indices], dtype=np.int64)
                 y_batch = np.array([token_ids[i + 1:i + max_seq_len + 1] for i in batch_indices], dtype=np.int64)

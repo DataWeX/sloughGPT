@@ -110,7 +110,10 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="dataset_import_local")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_github(self, request: GitHubImportRequest):
         """Import dataset from GitHub repository."""
@@ -135,7 +138,10 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="dataset_handler")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_huggingface(self, request: HuggingFaceImportRequest):
         """Import dataset from HuggingFace Hub."""
@@ -159,7 +165,10 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="dataset_handler")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_url(self, request: URLImportRequest):
         """Import dataset from URL."""
@@ -182,7 +191,10 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="dataset_handler")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_kaggle(self, request: KaggleImportRequest):
         """Import dataset from Kaggle."""
@@ -222,7 +234,10 @@ class DatasetsRouter:
         except FileNotFoundError:
             raise HTTPException(status_code=400, detail="Kaggle CLI not found. Install with: pip install kaggle")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="dataset_handler")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_csv(self, request: CSVImportRequest):
         """Import dataset from CSV URL."""
@@ -266,7 +281,10 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="dataset_handler")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def batch_import(self, request: BatchImportRequest):
         """Import multiple datasets in one request."""
@@ -352,9 +370,12 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="dataset_handler")
+            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
-    async def search_datasets(self, q: str = Query(..., description="Search query")):
+    async def search_datasets(self, q: str = Query(..., min_length=1, max_length=500, description="Search query")):
         """Search datasets by name"""
         ctrl = get_datasets_controller()
         results = ctrl.search_datasets(q)
@@ -436,7 +457,7 @@ class DatasetsRouter:
             raise HTTPException(status_code=404, detail="Dataset not found")
         return success_response(data={"status": "appended", "rows_added": result})
 
-    async def preview_dataset(self, dataset_id: str, limit: int = Query(10, description="Number of samples")):
+    async def preview_dataset(self, dataset_id: str, limit: int = Query(10, ge=1, le=1000, description="Number of samples")):
         """Preview dataset contents (first N rows)"""
         self._validate_dataset_id(dataset_id)
         ctrl = get_datasets_controller()
@@ -445,7 +466,7 @@ class DatasetsRouter:
             raise HTTPException(status_code=404, detail="Dataset not found or empty")
         return preview
 
-    async def export_dataset(self, dataset_id: str, format: str = Query("jsonl", description="Export format")):
+    async def export_dataset(self, dataset_id: str, format: str = Query("jsonl", pattern="^(jsonl|csv)$", description="Export format")):
         """Export a dataset as a downloadable file"""
         self._validate_dataset_id(dataset_id)
         ctrl = get_datasets_controller()
@@ -486,7 +507,7 @@ class DatasetsRouter:
             "status": "created",
             "dataset_id": dataset["id"],
             "name": name,
-            "messages_exported": len([m for m in messages if m.get("role") in ("user", "assistant") and m.get("content")]),
+            "messages_exported": len([m for m in messages if m.role in ("user", "assistant") and m.content]),
         }
 
     async def convert_to_messages(self, dataset_id: str, system_prompt: str = "You are a helpful assistant."):

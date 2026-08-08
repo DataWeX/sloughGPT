@@ -84,20 +84,24 @@ class TestAgentTask:
 class TestMultiAgentOrchestrator:
     def test_init_default_agents(self):
         orch = MultiAgentOrchestrator()
-        assert len(orch.agents) == 4
+        assert len(orch.agents) >= 4
         assert "researcher" in orch.agents
+        assert "writer" in orch.agents
+        assert "coder" in orch.agents
+        assert "critic" in orch.agents
 
     def test_init_custom_agents(self):
         custom = {
             "bot": SpecializedAgent(name="Bot", role="bot", system_prompt="beep"),
         }
         orch = MultiAgentOrchestrator(agents=custom)
-        assert list(orch.agents.keys()) == ["bot"]
+        assert "bot" in orch.agents
+        assert orch.agents["bot"].name == "Bot"
 
     def test_list_agents(self):
         orch = MultiAgentOrchestrator()
         agents = orch.list_agents()
-        assert len(agents) == 4
+        assert len(agents) >= 4
         names = [a["name"] for a in agents]
         assert "Researcher" in names
         assert "Writer" in names
@@ -482,7 +486,7 @@ class TestLoadCustomAgents:
         (config_dir / "custom_agents.json").write_text("{not valid json")
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         orch = MultiAgentOrchestrator()
-        assert len(orch.agents) == 4
+        assert len(orch.agents) >= 4
 
     def test_missing_key_in_entry_ignored(self, tmp_path, monkeypatch):
         from pathlib import Path

@@ -5,8 +5,6 @@ import { useErrorStore } from '@/lib/error-store'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { cn } from '@sloughgpt/strui'
 
-const API = PUBLIC_API_URL || 'http://localhost:8000'
-
 interface HealthScore {
   score: number
   status: string
@@ -114,9 +112,9 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
     const refresh = async () => {
       let backend: BackendDebug | null = null
       try {
-        const r = await fetch(`${API}/health/debug`, { signal: AbortSignal.timeout(3000) })
+        const r = await fetch(`${PUBLIC_API_URL}/health/debug`, { signal: AbortSignal.timeout(3000) })
         if (r.ok) backend = await r.json()
-      } catch {}
+      } catch { /* debug overlay — server may be offline */ }
 
       const frontendErrCount = useErrorStore.getState().errors.length
 

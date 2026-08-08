@@ -116,6 +116,33 @@ class TestRunEval:
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"
 
+    @patch("pathlib.Path")
+    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    def test_soul_param_passed_to_run(self, mock_get_eval, mock_path_cls):
+        evaluator = MagicMock()
+        evaluator.run.return_value = _mock_eval_result()
+        mock_get_eval.return_value = evaluator
+        mock_path_instance = MagicMock()
+        mock_path_instance.exists.return_value = False
+        mock_path_cls.return_value = mock_path_instance
+
+        client.get("/lora-eval/run", params={"soul": "friendly"})
+        for call in evaluator.run.call_args_list:
+            assert call.kwargs.get("soul_name") == "friendly"
+
+    @patch("pathlib.Path")
+    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    def test_default_adapter_path_used(self, mock_get_eval, mock_path_cls):
+        evaluator = MagicMock()
+        evaluator.run.return_value = _mock_eval_result()
+        mock_get_eval.return_value = evaluator
+        mock_path_instance = MagicMock()
+        mock_path_instance.exists.return_value = False
+        mock_path_cls.return_value = mock_path_instance
+
+        client.get("/lora-eval/run", params={"soul": "assistant"})
+        assert mock_path_cls.call_args.args[0] == "data/user_adapters/best_aggregated.npz"
+
 
 class TestEvalHistory:
     """GET /lora-eval/history"""
@@ -160,6 +187,24 @@ class TestEvalHistory:
 
         resp = client.get("/lora-eval/history")
         assert resp.status_code == 500
+
+    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    def test_history_limit_bounds(self, mock_get_eval):
+        evaluator = MagicMock()
+        evaluator.get_history.return_value = []
+        mock_get_eval.return_value = evaluator
+
+        resp = client.get("/lora-eval/history", params={"limit": 100})
+        assert resp.status_code == 200
+        evaluator.get_history.assert_called_once_with(limit=100)
+
+    def test_history_limit_zero_is_422(self):
+        resp = client.get("/lora-eval/history", params={"limit": 0})
+        assert resp.status_code == 422
+
+    def test_history_limit_above_max_is_422(self):
+        resp = client.get("/lora-eval/history", params={"limit": 101})
+        assert resp.status_code == 422
 
 
 class TestAggregate:
@@ -252,3 +297,15 @@ class TestAggregate:
 
         resp = client.post("/lora-eval/aggregate")
         assert resp.status_code == 500
+
+    def test_top_k_zero_is_422(self):
+        resp = client.post("/lora-eval/aggregate", params={"top_k": 0})
+        assert resp.status_code == 422
+
+    def test_top_k_above_max_is_422(self):
+        resp = client.post("/lora-eval/aggregate", params={"top_k": 51})
+        assert resp.status_code == 422
+
+    def test_min_feedback_zero_is_422(self):
+        resp = client.post("/lora-eval/aggregate", params={"min_feedback": 0})
+        assert resp.status_code == 422

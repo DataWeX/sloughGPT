@@ -87,3 +87,73 @@ describe('soulsController.loadCheckpoint', () => {
     expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/checkpoints/v1/load')
   })
 })
+
+describe('soulsController.listWeightSnapshots', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('GETs /souls/weights/snapshots and returns array', async () => {
+    apiClient.apiGet.mockResolvedValue([{ name: 'preset-1', saved_at: '2026-01-01' }])
+
+    const result = await soulsController.listWeightSnapshots()
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('preset-1')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/souls/weights/snapshots')
+  })
+
+  it('handles {snapshots: [...]} response shape', async () => {
+    apiClient.apiGet.mockResolvedValue({ snapshots: [{ name: 'a' }, { name: 'b' }] })
+
+    const result = await soulsController.listWeightSnapshots()
+    expect(result).toHaveLength(2)
+  })
+})
+
+describe('soulsController.saveWeightSnapshot', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs to /souls/weights/snapshot/{name} and returns path', async () => {
+    apiClient.apiPost.mockResolvedValue({ path: '/snapshots/p1.json' })
+
+    const result = await soulsController.saveWeightSnapshot('p1')
+    expect(result).toBe('/snapshots/p1.json')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/weights/snapshot/p1')
+  })
+
+  it('URL-encodes snapshot names', async () => {
+    apiClient.apiPost.mockResolvedValue({ path: '/x' })
+
+    await soulsController.saveWeightSnapshot('my preset v2')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/weights/snapshot/my%20preset%20v2')
+  })
+})
+
+describe('soulsController.loadWeightSnapshot', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs to /souls/weights/snapshot/{name}/load and returns count', async () => {
+    apiClient.apiPost.mockResolvedValue({ traits_loaded: 13 })
+
+    const result = await soulsController.loadWeightSnapshot('p1')
+    expect(result).toBe(13)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/weights/snapshot/p1/load')
+  })
+})
+
+describe('soulsController.deleteWeightSnapshot', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('DELETEs /souls/weights/snapshot/{name} and returns boolean', async () => {
+    apiClient.apiDelete.mockResolvedValue({ deleted: true })
+
+    const result = await soulsController.deleteWeightSnapshot('p1')
+    expect(result).toBe(true)
+    expect(apiClient.apiDelete).toHaveBeenCalledWith('/souls/weights/snapshot/p1')
+  })
+
+  it('returns false when response has no deleted field', async () => {
+    apiClient.apiDelete.mockResolvedValue({ status: 'ok' })
+
+    const result = await soulsController.deleteWeightSnapshot('p1')
+    expect(result).toBe(false)
+  })
+})

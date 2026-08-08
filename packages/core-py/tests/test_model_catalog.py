@@ -184,6 +184,30 @@ class TestModelCatalogSync:
         monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
         assert catalog.sync_from_disk() == 0
 
+    def test_sync_skips_non_dir_entries(self, catalog, tmp_path, monkeypatch):
+        hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        model_dir = hf_cache / "models--org--cool-model"
+        (model_dir / "snapshots" / "main").mkdir(parents=True)
+        (model_dir / "snapshots" / "main" / "model.slnc").write_bytes(b"SLNC")
+        (hf_cache / "models--orphan.txt").write_text("x")
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+        assert catalog.sync_from_disk() == 1
+        assert catalog.get("org/cool-model") is not None
+
+    def test_sync_finds_slnc_in_other_snapshot(self, catalog, tmp_path, monkeypatch):
+        hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        model_dir = hf_cache / "models--org--v2-model"
+        v2_dir = model_dir / "snapshots" / "v2"
+        v2_dir.mkdir(parents=True)
+        (v2_dir / "model.slnc").write_bytes(b"SLNC")
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/v2-model")
+        assert doc is not None
+        assert doc["path"].endswith("model.slnc")
+
     def test_sync_from_custom_dirs(self, catalog, tmp_path):
         cache = tmp_path / "models"
         (cache / "sub").mkdir(parents=True)

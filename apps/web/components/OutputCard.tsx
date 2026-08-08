@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useServerOutput } from '@/hooks/useServerOutput'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -47,7 +48,7 @@ function formatTs(ts: number): string {
   return `${h}:${m}:${s}`
 }
 
-function LogLine({ line }: { line: OutputLine }) {
+const LogLine = React.memo(function LogLine({ line }: { line: OutputLine }) {
   const ts = formatTs(line.ts)
   const lvl = LEVEL_ABBR[line.level] ?? 'INF'
   const lvlColor = LEVEL_COLOR[line.level] ?? 'rgb(var(--muted-foreground))'
@@ -72,7 +73,7 @@ function LogLine({ line }: { line: OutputLine }) {
       </span>
     </div>
   )
-}
+})
 
 export function OutputCard({ title = 'Server Output', height, tail, maxLines, compact }: OutputCardProps) {
   const { lines, streaming, clear, scrollRef, paused, togglePause, exportLines } = useServerOutput({ tail, maxLines })

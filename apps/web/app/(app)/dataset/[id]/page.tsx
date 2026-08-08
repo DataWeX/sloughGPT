@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import dynamicNext from 'next/dynamic'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
@@ -13,12 +14,15 @@ import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
-import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh, IconClock } from '@sloughgpt/strui'
+import { Breadcrumbs } from '@sloughgpt/strui'
+import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh, IconClock, IconChevronDown } from '@sloughgpt/strui'
 import { datasetController, type Dataset, type DatasetStats } from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
 import { formatBytes } from '@/lib/format-bytes'
-import { downloadBlob } from '@/lib/download-utils'
+import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { useToastStore } from '@/lib/toast-store'
+
+const DatasetImportModal = dynamicNext(() => import('@/components/DatasetImportModal').then(m => m.DatasetImportModal), { ssr: false })
 
 export default function DatasetDetailPage() {
   const params = useParams()
@@ -36,6 +40,7 @@ export default function DatasetDetailPage() {
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [snapshotting, setSnapshotting] = useState(false)
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const fetchDataset = useCallback(async () => {
     setLoading(true)
@@ -152,24 +157,59 @@ export default function DatasetDetailPage() {
     }
   }
 
+  const handleExportCSV = async () => {
+    if (!dataset) return
+    try {
+      const blob = await datasetController.export(dataset.id)
+      const text = await blob.text()
+      const lines = text.trim().split('\n').filter(Boolean)
+      const rows = lines.map(line => {
+        try { return JSON.parse(line) } catch { return { content: line } }
+      })
+      if (rows.length === 0) { addToast('Empty dataset', 'error'); return }
+      const headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))))
+      const csv = [
+        headers.join(','),
+        ...rows.map(row => headers.map(h => {
+          const val = String(row[h] ?? '')
+          return val.includes(',') || val.includes('"') || val.includes('\n')
+            ? `"${val.replace(/"/g, '""')}"` : val
+        }).join(','))
+      ].join('\n')
+      downloadBlob(new Blob([csv], { type: 'text/csv' }), `${dataset.name || dataset.id}.csv`)
+      addToast('Exported as CSV', 'success')
+    } catch {
+      addToast('CSV export failed', 'error')
+    }
+  }
+
   if (!datasetId) return null
 
   return (
     <div className="sl-page mx-auto max-w-4xl">
+      <Breadcrumbs
+        items={[
+          { label: 'Datasets', href: '/datasets' },
+          { label: loading ? '...' : dataset?.name || datasetId },
+        ]}
+        className="mb-3"
+      />
       <AppRouteHeader
         left={
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/datasets')} className="h-7 px-1.5 text-xs text-muted-foreground hover:text-foreground">
-              ← Datasets
-            </Button>
             <AppRouteHeaderLead title={loading ? '...' : dataset?.name || datasetId} />
           </div>
         }
         right={
-          <Button variant="secondary" size="sm" onClick={fetchDataset} disabled={loading}>
-            <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5 mr-1' : 'h-3.5 w-3.5 mr-1'} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setImportOpen(true)}>
+              Import Data
+            </Button>
+            <Button variant="secondary" size="sm" onClick={fetchDataset} disabled={loading}>
+              <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5 mr-1' : 'h-3.5 w-3.5 mr-1'} />
+              Refresh
+            </Button>
+          </div>
         }
       />
 
@@ -196,9 +236,21 @@ export default function DatasetDetailPage() {
                     {dataset.type && <Badge variant={"secondary" as const} className="text-xs">{dataset.type}</Badge>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
-                      <IconDownload className="h-3 w-3 mr-1" /> Export
-                    </Button>
+                    <div className="relative group">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
+                        <IconDownload className="h-3 w-3 mr-1" /> Export
+                      </Button>
+                      <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
+                        <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
+                          <button onClick={handleExport} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                            Export as JSONL
+                          </button>
+                          <button onClick={handleExportCSV} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                            Export as CSV
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                     <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => setShowDelete(true)}>
                       <IconTrash className="h-3 w-3 mr-1" /> Delete
                     </Button>
@@ -370,6 +422,14 @@ export default function DatasetDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {importOpen && DatasetImportModal && (
+        <DatasetImportModal
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          onImportComplete={() => { setImportOpen(false); fetchDataset() }}
+        />
+      )}
     </div>
   )
 }

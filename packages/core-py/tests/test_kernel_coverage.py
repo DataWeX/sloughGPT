@@ -413,6 +413,13 @@ class TestTickRun:
         results = k.run(3)
         assert len(results) == 1
 
+    def test_run_stops_when_all_zombie(self):
+        k = Kernel()
+        k.boot()
+        k.spawn_process('fast', entry=lambda: 42)
+        results = k.run(max_ticks=10000)
+        assert len(results) < 10000
+
 
 class TestInfo:
     def test_stats_keys(self):

@@ -17,6 +17,21 @@ interface StatusCardProps {
 export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRate, loaded }: StatusCardProps) {
   const apiOk = (liveHealth?.health_status ?? detailed?.status) === 'healthy'
   const modelLoaded = liveHealth?.model_loaded ?? detailed?.model_loaded ?? false
+  const modelLoading = liveHealth?.model_loading ?? detailed?.model_loading ?? false
+  const params = liveHealth?.num_parameters != null
+    ? liveHealth.num_parameters
+    : detailed?.num_parameters != null
+      ? detailed.num_parameters
+      : null
+  const modelLabel = modelLoading
+    ? 'Loading…'
+    : modelLoaded
+      ? (liveHealth?.model_type || detailed?.model_type || 'Loaded')
+      : 'Not loaded'
+  const modelValue = params != null && params > 0 && !modelLoading
+    ? `${modelLabel} · ${params >= 1e9 ? `${(params / 1e9).toFixed(1)}B` : `${Math.round(params / 1e6)}M`}`
+    : modelLabel
+  const soulValue = liveHealth?.soul || detailed?.soul || null
 
   return (
     <Card className="p-3">
@@ -26,6 +41,12 @@ export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRa
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-medium">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
             live
+          </span>
+        )}
+        {connectionStatus === 'connected' && liveHealth?.is_inferencing && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+            inferencing
           </span>
         )}
         {connectionStatus === 'connecting' && (
@@ -50,7 +71,7 @@ export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRa
           />
           <StatCard
             label="Model"
-            value={!loaded ? '...' : <span className="font-mono">{modelLoaded ? (liveHealth?.model_type || detailed?.model_type || 'Loaded') : 'Not loaded'}</span>}
+            value={!loaded ? '...' : <span className="font-mono">{modelValue}</span>}
             icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : modelLoaded ? 'bg-success' : 'bg-warning'}`} />}
           />
           <StatCard
@@ -74,6 +95,10 @@ export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRa
             label="Errors"
             value={!loaded ? '...' : <span className="font-mono">{String(liveHealth?.error_count ?? 0)}</span>}
             icon={<span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.error_count ?? 0) > 0 ? 'bg-destructive' : 'bg-success'}`} />}
+          />
+          <StatCard
+            label="Soul"
+            value={!loaded ? '...' : <span className="font-mono">{soulValue || '—'}</span>}
           />
         </KpiGrid>
       </CardContent>

@@ -27,7 +27,7 @@ import { datasetController } from '@/lib/dataset-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { useHomePageData } from '@/hooks/useHomePageData'
 import { formatUptime } from '@/lib/chat-utils'
-import { MS_PER_MINUTE } from '@/lib/format-bytes'
+import { MS_PER_MINUTE, formatBytes } from '@/lib/format-bytes'
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -132,7 +132,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl space-y-4 overflow-hidden">
+    <div className="sl-page mx-auto max-w-4xl space-y-4">
       <AppRouteHeader
         left={<AppRouteHeaderLead title={<Greeting />} subtitle={subtitleText()} />}
       />
@@ -231,7 +231,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Ratio</span>
-                    <span className={"text-xs font-medium " + (feedbackStats.db_stats.ratio >= 0.5 ? "text-success" : "text-warning")}>
+                    <span className={`text-xs font-medium ${feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning'}`}>
                       {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
                     </span>
                   </div>
@@ -465,11 +465,7 @@ export default function HomePage() {
                   </div>
                   <div>
                     <p className="text-lg font-semibold tabular-nums">
-                      {datasetStats.totalSize >= 1073741824
-                        ? `${(datasetStats.totalSize / 1073741824).toFixed(1)} GB`
-                        : datasetStats.totalSize >= 1048576
-                        ? `${(datasetStats.totalSize / 1048576).toFixed(1)} MB`
-                        : `${(datasetStats.totalSize / 1024).toFixed(1)} KB`}
+                      {formatBytes(datasetStats.totalSize)}
                     </p>
                     <p className="text-[10px] text-muted-foreground">Total size</p>
                   </div>
@@ -638,23 +634,6 @@ export default function HomePage() {
           </div>
         </Link>
       </div>
-
-      {apiStatus === 'online' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-          <div className="rounded-lg border border-border/60 p-3 sm:p-4">
-            <div className="text-xs font-medium text-muted-foreground mb-1">How it works</div>
-            <p className="text-[11px] text-muted-foreground/70">
-              Mix and match AI models with personalities. Each one has its own voice and style — pick the one you like.
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/60 p-3 sm:p-4">
-            <div className="text-xs font-medium text-muted-foreground mb-1">Your data</div>
-            <p className="text-[11px] text-muted-foreground/70">
-              Import text, files, or conversations. The AI learns from your data and gets better over time.
-            </p>
-          </div>
-        </div>
-      )}
 
     </div>
   )

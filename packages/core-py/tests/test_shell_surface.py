@@ -1,5 +1,7 @@
 """Tests for domains/shell/surface.py — content surfaces."""
 
+import pytest
+
 from domains.shell.log_buffer import LogBuffer, LogEntry
 from domains.shell.surface import (
     LogSurface,
@@ -7,6 +9,7 @@ from domains.shell.surface import (
     STYLE_ERROR,
     STYLE_INFO,
     STYLE_WARN,
+    Surface,
     TextSurface,
     clip,
     strip_ansi,
@@ -203,3 +206,28 @@ class TestLogSurface:
         s.set_width(10)
         lines = s.render(1)
         assert len(lines[0].text) <= 10
+
+
+class TestSurfaceBase:
+    def test_set_width_not_implemented(self):
+        with pytest.raises(NotImplementedError):
+            Surface().set_width(80)
+
+    def test_render_not_implemented(self):
+        with pytest.raises(NotImplementedError):
+            Surface().render(10)
+
+
+class TestTextSurfacePartialRender:
+    def test_render_includes_open_partial_line(self):
+        s = TextSurface()
+        s.write("first", end="\n")
+        s.write("second", end="")
+        lines = s.render(10)
+        assert [r.text for r in lines] == ["first", "second"]
+
+    def test_render_offset_includes_partial_line(self):
+        s = TextSurface()
+        s.write("tail", end="")
+        lines = s.render(1, offset=1)
+        assert lines and lines[-1].text == "tail"

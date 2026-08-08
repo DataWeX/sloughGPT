@@ -68,12 +68,16 @@ describe('VoiceInput', () => {
     expect(onTranscript).toHaveBeenCalledWith('hello world')
   })
 
-  it('does not render when no speech support and no server support', async () => {
+  it('renders disabled button when no speech support and no server support', async () => {
     const w = window as unknown as Record<string, unknown>
     delete w.SpeechRecognition
     delete w.webkitSpeechRecognition
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ speech_to_text: false }) })
     render(<VoiceInput onTranscript={() => {}} />)
-    await waitFor(() => expect(screen.queryByLabelText(/voice input/i)).toBeNull())
+    await waitFor(() => {
+      const btn = screen.getByLabelText(/voice input/i)
+      expect(btn).toBeDefined()
+      expect(btn).toBeDisabled()
+    })
   })
 })

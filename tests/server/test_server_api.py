@@ -63,6 +63,67 @@ class TestInferenceEndpoints:
             assert response.status_code == 503
 
 
+class TestInfoEndpoints:
+    def test_info_returns_version(self):
+        response = client.get("/info")
+        assert response.status_code == 200
+        data = response.json()
+        assert data.get("api_version") == "1.0.0"
+
+    def test_info_includes_model_block(self):
+        response = client.get("/info")
+        data = response.json()
+        model = data.get("model", {})
+        assert "type" in model
+        assert "loaded" in model
+        assert isinstance(model["loaded"], bool)
+
+    def test_info_soul_ok(self):
+        response = client.get("/info/soul")
+        assert response.status_code == 200
+
+
+class TestProvidersEndpoints:
+    def test_providers_ok(self):
+        response = client.get("/providers")
+        assert response.status_code == 200
+        assert "data" in response.json()
+
+
+class TestSystemEndpoints:
+    def test_executor_status_ok(self):
+        response = client.get("/system/executor")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert "initialized" in data
+        assert "active_jobs" in data
+        assert isinstance(data.get("active_jobs", 0), int)
+
+    def test_executor_uninitialized_reports_zero_jobs(self):
+        from domains.training.executor import _instance as executor_instance
+        if executor_instance is None:
+            response = client.get("/system/executor")
+            data = response.json()["data"]
+            assert data.get("initialized") is False
+            assert data.get("active_jobs") == 0
+
+
+class TestStatsEndpoints:
+    def test_tokenizer_stats_ok(self):
+        response = client.get("/tokenizer/stats")
+        assert response.status_code == 200
+        data = response.json().get("data", response.json())
+        assert "vocab_size" in data
+
+    def test_knowledge_stats_shape(self):
+        response = client.get("/knowledge/stats")
+        assert response.status_code == 200
+        data = response.json()
+        payload = data.get("data", data)
+        assert isinstance(payload, dict)
+        assert "total_items" in payload
+
+
 class TestAutoTrainEndpoints:
     @pytest.mark.slow
     def test_list_checkpoints(self):

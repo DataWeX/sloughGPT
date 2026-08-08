@@ -19,6 +19,8 @@ import logging
 
 logger = logging.getLogger("slo.feedback.per_user_lora")
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+
 
 @dataclass
 class UserAdapter:
@@ -48,7 +50,7 @@ class PerUserLoRAStore:
 
     def __init__(
         self,
-        store_path: str = "data/user_adapters",
+        store_path: str = str(_REPO_ROOT / "data" / "user_adapters"),
         adapter_rank: int = 8,
         adapter_alpha: int = 16,
         model_dim: int = 768,
@@ -522,6 +524,16 @@ class PerUserLoRAStore:
                 from domains.feedback.lora_eval import get_lora_evaluator
 
                 evaluator = get_lora_evaluator()
+                if not evaluator.available():
+                    logger.info(
+                        "Eval skipped: no model loaded for evaluation.", extra={"tag": "INFRA"}
+                    )
+                    result["eval"] = {
+                        "skipped": True,
+                        "reason": "No model loaded for evaluation",
+                    }
+                    return result
+
                 baseline = evaluator.run(adapter_path=None, save=True)
                 with_adapter = evaluator.run(adapter_path=str(output_path), save=True)
                 delta = evaluator.compare(baseline, with_adapter)
@@ -615,7 +627,7 @@ _per_user_lora: Optional[PerUserLoRAStore] = None
 
 
 def get_per_user_lora(
-    store_path: str = "data/user_adapters",
+    store_path: str = str(_REPO_ROOT / "data" / "user_adapters"),
     adapter_rank: int = 8,
 ) -> PerUserLoRAStore:
     """Get or create the global per-user LoRA store."""

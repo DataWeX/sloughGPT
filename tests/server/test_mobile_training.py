@@ -49,6 +49,12 @@ def mock_store():
         store.compact.return_value = 90
         store.count.return_value = 100
         store.quality_breakdown.return_value = {"0": 1, "1": 1, "-1": 1}
+        store.list_pairs.return_value = [
+            {"_id": "pair_001", "user_msg": "hello", "assistant_msg": "hi",
+             "quality": 0.8, "session_id": "s1", "timestamp": 1000.0},
+        ]
+        store.mark_used.return_value = None
+        store.mark_synced.return_value = None
         mock.return_value = store
         yield store
 
@@ -272,3 +278,130 @@ class TestAutoTrainStatus:
         assert "last_train" in data
         assert "last_loss" in data
         assert "last_checkpoint" in data
+
+
+class TestListTrainingPairs:
+    def test_list_top_level_fields(self):
+        resp = client.get("/mobile/train/pairs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["offset"] == 0
+        assert data["total"] == 100
+        assert data["count"] == 1
+
+    def test_passes_params(self, mock_store):
+        client.get(
+            "/mobile/train/pairs",
+            params={"limit": 25, "offset": 5, "min_quality": 0.8, "session_id": "s9", "search": "hello"},
+        )
+        store = mock_store
+        last_call = store.list_pairs.call_args
+        assert last_call.kwargs["limit"] == 25
+        assert last_call.kwargs["offset"] == 5
+        assert last_call.kwargs["min_quality"] == 0.8
+        assert last_call.kwargs["session_id"] == "s9"
+        assert last_call.kwargs["search"] == "hello"
+
+    def test_limit_out_of_range_is_422(self):
+        assert client.get("/mobile/train/pairs", params={"limit": 0}).status_code == 422
+        assert client.get("/mobile/train/pairs", params={"limit": 501}).status_code == 422
+
+    def test_negative_offset_is_422(self):
+        assert client.get("/mobile/train/pairs", params={"offset": -1}).status_code == 422
+
+
+class TestExportTrainingPairs:
+    def test_exports_ndjson(self):
+        resp = client.get("/mobile/train/export")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/x-ndjson")
+        lines = [l for l in resp.text.strip().split("\n") if l]
+        assert len(lines) == 1
+        import json as _json
+        parsed = _json.loads(lines[0])
+        assert parsed["user_msg"] == "hello"
+        assert parsed["quality"] == 0.8
+
+    def test_export_limit_out_of_range_is_422(self):
+        assert client.get("/mobile/train/export", params={"limit": 5001}).status_code == 422
+
+
+class TestDeletePairsBulk:
+    def test_bulk_delete_counts(self):
+        resp = client.delete("/mobile/train/pairs/bulk", params={"ids": ["pair_001", "pair_002"]})
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 2
+
+    def test_bulk_delete_missing_ids_is_422(self):
+        assert client.delete("/mobile/train/pairs/bulk").status_code == 422
+
+    def test_bulk_delete_skips_failed_deletes(self, mock_store):
+        def _delete(pair_id):
+            return pair_id != "pair_002"
+        mock_store.delete_pair.side_effect = _delete
+        resp = client.delete("/mobile/train/pairs/bulk", params={"ids": ["pair_001", "pair_002"]})
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 1
+
+
+class TestMobileTrain:
+    def test_insufficient_pairs_is_400(self):
+        body = {"checkpoint": "mobile_base", "pairs": [
+            {"id": f"p{i}", "user_msg": f"u{i}", "assistant_msg": f"a{i}"} for i in range(3)
+        ]}
+        resp = client.post("/mobile/train", json=body)
+        assert resp.status_code == 400
+
+    def test_missing_pairs_field_is_422(self):
+        resp = client.post("/mobile/train", json={"checkpoint": "mobile_base"})
+        assert resp.status_code == 422
+
+
+class TestUpdateAutoConfig:
+    def test_updates_threshold(self, mock_store):
+        with patch("domains.training.auto_trainer.get_auto_trainer") as mock_get:
+            trainer = MagicMock()
+            trainer.status.return_value = {"threshold": 42, "interval_s": 60}
+            mock_get.return_value = trainer
+            resp = client.patch("/mobile/train/auto-config", params={"threshold": 42})
+            assert resp.status_code == 200
+            assert trainer.threshold == 42
+            assert resp.json()["threshold"] == 42
+
+    def test_updates_interval(self, mock_store):
+        with patch("domains.training.auto_trainer.get_auto_trainer") as mock_get:
+            trainer = MagicMock()
+            trainer.status.return_value = {"threshold": 10, "interval_s": 300}
+            mock_get.return_value = trainer
+            resp = client.patch("/mobile/train/auto-config", params={"interval_s": 300})
+            assert resp.status_code == 200
+            assert trainer.interval_s == 300
+
+    def test_threshold_out_of_range_is_422(self):
+        assert client.patch("/mobile/train/auto-config", params={"threshold": 0}).status_code == 422
+        assert client.patch("/mobile/train/auto-config", params={"threshold": 101}).status_code == 422
+
+    def test_interval_out_of_range_is_422(self):
+        assert client.patch("/mobile/train/auto-config", params={"interval_s": 10}).status_code == 422
+        assert client.patch("/mobile/train/auto-config", params={"interval_s": 4000}).status_code == 422
+
+
+class TestParamValidation:
+    def test_from_sessions_limit_below_ge_is_422(self):
+        assert client.post("/mobile/train/from-sessions", json={"limit": 4}).status_code == 422
+
+    def test_from_sessions_limit_above_le_is_422(self):
+        assert client.post("/mobile/train/from-sessions", json={"limit": 501}).status_code == 422
+
+    def test_from_sessions_min_length_zero_is_422(self):
+        assert client.post("/mobile/train/from-sessions", json={"min_length": 0}).status_code == 422
+
+    def test_pending_limit_out_of_range_is_422(self):
+        assert client.get("/mobile/train/pending", params={"limit": 0}).status_code == 422
+        assert client.get("/mobile/train/pending", params={"limit": 501}).status_code == 422
+
+    def test_stats_wrong_method_is_405(self):
+        assert client.post("/mobile/train/stats").status_code == 405
+
+    def test_export_wrong_method_is_405(self):
+        assert client.post("/mobile/train/export").status_code == 405

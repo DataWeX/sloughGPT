@@ -1,0 +1,163 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
+import { IconTrash, IconRefresh } from '@sloughgpt/strui'
+import { useToastStore } from '@/lib/toast-store'
+import { extractErrorMessage } from '@/lib/error-utils'
+import { trainingJobsController, type FineTunedModel } from '@/lib/training-controller'
+import { modelController } from '@/lib/model-controller'
+
+export function FineTunedModelsCard({
+  activeModelId,
+  onLoaded,
+}: {
+  activeModelId?: string | null
+  onLoaded?: () => void
+}) {
+  const addToast = useToastStore(s => s.addToast)
+  const router = useRouter()
+  const [models, setModels] = useState<FineTunedModel[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [loadingName, setLoadingName] = useState<string | null>(null)
+
+  const fetchModels = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const list = await trainingJobsController.listFineTuned()
+      setModels(list)
+    } catch (e) {
+      setError(extractErrorMessage(e, 'Failed to load models'))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void fetchModels() }, [fetchModels])
+
+  const handleLoad = async (name: string) => {
+    setLoadingName(name)
+    try {
+      await trainingJobsController.loadFineTuned(name)
+      addToast(`${name} loaded for chat`, 'success')
+      onLoaded?.()
+    } catch (e) {
+      addToast(extractErrorMessage(e, 'Load failed'), 'error')
+    } finally {
+      setLoadingName(null)
+    }
+  }
+
+  const handleDelete = async (name: string) => {
+    try {
+      await trainingJobsController.deleteFineTuned(name)
+      addToast(`Deleted ${name}`, 'success')
+      void fetchModels()
+    } catch (e) {
+      addToast(extractErrorMessage(e, 'Delete failed'), 'error')
+    }
+  }
+
+  const handleUnload = async (name: string) => {
+    setLoadingName(name)
+    try {
+      await modelController.unloadModel(name)
+      addToast(`${name} unloaded`, 'info')
+      onLoaded?.()
+    } catch (e) {
+      addToast(extractErrorMessage(e, 'Unload failed'), 'error')
+    } finally {
+      setLoadingName(null)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Fine-tuned models</CardTitle>
+        <Button size="sm" variant="ghost" onClick={() => void fetchModels()} aria-label="Refresh fine-tuned models">
+          <IconRefresh className="h-3.5 w-3.5" />
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[1, 2].map(i => (
+              <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-28" />
+                </div>
+                <Skeleton className="h-5 w-12 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="text-center py-4">
+            <p className="text-xs text-destructive mb-2">{error}</p>
+            <Button size="sm" variant="ghost" onClick={() => void fetchModels()}>Retry</Button>
+          </div>
+        ) : models.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            No fine-tuned models yet. HF fine-tuned outputs under models/hf-finetuned appear here.
+          </p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {models.map((m) => {
+              const isActive = !!activeModelId && (activeModelId === m.model_name || activeModelId === m.name)
+              return (
+                <div key={m.name} className={cn(
+                  'flex items-center justify-between rounded-lg border p-3 text-sm transition-colors',
+                  isActive ? 'border-primary/30 bg-primary/[0.08]' : 'border-border/50 hover:bg-muted/30',
+                )}>
+                  <div className="min-w-0 flex-1">
+                    <button
+                      onClick={() => router.push(`/model/${encodeURIComponent(m.name)}`)}
+                      className="flex items-center gap-2 text-left w-full"
+                      aria-label={`View details for ${m.name}`}
+                    >
+                      <p className="truncate font-medium text-xs hover:text-primary transition-colors">{m.name}</p>
+                      {isActive && <span className="text-primary text-[10px]">✓</span>}
+                    </button>
+                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
+                      <span>{m.model}</span>
+                      {m.dataset && <span>· {m.dataset}</span>}
+                      {m.size_mb > 0 && <span>· {m.size_mb.toFixed(1)} MB</span>}
+                      {m.final_loss != null && <span>· loss {Number(m.final_loss).toFixed(4)}</span>}
+                      {m.epochs && m.epochs > 0 && <span>· {m.epochs} ep</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {!isActive && (
+                      <Button size="sm" variant="ghost" className="h-6 text-xs" disabled={loadingName !== null} onClick={() => handleLoad(m.name)}>
+                        {loadingName === m.name ? 'Loading...' : 'Load'}
+                      </Button>
+                    )}
+                    {isActive && (
+                      <Button size="sm" variant="ghost" className="h-6 text-xs" disabled={loadingName !== null} onClick={() => handleUnload(m.name)} aria-label={`Unload ${m.name}`}>
+                        {loadingName === m.name ? 'Unloading...' : (
+                          <>
+                            <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 110 12.728m0-12.728L12 12m6.364-6.364L12 12" />
+                            </svg>
+                            Unload
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => handleDelete(m.name)} aria-label={`Delete ${m.name}`}>
+                      <IconTrash className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

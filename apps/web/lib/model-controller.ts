@@ -170,6 +170,10 @@ export const modelController = {
   async dequantize(): Promise<{ dequantized: boolean; model_type: string; layers_reset: number }> {
     return apiPost('/models/dequantize')
   },
+
+  async getExportFormats(): Promise<Record<string, string>> {
+    return apiGet<Record<string, string>>('/models/export/formats')
+  },
 }
 
 export async function* streamModelEvents(

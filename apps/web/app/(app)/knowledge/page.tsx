@@ -16,6 +16,10 @@ import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX } from '
 import { useToastStore } from '@/lib/toast-store'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount } from '@/lib/knowledge-controller'
 import { downloadJson } from '@/lib/download-utils'
+import { todayDateString, MS_PER_SECOND } from '@/lib/format-bytes'
+
+const SEARCH_DEBOUNCE_MS = 300
+import { knowledgeSchema } from '@/lib/validation-schemas'
 
 export default function KnowledgePage() {
   const addToast = useToastStore(s => s.addToast)
@@ -25,10 +29,11 @@ export default function KnowledgePage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<KnowledgeItem[] | null>(null)
-  const [searching, setSearching] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [pendingDelete, setPendingDelete] = useState<KnowledgeItem | null>(null)
   const [pendingBatchDelete, setPendingBatchDelete] = useState(false)
+  const [showBulkTopic, setShowBulkTopic] = useState(false)
+  const [bulkTopic, setBulkTopic] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [newContent, setNewContent] = useState('')
   const [newTopic, setNewTopic] = useState('general')
@@ -36,21 +41,41 @@ export default function KnowledgePage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [editTopic, setEditTopic] = useState('')
+  const [addErrors, setAddErrors] = useState<{ content?: string; topic?: string }>({})
+  const [editErrors, setEditErrors] = useState<{ content?: string; topic?: string }>({})
+  const [editingImportanceId, setEditingImportanceId] = useState<string | null>(null)
+  const [importanceValue, setImportanceValue] = useState(0)
   const [importing, setImporting] = useState(false)
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null)
   const [sortBy, setSortBy] = useState<'date' | 'importance' | 'topic'>('date')
+  const [adapterStatus, setAdapterStatus] = useState<{ adapter_exists: boolean; fact_count: number; total_facts_available: number; trained_at?: number; post_training_loss?: number } | null>(null)
+  const [adapterTraining, setAdapterTraining] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const suggestTopic = (content: string): string => {
+    const lower = content.toLowerCase()
+    if (/\b(prefer|like|love|hate|favorite|best|worst)\b/.test(lower)) return 'preferences'
+    if (/\b(born|live|work|study|age|name|from)\b/.test(lower)) return 'personal'
+    if (/\b(project|code|api|bug|fix|deploy|build)\b/.test(lower)) return 'technical'
+    if (/\b(meeting|deadline|schedule|plan|goal)\b/.test(lower)) return 'planning'
+    if (/\b(book|read|watch|listen|play|game|movie)\b/.test(lower)) return 'interests'
+    if (/\b(cook|recipe|food|eat|drink|coffee|tea)\b/.test(lower)) return 'food'
+    return 'general'
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [itemsResult, statsResult, topicsResult] = await Promise.all([
+      const [itemsResult, statsResult, topicsResult, adapterResult] = await Promise.all([
         knowledgeController.list(),
         knowledgeController.stats(),
         knowledgeController.topics(),
+        knowledgeController.getAdapterStatus().catch(() => null),
       ])
       setItems(itemsResult)
       setStats(statsResult)
       setTopics(topicsResult.topics || [])
+      if (adapterResult) setAdapterStatus(adapterResult)
     } catch {
       addToast('Failed to load knowledge', 'error')
     } finally {
@@ -59,6 +84,19 @@ export default function KnowledgePage() {
   }, [addToast])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  const handleTrainAdapter = useCallback(async () => {
+    setAdapterTraining(true)
+    try {
+      const result = await knowledgeController.trainAdapter()
+      setAdapterStatus(result.adapter_status)
+      addToast(`Adapter trained on ${result.fact_count} facts in ${result.elapsed.toFixed(1)}s`, 'success')
+    } catch {
+      addToast('Adapter training failed', 'error')
+    } finally {
+      setAdapterTraining(false)
+    }
+  }, [addToast])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -81,14 +119,11 @@ export default function KnowledgePage() {
       setSearchResults(null)
       return
     }
-    setSearching(true)
     try {
       const result = await knowledgeController.search(search)
       setSearchResults(result.results || [])
     } catch {
       addToast('Search failed', 'error')
-    } finally {
-      setSearching(false)
     }
   }, [search, addToast])
 
@@ -96,7 +131,7 @@ export default function KnowledgePage() {
     const timer = setTimeout(() => {
       if (search.trim()) handleSearch()
       else setSearchResults(null)
-    }, 300)
+    }, SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [search, handleSearch])
 
@@ -108,51 +143,133 @@ export default function KnowledgePage() {
     return b.timestamp - a.timestamp
   })
 
+  function highlightText(text: string, query: string): React.ReactNode {
+    if (!query) return text
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`(${escaped})`, 'gi')
+    const parts = text.split(regex)
+    return parts.map((part, i) =>
+      regex.test(part) ? (
+        <mark key={i} className="bg-warning/30 text-foreground rounded px-0.5">{part}</mark>
+      ) : (
+        part
+      )
+    )
+  }
+
   const handleDelete = async () => {
     if (!pendingDelete) return
+    const deleted = pendingDelete
+    setItems(prev => prev.filter(i => i.id !== deleted.id))
+    setStats(prev => prev ? { ...prev, total_items: prev.total_items - 1 } : prev)
+    setPendingDelete(null)
     try {
-      await knowledgeController.delete(pendingDelete.id)
-      setItems(prev => prev.filter(i => i.id !== pendingDelete.id))
-      setStats(prev => prev ? { ...prev, total_items: prev.total_items - 1 } : prev)
-      addToast('Deleted', 'info')
+      await knowledgeController.delete(deleted.id)
+      addToast('Deleted', 'info', undefined, () => {
+        setItems(prev => [deleted, ...prev])
+        setStats(prev => prev ? { ...prev, total_items: prev.total_items + 1 } : prev)
+        knowledgeController.add(deleted.content, deleted.topic, false).catch(() => {})
+      })
     } catch {
+      setItems(prev => [deleted, ...prev])
+      setStats(prev => prev ? { ...prev, total_items: prev.total_items + 1 } : prev)
       addToast('Delete failed', 'error')
-    } finally {
-      setPendingDelete(null)
     }
   }
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return
+    const deletedIds = new Set(selectedIds)
+    const deletedItems = items.filter(i => deletedIds.has(i.id))
+    setItems(prev => prev.filter(i => !deletedIds.has(i.id)))
+    setStats(prev => prev ? { ...prev, total_items: prev.total_items - deletedIds.size } : prev)
+    setSelectedIds(new Set())
+    setPendingBatchDelete(false)
     try {
-      await knowledgeController.batchDelete(Array.from(selectedIds))
-      setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
-      setStats(prev => prev ? { ...prev, total_items: prev.total_items - selectedIds.size } : prev)
-      addToast(`Deleted ${selectedIds.size} items`, 'info')
-      setSelectedIds(new Set())
+      await knowledgeController.batchDelete(Array.from(deletedIds))
+      addToast(`Deleted ${deletedIds.size} items`, 'info', undefined, () => {
+        setItems(prev => [...deletedItems, ...prev])
+        setStats(prev => prev ? { ...prev, total_items: prev.total_items + deletedIds.size } : prev)
+        knowledgeController.batchIngest(deletedItems.map(i => ({ content: i.content, tags: [i.topic] }))).catch(() => {})
+      })
     } catch {
+      setItems(prev => [...deletedItems, ...prev])
+      setStats(prev => prev ? { ...prev, total_items: prev.total_items + deletedIds.size } : prev)
       addToast('Batch delete failed', 'error')
-    } finally {
-      setPendingBatchDelete(false)
+    }
+  }
+
+  const handleBulkTopicReassign = async () => {
+    if (selectedIds.size === 0 || !bulkTopic.trim()) return
+    const newTopic = bulkTopic.trim()
+    const affectedIds = new Set(selectedIds)
+    const oldTopics = new Map(items.filter(i => affectedIds.has(i.id)).map(i => [i.id, i.topic]))
+    setItems(prev => prev.map(i => affectedIds.has(i.id) ? { ...i, topic: newTopic } : i))
+    setSelectedIds(new Set())
+    setShowBulkTopic(false)
+    setBulkTopic('')
+    try {
+      await Promise.all(Array.from(affectedIds).map(id => knowledgeController.update(id, { topic: newTopic })))
+      addToast(`Updated ${affectedIds.size} items to "${newTopic}"`, 'success')
+    } catch {
+      setItems(prev => prev.map(i => affectedIds.has(i.id) ? { ...i, topic: oldTopics.get(i.id) || 'general' } : i))
+      addToast('Failed to reassign topics', 'error')
     }
   }
 
   const handleAdd = async () => {
-    if (!newContent.trim()) return
+    const result = knowledgeSchema.safeParse({ content: newContent, topic: newTopic })
+    if (!result.success) {
+      const fieldErrors: { content?: string; topic?: string } = {}
+      result.error.issues.forEach(issue => {
+        const field = issue.path[0] as string
+        if (field === 'content') fieldErrors.content = issue.message
+        if (field === 'topic') fieldErrors.topic = issue.message
+      })
+      setAddErrors(fieldErrors)
+      return
+    }
+    setAddErrors({})
+    const tempId = `temp-${Date.now()}`
+    const optimisticItem: KnowledgeItem = {
+      id: tempId,
+      content: newContent.trim(),
+      topic: newTopic,
+      source: 'manual',
+      url: '',
+      timestamp: Date.now(),
+      importance: 0,
+      score: 1,
+    }
+    setItems(prev => [optimisticItem, ...prev])
+    setStats(prev => prev ? { ...prev, total_items: prev.total_items + 1 } : prev)
+    setNewContent('')
+    setNewTopic('general')
+    setShowAdd(false)
     try {
       await knowledgeController.add(newContent.trim(), newTopic, true)
-      setNewContent('')
-      setNewTopic('general')
-      setShowAdd(false)
       addToast('Knowledge added', 'info')
       await fetchData()
     } catch {
+      setItems(prev => prev.filter(i => i.id !== tempId))
+      setStats(prev => prev ? { ...prev, total_items: prev.total_items - 1 } : prev)
       addToast('Failed to add knowledge', 'error')
     }
   }
 
   const handleSaveEdit = async (id: string) => {
-    if (!editContent.trim()) return
+    const result = knowledgeSchema.safeParse({ content: editContent, topic: editTopic })
+    if (!result.success) {
+      const fieldErrors: { content?: string; topic?: string } = {}
+      result.error.issues.forEach(issue => {
+        const field = issue.path[0] as string
+        if (field === 'content') fieldErrors.content = issue.message
+        if (field === 'topic') fieldErrors.topic = issue.message
+      })
+      setEditErrors(fieldErrors)
+      return
+    }
+    setEditErrors({})
     try {
       await knowledgeController.update(id, { content: editContent.trim(), topic: editTopic.trim() || 'general' })
       setItems(prev => prev.map(i => i.id === id ? { ...i, content: editContent.trim(), topic: editTopic.trim() || 'general' } : i))
@@ -163,33 +280,85 @@ export default function KnowledgePage() {
     }
   }
 
+  const handleSaveImportance = async (id: string) => {
+    try {
+      await knowledgeController.update(id, { importance: importanceValue })
+      setItems(prev => prev.map(i => i.id === id ? { ...i, importance: importanceValue } : i))
+      setEditingImportanceId(null)
+      addToast('Importance updated', 'info')
+    } catch {
+      addToast('Update failed', 'error')
+    }
+  }
+
   const handleExport = () => {
     const data = items.map(i => ({ content: i.content, topic: i.topic, source: i.source, importance: i.importance }))
-    downloadJson(data, `knowledge-export-${new Date().toISOString().slice(0, 10)}.json`)
+    downloadJson(data, `knowledge-export-${todayDateString()}.json`)
     addToast(`Exported ${items.length} items`, 'success')
+  }
+
+  const handleExportCSV = () => {
+    const headers = ['content', 'topic', 'source', 'importance']
+    const rows = items.map(i => [
+      i.content, i.topic || '', i.source || '', i.importance.toString()
+    ])
+    const csv = [
+      headers.join(','),
+      ...rows.map(row => row.map(val =>
+        val.includes(',') || val.includes('"') || val.includes('\n')
+          ? `"${val.replace(/"/g, '""')}"` : val
+      ).join(','))
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `knowledge-export-${todayDateString()}.csv`
+    a.click(); URL.revokeObjectURL(url)
+    addToast(`Exported ${items.length} items as CSV`, 'success')
   }
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setImporting(true)
+    setImportProgress({ current: 0, total: 0 })
     try {
       const text = await file.text()
+      const splitLines = (t: string) => t.split('\n').map(l => l.trim()).filter(Boolean)
       let facts: string[]
       if (file.name.endsWith('.json')) {
         const parsed = JSON.parse(text)
-        facts = Array.isArray(parsed) ? parsed.map((i: any) => typeof i === 'string' ? i : i.content || JSON.stringify(i)).filter(Boolean) : []
+        facts = Array.isArray(parsed) ? parsed.map((i: string | { content?: string }) => typeof i === 'string' ? i : i.content || JSON.stringify(i)).filter(Boolean) : []
+      } else if (file.name.endsWith('.csv')) {
+        const lines = splitLines(text)
+        if (lines.length === 0) { addToast('No data found in CSV', 'error'); return }
+        const header = lines[0].toLowerCase()
+        const contentIdx = header.split(',').findIndex(h => h.includes('content'))
+        const topicIdx = header.split(',').findIndex(h => h.includes('topic'))
+        facts = lines.slice(1).map(line => {
+          const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+          const content = contentIdx >= 0 ? cols[contentIdx] : cols[0]
+          const topic = topicIdx >= 0 ? cols[topicIdx] : ''
+          return content ? `${content}${topic ? ` [${topic}]` : ''}` : ''
+        }).filter(Boolean)
       } else {
-        facts = text.split('\n').map(l => l.trim()).filter(Boolean)
+        facts = splitLines(text)
       }
       if (facts.length === 0) { addToast('No facts found in file', 'error'); return }
-      await knowledgeController.bulkIngest(facts, 'imported', 'file-import')
+      setImportProgress({ current: 0, total: facts.length })
+      const batchSize = 50
+      for (let i = 0; i < facts.length; i += batchSize) {
+        const batch = facts.slice(i, i + batchSize)
+        await knowledgeController.bulkIngest(batch, 'imported', 'file-import')
+        setImportProgress({ current: Math.min(i + batchSize, facts.length), total: facts.length })
+      }
       addToast(`Imported ${facts.length} facts`, 'success')
       await fetchData()
     } catch {
       addToast('Import failed', 'error')
     } finally {
       setImporting(false)
+      setImportProgress(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -222,14 +391,39 @@ export default function KnowledgePage() {
               Refresh
             </Button>
             {items.length > 0 && (
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
-                Export
-              </Button>
+              <div className="relative group">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
+                  Export
+                </Button>
+                <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
+                  <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
+                    <button onClick={handleExport} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                      Export as JSON
+                    </button>
+                    <button onClick={handleExportCSV} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                      Export as CSV
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing...' : 'Import'}
             </Button>
-            <input ref={fileInputRef} type="file" accept=".json,.txt" className="hidden" onChange={handleImportFile} />
+            <input ref={fileInputRef} type="file" accept=".json,.txt,.csv" className="hidden" onChange={handleImportFile} />
+            {importProgress && importProgress.total > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  {importProgress.current}/{importProgress.total}
+                </span>
+              </div>
+            )}
             <Button size="sm" className="h-7 text-xs" onClick={() => setShowAdd(true)}>
               <IconPlus className="h-3 w-3 mr-1" />
               Add
@@ -243,7 +437,14 @@ export default function KnowledgePage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
               <CardContent className="p-3">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Facts</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Facts</p>
+                  {items.length > 0 && (
+                    <button onClick={handleExport} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export knowledge">
+                      Export
+                    </button>
+                  )}
+                </div>
                 <p className="text-lg font-semibold mt-1">{stats.total_items}</p>
               </CardContent>
             </Card>
@@ -266,6 +467,76 @@ export default function KnowledgePage() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {adapterStatus && (
+          <Card>
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Knowledge Adapter</p>
+                  {adapterStatus.adapter_exists ? (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">Trained</span>
+                  ) : (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Not trained</span>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant={adapterStatus.adapter_exists ? 'outline' : 'default'}
+                  className="h-6 text-[10px] px-2"
+                  onClick={handleTrainAdapter}
+                  disabled={adapterTraining || items.length === 0}
+                >
+                  {adapterTraining ? (
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent" />
+                      Training…
+                    </span>
+                  ) : adapterStatus.adapter_exists ? 'Retrain' : 'Train Adapter'}
+                </Button>
+              </div>
+              <div className="flex gap-3 mt-1.5 text-[10px] text-muted-foreground">
+                <span>{adapterStatus.fact_count} facts in adapter</span>
+                {adapterStatus.trained_at && (
+                  <span>Trained {new Date(adapterStatus.trained_at * MS_PER_SECOND).toLocaleDateString()}</span>
+                )}
+                {adapterStatus.post_training_loss != null && (
+                  <span>Loss {adapterStatus.post_training_loss.toFixed(3)}</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {topics.length > 0 && (
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-2">Topic Distribution</p>
+              <div className="space-y-1.5">
+                {topics.slice(0, 8).map(t => {
+                  const pct = stats ? Math.round((t.count / stats.total_items) * 100) : 0
+                  return (
+                    <div key={t.name} className="flex items-center gap-2">
+                      <button
+                        onClick={() => setActiveTopic(activeTopic === t.name ? null : t.name)}
+                        className={`text-[11px] w-24 text-left truncate transition-colors ${activeTopic === t.name ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        {t.name}
+                      </button>
+                      <div className="flex-1 h-3 bg-muted/50 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary/40 rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground w-8 text-right">{t.count}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {topics.length > 0 && (
@@ -315,15 +586,26 @@ export default function KnowledgePage() {
             <option value="topic">Topic</option>
           </select>
           {selectedIds.size > 0 && (
-            <Button
-              size="sm"
-              variant="destructive"
-              className="h-8 text-xs"
-              onClick={() => setPendingBatchDelete(true)}
-            >
-              <IconTrash className="h-3 w-3 mr-1" />
-              Delete ({selectedIds.size})
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => setShowBulkTopic(true)}
+              >
+                <svg className="h-3 w-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+                Move to topic ({selectedIds.size})
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-8 text-xs"
+                onClick={() => setPendingBatchDelete(true)}
+              >
+                <IconTrash className="h-3 w-3 mr-1" />
+                Delete ({selectedIds.size})
+              </Button>
+            </div>
           )}
         </div>
 
@@ -335,7 +617,9 @@ export default function KnowledgePage() {
           </div>
         ) : displayItems.length === 0 ? (
           <EmptyCard
-            message={search ? 'No results found' : 'No knowledge stored. Add facts the AI should remember across conversations.'}
+            message={search ? 'No results found' : 'No knowledge stored'}
+            description={search ? 'Try a different search term' : 'Add facts the AI should remember across conversations. Click the + button to get started.'}
+            icon={<IconSearch className="h-5 w-5" />}
             action={null}
           />
         ) : (
@@ -351,7 +635,7 @@ export default function KnowledgePage() {
                 Select all ({displayItems.length})
               </label>
             )}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-h-[60vh] overflow-y-auto overscroll-contain">
               {displayItems.map(item => (
                 <div
                   key={item.id}
@@ -373,13 +657,23 @@ export default function KnowledgePage() {
                     <div className="flex-1 min-w-0">
                       {editingId === item.id ? (
                         <div className="space-y-2">
-                          <textarea
-                            className="w-full p-2 text-sm border border-input rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
-                            value={editContent}
-                            onChange={e => setEditContent(e.target.value)}
-                            autoFocus
-                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(item.id) } if (e.key === 'Escape') setEditingId(null) }}
-                          />
+                          <div>
+                            <textarea
+                              className={`w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 ${editErrors.content ? 'border-destructive ring-destructive/20' : 'border-input'}`}
+                              value={editContent}
+                              onChange={e => {
+                                setEditContent(e.target.value)
+                                if (editErrors.content) setEditErrors(prev => ({ ...prev, content: undefined }))
+                              }}
+                              autoFocus
+                              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(item.id) } if (e.key === 'Escape') setEditingId(null) }}
+                              aria-invalid={!!editErrors.content}
+                              aria-describedby={editErrors.content ? 'edit-content-error' : undefined}
+                            />
+                            {editErrors.content && (
+                              <p id="edit-content-error" className="text-[10px] text-destructive mt-1" role="alert">{editErrors.content}</p>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2">
                             <Input
                               value={editTopic}
@@ -398,7 +692,9 @@ export default function KnowledgePage() {
                         </div>
                       ) : (
                         <>
-                          <p className="text-sm text-foreground break-words">{item.content}</p>
+                          <p className="text-sm text-foreground break-words">
+                            {search ? highlightText(item.content, search) : item.content}
+                          </p>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                             {item.topic && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
@@ -410,13 +706,35 @@ export default function KnowledgePage() {
                                 {item.source}
                               </span>
                             )}
-                            {item.importance > 0 && (
-                              <span className="text-[9px] text-muted-foreground/50">
+                            {editingImportanceId === item.id ? (
+                              <div className="flex items-center gap-1.5 bg-muted/50 rounded px-1.5 py-0.5">
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={10}
+                                  step={0.1}
+                                  value={importanceValue}
+                                  onChange={e => setImportanceValue(Number(e.target.value))}
+                                  className="w-16 h-1 accent-primary"
+                                />
+                                <span className="text-[10px] font-mono w-6 text-right">{importanceValue.toFixed(1)}</span>
+                                <button onClick={() => handleSaveImportance(item.id)} aria-label="Save importance" className="text-primary hover:text-primary/80">
+                                  <IconCheck className="h-3 w-3" />
+                                </button>
+                                <button onClick={() => setEditingImportanceId(null)} aria-label="Cancel editing" className="text-muted-foreground hover:text-foreground">
+                                  <IconX className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { setEditingImportanceId(item.id); setImportanceValue(item.importance) }}
+                                className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                              >
                                 importance: {item.importance.toFixed(1)}
-                              </span>
+                              </button>
                             )}
                             <span className="text-[9px] text-muted-foreground/50">
-                              {new Date(item.timestamp * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                              {new Date(item.timestamp * MS_PER_SECOND).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </span>
                           </div>
                         </>
@@ -482,6 +800,41 @@ export default function KnowledgePage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={showBulkTopic} onOpenChange={() => setShowBulkTopic(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Move {selectedIds.size} items to topic</AlertDialogTitle>
+            <AlertDialogDescription>
+              Assign all selected knowledge items to a new topic.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Input
+              value={bulkTopic}
+              onChange={e => setBulkTopic(e.target.value)}
+              placeholder="Enter topic name..."
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter' && bulkTopic.trim()) handleBulkTopicReassign() }}
+            />
+            <div className="flex flex-wrap gap-1 mt-2">
+              {topics.slice(0, 6).map(t => (
+                <button
+                  key={t.name}
+                  onClick={() => setBulkTopic(t.name)}
+                  className="text-[10px] px-2 py-0.5 rounded-full border border-border/40 text-muted-foreground hover:bg-muted/50 transition-colors"
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button size="sm" disabled={!bulkTopic.trim()} onClick={handleBulkTopicReassign}>Move</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={showAdd} onOpenChange={() => setShowAdd(false)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -491,13 +844,27 @@ export default function KnowledgePage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
-            <textarea
-              className="w-full p-2.5 text-sm border border-input rounded-lg resize-none h-24 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
-              placeholder="Enter a fact, preference, or piece of context..."
-              value={newContent}
-              onChange={e => setNewContent(e.target.value)}
-              autoFocus
-            />
+            <div>
+              <textarea
+                className={`w-full p-2.5 text-sm border rounded-lg resize-none h-24 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 ${addErrors.content ? 'border-destructive ring-destructive/20' : 'border-input'}`}
+                placeholder="Enter a fact, preference, or piece of context..."
+                value={newContent}
+                onChange={e => {
+                  const val = e.target.value
+                  setNewContent(val)
+                  if (addErrors.content) setAddErrors(prev => ({ ...prev, content: undefined }))
+                  if (newTopic === 'general' || newTopic === '') {
+                    setNewTopic(suggestTopic(val))
+                  }
+                }}
+                autoFocus
+                aria-invalid={!!addErrors.content}
+                aria-describedby={addErrors.content ? 'add-content-error' : undefined}
+              />
+              {addErrors.content && (
+                <p id="add-content-error" className="text-[10px] text-destructive mt-1" role="alert">{addErrors.content}</p>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <label className="text-xs text-muted-foreground shrink-0">Topic:</label>
               <Input

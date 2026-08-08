@@ -38,6 +38,7 @@ def gpt2_uncompressed():
 @pytest.fixture(scope="session")
 def qwen2():
     """Load Qwen2.5 once for entire test session (from local cache)."""
+    pytest.importorskip("safetensors")
     if not _is_cached(QWEN_ID):
         pytest.skip(f"{QWEN_ID} not cached locally")
     return NumpyEngine.from_pretrained(QWEN_ID)
@@ -46,6 +47,7 @@ def qwen2():
 @pytest.fixture(scope="session")
 def qwen2_uncompressed():
     """Load Qwen2.5 without compression (from local cache)."""
+    pytest.importorskip("safetensors")
     if not _is_cached(QWEN_ID):
         pytest.skip(f"{QWEN_ID} not cached locally")
     return NumpyEngine.from_pretrained(QWEN_ID, compress=False)

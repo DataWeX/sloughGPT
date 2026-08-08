@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
 import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash } from '@sloughgpt/strui'
+import { knowledgeController } from '@/lib/knowledge-controller'
+import { useToastStore } from '@/lib/toast-store'
+import { toggleReaction, getReactions } from '@/lib/reaction-store'
 
 interface MessageActionsProps {
   content: string
@@ -18,6 +21,9 @@ interface MessageActionsProps {
   isBookmarked?: boolean
   onBookmark?: (messageId: string) => void
   onDelete?: (messageId: string) => void
+  onSaveToKnowledge?: (messageId: string, content: string) => void
+  reactions?: Record<string, string[]>
+  onReact?: (messageId: string, emoji: string) => void
 }
 
 function ThumbsUpIcon({ className, animated }: { className?: string; animated?: boolean }) {
@@ -101,12 +107,27 @@ function ConfettiBurst({ active }: { active: boolean }) {
   )
 }
 
-export function MessageActions({ content, messageId, role, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete }: MessageActionsProps) {
+const QUICK_REACTIONS = ['👍', '👎', '❤️', '🔥', '🎉', '🤔', '👀', '💯']
+
+export const MessageActions = memo(function MessageActions({ content, messageId, role, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete, onSaveToKnowledge }: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
   const [thumbsUp, setThumbsUp] = useState(false)
   const [thumbsDown, setThumbsDown] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const [speaking, setSpeaking] = useState(false)
+  const [savedToKnowledge, setSavedToKnowledge] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [localReactions, setLocalReactions] = useState<Record<string, string[]>>(() => getReactions(messageId))
+  const addToast = useToastStore(s => s.addToast)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+      if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current)
+    }
+  }, [])
 
   const handleCopy = useCallback(async () => {
     if (!content || !onCopy) return
@@ -114,8 +135,9 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
       await navigator.clipboard.writeText(content)
       setCopied(true)
       onCopy(content)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {}
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500)
+    } catch { /* clipboard API may be unavailable */ }
   }, [content, onCopy])
 
   const handleThumbsUp = useCallback(() => {
@@ -124,7 +146,8 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
     if (newVal) {
       setThumbsDown(false)
       setCelebrate(true)
-      setTimeout(() => setCelebrate(false), 600)
+      if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current)
+      celebrateTimerRef.current = setTimeout(() => setCelebrate(false), 600)
     }
     onThumbsUp?.(messageId)
   }, [thumbsUp, messageId, onThumbsUp])
@@ -154,7 +177,24 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
     setSpeaking(true)
   }, [content, speaking])
 
+  const handleSaveToKnowledge = useCallback(async () => {
+    if (!content || savedToKnowledge) return
+    try {
+      await knowledgeController.add(content.slice(0, 500), 'chat-saved', true)
+      setSavedToKnowledge(true)
+      addToast('Saved to knowledge', 'success')
+    } catch {
+      addToast('Failed to save to knowledge', 'error')
+    }
+  }, [content, savedToKnowledge, addToast])
+
+  const handleToggleReaction = useCallback((emoji: string) => {
+    toggleReaction(messageId, emoji)
+    setLocalReactions(getReactions(messageId))
+  }, [messageId])
+
   return (
+    <>
     <div
       className="flex items-center gap-0 mt-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity relative"
       role="group"
@@ -222,6 +262,22 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark message'}
         >
           <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />
+        </Button>
+      )}
+
+      {onSaveToKnowledge && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={handleSaveToKnowledge}
+          className="p-2"
+          aria-label={savedToKnowledge ? 'Already saved to knowledge' : 'Save to knowledge'}
+          disabled={savedToKnowledge}
+        >
+          <svg className={cn('h-3.5 w-3.5', savedToKnowledge && 'text-success')} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" />
+            {savedToKnowledge && <path d="M9 12l2 2 4-4" />}
+          </svg>
         </Button>
       )}
 
@@ -306,6 +362,54 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           </Button>
         </>
       )}
+
+      <div className="relative">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="p-2"
+            aria-label="Add reaction"
+          >
+            <span className="text-sm">😊</span>
+          </Button>
+          {showEmojiPicker && (
+            <div className="absolute bottom-full left-0 mb-1 flex gap-0.5 bg-popover/95 backdrop-blur-sm border border-border/40 rounded-lg p-1 shadow-xl z-50">
+              {QUICK_REACTIONS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => {
+                    handleToggleReaction(emoji)
+                    setShowEmojiPicker(false)
+                  }}
+                  className="w-7 h-7 flex items-center justify-center hover:bg-accent/50 rounded transition-colors text-sm"
+                  aria-label={`React with ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
     </div>
+
+    {Object.keys(localReactions).length > 0 && (
+      <div className="flex flex-wrap gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {Object.entries(localReactions).map(([emoji, users]) => (
+          <button
+            key={emoji}
+            onClick={() => handleToggleReaction(emoji)}
+            className={cn(
+              "inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border transition-colors",
+              users.includes('user') ? "bg-primary/15 border-primary/30 text-primary" : "bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted/80"
+            )}
+          >
+            <span>{emoji}</span>
+            <span>{users.length}</span>
+          </button>
+        ))}
+      </div>
+    )}
+    </>
   )
-}
+})

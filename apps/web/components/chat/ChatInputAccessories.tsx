@@ -16,6 +16,10 @@ interface ChatInputAccessoriesProps {
   onGeneratedImage?: (dataUrl: string, prompt: string) => void
   onPDFAnalysis?: (analysis: string, filename: string) => void
   onPDFError?: (error: string) => void
+  onCodeBlock?: () => void
+  textareaRef?: React.RefObject<HTMLTextAreaElement>
+  value?: string
+  onChange?: (value: string) => void
 }
 
 export function ChatInputAccessories({
@@ -26,9 +30,36 @@ export function ChatInputAccessories({
   onGeneratedImage,
   onPDFAnalysis,
   onPDFError,
+  onCodeBlock,
+  textareaRef,
+  value,
+  onChange,
 }: ChatInputAccessoriesProps) {
   const audioInputRef = useRef<HTMLInputElement>(null)
   const [audioLoading, setAudioLoading] = useState(false)
+
+  const handleCodeBlock = () => {
+    if (onCodeBlock) {
+      onCodeBlock()
+      return
+    }
+    if (!textareaRef?.current || !onChange || !value) return
+    const ta = textareaRef.current
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const selected = value.slice(start, end)
+    if (selected) {
+      const wrapped = `\`\`\`\n${selected}\n\`\`\``
+      const newVal = value.slice(0, start) + wrapped + value.slice(end)
+      onChange(newVal)
+      setTimeout(() => { ta.selectionStart = start + 4; ta.selectionEnd = start + 4 + selected.length; ta.focus() }, 0)
+    } else {
+      const insert = '```\n\n```'
+      const newVal = value.slice(0, start) + insert + value.slice(end)
+      onChange(newVal)
+      setTimeout(() => { ta.selectionStart = start + 4; ta.selectionEnd = start + 4; ta.focus() }, 0)
+    }
+  }
 
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -52,6 +83,17 @@ export function ChatInputAccessories({
       {onPDFAnalysis && onPDFError && (
         <PDFUpload onAnalysis={onPDFAnalysis} onError={onPDFError} disabled={disabled} />
       )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-10 w-10 text-muted-foreground"
+        disabled={disabled}
+        onClick={handleCodeBlock}
+        aria-label="Insert code block"
+        title="Insert code block"
+      >
+        <span className="font-mono text-xs font-bold">{'</>'}</span>
+      </Button>
       <Button
         variant="ghost"
         size="icon"

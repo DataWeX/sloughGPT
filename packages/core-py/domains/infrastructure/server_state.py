@@ -126,6 +126,8 @@ class ServerState:
         self._health_history: list[dict] = []
         self._health_history_max: int = 30
 
+        self._last_trend_ts: float = 0.0
+
         # Memory snapshots (periodic RSS/virtual memory tracking)
         self._memory_history: list[dict] = []
         self._memory_history_max: int = 30
@@ -353,6 +355,29 @@ class ServerState:
             })
             if len(self._health_history) > self._health_history_max:
                 self._health_history = self._health_history[-self._health_history_max:]
+
+    def record_trend_snapshots(self, interval_s: float = 5.0) -> None:
+        """Record health + memory trend snapshots if interval_s has elapsed.
+
+        Throttled so high-frequency health polling does not flood the
+        history ring buffers.
+
+        Args:
+            interval_s: minimum seconds between trend records.
+
+        Returns:
+            None
+
+        Side effects:
+            - appends to health_history and memory_history
+        """
+        now = time.time()
+        with self._lock:
+            if now - self._last_trend_ts < interval_s:
+                return
+            self._last_trend_ts = now
+        self.record_health_snapshot()
+        self.record_memory_snapshot()
 
     def get_health_history(self, limit: int = 20) -> list[dict]:
         """Return health score history (oldest first, for charting)."""

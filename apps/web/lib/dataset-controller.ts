@@ -5,24 +5,26 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from './http-client'
 import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
+import type { Method } from '@/hooks/useTrainingForm'
 
 export type ImportSource = 'github' | 'huggingface' | 'url' | 'local' | 'kaggle' | 'csv' | 'isbn'
+export type DatasetFormat = 'jsonl' | 'csv' | 'json'
 
 export interface DatasetStats {
-  format: string
+  format: DatasetFormat
   samples: number
   chars: number
   avg_length: number
   has_messages: boolean
   sample_preview: string[]
   lines: number
-  suggested_method: string
+  suggested_method: Method | 'unknown'
   file_type: string
   error?: string
 }
 
 export interface TrainingConfig {
-  method: string
+  method: Method
   model: string
   epochs: number
   learning_rate: number

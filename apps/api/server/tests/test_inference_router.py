@@ -121,6 +121,37 @@ class TestSessionCRUD:
         resp = client.delete(f"/chat/sessions/nonexistent_{uuid.uuid4().hex[:8]}")
         assert resp.status_code == 404
 
+    def test_delete_session_clears_slonet_kv(self):
+        """Deleting a session drops its cross-turn KV state on the provider."""
+        from domains.models.provider import register_provider, _providers
+
+        class _FakeProvider:
+            def __init__(self):
+                self.cleared = []
+
+            def clear_session(self, session_id):
+                self.cleared.append(session_id)
+
+        fake = _FakeProvider()
+        register_provider("slonet-native", fake)
+        try:
+            sid = f"kvdel_{uuid.uuid4().hex[:8]}"
+            client.post("/chat/sessions", json={"session_id": sid, "name": "kv"})
+            resp = client.delete(f"/chat/sessions/{sid}")
+            assert resp.status_code == 200
+            assert sid in fake.cleared
+        finally:
+            _providers.pop("slonet-native", None)
+
+    def test_delete_session_without_provider_still_succeeds(self):
+        """KV clear is best-effort — delete works even with no slonet provider."""
+        from domains.models.provider import _providers
+        _providers.pop("slonet-native", None)
+        sid = f"kvmiss_{uuid.uuid4().hex[:8]}"
+        client.post("/chat/sessions", json={"session_id": sid, "name": "kv"})
+        resp = client.delete(f"/chat/sessions/{sid}")
+        assert resp.status_code == 200
+
     def test_search_sessions_empty_query(self):
         resp = client.get("/chat/sessions/search?q=")
         assert resp.status_code == 200

@@ -41,7 +41,7 @@ export default function TraitEditor({ traitWeights, onSave, onReset }: TraitEdit
   }
 
   return (
-    <div className="space-y-4" data-testid="trait-editor">
+    <div className="space-y-4">
       {/* Live archetype badge */}
       <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/40 border border-border/50">
         <span className="text-[11px] text-muted-foreground">Archetype</span>

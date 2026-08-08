@@ -19,8 +19,8 @@ export function AutoTrainCard({ status }: AutoTrainCardProps) {
             value={status.enabled ? <span className="font-mono">Running</span> : <span className="font-mono">Off</span>}
             icon={<span className={`inline-block w-2 h-2 rounded-full ${status.enabled ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
           />
-          <StatCard label="Queue" value={<span className="font-mono">{status.pending_conversations}/{status.threshold}</span>} />
-          <StatCard label="Trains" value={<span className="font-mono">{status.total_trains.toString()}</span>} />
+          <StatCard label="Queue" value={<span className="font-mono">{status.pending_conversations ?? 0}/{status.threshold ?? 0}</span>} />
+          <StatCard label="Trains" value={<span className="font-mono">{(status.total_trains ?? 0).toString()}</span>} />
           <StatCard label="Loss" value={status.last_loss != null ? <span className="font-mono">{status.last_loss.toFixed(4)}</span> : '...'} />
         </KpiGrid>
         {status.last_train && (
@@ -30,7 +30,7 @@ export function AutoTrainCard({ status }: AutoTrainCardProps) {
           </p>
         )}
         <p className="text-[10px] text-muted-foreground/50 mt-0.5 font-mono">
-          {status.session_count} sessions · {status.response_log_count} logs · {status.interval_s}s
+          {status.session_count ?? 0} sessions · {status.response_log_count ?? 0} logs · {status.interval_s ?? 0}s
         </p>
       </CardContent>
     </Card>

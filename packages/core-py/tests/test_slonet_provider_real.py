@@ -25,7 +25,7 @@ from domains.inference.slonet_provider import (
     _split_fused_qkv,
 )
 
-# QuantEngine on tiny random weights can hit float32 scale overflows; these
+# Quantine on tiny random weights can hit float32 scale overflows; these
 # RuntimeWarnings come from real quantization math, not test failures.
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
 
@@ -325,7 +325,7 @@ def test_generate_batch_real(provider):
     assert len(results) == 2
 
 
-# ── quantization via real QuantEngine ─────────────────────────────────────────
+# ── quantization via real Quantine ─────────────────────────────────────────
 
 
 # These tests exercise the quantization *mechanics* (fresh quantize, npz
@@ -376,6 +376,31 @@ def test_quantize_reload_metadata_only(slnc, tmp_path, monkeypatch, avx2_availab
     assert reloaded.quantization_report()["quantized"] is True
 
 
+def test_fused_gemm_generation_bit_identical(quantized_provider, monkeypatch):
+    """Fused [q;k;v] / [w1;w3] GEMMs must not change generated output.
+
+    ``generate_numpy`` merges same-input quantized projections into single C
+    calls; each fused output row depends only on its own weight/scale/bias and
+    the shared per-token activation scale, so it is bit-identical to the
+    unfused path. Monkeypatching ``_fuse_quant_weights`` to None forces the
+    unfused inlined loop for a pure-numerics comparison.
+    """
+    model = quantized_provider._model
+    tok = quantized_provider._tokenizer
+    ids = np.array(tok.encode("hello world"), dtype=np.int64).flatten()
+
+    def gen():
+        return model.generate_numpy(ids, max_new_tokens=5, temperature=0.0, eos_token=-1)
+
+    fused = gen()
+    packs = [(b.attn._fused_qkv(), b.ff._fused_gate_up()) for b in model.blocks]
+    assert any(p[0] is not None or p[1] is not None for p in packs), "fusion packs not built"
+
+    monkeypatch.setattr("domains.training.slonet._fuse_quant_weights", lambda *a, **k: None)
+    unfused = gen()
+    np.testing.assert_array_equal(fused, unfused)
+
+
 def test_quantize_skipped_without_avx2(slnc, tmp_path, monkeypatch):
     monkeypatch.setenv("HF_HOME", str(tmp_path))
     monkeypatch.setattr("domains.infrastructure.quant_core.wrapper.HAS_AVX2", False)
@@ -383,3 +408,77 @@ def test_quantize_skipped_without_avx2(slnc, tmp_path, monkeypatch):
     provider = SloNetChatProvider.from_slnc(slnc, model_id="gpt2", quantize=True)
     assert provider.quantization_report() == {"quantized": False}
     assert provider.generate("hi", max_tokens=3, temperature=0.0)
+
+
+# ── lazy_from_slnc (server autoload deferred-weight path) ─────────────────────
+
+
+@pytest.fixture
+def lazy_provider(slnc, tmp_path, monkeypatch):
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    _build_tokenizer(str(tmp_path))
+    return SloNetChatProvider.lazy_from_slnc(slnc, model_id="gpt2")
+
+
+def test_lazy_from_slnc_header_only_deferred(lazy_provider):
+    """Construction reads only the .slnc header — no weights resident."""
+    assert lazy_provider._model is None
+    assert lazy_provider._parser is None
+    assert lazy_provider._loaded is False
+    md = lazy_provider.metadata()
+    assert md["model_id"] == "gpt2"
+    assert md["vocab_size"] == VOCAB
+    assert md["total_params"] > 0
+    assert lazy_provider.tokenize("hello")  # tokenizer is eager
+    stats = lazy_provider.session_stats()
+    assert stats["active_sessions"] == 0
+
+
+def test_lazy_from_slnc_generate_matches_eager(slnc, tmp_path, monkeypatch, lazy_provider):
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    _build_tokenizer(str(tmp_path))
+    eager = SloNetChatProvider.from_slnc(slnc, model_id="gpt2")
+    assert lazy_provider._model is None
+    lazy_text = lazy_provider.generate("hello", max_tokens=8, temperature=0.0)
+    eager_text = eager.generate("hello", max_tokens=8, temperature=0.0)
+    assert isinstance(lazy_text, str) and lazy_text
+    assert lazy_text == eager_text
+    assert lazy_provider._loaded is True
+    assert lazy_provider._model is not None
+    assert lazy_provider.metadata()["lazy"] is True
+
+
+def test_lazy_from_slnc_release_and_reload(lazy_provider):
+    text = lazy_provider.generate("hi", max_tokens=4, temperature=0.0)
+    assert lazy_provider._model is not None
+    assert lazy_provider.release_model() is True
+    assert lazy_provider._model is None
+    assert lazy_provider.session_stats()["active_sessions"] == 0
+    again = lazy_provider.generate("hi", max_tokens=4, temperature=0.0)
+    assert again == text
+    assert lazy_provider._model is not None
+
+
+def test_lazy_from_slnc_release_before_load(lazy_provider):
+    assert lazy_provider.release_model() is False
+    text = lazy_provider.generate("hi", max_tokens=4, temperature=0.0)
+    assert text
+
+
+def test_lazy_from_slnc_chat_stream_cross_turn_kv(lazy_provider):
+    async def _collect(session_id):
+        return [t async for t in lazy_provider.chat_stream(
+            [{"role": "user", "content": "hello"}], max_tokens=4, session_id=session_id)]
+
+    asyncio.run(_collect("s1"))
+    stats = lazy_provider.session_stats()
+    assert stats["active_sessions"] == 1
+    asyncio.run(_collect("s1"))
+    stats = lazy_provider.session_stats()
+    assert stats["active_sessions"] == 1
+    assert stats["cached_tokens"] > 0
+    asyncio.run(_collect("s2"))
+    assert lazy_provider.session_stats()["active_sessions"] == 2
+    assert lazy_provider.clear_session("s1") is True
+    assert lazy_provider.session_stats()["active_sessions"] == 1
+    assert lazy_provider.clear_all_sessions() == 1

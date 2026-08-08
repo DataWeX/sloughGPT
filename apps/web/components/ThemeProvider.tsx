@@ -27,9 +27,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
-    const savedMode = localStorage.getItem(MODE_STORAGE_KEY) as ThemeMode
+    const savedMode = localStorage.getItem(MODE_STORAGE_KEY)
     const t = isStoredThemeId(savedTheme) ? savedTheme : 'purple'
-    const m = savedMode === 'light' || savedMode === 'dark' ? savedMode : 'dark'
+    let m: ThemeMode
+    if (savedMode === 'light' || savedMode === 'dark') {
+      m = savedMode
+    } else if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      m = 'light'
+    } else {
+      m = 'dark'
+    }
     setTheme(t)
     setMode(m)
     syncHtmlTheme(m, t)
@@ -68,14 +75,3 @@ export const THEMES: { id: StoredThemeId; name: string; color: string }[] = [
   { id: 'green', name: 'Mint', color: '#6bb89a' },
   { id: 'teal', name: 'Dew', color: '#6cabcc' },
 ]
-
-/** Maps theme ID to CSS variable value for --primary */
-export const THEME_PRIMARY: Record<StoredThemeId, string> = {
-  blue: '139 123 196',
-  purple: '166 127 212',
-  pink: '216 148 180',
-  red: '232 136 144',
-  orange: '232 168 108',
-  green: '107 184 154',
-  teal: '108 171 204',
-}

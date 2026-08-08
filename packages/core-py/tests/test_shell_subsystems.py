@@ -266,6 +266,42 @@ class TestShellAuditLogger:
             assert a is b
         mod._audit = None
 
+    def test_setup_failure_swallows(self, monkeypatch):
+        from domains.shell.audit import ShellAuditLogger
+        import logging.handlers
+
+        def _boom(*a, **k):
+            raise OSError("cannot open log file")
+
+        monkeypatch.setattr(logging.handlers, "RotatingFileHandler", _boom)
+        with tempfile.TemporaryDirectory() as tmp:
+            logger = ShellAuditLogger(log_dir=tmp)
+            assert logger._handler is None
+            logger.command("rm -rf /tmp/x", "rm", "-rf /tmp/x", 1)
+            assert logger._cmd_count == 1
+
+
+# ── DaitRuntime ─────────────────────────────────────────────────
+
+
+class TestDaitRuntime:
+    def test_get_dait_runtime_singleton(self, monkeypatch):
+        import domains.shell as shell_mod
+        monkeypatch.setattr(shell_mod, "_dait_instance", None)
+        a = shell_mod.get_dait_runtime()
+        b = shell_mod.get_dait_runtime()
+        assert a is b
+        monkeypatch.setattr(shell_mod, "_dait_instance", None)
+
+    def test_get_dait_runtime_resets(self, monkeypatch):
+        import domains.shell as shell_mod
+        monkeypatch.setattr(shell_mod, "_dait_instance", None)
+        first = shell_mod.get_dait_runtime()
+        monkeypatch.setattr(shell_mod, "_dait_instance", None)
+        second = shell_mod.get_dait_runtime()
+        assert first is not second
+        monkeypatch.setattr(shell_mod, "_dait_instance", None)
+
 
 # ── ShellCommands ─────────────────────────────────────────────────
 

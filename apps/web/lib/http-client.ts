@@ -78,7 +78,7 @@ async function request<T>(
         let detail: string | undefined
         try { const j = JSON.parse(text); detail = j.detail ?? j.message ?? j.error }
         catch { detail = text || res.statusText }
-        const message = Array.isArray(detail) ? detail.map((d: any) => d.msg).join('; ') : detail || 'Request failed'
+        const message = Array.isArray(detail) ? detail.map((d: { msg?: string } | string) => typeof d === 'string' ? d : d.msg ?? '').join('; ') : detail || 'Request failed'
 
         if (!opts?.silent) {
           const apiErr = new ApiError(message, status, { raw: text }, requestId)

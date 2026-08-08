@@ -5,6 +5,16 @@ import pytest
 from domains.learner.knowledge import KnowledgeMemory, KnowledgeFact
 
 
+@pytest.fixture(autouse=True)
+def isolated_paths(tmp_path, monkeypatch):
+    """Keep persistence off the real data dir (repo-root anchored)."""
+    from domains.learner import knowledge as K
+    monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
+    monkeypatch.setattr(K, "FEED_STATE_PATH", tmp_path / "feeds.json")
+    monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")
+    monkeypatch.setattr(K, "ENTRIES_PATH", tmp_path / "entries.json")
+
+
 @pytest.fixture
 def km():
     mem = KnowledgeMemory()

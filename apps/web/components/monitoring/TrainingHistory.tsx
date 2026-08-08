@@ -19,26 +19,28 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function TrainingHistory({ jobs }: TrainingHistoryProps) {
-  if (jobs.length === 0) return null
-
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Training History</span>
       <CardContent className="p-0">
-        <div className="space-y-1">
-          {jobs.slice(0, 6).map((job) => (
-            <div key={job.id} className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-muted/30 transition-colors">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <StatusBadge status={job.status} />
-                <span className="truncate font-mono text-muted-foreground">{job.name || job.id}</span>
+        {jobs.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">No training jobs yet</p>
+        ) : (
+          <div className="space-y-1">
+            {jobs.slice(0, 6).map((job) => (
+              <div key={job.id} className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-muted/30 transition-colors">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <StatusBadge status={job.status} />
+                  <span className="truncate font-mono text-muted-foreground">{job.name || job.id}</span>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground shrink-0 ml-2 font-mono">
+                  {job.loss != null && <span>{job.loss.toFixed(3)}</span>}
+                  {job.epochs_completed != null && <span>ep{job.epochs_completed}</span>}
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground shrink-0 ml-2 font-mono">
-                {job.loss != null && <span>{job.loss.toFixed(3)}</span>}
-                {job.epochs_completed != null && <span>ep{job.epochs_completed}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
         {jobs.length > 6 && (
           <p className="text-[10px] text-muted-foreground/50 mt-1 font-mono">+{jobs.length - 6} more</p>
         )}

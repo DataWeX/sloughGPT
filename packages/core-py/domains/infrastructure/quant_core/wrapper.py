@@ -21,6 +21,7 @@ import logging
 import os
 import subprocess
 import sys
+from typing import Optional, Union
 
 import numpy as np
 
@@ -67,7 +68,7 @@ def _build_one(name: str) -> bool:
                 extra={"tag": "INFRA"})
             return False
         result = subprocess.run(
-            ["gcc", "-O3", "-mavx2", "-shared", "-fPIC",
+            ["gcc", "-O3", "-mavx2", "-shared", "-fPIC", "-pthread",
              "-o", dylib, src],
             capture_output=True, text=True, timeout=30,
         )
@@ -91,14 +92,31 @@ def _build_one(name: str) -> bool:
         return False
 
 
-def _build_all() -> bool:
-    """Compile all C extensions. Returns True if at least one succeeded."""
+def _build_all(force: bool = False) -> bool:
+    """Compile all C extensions. Returns True if at least one succeeded.
+
+    A library is (re)built when its shared object is missing or older than the
+    C source (stale libs silently mask kernel edits). Pass ``force=True`` to
+    always recompile.
+
+    Returns:
+        True if at least one library is available after building.
+    """
     ok = False
     for name in _SRCS:
-        if not os.path.exists(_DYLIBS[name]):
+        src = _SRCS[name]
+        dylib = _DYLIBS[name]
+        if force or not os.path.exists(dylib):
             ok = _build_one(name) or ok
-        else:
-            ok = True
+            continue
+        # Rebuild if the source is newer than the compiled library.
+        try:
+            if os.path.exists(src) and os.path.getmtime(src) > os.path.getmtime(dylib):
+                ok = _build_one(name) or ok
+                continue
+        except OSError:
+            pass
+        ok = True
     return ok
 
 
@@ -128,6 +146,18 @@ def _load_lib():
             ctypes.c_int,     # K
         ]
         _LIB.matmul_int8.restype = None
+        _LIB.matmul_int8_f32.argtypes = [
+            ctypes.c_void_p,  # A (float32)
+            ctypes.c_void_p,  # B (int8)
+            ctypes.c_void_p,  # B_scale (float)
+            ctypes.c_void_p,  # bias (float, nullable)
+            ctypes.c_void_p,  # C (float32 output)
+            ctypes.c_int,     # M
+            ctypes.c_int,     # N
+            ctypes.c_int,     # K
+            ctypes.c_int,     # b_scale_per_row
+        ]
+        _LIB.matmul_int8_f32.restype = None
         has_int8 = True
     except Exception as exc:
         logger.warning("quant_core: int8 lib load failed (%s)", exc,
@@ -191,6 +221,66 @@ def matmul_int8_c(A: np.ndarray, B: np.ndarray) -> np.ndarray:
         ctypes.c_int(M),
         ctypes.c_int(N),
         ctypes.c_int(K),
+    )
+    return C
+
+
+def matmul_int8_f32_c(
+    A: np.ndarray,
+    B: np.ndarray,
+    B_scale: Union[float, np.ndarray],
+    bias: Optional[np.ndarray] = None,
+) -> Optional[np.ndarray]:
+    """Fused float32 activation → quantized int8 → GEMM → float32 output.
+
+    Performs the whole per-token symmetric W8A8 linear in one C call:
+    quantize each row of ``A`` (scale = max|row|/127), int8 GEMM against
+    ``B``, then dequantize with per-row ``B_scale`` and add ``bias``.
+
+    Args:
+        A: float32 activations, shape (M, K)
+        B: int8 weights, shape (N, K)
+        B_scale: weight scale — float (per-tensor) or ``(N,)`` float32 per-row
+        bias: optional float32 bias, shape (N,)
+
+    Returns:
+        float32 result, shape (M, N), or None when the C library is
+        unavailable so the caller can fall back to the unfused path.
+    """
+    if not _load_lib() or not hasattr(_LIB, "matmul_int8_f32"):
+        return None
+
+    M, K = A.shape
+    N = B.shape[0]
+    assert B.shape[1] == K, f"B.shape[1]={B.shape[1]} != K={K}"
+
+    A = np.ascontiguousarray(A, dtype=np.float32)
+    B = np.ascontiguousarray(B, dtype=np.int8)
+    if np.isscalar(B_scale):
+        b_scale_arr = np.asarray([float(B_scale)], dtype=np.float32)
+        b_scale_per_row = 0
+    else:
+        b_scale_arr = np.asarray(B_scale, dtype=np.float32).ravel().copy()
+        assert b_scale_arr.shape[0] == N, \
+            f"B_scale has {b_scale_arr.shape[0]} rows, expected {N}"
+        b_scale_per_row = 1
+    bias_ptr = None
+    if bias is not None:
+        bias = np.ascontiguousarray(bias, dtype=np.float32)
+        assert bias.shape[0] == N
+        bias_ptr = bias.ctypes.data
+
+    C = np.empty((M, N), dtype=np.float32)
+    _LIB.matmul_int8_f32(
+        A.ctypes.data,
+        B.ctypes.data,
+        b_scale_arr.ctypes.data,
+        bias_ptr,
+        C.ctypes.data,
+        ctypes.c_int(M),
+        ctypes.c_int(N),
+        ctypes.c_int(K),
+        ctypes.c_int(b_scale_per_row),
     )
     return C
 

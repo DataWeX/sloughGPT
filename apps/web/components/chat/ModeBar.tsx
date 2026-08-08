@@ -140,7 +140,9 @@ export function ModeBar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">
             <DropdownMenuLabel className="text-[11px] text-muted-foreground/60">Mode</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={mode} onValueChange={(v) => onModeChange(v as ChatMode)}>
+            <DropdownMenuRadioGroup value={mode} onValueChange={(v) => {
+              if (MODES.some(m => m.value === v)) onModeChange(v as ChatMode)
+            }}>
               {MODES.map(m => (
                 <DropdownMenuRadioItem key={m.value} value={m.value} className="text-xs gap-2">
                   <span>{m.icon}</span>

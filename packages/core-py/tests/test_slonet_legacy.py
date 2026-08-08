@@ -1780,9 +1780,9 @@ class TestNormAccAndNd:
 
 class TestQuantizedLinearForward:
     def test_int8_quantized_forward(self):
-        from domains.infrastructure.quantization import QuantEngine
+        from domains.infrastructure.quantization import Quantine
         lin = SloLinear(8, 4, "q8")
-        info = QuantEngine(bits=8, mode="symmetric").quantize("w", lin.weight.data)
+        info = Quantine(bits=8, mode="symmetric").quantize("w", lin.weight.data)
         lin.set_quantized_weight(info)
         x = np.random.randn(3, 8).astype(np.float32)
         f = lin.forward_numpy(x)
@@ -1791,9 +1791,9 @@ class TestQuantizedLinearForward:
         np.testing.assert_allclose(f, t.data, atol=1e-3)
 
     def test_int4_quantized_forward(self):
-        from domains.infrastructure.quantization import QuantEngine
+        from domains.infrastructure.quantization import Quantine
         lin = SloLinear(8, 4, "q4")
-        info = QuantEngine(bits=4, mode="symmetric").quantize("w", lin.weight.data)
+        info = Quantine(bits=4, mode="symmetric").quantize("w", lin.weight.data)
         lin.set_quantized_weight(info)
         x = np.random.randn(3, 8).astype(np.float32)
         f = lin.forward_numpy(x)

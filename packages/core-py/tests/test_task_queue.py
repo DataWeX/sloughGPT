@@ -287,15 +287,129 @@ class TestInProcessTaskQueue:
         await queue.stop()
         assert order == ["high", "low"]
 
-    async def test_singleton(self):
-        q1 = get_task_queue()
-        q2 = get_task_queue()
-        assert q1 is q2
+    async def test_unregister_handler(self, queue):
+        async def h(task: Task):
+            pass
+
+        queue.register_handler("echo", h)
+        queue.unregister_handler("echo")
+        t = Task(task_type="echo")
+        await queue.enqueue(t)
+        await queue.start()
+        await asyncio.sleep(0.3)
+        await queue.stop()
+        assert t.status == TaskStatus.FAILED
+        assert "No handler" in (t.error or "")
+
+    async def test_cancel_paused(self, queue):
+        t = Task(task_type="echo")
+        await queue.enqueue(t)
+        t.status = TaskStatus.PAUSED
+        queue._paused[t.id] = t
+        ok = await queue.cancel(t.id)
+        assert ok is True
+        assert t.status == TaskStatus.CANCELLED
+        assert t.id not in queue._paused
+
+    async def test_stop_cancels_running(self, queue):
+        t = Task(task_type="echo")
+        queue._tasks[t.id] = t
+        t.status = TaskStatus.RUNNING
+        queue._running[t.id] = t
+        await queue.start()
+        await queue.stop()
+        assert t.cancel_event.is_set()
+
+    async def test_emit_event_with_extra(self, queue):
+        t = Task(task_type="echo")
+        queue._tasks[t.id] = t
+        queue._emit_event("custom", t, extra={"note": "x"})
+
+    async def test_emit_event_bus_error_swallowed(self, queue):
+        class BadBus:
+            def emit(self, *args, **kwargs):
+                raise RuntimeError("bus down")
+
+        queue._event_bus = BadBus()
+        t = Task(task_type="echo")
+        queue._tasks[t.id] = t
+        queue._emit_event("task.enqueued", t)
+
+    async def test_sse_callback_error_swallowed(self, queue):
+        def bad_cb(event: str, task: Task):
+            raise RuntimeError("cb boom")
+
+        queue.subscribe(bad_cb)
+        t = Task(task_type="echo")
+        await queue.enqueue(t)
+        assert t.status == TaskStatus.QUEUED
+
+    async def test_cancel_before_pause_wait(self, queue):
+        t = Task(task_type="echo")
+        queue._tasks[t.id] = t
+        t.cancel_event.set()
+        queue.register_handler("echo", lambda task: None)
+        await queue._run_with_controls(t)
+        assert t.status == TaskStatus.CANCELLED
+
+    async def test_cancel_after_pause_wait(self, queue):
+        t = Task(task_type="echo")
+        queue._tasks[t.id] = t
+        t.pause_event.clear()
+        queue.register_handler("echo", lambda task: None)
+        runner = asyncio.create_task(queue._run_with_controls(t))
+        await asyncio.sleep(0.05)
+        t.pause_event.set()
+        t.cancel_event.set()
+        await runner
+        assert t.status == TaskStatus.CANCELLED
+        assert queue.count(TaskStatus.CANCELLED) == 1
+
+    async def test_dispatch_skips_cancelled(self, queue):
+        t = Task(task_type="echo")
+        queue._tasks[t.id] = t
+        queue._pending.append(t)
+        t.status = TaskStatus.CANCELLED
+        disp = asyncio.create_task(queue._dispatch_loop())
+        await asyncio.sleep(0.15)
+        queue._stop_event.set()
+        await asyncio.wait_for(disp, timeout=2.0)
+        assert t.id not in queue._running
+        assert queue._pending == []
+
+    async def test_base_run_with_controls_raises(self):
+        from domains.infrastructure.task_queue import TaskQueue
+
+        q = TaskQueue(num_workers=1)
+        with pytest.raises(NotImplementedError):
+            await q._run_with_controls(Task(task_type="echo"))
+
+    async def test_event_bus_import_failure(self, monkeypatch):
+        import sys
+        import types
+
+        fake = types.ModuleType("domains.infrastructure.event_bus")
+        monkeypatch.setitem(sys.modules, "domains.infrastructure.event_bus", fake)
+        q = InProcessTaskQueue(num_workers=1)
+        assert q._event_bus is None
 
     async def test_set_singleton(self):
         q = InProcessTaskQueue()
         set_task_queue(q)
         assert get_task_queue() is q
+
+    async def test_get_task_queue_initializes_singleton(self):
+        import domains.infrastructure.task_queue as tq
+        from domains.infrastructure.resource_manager import get_resource_manager
+
+        old = tq._default_queue
+        tq._default_queue = None
+        try:
+            q = tq.get_task_queue()
+            assert q is not None
+            assert q._pool.num_workers == get_resource_manager().task_queue_workers
+        finally:
+            tq._default_queue = old
 
 
 @pytest.mark.asyncio
@@ -323,3 +437,26 @@ class TestWorkerPool:
         await asyncio.sleep(0.2)
         await pool.stop()
         assert results == ["test"]
+
+    async def test_start_twice_is_noop(self):
+        from domains.infrastructure.task_queue import WorkerPool
+        pool = WorkerPool(num_workers=1)
+        await pool.start()
+        await pool.start()
+        await pool.stop()
+        assert pool.active_workers == 0
+
+    async def test_handler_exception_is_logged(self):
+        from domains.infrastructure.task_queue import WorkerPool, Task
+
+        async def boom(task: Task):
+            raise RuntimeError("boom")
+
+        pool = WorkerPool(num_workers=1)
+        pool.set_handler(boom)
+        await pool.start()
+        t = Task(name="fail", task_type="generic")
+        await pool.queue.put(t)
+        await asyncio.sleep(0.2)
+        await pool.stop()
+        assert pool.active_workers == 0

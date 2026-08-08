@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useEffect, useCallback, useRef, useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
@@ -9,7 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Tabs } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { datasetController } from '@/lib/controllers'
+import { datasetController, modelController } from '@/lib/controllers'
+import { trainingJobsController } from '@/lib/training-controller'
+import { soulsController } from '@/lib/souls-controller'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
 import { OutputCard } from '@/components/OutputCard'
 import { TestModelDialog } from '@/components/training/TestModelDialog'
@@ -21,10 +23,31 @@ import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { useTestDialog } from '@/hooks/useTestDialog'
 import { JobHistoryCard } from '@/components/training/JobHistoryCard'
 import { CheckpointsCard } from '@/components/training/CheckpointsCard'
+import { FineTunedModelsCard } from '@/components/training/FineTunedModelsCard'
 import { TrainingFormCard } from '@/components/training/TrainingFormCard'
 import { TrainFromSessionsCard } from '@/components/training/TrainFromSessionsCard'
 import { TrainingDataCard } from '@/components/training/TrainingDataCard'
 import { EvalReportCard } from '@/components/training/EvalReportCard'
+import { SelfTrainCard } from '@/components/training/SelfTrainCard'
+import { DatasetPreviewCard } from '@/components/training/DatasetPreviewCard'
+import { CheckpointCompareCard } from '@/components/training/CheckpointCompareCard'
+import { BestCheckpointCard } from '@/components/training/BestCheckpointCard'
+import { TrainingSummaryCard } from '@/components/training/TrainingSummaryCard'
+import { CheckpointLossChart } from '@/components/training/CheckpointLossChart'
+import { CheckpointNotes } from '@/components/training/CheckpointNotes'
+import { TrainingHealthCard } from '@/components/training/TrainingHealthCard'
+import { useCheckpointFilter } from '@/components/training/useCheckpointFilter'
+import { CheckpointFilterBar } from '@/components/training/CheckpointFilterBar'
+import { useTrainingSearch, TrainingSearchBar } from '@/components/training/TrainingSearch'
+import { TrainingRunCard } from '@/components/training/TrainingRunCard'
+import { TrainingProgress } from '@/components/training/TrainingProgress'
+import { TrainingTimeline } from '@/components/training/TrainingTimeline'
+import { TrainingQuickActions } from '@/components/training/TrainingQuickActions'
+import { TrainingCompareCard } from '@/components/training/TrainingCompareCard'
+import { TrainingDashboard } from '@/components/training/TrainingDashboard'
+import { TrainingOnboarding } from '@/components/training/TrainingOnboarding'
+import { TrainingTips } from '@/components/training/TrainingTips'
+import { TrainingActivity } from '@/components/training/TrainingActivity'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
@@ -38,6 +61,11 @@ export default function TrainingPage() {
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
 
   const [activeTab, setActiveTab] = useState('train')
+  const [currentModelId, setCurrentModelId] = useState<string | null>(null)
+
+  useEffect(() => {
+    void modelController.status().then(s => setCurrentModelId(s.model_type))
+  }, [])
 
   // ===== Visibility-based polling pause =====
   const visibilityRef = useRef<boolean>(true)
@@ -59,6 +87,38 @@ export default function TrainingPage() {
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [session.trainingRunning])
+
+  // Keyboard shortcuts for training page
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault()
+        if (form.canStart && !session.trainingRunning) {
+          form.startTraining()
+          addToast('Training started', 'success')
+        }
+      }
+      if (e.key === 't' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        setActiveTab('train')
+      }
+      if (e.key === 'h' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        setActiveTab('history')
+      }
+      if (e.key === 'e' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        setActiveTab('eval')
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
+        e.preventDefault()
+        test.setTestDialogOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [form.canStart, session.trainingRunning, form.startTraining, addToast, test.setTestDialogOpen])
 
   useEffect(() => {
     void datasets.fetchDatasets()
@@ -137,6 +197,30 @@ export default function TrainingPage() {
     requestNotificationPermission()
   }, [requestNotificationPermission])
 
+  const handleExportMetrics = useCallback(async () => {
+    try {
+      const blob = await trainingJobsController.exportMetrics()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'training-metrics.json'
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast('Metrics exported', 'success')
+    } catch {
+      addToast('Failed to export metrics', 'error')
+    }
+  }, [addToast])
+
+  const { filtered: filteredCheckpoints, typeFilter, setTypeFilter, lossMax, setLossMax, types } = useCheckpointFilter(checkpoints.checkpoints)
+  const { filtered: searchResults, query, setQuery } = useTrainingSearch(filteredCheckpoints)
+
+  const bestName = useMemo(() => {
+    const valid = searchResults.filter(c => c.loss != null && c.loss > 0)
+    if (!valid.length) return null
+    return valid.reduce((a, b) => (a.loss ?? Infinity) < (b.loss ?? Infinity) ? a : b).name
+  }, [searchResults])
+
   const TABS = [
     { value: 'train', label: 'Train' },
     { value: 'history', label: 'History', count: checkpoints.checkpoints.length || undefined },
@@ -149,6 +233,7 @@ export default function TrainingPage() {
         left={<AppRouteHeaderLead title="Teach me" subtitle="Teach your agent from your data" />}
         right={
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={handleExportMetrics}>Export metrics</Button>
             <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchJobs(); void checkpoints.fetchCheckpoints() }}>Refresh</Button>
           </div>
         }
@@ -162,6 +247,10 @@ export default function TrainingPage() {
           <StatCard label="Completed" value={completedCount} />
           <StatCard label="Saved versions" value={checkpoints.checkpoints.length} />
         </KpiGrid>
+
+        <TrainingSummaryCard checkpoints={checkpoints.checkpoints} />
+
+        <TrainingHealthCard checkpoints={checkpoints.checkpoints} />
 
         {/* Tabs */}
         <Tabs value={activeTab} onChange={setActiveTab} tabs={TABS} />
@@ -177,9 +266,38 @@ export default function TrainingPage() {
               onTest={() => test.setTestDialogOpen(true)}
             />
 
+            {datasets.selectedDataset && (
+              <DatasetPreviewCard datasetId={datasets.selectedDataset} />
+            )}
+
             <TrainFromSessionsCard />
 
             <TrainingDataCard />
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Schedule</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                    <span>Training runs immediately when started</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-primary" />
+                    <span>Queue multiple jobs with &ldquo;Start training&rdquo;</span>
+                  </div>
+                </div>
+                {form.allJobs.filter(j => j.status === 'running').length > 0 && (
+                  <p className="text-[11px] text-warning mt-2">
+                    {form.allJobs.filter(j => j.status === 'running').length} job(s) running — new jobs will queue automatically
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <SelfTrainCard />
 
             {!session.trainingRunning && !checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 && form.allJobs.length === 0 && (
               <Card className="border-dashed">
@@ -202,7 +320,107 @@ export default function TrainingPage() {
         {/* Tab: History */}
         {activeTab === 'history' && (
           <div className="space-y-4">
+            <TrainingOnboarding
+              hasCheckpoints={checkpoints.checkpoints.length > 0}
+              onStartTraining={() => setActiveTab('train')}
+              onImportData={() => setActiveTab('train')}
+            />
+
+            <TrainingDashboard checkpoints={checkpoints.checkpoints} />
+
+            <TrainingTips
+              checkpoints={checkpoints.checkpoints}
+              isTraining={!!runningJob}
+              hasDataset={!!datasets.selectedDataset}
+            />
+
+            <TrainingActivity checkpoints={checkpoints.checkpoints} />
+
+            <TrainingProgress job={runningJob ?? null} />
+
+            <TrainingTimeline checkpoints={searchResults} />
+
+            <TrainingQuickActions
+              checkpoints={searchResults}
+              onLoadBest={async (name) => {
+                try {
+                  await soulsController.loadCheckpoint(name)
+                  addToast(`Loaded ${name}`, 'success')
+                  await modelController.status()
+                } catch {
+                  addToast('Failed to load checkpoint', 'error')
+                }
+              }}
+              onExportMetrics={handleExportMetrics}
+            />
+
+            <TrainingSearchBar query={query} onQueryChange={setQuery} total={filteredCheckpoints.length} shown={searchResults.length} />
+
+            <CheckpointFilterBar
+              types={types}
+              typeFilter={typeFilter}
+              onTypeFilterChange={setTypeFilter}
+              lossMax={lossMax}
+              onLossMaxChange={setLossMax}
+              total={checkpoints.checkpoints.length}
+              shown={filteredCheckpoints.length}
+            />
+
             <CheckpointsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }} onContinue={form.startTraining} onTest={() => test.setTestDialogOpen(true)} />
+
+            <BestCheckpointCard
+              checkpoints={searchResults}
+              onLoad={async (name) => {
+                try {
+                  await soulsController.loadCheckpoint(name)
+                  addToast(`Loaded ${name}`, 'success')
+                  await modelController.status()
+                } catch {
+                  addToast('Failed to load checkpoint', 'error')
+                }
+              }}
+            />
+
+            <CheckpointLossChart checkpoints={searchResults} />
+
+            <div className="space-y-2">
+              {searchResults.map((c, i) => (
+                <TrainingRunCard
+                  key={c.name}
+                  checkpoint={c}
+                  index={i}
+                  isBest={c.name === bestName}
+                  onLoad={async (cp) => {
+                    try {
+                      await soulsController.loadCheckpoint(cp.name)
+                      addToast(`Loaded ${cp.name}`, 'success')
+                      await modelController.status()
+                    } catch {
+                      addToast('Failed to load checkpoint', 'error')
+                    }
+                  }}
+                />
+              ))}
+            </div>
+
+            <CheckpointCompareCard checkpoints={searchResults} />
+
+            <TrainingCompareCard
+              checkpoints={searchResults}
+              onLoad={async (name) => {
+                try {
+                  await soulsController.loadCheckpoint(name)
+                  addToast(`Loaded ${name}`, 'success')
+                  await modelController.status()
+                } catch {
+                  addToast('Failed to load checkpoint', 'error')
+                }
+              }}
+            />
+
+            <CheckpointNotes checkpoints={searchResults} />
+
+            <FineTunedModelsCard activeModelId={currentModelId} onLoaded={() => { void checkpoints.fetchCheckpoints(); void modelController.status().then(s => setCurrentModelId(s.model_type)) }} />
 
             <EvalReportCard />
 

@@ -26,7 +26,8 @@ def fake_clock(monkeypatch):
 
 def write_weight_file(path, size):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(b"\x00" * size)
+    with path.open("wb") as f:
+        f.truncate(size)
 
 
 class TestSumWeightFiles:
@@ -52,6 +53,14 @@ class TestSumWeightFiles:
         assert ms._sum_weight_files(tmp_path) == 1.46
 
     def test_empty_dir_returns_none(self, tmp_path):
+        assert ms._sum_weight_files(tmp_path) is None
+
+    def test_stat_error_ignored(self, tmp_path, monkeypatch):
+        class _StatBoom:
+            def stat(self):
+                raise OSError("boom")
+
+        monkeypatch.setattr(ms.Path, "rglob", lambda self, pattern: iter([_StatBoom()]))
         assert ms._sum_weight_files(tmp_path) is None
 
 
@@ -100,6 +109,13 @@ class TestGetHubFileSize:
 
         monkeypatch.setattr(hub, "fetch_model_info", boom)
         assert ms._get_hub_file_size_gb("org/model") is None
+
+    def test_ignores_non_dict_siblings(self, monkeypatch):
+        _patch_fetch(monkeypatch, {"siblings": [
+            "not-a-dict",
+            {"rfilename": "model.safetensors", "size": 500 * 1024**2},
+        ]})
+        assert ms._get_hub_file_size_gb("org/model") == round(500 * 1024**2 / 1024**3, 2)
 
 
 class TestComputeModelSize:
@@ -176,6 +192,18 @@ class TestIsModelCached:
         ms.is_model_cached("org/model", deep_check=True)
         ms.is_model_cached("org/model", deep_check=True)
         assert len(calls) == 2
+
+
+class TestImportFallback:
+    def test_hf_hub_import_error_uses_fallback(self, monkeypatch):
+        import importlib
+        import sys
+
+        monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub", None)
+        importlib.reload(ms)
+        assert ms.is_download_complete("org/model") is False
+        assert ms.get_cache_dir("org/model") == "~/.cache/huggingface/hub/models--org--model/"
+        assert ms.find_cached_model_dir("org/model") is None
 
 
 class TestFormatting:

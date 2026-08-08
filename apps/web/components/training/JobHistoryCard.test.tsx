@@ -25,7 +25,7 @@ function makeCheckpoints(overrides: Partial<UseTrainingCheckpointsReturn> = {}):
 function makeJob(overrides: Record<string, any> = {}) {
   return {
     id: 'job-1', name: 'Training run 1', model: 'gpt2', dataset: 'shakespeare',
-    status: 'completed', loss: 0.42, current_epoch: 5, epochs: 5,
+    status: 'completed', progress: 1.0, loss: 0.42, current_epoch: 5, epochs: 5,
     created_at: new Date(Date.now() - 300000).toISOString(),
     finished_at: new Date(Date.now() - 60000).toISOString(),
     checkpoint: 'cp-1', status_message: '',

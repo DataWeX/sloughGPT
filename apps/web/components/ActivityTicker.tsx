@@ -120,7 +120,7 @@ export function ErrorList({ className }: { className?: string }) {
         <span className="text-xs text-muted-foreground font-mono">
           {errors.length} unique error{errors.length !== 1 ? 's' : ''}
         </span>
-        <button onClick={clearErrors} className="text-xs text-muted-foreground hover:text-foreground">
+        <button type="button" onClick={clearErrors} className="text-xs text-muted-foreground hover:text-foreground">
           Clear all
         </button>
       </div>

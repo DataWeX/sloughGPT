@@ -484,6 +484,90 @@ class TestSetupProviders:
         setup_providers(slonet_provider=provider, process_guard=MagicMock())
         assert provider._server is None
 
+    def test_slonet_path_registers_local_slnc(self, tmp_path):
+        import json
+        import struct
+
+        import numpy as np
+
+        from domains.infrastructure.slnc.compiler import SLNCCompiler
+
+        cfg = {
+            "n_layer": 1, "n_embd": 4, "n_head": 1, "n_inner": 8,
+            "vocab_size": 8, "n_positions": 6, "model_type": "gpt2",
+        }
+        weights = {
+            "h.0.ln_1.weight": np.ones(4, dtype=np.float32),
+            "h.0.ln_1.bias": np.zeros(4, dtype=np.float32),
+            "h.0.attn.c_attn.weight": np.arange(48, dtype=np.float32).reshape(4, 12),
+            "h.0.attn.c_attn.bias": np.arange(12, dtype=np.float32),
+            "h.0.attn.c_proj.weight": np.ones((4, 4), dtype=np.float32),
+            "h.0.attn.c_proj.bias": np.zeros(4, dtype=np.float32),
+            "h.0.ln_2.weight": np.ones(4, dtype=np.float32),
+            "h.0.ln_2.bias": np.zeros(4, dtype=np.float32),
+            "h.0.mlp.c_fc.weight": np.arange(32, dtype=np.float32).reshape(4, 8),
+            "h.0.mlp.c_fc.bias": np.arange(8, dtype=np.float32),
+            "h.0.mlp.c_proj.weight": np.arange(32, dtype=np.float32).reshape(8, 4),
+            "h.0.mlp.c_proj.bias": np.zeros(4, dtype=np.float32),
+            "ln_f.weight": np.ones(4, dtype=np.float32),
+            "ln_f.bias": np.zeros(4, dtype=np.float32),
+            "wte.weight": np.arange(32, dtype=np.float32).reshape(8, 4),
+            "wpe.weight": np.arange(24, dtype=np.float32).reshape(6, 4),
+        }
+        d = tmp_path / "finetuned"
+        d.mkdir()
+        (d / "config.json").write_text(json.dumps(cfg))
+        tok_data = {
+            "model": {
+                "vocab": {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, " ": 7},
+                "merges": [],
+                "eos_token_id": 7,
+            },
+            "pre_tokenizer": {"type": "Whitespace"},
+        }
+        (d / "tokenizer.json").write_text(json.dumps(tok_data))
+        st_path = d / "model.safetensors"
+        header = {"__metadata__": {}}
+        data = b""
+        for name, arr in weights.items():
+            header[name] = {"dtype": "F32", "shape": list(arr.shape),
+                            "data_offsets": [len(data), len(data) + arr.nbytes]}
+            data += arr.tobytes()
+        header_json = json.dumps(header).encode()
+        st_path.write_bytes(struct.pack("<Q", len(header_json)) + header_json + data)
+
+        slnc = d / "model.slnc"
+        SLNCCompiler().compile_from_directory(str(d), str(slnc))
+        assert slnc.exists()
+
+        setup_providers(slonet_hf_id="gpt2", slonet_path=str(slnc))
+        provider = get_provider("slonet-native")
+        assert provider is not None
+        assert provider._model_id == "gpt2"
+        assert get_provider("default") is not None
+
+    def test_slonet_path_bad_file_logs_and_skips(self, tmp_path, caplog):
+        bad = tmp_path / "missing.slnc"
+        setup_providers(slonet_hf_id="gpt2", slonet_path=str(bad))
+        assert get_provider("slonet-native") is None
+
+    def test_failed_load_preserves_existing_default_router(self, tmp_path):
+        # A working default router is active (e.g. from a previous successful
+        # model load). A subsequent failed load (missing .slnc) must NOT
+        # clobber it with an empty router, or the active model stops serving.
+        slonet = _make_mock_provider("Qwen/Qwen2.5-0.5B-Instruct")
+        register_provider("slonet-native", slonet)
+        working = ProviderRouter()
+        working.set_text_provider("slonet-native")
+        register_provider("default", working)
+
+        bad = tmp_path / "missing.slnc"
+        setup_providers(slonet_hf_id="gpt2", slonet_path=str(bad))
+
+        assert get_provider("slonet-native") is slonet
+        assert get_provider("default") is working
+        assert get_provider("default")._text_name == "slonet-native"
+
 
 # ---------------------------------------------------------------------------
 # ModelCapabilities

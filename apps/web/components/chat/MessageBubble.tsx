@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
+import { MS_PER_MINUTE } from '@/lib/format-bytes'
 import { MessageActions } from './MessageActions'
 import { MessageContextMenu } from './MessageContextMenu'
 import { MessageImages } from './MessageImages'
@@ -37,7 +38,7 @@ function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
   const now = new Date()
   const diffMs = now.getTime() - d.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
+  const diffMins = Math.floor(diffMs / MS_PER_MINUTE)
   if (diffMins < 1) return 'just now'
   if (diffMins < 60) return `${diffMins}m ago`
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -118,7 +119,7 @@ export const MessageBubble = memo(function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 max-w-[85%] sm:max-w-[70%] lg:max-w-[60%] transition-all duration-200 leading-relaxed",
+          "relative rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2.5 max-w-[85%] sm:max-w-[70%] lg:max-w-[60%] transition-all duration-200 leading-normal",
           role === 'user'
             ? 'bg-primary text-primary-foreground rounded-br-sm shadow-sm'
             : 'bg-card text-foreground rounded-bl-sm border border-border/40 shadow-sm',

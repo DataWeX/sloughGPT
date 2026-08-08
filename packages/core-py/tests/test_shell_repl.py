@@ -4,7 +4,9 @@ Tests for ShellREPL — pipeline parsing, output capture, state persistence.
 
 from __future__ import annotations
 
+import gc
 import json
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -23,6 +25,7 @@ def repl():
     from pathlib import Path
     from unittest.mock import patch
     import tempfile
+    import gc
     with tempfile.TemporaryDirectory() as tmp:
         st = Path(tmp) / "sloughgpt"
         st.mkdir(parents=True, exist_ok=True)
@@ -37,6 +40,21 @@ def repl():
             r = ShellREPL(os)
             r._perms._granted.update(["tee", "xargs", "cp", "mv", "touch", "chmod"])
             yield r
+            # Break reference cycles to allow GC of 679+ DaitRuntime instances:
+            # 1) logging handlers on root logger → closure → repl
+            for name in ("slo", "slo.kernel", "slo.shell.runtime", "slo.shell.init"):
+                for h in logging.getLogger(name).handlers[:]:
+                    try:
+                        logging.getLogger(name).removeHandler(h)
+                        h.close()
+                    except Exception:
+                        pass
+            # 2) _buffered_emit closure captures self → self.log → closure cycle
+            r.log = None
+            r._bg_threads.clear()
+            r = None
+            os = None
+            gc.collect()
 
 
 @pytest.fixture
@@ -457,6 +475,24 @@ class TestCommandsIntegration:
     def test_empty_pipeline_does_nothing(self, repl):
         # _execute_pipeline prints output; just verify no error
         repl._execute_pipeline([])
+
+
+class TestAiCommand:
+    def test_ai_query_uses_real_cwd(self, repl):
+        """``ai`` builds shell context from the process cwd, not a runtime
+        attribute — regression for ``'DaitRuntime' object has no attribute
+        'cwd'`` (repl.py ctx_parts)."""
+        from unittest.mock import patch
+        with patch("domains.shell.runtime._probe_api", return_value={"available": True, "model_id": "x"}), \
+             patch.object(repl, "_spinner_call", return_value={"text": "echo hi"}):
+            with _CaptureOutput() as cap:
+                repl._cmd_ai("how are you?")
+        assert "echo hi" in cap.getvalue()
+
+    def test_ai_falls_back_to_keyword_match_when_api_down(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_ai("list models")
+        assert "keyword" in cap.getvalue().lower()
 
 
 # ── source command ──────────────────────────────────────────────────
@@ -883,6 +919,34 @@ class TestGenCompletion:
         """gen command should have tab completion candidates."""
         from domains.shell.repl import ShellREPL
         assert "gen" in ShellREPL.COMMANDS
+
+
+# ── finetuned tab completion ─────────────────────────────────────────
+
+
+class TestFinetunedCompletion:
+    def test_finetuned_subcommand_completion(self, repl):
+        """finetuned should complete load/rm/del/delete subcommands."""
+        candidates = repl._complete_args_for("finetuned")
+        assert isinstance(candidates, list)
+        assert "load" in candidates
+        assert "rm" in candidates
+        assert "del" in candidates
+        assert "delete" in candidates
+
+    def test_finetuned_load_completes_names(self, repl):
+        """finetuned load should resolve model names from the API."""
+        original = repl.cmds.finetuned_models
+        repl.cmds.finetuned_models = lambda: [
+            {"model_name": "gpt2__dataset_1"},
+            {"model_name": "qwen__v2"},
+        ]
+        try:
+            names = [m.get("model_name", "") for m in repl.cmds.finetuned_models()]
+            matched = [n for n in sorted(set(names)) if n.startswith("gpt")]
+            assert matched == ["gpt2__dataset_1"]
+        finally:
+            repl.cmds.finetuned_models = original
 
     def test_complete_args_for_gen(self, repl):
         """_complete_args_for should handle gen without error."""
@@ -1493,7 +1557,6 @@ class TestPipelineBuiltins:
 
     def test_find_no_matches(self, repl):
         with _CaptureOutput() as cap:
-            import tempfile
             with tempfile.TemporaryDirectory() as td:
                 repl._cmd_find(td + " -name nonexistent")
                 out = cap.getvalue()

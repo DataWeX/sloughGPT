@@ -6,6 +6,7 @@ import { Button } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
 import { generateController } from '@/lib/generate-controller'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 interface ModelPlaygroundCardProps {
   activeRuntimeId: string | null
@@ -30,7 +31,7 @@ export default function ModelPlaygroundCard({ activeRuntimeId }: ModelPlayground
       })
       setTestOutput(result.text || 'No output')
     } catch (err) {
-      setTestOutput(`Error: ${err instanceof Error ? err.message : String(err)}`)
+      setTestOutput(`Error: ${extractErrorMessage(err)}`)
     } finally {
       setTestGenerating(false)
     }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { datasetController, type ImportSource, type GitHubRepo, type BookResult, type ImportResponse } from '@/lib/dataset-controller'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Label } from '@sloughgpt/strui'
@@ -95,7 +96,7 @@ export function DatasetImportModal({
         setSearchResults(result.repos || [])
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed')
+      setError(extractErrorMessage(err, 'Search failed'))
     } finally {
       setSearching(false)
     }
@@ -206,7 +207,7 @@ export function DatasetImportModal({
         onOpenChange(false)
       }, 2000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import failed')
+      setError(extractErrorMessage(err, 'Import failed'))
     } finally {
       setLoading(false)
     }

@@ -145,10 +145,10 @@ class TrainerConfig:
 
     # Model
     vocab_size: int = 256
-    n_embed: int = 256
-    n_layer: int = 6
-    n_head: int = 8
-    block_size: int = 128
+    n_embed: int = 64
+    n_layer: int = 2
+    n_head: int = 4
+    block_size: int = 64
     dropout: float = 0.1
 
     # Training
@@ -574,10 +574,10 @@ class SloughGPTTrainer:
         config: Optional[TrainerConfig] = None,
         # Legacy parameters (for backward compatibility)
         vocab_size: Optional[int] = None,
-        n_embed: int = 256,
-        n_layer: int = 6,
-        n_head: int = 8,
-        block_size: int = 128,
+        n_embed: int = 64,
+        n_layer: int = 2,
+        n_head: int = 4,
+        block_size: int = 64,
         dropout: float = 0.1,
         batch_size: int = 32,
         epochs: int = 10,
@@ -794,15 +794,19 @@ class SloughGPTTrainer:
         return self.ddp_model if self.ddp_model is not None else self.model
 
     def get_batch(self, split: str = "train") -> tuple:
-        """Get a batch of data as numpy arrays."""
+        """Get a batch of data as numpy arrays.
+
+        Uses vectorized advanced indexing instead of Python-level loops
+        for O(1) batch construction regardless of batch_size.
+        """
         data = self.train_data if split == "train" else self.val_data
         batch_size = self.config.batch_size
         block_size = self.config.block_size
 
         idx = np.random.randint(0, len(data) - block_size, size=batch_size)
-        idx_list = [int(i) for i in idx]
-        x = np.stack([data[i : i + block_size] for i in idx_list])
-        y = np.stack([data[i + 1 : i + block_size + 1] for i in idx_list])
+        offsets = np.arange(block_size)
+        x = data[idx[:, None] + offsets]
+        y = data[idx[:, None] + offsets + 1]
         return x, y
 
     def train_step(self) -> Dict[str, float]:
@@ -851,8 +855,12 @@ class SloughGPTTrainer:
 
         return metrics
 
-    def evaluate(self, num_batches: int = 50) -> Dict[str, float]:
-        """Evaluate the model on the validation split."""
+    def evaluate(self, num_batches: int = 10) -> Dict[str, float]:
+        """Evaluate the model on the validation split.
+
+        Uses 10 batches (was 50) — sufficient for loss estimation
+        while reducing per-eval cost from ~50 forward passes to ~10.
+        """
         model = self.training_model
         model.eval()
 
@@ -1006,6 +1014,7 @@ class SloughGPTTrainer:
                 logger.exception("on_progress callback failed", extra={"tag": "TRAIN"})
 
         self._is_training = True
+        self._training_start_time = time.time()
         for epoch in range(self.current_epoch, self.config.epochs):
             self.current_epoch = epoch
 
@@ -1205,12 +1214,17 @@ class SloughGPTTrainer:
 
         checkpoint_path = checkpoint_dir / f"{ds_name}_{timestamp}"
 
+        # Compute training duration
+        start_t = getattr(self, '_training_start_time', None)
+        training_duration = round(time.time() - start_t, 1) if start_t else None
+
         # Save in .soul format with vocab
         self.save(str(checkpoint_path), format="sou",
-                  stoi=self.stoi, itos=self.itos, chars=chars_list)
+                  stoi=self.stoi, itos=self.itos, chars=chars_list,
+                  training_duration=training_duration)
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
 
-    def save(self, path: str, format: str = "sou", stoi=None, itos=None, chars=None):
+    def save(self, path: str, format: str = "sou", stoi=None, itos=None, chars=None, training_duration=None):
         """Save model in specified format."""
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
@@ -1229,6 +1243,8 @@ class SloughGPTTrainer:
             "epochs_trained": self.config.epochs,
             "final_val_loss": self._best_val_loss,
         }
+        if training_duration is not None:
+            metadata["training_duration_s"] = training_duration
 
         if format == "sou":
             from domains.inference import create_soul_profile, save_soul
@@ -1258,6 +1274,8 @@ class SloughGPTTrainer:
                     pass
             soul.metadata["vocab_size"] = self.vocab_size
             soul.metadata["config"] = metadata["config"]
+            if training_duration is not None:
+                soul.metadata["training_duration_s"] = training_duration
 
             # Embed training state so .soul is fully self-contained
             soul.metadata["training_state"] = _build_training_state_metadata(

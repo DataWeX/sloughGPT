@@ -26,7 +26,7 @@ vi.mock('@sloughgpt/strui', () => {
       <input value={value} onChange={onChange} className={className} placeholder={placeholder} />
     ),
     Skeleton: ({ className }: any) => <div className={className} />,
-    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'),
+    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconChevronDown: iconMock('chevron-down'),
     AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
@@ -47,11 +47,17 @@ vi.mock('@/lib/dataset-controller', () => ({
   datasetController: {
     list: mockList,
     delete: mockDelete,
+    preview: vi.fn(),
   },
 }))
 
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
+}))
+
+vi.mock('@/components/DatasetInlineImportModal', () => ({
+  __esModule: true,
+  default: ({ open, onOpenChange }: any) => open ? <div data-testid="import-modal">Import Modal</div> : null,
 }))
 
 import DatasetsPage from './page'
@@ -117,7 +123,7 @@ describe('DatasetsPage', () => {
   it('shows empty state when no datasets', async () => {
     mockList.mockResolvedValue([])
     render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('No datasets yet.')).toBeDefined())
+    await waitFor(() => expect(screen.getByText('No datasets yet')).toBeDefined(), { timeout: 3000 })
     expect(screen.getByText('Import Dataset')).toBeDefined()
   })
 
@@ -135,18 +141,18 @@ describe('DatasetsPage', () => {
     await act(async () => { fireEvent.click(deleteButtons[0]) })
     await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
     const dialog = screen.getByTestId('alert-dialog')
-    const confirmBtn = dialog.querySelector('button:last-child') as HTMLElement
+    const confirmBtn = Array.from(dialog.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Delete') as HTMLElement
     await act(async () => { confirmBtn.click() })
     await waitFor(() => {
-      expect(mockDelete).toHaveBeenCalledWith('ds1')
-      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Shakespeare'), 'info')
+      expect(mockDelete).toHaveBeenCalledWith('ds3')
+      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Wikipedia'), 'info', undefined, expect.any(Function))
     })
   })
 
-  it('navigates to training on Import click', async () => {
+  it('opens import modal on Import click', async () => {
     render(<DatasetsPage />)
     await waitFor(() => expect(screen.getByText('Import')).toBeDefined())
     fireEvent.click(screen.getByText('Import'))
-    expect(mockPush).toHaveBeenCalledWith('/training')
+    await waitFor(() => expect(screen.getByTestId('import-modal')).toBeTruthy())
   })
 })

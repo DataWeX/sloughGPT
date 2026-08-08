@@ -461,6 +461,7 @@ class TestNumpyEngineModelTree:
     @pytest.mark.skipif(not _is_cached(QWEN2_ID), reason=f"{QWEN2_ID} not cached locally")
     def test_numpy_engine_from_pretrained_with_points(self):
         """NumpyEngine.from_pretrained with use_points=True."""
+        pytest.importorskip("safetensors")
         from domains.infrastructure.numpy_engine import NumpyEngine
 
         engine = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, n_clusters=8)
@@ -480,6 +481,7 @@ class TestNumpyEngineModelTree:
     @pytest.mark.skipif(not _is_cached(QWEN2_ID), reason=f"{QWEN2_ID} not cached locally")
     def test_numpy_engine_from_pretrained_with_shared_library(self):
         """Two engines share the same PointLibrary via ModelTree."""
+        pytest.importorskip("safetensors")
         from domains.infrastructure.numpy_engine import NumpyEngine
 
         lib = PointLibrary(name="shared")
@@ -496,6 +498,7 @@ class TestNumpyEngineModelTree:
     @pytest.mark.skipif(not _is_cached(QWEN2_ID), reason=f"{QWEN2_ID} not cached locally")
     def test_points_persistence(self):
         """Save PointLibrary from NumpyEngine, load and verify."""
+        pytest.importorskip("safetensors")
         from domains.infrastructure.numpy_engine import NumpyEngine
 
         engine = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, n_clusters=8)
@@ -716,3 +719,144 @@ class TestPointLibrarySync:
             assert loaded.stats()["total_points"] == 5
             for i in range(5):
                 assert loaded.has(f"p{i}")
+
+
+# ── Point binary serialization coverage ──
+
+class TestPointBytes:
+    """to_bytes / from_bytes round-trips with residuals and error paths."""
+
+    def test_to_bytes_periodic_with_residual(self):
+        residual = np.array([0.1, -0.2, 0.3], dtype=np.float32)
+        p = Point(identity="t", function_type="periodic",
+                  params={"a": 1.0, "b": 0.5, "w": 0.0}, residual=residual)
+        data = p.to_bytes()
+        assert data[:4] == b"PER "
+        p2 = Point.from_bytes(data, identity="t")
+        assert p2.function_type == "periodic"
+        assert p2.params["a"] == pytest.approx(1.0)
+        assert p2.residual is not None
+        np.testing.assert_array_almost_equal(p2.residual, residual)
+
+    def test_to_bytes_linear_with_residual(self):
+        residual = np.array([0.01, -0.01], dtype=np.float32)
+        p = Point(identity="t", function_type="linear",
+                  params={"a": 2.0, "b": 1.0}, residual=residual)
+        data = p.to_bytes()
+        assert data[:4] == b"LIN "
+        p2 = Point.from_bytes(data, identity="t")
+        assert p2.function_type == "linear"
+        assert p2.residual is not None
+        np.testing.assert_array_almost_equal(p2.residual, residual)
+
+    def test_to_bytes_polynomial_with_residual(self):
+        residual = np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32)
+        p = Point(identity="t", function_type="polynomial",
+                  params={"a": 0.1, "b": 0.5, "c": 1.0}, residual=residual)
+        data = p.to_bytes()
+        assert data[:4] == b"POLY"
+        p2 = Point.from_bytes(data, identity="t")
+        assert p2.function_type == "polynomial"
+        assert p2.residual is not None
+        np.testing.assert_array_almost_equal(p2.residual, residual)
+
+    def test_to_bytes_unknown_type_returns_empty_params(self):
+        p = Point(identity="t", function_type="mystery", params={})
+        assert p.to_bytes() == b"\x00\x00\x00\x00"
+
+    def test_from_bytes_unknown_type_code_raises(self):
+        with pytest.raises(ValueError):
+            Point.from_bytes(b"\x00\x00\x00\x00")
+
+    def test_from_bytes_unknown_function_type_raises(self, monkeypatch):
+        import domains.infrastructure.pugqeep.point as point_module
+        decode = dict(point_module.Point._TYPE_DECODE)
+        decode[b"ZZZZ"] = "mystery"
+        monkeypatch.setattr(point_module.Point, "_TYPE_DECODE", decode)
+        with pytest.raises(ValueError):
+            point_module.Point.from_bytes(b"ZZZZ")
+
+    def test_generate_with_residual(self):
+        residual = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        p = Point(identity="t", function_type="linear",
+                  params={"a": 0.0, "b": 0.0}, residual=residual)
+        np.testing.assert_array_almost_equal(p.generate(3), residual)
+
+    def test_generate_unknown_type_raises(self):
+        p = Point(identity="t", function_type="mystery", params={})
+        with pytest.raises(ValueError):
+            p.generate(3)
+
+    def test_nbytes_raw(self):
+        import base64
+        raw = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        p = Point(identity="t", function_type="raw",
+                  params={"data_b64": base64.b64encode(raw.tobytes()).decode()})
+        assert p.nbytes() == raw.nbytes
+
+    def test_nbytes_function_with_residual(self):
+        residual = np.array([0.1, 0.2], dtype=np.float32)
+        p = Point(identity="t", function_type="linear",
+                  params={"a": 1.0, "b": 0.0}, residual=residual)
+        assert p.nbytes() == 4 + len(p.params) * 4 + residual.nbytes
+
+    def test_nbytes_cluster_with_residual(self):
+        centroids = np.zeros(4, dtype=np.float32)
+        assignments = np.zeros(8, dtype=np.uint8)
+        residual = np.zeros(8, dtype=np.float32)
+        p = Point(identity="t", function_type="cluster",
+                  params={"centroids": centroids, "assignments": assignments},
+                  residual=residual)
+        assert p.nbytes() == centroids.nbytes + assignments.nbytes + residual.nbytes
+
+
+# ── PointLibrary edge-case coverage ──
+
+class TestPointLibraryCoverage:
+    def test_remove_auto_save(self, tmp_path):
+        from domains.infrastructure.pugqeep.config import LibraryConfig
+        cfg = LibraryConfig(name="autosave", auto_save=True, storage_dir=tmp_path)
+        lib = PointLibrary(config=cfg)
+        lib.add(Point(identity="p1", function_type="linear", params={"a": 1.0, "b": 0.0}))
+        assert lib.remove("p1")
+        assert not lib.has("p1")
+        assert (tmp_path / "autosave.points.json").exists()
+
+    def test_compress_and_store_function(self, library, structured_weights):
+        point = library.compress_and_store(structured_weights, "w_f", method="function")
+        assert library.has("w_f")
+        assert point.function_type in ("periodic", "linear", "polynomial")
+
+    def test_decompress_to_nonexistent(self, library):
+        assert library.decompress_to("nope") is None
+
+    def test_decompress_to_cluster(self, library):
+        centroids = np.array([0.1, 0.5, 0.9], dtype=np.float32)
+        assignments = np.array([0, 1, 2, 0], dtype=np.uint8)
+        library.add(Point(identity="clu", function_type="cluster",
+                          params={"centroids": centroids, "assignments": assignments}))
+        np.testing.assert_array_equal(library.decompress_to("clu"), centroids[assignments])
+
+    def test_decompress_to_function(self, library):
+        library.add(Point(identity="lin", function_type="linear",
+                          params={"a": 1.0, "b": 0.0}))
+        result = library.decompress_to("lin")
+        assert result.shape == (2 * 100,)
+
+    def test_decompress_to_with_shape(self, library):
+        library.add(Point(identity="lin", function_type="linear",
+                          params={"a": 1.0, "b": 0.0}))
+        result = library.decompress_to("lin", shape=(10, 20))
+        assert result.shape == (10, 20)
+
+    def test_stats_with_residual(self, library):
+        residual = np.array([0.1, -0.2, 0.3], dtype=np.float32)
+        library.add(Point(identity="lin", function_type="linear",
+                          params={"a": 1.0, "b": 0.0}, residual=residual))
+        s = library.stats()
+        expected = 4 + len({"a": 1.0, "b": 0.0}) * 4 + residual.nbytes
+        assert s["total_compressed_bytes"] == expected
+
+    def test_save_without_storage_dir_raises(self, library):
+        with pytest.raises(ValueError):
+            library.save()

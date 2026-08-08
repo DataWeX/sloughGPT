@@ -4,7 +4,7 @@ Experiments Router - ML experiment tracking
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import re
 from pathlib import Path
@@ -31,6 +31,7 @@ class ExperimentsRouter:
         self.router.add_api_route("", self.create_experiment, methods=["POST"])
         self.router.add_api_route("", self.list_experiments, methods=["GET"])
         self.router.add_api_route("/{experiment_id}", self.get_experiment, methods=["GET"])
+        self.router.add_api_route("/{experiment_id}", self.delete_experiment, methods=["DELETE"])
         self.router.add_api_route("/{experiment_id}/runs", self.get_experiment_runs, methods=["GET"])
         self.router.add_api_route("/{experiment_id}/complete", self.complete_experiment, methods=["POST"])
         self.router.add_api_route("/{experiment_id}/log_metric", self.log_metric, methods=["POST"])
@@ -60,6 +61,17 @@ class ExperimentsRouter:
             raise HTTPException(status_code=404, detail="Experiment not found")
         return success_response(data={"id": experiment_id, "path": str(path)})
 
+    async def delete_experiment(self, experiment_id: str):
+        """Delete an experiment and all its data."""
+        import shutil
+        if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
+            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+        path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
+        if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
+            raise HTTPException(status_code=404, detail="Experiment not found")
+        shutil.rmtree(path)
+        return success_response(data={"id": experiment_id, "deleted": True})
+
     async def get_experiment_runs(self, experiment_id: str):
         """Get runs for an experiment"""
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
@@ -71,8 +83,22 @@ class ExperimentsRouter:
         return success_response(data={"runs": len(runs)})
 
     async def complete_experiment(self, experiment_id: str):
-        """Mark experiment as complete"""
-        return success_response(data={"id": experiment_id, "status": "completed"})
+        """Mark experiment as complete and persist status to disk."""
+        import os
+        e_id = experiment_id
+        if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
+            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+        log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
+        os.makedirs(log_dir, exist_ok=True)
+        status_file = os.path.join(log_dir, f"{e_id}_status.json")
+        status_data = {
+            "experiment_id": e_id,
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(status_file, "w") as f:
+            json.dump(status_data, f)
+        return success_response(data={"id": e_id, "status": "completed"})
 
     async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0):
         """Log a metric for an experiment."""
@@ -82,7 +108,7 @@ class ExperimentsRouter:
         os.makedirs(log_dir, exist_ok=True)
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(datetime.timezone.utc).isoformat()}
+        entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
         with open(os.path.join(log_dir, f"{e_id}_metrics.jsonl"), "a") as f:
             f.write(json.dumps(entry) + "\n")
         return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
@@ -95,7 +121,7 @@ class ExperimentsRouter:
         os.makedirs(log_dir, exist_ok=True)
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(datetime.timezone.utc).isoformat()}
+        entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
         with open(os.path.join(log_dir, f"{e_id}_params.jsonl"), "a") as f:
             f.write(json.dumps(entry) + "\n")
         return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})

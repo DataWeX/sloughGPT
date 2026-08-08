@@ -669,6 +669,54 @@ describe('SloughGPTClient', () => {
       expect(result).toEqual(mockLog);
       expect(mockFetch.mock.calls[0][0]).toContain('/security/audit');
     });
+
+    it('gets security keys', async () => {
+      const mockKeys = [{ key_id: 'k1' }];
+      mockFetch.mockResolvedValue(createMockResponse({ status: 'success', data: { keys: mockKeys, count: 1 } }));
+      const client = new SloughGPTClient();
+      const result = await client.getSecurityKeys();
+      expect(result).toEqual(mockKeys);
+      expect(mockFetch.mock.calls[0][0]).toContain('/security/keys');
+    });
+  });
+
+  describe('model registry', () => {
+    it('lists registry models (unwraps models field)', async () => {
+      mockFetch.mockResolvedValue(
+        createMockResponse({ status: 'success', data: { models: [{ model_id: 'gpt2' }], count: 1 } })
+      );
+      const client = new SloughGPTClient();
+      const result = await client.listRegistryModels();
+      expect(result).toEqual([{ model_id: 'gpt2' }]);
+      expect(mockFetch.mock.calls[0][0]).toContain('/registry/models');
+    });
+
+    it('gets single registry model (unwraps envelope)', async () => {
+      const mockModel = { model_id: 'gpt2', params: 124_000_000 };
+      mockFetch.mockResolvedValue(createMockResponse({ status: 'success', data: mockModel }));
+      const client = new SloughGPTClient();
+      const result = await client.getRegistryModel('gpt2');
+      expect(result).toEqual(mockModel);
+      expect(mockFetch.mock.calls[0][0]).toContain('/registry/models/gpt2');
+    });
+
+    it('gets best registry model (unwraps envelope)', async () => {
+      const mockBest = { models: 2, loaded: 1 };
+      mockFetch.mockResolvedValue(createMockResponse({ status: 'success', data: mockBest }));
+      const client = new SloughGPTClient();
+      const result = await client.getRegistryBest();
+      expect(result).toEqual(mockBest);
+      expect(mockFetch.mock.calls[0][0]).toContain('/registry/best');
+    });
+
+    it('gets registry stats (unwraps envelope)', async () => {
+      const mockStats = { models: 5, best_score: 0.9 };
+      mockFetch.mockResolvedValue(createMockResponse({ status: 'success', data: mockStats }));
+      const client = new SloughGPTClient();
+      const result = await client.getRegistryStats();
+      expect(result).toEqual(mockStats);
+      expect(mockFetch.mock.calls[0][0]).toContain('/registry/stats');
+    });
   });
 
   describe('detailed health', () => {

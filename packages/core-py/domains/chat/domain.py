@@ -51,7 +51,9 @@ class ChatDomain:
     """
 
     def __init__(self, log_dir: str = "data/response_logs", engine: Optional[Any] = None):
-        self.log_dir = Path(log_dir)
+        # Anchor relative to repo root, matching response_tracker.py, so the
+        # log location does not depend on the process CWD.
+        self.log_dir = Path(__file__).resolve().parents[4] / log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self._engine = engine
 
@@ -83,6 +85,7 @@ class ChatDomain:
             temperature=temperature,
             max_tokens=max_tokens,
             messages=messages,
+            session_id=session_id,
         )
 
         duration_ms = int((time.perf_counter() - start_time) * 1000)
@@ -120,12 +123,14 @@ class ChatDomain:
         temperature: float,
         max_tokens: int,
         messages: List[Dict[str, str]] = None,
+        session_id: str = "default",
     ) -> str:
         """Generate response using provider pipeline.
 
         Delegates to provider.chat() which handles ModelServer, engine
         fallback, and error recovery internally. The provider is async
-        and non-blocking.
+        and non-blocking. ``session_id`` is threaded through so the
+        provider can reuse cross-turn KV cache state.
         """
         import asyncio
 
@@ -146,7 +151,12 @@ class ChatDomain:
             ]
 
             result = await asyncio.wait_for(
-                provider.chat(chat_msgs, max_tokens=max_tokens, temperature=temperature),
+                provider.chat(
+                    chat_msgs,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    session_id=session_id,
+                ),
                 timeout=60.0,
             )
             return result or ""
@@ -217,8 +227,11 @@ class ChatDomain:
 
     def get_recent_responses(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recent logged responses."""
+        import datetime
+        from datetime import timezone
+
         responses = []
-        log_file = self.log_dir / f"responses_{time.strftime('%Y%m%d')}.jsonl"
+        log_file = self.log_dir / f"responses_{datetime.datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
 
         if not log_file.exists():
             return responses

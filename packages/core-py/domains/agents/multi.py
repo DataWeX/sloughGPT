@@ -366,11 +366,19 @@ class MultiAgentOrchestrator:
             f"{agent.system_prompt}\n\n"
             f"Goal: {goal}\n"
             f"Your task: {task.description}\n"
+            f"Available tools: {', '.join(agent.tools) if agent.tools else 'none'}\n"
             f"{prev}\n"
             f"Output your work below:"
         )
         result = self._generate(prompt, max_tokens=300)
-        return result.strip()
+        result = result.strip()
+
+        # Try executing a tool if detected in the output
+        tool_result = self._try_execute_tool(result, agent.tools)
+        if tool_result:
+            result = f"{result}\n\n[Tool output]: {tool_result}"
+
+        return result
 
     def _compose(self, goal: str, tasks: List[AgentTask]) -> str:
         """Compose final output from all task results."""
@@ -412,6 +420,46 @@ class MultiAgentOrchestrator:
         if isinstance(result, dict) and "error" in result:
             return f"[LLM error: {result['error']}]"
         return str(result)
+
+    def _try_execute_tool(self, text: str, agent_tools: List[str]) -> Optional[str]:
+        """Detect and execute a tool from agent output text. Returns result or None."""
+        from .tools import get_tool_registry
+        registry = get_tool_registry()
+        intent = registry.detect_tool_intent(text)
+        if not intent:
+            return None
+        tool_name, args = intent
+        if tool_name not in agent_tools:
+            return None
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(registry.execute(tool_name, args))
+        except Exception:
+            return None
+        if result.success:
+            return result.output
+        return None
+
+    async def _async_try_execute_tool(self, text: str, agent_tools: List[str]) -> Optional[str]:
+        """Async detect and execute a tool from agent output text."""
+        from .tools import get_tool_registry
+        registry = get_tool_registry()
+        intent = registry.detect_tool_intent(text)
+        if not intent:
+            return None
+        tool_name, args = intent
+        if tool_name not in agent_tools:
+            return None
+        try:
+            result = await registry.execute(tool_name, args)
+        except Exception:
+            return None
+        if result.success:
+            return result.output
+        return None
 
     async def _async_plan(self, goal: str, context: str) -> List[AgentTask]:
         """Async plan subtasks — same as _plan but non-blocking."""
@@ -471,11 +519,19 @@ class MultiAgentOrchestrator:
             f"{agent.system_prompt}\n\n"
             f"Goal: {goal}\n"
             f"Your task: {task.description}\n"
+            f"Available tools: {', '.join(agent.tools) if agent.tools else 'none'}\n"
             f"{prev}\n"
             f"Output your work below:"
         )
         result = await self._async_generate(prompt, max_tokens=300)
-        return result.strip()
+        result = result.strip()
+
+        # Try executing a tool if detected in the output
+        tool_result = await self._async_try_execute_tool(result, agent.tools)
+        if tool_result:
+            result = f"{result}\n\n[Tool output]: {tool_result}"
+
+        return result
 
     async def _async_compose(self, goal: str, tasks: List[AgentTask]) -> str:
         """Async compose final output — same as _compose but non-blocking."""

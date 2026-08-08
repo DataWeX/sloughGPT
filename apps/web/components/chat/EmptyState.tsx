@@ -1,17 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import Link from 'next/link'
 import { useLocale } from '@/hooks/useLocale'
 import { cn, Chip } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
+import type { Conversation } from '@/lib/session-controller'
 
 interface EmptyStateProps {
   hasModel: boolean
   suggestions?: { text: string; icon: string }[]
   onSuggestionClick?: (text: string) => void
+  recentConversations?: Conversation[]
+  onLoadConversation?: (id: string) => void
 }
 
+const FALLBACK_SUGGESTIONS = [
+  { text: 'Explain quantum computing in simple terms', icon: '🔬' },
+  { text: 'Write a short poem about the ocean', icon: '🌊' },
+  { text: 'Help me debug this Python code', icon: '🐍' },
+  { text: 'What are the best practices for REST APIs?', icon: '💡' },
+]
 const moods = ['curious', 'friendly', 'playful', 'thoughtful', 'excited']
 const moodEmojis = ['👋', '✨', '🤖', '💬', '🌟', '🚀', '🎯']
 
@@ -57,7 +66,7 @@ function SuggestionChip({ text, icon, onClick }: { text: string; icon: string; o
   )
 }
 
-export function EmptyState({ hasModel, suggestions, onSuggestionClick }: EmptyStateProps) {
+export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSuggestionClick, recentConversations, onLoadConversation }: EmptyStateProps) {
   const { t } = useLocale()
   const [greeting, setGreeting] = useState('')
   const [mood, setMood] = useState(0)
@@ -76,7 +85,9 @@ export function EmptyState({ hasModel, suggestions, onSuggestionClick }: EmptySt
     return () => clearInterval(moodInterval)
   }, [])
 
-  const showSuggestions = hasModel && suggestions && suggestions.length > 0
+  const displaySuggestions = hasModel
+    ? (suggestions && suggestions.length > 0 ? suggestions : FALLBACK_SUGGESTIONS)
+    : null
 
   return (
     <div
@@ -97,11 +108,11 @@ export function EmptyState({ hasModel, suggestions, onSuggestionClick }: EmptySt
         </p>
       </div>
 
-      {showSuggestions ? (
+      {displaySuggestions ? (
         <div className="w-full max-w-sm space-y-3 pt-2">
           <p className="text-[11px] text-muted-foreground/40 font-medium uppercase tracking-[0.1em]">Try asking</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {suggestions.map((s) => (
+            {displaySuggestions.map((s) => (
               <SuggestionChip
                 key={s.text}
                 text={s.text}
@@ -124,8 +135,30 @@ export function EmptyState({ hasModel, suggestions, onSuggestionClick }: EmptySt
         </div>
       ) : null}
 
+      {recentConversations && recentConversations.length > 0 && onLoadConversation && (
+        <div className="w-full max-w-sm space-y-2 pt-2">
+          <p className="text-[11px] text-muted-foreground/40 font-medium uppercase tracking-[0.1em]">Recent</p>
+          <div className="space-y-1">
+            {recentConversations.slice(0, 4).map(conv => (
+              <button
+                key={conv.id}
+                onClick={() => onLoadConversation(conv.id)}
+                className="w-full text-left rounded-lg border border-border/40 px-3 py-2 hover:bg-muted/50 hover:border-primary/20 transition-all group"
+              >
+                <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">{conv.name || 'Untitled'}</p>
+                {conv.updated_at && (
+                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                    {new Date(conv.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div
-        className="flex items-center gap-3 text-[11px] text-muted-foreground/40 bg-muted/20 px-3 py-1.5 rounded-full border border-border/30"
+        className="flex flex-wrap items-center justify-center gap-3 text-[11px] text-muted-foreground/40 bg-muted/20 px-3 py-1.5 rounded-full border border-border/30"
         aria-label="Keyboard shortcuts"
       >
         <span className="flex items-center gap-1.5">
@@ -134,12 +167,15 @@ export function EmptyState({ hasModel, suggestions, onSuggestionClick }: EmptySt
         </span>
         <span className="text-muted-foreground/20">·</span>
         <span className="flex items-center gap-1.5">
-          <kbd className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[10px] shadow-sm border border-border/50">⇧</kbd>
-          <span>+</span>
-          <kbd className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[10px] shadow-sm border border-border/50">↵</kbd>
-          <span>new line</span>
+          <kbd className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[10px] shadow-sm border border-border/50">/</kbd>
+          <span>commands</span>
+        </span>
+        <span className="text-muted-foreground/20">·</span>
+        <span className="flex items-center gap-1.5">
+          <kbd className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[10px] shadow-sm border border-border/50">?</kbd>
+          <span>shortcuts</span>
         </span>
       </div>
     </div>
   )
-}
+})

@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useImperativeHandle, useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { forwardRef, memo, useImperativeHandle, useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { ChatInput } from './ChatInput'
 import { ChatScreen } from './ChatScreen'
 import type { ChatInputProps } from './ChatInput'
@@ -31,6 +31,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   isBookmarked?: (id: string) => boolean
   onBookmark?: (messageId: string) => void
   onDelete?: (messageId: string) => void
+  onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
 }
 
@@ -40,7 +41,7 @@ export interface ChatAreaRef {
 
 const NEAR_BOTTOM_THRESHOLD = 100
 
-export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
+export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
   function ChatArea({
     messages,
     loading,
@@ -66,6 +67,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
     isBookmarked,
     onBookmark,
     onDelete,
+    onSaveToKnowledge,
     collapsibleLength,
     ...inputProps
   }, ref) {
@@ -133,6 +135,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
             isBookmarked={isBookmarked}
             onBookmark={onBookmark}
             onDelete={onDelete}
+            onSaveToKnowledge={onSaveToKnowledge}
             collapsibleLength={collapsibleLength}
           />
 
@@ -165,4 +168,4 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       </div>
     )
   }
-)
+))

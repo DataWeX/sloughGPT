@@ -1,0 +1,218 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { IconRefresh, IconTrash } from '@sloughgpt/strui'
+import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { experimentsController } from '@/lib/experiments-controller'
+import { useToastStore } from '@/lib/toast-store'
+
+export default function ExperimentsPage() {
+  const [experiments, setExperiments] = useState<Awaited<ReturnType<typeof experimentsController.list>>>([])
+  const [loading, setLoading] = useState(true)
+  const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [metricName, setMetricName] = useState('')
+  const [metricValue, setMetricValue] = useState('')
+  const [paramName, setParamName] = useState('')
+  const [paramValue, setParamValue] = useState('')
+  const [logMsg, setLogMsg] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const addToast = useToastStore(s => s.addToast)
+
+  const fetchExperiments = async () => {
+    setLoading(true)
+    try {
+      setExperiments(await experimentsController.list())
+    } catch {
+      addToast('Failed to load experiments', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchExperiments() }, [])
+
+  useEffect(() => {
+    if (autoRefresh) {
+      intervalRef.current = setInterval(fetchExperiments, 15000)
+      const onVis = () => { if (!document.hidden && intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = setInterval(fetchExperiments, 15000) } }
+      document.addEventListener('visibilitychange', onVis)
+      return () => { clearInterval(intervalRef.current!); document.removeEventListener('visibilitychange', onVis) }
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+    }
+  }, [autoRefresh])
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return
+    setCreating(true)
+    try {
+      await experimentsController.create(newName)
+      setNewName('')
+      await fetchExperiments()
+    } catch {
+      addToast('Failed to create experiment', 'error')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await experimentsController.delete(id)
+      await fetchExperiments()
+    } catch {
+      addToast('Failed to delete experiment', 'error')
+    }
+  }
+
+  const handleLogMetric = async () => {
+    if (!selectedId || !metricName.trim() || !metricValue) return
+    setLogMsg(null)
+    try {
+      const res = await experimentsController.logMetric(selectedId, metricName, Number(metricValue))
+      setLogMsg(res.status === 'logged' ? `Logged ${metricName}=${metricValue}` : 'Failed')
+      setMetricName('')
+      setMetricValue('')
+    } catch { setLogMsg('Failed') }
+  }
+
+  const handleLogParam = async () => {
+    if (!selectedId || !paramName.trim() || !paramValue) return
+    setLogMsg(null)
+    try {
+      const res = await experimentsController.logParam(selectedId, paramName, paramValue)
+      setLogMsg(res.status === 'logged' ? `Logged ${paramName}=${paramValue}` : 'Failed')
+      setParamName('')
+      setParamValue('')
+    } catch { setLogMsg('Failed') }
+  }
+
+  const handleComplete = async (id: string) => {
+    try {
+      await experimentsController.complete(id)
+      setLogMsg(`Experiment ${id} marked complete`)
+    } catch { setLogMsg('Failed') }
+  }
+
+  if (loading) {
+    return (
+      <div className="sl-page mx-auto max-w-4xl">
+        <AppRouteHeader left={<AppRouteHeaderLead title="Experiments" subtitle="ML experiment tracking" />} />
+        <div className="space-y-4">
+          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="sl-page mx-auto max-w-4xl">
+      <AppRouteHeader left={<AppRouteHeaderLead title="Experiments" subtitle={`${experiments.length} experiments`} />} />
+      <div className="space-y-4">
+        {logMsg && (
+          <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
+            {logMsg}
+            <button className="ml-2 underline" onClick={() => setLogMsg(null)}>Dismiss</button>
+          </div>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">New Experiment</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                placeholder="Experiment name"
+                onKeyDown={e => e.key === 'Enter' && handleCreate()}
+              />
+              <Button size="sm" onClick={handleCreate} disabled={creating || !newName.trim()}>
+                {creating ? 'Creating...' : 'Create'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Experiments</CardTitle>
+            <div className="flex items-center gap-2">
+              <Input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search..."
+                className="h-7 w-32 text-xs"
+              />
+              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
+                {autoRefresh ? 'Auto' : 'Refresh'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={fetchExperiments}>
+                <IconRefresh className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {experiments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No experiments yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {experiments
+                  .filter(exp => !search || exp.id.toLowerCase().includes(search.toLowerCase()))
+                  .map(exp => (
+                  <div
+                    key={exp.id}
+                    className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors cursor-pointer ${
+                      selectedId === exp.id
+                        ? 'border-primary/40 bg-primary/5'
+                        : 'border-border/60 hover:bg-muted/50'
+                    }`}
+                    onClick={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{exp.id}</div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); handleComplete(exp.id) }}>
+                        Done
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-destructive" onClick={e => { e.stopPropagation(); handleDelete(exp.id) }}>
+                        <IconTrash className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {selectedId && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Log to: {selectedId}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Input value={metricName} onChange={e => setMetricName(e.target.value)} placeholder="Metric name" className="flex-1" />
+                <Input value={metricValue} onChange={e => setMetricValue(e.target.value)} placeholder="Value" type="number" className="w-24" />
+                <Button size="sm" onClick={handleLogMetric} disabled={!metricName.trim() || !metricValue}>Log Metric</Button>
+              </div>
+              <div className="flex gap-2">
+                <Input value={paramName} onChange={e => setParamName(e.target.value)} placeholder="Param name" className="flex-1" />
+                <Input value={paramValue} onChange={e => setParamValue(e.target.value)} placeholder="Value" className="w-32" />
+                <Button size="sm" variant="outline" onClick={handleLogParam} disabled={!paramName.trim() || !paramValue}>Log Param</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -5,11 +5,17 @@ import { useEffect, useCallback, useMemo, useState } from 'react'
 import dynamicNext from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
-import { soulsController } from '@/lib/controllers'
+import { soulsController, multimodalController } from '@/lib/controllers'
 import type { ChatCommand } from '@/lib/chat-commands'
 import { useChatUI } from '@/hooks/useChatUI'
 import { useChatVision } from '@/hooks/useChatVision'
 import { useChatAgents } from '@/hooks/useChatAgents'
+import type { AgentDef } from '@/lib/agents'
+import { extractErrorMessage, formatToastError } from '@/lib/error-utils'
+import { PDF_ANALYSIS_MAX_TOKENS } from '@/lib/format-bytes'
+
+const MAX_FILE_CONTENT_CHARS = 12000
+const MAX_KNOWLEDGE_CONTENT_CHARS = 500
 import { useChatLocalEngine } from '@/hooks/useChatLocalEngine'
 import { useChatModelSettings } from '@/hooks/useChatModelSettings'
 import { useChatKeyboard } from '@/hooks/useChatKeyboard'
@@ -21,6 +27,7 @@ import type { ChatMessage } from '@/lib/chat-utils'
 import { modelController } from '@/lib/model-controller'
 import { chatController } from '@/lib/chat-controller'
 import { generationConfigController } from '@/lib/generation-config-controller'
+
 
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
@@ -53,10 +60,10 @@ const SystemPromptDialog = dynamicNext(() => import('@/components/chat/SystemPro
 const ReadFileSection = dynamicNext(() => import('@/components/chat/ReadFileSection'), { ssr: false })
 
 export default function ChatPage() {
-  const showToast = useCallback((message: string, type: string = 'success') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     const store = useToastStore.getState()
     const exists = store.toasts.some(t => t.message === message && t.type === type)
-    if (!exists) store.addToast(message, type as 'success' | 'error' | 'info')
+    if (!exists) store.addToast(message, type)
   }, [])
 
   const router = useRouter()
@@ -296,12 +303,12 @@ export default function ChatPage() {
     }
     try {
       await cmd.execute(args, context)
-    } catch (err: any) {
-      showToast(`Command failed: ${err?.message || 'Unknown error'}`, 'error')
+    } catch (err: unknown) {
+      showToast(formatToastError(err, 'Command failed'), 'error')
     }
   }, [chat, clearChat, model, showToast, router, ui])
 
-  const handleSelectAgentWithToast = useCallback((agent: any) => {
+  const handleSelectAgentWithToast = useCallback((agent: AgentDef | null) => {
     agents.setCurrentAgent(agent)
     showToast(`Switched to ${agent?.name || 'no agent'}`)
   }, [agents, showToast])
@@ -346,9 +353,9 @@ export default function ChatPage() {
       chat.setMessages(prev => prev.map(m =>
         m.id === pendingId ? { ...m, content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${prompt}](${result.image})` } : m
       ))
-    } catch (err: any) {
+    } catch (err: unknown) {
       chat.setMessages(prev => prev.map(m =>
-        m.id === pendingId ? { ...m, content: `❌ Sorry, I couldn't create that image. ${err?.message || 'Please try again.'}` } : m
+        m.id === pendingId ? { ...m, content: `❌ Sorry, I couldn't create that image. ${extractErrorMessage(err, 'Please try again.')}` } : m
       ))
     } finally { chat.setLoading(false) }
   }, [chat, createStyle])
@@ -382,7 +389,7 @@ export default function ChatPage() {
     } else if (chatMode === 'read') {
       if (!readFileData) { useToastStore.getState().addToast('Upload a file first, then ask your question', 'info'); return }
       chat.setInput('')
-      chat.sendMessage(`[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, 12000)}\n\n---\n\nMy question: ${input}`)
+      chat.sendMessage(`[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, MAX_FILE_CONTENT_CHARS)}\n\n---\n\nMy question: ${input}`)
     } else {
       chat.sendMessage()
     }
@@ -413,7 +420,7 @@ export default function ChatPage() {
 
   const handleSaveToKnowledge = useCallback(async (messageId: string, content: string) => {
     try {
-      await knowledgeController.add(content.slice(0, 500), 'chat-saved', true)
+      await knowledgeController.add(content.slice(0, MAX_KNOWLEDGE_CONTENT_CHARS), 'chat-saved', true)
       showToast('Saved to knowledge', 'success')
     } catch {
       showToast('Failed to save to knowledge', 'error')
@@ -424,15 +431,15 @@ export default function ChatPage() {
     setReadLoading(true)
     try {
       const result = await filesController.extract(file)
-      setReadFileData({ text: result.text, filename: result.filename, pages: result.pages })
+      setReadFileData({ text: result.text, filename: result.filename, pages: result.pages ?? 0 })
       const fileName = result.filename
       const pageInfo = result.extension === '.pdf' ? ` (${result.pages} pages)` : ''
       // Add a system message confirming the file was read
       chat.setMessages(prev => [...prev, {
         id: `file-${Date.now()}`, role: 'assistant', content: `📄 **Read: ${fileName}**${pageInfo}\n\nGot it! I've read ${result.chars.toLocaleString()} characters${pageInfo ? ` across ${result.pages} pages` : ''}. What do you want to know?`, timestamp: new Date(),
       }])
-    } catch (err: any) {
-      useToastStore.getState().addToast(`Couldn't read file: ${err?.message || 'Unknown error'}`, 'error')
+    } catch (err: unknown) {
+      useToastStore.getState().addToast(formatToastError(err, "Couldn't read file"), 'error')
     } finally {
       setReadLoading(false)
     }
@@ -458,23 +465,11 @@ export default function ChatPage() {
   const handlePDFDropped = useCallback(async (file: File) => {
     showToast(`Analyzing ${file.name}...`, 'info')
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('question', 'Analyze this document and summarize its contents.')
-      formData.append('per_page', 'false')
-      formData.append('max_new_tokens', '512')
-
-      const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const res = await fetch(`${PUBLIC_API_URL}/multimodal/pdf/upload`, {
-        method: 'POST',
-        body: formData,
+      const result = await multimodalController.uploadPDF(file, 'Analyze this document and summarize its contents.', {
+        perPage: false,
+        maxNewTokens: PDF_ANALYSIS_MAX_TOKENS,
       })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Upload failed' }))
-        throw new Error(err.detail || `HTTP ${res.status}`)
-      }
-      const data = await res.json()
-      const analysis = data.analysis || JSON.stringify(data)
+      const analysis = result.analysis || JSON.stringify(result)
       chat.setMessages(prev => [...prev, {
         id: `pdf-user-${Date.now()}`,
         role: 'user',
@@ -487,8 +482,8 @@ export default function ChatPage() {
         timestamp: new Date(),
       }])
       showToast('PDF analyzed — see response below', 'info')
-    } catch (err: any) {
-      showToast(`PDF analysis failed: ${err?.message || 'Unknown error'}`, 'error')
+    } catch (err: unknown) {
+      showToast(formatToastError(err, 'PDF analysis failed'), 'error')
     }
   }, [chat, showToast])
 

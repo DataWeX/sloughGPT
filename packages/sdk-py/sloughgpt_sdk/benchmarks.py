@@ -491,40 +491,6 @@ def benchmark_cache_operations():
     return result
 
 
-def benchmark_api_key_operations():
-    """Benchmark API key operations."""
-    import tempfile
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from sloughgpt_sdk.auth import APIKeyManager, KeyTier
-
-    temp_file = tempfile.NamedTemporaryFile(delete=False)
-    manager = APIKeyManager(storage_path=temp_file.name)
-
-    key, _ = manager.create_key(name="Test", tier=KeyTier.PRO)
-
-    bench = Benchmark()
-
-    bench.run(
-        name="API Key Validation",
-        func=lambda: manager.validate_key(key),
-        iterations=1000,
-    )
-
-    bench.run(
-        name="API Key Creation",
-        func=lambda: manager.create_key(name="Temp"),
-        iterations=100,
-    )
-
-    bench.run(
-        name="Usage Stats",
-        func=lambda: manager.get_usage_stats(key[:20] + "xxx"),
-        iterations=1000,
-    )
-
-
 if __name__ == "__main__":
     import sys
     import os
@@ -536,8 +502,3 @@ if __name__ == "__main__":
     print("CACHE BENCHMARKS")
     print("=" * 60)
     benchmark_cache_operations()
-
-    print("\n" + "=" * 60)
-    print("API KEY BENCHMARKS")
-    print("=" * 60)
-    benchmark_api_key_operations()

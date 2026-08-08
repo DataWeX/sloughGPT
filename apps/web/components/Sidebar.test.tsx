@@ -52,4 +52,21 @@ describe('Sidebar', () => {
     expect(screen.getByText('app.name')).toBeDefined()
     expect(screen.getByText('app.console')).toBeDefined()
   })
+
+  it('hides nav labels when collapsed', () => {
+    render(<Sidebar collapsed />)
+    expect(screen.queryByText('nav.chat')).toBeNull()
+    expect(screen.queryByText('nav.models')).toBeNull()
+  })
+
+  it('sets data-collapsed attribute when collapsed', () => {
+    const { container } = render(<Sidebar collapsed />)
+    const aside = container.querySelector('aside')
+    expect(aside?.getAttribute('data-collapsed')).toBe('true')
+  })
+
+  it('ignores collapsed when variant is drawer', () => {
+    render(<Sidebar variant="drawer" collapsed />)
+    expect(screen.getByText('nav.chat')).toBeDefined()
+  })
 })

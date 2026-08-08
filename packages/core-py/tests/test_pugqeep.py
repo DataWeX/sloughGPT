@@ -273,6 +273,151 @@ class TestPGQ:
         assert "cache" in s
         assert "queue" in s
 
+    def test_from_model(self, monkeypatch):
+        from domains.infrastructure.pugqeep import PGQ
+        import domains.infrastructure.pugqeep.facade as facade
+        from domains.infrastructure.pugqeep.model_tree import ModelTree
+        from domains.infrastructure.pugqeep.library import PointLibrary
+        lib = PointLibrary(name="fake_points")
+        tree = ModelTree("fake", lib)
+        monkeypatch.setattr(facade, "load_model_to_points", lambda *a, **k: tree)
+        sys = PGQ.from_model("fake", n_clusters=4)
+        assert sys._tree is tree
+        assert sys._library is lib
+
+    def test_queue_classmethod(self, monkeypatch):
+        from domains.infrastructure.pugqeep import PGQ, ModelQueue
+        import domains.infrastructure.pugqeep.model_tree as model_tree_module
+        from domains.infrastructure.pugqeep.model_tree import ModelTree
+        from domains.infrastructure.pugqeep.library import PointLibrary
+        trees = {}
+
+        def fake_load(model_id, *args, **kwargs):
+            lib = PointLibrary(name=f"{model_id}_points")
+            t = ModelTree(model_id, lib)
+            trees[model_id] = t
+            return t
+
+        monkeypatch.setattr(model_tree_module, "load_model_to_points", fake_load)
+        q = PGQ.queue(["a", "b"], n_clusters=4)
+        assert isinstance(q, ModelQueue)
+        assert q.get_tree("a") is trees["a"]
+        assert q.get_tree("b") is trees["b"]
+        assert q.list_trees() == ["a", "b"]
+
+    def test_put_function_method(self):
+        from domains.infrastructure.pugqeep import PGQ
+        import numpy as np
+        sys = PGQ(name="test")
+        w = np.sin(np.linspace(0, 4 * np.pi, 200)).astype(np.float32)
+        sys.put("weight1", w, method="function", compress=True)
+        assert sys._library.get("weight1").function_type in ("periodic", "linear", "polynomial")
+
+    def test_put_no_compress(self):
+        from domains.infrastructure.pugqeep import PGQ
+        import numpy as np
+        sys = PGQ(name="test")
+        w = np.random.randn(50).astype(np.float32)
+        out = sys.put("raw1", w, compress=False)
+        assert out is w
+        assert sys._shapes["raw1"] == (50,)
+
+    def test_get_cache_hit(self):
+        from domains.infrastructure.pugqeep import PGQ
+        sys = PGQ(name="test")
+        sys.put_raw("config", {"lr": 0.01})
+        assert sys.get("config") == {"lr": 0.01}
+
+    def test_has_and_remove(self):
+        from domains.infrastructure.pugqeep import PGQ
+        import numpy as np
+        sys = PGQ(name="test")
+        sys.put_raw("k", "v")
+        assert sys.has("k") is True
+        assert sys.has("missing") is False
+        assert sys.remove("k") is True
+        assert sys.has("k") is False
+        assert sys.remove("k") is False
+
+    def test_fail_and_cancel_task(self):
+        from domains.infrastructure.pugqeep import PGQ, Task
+        sys = PGQ(name="test")
+        t1 = Task(name="t1", max_retries=0)
+        sys.submit_task(t1)
+        sys.next_task()
+        assert sys.fail_task(t1.id, error="boom").status.value == "failed"
+
+        t2 = Task(name="t2")
+        sys.submit_task(t2)
+        assert sys.cancel_task(t2.id).status.value == "cancelled"
+
+    def test_pause_and_resume_queue(self):
+        from domains.infrastructure.pugqeep import PGQ
+        sys = PGQ(name="test")
+        sys.pause_queue()
+        assert sys._task_queue._paused is True
+        sys.resume_queue()
+        assert sys._task_queue._paused is False
+
+    def test_training_ops(self, monkeypatch):
+        from domains.infrastructure.pugqeep import PGQ
+        import domains.training.executor as executor_module
+
+        class _FakeExecutor:
+            def submit_training(self, fn, job_id, tree_id, library, **kwargs):
+                return job_id
+
+            def status(self, job_id):
+                return {"job_id": job_id, "status": "running"}
+
+            def cancel(self, job_id):
+                return True
+
+        monkeypatch.setattr(executor_module, "get_training_executor", lambda: _FakeExecutor())
+        sys = PGQ(name="test")
+        assert sys.submit_training(lambda *a, **k: None, "job1") == "job1"
+        assert sys.training_status("job1")["status"] == "running"
+        assert sys.cancel_training("job1") is True
+
+    def test_search_and_best(self):
+        from domains.infrastructure.pugqeep import PGQ
+        import numpy as np
+        sys = PGQ(name="test", n_clusters=4)
+        sys.put("alpha1", np.random.randn(100).astype(np.float32), compress=True)
+        sys.put("beta2", np.random.randn(100).astype(np.float32), compress=True)
+        assert len(sys.search("alpha")) == 1
+        assert len(sys.best(n=2)) == 2
+
+    def test_cache_and_queue_stats(self):
+        from domains.infrastructure.pugqeep import PGQ
+        sys = PGQ(name="test")
+        assert "total_entries" in sys.cache_stats()
+        assert "total" in sys.queue_stats()
+
+    def test_facade_properties(self):
+        from domains.infrastructure.pugqeep import PGQ
+        sys = PGQ(name="test")
+        assert sys.is_loaded is False
+        assert sys.library is sys._library
+        assert sys.tree is sys._tree
+        assert sys.cache is sys._cache
+        assert sys.task_queue is sys._task_queue
+
+    def test_exists_and_remove_many(self):
+        from domains.infrastructure.pugqeep import PGQ
+        sys = PGQ(name="test")
+        sys.put_raw("a", "1")
+        sys.put_raw("b", "2")
+        assert sys.exists_many(["a", "b", "c"]) == {"a": True, "b": True, "c": False}
+        assert sys.remove_many(["a", "c"]) == 1
+
+    def test_export_stats(self):
+        from domains.infrastructure.pugqeep import PGQ
+        sys = PGQ(name="test")
+        s = sys.export_stats()
+        assert s["version"] == "0.1.0"
+        assert "tree" in s
+
     def test_put_get_many(self):
         from domains.infrastructure.pugqeep import PGQ
         import numpy as np
@@ -533,3 +678,72 @@ class TestConfigWiring:
         p = c.compress_cluster(weights, "test", n_clusters=4)
         assert p.function_type == "cluster"
         assert len(p.params["centroids"]) == 4
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Function stores
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestStores:
+    def test_memory_store_crud(self):
+        from domains.infrastructure.pugqeep.store import MemoryStore
+        from domains.infrastructure.pugqeep import Point
+        store = MemoryStore()
+        p = Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0})
+        store.save(p)
+        assert store.load("w1") is p
+        assert store.load("missing") is None
+        assert store.count() == 1
+        assert len(store.list_all()) == 1
+        assert store.remove("w1")
+        assert not store.remove("w1")
+        store.save(p)
+        store.clear()
+        assert store.count() == 0
+
+    def test_json_store_crud(self, tmp_path):
+        from domains.infrastructure.pugqeep.store import JSONStore
+        from domains.infrastructure.pugqeep import Point
+        path = tmp_path / "store.json"
+        store = JSONStore(path)
+        p = Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0})
+        store.save(p)
+        assert store.load("w1") is not None
+        assert store.load("missing") is None
+        assert store.count() == 1
+        points = store.list_all()
+        assert len(points) == 1
+        assert points[0].identity == "w1"
+        assert store.remove("w1")
+        assert not store.remove("w1")
+        store.save(p)
+        store.clear()
+        assert store.count() == 0
+
+    def test_json_store_reload_from_disk(self, tmp_path):
+        from domains.infrastructure.pugqeep.store import JSONStore
+        from domains.infrastructure.pugqeep import Point
+        path = tmp_path / "store.json"
+        store = JSONStore(path)
+        store.save(Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0}))
+        reopened = JSONStore(path)
+        assert reopened.count() == 1
+        assert reopened.load("w1") is not None
+
+    def test_directory_store_crud(self, tmp_path):
+        from domains.infrastructure.pugqeep.store import DirectoryStore
+        from domains.infrastructure.pugqeep import Point
+        dstore = DirectoryStore(tmp_path / "points")
+        p = Point(identity="w/1", function_type="linear", params={"a": 1.0, "b": 0.0})
+        dstore.save(p)
+        assert dstore.load("w/1") is not None
+        assert dstore.load("missing") is None
+        assert dstore.count() == 1
+        points = dstore.list_all()
+        assert len(points) == 1
+        assert points[0].identity == "w/1"
+        assert dstore.remove("w/1")
+        assert not dstore.remove("w/1")
+        dstore.save(p)
+        dstore.clear()
+        assert dstore.count() == 0

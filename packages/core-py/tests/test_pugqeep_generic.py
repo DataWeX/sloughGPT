@@ -11,6 +11,7 @@ from domains.infrastructure.pugqeep.generic import (
     StorageBackend,
     FunctionType,
     registry,
+    _FunctionTypeRegistry,
     ClusterStrategy,
     FunctionStrategy,
     RawStrategy,
@@ -22,9 +23,57 @@ from domains.infrastructure.pugqeep.generic import (
 from domains.infrastructure.pugqeep.point import Point
 
 
+class _CustomFunctionType(FunctionType):
+    type_name = "custom_ft"
+    type_code = b"CUST"
+
+    def generate(self, params, n):
+        return np.full(n, params.get("fill", 0.0), dtype=np.float32)
+
+    def nbytes(self, params):
+        return 4
+
+    def to_bytes(self, params, residual=None):
+        return b"\x00"
+
+    def from_bytes(self, data):
+        return {}, None
+
+    def to_dict(self, params):
+        return dict(params)
+
+    def from_dict(self, d):
+        return dict(d)
+
+
+class _CustomCompressor(CompressionStrategy):
+    name = "custom_comp"
+
+    def compress(self, data, identity="unknown", **kwargs):
+        return Point(identity=identity, function_type=_CustomFunctionType.type_name,
+                     params={"fill": 3.0}, accuracy=1.0)
+
+    def decompress(self, point, n):
+        return point.generate(n)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Built-in strategies
 # ══════════════════════════════════════════════════════════════════════════════
+
+class TestCompressionStrategyDefaults:
+    def test_nbytes_default_delegates_to_point(self):
+        strategy = ClusterStrategy()
+        point = Point(identity="w", function_type="linear", params={"a": 1.0, "b": 0.0})
+        assert strategy.nbytes(point) == point.nbytes()
+
+    def test_nbytes_default_function_type(self):
+        strategy = FunctionStrategy()
+        point = Point(identity="w", function_type="cluster",
+                      params={"centroids": np.zeros(4, dtype=np.float32),
+                              "assignments": np.zeros(8, dtype=np.uint8)})
+        assert strategy.nbytes(point) == point.nbytes()
+
 
 class TestClusterStrategy:
     def test_compress_decompress(self):
@@ -89,6 +138,21 @@ class TestFunctionStrategy:
         point = s.compress(data, "test")
         assert point.residual is None
 
+    def test_decompress_delegates_to_generate(self):
+        s = FunctionStrategy()
+        data = np.arange(100, dtype=np.float32) * 2.0 + 1.0
+        point = s.compress(data, "test")
+        out = s.decompress(point, 100)
+        np.testing.assert_allclose(out, data, atol=1e-3)
+
+    def test_residual_stored_for_linear_best_fit(self):
+        s = FunctionStrategy(residual_threshold=1.5)
+        data = np.arange(100, dtype=np.float32) * 2.0 + 1.0
+        point = s.compress(data, "test")
+        assert point.function_type == "linear"
+        assert point.residual is not None
+        assert len(point.residual) == 100
+
 
 class TestRawStrategy:
     def test_compress_decompress(self):
@@ -121,6 +185,13 @@ class TestAutoStrategy:
         data = np.random.randn(200).astype(np.float32)
         point = s.compress(data, "test", n_clusters=16)
         assert point.accuracy > 0.5
+
+    def test_decompress_delegates_to_generate(self):
+        s = AutoStrategy()
+        data = np.random.randn(200).astype(np.float32)
+        point = s.compress(data, "test", n_clusters=16)
+        out = s.decompress(point, 200)
+        assert out.shape == (200,)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -178,6 +249,25 @@ class TestJSONStorage:
             s2 = JSONStorage(path)
             assert s2.load("x") is not None
 
+    def test_remove(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = JSONStorage(Path(tmp) / "test.json")
+            s.save(Point(identity="x", function_type="linear", params={"a": 1.0, "b": 0.0}))
+            assert s.remove("x") is True
+            assert s.load("x") is None
+            assert s.remove("x") is False
+
+    def test_list_all_clear_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = JSONStorage(Path(tmp) / "test.json")
+            s.save(Point(identity="a", function_type="linear", params={"a": 1.0, "b": 0.0}))
+            s.save(Point(identity="b", function_type="linear", params={"a": 2.0, "b": 1.0}))
+            assert s.count() == 2
+            assert {p.identity for p in s.list_all()} == {"a", "b"}
+            s.clear()
+            assert s.count() == 0
+            assert s.list_all() == []
+
 
 class TestDirectoryStorage:
     def test_save_load(self):
@@ -195,6 +285,17 @@ class TestDirectoryStorage:
             s.save(Point(identity="a", function_type="raw", params={"data_b64": "", "shape": [], "dtype": "float32"}, accuracy=1.0))
             assert s.remove("a") is True
             assert s.load("a") is None
+
+    def test_list_all_clear_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = DirectoryStorage(Path(tmp))
+            s.save(Point(identity="a", function_type="linear", params={"a": 1.0, "b": 0.0}))
+            s.save(Point(identity="b", function_type="linear", params={"a": 2.0, "b": 1.0}))
+            assert s.count() == 2
+            assert {p.identity for p in s.list_all()} == {"a", "b"}
+            s.clear()
+            assert s.count() == 0
+            assert s.list_all() == []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -239,6 +340,33 @@ class TestRegistry:
         registry.storages.register(NullStorage())
         assert "null" in registry.storages
         del registry.storages._backends["null"]
+
+
+class TestFunctionTypeRegistry:
+    def test_register_and_get(self):
+        reg = _FunctionTypeRegistry()
+        ft = _CustomFunctionType()
+        reg.register(ft)
+        assert reg.get("custom_ft") is ft
+        assert reg.get("missing") is None
+
+    def test_get_by_code(self):
+        reg = _FunctionTypeRegistry()
+        ft = _CustomFunctionType()
+        reg.register(ft)
+        assert reg.get_by_code(b"CUST") is ft
+        assert reg.get_by_code(b"NOPE") is None
+
+    def test_list(self):
+        reg = _FunctionTypeRegistry()
+        reg.register(_CustomFunctionType())
+        assert reg.list() == ["custom_ft"]
+
+    def test_contains(self):
+        reg = _FunctionTypeRegistry()
+        reg.register(_CustomFunctionType())
+        assert "custom_ft" in reg
+        assert "missing" not in reg
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -376,3 +504,40 @@ class TestPGQGeneric:
     def test_unknown_storage_raises(self):
         with pytest.raises(ValueError, match="Unknown storage"):
             PGQGeneric(name="test", storage="nonexistent")
+
+    def test_get_missing_returns_none(self):
+        sys = PGQGeneric(name="test", storage=MemoryStorage())
+        assert sys.get("nope") is None
+
+    def test_list_all(self):
+        sys = PGQGeneric(name="test", storage=MemoryStorage())
+        sys.put("a", np.ones(10, dtype=np.float32))
+        sys.put("b", np.ones(20, dtype=np.float32))
+        points = sys.list_all()
+        assert len(points) == 2
+        assert {p.identity for p in points} == {"a", "b"}
+
+    def test_registers_custom_function_types(self):
+        ft = _CustomFunctionType()
+        sys = PGQGeneric(name="test", storage=MemoryStorage(), function_types=[ft])
+        assert sys._custom_types["custom_ft"] is ft
+        assert registry.function_types.get("custom_ft") is ft
+        del registry.function_types._types["custom_ft"]
+        del registry.function_types._code_map[b"CUST"]
+
+    def test_get_custom_function_type_branch(self):
+        sys = PGQGeneric(name="test", compressor=_CustomCompressor(),
+                         storage=MemoryStorage(), function_types=[_CustomFunctionType()])
+        sys.put("w1", np.arange(10, dtype=np.float32))
+        result = sys.get("w1")
+        np.testing.assert_array_equal(result, np.full(10, 3.0))
+        del registry.function_types._types["custom_ft"]
+        del registry.function_types._code_map[b"CUST"]
+
+    def test_estimate_n_fallback_1000(self):
+        sys = PGQGeneric(name="test", storage=MemoryStorage())
+        point = Point(identity="direct", function_type="linear", params={"a": 1.0, "b": 0.0})
+        sys._storage.save(point)
+        result = sys.get("direct")
+        assert result is not None
+        assert result.shape == (1000,)

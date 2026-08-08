@@ -38,6 +38,20 @@ class TestDtype:
                 return np.float16
         assert mt.dtype(FakeTorchDtype()) == np.float16
 
+    def test_torch_dtype_numpy_raises_falls_back(self, monkeypatch):
+        class _Raises:
+            def numpy(self):
+                raise RuntimeError("no torch")
+
+        real_dtype = np.dtype
+
+        class _DTypeProxy:
+            def __new__(cls, v):
+                return real_dtype(np.float32)
+
+        monkeypatch.setattr(mt.np, "dtype", _DTypeProxy)
+        assert mt.dtype(_Raises()) == np.float32
+
     def test_unknown_string_raises(self):
         with pytest.raises(ValueError):
             mt.dtype("not_a_dtype")
@@ -323,6 +337,23 @@ class TestPlatform:
         monkeypatch.setattr(mt.platform, "system", lambda: "Darwin")
         monkeypatch.setitem(sys.modules, "torch", None)
         assert mt._mps_available() is True
+
+    def test_mps_fallback_non_arm64(self, monkeypatch):
+        monkeypatch.setattr(mt.sys, "platform", "darwin")
+        monkeypatch.setattr(mt.platform, "machine", lambda: "ppc64")
+        monkeypatch.setattr(mt.platform, "system", lambda: "Darwin")
+        monkeypatch.setitem(sys.modules, "torch", None)
+        assert mt._mps_available() is False
+
+    def test_mps_stub_methods(self, monkeypatch):
+        monkeypatch.setattr(mt, "_mps_available", lambda: False)
+        assert mt.mps.is_available() is False
+        assert mt.mps.empty_cache() is None
+
+    def test_cuda_stub_methods(self, monkeypatch):
+        monkeypatch.setattr(mt, "_cuda_available", lambda: False)
+        assert mt.cuda.is_available() is False
+        assert mt.cuda.empty_cache() is None
 
     def test_cuda_unavailable_without_torch(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "torch", None)

@@ -6,6 +6,7 @@ import { Providers } from './Providers'
 import { MODE_STORAGE_KEY, THEME_IDS, THEME_STORAGE_KEY } from '@/lib/theme-storage'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
+import WebVitals from '@/components/WebVitals'
 
 const outfit = localFont({
   src: '../public/fonts/outfit-latin.woff2',
@@ -45,6 +46,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapInline }} />
       </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
+        <WebVitals />
         <ErrorLifecycle />
         <ErrorBoundary>
           <Providers>{children}</Providers>

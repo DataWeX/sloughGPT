@@ -573,6 +573,52 @@ class TestLlamaAutoBias:
         )
 
 
+class TestCompileFromDirectory:
+    def _make_dir(self, tmp_path, config=None):
+        d = tmp_path / "fine-tuned-model"
+        d.mkdir(exist_ok=True)
+        (d / "config.json").write_text(json.dumps(config or CFG))
+        _write_safetensors(d / "model.safetensors", _gpt2_weights())
+        return d
+
+    def test_missing_directory_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            SLNCCompiler().compile_from_directory(str(tmp_path / "nope"), str(tmp_path / "o.slnc"))
+
+    def test_missing_safetensors_raises(self, tmp_path):
+        d = tmp_path / "m"
+        d.mkdir()
+        (d / "config.json").write_text(json.dumps(CFG))
+        with pytest.raises(FileNotFoundError):
+            SLNCCompiler().compile_from_directory(str(d), str(tmp_path / "o.slnc"))
+
+    def test_compiles_and_loads(self, tmp_path):
+        d = self._make_dir(tmp_path)
+        out = tmp_path / "out" / "model.slnc"
+        ret = SLNCCompiler().compile_from_directory(str(d), str(out))
+        assert ret == str(out)
+        assert out.exists()
+        parser = SLNCParser(str(out))
+        assert parser.config.get("model_type") == "gpt2"
+        w = parser.get_weights_dict()
+        assert "wte.weight" in w
+        assert w["wte.weight"].shape == (CFG["vocab_size"], CFG["n_embd"])
+
+    def test_round_trip_equals_compile_from_dict(self, tmp_path):
+        d = self._make_dir(tmp_path)
+        out = tmp_path / "dir.slnc"
+        SLNCCompiler().compile_from_directory(str(d), str(out))
+        weights = _gpt2_weights()
+        out2 = tmp_path / "dict.slnc"
+        SLNCCompiler().compile_from_dict(CFG, weights, str(out2))
+        p1 = SLNCParser(str(out))
+        p2 = SLNCParser(str(out2))
+        w1 = p1.get_weights_dict()
+        w2 = p2.get_weights_dict()
+        assert set(w1) == set(w2)
+        assert np.allclose(w1["wte.weight"], w2["wte.weight"])
+
+
 class TestXxhash:
     def test_uses_xxhash_when_installed(self, monkeypatch):
         import sys

@@ -2,6 +2,8 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { extractErrorMessage } from '@/lib/error-utils'
+import { useRouter } from 'next/navigation'
 import type { ModelEntry } from '@/lib/types/models'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
@@ -17,6 +19,7 @@ import ComposableLayersCard from '@/components/models/ComposableLayersCard'
 import PersonalitiesCard from '@/components/models/PersonalitiesCard'
 import PersonalityProfileCard from '@/components/models/PersonalityProfileCard'
 import ModelCatalogCard from '@/components/models/ModelCatalogCard'
+import { FineTunedModelsCard } from '@/components/training/FineTunedModelsCard'
 import ModelPlaygroundCard from '@/components/models/ModelPlaygroundCard'
 import ModelCacheCard from '@/components/models/ModelCacheCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
@@ -36,6 +39,7 @@ const OutputComparisonCard = dynamicNext<{ models: ModelEntry[] }>(() => import(
 const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
 
 export default function ModelsPage() {
+  const router = useRouter()
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
   const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(null)
   const { healthLegacy: health } = useLiveStatus()
@@ -63,7 +67,7 @@ export default function ModelsPage() {
       await switchSoul({ name, checkpointName })
       addToast(checkpointName ? `${name} + ${checkpointName}` : name, 'success')
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed', 'error')
+      addToast(extractErrorMessage(err, 'Failed'), 'error')
     } finally {
       setSwitchingSoul(null)
     }
@@ -75,7 +79,7 @@ export default function ModelsPage() {
       addToast('Personality updated', 'success')
       setTraitWeights(weights)
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to save traits', 'error')
+      addToast(extractErrorMessage(err, 'Failed to save traits'), 'error')
     }
   }, [addToast])
 
@@ -120,7 +124,7 @@ export default function ModelsPage() {
 
   const clearCompareResult = (modelId: string) => setCompareResults(prev => { const n = { ...prev }; delete n[modelId]; return n })
 
-  const completedCompareResults = useMemo(() => Object.entries(compareResults).filter(([, r]) => r !== null && !r!.error) as [string, BenchmarkResult][], [compareResults])
+  const completedCompareResults = useMemo(() => Object.entries(compareResults).filter(([, r]) => r !== null && !r.error) as [string, BenchmarkResult][], [compareResults])
 
   const bestMetrics: Record<string, number> = useMemo(() => {
     if (completedCompareResults.length === 0) return { throughput: 0, latency: Infinity, p95: Infinity, params: 0 }
@@ -164,7 +168,14 @@ export default function ModelsPage() {
       <AppRouteHeader
         className="items-start"
         left={<AppRouteHeaderLead title="Models & Personalities" subtitle={subtitle} />}
-        right={<Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>}
+        right={
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => router.push('/compare')}>
+              Compare
+            </Button>
+            <Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
+          </div>
+        }
       />
 
       <div className="space-y-4">
@@ -207,11 +218,15 @@ export default function ModelsPage() {
           activeRuntimeId={activeRuntimeId}
           onModelLoaded={async () => { await refreshHealth(); await refetchModels() }}
         />
+        <FineTunedModelsCard
+          activeModelId={activeRuntimeId}
+          onLoaded={async () => { await refreshHealth(); await refetchModels() }}
+        />
         <ModelPlaygroundCard activeRuntimeId={activeRuntimeId} />
         <QuantizationCard isOnline={isOnline} />
         <ModelCacheCard
           cacheUsage={cacheUsage}
-          health={health}
+          health={health && health !== 'offline' ? health : null}
           onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})}
         />
 

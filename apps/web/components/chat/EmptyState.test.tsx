@@ -56,14 +56,16 @@ describe('EmptyState', () => {
     expect(screen.getByRole('button', { name: /Plan a weekend trip/ })).toBeTruthy()
   })
 
-  it('does not show suggestion section when suggestions is empty', () => {
+  it('shows fallback suggestions when suggestions is empty', () => {
     render(<EmptyState hasModel suggestions={[]} />)
-    expect(screen.queryByText('Try asking')).toBeNull()
+    expect(screen.getByText('Try asking')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /quantum computing/ })).toBeTruthy()
   })
 
-  it('does not show suggestion section when suggestions not provided', () => {
+  it('shows fallback suggestions when suggestions not provided', () => {
     render(<EmptyState hasModel />)
-    expect(screen.queryByText('Try asking')).toBeNull()
+    expect(screen.getByText('Try asking')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /poem about the ocean/ })).toBeTruthy()
   })
 
   it('shows connecting state when hasModel is false', () => {
@@ -76,7 +78,8 @@ describe('EmptyState', () => {
   it('renders keyboard shortcuts hint', () => {
     render(<EmptyState hasModel />)
     expect(screen.getByText('Send')).toBeTruthy()
-    expect(screen.getByText('new line')).toBeTruthy()
+    expect(screen.getByText('commands')).toBeTruthy()
+    expect(screen.getByText('shortcuts')).toBeTruthy()
   })
 
   it('has accessible region with label', () => {

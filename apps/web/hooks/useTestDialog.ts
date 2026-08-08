@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { generateController } from '@/lib/generate-controller'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 export interface TestModelResult {
   prompt: string
@@ -51,7 +52,7 @@ export function useTestDialog(): UseTestDialogReturn {
         response: '',
         model: '',
         tokens_generated: 0,
-        error: e instanceof Error ? e.message : 'unknown error',
+        error: extractErrorMessage(e, 'unknown error'),
       })
     } finally { setTestLoading(false) }
   }, [testPrompt])

@@ -38,6 +38,7 @@ export interface Checkpoint {
   tokenizer_type?: string
   vocab_size?: number
   training_dataset?: string
+  training_duration_s?: number
 }
 
 export interface SoulsResponse {

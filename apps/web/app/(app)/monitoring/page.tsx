@@ -6,6 +6,7 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { Button, Switch } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type ExecutorStatus } from '@/lib/system-controller'
 import { trainingController, type TrainingJob } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
@@ -15,8 +16,15 @@ import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from 'next/dynamic'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { downloadJson } from '@/lib/download-utils'
+import { todayDateString, getJsonItem } from '@/lib/format-bytes'
 import { StatusCard } from '@/components/monitoring/StatusCard'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
+import { TrafficCard } from '@/components/monitoring/TrafficCard'
+import { ModelMetricsCard } from '@/components/monitoring/ModelMetricsCard'
+import { PathLatenciesCard } from '@/components/monitoring/PathLatenciesCard'
+import { ServerErrorsCard } from '@/components/monitoring/ServerErrorsCard'
+import { ModelEventsCard } from '@/components/monitoring/ModelEventsCard'
+import { RateViolationsCard } from '@/components/monitoring/RateViolationsCard'
 import { ResourceCard } from '@/components/monitoring/ResourceCard'
 import { LatencyCard } from '@/components/monitoring/LatencyCard'
 import { AlertPanel } from '@/components/monitoring/AlertPanel'
@@ -32,7 +40,15 @@ import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/Syste
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
+const POLL_INTERVAL_MS = 5000
+const MAX_ALERT_HISTORY = 20
+
 const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
+  ssr: false,
+  loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
+})
+
+const TrendChart = dynamicNext(() => import('@/components/monitoring/TrendChart').then(m => m.TrendChart), {
   ssr: false,
   loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
 })
@@ -65,10 +81,10 @@ export default function SystemHealthPage() {
   const [inferenceRate, setInferenceRate] = useState<number>(0)
   const prevInferenceRef = useRef<{ count: number; time: number } | null>(null)
   const [cpuThreshold, setCpuThreshold] = useState(() => {
-    try { const s = JSON.parse(localStorage.getItem('sloughgpt-monitoring-thresholds') || '{}'); return s.cpu ?? 80 } catch { return 80 }
+    return getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).cpu ?? 80
   })
   const [memThreshold, setMemThreshold] = useState(() => {
-    try { const s = JSON.parse(localStorage.getItem('sloughgpt-monitoring-thresholds') || '{}'); return s.mem ?? 80 } catch { return 80 }
+    return getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).mem ?? 80
   })
   const [alerts, setAlerts] = useState<Array<{ time: string; type: string; value: number }>>([])
   const alertsRef = useRef<Array<{ time: string; type: string; value: number }>>([])
@@ -117,7 +133,7 @@ export default function SystemHealthPage() {
       setTrainingJobs(Array.isArray(tj) ? tj : [])
       setLastUpdated(new Date().toLocaleTimeString())
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load system health')
+      setError(extractErrorMessage(e, 'Failed to load system health'))
     }
     if (showRefreshing) setRefreshing(false)
   }, [])
@@ -142,7 +158,7 @@ export default function SystemHealthPage() {
     const cpuOver = cpu > cpuThreshold
     if (cpuOver && !prevCpuOverRef.current) {
       const alert = { time: now, type: 'CPU', value: cpu }
-      alertsRef.current = [alert, ...alertsRef.current.slice(0, 19)]
+      alertsRef.current = [alert, ...alertsRef.current.slice(0, MAX_ALERT_HISTORY - 1)]
       setAlerts(alertsRef.current)
       if (Notification.permission === 'granted') {
         new Notification('High CPU Usage', { body: `CPU at ${cpu.toFixed(0)}% (threshold: ${cpuThreshold}%)`, icon: '/favicon.svg' })
@@ -152,7 +168,7 @@ export default function SystemHealthPage() {
     const memOver = mem > memThreshold
     if (memOver && !prevMemOverRef.current) {
       const alert = { time: now, type: 'Memory', value: mem }
-      alertsRef.current = [alert, ...alertsRef.current.slice(0, 19)]
+      alertsRef.current = [alert, ...alertsRef.current.slice(0, MAX_ALERT_HISTORY - 1)]
       setAlerts(alertsRef.current)
       if (Notification.permission === 'granted') {
         new Notification('High Memory Usage', { body: `Memory at ${mem.toFixed(0)}% (threshold: ${memThreshold}%)`, icon: '/favicon.svg' })
@@ -193,7 +209,7 @@ export default function SystemHealthPage() {
       if (document.hidden) return
       fetchAll()
     }
-    const id = setInterval(poll, 5000)
+    const id = setInterval(poll, POLL_INTERVAL_MS)
     const handleVisibility = () => {
       if (!document.hidden && autoRefresh) fetchAll(true)
     }
@@ -226,7 +242,7 @@ export default function SystemHealthPage() {
 
   const handleExportHistory = () => {
     if (chartHistory.length === 0) return
-    downloadJson(chartHistory, `system-history-${new Date().toISOString().slice(0, 10)}.json`)
+    downloadJson(chartHistory, `system-history-${todayDateString()}.json`)
   }
 
   return (
@@ -300,6 +316,34 @@ export default function SystemHealthPage() {
 
         {/* Row 1a: Diagnostics — live health checks from SSE */}
         <DiagnosticsCard liveHealth={liveHealth} />
+
+        {/* Row 1a2: Traffic — live request/token throughput from SSE */}
+        <TrafficCard liveHealth={liveHealth} />
+
+        {/* Row 1a3: Model activity — per-model inference stats from SSE */}
+        <ModelMetricsCard liveHealth={liveHealth} />
+
+        {/* Row 1a4: Endpoint latency — per-path avg/p95 from SSE */}
+        <PathLatenciesCard liveHealth={liveHealth} />
+
+        {/* Row 1a5: Server errors — real server-side error history from SSE */}
+        <ServerErrorsCard liveHealth={liveHealth} />
+
+        {/* Row 1a6: Model events — lifecycle loads/unloads/swaps from SSE */}
+        <ModelEventsCard liveHealth={liveHealth} />
+
+        {/* Row 1a7: Rate violations — endpoints over their per-second limit from SSE */}
+        <RateViolationsCard liveHealth={liveHealth} />
+
+        {/* Row 1a8: Health & memory trend — server-side history charted from SSE */}
+        <Card className="p-3">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Health &amp; memory trend</span>
+          <CardContent className="p-0">
+            <div className="h-40">
+              <TrendChart liveHealth={liveHealth} />
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Row 1b: Latency + Alerts + Knowledge (when data available) */}
         {loaded && (

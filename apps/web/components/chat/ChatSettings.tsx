@@ -42,7 +42,6 @@ export function ChatSettings({
   hasMessages,
   availableModels = DEFAULT_MODELS,
 }: ChatSettingsProps) {
-  const modelOptions = availableModels.length > 0 ? availableModels : DEFAULT_MODELS
   return (
     <section
       className={cn(
@@ -59,7 +58,7 @@ export function ChatSettings({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[120px]">
-            {modelOptions.map((m: string) => (
+            {availableModels.map((m: string) => (
               <DropdownMenuItem
                 key={m}
                 onSelect={() => onModelChange(m)}

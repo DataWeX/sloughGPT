@@ -66,7 +66,7 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
                 break
     if config_path is None:
         config_path = model_dir / "config.json"
-    if config_path is None:
+    if config_path is None or not config_path.exists():
         raise FileNotFoundError(f"No config.json for {model_id}")
 
     with open(config_path) as f:

@@ -180,9 +180,9 @@ describe('MessageBubble', () => {
 
   it('transitions to visible state on mount', () => {
     const { container } = render(<MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp />)
-    const outer = container.firstChild as HTMLElement
-    expect(outer.className).toContain('opacity-100')
-    expect(outer.className).toContain('translate-y-0')
+    const article = container.querySelector('[role="article"]') as HTMLElement
+    expect(article.className).toContain('opacity-100')
+    expect(article.className).toContain('translate-y-0')
   })
 
   it('accepts custom aria-live for assistant', () => {

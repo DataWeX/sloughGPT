@@ -58,12 +58,12 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     const unseen = whatsNewItems.some(i => !seen.has(i.id))
     if (!unseen) return
     markStartedRef.current = true
-    markAllSeen().then(() => setSeen(new Set(whatsNewItems.map(i => i.id))))
+    markAllSeen().then(() => setSeen(new Set(whatsNewItems.map(i => i.id)))).catch(() => {})
   }, [open, seen])
 
   const handleOpen = (v: boolean) => {
     if (v) {
-      markAllSeen().then(() => setSeen(new Set(whatsNewItems.map(i => i.id))))
+      markAllSeen().then(() => setSeen(new Set(whatsNewItems.map(i => i.id)))).catch(() => {})
     }
     onOpenChange(v)
   }

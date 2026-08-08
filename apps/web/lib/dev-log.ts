@@ -57,16 +57,11 @@ const BATCH_INTERVAL_MS = 5000
 const MAX_BATCH_SIZE = 20
 let _logBatch: LogRecord[] = []
 let _logTimer: ReturnType<typeof setTimeout> | null = null
-let _apiUrl: string | null = null
 
 function _getApiUrl(): string {
-  if (_apiUrl) return _apiUrl
-  const raw =
-    (typeof window !== 'undefined' && window.__NEXT_PUBLIC_API_URL) ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    'http://localhost:8000'
-  _apiUrl = String(raw)
-  return _apiUrl
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PUBLIC_API_URL } = require('@/lib/config') as { PUBLIC_API_URL: string }
+  return PUBLIC_API_URL
 }
 
 function _flushLogs() {
@@ -163,7 +158,11 @@ export class WebLogger {
 
   /** Deserialize a JSON string back into a LogRecord. */
   fromJSON(raw: string): LogRecord {
-    return JSON.parse(raw)
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return { timestamp: Date.now(), level: 'error', logger: 'unknown', message: `Failed to parse log: ${raw.slice(0, 100)}`, context: {} }
+    }
   }
 
   /** Flush any buffered logs to the backend immediately. */

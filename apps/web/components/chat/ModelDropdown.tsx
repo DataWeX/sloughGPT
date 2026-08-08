@@ -5,6 +5,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -20,12 +21,24 @@ interface ModelInfo {
   size_gb?: number
 }
 
+interface FineTunedModel {
+  name: string
+  model?: string
+  dataset?: string
+  size_mb?: number
+}
+
 function shortModelName(m: string): string {
   return m.includes('/') ? m.split('/').pop() || m : m
 }
 
 function sizeLabel(info?: ModelInfo): string {
   return info?.size_gb ? `${info.size_gb.toFixed(2)} GB` : ''
+}
+
+function fineTunedName(m: string): string {
+  // Directory names like "gpt2__dataset_1" -> "gpt2 · dataset_1"
+  return m.split('__').join(' · ')
 }
 
 export function ModelDropdown({
@@ -43,6 +56,7 @@ export function ModelDropdown({
     downloadProgress,
     onSelect: onSelectModel,
     onUnload: onUnloadModel,
+    fineTuned,
   } = ctx.model
   const isLoading = (m: string) => m === loadingModel
   const isLoaded = (m: string) => m === currentModel
@@ -132,20 +146,7 @@ export function ModelDropdown({
             />
           </div>
         )}
-        {currentModel && onUnloadModel && (
-          <>
-            <DropdownMenuItem
-              onSelect={() => onUnloadModel()}
-              className="text-destructive focus:text-destructive text-xs gap-2"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Remove model
-            </DropdownMenuItem>
-            <div className="h-px bg-border/50 mx-2 my-1" />
-          </>
-        )}
+
         {availableModels.map(m => {
           const info = modelInfoMap[m]
           const isCached = info?.cached
@@ -182,6 +183,44 @@ export function ModelDropdown({
             </DropdownMenuItem>
           )
         })}
+        {fineTuned && fineTuned.models.length > 0 && (
+          <>
+            <div className="h-px bg-border/50 mx-2 my-1" />
+            <DropdownMenuLabel className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">
+              Fine-tuned
+            </DropdownMenuLabel>
+            {fineTuned.models.map(ft => {
+              const isLoading = loadingModel === ft.name
+              const isLoaded = currentModel === ft.name
+              return (
+                <DropdownMenuItem
+                  key={ft.name}
+                  onSelect={() => void fineTuned.onLoad(ft.name)}
+                  disabled={isLoading}
+                  className="text-xs"
+                  title={`${ft.name}${ft.size_mb ? ` — ${ft.size_mb.toFixed(1)} MB` : ''}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="truncate block">{fineTunedName(ft.name)}</span>
+                    {(ft.model || ft.dataset) && (
+                      <span className="text-[9px] text-muted-foreground/60 block truncate">
+                        {[ft.model, ft.dataset].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">
+                    {ft.size_mb ? `${ft.size_mb.toFixed(1)} MB` : 'local'}
+                  </span>
+                  {isLoading ? (
+                    <IconRefresh className="h-3 w-3 animate-spin shrink-0 text-warning ml-1" />
+                  ) : isLoaded ? (
+                    <IconCheck className="h-3 w-3 shrink-0 text-success ml-1" />
+                  ) : null}
+                </DropdownMenuItem>
+              )
+            })}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

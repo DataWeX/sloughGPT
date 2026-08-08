@@ -32,10 +32,15 @@ class DatasetDataRequest(BaseModel):
 
 
 class DatasetStats(BaseModel):
-    dataset_id: str
-    files: int
-    size_bytes: int
-    description: str = ""
+    format: str = "text"
+    samples: int = 0
+    chars: int = 0
+    avg_length: float = 0.0
+    has_messages: bool = False
+    sample_preview: List[str] = []
+    lines: int = 0
+    suggested_method: str = "unknown"
+    file_type: str = "txt"
 
 
 class DatasetListResponse(BaseModel):

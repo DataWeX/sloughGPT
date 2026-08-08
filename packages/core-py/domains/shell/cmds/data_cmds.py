@@ -9,14 +9,6 @@ help = "List datasets, knowledge, checkpoints, or fine-tuned models"
 names = ["datasets", "knowledge", "remember", "recall", "checkpoints", "finetuned", "tokenizer"]
 
 
-def _dict_val(d: dict, *keys: str, default: str = "") -> str:
-    for k in keys:
-        v = d.get(k, default)
-        if v:
-            return str(v)
-    return default
-
-
 def run(argv: list[str], out: Console, api: ShellCommands,
         env: dict[str, str]) -> int:
     cmd = argv[0] if argv else "datasets"
@@ -128,6 +120,36 @@ def run(argv: list[str], out: Console, api: ShellCommands,
         return 0
 
     if cmd == "finetuned":
+        sub = argv[1] if len(argv) > 1 else ""
+        if sub == "load":
+            name = argv[2] if len(argv) > 2 else ""
+            if not name:
+                out.print("  Usage: finetuned load <name>")
+                return 1
+            with out.spinner(f"Loading {name}") as s:
+                result = api.load_finetuned(name)
+            status = result.get("status", "?")
+            if status == "loaded":
+                s.ok(f"{name} loaded for chat")
+            else:
+                s.fail("Load failed")
+                out.print(f"  Error: {result.get('error', result)}")
+                return 1
+            return 0
+        if sub in ("rm", "del", "delete"):
+            name = argv[2] if len(argv) > 2 else ""
+            if not name:
+                out.print("  Usage: finetuned rm <name>")
+                return 1
+            with out.spinner(f"Deleting {name}") as s:
+                result = api.delete_finetuned(name)
+            if result.get("status") == "deleted":
+                s.ok(f"Deleted {name}")
+            else:
+                s.fail("Delete failed")
+                out.print(f"  Error: {result}")
+                return 1
+            return 0
         with out.spinner("Fetching fine-tuned models") as s:
             models = api.finetuned_models()
         s.ok("Fine-tuned models loaded")
@@ -143,6 +165,7 @@ def run(argv: list[str], out: Console, api: ShellCommands,
             sz_str = f"{sz_bytes / 1048576:.0f}M"
             rows.append([name, f"{loss}", f"{ep}ep", sz_str])
         out.table(rows, ["Model", "Loss", "Epochs", "Size"])
+        out.print("  Use: finetuned load <name>  |  finetuned rm <name>")
         return 0
 
     if cmd == "tokenizer":

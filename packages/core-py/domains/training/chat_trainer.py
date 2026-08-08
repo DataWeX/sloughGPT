@@ -69,15 +69,17 @@ class ChatTextDataset:
         return self.n_samples
 
     def get_batch(self, batch_size: int, rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
-        """Get random batch of (x, y) pairs for next-token prediction."""
+        """Get random batch of (x, y) pairs for next-token prediction.
+
+        Uses vectorized advanced indexing instead of Python-level loops.
+        """
         indices = rng.integers(0, self.n_samples, size=batch_size)
-        x = np.zeros((batch_size, self.block_size), dtype=np.int32)
-        y = np.zeros((batch_size, self.block_size), dtype=np.int32)
-        for i, idx in enumerate(indices):
-            chunk = self.ids[idx:idx + self.block_size + 1]
-            x[i, :len(chunk) - 1] = chunk[:-1]
-            y[i, :len(chunk) - 1] = chunk[1:]
-        return x, y
+        offsets = np.arange(self.block_size)
+        ids = np.asarray(self.ids, dtype=np.int32)
+        pos = indices[:, None] + offsets
+        x = ids[pos]
+        y = ids[pos + 1]
+        return x.astype(np.int32), y.astype(np.int32)
 
 
 def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
@@ -297,7 +299,9 @@ def train_chat_model(
                 logger.info("  val_loss=%.4f", val_loss,
                     extra={"tag": "TRAIN"})
 
-            gc.collect()
+            # Periodic GC — every 100 steps, not every step
+            if step % 100 == 0:
+                gc.collect()
 
         # End of epoch
         avg_epoch_loss = epoch_loss / max(1, epoch_tokens)

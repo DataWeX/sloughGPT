@@ -16,7 +16,7 @@ import pytest
 
 from domains.infrastructure import quantization as q
 from domains.infrastructure.quantization import (
-    QuantEngine,
+    Quantine,
     QuantMeta,
     QuantMode,
     QuantizedLinear,
@@ -156,19 +156,19 @@ def test_tensor_info_plain_quantized_bytes_and_ratio():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# QuantEngine branches
+# Quantine branches
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 def test_is_sensitive_true_for_norm_prefixes():
-    engine = QuantEngine(bits=8)
+    engine = Quantine(bits=8)
     assert engine.is_sensitive("attn_norm.weight")
     assert engine.is_sensitive("ff_norm.weight")
     assert not engine.is_sensitive("q_proj.weight")
 
 
 def test_quantize_skips_when_relative_mse_above_threshold():
-    engine = QuantEngine(bits=8, mode="symmetric")
+    engine = Quantine(bits=8, mode="symmetric")
     engine._error_threshold = 1e-12
     arr = (np.random.RandomState(0).randn(32) * 5).astype(np.float32)
     info = engine.quantize("test.w", arr)
@@ -177,7 +177,7 @@ def test_quantize_skips_when_relative_mse_above_threshold():
 
 
 def test_quantize_per_channel_skips_when_above_threshold():
-    engine = QuantEngine(bits=8, mode="symmetric")
+    engine = Quantine(bits=8, mode="symmetric")
     engine._error_threshold = 1e-12
     arr = (np.random.RandomState(1).randn(8, 16) * 3).astype(np.float32)
     info = engine.quantize("test.mat", arr)
@@ -186,7 +186,7 @@ def test_quantize_per_channel_skips_when_above_threshold():
 
 
 def test_dequantize_to_float_matches_as_float():
-    engine = QuantEngine(bits=8, mode="symmetric")
+    engine = Quantine(bits=8, mode="symmetric")
     arr = np.array([1.0, -2.0, 3.0, -4.0], dtype=np.float32)
     info = engine.quantize("test.w", arr)
     out = engine.dequantize_to_float(info)
@@ -195,25 +195,25 @@ def test_dequantize_to_float_matches_as_float():
 
 
 def test_summary_empty_engine():
-    engine = QuantEngine(bits=8)
+    engine = Quantine(bits=8)
     assert engine.summary() == {"tensors": 0}
 
 
 def test_compute_asymmetric_constant_array():
-    engine = QuantEngine(bits=8, mode="asymmetric")
+    engine = Quantine(bits=8, mode="asymmetric")
     scale, zero_point = engine._compute_asymmetric(np.full(8, 2.5, dtype=np.float32))
     assert scale == 1.0
     assert zero_point == 0
 
 
 def test_quantize_with_scale_skip_prefix():
-    engine = QuantEngine(bits=8, mode="symmetric")
+    engine = Quantine(bits=8, mode="symmetric")
     info = engine.quantize_with_scale("norm.final.weight", np.ones(4), 0.01)
     assert info.meta is None
 
 
 def test_quantize_with_scale_scalar_path():
-    engine = QuantEngine(bits=8, mode="symmetric")
+    engine = Quantine(bits=8, mode="symmetric")
     arr = np.array([1.0, -2.0, 3.0, -4.0], dtype=np.float32)
     info = engine.quantize_with_scale("test.w", arr, scale=0.1)
     assert info.is_quantized
@@ -222,7 +222,7 @@ def test_quantize_with_scale_scalar_path():
 
 
 def test_quantize_with_scale_per_channel_symmetric():
-    engine = QuantEngine(bits=8, mode="symmetric")
+    engine = Quantine(bits=8, mode="symmetric")
     mat = np.array([[1.0, -2.0], [3.0, -4.0], [5.0, -6.0]], dtype=np.float32)
     scale = np.array([0.1, 0.2, 0.3], dtype=np.float32)
     info = engine.quantize_with_scale("test.mat", mat, scale=scale)
@@ -283,6 +283,19 @@ def test_quantized_linear_with_explicit_x_scale():
     wq = np.clip(np.round(w / 0.01), -128, 127).astype(np.int8)
     res = quantized_linear(x, wq, weight_scale=0.01, x_scale=0.05)
     assert res.shape == (3, 8)
+
+
+def test_quantized_linear_weight_only_scale_zero_row_and_bias():
+    # Weight-only path (x_scale=None): per-token activation scale with a zero
+    # row (np.where branches) plus the bias add. A non-zero weight_zero_point
+    # bypasses the fused W8A8 C path so the numpy per-token scaling executes.
+    x = np.array([[0.0, 0.0, 0.0, 0.0], [1.0, -1.0, 2.0, -2.0]], dtype=np.float32)
+    w = (np.random.RandomState(1).randn(8, 4) * 0.1).astype(np.float32)
+    wq = np.clip(np.round(w / 0.01), -128, 127).astype(np.int8)
+    bias = np.ones(8, dtype=np.float32)
+    res = quantized_linear(x, wq, weight_scale=0.01, bias=bias, weight_zero_point=1)
+    assert res.shape == (2, 8)
+    assert np.all(np.isfinite(res))
 
 
 def test_int4_quantized_linear_with_explicit_x_scale_and_zero_point():
@@ -402,7 +415,7 @@ def test_call_numpy_forward_without_torch():
 
 def test_suggest_format_1d_weight_reshaped():
     w = np.random.RandomState(0).randn(128).astype(np.float32)
-    res = QuantEngine.suggest_format(sample_weight=w, quality_threshold=0.0, min_speed_ratio=0.0)
+    res = Quantine.suggest_format(sample_weight=w, quality_threshold=0.0, min_speed_ratio=0.0)
     assert "format" in res
     assert res["bits"] in (32, 8, 4)
 
@@ -413,7 +426,7 @@ def test_suggest_format_without_avx2(monkeypatch):
             raise ImportError(f"cannot import name {name!r}")
 
     monkeypatch.setitem(sys.modules, "domains.infrastructure.quant_core.wrapper", _Broken())
-    res = QuantEngine.suggest_format(
+    res = Quantine.suggest_format(
         sample_weight=np.ones((64, 64), dtype=np.float32),
         quality_threshold=0.0,
         min_speed_ratio=0.0,

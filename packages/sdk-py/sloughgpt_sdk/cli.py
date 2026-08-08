@@ -20,7 +20,7 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from sloughgpt_sdk import SloughGPTClient, ChatMessage, APIKeyManager, KeyTier
+    from sloughgpt_sdk import SloughGPTClient, ChatMessage
 except ImportError:
     print("Error: sloughgpt-sdk not found. Install with: pip install sloughgpt-sdk")
     sys.exit(1)
@@ -100,62 +100,15 @@ def main():
     metrics = subparsers.add_parser("metrics", help="Get API metrics")
     metrics.add_argument("--prometheus", action="store_true", help="Prometheus format")
 
-    key = subparsers.add_parser("key", help="API key management")
-    key_subparsers = key.add_subparsers(dest="key_action", help="Key actions")
-
-    key_create = key_subparsers.add_parser("create", help="Create a new API key")
-    key_create.add_argument("--name", "-n", required=True, help="Key name")
-    key_create.add_argument("--tier", "-t", default="free", choices=["free", "starter", "pro", "enterprise"], help="Subscription tier")
-    key_create.add_argument("--expires", "-e", type=int, help="Days until expiration")
-    key_create.add_argument("--quota-daily", type=int, help="Daily quota limit")
-    key_create.add_argument("--quota-monthly", type=int, help="Monthly quota limit")
-
-    key_list = key_subparsers.add_parser("list", help="List API keys")
-
-    key_info = key_subparsers.add_parser("info", help="Get key info")
-    key_info.add_argument("key_id", help="Key ID")
-
-    key_rotate = key_subparsers.add_parser("rotate", help="Rotate API key")
-    key_rotate.add_argument("key_id", help="Key ID to rotate")
-
-    key_revoke = key_subparsers.add_parser("revoke", help="Revoke API key")
-    key_revoke.add_argument("key_id", help="Key ID to revoke")
-
-    key_delete = key_subparsers.add_parser("delete", help="Delete API key")
-    key_delete.add_argument("key_id", help="Key ID to delete")
-
-    key_usage = key_subparsers.add_parser("usage", help="Get key usage stats")
-    key_usage.add_argument("key_id", help="Key ID")
-
-    key_reset = key_subparsers.add_parser("reset", help="Reset key usage")
-    key_reset.add_argument("key_id", help="Key ID")
-
-    registry = subparsers.add_parser("registry", help="Model registry")
+    registry = subparsers.add_parser("registry", help="Model registry (live server)")
     reg_subparsers = registry.add_subparsers(dest="reg_action", help="Registry actions")
 
     reg_list = reg_subparsers.add_parser("list", help="List registered models")
-    reg_list.add_argument("--status", help="Filter by status (ready, loading, error)")
-    reg_list.add_argument("--tag", action="append", help="Filter by tag")
-
-    reg_register = reg_subparsers.add_parser("register", help="Register a model")
-    reg_register.add_argument("--id", "-i", required=True, help="Model ID")
-    reg_register.add_argument("--name", "-n", required=True, help="Model name")
-    reg_register.add_argument("--version", "-v", required=True, help="Model version")
-    reg_register.add_argument("--path", "-p", required=True, help="Model path")
-    reg_register.add_argument("--description", "-d", default="", help="Description")
-    reg_register.add_argument("--size", "-s", type=float, default=0, help="Size in MB")
-    reg_register.add_argument("--params", type=int, default=0, help="Number of parameters")
-    reg_register.add_argument("--tag", action="append", help="Tags (can repeat)")
 
     reg_info = reg_subparsers.add_parser("info", help="Get model info")
     reg_info.add_argument("model_id", help="Model ID")
 
-    reg_metrics = reg_subparsers.add_parser("metrics", help="Get model metrics")
-    reg_metrics.add_argument("model_id", help="Model ID")
-
     reg_best = reg_subparsers.add_parser("best", help="Get best model")
-    reg_best.add_argument("--criteria", "-c", default="latency", choices=["latency", "throughput", "memory"], help="Selection criteria")
-    reg_best.add_argument("--tag", action="append", help="Filter by tag")
 
     reg_stats = reg_subparsers.add_parser("stats", help="Get registry statistics")
 
@@ -276,189 +229,38 @@ def main():
                     print(f"Cache Misses: {result.cache_misses}")
                     print(f"Avg Response Time: {result.avg_response_time_ms:.2f}ms")
 
-        elif args.command == "key":
-            key_manager = APIKeyManager()
-
-            if args.key_action == "create":
-                tier = KeyTier(args.tier)
-                new_key, key_data = key_manager.create_key(
-                    name=args.name,
-                    tier=tier,
-                    expires_in_days=args.expires,
-                    quota_daily=args.quota_daily,
-                    quota_monthly=args.quota_monthly,
-                )
-                print("\n" + "="*50)
-                print("NEW API KEY CREATED")
-                print("="*50)
-                print(f"\nKey: {new_key}")
-                print(f"Key ID: {key_data.key_id}")
-                print(f"Name: {key_data.name}")
-                print(f"Tier: {key_data.tier.value}")
-                print(f"Rate Limit: {key_data.rate_limit}/min")
-                print(f"Daily Quota: {key_data.quota_daily}")
-                print(f"Monthly Quota: {key_data.quota_monthly}")
-                print("\n⚠️  Save this key securely - it will not be shown again!")
-                print("="*50)
-
-            elif args.key_action == "list":
-                keys = key_manager.list_keys()
-                if not keys:
-                    print("No API keys found.")
-                else:
-                    for k in keys:
-                        status = "✓" if k.is_valid() else "✗"
-                        print(f"\n{status} {k.name} ({k.key_id})")
-                        print(f"   Prefix: {k.prefix}...")
-                        print(f"   Tier: {k.tier.value}")
-                        print(f"   Active: {k.is_active}")
-                        print(f"   Usage: {k.usage_today}/{k.quota_daily} today, {k.usage_this_month}/{k.quota_monthly} this month")
-
-            elif args.key_action == "info":
-                key_data = key_manager.get_key_info(args.key_id)
-                if key_data:
-                    print(format_json(key_data.to_dict()))
-                else:
-                    print(f"Key not found: {args.key_id}")
-
-            elif args.key_action == "rotate":
-                try:
-                    new_key, new_data = key_manager.rotate_key(args.key_id)
-                    print("\n" + "="*50)
-                    print("KEY ROTATED")
-                    print("="*50)
-                    print(f"\nNew Key: {new_key}")
-                    print(f"Key ID: {new_data.key_id}")
-                    print(f"Name: {new_data.name}")
-                    print("\n⚠️  The old key has been revoked!")
-                    print("⚠️  Save this new key securely!")
-                    print("="*50)
-                except ValueError as e:
-                    print(f"Error: {e}")
-
-            elif args.key_action == "revoke":
-                if key_manager.revoke_key(args.key_id):
-                    print(f"Key revoked: {args.key_id}")
-                else:
-                    print(f"Key not found: {args.key_id}")
-
-            elif args.key_action == "delete":
-                if key_manager.delete_key(args.key_id):
-                    print(f"Key deleted: {args.key_id}")
-                else:
-                    print(f"Key not found: {args.key_id}")
-
-            elif args.key_action == "usage":
-                stats = key_manager.get_usage_stats(args.key_id)
-                if stats:
-                    print(f"\nUsage Statistics for {args.key_id}:")
-                    print(f"  Total Requests: {stats['total_requests']}")
-                    print(f"  Today: {stats['requests_today']}/{stats['daily_limit']} ({stats['daily_usage_percent']:.1f}%)")
-                    print(f"  This Month: {stats['requests_this_month']}/{stats['monthly_limit']} ({stats['monthly_usage_percent']:.1f}%)")
-                    print(f"  Remaining Today: {stats['daily_remaining']}")
-                    print(f"  Remaining This Month: {stats['monthly_remaining']}")
-                else:
-                    print(f"Key not found: {args.key_id}")
-
-            elif args.key_action == "reset":
-                if key_manager.reset_usage(args.key_id):
-                    print(f"Usage reset for: {args.key_id}")
-                else:
-                    print(f"Key not found: {args.key_id}")
-
-            else:
-                key.print_help()
-
         elif args.command == "registry":
-            from sloughgpt_sdk import ModelRegistry, ModelStatus
-
-            reg = ModelRegistry()
-
             if args.reg_action == "list":
-                models = reg.list_models()
-                if args.status:
-                    status = ModelStatus(args.status)
-                    models = [m for m in models if m.status == status]
-                if args.tag:
-                    models = [m for m in models if any(t in m.tags for t in args.tag)]
-
+                models = client.list_registry_models()
                 if not models:
                     print("No models found.")
                 else:
                     for m in models:
-                        status_icon = "✓" if m.status == ModelStatus.READY else "✗"
-                        print(f"\n{status_icon} {m.name} ({m.id})")
-                        print(f"   Version: {m.version}")
-                        print(f"   Status: {m.status.value}")
-                        print(f"   Tags: {', '.join(m.tags)}")
-                        if m.metrics.total_requests > 0:
-                            print(f"   Requests: {m.metrics.total_requests}")
-                            print(f"   Avg Latency: {m.metrics.avg_latency_ms:.2f}ms")
-
-            elif args.reg_action == "register":
-                tags = args.tag or ["stable"]
-                model = reg.register(
-                    id=args.id,
-                    name=args.name,
-                    version=args.version,
-                    path=args.path,
-                    description=args.description,
-                    size_mb=args.size,
-                    parameters=args.params,
-                    tags=tags,
-                )
-                print(f"✓ Registered model: {model.name} ({model.id})")
+                        print(f"\n{m.get('model_id', m.get('id', 'unknown'))}")
+                        print(f"   Status: {m.get('status', 'unknown')}")
+                        print(f"   Type: {m.get('model_type', 'unknown')}")
+                        if args.json:
+                            print(format_json(m))
 
             elif args.reg_action == "info":
-                model = reg.get(args.model_id)
+                model = client.get_registry_model(args.model_id)
                 if model:
-                    print(f"\n{model.name} (v{model.version})")
-                    print(f"  ID: {model.id}")
-                    print(f"  Status: {model.status.value}")
-                    print(f"  Tags: {', '.join(model.tags)}")
-                    print(f"  Size: {model.size_mb} MB")
-                    print(f"  Parameters: {model.parameters:,}")
-                    print(f"  Metrics:")
-                    print(f"    Requests: {model.metrics.total_requests}")
-                    print(f"    Avg Latency: {model.metrics.avg_latency_ms:.2f}ms")
-                    print(f"    Success Rate: {model.metrics.successful_requests / max(model.metrics.total_requests, 1) * 100:.1f}%")
-                else:
-                    print(f"Model not found: {args.model_id}")
-
-            elif args.reg_action == "metrics":
-                metrics = reg.get_metrics(args.model_id)
-                if metrics:
-                    print(f"\nMetrics for {args.model_id}:")
-                    print(f"  Total Requests: {metrics['total_requests']}")
-                    print(f"  Successful: {metrics['successful_requests']}")
-                    print(f"  Failed: {metrics['failed_requests']}")
-                    print(f"  Avg Latency: {metrics['avg_latency_ms']}ms")
-                    print(f"  Min/Max Latency: {metrics['min_latency_ms']}/{metrics['max_latency_ms']}ms")
+                    print(format_json(model) if args.json else f"{model.get('model_id', args.model_id)}")
+                    if not args.json:
+                        for k, v in model.items():
+                            if k in ("model_id",):
+                                continue
+                            print(f"  {k}: {v}")
                 else:
                     print(f"Model not found: {args.model_id}")
 
             elif args.reg_action == "best":
-                model = reg.get_best_model(args.criteria, tags=args.tag)
-                if model:
-                    print(f"Best model by {args.criteria}: {model.name}")
-                    print(f"  ID: {model.id}")
-                    print(f"  Avg Latency: {model.metrics.avg_latency_ms:.2f}ms")
-                    print(f"  Total Requests: {model.metrics.total_requests}")
-                else:
-                    print("No models found matching criteria.")
+                result = client.get_registry_best()
+                print(format_json(result) if args.json else result)
 
             elif args.reg_action == "stats":
-                stats = reg.get_stats()
-                print(f"\nRegistry Statistics:")
-                print(f"  Total Models: {stats['total_models']}")
-                print(f"  Total Requests: {stats['total_requests']}")
-                print(f"  Total Tokens: {stats['total_tokens']:,}")
-                print(f"\nBy Status:")
-                for status, count in stats['by_status'].items():
-                    print(f"  {status}: {count}")
-                print(f"\nBy Framework:")
-                for framework, count in stats['by_framework'].items():
-                    print(f"  {framework}: {count}")
+                stats = client.get_registry_stats()
+                print(format_json(stats) if args.json else stats)
 
             else:
                 registry.print_help()

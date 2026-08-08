@@ -33,6 +33,7 @@ vi.mock('@sloughgpt/strui', () => {
     AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
     AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    Breadcrumbs: ({ items }: any) => <nav aria-label="Breadcrumb">{items?.map((item: any, i: number) => <span key={i}>{item.label}</span>)}</nav>,
   }
 })
 
@@ -84,7 +85,7 @@ describe('DatasetDetailPage', () => {
   it('shows loading initially and calls get', () => {
     mockGet.mockReturnValue(new Promise(() => {}))
     render(<DatasetDetailPage />)
-    expect(screen.getByText('...')).toBeTruthy()
+    expect(screen.getAllByText('...').length).toBeGreaterThan(0)
     expect(mockGet).toHaveBeenCalledWith('shakespeare')
   })
 

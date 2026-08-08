@@ -1,7 +1,9 @@
 """Tests for knowledge_weight_integrator — native LoRA adapter training/loading helpers."""
 
 import json
+import sys
 import time
+import types
 
 import numpy as np
 import pytest
@@ -70,6 +72,37 @@ class TestTrainKnowledgeAdapter:
         result = ki.train_knowledge_adapter([{"content": "hi"}])
         assert result == {"status": "no_facts", "fact_count": 0}
 
+    def test_empty_encode_returns_no_facts(self, adapter_paths, monkeypatch):
+        monkeypatch.setattr(ki, "_encode", lambda texts, stoi, block_size: [])
+        result = ki.train_knowledge_adapter([{"content": "some knowledge fact here"}])
+        assert result == {"status": "no_facts", "fact_count": 0}
+
+    def test_model_unavailable_when_build_fails(self, adapter_paths, monkeypatch):
+        fake = types.ModuleType("domains.models")
+        monkeypatch.setitem(sys.modules, "domains.models", fake)
+        result = ki.train_knowledge_adapter([{"content": "some knowledge fact here"}])
+        assert result == {"status": "model_unavailable", "fact_count": 1}
+
+    def test_model_unavailable_when_resolver_returns_none(self, adapter_paths, monkeypatch):
+        monkeypatch.setattr(ki, "_resolve_model", lambda model, vocab_size: None)
+        result = ki.train_knowledge_adapter([{"content": "some knowledge fact here"}])
+        assert result == {"status": "model_unavailable", "fact_count": 1}
+
+    def test_training_failure(self, adapter_paths, monkeypatch):
+        def boom(*args, **kwargs):
+            raise RuntimeError("boom")
+        monkeypatch.setattr(ki, "_train_native", boom)
+        result = ki.train_knowledge_adapter([{"content": "some knowledge fact here"}])
+        assert result == {"status": "training_failed: boom", "fact_count": 1}
+
+
+class TestEncode:
+    def test_empty_text_skipped(self):
+        assert ki._encode([""], {}, 128) == []
+
+    def test_empty_texts_list(self):
+        assert ki._encode([], {}, 128) == []
+
 
 class TestLoadKnowledgeAdapter:
     def test_returns_model_when_no_adapter(self, adapter_paths):
@@ -97,6 +130,35 @@ class TestLoadKnowledgeAdapter:
             if not np.array_equal(before[n], np.asarray(p.data)):
                 changed += 1
         assert changed > 0
+
+    def test_failed_read_returns_model(self, adapter_paths, monkeypatch):
+        delta = ki._DELTA_PATH
+        delta.parent.mkdir(parents=True, exist_ok=True)
+        delta.write_bytes(b"x")
+
+        def boom(*args, **kwargs):
+            raise ValueError("corrupt npz")
+        monkeypatch.setattr(ki.np, "load", boom)
+        model = object()
+        assert ki.load_knowledge_adapter(model) is model
+
+    def test_unmerged_load_returns_model(self, adapter_paths, monkeypatch):
+        delta = ki._DELTA_PATH
+        delta.parent.mkdir(parents=True, exist_ok=True)
+        delta.write_bytes(b"x")
+        monkeypatch.setattr(ki.np, "load", lambda *a, **k: object())
+        model = object()
+        assert ki.load_knowledge_adapter(model, merge=False) is model
+
+    def test_merge_skips_missing_keys(self, adapter_paths):
+        from domains.training.slonet import SloTransformer
+        model = SloTransformer(vocab_size=64, n_embed=16, n_layer=1, n_head=2,
+                               block_size=16, max_seq_len=64)
+        delta = ki._DELTA_PATH
+        delta.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(str(delta), _stoi=np.array([1]), _itos=np.array([1]),
+                            _rank=np.array([8], dtype=np.int32))
+        assert ki.load_knowledge_adapter(model) is model
 
 
 class TestGetAdapterStatus:

@@ -11,6 +11,24 @@ import type { useChatModelSettings } from './useChatModelSettings'
 import type { useChatMessages } from './useChatMessages'
 import type { ApiHealthSnapshot } from './useApiHealth'
 import { datasetController } from '@/lib/dataset-controller'
+import { todayDateString } from '@/lib/format-bytes'
+
+type HealthStatus = 'loading' | 'offline' | 'ok' | 'loading' | 'degraded'
+
+function resolveHealthStatus(health: ApiHealthSnapshot): HealthStatus {
+  if (health === null) return 'loading'
+  if (health === 'offline') return 'offline'
+  if (health.model_loaded) return 'ok'
+  if (health.model_loading) return 'loading'
+  return 'degraded'
+}
+
+function resolveHealthSummary(health: ApiHealthSnapshot): string {
+  if (health === null) return 'Connecting...'
+  if (health === 'offline') return 'Server offline'
+  if (health.model_loading) return 'Loading model...'
+  return health.summary || ''
+}
 
 interface UseChatToolbarValueConfig {
   ui: ReturnType<typeof useChatUI>
@@ -26,7 +44,7 @@ interface UseChatToolbarValueConfig {
   handleNextMatch: () => void
   handleSelectAgentWithToast: (agent: AgentDef) => void
   modelDescriptions: Record<string, string>
-  showToast: (message: string, type?: string) => void
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
   onSystemPrompt: () => void
   onSearchConversations: () => void
   bookmarkCount: number
@@ -71,6 +89,11 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       downloadProgress: model.downloadProgress,
       onSelect: model.handleSelectModel,
       onUnload: model.handleUnloadModel,
+      fineTuned: {
+        models: model.fineTuned,
+        loading: model.fineTunedLoading,
+        onLoad: model.handleLoadFineTuned,
+      },
     },
     soul: {
       souls: model.souls,
@@ -110,7 +133,7 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
           if (msgs.length === 0) { showToast('No messages to save', 'error'); return }
           const res = await datasetController.createFromChat({
             messages: msgs,
-            name: `chat-${new Date().toISOString().slice(0, 10)}`,
+            name: `chat-${todayDateString()}`,
           })
           showToast(`Saved ${res.messages_exported} messages as dataset: ${res.name}`, 'success')
         } catch { showToast('Failed to save dataset', 'error') }
@@ -120,8 +143,8 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       bookmarkCount: config.bookmarkCount,
     },
     health: {
-      status: health === null ? 'loading' : health === 'offline' ? 'offline' : health.model_loaded ? 'ok' : health.model_loading ? 'loading' : 'degraded',
-      summary: health === null ? 'Connecting...' : health === 'offline' ? 'Server offline' : health.model_loading ? 'Loading model...' : health.summary || '',
+      status: resolveHealthStatus(health),
+      summary: resolveHealthSummary(health),
       modelLoaded: health !== null && health !== 'offline' && health.model_loaded,
       modelType: health !== null && health !== 'offline' ? health.model_type : '',
     },

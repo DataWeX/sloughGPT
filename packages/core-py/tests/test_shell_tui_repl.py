@@ -6,11 +6,18 @@ completion, token completion, and reverse history search.
 completion/search helpers can be exercised without a terminal.
 """
 
+import curses
+import ctypes
 import os
+import threading
+import time
+import types
+from unittest.mock import patch
 
 import pytest
 
-from domains.shell.tui_repl import TuiRepl, _complete_path, _read_escape_remainder
+import domains.shell.tui_repl as tui_mod
+from domains.shell.tui_repl import TuiIo, TuiRepl, _complete_path, _read_escape_remainder
 
 
 class _FakeRepl:
@@ -47,6 +54,13 @@ def test_complete_path_no_match(tmp_path):
     assert _complete_path(str(tmp_path / "zzz")) == []
 
 
+def test_complete_path_bare_name_no_slash(tmp_path, monkeypatch):
+    (tmp_path / "alpha.txt").write_text("")
+    (tmp_path / "beta.txt").write_text("")
+    monkeypatch.chdir(tmp_path)
+    assert _complete_path("al") == ["./alpha.txt"]
+
+
 def test_complete_path_expands_tilde():
     home = os.path.expanduser("~")
     matches = _complete_path("~")
@@ -81,6 +95,30 @@ def test_complete_dir_appends_slash(repl, tmp_path):
     set_buf(repl, "echo " + str(tmp_path / "my"))
     repl._complete()
     assert "".join(repl._input_buf) == "echo " + str(tmp_path / "mydir") + "/"
+
+
+def test_complete_command_extends_common_prefix(repl, monkeypatch):
+    monkeypatch.setattr(repl._repl, "COMMANDS", ["echo", "echidna", "exit"])
+    set_buf(repl, "ec")
+    repl._complete()
+    assert "".join(repl._input_buf) == "ech"
+
+
+def test_complete_path_token_common_prefix(repl, tmp_path):
+    (tmp_path / "alpine.txt").write_text("")
+    (tmp_path / "alps.txt").write_text("")
+    set_buf(repl, "")
+    repl._complete_path_token(0, 0, str(tmp_path / "al"))
+    assert "".join(repl._input_buf) == str(tmp_path / "alp")
+
+
+def test_complete_path_token_multiple_distinct(repl, tmp_path):
+    (tmp_path / "alpha.txt").write_text("")
+    (tmp_path / "beta.txt").write_text("")
+    set_buf(repl, "")
+    repl._complete_path_token(0, 0, str(tmp_path) + "/")
+    cap = "".join(repl._output_surface.capture)
+    assert "alpha.txt" in cap and "beta.txt" in cap
 
 
 # ── reverse history search ────────────────────────────────────────────────
@@ -146,6 +184,37 @@ def test_search_back_forward_past_end_returns_minus_one(repl):
     repl._cmd_history = ["ai one", "ai two"]
     repl._search_q = "ai"
     assert repl._search_back(2, fwd=True) == -1
+
+
+def test_search_back_backward_negative_start_returns_minus_one(repl):
+    repl._cmd_history = ["ai one", "ai two"]
+    repl._search_q = "ai"
+    assert repl._search_back(-1, fwd=False) == -1
+
+
+def test_search_back_empty_history_clamps(repl):
+    repl._cmd_history = []
+    repl._search_q = "ai"
+    assert repl._search_back(5, fwd=False) == 0
+    assert repl._search_back(0, fwd=True) == 0
+
+
+def test_kill_ring_trims_to_max(repl):
+    set_buf(repl, "")
+    for _ in range(12):
+        set_buf(repl, "word")
+        repl._kill_to_start()
+    assert len(repl._kill_ring) == repl._KILL_RING_MAX
+    assert repl._kill_ring[-1] == "word"
+
+
+def test_tui_io_flush_and_read():
+    from domains.shell.surface import TextSurface
+
+    io = TuiIo(TextSurface())
+    io.flush()
+    with pytest.raises(NotImplementedError):
+        io.read("prompt")
 
 
 def test_apply_search_forward_sentinel_finds_oldest(repl):
@@ -807,3 +876,606 @@ def test_repeat_out_search_no_last_noop(repl):
     repl._repeat_out_search(rows=10, fwd=True)
     assert repl._out_search_sel == -1
     assert repl._out_search_q == ""
+
+
+# ── curses event loop (_main) ────────────────────────────────────────────
+
+class _MainFakeRepl:
+    COMMANDS = ["ai", "echo", "exit"]
+
+    def __init__(self):
+        self.io = "old-io"
+        self.console = types.SimpleNamespace(_io="old-console")
+        self._history = ["echo hello", "ai test"]
+        self.dispatched = []
+
+    def _dispatch(self, cmd):
+        self.dispatched.append(cmd)
+
+
+class _FakeLogBuffer:
+    def __init__(self, entries=None):
+        if entries is None:
+            entries = [types.SimpleNamespace(timestamp=1700000000.0, level="INFO", source="test", message="boot")]
+        self._entries = entries
+
+    def get(self):
+        return self._entries
+
+
+class _FakeWin:
+    def __init__(self, rows, cols):
+        self.rows = rows
+        self.cols = cols
+
+    def getmaxyx(self):
+        return (self.rows, self.cols)
+
+    def erase(self):
+        pass
+
+    def addstr(self, y, x, text, attr=0):
+        pass
+
+    def move(self, y, x):
+        pass
+
+    def refresh(self):
+        pass
+
+
+class _ScriptStdscr(_FakeWin):
+    def __init__(self, keys, rows=24, cols=80):
+        super().__init__(rows, cols)
+        self._keys = list(keys)
+
+    def keypad(self, flag):
+        pass
+
+    def timeout(self, ms):
+        pass
+
+    def getch(self):
+        return self._keys.pop(0) if self._keys else -1
+
+
+class _ErrorWin:
+    def __init__(self, fail):
+        self.fail = fail
+
+    def getmaxyx(self):
+        return (2, 20)
+
+    def erase(self):
+        if self.fail == "erase":
+            raise curses.error("erase")
+
+    def addstr(self, y, x, text, attr=0):
+        if self.fail == "addstr":
+            raise curses.error("addstr")
+
+    def refresh(self):
+        if self.fail == "refresh":
+            raise curses.error("refresh")
+
+
+class _MoveErrorWin:
+    def getmaxyx(self):
+        return (1, 20)
+
+    def erase(self):
+        pass
+
+    def addstr(self, y, x, text, attr=0):
+        pass
+
+    def move(self, y, x):
+        raise curses.error("move")
+
+    def refresh(self):
+        pass
+
+
+def _drive(tui, scr, term=None, escdelay_raise=False, term_error=False, resize_error=False):
+    if term is None:
+        term = types.SimpleNamespace(lines=scr.rows, columns=scr.cols)
+
+    def _newwin(r, c, top, left):
+        return _FakeWin(r, c)
+
+    esc = (
+        patch.object(curses, "set_escdelay", side_effect=RuntimeError("boom"))
+        if escdelay_raise
+        else patch.object(curses, "set_escdelay")
+    )
+    getsize = (
+        patch("os.get_terminal_size", side_effect=OSError("no tty"))
+        if term_error
+        else patch("os.get_terminal_size", return_value=term)
+    )
+    resize = (
+        patch.object(curses, "resizeterm", side_effect=curses.error("resize"))
+        if resize_error
+        else patch.object(curses, "resizeterm")
+    )
+    with patch.object(curses, "curs_set"), patch.object(curses, "raw"), esc, \
+         patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "newwin", side_effect=_newwin), \
+         resize, getsize, \
+         patch.object(tui_mod, "_init_pairs"):
+        tui._main(scr)
+
+
+def _run_main(repl, keys, rows=24, cols=80, term=None, history=None, output=None,
+              term_error=False, resize_error=False):
+    tui = TuiRepl(repl, _FakeLogBuffer())
+    if history is not None:
+        tui._cmd_history = list(history)
+    if output is not None:
+        tui._output_surface.write("\n".join(output))
+    tui._running = True
+    scr = _ScriptStdscr(keys, rows=rows, cols=cols)
+    _drive(tui, scr, term=term, term_error=term_error, resize_error=resize_error)
+    return tui
+
+
+def _wait_until(pred, timeout=2.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if pred():
+            return True
+        time.sleep(0.005)
+    return pred()
+
+
+def _init_render_state(tui):
+    tui._input_buf = []
+    tui._input_cursor = 0
+    tui._rows = 24
+    tui._out_scroll = 0
+    tui._log_scroll = 0
+    tui._scroll_target = 0
+    tui._active_cmd = None
+    tui._searching = False
+    tui._search_fwd = False
+    tui._search_q = ""
+    tui._search_failed = False
+    tui._out_searching = False
+    tui._out_search_q = ""
+    tui._out_search_failed = False
+    return tui
+
+
+def test_main_types_command_dispatches_and_prompts():
+    repl = _MainFakeRepl()
+    tui = _run_main(repl, [ord("h"), ord("i"), ord("\n"), ord("q"), ord("\n")])
+    assert _wait_until(lambda: "hi" in repl.dispatched)
+    assert "hi" in repl.dispatched
+    assert tui._cmd_history == ["hi", "q"]
+    assert "\u03bb hi" in "".join(tui._output_surface.capture)
+    assert repl.io == "old-io"
+    assert repl.console._io == "old-console"
+
+
+def test_main_ctrl_c_without_command_exits():
+    tui = _run_main(_MainFakeRepl(), [3])
+    assert tui._running is False
+    assert tui._input_buf == []
+
+
+def test_main_poll_tick_clears_finished_command():
+    repl = _MainFakeRepl()
+    keys = [ord("h"), ord("i"), ord("\n")] + [-1] * 8 + [ord("q"), ord("\n")]
+    tui = _run_main(repl, keys)
+    assert _wait_until(lambda: "hi" in repl.dispatched)
+    assert tui._active_thread is None
+    assert tui._active_cmd is None
+
+
+def test_main_history_back_fills_line():
+    tui = _run_main(_MainFakeRepl(), [curses.KEY_UP, curses.KEY_UP, 3], history=["echo hello", "ai test"])
+    assert "".join(tui._input_buf) == "echo hello"
+    assert tui._history_pos == 0
+
+
+def test_main_history_up_down_clears_past_newest():
+    tui = _run_main(_MainFakeRepl(), [curses.KEY_UP, curses.KEY_UP, curses.KEY_DOWN, curses.KEY_DOWN, 3], history=["echo hello", "ai test"])
+    assert tui._input_buf == []
+    assert tui._history_pos == len(tui._cmd_history)
+
+
+def test_main_ctrl_r_search_enter_keeps_match():
+    tui = _run_main(_MainFakeRepl(), [18, ord("h"), ord("e"), ord("\n"), 3], history=["echo hello", "ai test"])
+    assert "".join(tui._input_buf) == "echo hello"
+    assert not tui._searching
+
+
+def test_main_esc_cancels_search_restores():
+    tui = _run_main(_MainFakeRepl(), [ord("a"), 18, ord("x"), 27, 3])
+    assert "".join(tui._input_buf) == "a"
+    assert not tui._searching
+
+
+def test_main_tab_completes_command():
+    tui = _run_main(_MainFakeRepl(), [ord("e"), ord("c"), 9, 3])
+    assert "".join(tui._input_buf) == "echo "
+
+
+def test_main_ctrl_l_and_ctrl_o():
+    tui = _run_main(_MainFakeRepl(), [12, 15, 3], output=["hello", "world"])
+    assert tui._output_surface.capture == []
+    assert tui._scroll_target == 1
+
+
+def test_main_pgup_pgdn_scrolls_panes():
+    tui = _run_main(_MainFakeRepl(), [15, curses.KEY_PPAGE, 15, curses.KEY_NPAGE, curses.KEY_NPAGE, 3])
+    assert tui._log_scroll == 10
+    assert tui._out_scroll == 0
+    assert tui._scroll_target == 0
+
+
+def test_main_kill_yank_and_editing():
+    tui = _run_main(_MainFakeRepl(), [ord("h"), ord("i"), 1, 11, 25, 3])
+    assert "".join(tui._input_buf) == "hi"
+    assert tui._input_cursor == 2
+
+
+def test_main_ctrl_d_delete_char():
+    tui = _run_main(_MainFakeRepl(), [ord("h"), ord("i"), 1, 4, 3])
+    assert "".join(tui._input_buf) == "i"
+
+
+def test_main_ctrl_w_delete_word_back():
+    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("b"), ord(" "), ord("c"), ord("d"), 23, 3])
+    assert "".join(tui._input_buf) == "ab "
+
+
+def test_main_ctrl_t_transpose():
+    tui = _run_main(_MainFakeRepl(), [ord("h"), ord("i"), 20, 3])
+    assert "".join(tui._input_buf) == "ih"
+
+
+def test_main_backspace():
+    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("b"), 8, 3])
+    assert "".join(tui._input_buf) == "a"
+
+
+def test_main_key_left_right():
+    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("b"), curses.KEY_LEFT, ord("x"), curses.KEY_RIGHT, 3])
+    assert "".join(tui._input_buf) == "axb"
+    assert tui._input_cursor == 3
+
+
+def test_main_key_delete_char():
+    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("b"), ord("c"), 1, curses.KEY_DC, 3])
+    assert "".join(tui._input_buf) == "bc"
+
+
+def test_main_alt_word_navigation_and_delete():
+    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("a"), ord(" "), ord("b"), ord("b"), 1, 27, ord("f"), 27, ord("b"), 27, ord("d"), 3])
+    assert "".join(tui._input_buf) == " bb"
+    assert tui._input_cursor == 0
+
+
+def test_main_seq_ctrl_arrows():
+    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("a"), ord(" "), ord("b"), ord("b"), 1, 27, 91, 53, 67, 27, 91, 53, 68, 3])
+    assert tui._input_cursor == 0
+
+
+def test_main_key_resize():
+    tui = _run_main(_MainFakeRepl(), [curses.KEY_RESIZE, 3])
+    assert tui._rows == 24
+    assert tui._cols == 80
+
+
+def test_main_detect_terminal_resize():
+    term = types.SimpleNamespace(lines=30, columns=100)
+    tui = _run_main(_MainFakeRepl(), [-1, 3], rows=24, cols=80, term=term)
+    assert tui._rows == 30
+    assert tui._cols == 100
+
+
+def test_main_out_search_accept_and_repeat():
+    out = ["target: one"] + ["filler " + str(i) for i in range(20)] + ["target: two"]
+    tui = _run_main(_MainFakeRepl(), [47, ord("t"), ord("\n"), 110, 3], output=out)
+    assert tui._out_search_last == "t"
+    assert tui._out_search_sel == 21
+    assert not tui._out_searching
+
+
+def test_main_out_search_cancel_restores():
+    tui = _run_main(_MainFakeRepl(), [47, 27, 3], output=["a", "b"])
+    assert not tui._out_searching
+    assert tui._out_search_q == ""
+    assert tui._out_search_sel == -1
+
+
+def test_main_out_search_backspace():
+    tui = _run_main(_MainFakeRepl(), [47, ord("z"), 8, 27, 3], output=["a", "b"])
+    assert tui._out_search_sel == -1
+
+
+def test_main_escdelay_failure_swallowed():
+    tui = TuiRepl(_MainFakeRepl(), _FakeLogBuffer())
+    tui._running = True
+    scr = _ScriptStdscr([3])
+    _drive(tui, scr, escdelay_raise=True)
+    assert tui._running is False
+
+
+def test_run_wraps_main_and_restores_io():
+    repl = _MainFakeRepl()
+    tui = TuiRepl(repl, _FakeLogBuffer())
+    scr = _ScriptStdscr([3])
+    term = types.SimpleNamespace(lines=24, columns=80)
+
+    def _fake_wrapper(main):
+        _drive(tui, scr, term=term)
+
+    with patch.object(curses, "wrapper", side_effect=_fake_wrapper), \
+         patch("domains.logging.cli_logger.set_cli_terminal") as sct:
+        tui.run()
+    assert tui._running is False
+    assert repl.io == "old-io"
+    assert repl.console._io == "old-console"
+    assert sct.call_count == 2
+
+
+# ── remaining uncovered branches ─────────────────────────────────────────
+
+def test_interrupt_active_async_exc_result_paths():
+    tui = TuiRepl(_MainFakeRepl(), None)
+    thread = threading.Thread(target=time.sleep, args=(1.0,), daemon=True)
+    thread.start()
+    tui._active_thread = thread
+    with patch.object(tui_mod, "_SET_ASYNC_EXC", return_value=0):
+        tui._interrupt_active()
+    with patch.object(tui_mod, "_SET_ASYNC_EXC", return_value=2):
+        tui._interrupt_active()
+
+    def _boom(*a, **k):
+        raise RuntimeError("boom")
+
+    with patch.object(tui_mod, "_SET_ASYNC_EXC", _boom):
+        tui._interrupt_active()
+    thread.join()
+
+
+def test_init_pairs_with_colors():
+    with patch.object(curses, "has_colors", return_value=True), \
+         patch.object(curses, "start_color"), \
+         patch.object(curses, "use_default_colors"), \
+         patch.object(curses, "init_pair") as ip:
+        tui_mod._init_pairs()
+    assert ip.call_count == 7
+
+
+def test_init_pairs_without_colors():
+    with patch.object(curses, "has_colors", return_value=False), \
+         patch.object(curses, "init_pair") as ip:
+        tui_mod._init_pairs()
+    assert ip.call_count == 0
+
+
+def test_read_escape_remainder_bracket_interrupted():
+    win = _FakeKeyWin([ord("["), -1])
+    assert _read_escape_remainder(win, {}) is None
+
+
+def test_read_escape_remainder_non_printable():
+    win = _FakeKeyWin([200])
+    assert _read_escape_remainder(win, {}) is None
+
+
+def test_blit_handles_curses_errors():
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    line = tui_mod.RenderLine("hello world", tui_mod.STYLE_INFO)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._blit(_ErrorWin("erase"), [line])
+        tui._blit(_ErrorWin("addstr"), [line])
+        tui._blit(_ErrorWin("refresh"), [line])
+
+
+def test_render_status_handles_errors():
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_status(_ErrorWin("erase"), 80)
+        tui._render_status(_ErrorWin("addstr"), 80)
+
+
+def test_render_input_handles_move_error():
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._input_buf = ["h", "i"]
+    tui._input_cursor = 2
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_input(_MoveErrorWin(), 20)
+
+
+def test_tui_io_write_routes_to_surface():
+    from domains.shell.surface import TextSurface
+
+    surf = TextSurface()
+    io = TuiIo(surf)
+    io.write("hello", end=" ")
+    assert "".join(surf.capture) == "hello "
+
+
+def test_blit_truncates_lines_past_window():
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    lines = [tui_mod.RenderLine(f"line {i}", tui_mod.STYLE_INFO) for i in range(5)]
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._blit(_FakeWin(2, 20), lines)
+
+
+def test_render_input_handles_addstr_error():
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._input_buf = ["h", "i"]
+    tui._input_cursor = 2
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_input(_ErrorWin("addstr"), 20)
+
+
+def test_render_status_zero_cols():
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_status(_FakeWin(1, 20), 0)
+
+
+def test_render_status_searching_failed_label():
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._searching = True
+    tui._search_failed = True
+    tui._search_q = "zzz"
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_status(_FakeWin(1, 20), 20)
+
+
+def test_render_status_out_searching_label():
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._out_searching = True
+    tui._out_search_failed = True
+    tui._out_search_q = "zzz"
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_status(_FakeWin(1, 20), 20)
+
+
+def test_main_search_direction_ctrl_s():
+    tui = _run_main(_MainFakeRepl(), [19, ord("a"), 19, ord("\n"), 3],
+                    history=["echo hello", "ai test"])
+    assert "".join(tui._input_buf) == "ai test"
+    assert not tui._searching
+
+
+def test_main_search_backspace():
+    tui = _run_main(_MainFakeRepl(), [18, ord("a"), ord("b"), 8, ord("\n"), 3],
+                    history=["echo hello", "ai test"])
+    assert "".join(tui._input_buf) == "ai test"
+
+
+def test_main_ctrl_e_end():
+    tui = _run_main(_MainFakeRepl(), [ord("h"), ord("i"), 1, 5, 3])
+    assert tui._input_cursor == 2
+
+
+def test_main_ctrl_u_kill_to_start():
+    tui = _run_main(_MainFakeRepl(), [ord("h"), ord("i"), ord(" "), ord("w"), 21, 3])
+    assert tui._input_buf == []
+    assert tui._input_cursor == 0
+
+
+def test_main_log_pane_pgdn():
+    tui = _run_main(_MainFakeRepl(), [15, curses.KEY_PPAGE, curses.KEY_NPAGE, 3])
+    assert tui._log_scroll == 0
+    assert tui._scroll_target == 1
+
+
+def test_main_ctrl_arrow_codes():
+    tui = _run_main(_MainFakeRepl(),
+                    [ord("a"), ord("a"), ord(" "), ord("b"), ord("b"), 1,
+                     tui_mod._KEY_CTRL_RIGHT, tui_mod._KEY_CTRL_LEFT, 3])
+    assert tui._input_cursor == 0
+
+
+class _BusyRepl(_MainFakeRepl):
+    def __init__(self):
+        super().__init__()
+        self.interrupts = 0
+
+    def _dispatch(self, cmd):
+        end = time.monotonic() + 10
+        try:
+            while time.monotonic() < end:
+                time.sleep(0.001)
+        except KeyboardInterrupt:
+            self.interrupts += 1
+        else:
+            self.dispatched.append(cmd)
+
+
+def test_main_ctrl_c_interrupts_active_command():
+    repl = _BusyRepl()
+    keys = [ord("h"), ord("i"), ord("\n"), -1, -1, -1, 3] + [-1] * 8 + [ord("q"), ord("\n")]
+    tui = _run_main(repl, keys)
+    assert "^C" in "".join(tui._output_surface.capture)
+    assert _wait_until(
+        lambda: repl.interrupts == 1
+        and (tui._active_thread is None or not tui._active_thread.is_alive())
+    )
+
+
+def test_main_unknown_key_blits_and_continues():
+    tui = _run_main(_MainFakeRepl(), [999, 3])
+    assert tui._running is False
+
+
+def test_main_getch_keyboard_interrupt_breaks():
+    class _KIStdscr(_ScriptStdscr):
+        def getch(self):
+            raise KeyboardInterrupt()
+
+    tui = TuiRepl(_MainFakeRepl(), _FakeLogBuffer())
+    tui._running = True
+    _drive(tui, _KIStdscr([]))
+    assert tui._running is False
+
+
+def test_main_detect_resize_terminal_oserror():
+    tui = _run_main(_MainFakeRepl(), [-1, 3], term_error=True)
+    assert tui._rows == 24
+
+
+def test_main_detect_resize_non_positive():
+    term = types.SimpleNamespace(lines=0, columns=80)
+    tui = _run_main(_MainFakeRepl(), [-1, 3], term=term)
+    assert tui._rows == 24
+
+
+def test_main_detect_resize_resizeterm_error():
+    tui = _run_main(_MainFakeRepl(), [-1, 3], resize_error=True)
+    assert tui._rows == 24
+
+
+def test_main_detect_resize_resizeterm_error_on_change():
+    term = types.SimpleNamespace(lines=30, columns=100)
+    tui = _run_main(_MainFakeRepl(), [-1, 3], term=term, resize_error=True)
+    assert tui._rows == 24
+
+
+def test_main_search_direction_backward():
+    tui = _run_main(_MainFakeRepl(), [18, ord("a"), 18, ord("\n"), 3],
+                    history=["echo hello", "ai test"])
+    assert not tui._searching
+
+
+def test_main_pgup_scrolls_output_pane():
+    tui = _run_main(_MainFakeRepl(), [curses.KEY_PPAGE, curses.KEY_NPAGE, 3])
+    assert tui._scroll_target == 0
+    assert tui._out_scroll == 0
+
+
+def test_run_handles_cli_logger_import_error():
+    import sys
+
+    repl = _MainFakeRepl()
+    tui = TuiRepl(repl, _FakeLogBuffer())
+    scr = _ScriptStdscr([3])
+    term = types.SimpleNamespace(lines=24, columns=80)
+
+    def _fake_wrapper(main):
+        _drive(tui, scr, term=term)
+
+    with patch.object(curses, "wrapper", side_effect=_fake_wrapper), \
+         patch.dict(sys.modules, {"domains.logging.cli_logger": None}):
+        tui.run()
+    assert tui._running is False
+    assert repl.io == "old-io"
+
+
+def test_module_async_exc_import_fallback():
+    import importlib
+
+    with patch.object(ctypes, "pythonapi", None):
+        importlib.reload(tui_mod)
+    assert tui_mod._SET_ASYNC_EXC is None
+    importlib.reload(tui_mod)
+    assert tui_mod._SET_ASYNC_EXC is not None

@@ -21,7 +21,8 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger("slo.learner.filter")
 
-FILTER_CONFIG_PATH = Path("data/knowledge/filter_config.json")
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+FILTER_CONFIG_PATH = _REPO_ROOT / "data" / "knowledge" / "filter_config.json"
 
 # ─── Default config ─────────────────────────────────────────────────────────
 

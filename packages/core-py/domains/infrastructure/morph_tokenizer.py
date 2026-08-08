@@ -224,6 +224,26 @@ class MorphTokenizer:
         pattern = "|".join(_re.escape(t) for t in sorted_tokens)
         return _re.compile(pattern) if pattern else None
 
+    def chat_stop_ids(self) -> Tuple[int, ...]:
+        """Resolve chat-template turn-end stop ids for generation.
+
+        Returns the ids of standard chat-template markers that terminate a
+        model turn (``<|im_end|>``, ``<|endoftext|>``, ``<|im_start|>``) when
+        defined by this tokenizer's ``added_tokens``, plus ``eos_token_id``.
+        Markers absent from the tokenizer are skipped, so non-chat models
+        get a set containing only the regular EOS token.
+
+        Returns:
+            Tuple of token ids that should stop generation.
+        """
+        _CHAT_STOP_MARKERS = ("<|im_end|>", "<|endoftext|>", "<|im_start|>")
+        stop_ids = {self.eos_token_id} if self.eos_token_id is not None else set()
+        for marker in _CHAT_STOP_MARKERS:
+            tok_id = self.added_tokens.get(marker)
+            if tok_id is not None:
+                stop_ids.add(tok_id)
+        return tuple(sorted(stop_ids))
+
     @classmethod
     def from_pretrained(cls, model_id: str) -> "MorphTokenizer":
         """Load from tokenizer.json — our own parser, no HF tokenizers lib."""
@@ -233,6 +253,10 @@ class MorphTokenizer:
 
         # Search multiple cache locations
         search_dirs = []
+        # Direct local directory (e.g. a fine-tuned model dir with tokenizer.json)
+        direct = Path(model_id)
+        if direct.is_dir():
+            search_dirs.append(direct)
         # Standard HF cache
         import os
         hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))

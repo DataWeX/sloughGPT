@@ -76,10 +76,15 @@ def mock_controller():
         "num_samples": 100,
     }
     ctrl.get_dataset_stats.return_value = {
-        "dataset_id": "shakespeare",
-        "files": 42,
-        "size_bytes": 27851,
-        "description": "Works of William Shakespeare",
+        "format": "jsonl",
+        "samples": 100,
+        "chars": 27851,
+        "avg_length": 278.5,
+        "has_messages": False,
+        "sample_preview": ["line1", "line2"],
+        "lines": 100,
+        "suggested_method": "finetune",
+        "file_type": "jsonl",
     }
     ctrl.dataset_exists.return_value = True
     ctrl.search_datasets.return_value = [
@@ -211,8 +216,9 @@ class TestStats:
         resp = client.get("/datasets/shakespeare/stats")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["dataset_id"] == "shakespeare"
-        assert data["files"] == 42
+        assert "format" in data
+        assert "samples" in data
+        assert "lines" in data
 
     def test_stats_nonexistent(self, mock_controller):
         mock_controller.get_dataset_stats.return_value = None

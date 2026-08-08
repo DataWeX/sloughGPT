@@ -11,6 +11,8 @@ const mockSoulsListCheckpoints = vi.fn()
 const mockStartDownload = vi.fn()
 const mockGetDownloadStatus = vi.fn()
 const mockIsApproved = vi.fn()
+const mockListFineTuned = vi.fn()
+const mockLoadFineTuned = vi.fn()
 
 vi.mock('@/lib/model-controller', () => ({
   modelController: { list: (...args: any[]) => mockList(...args), load: (...args: any[]) => mockLoad(...args), unloadModel: (...args: any[]) => mockUnloadModel(...args) },
@@ -33,6 +35,13 @@ vi.mock('@/lib/session-store', () => ({
   sessionStore: { isApproved: (...args: any[]) => mockIsApproved(...args) },
 }))
 
+vi.mock('@/lib/training-controller', () => ({
+  trainingJobsController: {
+    listFineTuned: (...args: any[]) => mockListFineTuned(...args),
+    loadFineTuned: (...args: any[]) => mockLoadFineTuned(...args),
+  },
+}))
+
 import { useChatModelSettings } from './useChatModelSettings'
 
 describe('useChatModelSettings', () => {
@@ -45,6 +54,8 @@ describe('useChatModelSettings', () => {
     mockGet.mockResolvedValue({ temperature: 0.8, max_new_tokens: 200 })
     mockSoulsList.mockResolvedValue({ souls: [], current_soul: null })
     mockSoulsListCheckpoints.mockResolvedValue({ checkpoints: [] })
+    mockListFineTuned.mockResolvedValue([])
+    mockLoadFineTuned.mockResolvedValue({ status: 'loaded' })
   })
 
   it('returns default state', () => {
@@ -102,6 +113,23 @@ describe('useChatModelSettings', () => {
     act(() => { result.current.setLoadingModel('gpt2') })
     await act(async () => { await result.current.handleSelectModel('gpt2') })
     expect(mockLoad).not.toHaveBeenCalled()
+  })
+
+  it('handleSelectModel surfaces backend load error instead of false success', async () => {
+    mockList.mockResolvedValue([{ id: 'gpt2', cached: true, size_gb: 0.5 }])
+    mockLoad.mockResolvedValue({ status: 'error', error: 'No .slnc file for gpt2' })
+    refreshHealth.mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.fetchInitialData() })
+    await act(async () => { await result.current.handleSelectModel('gpt2') })
+
+    expect(mockLoad).toHaveBeenCalledWith('gpt2')
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('No .slnc file for gpt2'), 'error')
+    expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Model ready'), 'success')
+    expect(result.current.model).toBe('')
+    expect(refreshHealth).not.toHaveBeenCalled()
+    expect(result.current.loadingModel).toBeNull()
   })
 
   it('handleUnloadModel unloads current model', async () => {
@@ -185,5 +213,42 @@ describe('useChatModelSettings', () => {
     await act(async () => { await result.current.fetchInitialData() })
 
     expect(result.current.model).toBe('')
+  })
+
+  it('fetchInitialData loads fine-tuned models', async () => {
+    mockListFineTuned.mockResolvedValue([{ name: 'gpt2__dataset_1', model: 'gpt2' }])
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.fetchInitialData() })
+    expect(mockListFineTuned).toHaveBeenCalled()
+    expect(result.current.fineTuned).toEqual([{ name: 'gpt2__dataset_1', model: 'gpt2' }])
+  })
+
+  it('fetchInitialData excludes fine-tuned dir names from availableModels', async () => {
+    mockList.mockResolvedValue([{ id: 'gpt2' }, { id: 'gpt2__dataset_1' }])
+    mockListFineTuned.mockResolvedValue([{ name: 'gpt2__dataset_1', model: 'gpt2' }])
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.fetchInitialData() })
+    expect(result.current.availableModels).toEqual(['gpt2'])
+    expect(result.current.fineTuned).toHaveLength(1)
+  })
+
+  it('handleLoadFineTuned loads, refreshes list, sets model from response, and toasts', async () => {
+    mockListFineTuned.mockResolvedValue([{ name: 'gpt2__dataset_1', model: 'gpt2' }])
+    mockLoadFineTuned.mockResolvedValue({ status: 'loaded', name: 'gpt2__dataset_1', model_path: '/tmp/x', model_id: 'gpt2__dataset_1' })
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.handleLoadFineTuned('gpt2__dataset_1') })
+    expect(mockLoadFineTuned).toHaveBeenCalledWith('gpt2__dataset_1')
+    expect(mockListFineTuned).toHaveBeenCalled()
+    expect(result.current.model).toBe('gpt2__dataset_1')
+    expect(refreshHealth).toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Fine-tuned model loaded'), 'success')
+  })
+
+  it('handleLoadFineTuned toasts error on failure', async () => {
+    mockLoadFineTuned.mockRejectedValue(new Error('load failed'))
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.handleLoadFineTuned('gpt2__dataset_1') })
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('load failed'), 'error')
+    expect(result.current.loadingModel).toBeNull()
   })
 })

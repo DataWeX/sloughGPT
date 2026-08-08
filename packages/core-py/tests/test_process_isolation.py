@@ -57,8 +57,8 @@ def _fake_slo_worker_main(
 
         if cmd == "generate":
             try:
-                prompt, gen_kwargs = payload
-                resp_q.put_nowait(("result", {
+                session_id, prompt, gen_kwargs = payload
+                resp_q.put_nowait(("result", session_id, {
                     "text": f"slo({model_id}): {prompt}",
                     "tokens_generated": len(prompt.split()),
                     "elapsed_ms": 1.0,
@@ -66,17 +66,17 @@ def _fake_slo_worker_main(
                 requests_served += 1
             except Exception as e:
                 try:
-                    resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
+                    resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
                     pass
 
         if cmd == "generate_stream":
             try:
-                prompt, gen_kwargs = payload
+                session_id, prompt, gen_kwargs = payload
                 text = f"slo({model_id}): {prompt}"
                 for word in text.split():
-                    resp_q.put_nowait(("token", word + " "))
-                resp_q.put_nowait(("result", {
+                    resp_q.put_nowait(("token", session_id, word + " "))
+                resp_q.put_nowait(("result", session_id, {
                     "text": "",
                     "tokens_generated": len(text.split()),
                     "elapsed_ms": 1.0,
@@ -84,7 +84,7 @@ def _fake_slo_worker_main(
                 requests_served += 1
             except Exception as e:
                 try:
-                    resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
+                    resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
                     pass
 
@@ -450,6 +450,59 @@ class TestModelWorkerProcess:
         result = worker.generate("hello")
         assert result["text"] == "ok"
 
+    def test_generate_ignores_stale_session_message(self):
+        from domains.infrastructure.model_worker import ModelWorkerProcess
+
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        worker._process = _FakeProc([True, True, True])
+        worker._req_q = _OkQueue()
+        worker._resp_q = _ScriptedQueue([
+            ("result", "req-stale-0", {"text": "old", "tokens_generated": 1, "elapsed_ms": 1.0}),
+            ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
+        ])
+        result = worker.generate("hello")
+        assert result["text"] == "ok"
+
+    def test_generate_stall_raises(self):
+        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domains.infrastructure.model_worker import WorkerStreamStalledError
+
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        worker._process = _AlwaysAliveProc()
+        worker._req_q = _OkQueue()
+        worker._resp_q = _ScriptedQueue([])
+        worker._stall_timeout = 0.2
+        with pytest.raises(WorkerStreamStalledError, match="stalled"):
+            worker.generate("hello")
+
+    def test_generate_stream_ignores_stale_session_tokens(self):
+        from domains.infrastructure.model_worker import ModelWorkerProcess
+
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        worker._process = _FakeProc([True, True, True, True])
+        worker._req_q = _OkQueue()
+        worker._resp_q = _ScriptedQueue([
+            ("token", "req-stale-0", "junk "),
+            ("token", "req-stale-0", "junk "),
+            ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
+        ])
+        gen = worker.generate_stream("hello")
+        with pytest.raises(StopIteration) as excinfo:
+            next(gen)
+        assert excinfo.value.value["tokens_generated"] == 0
+
+    def test_generate_stream_stall_raises(self):
+        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domains.infrastructure.model_worker import WorkerStreamStalledError
+
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        worker._process = _AlwaysAliveProc()
+        worker._req_q = _OkQueue()
+        worker._resp_q = _ScriptedQueue([])
+        worker._stall_timeout = 0.2
+        with pytest.raises(WorkerStreamStalledError, match="stalled"):
+            next(worker.generate_stream("hello"))
+
     def test_generate_stream_not_alive_raises(self):
         from domains.infrastructure.model_worker import ModelWorkerProcess
 
@@ -540,6 +593,27 @@ class TestProcessGuard:
         "health_check_interval": 0.5,
         "extra_sys_paths": _extra_paths,
     }
+
+    def test_resolve_memory_limit_uses_explicit(self, tmp_path):
+        from domains.infrastructure.process_guard import resolve_memory_limit_mb
+        assert resolve_memory_limit_mb(str(tmp_path / "model.slnc"), 12345.0) == 12345.0
+
+    def test_resolve_memory_limit_auto_sizes_from_file(self, tmp_path):
+        from domains.infrastructure.process_guard import resolve_memory_limit_mb
+        slnc = tmp_path / "model.slnc"
+        slnc.write_bytes(b"\x00" * (1024 * 1024 * 100))  # 100 MB
+        assert resolve_memory_limit_mb(str(slnc), 0) == 8192.0  # floor
+
+    def test_resolve_memory_limit_auto_large_file(self, tmp_path):
+        from domains.infrastructure.process_guard import resolve_memory_limit_mb
+        slnc = tmp_path / "model.slnc"
+        slnc.write_bytes(b"\x00" * (1024 * 1024 * 4096))  # 4 GB
+        assert resolve_memory_limit_mb(str(slnc), None) == 4096 * 8
+
+    def test_resolve_memory_limit_missing_file(self, tmp_path):
+        from domains.infrastructure.process_guard import resolve_memory_limit_mb
+        assert resolve_memory_limit_mb(str(tmp_path / "nope.slnc"), None) is None
+        assert resolve_memory_limit_mb(None, 0) is None
 
     def test_start_and_stop(self):
         from domains.infrastructure.process_guard import ProcessGuard
@@ -644,6 +718,25 @@ class TestProcessGuard:
         with pytest.raises(RuntimeError, match="not alive"):
             next(guard.generate_stream("hello"))
 
+    def test_stall_recovers_and_restarts(self):
+        from domains.infrastructure.process_guard import ProcessGuard
+        from domains.infrastructure.model_worker import WorkerStreamStalledError
+
+        guard = ProcessGuard(**self.GUARD_KWARGS)
+        guard.start()
+        try:
+            guard._worker.generate = lambda *a, **k: (
+                (_ for _ in ()).throw(WorkerStreamStalledError("simulated wedge"))
+            )
+            with pytest.raises(WorkerStreamStalledError, match="simulated wedge"):
+                guard.generate("hello")
+            assert guard._restart_count == 1
+            assert guard.alive
+            result = guard.generate("hello")
+            assert result["text"] == "guarded hello"
+        finally:
+            guard.stop()
+
     def test_monitor_loop_continues_without_worker(self):
         from domains.infrastructure.process_guard import ProcessGuard
 
@@ -675,7 +768,9 @@ class TestProcessGuard:
         guard._stop_monitor.clear()
         t = threading.Thread(target=guard._monitor_loop, daemon=True)
         t.start()
-        time.sleep(0.1)
+        deadline = time.time() + 5.0
+        while guard._restart_count == 0 and time.time() < deadline:
+            time.sleep(0.01)
         assert guard._restart_count == 1
         guard._stop_monitor.set()
         t.join(timeout=2)

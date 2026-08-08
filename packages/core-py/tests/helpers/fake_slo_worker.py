@@ -26,9 +26,9 @@ def fake_slo_generate(slnc_path, model_id, req_q, resp_q, hb_q, worker_id):
             break
 
         if cmd == "generate":
-            prompt, kwargs = payload
+            session_id, prompt, kwargs = payload
             try:
-                resp_q.put_nowait(("result", {
+                resp_q.put_nowait(("result", session_id, {
                     "text": f"fake-slo({model_id}): {prompt}",
                     "tokens_generated": 1,
                     "elapsed_ms": 1.0,
@@ -37,11 +37,11 @@ def fake_slo_generate(slnc_path, model_id, req_q, resp_q, hb_q, worker_id):
                 pass
 
         if cmd == "generate_stream":
-            prompt, kwargs = payload
+            session_id, prompt, kwargs = payload
             try:
                 for word in f"fake-slo({model_id}): {prompt}".split():
-                    resp_q.put_nowait(("token", word + " "))
-                resp_q.put_nowait(("result", {
+                    resp_q.put_nowait(("token", session_id, word + " "))
+                resp_q.put_nowait(("result", session_id, {
                     "text": "",
                     "tokens_generated": 5,
                     "elapsed_ms": 1.0,

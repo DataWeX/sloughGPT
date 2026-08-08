@@ -9,7 +9,7 @@ describe('ModelCacheCard', () => {
 
   const base = {
     cacheUsage: { total_gb: 3.5, model_count: 4 },
-    health: { model_loaded: true, model_type: 'gpt2' },
+    health: { status: 'healthy', model_loaded: true, model_type: 'gpt2', summary: 'ok' },
     onRefresh: vi.fn(),
   }
 
@@ -26,12 +26,12 @@ describe('ModelCacheCard', () => {
   })
 
   it('shows None when model not loaded', () => {
-    render(<ModelCacheCard {...base} health={{ model_loaded: false }} />)
+    render(<ModelCacheCard {...base} health={{ status: 'error', model_loaded: false, model_type: '', summary: 'error' }} />)
     expect(screen.getByText('None')).toBeDefined()
   })
 
   it('shows offline health', () => {
-    render(<ModelCacheCard {...base} health="offline" />)
+    render(<ModelCacheCard {...base} health={null} />)
     expect(screen.getByText('None')).toBeDefined()
   })
 })

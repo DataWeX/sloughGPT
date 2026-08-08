@@ -34,13 +34,13 @@ export function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, o
       </div>
       <CardContent className="p-0 space-y-2">
         <div className="flex items-center gap-2">
-          <label className="text-[11px] text-muted-foreground w-10">CPU</label>
-          <input type="range" min={10} max={100} value={cpuThreshold} onChange={e => onCpuThresholdChange(Number(e.target.value))} className="flex-1 h-1 accent-primary" />
+          <label htmlFor="cpu-threshold" className="text-[11px] text-muted-foreground w-10">CPU</label>
+          <input id="cpu-threshold" type="range" min={10} max={100} value={cpuThreshold} onChange={e => onCpuThresholdChange(Number(e.target.value))} className="flex-1 h-1 accent-primary" />
           <span className="text-[11px] font-mono w-8 text-right">{cpuThreshold}%</span>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-[11px] text-muted-foreground w-10">MEM</label>
-          <input type="range" min={10} max={100} value={memThreshold} onChange={e => onMemThresholdChange(Number(e.target.value))} className="flex-1 h-1 accent-primary" />
+          <label htmlFor="mem-threshold" className="text-[11px] text-muted-foreground w-10">MEM</label>
+          <input id="mem-threshold" type="range" min={10} max={100} value={memThreshold} onChange={e => onMemThresholdChange(Number(e.target.value))} className="flex-1 h-1 accent-primary" />
           <span className="text-[11px] font-mono w-8 text-right">{memThreshold}%</span>
         </div>
       </CardContent>

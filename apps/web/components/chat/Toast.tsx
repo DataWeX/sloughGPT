@@ -10,6 +10,7 @@ export interface Toast {
   message: string
   type: ToastType
   verbose?: string
+  onUndo?: () => void
 }
 
 interface ToastItemProps {
@@ -134,6 +135,14 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
             </button>
           )}
         </span>
+        {toast.onUndo && (
+          <button
+            onClick={e => { e.stopPropagation(); toast.onUndo!(); dismiss() }}
+            className="sl-toast__undo"
+          >
+            Undo
+          </button>
+        )}
         <button
           onClick={e => { e.stopPropagation(); dismiss() }}
           className="sl-toast__close"

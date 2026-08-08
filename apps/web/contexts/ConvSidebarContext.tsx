@@ -7,7 +7,7 @@ const NAV_COLLAPSED_KEY = 'sloughgpt:nav-sidebar-collapsed'
 
 function readBool(key: string): boolean {
   if (typeof window === 'undefined') return false
-  try { return localStorage.getItem(key) === 'true' } catch { return false }
+  try { return localStorage.getItem(key) === 'true' } catch { return false /* SSR or private browsing */ }
 }
 
 interface ConvSidebarContextValue {
@@ -39,11 +39,11 @@ export function ConvSidebarProvider({ children }: { children: ReactNode }) {
   const toggleNav = useCallback(() => setNavCollapsed(v => !v), [])
 
   useEffect(() => {
-    try { localStorage.setItem(CONV_COLLAPSED_KEY, String(convCollapsed)) } catch {}
+    try { localStorage.setItem(CONV_COLLAPSED_KEY, String(convCollapsed)) } catch { /* SSR or private browsing */ }
   }, [convCollapsed])
 
   useEffect(() => {
-    try { localStorage.setItem(NAV_COLLAPSED_KEY, String(navCollapsed)) } catch {}
+    try { localStorage.setItem(NAV_COLLAPSED_KEY, String(navCollapsed)) } catch { /* SSR or private browsing */ }
   }, [navCollapsed])
 
   return (

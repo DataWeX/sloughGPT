@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconX } from '@sloughgpt/strui'
+import { IconX, IconSearch } from '@sloughgpt/strui'
 import { chatDB, type KnowledgeItem } from '@/lib/db'
 import { logger } from '@/lib/dev-log'
 
@@ -23,10 +23,17 @@ export function KnowledgeTab({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [backendContentIds, setBackendContentIds] = useState<Map<string, string>>(new Map())
+  const [knowledgeSearch, setKnowledgeSearch] = useState('')
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const filteredKnowledge = useMemo(() => {
+    if (!knowledgeSearch) return knowledge
+    const q = knowledgeSearch.toLowerCase()
+    return knowledge.filter(k => k.content.toLowerCase().includes(q))
+  }, [knowledge, knowledgeSearch])
+
   useEffect(() => {
-    chatDB.getKnowledge().then(items => setKnowledge(items)).catch(() => {})
+    chatDB.getKnowledge().then(items => setKnowledge(items)).catch(e => logger.debug('Failed to load knowledge from DB', { exception: String(e) }))
   }, [])
 
   useEffect(() => {
@@ -63,8 +70,8 @@ export function KnowledgeTab({
           await chatDB.clearKnowledge()
           await chatDB.importKnowledge(merged)
         }
-      }).catch(() => {})
-    }).catch(() => {})
+      }).catch(e => logger.debug('Failed to fetch backend knowledge', { exception: String(e) }))
+    }).catch(() => /* dynamic import failed — knowledge controller unavailable */ {})
     return () => { cancelled = true }
   }, [])
 
@@ -112,8 +119,8 @@ export function KnowledgeTab({
       const backendId = backendContentIds.get(item.content)
       if (backendId) {
         import('@/lib/knowledge-controller').then(({ knowledgeController }) => {
-          knowledgeController.delete(backendId).catch(() => {})
-        }).catch(() => {})
+          knowledgeController.delete(backendId).catch(e => logger.debug('Backend knowledge delete failed', { exception: String(e) }))
+        }).catch(() => /* dynamic import failed */ {})
       }
     }
   }
@@ -128,6 +135,27 @@ export function KnowledgeTab({
           + Add
         </Button>
       </div>
+
+      {knowledge.length > 3 && (
+        <div className="relative">
+          <IconSearch className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          <input
+            value={knowledgeSearch}
+            onChange={e => setKnowledgeSearch(e.target.value)}
+            placeholder="Search snippets..."
+            className="h-6 w-full rounded border border-border/60 bg-background pl-6 pr-2 text-[10px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+          />
+          {knowledgeSearch && (
+            <button
+              onClick={() => setKnowledgeSearch('')}
+              aria-label="Clear search"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <IconX className="h-2.5 w-2.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       {showAddKnowledge && (
         <div className="space-y-1">
@@ -149,9 +177,13 @@ export function KnowledgeTab({
         <p className="text-xs text-muted-foreground text-center py-4">
           No knowledge stored. Add facts the AI should reference.
         </p>
+      ) : filteredKnowledge.length === 0 ? (
+        <p className="text-xs text-muted-foreground text-center py-4">
+          No snippets matching &quot;{knowledgeSearch}&quot;
+        </p>
       ) : (
         <ul className="space-y-1 max-h-60 overflow-y-auto">
-          {knowledge.map((item) => (
+          {filteredKnowledge.map((item) => (
             <li key={item.id} className="p-2 rounded bg-muted/30 border border-border/40 text-xs leading-relaxed group relative">
               {editingId === item.id ? (
                 <div className="space-y-1">

@@ -2,13 +2,15 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { PUBLIC_API_URL } from '@/lib/config'
 
 export interface AppSettings {
   apiUrl: string
   hfToken: string
-  defaultModel: string
   defaultTemp: number
   defaultMaxTokens: number
+  defaultTopP: number
+  defaultTopK: number
   theme: 'dark' | 'light' | 'system'
   streaming: boolean
   customContext: string
@@ -30,12 +32,13 @@ interface AppStore {
   clearKnowledge: () => void
 }
 
-const DEFAULT_SETTINGS: AppSettings = {
-  apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+export const DEFAULT_SETTINGS: AppSettings = {
+  apiUrl: PUBLIC_API_URL,
   hfToken: '',
-  defaultModel: 'gpt2',
   defaultTemp: 0.8,
   defaultMaxTokens: 200,
+  defaultTopP: 0.9,
+  defaultTopK: 50,
   theme: 'light',
   streaming: true,
   customContext: '',
@@ -75,6 +78,17 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'man-store',
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<AppStore>
+        return {
+          ...current,
+          ...p,
+          settings: {
+            ...DEFAULT_SETTINGS,
+            ...(p.settings ?? {}),
+          },
+        }
+      },
     }
   )
 )

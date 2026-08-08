@@ -1,6 +1,7 @@
 """Tests for the conversation-to-training data pipeline."""
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -48,6 +49,11 @@ class TestPipelineInit:
         (data_dir / "conversations.db").write_text("{ not valid json")
         p = tp.TrainingDataPipeline(data_dir=str(data_dir))
         assert p.get_conversations(limit=10) == []
+
+    def test_read_db_missing_file_returns_empty(self, tmp_path):
+        p = tp.TrainingDataPipeline(data_dir=str(tmp_path / "data"))
+        db = p._read_db(tmp_path / "no-such-file.db")
+        assert db == {"version": "1.0", "records": []}
 
 
 class TestConversations:
@@ -104,6 +110,18 @@ class TestTrainingPairs:
 
     def test_empty_response_quality_zero(self, pipeline):
         pipeline.add_conversation("s", "u", "", "m")
+        assert pipeline.get_training_pairs()[0].quality_score == 0.0
+
+    def test_pair_quality_up_direct(self, pipeline):
+        pipeline._create_training_pair(
+            {"id": "conv_x", "user_message": "u", "assistant_message": "a", "feedback": "up"}
+        )
+        assert pipeline.get_training_pairs()[0].quality_score == 1.0
+
+    def test_pair_quality_down_direct(self, pipeline):
+        pipeline._create_training_pair(
+            {"id": "conv_y", "user_message": "u", "assistant_message": "a", "feedback": "down"}
+        )
         assert pipeline.get_training_pairs()[0].quality_score == 0.0
 
     def test_filter_min_quality(self, populated):
@@ -196,6 +214,16 @@ class TestExport:
         with pytest.raises(ValueError):
             pipeline.export_training_data()
 
+    def test_export_overwrites_existing_latest(self, populated):
+        pipeline, *_ = populated
+        (pipeline.exports_dir / "latest.jsonl").write_text("stale")
+        pipeline.export_training_data(min_quality=0.5, version="t2")
+        lines = [
+            json.loads(l)
+            for l in (pipeline.exports_dir / "latest.jsonl").read_text().splitlines()
+        ]
+        assert lines[0]["prompt"] == "hello"
+
     def test_export_unknown_format_raises(self, populated):
         pipeline, *_ = populated
         with pytest.raises(ValueError):
@@ -236,6 +264,20 @@ class TestBackup:
         pipeline.export_training_data(min_quality=0.5, version="t1")
         backup = Path(pipeline.create_backup())
         assert (backup / "latest.jsonl").exists()
+
+    def test_backup_ignores_latest_copy_error(self, populated, monkeypatch):
+        pipeline, *_ = populated
+        pipeline.export_training_data(min_quality=0.5, version="t1")
+        real_copy2 = shutil.copy2
+
+        def flaky(src, dst, *args, **kwargs):
+            if Path(dst).name == "latest.jsonl":
+                raise OSError("boom")
+            return real_copy2(src, dst, *args, **kwargs)
+
+        monkeypatch.setattr(shutil, "copy2", flaky)
+        backup = Path(pipeline.create_backup())
+        assert (backup / "conversations.db").exists()
 
 
 class TestSingleton:

@@ -6,6 +6,7 @@ import { Badge } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@sloughgpt/strui'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 interface DatasetValidation {
   dataset_id: string
@@ -39,7 +40,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
         setPreview(previewData)
         setValidation(null)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load preview')
+        setError(extractErrorMessage(err, 'Failed to load preview'))
       } finally {
         setLoading(false)
       }

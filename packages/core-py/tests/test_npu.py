@@ -2,6 +2,9 @@
 
 import pytest
 import time
+import importlib
+import sys
+import types
 import numpy as np
 from unittest.mock import MagicMock, patch, PropertyMock, mock_open
 from dataclasses import dataclass
@@ -1476,3 +1479,443 @@ class TestCBackendRouting:
         npu.open()
         with pytest.raises(ValueError, match="Unknown backend"):
             npu._load_provider("m", "model.slnc", "model.slnc", "invalid", {})
+
+
+# ── HuggingFace Provider Tests ────────────────────────────────────────────
+
+
+class _NullContext:
+    """Minimal context manager standing in for torch.no_grad()."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+class FakeTorchTensor(np.ndarray):
+    """Minimal torch.Tensor stand-in for _HuggingFaceProvider tests."""
+
+    def cpu(self):
+        return self
+
+    def numpy(self):
+        return np.asarray(self)
+
+    def long(self):
+        return self
+
+    def to(self, *args, **kwargs):
+        return self
+
+
+def _make_fake_torch():
+    fake = types.ModuleType("torch")
+    fake.Tensor = FakeTorchTensor
+    fake.from_numpy = staticmethod(lambda arr: np.asarray(arr).view(FakeTorchTensor))
+    fake.no_grad = staticmethod(lambda: _NullContext())
+    return fake
+
+
+class TestHuggingFaceProvider:
+    def test_metadata(self):
+        from domains.shell.kernel_npu import _HuggingFaceProvider
+        tok = types.SimpleNamespace(vocab_size=1000)
+        prov = _HuggingFaceProvider(model=object(), tokenizer=tok,
+                                    model_id="m1", device="cpu")
+        meta = prov.metadata()
+        assert meta["model_id"] == "m1"
+        assert meta["device"] == "cpu"
+        assert meta["vocab_size"] == 1000
+
+    def test_metadata_default_vocab(self):
+        from domains.shell.kernel_npu import _HuggingFaceProvider
+        prov = _HuggingFaceProvider(model=object(), tokenizer=object(),
+                                    model_id="m1", device="cpu")
+        assert prov.metadata()["vocab_size"] == 0
+
+    def test_call_missing_input_ids(self):
+        from domains.shell.kernel_npu import _HuggingFaceProvider
+        torch = _make_fake_torch()
+        prov = _HuggingFaceProvider(model=object(), tokenizer=object(),
+                                    model_id="m1", device="cpu")
+        with patch.dict(sys.modules, {"torch": torch}):
+            with pytest.raises(ValueError, match="input_ids"):
+                prov({"x": 1})
+
+    def test_call_ndarray_tensor_logits(self):
+        from domains.shell.kernel_npu import _HuggingFaceProvider
+        torch = _make_fake_torch()
+        output = types.SimpleNamespace()
+
+        def _model(ids):
+            output.logits = np.random.randn(1, 3).astype(np.float32).view(FakeTorchTensor)
+            return output
+
+        prov = _HuggingFaceProvider(model=_model, tokenizer=object(),
+                                    model_id="m1", device="cpu")
+        with patch.dict(sys.modules, {"torch": torch}):
+            out = prov({"input_ids": np.array([[1, 2, 3]], dtype=np.int64)})
+        assert isinstance(out, np.ndarray)
+        assert out.shape == (1, 3)
+
+    def test_call_ndarray_numpy_logits(self):
+        from domains.shell.kernel_npu import _HuggingFaceProvider
+        torch = _make_fake_torch()
+        output = types.SimpleNamespace()
+
+        def _model(ids):
+            output.logits = np.random.randn(1, 3).astype(np.float32)
+            return output
+
+        prov = _HuggingFaceProvider(model=_model, tokenizer=object(),
+                                    model_id="m1", device="cpu")
+        with patch.dict(sys.modules, {"torch": torch}):
+            out = prov({"input_ids": np.array([[1, 2, 3]], dtype=np.int64)})
+        assert out.shape == (1, 3)
+
+    def test_generate_numpy(self):
+        from domains.shell.kernel_npu import _HuggingFaceProvider
+        torch = _make_fake_torch()
+
+        class _Tok:
+            eos_token_id = 50256
+
+            def __call__(self, prompt, **kwargs):
+                return {"input_ids": np.asarray([1, 2, 3], dtype=np.int64).reshape(1, -1).view(FakeTorchTensor)}
+
+        class _Gen:
+            def generate(self, input_ids, **kwargs):
+                return np.asarray([1, 2, 3, 9, 9], dtype=np.int64).reshape(1, -1).view(FakeTorchTensor)
+
+        prov = _HuggingFaceProvider(model=_Gen(), tokenizer=_Tok(),
+                                    model_id="m1", device="cpu")
+        with patch.dict(sys.modules, {"torch": torch}):
+            out = prov.generate_numpy("hi", max_tokens=2, temperature=0.7)
+        assert out == [9, 9]
+
+    def test_tokenize_detokenize(self):
+        from domains.shell.kernel_npu import _HuggingFaceProvider
+        tok = types.SimpleNamespace(encode=lambda t: [1, 2],
+                                    decode=lambda ids: "decoded")
+        prov = _HuggingFaceProvider(model=object(), tokenizer=tok,
+                                    model_id="m1", device="cpu")
+        assert prov.tokenize("hi") == [1, 2]
+        assert prov.detokenize([1, 2]) == "decoded"
+
+
+class _FakeHFAutoTokenizer:
+    """Minimal AutoTokenizer stand-in for _load_huggingface_provider."""
+
+    vocab_size = 1000
+    eos_token_id = 0
+
+    @classmethod
+    def from_pretrained(cls, model_id):
+        return cls()
+
+
+class _FakeHFAutoModel:
+    """Minimal AutoModelForCausalLM stand-in for _load_huggingface_provider."""
+
+    def __init__(self):
+        self._device = None
+
+    def to(self, device):
+        self._device = device
+        return self
+
+    def eval(self):
+        return self
+
+    @classmethod
+    def from_pretrained(cls, model_id, **kwargs):
+        return cls()
+
+
+class TestHuggingFaceLoad:
+    def test_load_success(self):
+        fake = types.ModuleType("transformers")
+        fake.AutoModelForCausalLM = _FakeHFAutoModel
+        fake.AutoTokenizer = _FakeHFAutoTokenizer
+        npu = NPUDevice()
+        with patch.dict(sys.modules, {"transformers": fake}):
+            prov = npu._load_huggingface_provider("m", "huggingface:gpt2", {"device": "cpu"})
+        assert prov._model_id == "gpt2"
+        assert prov._device == "cpu"
+        assert prov._model._device == "cpu"
+
+    def test_load_transformers_missing(self):
+        npu = NPUDevice()
+        with patch.dict(sys.modules, {"transformers": None}):
+            with pytest.raises(ValueError, match="transformers not installed"):
+                npu._load_huggingface_provider("m", "huggingface:gpt2", {})
+
+
+class TestLoadProviderRouting:
+    def test_provider_routes_slnc_to_c(self):
+        npu = NPUDevice()
+        with patch.object(npu, "_load_c_provider", return_value=MockCTransformProvider()):
+            prov, backend = npu._load_provider("m", "model.slnc", "model.slnc")
+        assert backend == "c"
+
+    def test_provider_routes_huggingface(self):
+        npu = NPUDevice()
+        with patch.object(npu, "_load_huggingface_provider", return_value=object()):
+            prov, backend = npu._load_provider("m", "huggingface:gpt2", "hf")
+        assert backend == "huggingface"
+
+    def test_provider_rejects_unknown_source(self):
+        npu = NPUDevice()
+        with pytest.raises(ValueError, match="Unknown backend for"):
+            npu._load_provider("m", "model.bin", "model.bin")
+
+
+class TestNPULoadErrors:
+    def test_load_model_no_source(self):
+        npu = NPUDevice()
+        result = npu.load_model("m", "")
+        assert not result.success
+        assert "no source path provided" in result.error
+
+    def test_load_model_provider_error(self):
+        npu = NPUDevice()
+        with patch.object(npu, "_load_provider", side_effect=RuntimeError("boom")):
+            result = npu.load_model("m", "model.slnc")
+        assert not result.success
+        assert "load_model failed" in result.error
+
+    def test_unload_default_model(self):
+        npu = NPUDevice()
+        npu.open()
+        provider = MockProvider()
+        npu._models["m"] = NPUModel(name="m", provider=provider)
+        npu._default_model = "m"
+        result = npu.unload_model("")
+        assert result.success
+        assert "m" not in npu._models
+        assert npu._default_model == ""
+
+
+class _RawInner:
+    """Bare model object — no forward_pass or generate_numpy."""
+
+
+class RawModelProvider:
+    """Provider whose _model lacks forward_pass/generate_numpy — exercises
+    the else branches in forward/generate/batch/compare/benchmark."""
+
+    def __init__(self, inner=None):
+        self._model = inner if inner is not None else _RawInner()
+        self._tokenizer = MockTokenizer()
+        self._model_id = "raw"
+        self._device = "cpu"
+
+    def forward_numpy(self, input_ids):
+        return np.random.randn(input_ids.shape[0], input_ids.shape[1], 256).astype(np.float32)
+
+    def generate_numpy(self, input_ids, max_new_tokens=10, **kwargs):
+        return np.random.randint(0, 256, (input_ids.shape[0], 2), dtype=np.int64)
+
+    def tokenize(self, text):
+        return self._tokenizer.encode(text)
+
+    def detokenize(self, token_ids):
+        return self._tokenizer.decode(token_ids)
+
+    def embed(self, text, layer=-1):
+        return np.random.randn(64).astype(np.float32)
+
+    def metadata(self):
+        return {
+            "model_id": self._model_id,
+            "total_params": 100,
+            "n_layer": 2,
+            "n_embed": 64,
+            "n_head": 4,
+            "vocab_size": 256,
+        }
+
+
+class TestNPUProviderFallbacks:
+    def _make_npu(self):
+        npu = NPUDevice()
+        npu.open()
+        provider = RawModelProvider()
+        npu._models["raw"] = NPUModel(name="raw", provider=provider,
+                                      config=provider.metadata())
+        npu._default_model = "raw"
+        return npu
+
+    def test_forward_uses_forward_numpy(self):
+        npu = self._make_npu()
+        result = npu.forward("raw", [1, 2, 3])
+        assert result.success
+        assert result.value["engine"] == "numpy"
+
+    def test_generate_uses_provider_generate_numpy(self):
+        npu = self._make_npu()
+        result = npu.generate("raw", "hello", max_tokens=4)
+        assert result.success
+        assert "text" in result.value
+
+    def test_batch_uses_provider_generate_numpy(self):
+        npu = self._make_npu()
+        result = npu.batch("raw", ["a", "b"], max_tokens=4)
+        assert result.success
+        assert result.value["count"] == 2
+
+    def test_compare_uses_provider_generate_numpy(self):
+        npu = NPUDevice()
+        npu.open()
+        inner = types.SimpleNamespace(
+            forward_pass=lambda ids: ForwardPassResult(
+                logits=np.random.randn(1, 3, 256).astype(np.float32), engine="numpy"))
+        p1 = RawModelProvider(inner=inner)
+        p2 = RawModelProvider(inner=inner)
+        npu._models["a"] = NPUModel(name="a", provider=p1, config=p1.metadata())
+        npu._models["b"] = NPUModel(name="b", provider=p2, config=p2.metadata())
+        result = npu.compare("a", "b", "hi", 3)
+        assert result.success
+
+    def test_benchmark_uses_provider_generate_numpy(self):
+        npu = self._make_npu()
+        result = npu.benchmark("raw", [1, 2])
+        assert result.success
+        assert len(result.value["results"]) == 2
+
+
+class TestNPUMissingModelErrors:
+    def _setup(self):
+        npu = NPUDevice()
+        npu.open()
+        return npu
+
+    def test_embed_missing_model(self):
+        result = self._setup().embed("nope", "hi")
+        assert not result.success
+
+    def test_tokenize_missing_model(self):
+        result = self._setup().tokenize("nope", "hi")
+        assert not result.success
+
+    def test_detokenize_missing_model(self):
+        result = self._setup().detokenize("nope", [1, 2])
+        assert not result.success
+
+    def test_train_step_missing_model(self):
+        result = self._setup().train_step("nope", [1], [2])
+        assert not result.success
+
+    def test_dequantize_missing_model(self):
+        result = self._setup().dequantize("nope")
+        assert not result.success
+
+
+def _build_soul_binary(weights=None):
+    """Create a minimal valid .soul binary for testing."""
+    import struct
+    import json
+    meta = json.dumps({"soul_name": "test"}).encode()
+    json_len = len(meta)
+    header = b"SOU\x00" + struct.pack("<I", 3) + struct.pack("<I", json_len) + meta
+    weight_data = b""
+    if weights:
+        weight_data = struct.pack("<I", len(weights))
+        for wname, arr in weights.items():
+            name_bytes = wname.encode("utf-8")
+            weight_data += struct.pack("<I", len(name_bytes))
+            weight_data += name_bytes
+            weight_data += struct.pack("<I", arr.ndim)
+            for s in arr.shape:
+                weight_data += struct.pack("<I", s)
+            weight_data += arr.tobytes()
+    else:
+        weight_data = struct.pack("<I", 0)
+    return header + weight_data
+
+
+class TestNPUCheckpointErrors:
+    def _make_npu_with_model(self):
+        npu = NPUDevice()
+        npu.open()
+        provider = MockProvider()
+        npu._models["m"] = NPUModel(name="m", provider=provider,
+                                    config=provider.metadata(), loaded_at=time.time())
+        npu._default_model = "m"
+        return npu
+
+    @patch("domains.inference.slo_format.save_soul", side_effect=RuntimeError("disk full"))
+    def test_save_checkpoint_error(self, mock_save):
+        npu = self._make_npu_with_model()
+        result = npu.save_checkpoint("m", "/tmp/x.soul")
+        assert not result.success
+        assert "SAVE_CHECKPOINT failed" in result.error
+
+    def test_load_checkpoint_applies_state_dict(self):
+        npu = self._make_npu_with_model()
+        provider = npu._models["m"].provider
+        provider.load_state_dict = lambda weights: setattr(provider, "loaded", weights)
+        soul_data = _build_soul_binary({"w1": np.ones((8, 8), dtype=np.float32)})
+        with patch("builtins.open", mock_open(read_data=soul_data)):
+            result = npu.load_checkpoint("m", "/tmp/x.soul")
+        assert result.success
+        assert result.value["weights_restored"] == 1
+        assert provider.loaded["w1"].shape == (8, 8)
+
+    def test_load_checkpoint_generic_error(self):
+        npu = self._make_npu_with_model()
+        with patch("builtins.open", side_effect=PermissionError("denied")):
+            result = npu.load_checkpoint("m", "/tmp/x.soul")
+        assert not result.success
+        assert "LOAD_CHECKPOINT failed" in result.error
+
+
+class TestNPUQuantizeSkips:
+    def test_quantize_skips_non_array_params(self):
+        npu = NPUDevice()
+        npu.open()
+        provider = MockProvider()
+        m = provider._model
+        m._params = {"w1": np.random.randn(32, 32).astype(np.float32)}
+        m._params["meta"] = "not-an-array"
+        npu._models["m"] = NPUModel(name="m", provider=provider,
+                                    config=provider.metadata())
+        npu._default_model = "m"
+        result = npu.quantize("m", 8)
+        assert result.success
+        assert result.value["params_quantized"] == 1
+
+
+class _FakePsutil:
+    class Process:
+        @staticmethod
+        def memory_info():
+            return types.SimpleNamespace(rss=10 * 1024 * 1024)
+
+
+class TestNPUPsutil:
+    def test_psutil_available_branch(self):
+        kp = importlib.import_module("domains.shell.kernel_npu")
+        fake = _FakePsutil()
+        with patch.dict(sys.modules, {"psutil": fake}):
+            reloaded = importlib.reload(kp)
+            assert reloaded._HAS_PSUTIL is True
+        try:
+            npu = NPUDevice()
+            npu.open()
+            inner = types.SimpleNamespace(
+                forward_pass=lambda ids: ForwardPassResult(
+                    logits=np.random.randn(1, 3, 256).astype(np.float32), engine="numpy"))
+            p1 = RawModelProvider(inner=inner)
+            p2 = RawModelProvider(inner=inner)
+            npu._models["a"] = NPUModel(name="a", provider=p1, config=p1.metadata())
+            npu._models["b"] = NPUModel(name="b", provider=p2, config=p2.metadata())
+            result = npu.compare("a", "b", "hi", 3)
+            assert result.success
+            assert result.value["models"]["a"]["memory_mb"] > 0
+        finally:
+            with patch.dict(sys.modules, {"psutil": None}):
+                importlib.reload(kp)
+            assert kp._HAS_PSUTIL is False

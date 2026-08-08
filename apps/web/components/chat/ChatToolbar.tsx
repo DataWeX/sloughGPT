@@ -53,6 +53,13 @@ export const ChatToolbar = memo(function ChatToolbar() {
         </span>
       )}
 
+      {ctx.actions.hasMessages && (
+        <span className="hidden lg:flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+          <span className="font-mono">{ctx.actions.messageCount}</span>
+          <span>msgs</span>
+        </span>
+      )}
+
       <div className="flex items-center gap-1 sm:gap-1.5">
         <ModelDropdown />
         <SoulSelectorDropdown />

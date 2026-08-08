@@ -184,16 +184,24 @@ class TestPDFVLMProcessor:
     def test_extract_text_pypdf_breaks_at_max_pages(self, tmp_path, monkeypatch):
         """pypdf fallback should stop reading past max_pages."""
         import sys
+        import types
 
         monkeypatch.delitem(sys.modules, "fitz", raising=False)
-        import pypdf
 
-        writer = pypdf.PdfWriter()
-        for _ in range(3):
-            writer.add_blank_page(width=612, height=792)
+        class FakePage:
+            def extract_text(self):
+                return "P "
+
+        class FakePdfReader:
+            def __init__(self, stream):
+                self.pages = [FakePage(), FakePage(), FakePage()]
+
+        fake = types.ModuleType("pypdf")
+        fake.PdfReader = FakePdfReader
+        monkeypatch.setitem(sys.modules, "pypdf", fake)
+
         path = tmp_path / "multi.pdf"
-        with open(path, "wb") as f:
-            writer.write(f)
+        path.write_bytes(b"%PDF-1.4 fake body")
 
         p = PDFVLMProcessor(max_pages=1)
-        assert isinstance(p._extract_text(str(path)), str)
+        assert p._extract_text(str(path)) == "P "

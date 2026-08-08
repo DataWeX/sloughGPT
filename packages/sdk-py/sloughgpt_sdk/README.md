@@ -1,15 +1,15 @@
 # SloughGPT Python SDK
 
-A comprehensive Python client library for the SloughGPT API. Build AI-powered applications with full SaaS infrastructure out of the box.
+A Python client library for the SloughGPT API. Every method maps to a real backend endpoint — no simulated or local-only API surface.
 
 ## Features
 
 | Category | Features |
 |----------|----------|
 | **Core** | Sync/Async HTTP client, streaming, batch processing |
-| **Auth** | API keys, tiers, quotas, rotation |
-| **SaaS** | Webhooks, billing, subscriptions, usage analytics |
-| **Tools** | Caching, benchmarks, profiling, model registry |
+| **Server** | Health, models, chat, generate, tokenizer, system, souls, knowledge |
+| **Training** | Fine-tune jobs, auto-train, checkpoints, recovery |
+| **Tools** | Caching, benchmarks, profiling, live model registry |
 | **CLI** | Full command-line interface |
 
 ## Installation
@@ -62,30 +62,6 @@ status = client.get_training_status(job_id)
 all_jobs = client.list_training_jobs()
 ```
 
-## API Key Management
-
-```python
-from sloughgpt_sdk import APIKeyManager, KeyTier
-
-manager = APIKeyManager()
-
-# Create key
-key, data = manager.create_key(
-    name="My App",
-    tier=KeyTier.PRO,
-    quota_daily=10000
-)
-
-# Validate key
-is_valid, reason, key_data = manager.validate_key(key)
-
-# Record usage
-manager.record_usage(key, requests_count=1)
-
-# Rotate key
-new_key, new_data = manager.rotate_key(data.key_id)
-```
-
 ## Simple Tracking
 
 ```python
@@ -97,27 +73,23 @@ with client.track("training-v1") as t:
         t.next_step()
 ```
 
-## Model Registry
+## Model Registry (live server)
+
+The registry methods proxy the real `ModelRegistry` running inside the server — no client-side state.
 
 ```python
-from sloughgpt_sdk import ModelRegistry, ModelStatus
+models = client.list_registry_models()
+stats = client.get_registry_stats()
+best = client.get_registry_best()
+detail = client.get_registry_model(models[0]["model_id"])
+```
 
-registry = ModelRegistry()
+## Security & Rate Limits
 
-# Register model
-registry.register(
-    id="gpt2-large",
-    name="GPT-2 Large",
-    version="1.0",
-    path="/models/gpt2-large",
-    tags=["stable", "gpu"]
-)
-
-# Record metrics
-registry.record_request("gpt2-large", latency_ms=50, tokens=100)
-
-# Get best model
-best = registry.get_best_model("latency")
+```python
+keys = client.get_security_keys()
+audit = client.get_audit_log()
+status = client.get_rate_limit_status()
 ```
 
 ## Caching
@@ -128,49 +100,6 @@ from sloughgpt_sdk import InMemoryCache
 cache = InMemoryCache(ttl=3600)  # 1 hour
 cache.set("key", "value")
 value = cache.get("key")
-```
-
-## Webhooks
-
-```python
-from sloughgpt_sdk import WebhookManager, WebhookEvent
-
-wh = WebhookManager()
-wh.create_webhook(
-    url="https://myapp.com/webhook",
-    events=[WebhookEvent.KEY_CREATED, WebhookEvent.QUOTA_EXCEEDED]
-)
-```
-
-## Billing
-
-```python
-from sloughgpt_sdk import BillingManager, BillingCycle
-
-billing = BillingManager()
-
-# Create customer & subscription
-customer = billing.create_customer("user@example.com", "User")
-subscription = billing.create_subscription(
-    customer["id"],
-    plan_id="pro",
-    billing_cycle=BillingCycle.MONTHLY
-)
-```
-
-## Usage Dashboard
-
-```python
-from sloughgpt_sdk import UsageDashboard
-
-dashboard = UsageDashboard()
-
-# Record request
-dashboard.record_request("sk_xxx", "cus_xxx", tokens=100)
-
-# Get metrics
-metrics = dashboard.get_metrics("7d")
-report = dashboard.generate_report("30d")
 ```
 
 ## Benchmarks
@@ -192,14 +121,11 @@ sloughgpt-cli generate "Hello world"
 # Chat
 sloughgpt-cli chat "What is Python?"
 
-# API Keys
-sloughgpt-cli key create --name "My App" --tier pro
-sloughgpt-cli key list
-
-# Registry
-sloughgpt-cli registry register --id gpt2 --name "GPT-2" --version 1.0 --path /models/gpt2
+# Registry (live server)
 sloughgpt-cli registry list
-sloughgpt-cli registry best --criteria latency
+sloughgpt-cli registry info gpt2
+sloughgpt-cli registry best
+sloughgpt-cli registry stats
 
 # Metrics
 sloughgpt-cli metrics
@@ -219,32 +145,8 @@ from sloughgpt_sdk import (
     BatchRequest, BatchResult,
     ModelInfo, DatasetInfo,
     HealthStatus, SystemInfo, MetricsData,
-
-    # Auth
-    APIKeyManager, APIKey, KeyTier,
-
-    # Webhooks
-    WebhookManager, Webhook, WebhookEvent,
-
-    # Billing
-    BillingManager, Plan, Subscription, Invoice,
-
-    # Dashboard
-    UsageDashboard, DashboardMetrics,
-
-    # Registry
-    ModelRegistry, ModelSelector, ModelStatus, ModelTag,
 )
 ```
-
-## Subscription Tiers
-
-| Tier | Rate Limit | Daily | Monthly |
-|------|-----------|-------|---------|
-| Free | 60/min | 100 | 1,000 |
-| Starter | 120/min | 1,000 | 10,000 |
-| Pro | 300/min | 10,000 | 100,000 |
-| Enterprise | 1000/min | 100,000 | 1,000,000 |
 
 ## Error Handling
 

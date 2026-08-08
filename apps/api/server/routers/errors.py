@@ -21,7 +21,7 @@ import re
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from schemas.common import success_response
 
@@ -38,10 +38,10 @@ _ERROR_LOG_FILE = _ERROR_LOG_DIR / "errors.jsonl"
 # ── Pydantic models ──────────────────────────────────────────────────────
 
 class ErrorEntry(BaseModel):
-    message: str
-    source: str = "web"
-    stack: Optional[str] = None
-    url: Optional[str] = None
+    message: str = Field(max_length=5000)
+    source: str = Field(default="web", max_length=100)
+    stack: Optional[str] = Field(default=None, max_length=20000)
+    url: Optional[str] = Field(default=None, max_length=2000)
     line: Optional[int] = None
     col: Optional[int] = None
     timestamp: Optional[str] = None
@@ -49,20 +49,20 @@ class ErrorEntry(BaseModel):
 
 
 class ErrorBatch(BaseModel):
-    errors: List[ErrorEntry]
+    errors: List[ErrorEntry] = Field(max_length=100)
 
 
 class FrontendLogEntry(BaseModel):
-    level: str = "info"
-    logger: str = "web"
-    message: str = ""
+    level: str = Field(default="info", max_length=20)
+    logger: str = Field(default="web", max_length=100)
+    message: str = Field(default="", max_length=5000)
     timestamp: float = 0.0
     context: Optional[dict] = None
-    exception: Optional[str] = None
+    exception: Optional[str] = Field(default=None, max_length=20000)
 
 
 class FrontendLogBatch(BaseModel):
-    logs: List[FrontendLogEntry]
+    logs: List[FrontendLogEntry] = Field(max_length=100)
 
 
 # ── Router class ─────────────────────────────────────────────────────────
