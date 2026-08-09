@@ -48,6 +48,7 @@ export interface HealthStatus {
   summary: string
   is_inferencing?: boolean
   inference_count?: number
+  request_count?: number
   soul_engine_active?: boolean
   soul_name?: string | null
   vocab_size?: number

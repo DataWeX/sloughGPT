@@ -11,7 +11,9 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -168,10 +170,76 @@ class AuditLogger:
     Writes events to ``audit.log`` as JSON lines.
     """
 
+    _TAIL_BYTES = 256 * 1024
+
     def __init__(self, log_path: str = "audit.log"):
         self._log_path = log_path
         self._handler = None
+        self._logs: deque = deque(maxlen=1000)
         self._setup()
+
+    @property
+    def logs(self) -> list:
+        """In-memory audit records, newest last.
+
+        Returns:
+            List of the most recent records as dicts.
+        """
+        return list(self._logs)
+
+    def file_query(
+        self,
+        limit: int = 100,
+        event_type: Optional[str] = None,
+        before: Optional[str] = None,
+    ) -> list:
+        """Query persisted audit records from ``audit.log``, newest last.
+
+        Reads the tail of the on-disk log so records written before the current
+        process started remain queryable. Falls back to the in-memory ring
+        buffer when the file is unavailable (e.g. handler setup failed).
+
+        Args:
+            limit: Max records to return. 0 returns all, negative mirrors
+                ``logs[-limit:]`` slicing.
+            event_type: Only return records with this event_type.
+            before: ISO-8601 timestamp cursor; only records strictly older
+                than it are returned.
+
+        Returns:
+            List of audit records as dicts, newest last.
+        """
+        try:
+            with open(self._log_path, "rb") as fh:
+                size = fh.seek(0, os.SEEK_END)
+                start = max(0, size - self._TAIL_BYTES)
+                fh.seek(start)
+                tail = fh.read()
+        except OSError:
+            events = list(self._logs)
+        else:
+            text = tail.decode("utf-8", errors="replace")
+            events = []
+            for line in text.splitlines():
+                line = line.strip()
+                if not line.startswith("{"):
+                    continue
+                try:
+                    events.append(json.loads(line))
+                except (ValueError, TypeError):
+                    continue
+            events.reverse()
+            if not events:
+                events = list(self._logs)
+        if before is not None:
+            events = [e for e in events if e.get("timestamp") and e["timestamp"] < before]
+        if event_type:
+            events = [e for e in events if e.get("event_type") == event_type]
+        if limit == 0:
+            return events
+        if limit < 0:
+            return events[-limit:]
+        return events[:limit]
 
     def _setup(self):
         try:
@@ -204,13 +272,14 @@ class AuditLogger:
         """
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "event": event,
+            "event_type": event,
             "user": user,
             "resource": resource,
             "detail": detail,
         }
         if extra:
             record["extra"] = extra
+        self._logs.append(record)
         line = json.dumps(record, default=str)
         if self._handler:
             self._handler.emit(logging.LogRecord("audit", logging.INFO, "", 0, line, (), None))
@@ -235,6 +304,22 @@ def get_audit_logger() -> AuditLogger:
     if _audit_logger_instance is None:
         _audit_logger_instance = AuditLogger()
     return _audit_logger_instance
+
+
+def audit_user(auth_user) -> str:
+    """Extract a stable actor identifier from an auth payload.
+
+    Args:
+        auth_user: Decoded token payload dict from ``require_auth_if_enabled``,
+            or None when auth is disabled.
+
+    Returns:
+        Subject identifier if present, otherwise ``"anonymous"``.
+    """
+    if not auth_user:
+        return "anonymous"
+    sub = auth_user.get("sub") or auth_user.get("username") or auth_user.get("user_id")
+    return str(sub) if sub else "anonymous"
 
 
 async def require_auth_if_enabled(

@@ -18,13 +18,27 @@ class SecurityRouter:
         self.router.add_api_route(path="/audit", endpoint=self.get_audit_logs, methods=["GET"])
         self.router.add_api_route(path="/keys", endpoint=self.get_keys, methods=["GET"])
 
-    async def get_audit_logs(self, limit: int = 100, event_type: Optional[str] = None):
-        """Get audit logs"""
+    async def get_audit_logs(
+        self,
+        limit: int = 100,
+        event_type: Optional[str] = None,
+        history: bool = False,
+        before: Optional[str] = None,
+    ):
+        """Get audit logs.
+
+        With ``history=true`` reads the persisted ``audit.log`` file (full trail
+        across restarts, optional ``before`` ISO-8601 cursor for pagination);
+        otherwise returns the in-memory session buffer.
+        """
         from infrastructure.auth import get_audit_logger
         audit_logger = get_audit_logger()
-        logs = audit_logger.logs[-limit:]
-        if event_type:
-            logs = [l for l in logs if l.get("event_type") == event_type]
+        if history:
+            logs = audit_logger.file_query(limit=limit, event_type=event_type, before=before)
+        else:
+            logs = audit_logger.logs[-limit:]
+            if event_type:
+                logs = [l for l in logs if l.get("event_type") == event_type]
         return success_response(data={"logs": logs, "count": len(logs)})
 
     async def get_keys(self):

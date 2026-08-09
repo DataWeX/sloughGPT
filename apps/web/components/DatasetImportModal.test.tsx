@@ -29,6 +29,11 @@ const mocks = vi.hoisted(() => ({
   mockImportFromCSV: vi.fn(),
   mockSearchGitHubRepos: vi.fn(),
   mockSearchBooks: vi.fn(),
+  mockReportError: vi.fn(),
+}))
+
+vi.mock('@/lib/error-reporter', () => ({
+  reportError: mocks.mockReportError,
 }))
 
 vi.mock('@/lib/dataset-controller', () => ({
@@ -146,6 +151,20 @@ describe('DatasetImportModal', () => {
     await waitFor(() => {
       expect(screen.getByText(/Kaggle dataset ID is required/)).toBeDefined()
     })
+  })
+
+  it('shows error and reports it for empty ISBN search', async () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('ISBN / Book'))
+    fireEvent.click(screen.getByText('Import'))
+    await waitFor(() => {
+      expect(screen.getByText('Enter a search term or ISBN')).toBeDefined()
+    })
+    expect(mocks.mockReportError).toHaveBeenCalledWith(
+      'Enter a search term or ISBN',
+      'dataset-import',
+      expect.objectContaining({ metadata: expect.objectContaining({ source: 'isbn', action: 'import' }) }),
+    )
   })
 
   it('shows loading state during GitHub import', async () => {

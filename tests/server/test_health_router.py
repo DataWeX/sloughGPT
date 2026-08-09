@@ -3,10 +3,12 @@ Tests for the health router — health, liveness, readiness, startup-progress, d
 """
 
 import sys
+import asyncio
+import json
 from pathlib import Path
 
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock, PropertyMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -89,6 +91,14 @@ class TestHealth:
         resp = client.get("/health")
         assert resp.status_code == 200
         assert resp.json()["data"]["model_loaded"] is False
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_health_controller_error_returns_500(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_basic_health.side_effect = RuntimeError("health controller down")
+        mock_get_ctrl.return_value = ctrl
+        resp = client.get("/health")
+        assert resp.status_code == 500
 
 
 class TestLiveness:
@@ -245,6 +255,37 @@ class TestModelHealth:
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "error"
 
+    @patch("domains.feedback.model_health.get_health_monitor")
+    def test_model_health_ok_with_stats(self, mock_get_mon, client):
+        mon = MagicMock()
+        mon._model = None
+        mon.get_stats.return_value = {"inference_count": 42, "latency_ms": 5}
+        mock_get_mon.return_value = mon
+        import state as _state
+        _state.model = None
+        _state.tokenizer = None
+        resp = client.get("/health/model")
+        body = resp.json()["data"]
+        assert body["status"] == "ok"
+        assert body["inference_count"] == 42
+        assert body["latency_ms"] == 5
+
+    @patch("domains.feedback.model_health.get_health_monitor")
+    def test_model_health_registers_state_model(self, mock_get_mon, client):
+        mon = MagicMock()
+        mon._model = None
+        mon.get_stats.return_value = {"inference_count": 0}
+        mock_get_mon.return_value = mon
+        import state as _state
+        _state.model = "gpt2"
+        _state.tokenizer = "tok"
+        try:
+            client.get("/health/model")
+        finally:
+            _state.model = None
+            _state.tokenizer = None
+        mon.set_model.assert_called_once_with("gpt2", "tok")
+
 
 class TestHealthSummary:
     """GET /health/summary"""
@@ -303,6 +344,87 @@ class TestHealthSummary:
         body = resp.json()["data"]
         assert body["model_loaded"] is False
         assert body["model_type"] is None
+
+
+class TestHealthStream:
+    """GET /health/stream — SSE snapshots."""
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_stream_yields_sse_snapshot(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.return_value = _make_detailed()
+        ctrl.get_basic_health.return_value = {
+            "is_inferencing": True, "inference_count": 7,
+        }
+        mock_get_ctrl.return_value = ctrl
+        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            with client.stream("GET", "/health/stream") as resp:
+                assert resp.status_code == 200
+                assert resp.headers["content-type"].startswith("text/event-stream")
+                body = resp.read()
+                lines = [ln for ln in body.decode().split("\r\n") if ln]
+                first = next((ln for ln in lines if ln.startswith("data: ")), None)
+                assert first is not None
+                snapshot = json.loads(first[6:])
+                assert snapshot["stream"] == "health"
+                assert snapshot["phase"] == "HEALTH"
+                assert snapshot["status"] == "working"
+                assert snapshot["data"]["is_inferencing"] is True
+                assert snapshot["data"]["inference_count"] == 7
+                assert snapshot["data"]["model_loaded"] is True
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_stream_survives_build_exception(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.get_detailed_health.side_effect = RuntimeError("boom")
+        mock_get_ctrl.return_value = ctrl
+        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            with client.stream("GET", "/health/stream") as resp:
+                assert resp.status_code == 200
+                body = resp.read()
+                assert b"data:" not in body
+
+
+class TestHealthMethodCoverage:
+    """Method-mismatch coverage — all health routes are GET-only."""
+
+    def test_root_wrong_method_405(self, client):
+        resp = client.post("/health")
+        assert resp.status_code == 405
+
+    def test_live_wrong_method_405(self, client):
+        resp = client.post("/health/live")
+        assert resp.status_code == 405
+
+    def test_ready_wrong_method_405(self, client):
+        resp = client.post("/health/ready")
+        assert resp.status_code == 405
+
+    def test_detailed_wrong_method_405(self, client):
+        resp = client.put("/health/detailed")
+        assert resp.status_code == 405
+
+    def test_startup_progress_wrong_method_405(self, client):
+        resp = client.post("/health/startup-progress")
+        assert resp.status_code == 405
+
+    def test_debug_wrong_method_405(self, client):
+        resp = client.post("/health/debug")
+        assert resp.status_code == 405
+
+    def test_summary_wrong_method_405(self, client):
+        resp = client.post("/health/summary")
+        assert resp.status_code == 405
+
+    def test_model_wrong_method_405(self, client):
+        resp = client.post("/health/model")
+        assert resp.status_code == 405
+
+    def test_stream_wrong_method_405(self, client):
+        resp = client.delete("/health/stream")
+        assert resp.status_code == 405
 
 
 

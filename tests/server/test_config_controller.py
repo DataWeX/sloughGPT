@@ -159,3 +159,33 @@ class TestConfigShape:
         assert after["temperature"] == before["temperature"]
         assert after["top_p"] == before["top_p"]
         assert after["top_k"] == before["top_k"]
+
+
+class TestUpdateEdgeCases:
+    def test_update_with_no_kwargs_returns_copy(self, ctrl):
+        result = ctrl.update_generation_config()
+        assert result == ctrl.get_generation_config()
+
+    def test_unknown_key_with_none_is_noop(self, ctrl):
+        result = ctrl.update_generation_config(bogus=None)
+        assert result == ctrl.get_generation_config()
+
+    def test_unknown_key_with_value_does_not_grow_config(self, ctrl):
+        result = ctrl.update_generation_config(bogus=1)
+        assert set(result.keys()) == {
+            "temperature", "top_p", "top_k", "repetition_penalty",
+            "max_new_tokens", "max_context_length",
+        }
+
+    def test_negative_values_stored(self, ctrl):
+        result = ctrl.update_generation_config(temperature=-0.5)
+        assert result["temperature"] == -0.5
+
+    def test_controller_does_not_validate_types(self, ctrl):
+        """The controller stores raw values — validation is the router's job."""
+        result = ctrl.update_generation_config(temperature="hot")
+        assert result["temperature"] == "hot"
+
+    def test_boolean_values_stored(self, ctrl):
+        result = ctrl.update_generation_config(top_p=False)
+        assert result["top_p"] is False

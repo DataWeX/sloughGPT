@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { feedbackController, type FeedbackStats, type WorkflowStatus, type TrainingStats } from '@/lib/feedback-controller'
+import { FeedbackInsightsCard } from '@/components/feedback/FeedbackInsightsCard'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -128,11 +129,18 @@ export default function FeedbackPage() {
 
         {tab === 'stats' && (
           <>
+            <KpiGrid>
+              <StatCard label="Thumbs Up" value={String(stats?.db_stats?.thumbs_up ?? 0)} />
+              <StatCard label="Thumbs Down" value={String(stats?.db_stats?.thumbs_down ?? 0)} />
+              <StatCard label="Total Feedback" value={String(stats?.db_stats?.feedback_total ?? 0)} />
+              <StatCard label="Up Ratio" value={`${((stats?.db_stats?.ratio ?? 0) * 100).toFixed(1)}%`} />
+            </KpiGrid>
+
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Feedback Summary</CardTitle>
                 <Button size="sm" variant="ghost" onClick={handleRefreshStats}>
-                  <IconRefresh className="h-3.5 w-3.5" />
+                  <IconRefresh className="h-4 w-4" />
                 </Button>
               </CardHeader>
               <CardContent>
@@ -156,27 +164,15 @@ export default function FeedbackPage() {
               </CardContent>
             </Card>
 
+            <FeedbackInsightsCard stats={stats} />
+
             {workflow && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Workflow Pipeline</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                      { label: 'Status', value: workflow.running ? 'Running' : 'Stopped', color: workflow.running ? 'text-success' : 'text-muted-foreground' },
-                      { label: 'Runs', value: String(workflow.stats?.workflow_runs ?? 0) },
-                      { label: 'Aggregations', value: String(workflow.stats?.aggregations_performed ?? 0) },
-                      { label: 'Prunes', value: String(workflow.stats?.prunes_performed ?? 0) },
-                    ].map(s => (
-                      <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                        <div className="text-xs text-muted-foreground">{s.label}</div>
-                        <div className={`text-sm font-mono font-medium ${s.color ?? ''}`}>{s.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <KpiGrid>
+                <StatCard label="Workflow Status" value={workflow.running ? 'Running' : 'Stopped'} />
+                <StatCard label="Workflow Runs" value={String(workflow.stats?.workflow_runs ?? 0)} />
+                <StatCard label="Aggregations" value={String(workflow.stats?.aggregations_performed ?? 0)} />
+                <StatCard label="Prunes" value={String(workflow.stats?.prunes_performed ?? 0)} />
+              </KpiGrid>
             )}
           </>
         )}
@@ -186,7 +182,7 @@ export default function FeedbackPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Conversations ({conversations.length})</CardTitle>
               <Button size="sm" variant="ghost" onClick={handleLoadConversations}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -210,8 +206,8 @@ export default function FeedbackPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{conv.name}</span>
-                          {conv.pinned && <span className="text-[10px] bg-primary/10 text-primary px-1 rounded">pinned</span>}
-                          {conv.starred && <span className="text-[10px] bg-warning/10 text-warning px-1 rounded">starred</span>}
+                          {conv.pinned && <span className="text-xs bg-primary/10 text-primary px-1 rounded">pinned</span>}
+                          {conv.starred && <span className="text-xs bg-warning/10 text-warning px-1 rounded">starred</span>}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
                           {conv.message_count} messages · {conv.created_at ? new Date(conv.created_at).toLocaleDateString() : '—'}
@@ -243,18 +239,11 @@ export default function FeedbackPage() {
             </CardHeader>
             <CardContent>
               {trainStats ? (
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Feedback Pairs', value: String(trainStats.feedback_pairs ?? 0) },
-                    { label: 'Last Training', value: trainStats.last_training ? new Date(trainStats.last_training).toLocaleDateString() : 'Never' },
-                    { label: 'Quality Score', value: trainStats.quality_score != null ? `${(trainStats.quality_score * 100).toFixed(1)}%` : '—' },
-                  ].map(s => (
-                    <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className="text-sm font-mono font-medium">{s.value}</div>
-                    </div>
-                  ))}
-                </div>
+                <KpiGrid>
+                  <StatCard label="Feedback Pairs" value={String(trainStats.feedback_pairs ?? 0)} />
+                  <StatCard label="Last Training" value={trainStats.last_training ? new Date(trainStats.last_training).toLocaleDateString() : 'Never'} />
+                  <StatCard label="Quality Score" value={trainStats.quality_score != null ? `${(trainStats.quality_score * 100).toFixed(1)}%` : '—'} />
+                </KpiGrid>
               ) : (
                 <p className="text-sm text-muted-foreground">No training data available.</p>
               )}

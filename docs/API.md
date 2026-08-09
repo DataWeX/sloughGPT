@@ -46,6 +46,8 @@ payload, not the envelope. Bare responses (non-enveloped lists/dicts) pass throu
 | Experiments | `create_experiment`, `list_experiments`, `get_experiment`, `log_metric`, `log_param` |
 | Rate limit | `get_rate_limit_status`, `check_rate_limit` |
 | Security | `get_audit_log`, `get_security_keys` |
+| Security history (`/security/audit`) | `history=true` reads persisted `audit.log` (survives restart); `before=<ISO timestamp>` cursor pagination; `event_type=<type>` filter; `limit` (0 = all, negative mirrors ring `[-limit:]`) |
+| Audit instrumentation (privileged ops) | `model.load`, `model.unload`, `model.quantize/dequantize/precision/download/cancel`, `soul.switch`, `soul.weights.save`, `weights.snapshot.save/load/delete`, `training.start` (detail `char`/`hf`), `training.stop`, `training.delete`, `training.checkpoint.load/delete`, `training.webhook.register/delete`, `dataset.create/update/delete/version/data.append/import/convert`, `knowledge.add/update/delete/batch.delete`, `agent.create/update/delete/execute`, `config.generation.save`, `experiment.create/delete`, `adapter.update/reset/merge/aggregate/delete/prune`, `adapter.eval.aggregate`, `tokenizer.train`, `executor.purge/cancel`, `self_train.start/stop`, `multimodal.checkpoint.load/delete`, `multimodal.reset`, `training.pause/resume` — emitted via `AuditLogger.log` (best-effort, never breaks the operation); queryable at `/security/audit?history=true&event_type=<type>` |
 | Model registry | `list_registry_models`, `get_registry_model`, `get_registry_best`, `get_registry_stats` |
 | Benchmark | `run_benchmark`, `get_benchmark_metrics`, `get_benchmark_stats` |
 
@@ -94,9 +96,12 @@ list is documented in [`docs/routers.md`](routers.md).
 | Experiments (`/experiments`) | ✅ |
 | Rate limit (`/rate-limit/*`) | ✅ |
 | Security (`/security/audit`, `/security/keys`) | ✅ |
+| Security history (`/security/audit?history=true&before=&event_type=&limit=`) | ✅ |
+| Audit instrumentation (models, souls, auto-train, datasets, kb, agents, config, experiments, adapters, lora-eval, tokenizer, system, self-train, multimodal privileged ops) | ✅ |
 | Registry (`/registry/models`, `/registry/models/{id}`, `/registry/best`, `/registry/stats`) | ✅ |
 | Benchmark (`/benchmark/*`) | ✅ |
 | Companion (`/companion/*`) | ✅ |
+| VM console (`/vm/run`, `/vm/builtins`, `/vm/info`, `/vm/training/jobs/{id}`) | Backend-only — see [`docs/VM_CONSOLE.md`](VM_CONSOLE.md) |
 | Other routers (multimodal, agents, shell, LORA eval, user adapters, system executor, etc.) | Backend-only — call via HTTP client or `apps/web` controllers |
 
 ### Deleted fake modules

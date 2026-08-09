@@ -143,6 +143,52 @@ Cypress.Commands.add('mockMultimodal', () => {
   }).as('multimodalReset')
 })
 
+Cypress.Commands.add('mockVm', (runOverrides: Record<string, unknown> = {}) => {
+  const baseRegisters = [
+    { name: 'EAX', value: 0, hex: '0x00000000' },
+    { name: 'ECX', value: 0, hex: '0x00000000' },
+    { name: 'EDX', value: 0, hex: '0x00000000' },
+    { name: 'EBX', value: 0, hex: '0x00000000' },
+    { name: 'ESP', value: 0, hex: '0x00000000' },
+    { name: 'EBP', value: 0, hex: '0x00000000' },
+    { name: 'ESI', value: 0, hex: '0x00000000' },
+    { name: 'EDI', value: 0, hex: '0x00000000' },
+  ]
+  cy.intercept('POST', `${api}/vm/run`, {
+    statusCode: 200,
+    body: {
+      success: true,
+      exit_code: 0,
+      steps_executed: 12,
+      elapsed_ms: 3.5,
+      output: '',
+      registers: baseRegisters,
+      eip: 0,
+      eip_hex: '0x00000000',
+      status: 'halted',
+      ...runOverrides,
+    },
+  }).as('vmRun')
+  cy.intercept('GET', `${api}/vm/builtins`, {
+    statusCode: 200,
+    body: {
+      programs: [
+        { name: 'hello', description: 'Write "Hello, VM!" to the VGA buffer' },
+        { name: 'train', description: 'Start a training job (requires admin)' },
+        { name: 'train-status', description: 'Poll a training job result (requires admin)' },
+      ],
+    },
+  }).as('vmBuiltins')
+  cy.intercept('GET', `${api}/vm/info`, {
+    statusCode: 200,
+    body: { isa: 'x86-32', max_steps: 1000000, default_memory: 1048576, max_memory: 16777216, registers: ['EAX'], features: [] },
+  }).as('vmInfo')
+  cy.intercept('GET', `${api}/vm/training/jobs/*`, {
+    statusCode: 200,
+    body: { job_id: 1, api_job_id: '1', status: 'completed', progress: 100, result: '{"success": true, "final_loss": 1.5}' },
+  }).as('vmTrainingJob')
+})
+
 Cypress.Commands.add('mockAgents', (overrides: any[] = []) => {
   const defaultAgents = [
     { id: 'assistant', name: 'Assistant', description: 'General purpose AI assistant', instructions: 'You are a helpful AI assistant.', tools: ['memory', 'file_search'], avatar: 'A' },

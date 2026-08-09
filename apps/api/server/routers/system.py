@@ -197,6 +197,16 @@ class SystemRouter:
         if _instance is None:
             return success_response(data={"purged": 0})
         purged = _instance.purge_completed(max_age_s=max_age_s)
+        try:
+            from infrastructure.auth import get_audit_logger, audit_user
+            get_audit_logger().log(
+                "executor.purge",
+                resource="executor",
+                detail=f"purged={purged} max_age_s={max_age_s}",
+                user=audit_user(auth_user),
+            )
+        except Exception:
+            pass
         return success_response(data={"purged": purged})
 
     async def cancel_executor_job(self, job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
@@ -210,6 +220,16 @@ class SystemRouter:
         if _instance is None:
             return success_response(data={"cancelled": False, "reason": "executor not initialized"})
         cancelled = _instance.cancel(job_id)
+        try:
+            from infrastructure.auth import get_audit_logger, audit_user
+            get_audit_logger().log(
+                "executor.cancel",
+                resource=job_id,
+                detail=f"cancelled={cancelled}",
+                user=audit_user(auth_user),
+            )
+        except Exception:
+            pass
         return success_response(data={"cancelled": cancelled})
 
     async def get_inference_pool_status(self):

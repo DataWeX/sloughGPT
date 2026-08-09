@@ -26,6 +26,17 @@ export interface VMRunResult {
   vga_cells?: { ch: string; fg: string; bg: string }[]
   keyboard_buffer?: string
   memory_dump?: string
+  training_job_id?: number | null
+  training_result?: string | null
+}
+
+export interface VMTrainingJob {
+  job_id: number
+  api_job_id: string
+  status: string
+  progress: number
+  error?: string | null
+  result?: string | null
 }
 
 export interface VMBuiltin {
@@ -62,6 +73,14 @@ class VMController {
 
   async info(): Promise<VMInfo> {
     return apiGet<VMInfo>('/vm/info')
+  }
+
+  async trainingJob(jobId: number): Promise<VMTrainingJob> {
+    return apiGet<VMTrainingJob>(`/vm/training/jobs/${jobId}`)
+  }
+
+  async stopTrainingJob(jobId: number): Promise<{ status: string; job_id: number }> {
+    return apiPost(`/vm/training/jobs/${jobId}/stop`, {})
   }
 }
 

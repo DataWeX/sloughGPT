@@ -72,6 +72,27 @@ describe('vmController', () => {
       expect(result.success).toBe(false)
       expect(result.error).toBe('assembly error')
     })
+
+    it('passes training_result through from the response', async () => {
+      const fakeResult = {
+        success: true,
+        exit_code: 0,
+        steps_executed: 10,
+        elapsed_ms: 1.5,
+        output: '',
+        registers: [],
+        eip: 0,
+        eip_hex: '0x0',
+        status: 'halted',
+        training_job_id: 1,
+        training_result: '{"success": true, "final_loss": 1.5}',
+      }
+      mockPost('/vm/run', fakeResult)
+
+      const result = await vmController.run('MOV EAX, 30\nINT 0x80\nHLT')
+      expect(result.training_job_id).toBe(1)
+      expect(result.training_result).toContain('final_loss')
+    })
   })
 
   describe('builtins', () => {
@@ -108,6 +129,64 @@ describe('vmController', () => {
       expect(result.isa).toBe('x86-32')
       expect(result.registers).toContain('EAX')
       expect(result.features).toContain('protected mode')
+    })
+  })
+
+  describe('trainingJob', () => {
+    it('calls GET /vm/training/jobs/{id}', async () => {
+      const fakeJob = {
+        job_id: 7,
+        api_job_id: 'abc-123',
+        status: 'running',
+        progress: 0.42,
+        error: null,
+      }
+      mockGet('/vm/training/jobs/7', fakeJob)
+
+      const result = await vmController.trainingJob(7)
+      expect(apiClient.apiGet).toHaveBeenCalledWith('/vm/training/jobs/7')
+      expect(result).toEqual(fakeJob)
+      expect(result.status).toBe('running')
+      expect(result.job_id).toBe(7)
+    })
+
+    it('passes completed job with error field through', async () => {
+      const fakeJob = {
+        job_id: 3,
+        api_job_id: 'done-9',
+        status: 'failed',
+        progress: 0.5,
+        error: 'dataset not found',
+      }
+      mockGet('/vm/training/jobs/3', fakeJob)
+
+      const result = await vmController.trainingJob(3)
+      expect(result.status).toBe('failed')
+      expect(result.error).toBe('dataset not found')
+    })
+
+    it('passes the result JSON through on completed jobs', async () => {
+      const fakeJob = {
+        job_id: 3,
+        api_job_id: 'done-9',
+        status: 'completed',
+        progress: 1,
+        result: '{"success": true, "final_loss": 1.2}',
+      }
+      mockGet('/vm/training/jobs/3', fakeJob)
+
+      const result = await vmController.trainingJob(3)
+      expect(result.status).toBe('completed')
+      expect(result.result).toContain('final_loss')
+    })
+
+    it('posts to the stop endpoint', async () => {
+      mockPost('/vm/training/jobs/7/stop', { status: 'stopping', job_id: 7 })
+
+      const result = await vmController.stopTrainingJob(7)
+      expect(apiClient.apiPost).toHaveBeenCalledWith('/vm/training/jobs/7/stop', {})
+      expect(result.status).toBe('stopping')
+      expect(result.job_id).toBe(7)
     })
   })
 })

@@ -24,6 +24,17 @@ from domains.training.slonet import SloTransformer
 from domains.learner.knowledge import KnowledgeFact
 
 
+@pytest.fixture(autouse=True)
+def isolated_knowledge_paths(tmp_path, monkeypatch):
+    """Keep ContinualLearner's KnowledgeMemory persistence off the real data dir."""
+    from domains.learner import knowledge as K
+    monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
+    monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")
+    monkeypatch.setattr(K, "ENTRIES_PATH", tmp_path / "entries.json")
+    monkeypatch.setattr(K, "_knowledge_memory", None)
+    monkeypatch.setattr(K, "_knowledge_ingestor", None)
+
+
 @pytest.fixture
 def state_paths(tmp_path, monkeypatch):
     state_path = tmp_path / "learner" / "continual.soul"

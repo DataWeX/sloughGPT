@@ -33,6 +33,7 @@ class ExperimentsRouter:
         self.router.add_api_route("/{experiment_id}", self.get_experiment, methods=["GET"])
         self.router.add_api_route("/{experiment_id}", self.delete_experiment, methods=["DELETE"])
         self.router.add_api_route("/{experiment_id}/runs", self.get_experiment_runs, methods=["GET"])
+        self.router.add_api_route("/{experiment_id}/data", self.get_experiment_data, methods=["GET"])
         self.router.add_api_route("/{experiment_id}/complete", self.complete_experiment, methods=["POST"])
         self.router.add_api_route("/{experiment_id}/log_metric", self.log_metric, methods=["POST"])
         self.router.add_api_route("/{experiment_id}/log_param", self.log_param, methods=["POST"])
@@ -43,6 +44,11 @@ class ExperimentsRouter:
         exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         exp_dir = self.EXPERIMENTS_DIR / exp_id
         exp_dir.mkdir(exist_ok=True)
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("experiment.create", resource=exp_id, detail=req.name)
+        except Exception:
+            pass
         return success_response(data={"id": exp_id, "name": req.name, "created": True})
 
     async def list_experiments(self):
@@ -70,6 +76,11 @@ class ExperimentsRouter:
         if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
             raise HTTPException(status_code=404, detail="Experiment not found")
         shutil.rmtree(path)
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("experiment.delete", resource=experiment_id)
+        except Exception:
+            pass
         return success_response(data={"id": experiment_id, "deleted": True})
 
     async def get_experiment_runs(self, experiment_id: str):
@@ -81,6 +92,45 @@ class ExperimentsRouter:
             raise HTTPException(status_code=404, detail="Experiment not found")
         runs = list(path.glob("*.json"))
         return success_response(data={"runs": len(runs)})
+
+    async def get_experiment_data(self, experiment_id: str):
+        """Get logged metrics and params for an experiment."""
+        import os
+        e_id = experiment_id
+        if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
+            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+        log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
+        metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
+        params_file = os.path.join(log_dir, f"{e_id}_params.jsonl")
+        status_file = os.path.join(log_dir, f"{e_id}_status.json")
+        metrics = []
+        params = []
+        status = None
+        if os.path.exists(metrics_file):
+            with open(metrics_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            metrics.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+        if os.path.exists(params_file):
+            with open(params_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            params.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+        if os.path.exists(status_file):
+            with open(status_file) as f:
+                try:
+                    status = json.load(f)
+                except json.JSONDecodeError:
+                    pass
+        return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
 
     async def complete_experiment(self, experiment_id: str):
         """Mark experiment as complete and persist status to disk."""

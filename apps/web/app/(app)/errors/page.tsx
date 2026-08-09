@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { ErrorInsightsCard } from '@/components/errors/ErrorInsightsCard'
 import { downloadJson } from '@/lib/download-utils'
 import { errorsController } from '@/lib/errors-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -73,6 +74,23 @@ export default function ErrorsPage() {
     }
   }
 
+  const handleExportFiltered = () => {
+    const filtered = grouped.filter(g =>
+      !search || g.message.toLowerCase().includes(search.toLowerCase()) || g.source.toLowerCase().includes(search.toLowerCase())
+    )
+    const data = filtered.map(g => ({
+      message: g.message,
+      source: g.source,
+      count: g.count,
+      fingerprint: g.fingerprint,
+      sample_url: g.sample_url,
+      sample_line: g.sample_line,
+      latest: g.latest,
+    }))
+    downloadJson(data, `errors-filtered-${Date.now()}.json`)
+    addToast(`Exported ${data.length} error groups`, 'success')
+  }
+
   const maxTrend = Math.max(...trends.map(t => t.count), 1)
 
   if (loading) {
@@ -80,16 +98,35 @@ export default function ErrorsPage() {
       <div className="sl-page mx-auto max-w-4xl">
         <AppRouteHeader left={<AppRouteHeaderLead title="Errors" subtitle="Client-side error monitoring" />} />
         <div className="space-y-4">
+          <KpiGrid>
+            <StatCard label="Total" value="..." />
+            <StatCard label="Groups" value="..." />
+            <StatCard label="Last Hour" value="..." />
+            <StatCard label="Top Error" value="..." />
+          </KpiGrid>
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>
       </div>
     )
   }
 
+  const lastHourCount = recent.filter(e => {
+    const ts = new Date(e.timestamp).getTime()
+    return Date.now() - ts < 3600000
+  }).length
+  const topError = grouped.length > 0 ? grouped[0].message.slice(0, 40) : 'None'
+
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Errors" subtitle={`${total} total errors`} />} />
       <div className="space-y-4">
+        <KpiGrid>
+          <StatCard label="Total Errors" value={String(total)} />
+          <StatCard label="Error Groups" value={String(grouped.length)} />
+          <StatCard label="Last Hour" value={String(lastHourCount)} />
+          <StatCard label="Top Error" value={topError} />
+        </KpiGrid>
+        <ErrorInsightsCard grouped={grouped} recent={recent} total={total} />
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Actions</CardTitle>
@@ -98,7 +135,7 @@ export default function ErrorsPage() {
                 {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}
               </Button>
               <Button size="sm" variant="ghost" onClick={fetchData}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
@@ -106,13 +143,21 @@ export default function ErrorsPage() {
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={handleExport}>
                 <span className="inline-flex items-center gap-1.5">
-                  <IconDownload className="h-3.5 w-3.5" />
-                  Export JSON
+                  <IconDownload className="h-4 w-4" />
+                  Export All
                 </span>
               </Button>
+              {search && (
+                <Button size="sm" variant="outline" onClick={handleExportFiltered}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <IconDownload className="h-4 w-4" />
+                    Export Filtered
+                  </span>
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={handleClear} disabled={clearing} className="text-destructive">
                 <span className="inline-flex items-center gap-1.5">
-                  <IconTrash className="h-3.5 w-3.5" />
+                  <IconTrash className="h-4 w-4" />
                   {clearing ? 'Clearing...' : 'Clear All'}
                 </span>
               </Button>
@@ -136,7 +181,7 @@ export default function ErrorsPage() {
                   />
                 ))}
               </div>
-              <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
                 <span>{trends[0]?.hour.split('T')[1]}</span>
                 <span>{trends[trends.length - 1]?.hour.split('T')[1]}</span>
               </div>
@@ -151,7 +196,7 @@ export default function ErrorsPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search errors..."
-              className="h-7 w-48 text-xs"
+              className="h-9 w-48 text-sm"
             />
           </CardHeader>
           <CardContent>

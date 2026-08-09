@@ -430,10 +430,10 @@ export default function AgentsPage() {
         right={
           <div className="flex items-center gap-2">
             <input ref={importInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleExport} disabled={agents.length === 0}>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExport} disabled={agents.length === 0}>
               Export
             </Button>
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => importInputRef.current?.click()}>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => importInputRef.current?.click()}>
               Import
             </Button>
           </div>
@@ -459,7 +459,7 @@ export default function AgentsPage() {
                   <button
                     key={t.name}
                     onClick={() => { setNewName(t.name); setNewDesc(t.desc); setNewInstructions(t.instructions); setNewTools([...t.tools]) }}
-                    className="rounded-full px-3 py-1 text-[10px] font-medium border border-border/60 bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
+                    className="rounded-full px-3 py-1 text-xs font-medium border border-border/60 bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
                   >
                     {t.name}
                   </button>
@@ -478,7 +478,7 @@ export default function AgentsPage() {
                 className={createErrors.name ? 'border-destructive ring-destructive/20' : ''}
                 aria-invalid={!!createErrors.name}
               />
-              {createErrors.name && <p className="text-[10px] text-destructive mt-1" role="alert">{createErrors.name}</p>}
+              {createErrors.name && <p className="text-xs text-destructive mt-1" role="alert">{createErrors.name}</p>}
             </div>
             <Input placeholder="Description (optional)" value={newDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDesc(e.target.value)} />
             <textarea
@@ -541,7 +541,7 @@ export default function AgentsPage() {
                     value={agentSearch}
                     onChange={e => setAgentSearch(e.target.value)}
                     placeholder="Search agents..."
-                    className="h-8 w-full max-w-xs rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    className="h-9 w-full max-w-xs rounded-md border border-border/60 bg-background px-2.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 )}
                 {filteredAgents.length > 0 && (
@@ -559,10 +559,10 @@ export default function AgentsPage() {
                       <>
                         <span className="text-muted-foreground">·</span>
                         <span className="text-muted-foreground">{selectedIds.size} selected</span>
-                        <Button size="sm" variant="ghost" onClick={handleBulkExport} className="h-6 text-[10px]">
+                        <Button size="sm" variant="ghost" onClick={handleBulkExport} className="h-7 text-xs">
                           Export
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={handleBulkDelete} className="h-6 text-[10px] text-destructive hover:text-destructive">
+                        <Button size="sm" variant="ghost" onClick={handleBulkDelete} className="h-7 text-xs text-destructive hover:text-destructive">
                           Delete
                         </Button>
                       </>
@@ -573,7 +573,7 @@ export default function AgentsPage() {
                   <p className="text-xs text-muted-foreground py-4 text-center">No agents matching &quot;{agentSearch}&quot;</p>
                 ) : (
                   filteredAgents.map(agent => (
-                <div key={agent.id} className={`rounded-lg border p-3 space-y-2 transition-colors ${execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50'}`}>
+                <div key={agent.id} className={`rounded-lg border p-4 space-y-2 transition-colors ${execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50'}`}>
                   {editingId === agent.id ? (
                     <div className="space-y-2">
                       <div>
@@ -588,7 +588,7 @@ export default function AgentsPage() {
                           className={editErrors.name ? 'border-destructive ring-destructive/20' : ''}
                           aria-invalid={!!editErrors.name}
                         />
-                        {editErrors.name && <p className="text-[10px] text-destructive mt-1" role="alert">{editErrors.name}</p>}
+                        {editErrors.name && <p className="text-xs text-destructive mt-1" role="alert">{editErrors.name}</p>}
                       </div>
                       <Input value={editDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditDesc(e.target.value)} placeholder="Description" aria-label="Agent description" />
                       <textarea
@@ -636,25 +636,25 @@ export default function AgentsPage() {
                         </div>
                         <div className="flex gap-1 shrink-0 ml-2">
                           <Button size="sm" variant="ghost" onClick={() => handleClone(agent)} aria-label={`Clone ${agent.name}`}>
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => startEdit(agent)}>Edit</Button>
                            <Button size="sm" variant="destructive" onClick={() => setPendingDelete(agent)} aria-label={`Delete ${agent.name}`}>
-                            <IconTrash className="h-3.5 w-3.5" />
+                            <IconTrash className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
                       {agent.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {agent.tools.map(t => (
-                            <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                               {t.replace(/_/g, ' ')}
                             </span>
                           ))}
                         </div>
                       )}
                       {agent.instructions && (
-                        <p className="text-[10px] text-muted-foreground/70 line-clamp-2">{agent.instructions}</p>
+                        <p className="text-xs text-muted-foreground/70 line-clamp-2">{agent.instructions}</p>
                       )}
                       {/* Inline execute */}
                       <div className="pt-1">
@@ -672,7 +672,7 @@ export default function AgentsPage() {
                                 className={execErrors.prompt ? 'border-destructive ring-destructive/20' : ''}
                                 aria-invalid={!!execErrors.prompt}
                               />
-                              {execErrors.prompt && <p className="text-[10px] text-destructive mt-1" role="alert">{execErrors.prompt}</p>}
+                              {execErrors.prompt && <p className="text-xs text-destructive mt-1" role="alert">{execErrors.prompt}</p>}
                             </div>
                             <div className="flex gap-2">
                               <Button size="sm" onClick={() => handleExecute(agent.id)} disabled={execRunning || !execPrompt.trim()}>
@@ -724,7 +724,7 @@ export default function AgentsPage() {
                 className={orchErrors.goal ? 'border-destructive ring-destructive/20' : ''}
                 aria-invalid={!!orchErrors.goal}
               />
-              {orchErrors.goal && <p className="text-[10px] text-destructive mt-1" role="alert">{orchErrors.goal}</p>}
+              {orchErrors.goal && <p className="text-xs text-destructive mt-1" role="alert">{orchErrors.goal}</p>}
             </div>
             <textarea
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
@@ -776,7 +776,7 @@ export default function AgentsPage() {
                       <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
                       <span className="flex-1 truncate">{task.description}</span>
                       {task.depends_on && task.depends_on.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground/50">after: {task.depends_on.join(', ')}</span>
+                        <span className="text-xs text-muted-foreground/50">after: {task.depends_on.join(', ')}</span>
                       )}
                     </div>
                   )
@@ -809,13 +809,13 @@ export default function AgentsPage() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setRunViewMode('list')}
-                  className={`text-[10px] px-2 py-0.5 rounded transition-colors ${runViewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
+                  className={`text-xs px-2 py-1 rounded transition-colors ${runViewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
                 >
                   List
                 </button>
                 <button
                   onClick={() => setRunViewMode('timeline')}
-                  className={`text-[10px] px-2 py-0.5 rounded transition-colors ${runViewMode === 'timeline' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
+                  className={`text-xs px-2 py-1 rounded transition-colors ${runViewMode === 'timeline' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
                 >
                   Timeline
                 </button>
@@ -843,14 +843,14 @@ export default function AgentsPage() {
                           <button
                             key={s ?? 'all'}
                             onClick={() => setRunStatusFilter(s)}
-                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${runStatusFilter === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                            className={`text-xs px-2 py-1 rounded-full border transition-colors ${runStatusFilter === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
                           >
                             {s === null ? 'All' : s}
                           </button>
                         ))}
                       </div>
                       <div className="flex-1" />
-                      <div className="flex gap-3 text-[10px] text-muted-foreground">
+                      <div className="flex gap-3 text-xs text-muted-foreground">
                         <span>{runs.filter(r => r.status === 'completed').length} completed</span>
                         <span>{runs.filter(r => r.status === 'failed').length} failed</span>
                         <span>{runs.reduce((s, r) => s + r.completed_count + r.failed_count, 0)} total tasks</span>
@@ -864,7 +864,7 @@ export default function AgentsPage() {
                         <div className="flex flex-wrap gap-1">
                           <button
                             onClick={() => setRunAgentFilter(null)}
-                            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${runAgentFilter === null ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                            className={`text-xs px-2 py-1 rounded border transition-colors ${runAgentFilter === null ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
                           >
                             All agents
                           </button>
@@ -872,7 +872,7 @@ export default function AgentsPage() {
                             <button
                               key={name}
                               onClick={() => setRunAgentFilter(runAgentFilter === name ? null : name)}
-                              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${runAgentFilter === name ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                              className={`text-xs px-2 py-1 rounded border transition-colors ${runAgentFilter === name ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
                             >
                               {name}
                             </button>
@@ -899,7 +899,7 @@ export default function AgentsPage() {
                     >
                       <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusColor}`} />
                       <span className="flex-1 truncate text-sm">{run.goal}</span>
-                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                      <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                         {run.completed_count}/{run.completed_count + run.failed_count} tasks
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground">
@@ -938,7 +938,7 @@ export default function AgentsPage() {
                         {run.logs.length > 0 && (
                           <div className="rounded-lg bg-muted/50 p-3">
                             <p className="text-xs font-medium text-muted-foreground mb-1">Logs</p>
-                            <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto">
+                            <pre className="text-xs text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto">
                               {run.logs.join('\n')}
                             </pre>
                           </div>
@@ -961,7 +961,7 @@ export default function AgentsPage() {
                             <div className="flex items-center gap-2">
                               <span className={`text-xs font-medium ${statusColor}`}>{run.status}</span>
                               <span className="text-sm flex-1 truncate">{run.goal}</span>
-                              <span className="text-[10px] text-muted-foreground">{run.started_at ? new Date(run.started_at).toLocaleString() : ''}</span>
+                              <span className="text-xs text-muted-foreground">{run.started_at ? new Date(run.started_at).toLocaleString() : ''}</span>
                             </div>
                             <div className="ml-2 border-l-2 border-border/60 pl-4 space-y-2">
                               {run.tasks.map((task, i) => {
@@ -969,17 +969,17 @@ export default function AgentsPage() {
                                 return (
                                   <div key={task.id} className="relative flex items-center gap-3">
                                     <div className={`absolute -left-[21px] h-2.5 w-2.5 rounded-full border-2 border-background ${taskColor}`} />
-                                    <span className="text-[10px] text-muted-foreground w-8 shrink-0">#{i + 1}</span>
-                                    <span className="text-[10px] text-muted-foreground min-w-[64px] shrink-0">{task.agent}</span>
+                                    <span className="text-xs text-muted-foreground w-8 shrink-0">#{i + 1}</span>
+                                    <span className="text-xs text-muted-foreground min-w-[64px] shrink-0">{task.agent}</span>
                                     <span className="text-xs flex-1 truncate">{task.description}</span>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${taskBadgeStyle(task.status)}`}>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded ${taskBadgeStyle(task.status)}`}>
                                       {task.status}
                                     </span>
                                   </div>
                                 )
                               })}
                               {run.tasks.length === 0 && (
-                                <p className="text-[10px] text-muted-foreground italic">No tasks recorded</p>
+                                <p className="text-xs text-muted-foreground italic">No tasks recorded</p>
                               )}
                             </div>
                           </div>

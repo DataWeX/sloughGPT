@@ -103,7 +103,10 @@ class ErrorsRouter:
             self._ensure_dir()
             with open(_ERROR_LOG_FILE, "a") as f:
                 f.write(json.dumps(record, default=str) + "\n")
-        except Exception:
+        except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="errors_persist")
             pass
 
     def _load_from_disk(self) -> list[dict]:
@@ -115,7 +118,10 @@ class ErrorsRouter:
                     if line:
                         records.append(json.loads(line))
                 return records[-MAX_ERRORS:]
-        except Exception:
+        except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="errors_load_from_disk")
             pass
         return []
 
@@ -123,7 +129,10 @@ class ErrorsRouter:
         try:
             if _ERROR_LOG_FILE.exists():
                 _ERROR_LOG_FILE.unlink()
-        except Exception:
+        except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="errors_clear_disk")
             pass
 
     def _fingerprint(self, message: str) -> str:
@@ -271,7 +280,10 @@ class ErrorsRouter:
                             buckets[key] += 1
                     except (ValueError, TypeError, json.JSONDecodeError):
                         pass
-        except Exception:
+        except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="errors_trends")
             pass
 
         result = [{"hour": k, "count": v} for k, v in sorted(buckets.items())]
@@ -314,7 +326,10 @@ class ErrorsRouter:
                         "snippet": rec.get("snippet", ""),
                         "cwd": rec.get("cwd", ""),
                     })
-        except Exception:
+        except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="errors_opencode_log_cli")
             pass
 
         ui_log_path = os.path.join(home, ".opencode-ui-error-log.json")
@@ -331,7 +346,10 @@ class ErrorsRouter:
                         "snippet": rec.get("snippet", ""),
                         "cwd": rec.get("cwd", ""),
                     })
-        except Exception:
+        except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="errors_opencode_log_ui")
             pass
 
         entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)

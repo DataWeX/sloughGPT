@@ -320,3 +320,110 @@ class TestPruneAdapters:
         mock_get.side_effect = ImportError("no module")
         resp = client.post("/user-adapters/prune", json={})
         assert resp.status_code == 503
+
+
+class TestUserAdapterMethods:
+    """405s for disallowed methods"""
+
+    def test_list_post_is_405(self):
+        resp = client.post("/user-adapters")
+        assert resp.status_code == 405
+
+    def test_quality_post_is_405(self):
+        resp = client.post("/user-adapters/quality")
+        assert resp.status_code == 405
+
+    def test_update_get_is_405(self):
+        resp = client.get("/user-adapters/user1/update")
+        assert resp.status_code == 405
+
+    def test_reset_get_is_405(self):
+        resp = client.get("/user-adapters/user1/reset")
+        assert resp.status_code == 405
+
+    @patch(STORE_TARGET)
+    def test_get_on_merge_routes_to_get_adapter(self, mock_get):
+        """GET /merge is shadowed by /{user_id} — returns adapter lookup, not 405."""
+        store = _make_store()
+        store.get_adapter.return_value = None
+        mock_get.return_value = store
+        resp = client.get("/user-adapters/merge")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["user_id"] == "merge"
+        assert resp.json()["data"]["exists"] is False
+
+    @patch(STORE_TARGET)
+    def test_get_on_aggregate_best_routes_to_get_adapter(self, mock_get):
+        store = _make_store()
+        store.get_adapter.return_value = None
+        mock_get.return_value = store
+        resp = client.get("/user-adapters/aggregate-best")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["user_id"] == "aggregate-best"
+
+    @patch(STORE_TARGET)
+    def test_get_on_prune_routes_to_get_adapter(self, mock_get):
+        store = _make_store()
+        store.get_adapter.return_value = None
+        mock_get.return_value = store
+        resp = client.get("/user-adapters/prune")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["user_id"] == "prune"
+
+
+class TestUserAdapterValidation:
+    """422s for malformed request bodies"""
+
+    def test_update_missing_rating_is_422(self):
+        resp = client.post("/user-adapters/user1/update", json={})
+        assert resp.status_code == 422
+
+    def test_update_rating_wrong_type_is_422(self):
+        resp = client.post("/user-adapters/user1/update", json={"rating": 5})
+        assert resp.status_code == 422
+
+    def test_prune_wrong_types_is_422(self):
+        resp = client.post("/user-adapters/prune", json={"min_feedback_count": "three"})
+        assert resp.status_code == 422
+        resp = client.post("/user-adapters/prune", json={"max_age_days": "long"})
+        assert resp.status_code == 422
+
+    @patch(STORE_TARGET)
+    def test_aggregate_best_invalid_types_422(self, mock_get):
+        resp = client.post("/user-adapters/aggregate-best", json={"top_k": "ten"})
+        assert resp.status_code == 422
+        resp = client.post("/user-adapters/aggregate-best", json={"min_feedback_count": "five"})
+        assert resp.status_code == 422
+
+
+class TestAggregateBestEvalDefaults:
+    """POST /user-adapters/aggregate-best — missing delta fields default to unknown"""
+
+    @patch(STORE_TARGET)
+    def test_eval_without_delta_uses_unknown_verdict(self, mock_get):
+        store = _make_store()
+        store.aggregate_best_adapters.return_value = {
+            "output_path": "x.npz",
+            "user_count": 1,
+            "total_feedback": 2,
+            "eval": {"report": "no delta"},
+        }
+        mock_get.return_value = store
+        resp = client.post("/user-adapters/aggregate-best", json={})
+        data = resp.json()["data"]
+        assert data["status"] == "aggregated_with_eval"
+        assert data["eval"]["verdict"] == "unknown"
+        assert data["eval"]["perplexity_delta"] is None
+
+    @patch(STORE_TARGET)
+    def test_eval_error_returns_aggregated(self, mock_get):
+        store = _make_store()
+        store.aggregate_best_adapters.return_value = {
+            "user_count": 4,
+            "eval": {"error": "crashed"},
+        }
+        mock_get.return_value = store
+        resp = client.post("/user-adapters/aggregate-best", json={})
+        data = resp.json()["data"]
+        assert data["status"] == "aggregated"
+        assert data["count"] == 4

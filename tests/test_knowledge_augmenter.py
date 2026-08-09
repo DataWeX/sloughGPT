@@ -31,7 +31,7 @@ class TestEnrichWithKnowledge:
     def test_returns_facts_from_memory(self, monkeypatch):
         mock_memory = MagicMock()
         mock_memory.search.return_value = [
-            {"content": "Python is a programming language created in 1991."},
+            {"content": "Python is a programming language created in 1991.", "score": 0.9},
         ]
 
         def mock_get_memory():
@@ -81,8 +81,8 @@ class TestEnrichWithKnowledge:
     def test_memory_filters_short_content(self, monkeypatch):
         mock_memory = MagicMock()
         mock_memory.search.return_value = [
-            {"content": "short"},
-            {"content": "This is a sufficiently long fact about something interesting."},
+            {"content": "short", "score": 0.9},
+            {"content": "This is a sufficiently long test fact about something interesting.", "score": 0.9},
         ]
 
         def mock_get_memory():

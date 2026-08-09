@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from pathlib import Path
 from typing import Optional, List
+import asyncio
 import json
 
 from schemas.datasets import (
@@ -14,7 +15,7 @@ from schemas.datasets import (
     LocalImportRequest, KaggleImportRequest, CSVImportRequest,
     BatchImportRequest, ISBNImportRequest, ImportResponse,
     VersionCreateResponse, VersionListResponse, VersionRestoreResponse,
-    FromChatRequest,
+    FromChatRequest, DatasetExportRequest,
 )
 from schemas.common import success_response
 from controllers.datasets import get_datasets_controller
@@ -31,6 +32,8 @@ class DatasetsRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/datasets", tags=["datasets"])
         self._DATASETS_DIR = Path(__file__).resolve().parents[4] / "datasets"
+        self._import_locks: dict[str, asyncio.Lock] = {}
+        self._import_locks_lock = asyncio.Lock()
         self._DATASET_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]+$')
         self._register_routes()
 
@@ -67,6 +70,13 @@ class DatasetsRouter:
             raise HTTPException(status_code=422, detail=f"Invalid dataset ID: {dataset_id!r} — only alphanumeric, hyphens, underscores allowed")
         return dataset_id
 
+    async def _get_import_lock(self, name: str) -> asyncio.Lock:
+        """Get a per-dataset import lock to prevent concurrent imports to the same name."""
+        async with self._import_locks_lock:
+            if name not in self._import_locks:
+                self._import_locks[name] = asyncio.Lock()
+            return self._import_locks[name]
+
     def _get_data_importer(self):
         """Get DataImporter configured to save to the repo datasets directory."""
         from domains.training.data_import import DataImporter
@@ -87,114 +97,174 @@ class DatasetsRouter:
 
     async def import_from_local(self, request: LocalImportRequest):
         """Import dataset from local file or directory."""
-        try:
-            from pathlib import Path as _P
-            import_path = _P(request.path).resolve()
-            _allowed = {_P.home(), _P.home() / "Documents", _P.home() / "Downloads", _P.home() / "Pictures", self._DATASETS_DIR.resolve()}
-            if not any(import_path == b or str(import_path).startswith(str(b) + "/") for b in _allowed):
-                raise HTTPException(status_code=403, detail=f"Directory not in allowed paths: {request.path}")
-            importer = self._get_data_importer()
-            result = importer.import_from_local(
-                path=request.path,
-                name=request.name,
-                extensions=request.extensions or None,
-            )
-            if result.success:
-                return ImportResponse(
-                    success=True,
-                    dataset_id=request.name,
-                    message=f"Imported {result.files_imported} files ({result.total_chars} chars)",
-                    output_path=result.output_path,
+        lock = await self._get_import_lock(request.name)
+        if lock.locked():
+            raise HTTPException(status_code=429, detail=f"Import already in progress for '{request.name}'")
+        async with lock:
+            try:
+                from pathlib import Path as _P
+                import_path = _P(request.path).resolve()
+                _allowed = {_P.home(), _P.home() / "Documents", _P.home() / "Downloads", _P.home() / "Pictures", self._DATASETS_DIR.resolve()}
+                if not any(import_path == b or str(import_path).startswith(str(b) + "/") for b in _allowed):
+                    raise HTTPException(status_code=403, detail=f"Directory not in allowed paths: {request.path}")
+                importer = self._get_data_importer()
+                result = await asyncio.to_thread(
+                    importer.import_from_local,
+                    path=request.path,
+                    name=request.name,
+                    extensions=request.extensions or None,
                 )
-            raise HTTPException(status_code=400, detail=result.error or "Import failed")
-        except HTTPException:
-            raise
-        except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="dataset_import_local")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
+                if result.success:
+                    try:
+                        from infrastructure.auth import get_audit_logger
+                        get_audit_logger().log(
+                            "dataset.import",
+                            resource=request.name,
+                            detail="local",
+                            extra={"files": result.files_imported, "chars": result.total_chars},
+                        )
+                    except Exception:
+                        pass
+                    return ImportResponse(
+                        success=True,
+                        dataset_id=request.name,
+                        message=f"Imported {result.files_imported} files ({result.total_chars} chars)",
+                        output_path=result.output_path,
+                    )
+                raise HTTPException(status_code=400, detail=result.error or "Import failed")
+            except HTTPException:
+                raise
+            except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="dataset_import_local")
+                raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_github(self, request: GitHubImportRequest):
         """Import dataset from GitHub repository."""
-        try:
-            from domains.training.data_import import RepoImporter
-            importer = RepoImporter()
-            result = importer.import_from_github(
-                url=request.url,
-                dataset_name=request.name,
-                output_dir=str(self._DATASETS_DIR),
-                extensions=request.extensions or None,
-                max_files=request.max_files,
-            )
-            if result.success:
-                return ImportResponse(
-                    success=True,
-                    dataset_id=result.name or request.name,
-                    message=f"Imported {result.files_imported} files ({result.total_chars} chars)",
-                    output_path=result.output_path,
+        lock = await self._get_import_lock(request.name)
+        if lock.locked():
+            raise HTTPException(status_code=429, detail=f"Import already in progress for '{request.name}'")
+        async with lock:
+            try:
+                from domains.training.data_import import RepoImporter
+                importer = RepoImporter()
+                result = await asyncio.to_thread(
+                    importer.import_from_github,
+                    url=request.url,
+                    dataset_name=request.name,
+                    output_dir=str(self._DATASETS_DIR),
+                    extensions=request.extensions or None,
+                    max_files=request.max_files,
                 )
-            raise HTTPException(status_code=400, detail=result.error or "Import failed")
-        except HTTPException:
-            raise
-        except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="dataset_handler")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
+                if result.success:
+                    try:
+                        from infrastructure.auth import get_audit_logger
+                        get_audit_logger().log(
+                            "dataset.import",
+                            resource=result.name or request.name,
+                            detail="github",
+                            extra={"files": result.files_imported, "chars": result.total_chars},
+                        )
+                    except Exception:
+                        pass
+                    return ImportResponse(
+                        success=True,
+                        dataset_id=result.name or request.name,
+                        message=f"Imported {result.files_imported} files ({result.total_chars} chars)",
+                        output_path=result.output_path,
+                    )
+                raise HTTPException(status_code=400, detail=result.error or "Import failed")
+            except HTTPException:
+                raise
+            except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="dataset_handler")
+                raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_huggingface(self, request: HuggingFaceImportRequest):
         """Import dataset from HuggingFace Hub."""
-        try:
-            from domains.training.data_import import HuggingFaceImporter
-            importer = HuggingFaceImporter()
-            name = request.name or request.dataset_id.split("/")[-1]
-            result = importer.download_dataset(
-                dataset_id=request.dataset_id,
-                name=name,
-                output_dir=str(self._DATASETS_DIR),
-            )
-            if result.success:
-                return ImportResponse(
-                    success=True,
-                    dataset_id=name,
-                    message=f"Downloaded {result.files_imported} splits ({result.total_chars} chars)",
-                    output_path=result.output_path,
+        name = request.name or request.dataset_id.split("/")[-1]
+        lock = await self._get_import_lock(name)
+        if lock.locked():
+            raise HTTPException(status_code=429, detail=f"Import already in progress for '{name}'")
+        async with lock:
+            try:
+                from domains.training.data_import import HuggingFaceImporter
+                importer = HuggingFaceImporter()
+                result = await asyncio.to_thread(
+                    importer.download_dataset,
+                    dataset_id=request.dataset_id,
+                    name=name,
+                    output_dir=str(self._DATASETS_DIR),
                 )
-            raise HTTPException(status_code=400, detail=result.error or "Download failed")
-        except HTTPException:
-            raise
-        except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="dataset_handler")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
+                if result.success:
+                    try:
+                        from infrastructure.auth import get_audit_logger
+                        get_audit_logger().log(
+                            "dataset.import",
+                            resource=name,
+                            detail="huggingface",
+                            extra={"dataset_id": request.dataset_id, "files": result.files_imported, "chars": result.total_chars},
+                        )
+                    except Exception:
+                        pass
+                    return ImportResponse(
+                        success=True,
+                        dataset_id=name,
+                        message=f"Downloaded {result.files_imported} splits ({result.total_chars} chars)",
+                        output_path=result.output_path,
+                    )
+                raise HTTPException(status_code=400, detail=result.error or "Download failed")
+            except HTTPException:
+                raise
+            except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="dataset_handler")
+                raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_url(self, request: URLImportRequest):
         """Import dataset from URL."""
-        try:
-            from domains.training.data_import import URLImporter
-            importer = URLImporter()
-            result = importer.import_from_url(
-                url=request.url,
-                dataset_name=request.name,
-                output_dir=str(self._DATASETS_DIR),
-            )
-            if result.success:
-                return ImportResponse(
-                    success=True,
-                    dataset_id=request.name,
-                    message=f"Downloaded {result.total_chars} chars",
-                    output_path=result.output_path,
+        lock = await self._get_import_lock(request.name)
+        if lock.locked():
+            raise HTTPException(status_code=429, detail=f"Import already in progress for '{request.name}'")
+        async with lock:
+            try:
+                from domains.training.data_import import URLImporter
+                importer = URLImporter()
+                result = await asyncio.to_thread(
+                    importer.import_from_url,
+                    url=request.url,
+                    dataset_name=request.name,
+                    output_dir=str(self._DATASETS_DIR),
                 )
-            raise HTTPException(status_code=400, detail=result.error or "Download failed")
-        except HTTPException:
-            raise
-        except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="dataset_handler")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
+                if result.success:
+                    try:
+                        from infrastructure.auth import get_audit_logger
+                        get_audit_logger().log(
+                            "dataset.import",
+                            resource=request.name,
+                            detail="url",
+                            extra={"url": request.url, "chars": result.total_chars},
+                        )
+                    except Exception:
+                        pass
+                    return ImportResponse(
+                        success=True,
+                        dataset_id=request.name,
+                        message=f"Downloaded {result.total_chars} chars",
+                        output_path=result.output_path,
+                    )
+                raise HTTPException(status_code=400, detail=result.error or "Download failed")
+            except HTTPException:
+                raise
+            except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="dataset_handler")
+                raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_kaggle(self, request: KaggleImportRequest):
         """Import dataset from Kaggle."""
@@ -223,6 +293,16 @@ class DatasetsRouter:
             file_count = sum(1 for _ in output_dir.rglob("*") if _.is_file())
             total_size = sum(f.stat().st_size for f in output_dir.rglob("*") if f.is_file())
 
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "dataset.import",
+                    resource=name,
+                    detail="kaggle",
+                    extra={"dataset": request.dataset, "files": file_count},
+                )
+            except Exception:
+                pass
             return ImportResponse(
                 success=True,
                 dataset_id=name,
@@ -272,6 +352,16 @@ class DatasetsRouter:
             with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump({"source": request.url, "columns": headers, "rows": len(rows)}, f, indent=2)
 
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "dataset.import",
+                    resource=name,
+                    detail="csv",
+                    extra={"url": request.url, "rows": len(rows), "columns": len(headers)},
+                )
+            except Exception:
+                pass
             return ImportResponse(
                 success=True,
                 dataset_id=name,
@@ -320,6 +410,16 @@ class DatasetsRouter:
             except Exception as e:
                 errors.append({"index": i, "error": str(e)})
 
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "dataset.import",
+                resource=f"batch({len(request.sources[:20])})",
+                detail="batch",
+                extra={"imported": len(results), "errors": len(errors)},
+            )
+        except Exception:
+            pass
         return success_response(data={"imported": len(results), "errors": errors})
 
     async def search_books(self, q: str = Query(..., description="Search by title or ISBN"), limit: int = Query(10, ge=1, le=50)):
@@ -353,11 +453,22 @@ class DatasetsRouter:
         try:
             from domains.training.data_import import ISBNImporter
             importer = ISBNImporter(output_dir=str(self._DATASETS_DIR))
-            result = importer.import_from_isbn(
+            result = await asyncio.to_thread(
+                importer.import_from_isbn,
                 isbn=request.isbn,
                 name=request.name or f"book_{request.isbn}",
             )
             if result.success:
+                try:
+                    from infrastructure.auth import get_audit_logger
+                    get_audit_logger().log(
+                        "dataset.import",
+                        resource=result.name or request.name or f"book_{request.isbn}",
+                        detail="isbn",
+                        extra={"isbn": request.isbn, "files": result.files_imported},
+                    )
+                except Exception:
+                    pass
                 return ImportResponse(
                     success=True,
                     dataset_id=result.name or request.name or f"book_{request.isbn}",
@@ -403,6 +514,11 @@ class DatasetsRouter:
         """Create a new dataset"""
         ctrl = get_datasets_controller()
         dataset = ctrl.create_dataset(req.name, req.description)
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("dataset.create", resource=req.name, detail=req.description or "")
+        except Exception:
+            pass
         return DatasetInfo(**dataset)
 
     async def update_dataset(self, dataset_id: str, req: DatasetUpdate):
@@ -412,6 +528,11 @@ class DatasetsRouter:
         dataset = ctrl.update_dataset(dataset_id, req.model_dump(exclude_none=True))
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("dataset.update", resource=dataset_id, detail=str(req.model_dump(exclude_none=True)))
+        except Exception:
+            pass
         return DatasetInfo(**dataset)
 
     async def delete_dataset(self, dataset_id: str):
@@ -421,6 +542,11 @@ class DatasetsRouter:
         ok = ctrl.delete_dataset(dataset_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Dataset not found")
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("dataset.delete", resource=dataset_id)
+        except Exception:
+            pass
         return success_response(data={"status": "deleted", "dataset_id": dataset_id})
 
     async def create_version(self, dataset_id: str):
@@ -430,6 +556,11 @@ class DatasetsRouter:
         timestamp = ctrl.create_version_snapshot(dataset_id)
         if not timestamp:
             raise HTTPException(status_code=404, detail="Dataset not found")
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("dataset.version", resource=dataset_id, detail=str(timestamp))
+        except Exception:
+            pass
         return VersionCreateResponse(timestamp=timestamp, message="Version created")
 
     async def list_versions(self, dataset_id: str):
@@ -446,6 +577,11 @@ class DatasetsRouter:
         ok = ctrl.restore_version(dataset_id, timestamp)
         if not ok:
             raise HTTPException(status_code=404, detail="Dataset or version not found")
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("dataset.version.restore", resource=dataset_id, detail=timestamp)
+        except Exception:
+            pass
         return VersionRestoreResponse(success=True, message="Version restored")
 
     async def add_dataset_data(self, dataset_id: str, req: DatasetDataRequest):
@@ -455,6 +591,11 @@ class DatasetsRouter:
         result = ctrl.add_data(dataset_id, req.data)
         if result is None:
             raise HTTPException(status_code=404, detail="Dataset not found")
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("dataset.data.append", resource=dataset_id, detail=f"rows={result}")
+        except Exception:
+            pass
         return success_response(data={"status": "appended", "rows_added": result})
 
     async def preview_dataset(self, dataset_id: str, limit: int = Query(10, ge=1, le=1000, description="Number of samples")):
@@ -466,16 +607,16 @@ class DatasetsRouter:
             raise HTTPException(status_code=404, detail="Dataset not found or empty")
         return preview
 
-    async def export_dataset(self, dataset_id: str, format: str = Query("jsonl", pattern="^(jsonl|csv)$", description="Export format")):
+    async def export_dataset(self, dataset_id: str, request: DatasetExportRequest):
         """Export a dataset as a downloadable file"""
         self._validate_dataset_id(dataset_id)
         ctrl = get_datasets_controller()
-        export_path = ctrl.export_dataset(dataset_id, format)
+        export_path = ctrl.export_dataset(dataset_id, request.format)
         if not export_path:
             raise HTTPException(status_code=404, detail="Dataset not found or empty")
         return FileResponse(
             path=str(export_path),
-            filename=f"{dataset_id}.{format}",
+            filename=f"{dataset_id}.{request.format}",
             media_type="application/octet-stream",
         )
 
@@ -503,6 +644,16 @@ class DatasetsRouter:
                 if msg.role in ("user", "assistant") and msg.content:
                     f.write(json.dumps({"messages": [{"role": msg.role, "content": msg.content}]}) + "\n")
 
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "dataset.create",
+                resource=name,
+                detail=f"from-chat ({len(messages)} messages)",
+                extra={"messages": len(messages)},
+            )
+        except Exception:
+            pass
         return {
             "status": "created",
             "dataset_id": dataset["id"],
@@ -565,6 +716,16 @@ class DatasetsRouter:
             for entry in messages_out:
                 f.write(json.dumps(entry) + "\n")
 
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "dataset.convert",
+                resource=dataset_id,
+                detail=str(new_ds["id"]),
+                extra={"conversations": len(messages_out)},
+            )
+        except Exception:
+            pass
         return {
             "status": "converted",
             "new_dataset_id": new_ds["id"],

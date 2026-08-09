@@ -683,6 +683,69 @@ class KnowledgeMemory:
         self._save_visited()
         return True
 
+    def add_facts(self, facts: list["KnowledgeFact"],
+                  vectors: Optional[list[list[float]]] = None) -> int:
+        """Store multiple facts, persisting the store once.
+
+        ``add_fact`` rewrites the full persisted store on every call, which
+        makes per-fact ingestion O(n) each and O(n·m) for a whole batch. This
+        method deduplicates the batch, upserts once, and saves once.
+
+        Args:
+            facts: facts to store
+            vectors: optional precomputed embeddings aligned with ``facts``;
+                when omitted each fact is embedded here
+
+        Returns:
+            number of newly stored facts (duplicates excluded)
+
+        Side effects:
+            - mutates ``_visited`` / ``_fact_counter``
+            - rewrites persisted entries + visited files once per call
+        """
+        if not facts:
+            return 0
+        if vectors is not None and len(vectors) != len(facts):
+            raise ValueError("vectors must be aligned with facts")
+
+        from domains.inference.vector_store import VectorEntry
+        if vectors is None:
+            vectors = [self._get_embedding(f.content) for f in facts]
+
+        to_upsert: list[VectorEntry] = []
+        with self._lock:
+            for i, fact in enumerate(facts):
+                content_hash = hashlib.md5(fact.content.encode()).hexdigest()
+                if content_hash in self._visited:
+                    continue
+                self._visited.add(content_hash)
+                self._fact_counter += 1
+                to_upsert.append(VectorEntry(
+                    id=f"fact_{self._fact_counter}_{content_hash[:8]}",
+                    vector=vectors[i],
+                    text=fact.content,
+                    metadata={
+                        "topic": fact.topic,
+                        "source": fact.source,
+                        "url": fact.url,
+                        "timestamp": fact.timestamp,
+                        "importance": fact.importance,
+                        "content_hash": content_hash,
+                    },
+                ))
+        if not to_upsert:
+            return 0
+        try:
+            if hasattr(self._vector_store, 'upsert_sync'):
+                self._vector_store.upsert_sync(to_upsert)
+            else:
+                self._run_async(self._vector_store.upsert(to_upsert))
+            self._save_entries()
+        except Exception as e:
+            logger.warning(f"Vector store batch upsert failed: {e}", extra={"tag": "INF"})
+        self._save_visited()
+        return len(to_upsert)
+
     def add_article(self, url: str, title: str, content: str, source: str = "article",
                      chunk_filter: Optional[callable] = None) -> int:
         """Extract topics from article content and store facts. Returns new fact count.

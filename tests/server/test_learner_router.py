@@ -215,3 +215,142 @@ class TestLearnEvaluate:
         resp = client.post("/learn/evaluate?text=hello+world")
         assert resp.status_code == 200
         learner.evaluate.assert_called_once_with(text="hello world")
+
+
+class TestLearnIngestUrl:
+    """POST /learn/ingest-url — single URL scraping."""
+
+    @patch("domains.learner.get_learner")
+    def test_ingests_url(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.ingest_url.return_value = {"status": "ok", "facts": 3}
+        resp = client.post("/learn/ingest-url?url=https://example.com/article")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["facts"] == 3
+        learner.ingest_url.assert_called_once_with("https://example.com/article")
+
+    @patch("domains.learner.get_learner")
+    def test_ingest_url_result_forwarded(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.ingest_url.return_value = {"status": "error", "message": "fetch failed"}
+        resp = client.post("/learn/ingest-url?url=https://bad.example")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["status"] == "error"
+
+
+class TestLearnIngestConversations:
+    """POST /learn/ingest — conversation pairs (bare-array request body)."""
+
+    @patch("domains.learner.get_learner")
+    def test_ingests_conversation_pairs(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.status.return_value = {"current_loss": 0.5}
+        resp = client.post("/learn/ingest", json=[
+            ["hi", "hello"], ["what is ai", "ai is..."],
+        ])
+        assert resp.status_code == 200
+        learner.ingest_conversation.assert_called_once_with([("hi", "hello"), ("what is ai", "ai is...")])
+
+    @patch("domains.learner.get_learner")
+    def test_ingest_skips_short_pairs(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.status.return_value = {"current_loss": 0.5}
+        resp = client.post("/learn/ingest", json=[
+            ["only_one"], ["a", "b"],
+        ])
+        assert resp.status_code == 200
+        learner.ingest_conversation.assert_called_once_with([("a", "b")])
+
+    @patch("domains.learner.get_learner")
+    def test_ingest_bad_body_422(self, mock_get_learner, client):
+        resp = client.post("/learn/ingest", json={"conversations": [["q", "a"]]})
+        assert resp.status_code == 422
+
+    @patch("domains.learner.get_learner")
+    def test_ingest_neither_returns_status(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.status.return_value = {"current_loss": 0.5}
+        resp = client.post("/learn/ingest")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["current_loss"] == 0.5
+
+
+class TestLearnValidation:
+    """Validation and method-mismatch coverage."""
+
+    @patch("domains.learner.get_learner")
+    def test_search_missing_query_422(self, mock_get_learner, client):
+        resp = client.post("/learn/search", json={})
+        assert resp.status_code == 422
+
+    @patch("domains.learner.get_learner")
+    def test_ingest_url_missing_param_422(self, mock_get_learner, client):
+        resp = client.post("/learn/ingest-url")
+        assert resp.status_code == 422
+
+    @patch("domains.learner.get_learner")
+    def test_feed_action_too_long_422(self, mock_get_learner, client):
+        resp = client.post("/learn/feed?action=" + "x" * 21)
+        assert resp.status_code == 422
+
+    @patch("domains.learner.get_learner")
+    def test_feed_poll_interval_below_min_422(self, mock_get_learner, client):
+        resp = client.post("/learn/feed?action=list&poll_interval=59")
+        assert resp.status_code == 422
+
+    @patch("domains.learner.get_learner")
+    def test_knowledge_top_k_above_max_422(self, mock_get_learner, client):
+        resp = client.get("/learn/knowledge?query=x&top_k=101")
+        assert resp.status_code == 422
+
+    @patch("domains.learner.get_learner")
+    def test_feed_subscribe_success(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.subscribe_feed.return_value = True
+        learner.list_feeds.return_value = [{"url": "https://rss.example"}]
+        resp = client.post("/learn/feed?action=subscribe&url=https://rss.example")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["status"] == "ok"
+        assert body["feeds"][0]["url"] == "https://rss.example"
+        learner.subscribe_feed.assert_called_once_with("https://rss.example", 3600)
+
+    @patch("domains.learner.get_learner")
+    def test_feed_subscribe_already_subscribed(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.subscribe_feed.return_value = False
+        learner.list_feeds.return_value = []
+        resp = client.post("/learn/feed?action=subscribe&url=https://rss.example")
+        assert resp.json()["data"]["status"] == "already_subscribed"
+
+    @patch("domains.learner.get_learner")
+    def test_feed_unsubscribe_success(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.unsubscribe_feed.return_value = True
+        learner.list_feeds.return_value = []
+        resp = client.post("/learn/feed?action=unsubscribe&url=https://rss.example")
+        assert resp.json()["data"]["status"] == "ok"
+
+    @patch("domains.learner.get_learner")
+    def test_feed_unsubscribe_not_found(self, mock_get_learner, client):
+        learner = mock_get_learner.return_value
+        learner.unsubscribe_feed.return_value = False
+        learner.list_feeds.return_value = []
+        resp = client.post("/learn/feed?action=unsubscribe&url=https://rss.example")
+        assert resp.json()["data"]["status"] == "not_found"
+
+    def test_search_wrong_method_405(self, client):
+        resp = client.get("/learn/search")
+        assert resp.status_code == 405
+
+    def test_status_wrong_method_405(self, client):
+        resp = client.post("/learn/status")
+        assert resp.status_code == 405
+
+    def test_knowledge_wrong_method_405(self, client):
+        resp = client.post("/learn/knowledge")
+        assert resp.status_code == 405
+
+    def test_train_wrong_method_405(self, client):
+        resp = client.get("/learn/train")
+        assert resp.status_code == 405

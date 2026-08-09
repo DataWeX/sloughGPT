@@ -252,3 +252,118 @@ class TestInferStream:
     def test_stream_missing_prompt_rejected(self, client):
         resp = client.post("/infer/stream", json={})
         assert resp.status_code == 422
+
+    @patch("state.model")
+    @patch("domains.models.provider.get_provider", return_value=None)
+    def test_stream_no_provider_errors(self, mock_prov, mock_model, client):
+        mock_model.model_id = "m"
+        resp = client.post("/infer/stream", json={"prompt": "Hi"})
+        assert resp.status_code == 200
+        assert "No provider available" in resp.text
+
+
+class TestInferEmbed:
+    """POST /infer/embed"""
+
+    def test_fallback_ngram_embedder(self, client):
+        resp = client.post("/infer/embed", json={"text": "hello world"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["dimensions"] > 0
+        assert body["model"] == "ngram-tfidf"
+        assert isinstance(body["embedding"], list)
+
+    def test_missing_text_rejected(self, client):
+        resp = client.post("/infer/embed", json={})
+        assert resp.status_code == 422
+
+    def test_model_embed_ndarray(self, client):
+        mock_model = type("M", (), {
+            "embed": lambda self, t: __import__("numpy").array([0.1, 0.2, 0.3]),
+            "model_id": "gpt2",
+        })()
+        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+            resp = client.post("/infer/embed", json={"text": "hi"})
+        body = resp.json()
+        assert body["dimensions"] == 3
+        assert body["model"] == "gpt2"
+
+    def test_model_embed_list(self, client):
+        mock_model = type("M", (), {
+            "embed": lambda self, t: [0.5, 0.5],
+            "model_id": "m1",
+        })()
+        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+            resp = client.post("/infer/embed", json={"text": "hi"})
+        assert resp.json()["dimensions"] == 2
+
+    def test_model_embed_not_implemented_falls_back(self, client):
+        mock_model = type("M", (), {
+            "embed": lambda self, t: (_ for _ in ()).throw(NotImplementedError()),
+            "model_id": "m1",
+        })()
+        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+            resp = client.post("/infer/embed", json={"text": "hi"})
+        assert resp.status_code == 200
+        assert resp.json()["model"] == "ngram-tfidf"
+
+
+class TestInferModelTokenize:
+    """Model-tokenizer path for /infer/tokenize and /infer/detokenize."""
+
+    def test_tokenize_uses_model_tokenizer(self, client):
+        tokenizer = type("Tok", (), {
+            "encode": lambda self, t: [10, 20, 30],
+            "itos": {10: "a", 20: "b", 30: "c"},
+        })()
+        mock_model = type("M", (), {"_tokenizer": tokenizer})()
+        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+            resp = client.post("/infer/tokenize", json={"text": "abc"})
+        body = resp.json()
+        assert body["ids"] == [10, 20, 30]
+        assert body["tokens"] == ["a", "b", "c"]
+        assert body["count"] == 3
+
+    def test_detokenize_uses_model_tokenizer(self, client):
+        tokenizer = type("Tok", (), {"decode": lambda self, ids: "decoded"})()
+        mock_model = type("M", (), {"_tokenizer": tokenizer})()
+        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+            resp = client.post("/infer/detokenize", json={"ids": [1, 2, 3]})
+        assert resp.json()["text"] == "decoded"
+        assert resp.json()["count"] == 3
+
+
+class TestInferValidation:
+    def test_temperature_too_high_422(self, client):
+        resp = client.post("/infer", json={"prompt": "Hi", "temperature": 3.0})
+        assert resp.status_code == 422
+
+    def test_max_new_tokens_zero_422(self, client):
+        resp = client.post("/infer", json={"prompt": "Hi", "max_new_tokens": 0})
+        assert resp.status_code == 422
+
+    def test_top_k_out_of_range_422(self, client):
+        resp = client.post("/infer", json={"prompt": "Hi", "top_k": 9999})
+        assert resp.status_code == 422
+
+    def test_detokenize_negative_ids_handled(self, client):
+        resp = client.post("/infer/detokenize", json={"ids": [-1, 65]})
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 2
+
+
+class TestInferMethodRestrictions:
+    def test_get_infer_405(self, client):
+        assert client.get("/infer").status_code == 405
+
+    def test_put_tokenize_405(self, client):
+        assert client.put("/infer/tokenize", json={"text": "x"}).status_code == 405
+
+    def test_delete_embed_405(self, client):
+        assert client.delete("/infer/embed").status_code == 405
+
+    def test_post_health_405(self, client):
+        assert client.post("/infer/health").status_code == 405
+
+    def test_post_info_405(self, client):
+        assert client.post("/infer/info").status_code == 405

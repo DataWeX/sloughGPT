@@ -71,10 +71,10 @@ class ModelProvider(Protocol):
         self,
         messages: List[ChatMessage],
         max_tokens: int = 512,
-        temperature: float = 0.8,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.2,
+        temperature: float = 0.7,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         cancel_event=None,
         session_id: Optional[str] = None,
         **kwargs,
@@ -84,7 +84,7 @@ class ModelProvider(Protocol):
         self,
         messages: List[ChatMessage],
         max_tokens: int = 512,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         **kwargs,
     ) -> str: ...
 
@@ -611,10 +611,10 @@ class ProviderRouter:
         self,
         messages: List[ChatMessage],
         max_tokens: int = 512,
-        temperature: float = 0.8,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.2,
+        temperature: float = 0.7,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         cancel_event=None,
         session_id: Optional[str] = None,
         **kwargs,
@@ -720,7 +720,7 @@ class ProviderRouter:
         self,
         messages: List[ChatMessage],
         max_tokens: int = 512,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         **kwargs,
     ) -> str:
         chunks = []
@@ -782,7 +782,7 @@ class SloTransformerProvider:
         self,
         messages: list,
         max_tokens: int = 512,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         cancel_event=None,
         session_id: Optional[str] = None,
         **kwargs,
@@ -796,7 +796,15 @@ class SloTransformerProvider:
         loop = asyncio.get_event_loop()
 
         def _gen():
-            return self._model.generate(inp, max_new_tokens=max_tokens, temperature=temperature)
+            return self._model.generate(
+                inp,
+                max_new_tokens=max_tokens,
+                temperature=temperature,
+                top_k=kwargs.get('top_k', 40),
+                top_p=kwargs.get('top_p', 0.95),
+                repetition_penalty=kwargs.get('repetition_penalty', 1.1),
+                eos_token=self._eos,
+            )
 
         try:
             out = await loop.run_in_executor(None, _gen)

@@ -2,12 +2,143 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
-import { vmController, type VMRunResult, type VMRegister } from '@/lib/vm-controller'
+import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge } from '@sloughgpt/strui'
+import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
+import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 
 const DEFAULT_MAX_STEPS = 5000
 const MAX_STEPS_LIMIT = 1_000_000
+
+const DEFAULT_TRAIN_CONFIG = {
+  dataset: 'shakespeare',
+  epochs: 1,
+  lr: 0.001,
+  batch_size: 32,
+  n_layer: 4,
+  n_head: 4,
+  embed_dim: 128,
+}
+
+type TrainConfig = typeof DEFAULT_TRAIN_CONFIG
+
+function buildTrainSource(config: TrainConfig): string {
+  const json = JSON.stringify(config)
+  return `[BITS 32]
+
+; Launch a training job through the x86 training bridge.
+; SYS_TRAIN_START: EAX=28, EBX=config JSON addr.
+; Returns EAX = job_id (>=1), or -2 when permission denied.
+; Requires the ADMIN role (role selector above).
+; The Training card on the right polls the job to completion, shows the
+; final result, and offers a Stop button for running jobs.
+
+MOV EBX, config
+MOV EAX, 28
+INT 0x80
+HLT
+
+config: db '${json}', 0`
+}
+
+function clampSteps(n: number): number {
+  return Number.isFinite(n)
+    ? Math.min(MAX_STEPS_LIMIT, Math.max(1, Math.floor(n)))
+    : DEFAULT_MAX_STEPS
+}
+
+function loadRole(): string {
+  try {
+    const saved = localStorage.getItem('vm-role')
+    if (saved === 'admin' || saved === 'kernel' || saved === 'user') return saved
+  } catch {
+    /* storage unavailable — default to user */
+  }
+  return 'user'
+}
+
+function loadMaxSteps(): number {
+  try {
+    const saved = Number(localStorage.getItem('vm-max-steps'))
+    if (Number.isFinite(saved)) return clampSteps(saved)
+  } catch {
+    /* storage unavailable — default steps */
+  }
+  return DEFAULT_MAX_STEPS
+}
+
+function loadTrainConfig(): TrainConfig {
+  try {
+    const raw = localStorage.getItem('vm-train-config')
+    if (!raw) return DEFAULT_TRAIN_CONFIG
+    const parsed = JSON.parse(raw) as Partial<TrainConfig>
+    return clampTrainConfig({
+      dataset: parsed.dataset ?? DEFAULT_TRAIN_CONFIG.dataset,
+      epochs: parsed.epochs ?? DEFAULT_TRAIN_CONFIG.epochs,
+      lr: parsed.lr ?? DEFAULT_TRAIN_CONFIG.lr,
+      batch_size: parsed.batch_size ?? DEFAULT_TRAIN_CONFIG.batch_size,
+      n_layer: parsed.n_layer ?? DEFAULT_TRAIN_CONFIG.n_layer,
+      n_head: parsed.n_head ?? DEFAULT_TRAIN_CONFIG.n_head,
+      embed_dim: parsed.embed_dim ?? DEFAULT_TRAIN_CONFIG.embed_dim,
+    })
+  } catch {
+    /* malformed or unavailable — default config */
+  }
+  return DEFAULT_TRAIN_CONFIG
+}
+
+function clampTrainConfig(config: TrainConfig): TrainConfig {
+  return {
+    ...config,
+    dataset: config.dataset.trim() || DEFAULT_TRAIN_CONFIG.dataset,
+    epochs: Number.isFinite(config.epochs)
+      ? Math.max(1, Math.floor(config.epochs))
+      : DEFAULT_TRAIN_CONFIG.epochs,
+    lr: Number.isFinite(config.lr) && config.lr > 0
+      ? config.lr
+      : DEFAULT_TRAIN_CONFIG.lr,
+    batch_size: Number.isFinite(config.batch_size)
+      ? Math.max(1, Math.floor(config.batch_size))
+      : DEFAULT_TRAIN_CONFIG.batch_size,
+    n_layer: Number.isFinite(config.n_layer)
+      ? Math.max(1, Math.floor(config.n_layer))
+      : DEFAULT_TRAIN_CONFIG.n_layer,
+    n_head: Number.isFinite(config.n_head)
+      ? Math.max(1, Math.floor(config.n_head))
+      : DEFAULT_TRAIN_CONFIG.n_head,
+    embed_dim: Number.isFinite(config.embed_dim)
+      ? Math.max(1, Math.floor(config.embed_dim))
+      : DEFAULT_TRAIN_CONFIG.embed_dim,
+  }
+}
+
+const num = (v: string) => (v.trim() === '' ? NaN : Number(v))
+
+function trainConfigHints(config: TrainConfig): { label: string; message: string }[] {
+  const hints: { label: string; message: string }[] = []
+  if (!config.dataset.trim()) {
+    hints.push({ label: 'Dataset', message: `using default "${DEFAULT_TRAIN_CONFIG.dataset}"` })
+  }
+  if (!Number.isFinite(config.epochs)) {
+    hints.push({ label: 'Epochs', message: `using default ${DEFAULT_TRAIN_CONFIG.epochs}` })
+  }
+  if (!Number.isFinite(config.lr) || config.lr <= 0) {
+    hints.push({ label: 'Learning rate', message: `using default ${DEFAULT_TRAIN_CONFIG.lr}` })
+  }
+  if (!Number.isFinite(config.batch_size)) {
+    hints.push({ label: 'Batch size', message: `using default ${DEFAULT_TRAIN_CONFIG.batch_size}` })
+  }
+  if (!Number.isFinite(config.n_layer)) {
+    hints.push({ label: 'Layers', message: `using default ${DEFAULT_TRAIN_CONFIG.n_layer}` })
+  }
+  if (!Number.isFinite(config.n_head)) {
+    hints.push({ label: 'Heads', message: `using default ${DEFAULT_TRAIN_CONFIG.n_head}` })
+  }
+  if (!Number.isFinite(config.embed_dim)) {
+    hints.push({ label: 'Embed size', message: `using default ${DEFAULT_TRAIN_CONFIG.embed_dim}` })
+  }
+  return hints
+}
 
 const DEFAULT_PROGRAMS: Record<string, string> = {
   hello: `[BITS 32]
@@ -346,6 +477,46 @@ JMP .prompt_loop
 HLT
 
 prompt: db 'Answer is 5!', 0`,
+
+  train: `[BITS 32]
+
+; Launch a training job through the x86 training bridge.
+; SYS_TRAIN_START: EAX=28, EBX=config JSON addr.
+; Returns EAX = job_id (>=1), or -2 when permission denied.
+; Requires the ADMIN role (role selector above).
+; The Training card on the right polls the job to completion, shows the
+; final result, and offers a Stop button for running jobs.
+
+MOV EBX, config
+MOV EAX, 28
+INT 0x80
+HLT
+
+config: db '{"dataset":"shakespeare","epochs":1}', 0`,
+
+  'train-status': `[BITS 32]
+
+; Inspect a training job via the x86 training bridge.
+; Requires the ADMIN role (role selector above).
+; 1) SYS_TRAIN_STATUS: EAX=29, EBX=job_id
+;    EAX: 0 running | 1 completed | 2 failed | -1 not found
+; 2) SYS_TRAIN_GET_RESULT: EAX=30, EBX=job_id, ECX=buf, EDX=size
+;    Writes result JSON into buf, returns bytes written in EAX.
+; Both results are stored to guest memory; the returned JSON is also
+; surfaced in the Training result card on the right.
+
+MOV EBX, 1
+MOV EAX, 29
+INT 0x80
+MOV [0x5000], EAX
+
+MOV EBX, 1
+MOV EAX, 30
+MOV ECX, 0x90000
+MOV EDX, 256
+INT 0x80
+MOV [0x5004], EAX
+HLT`,
 }
 
 export default function VMPage() {
@@ -355,48 +526,172 @@ export default function VMPage() {
   const [maxSteps, setMaxSteps] = useState(DEFAULT_MAX_STEPS)
   const [debug, setDebug] = useState(false)
   const [keyboardInput, setKeyboardInput] = useState('')
+  const [role, setRole] = useState('user')
+  const [hydrated, setHydrated] = useState(false)
   const [showRef, setShowRef] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [trainingJob, setTrainingJob] = useState<VMTrainingJob | null>(null)
+  const [trainConfig, setTrainConfig] = useState<TrainConfig>(DEFAULT_TRAIN_CONFIG)
+  const [datasetNames, setDatasetNames] = useState<string[]>([])
+  const [customDataset, setCustomDataset] = useState(false)
+  const [launchedJob, setLaunchedJob] = useState<number | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const trainingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     return () => {
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+      if (trainingTimerRef.current) clearInterval(trainingTimerRef.current)
     }
   }, [])
 
-  // Load from URL hash (#code=base64)
   useEffect(() => {
+    let cancelled = false
+    datasetController
+      .list()
+      .then((list) => {
+        if (cancelled) return
+        setDatasetNames(list.map((d) => d.name).filter(Boolean))
+      })
+      .catch(() => {
+        // fall back to the free-text dataset input
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const trainingJobId = result?.training_job_id ?? null
+  const permissionDenied = !!(
+    result &&
+    result.registers.some((r) => r.name === 'EAX' && r.hex.toLowerCase() === '0xfffffffe')
+  )
+
+  const pollTrainingJob = useCallback(async (): Promise<VMTrainingJob | null> => {
+    if (trainingJobId == null) return null
+    try {
+      const job = await vmController.trainingJob(trainingJobId)
+      setTrainingJob(job)
+      return job
+    } catch (err: unknown) {
+      setTrainingJob({
+        job_id: trainingJobId,
+        api_job_id: '',
+        status: 'error',
+        progress: 0,
+        error: extractErrorMessage(err),
+      })
+      return null
+    }
+  }, [trainingJobId])
+
+  const handleStopTraining = useCallback(async () => {
+    if (trainingJobId == null) return
+    try {
+      await vmController.stopTrainingJob(trainingJobId)
+    } catch (err: unknown) {
+      setTrainingJob({
+        job_id: trainingJobId,
+        api_job_id: '',
+        status: 'error',
+        progress: 0,
+        error: extractErrorMessage(err),
+      })
+      return
+    }
+    await pollTrainingJob()
+  }, [trainingJobId, pollTrainingJob])
+
+  useEffect(() => {
+    if (trainingJobId == null) {
+      setTrainingJob(null)
+      return
+    }
+    let disposed = false
+    const terminal = new Set(['completed', 'failed', 'cancelled', 'not_found', 'interrupted', 'error'])
+    const poll = async () => {
+      const job = await pollTrainingJob()
+      if (disposed || !job) return
+      if (terminal.has(job.status)) {
+        if (trainingTimerRef.current) clearInterval(trainingTimerRef.current)
+        trainingTimerRef.current = null
+      }
+    }
+    poll()
+    trainingTimerRef.current = setInterval(poll, 3000)
+    return () => {
+      disposed = true
+      if (trainingTimerRef.current) clearInterval(trainingTimerRef.current)
+      trainingTimerRef.current = null
+    }
+  }, [trainingJobId, pollTrainingJob])
+
+  // Load from URL hash (#code=base64) or persisted state after hydration
+  useEffect(() => {
+    let sourceLoaded = false
     try {
       const hash = window.location.hash
       if (hash.startsWith('#code=')) {
         const decoded = atob(hash.slice(6))
         setSource(decoded)
-        return
+        sourceLoaded = true
       }
     } catch { /* malformed hash — fall through to localStorage */ }
-    const saved = localStorage.getItem('vm-source')
-    if (saved) setSource(saved)
+    if (!sourceLoaded) {
+      const saved = localStorage.getItem('vm-source')
+      if (saved) setSource(saved)
+    }
+    setRole(loadRole())
+    setMaxSteps(loadMaxSteps())
+    setTrainConfig(loadTrainConfig())
+    setHydrated(true)
   }, [])
 
   // Save source to localStorage on change
   useEffect(() => {
+    if (!hydrated) return
     try {
       localStorage.setItem('vm-source', source)
     } catch { /* quota exceeded — source not persisted */ }
-  }, [source])
+  }, [source, hydrated])
 
-  const handleRun = useCallback(async (step?: boolean) => {
+  // Save role and steps to localStorage on change
+  useEffect(() => {
+    if (!hydrated) return
+    try {
+      localStorage.setItem('vm-role', role)
+    } catch { /* storage unavailable */ }
+  }, [role, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    try {
+      localStorage.setItem('vm-max-steps', String(maxSteps))
+    } catch { /* storage unavailable */ }
+  }, [maxSteps, hydrated])
+
+  // Save the training launch config to localStorage on change
+  useEffect(() => {
+    if (!hydrated) return
+    try {
+      localStorage.setItem('vm-train-config', JSON.stringify(clampTrainConfig(trainConfig)))
+    } catch { /* storage unavailable */ }
+  }, [trainConfig, hydrated])
+
+  const handleRun = useCallback(async (step?: boolean, srcOverride?: string): Promise<VMRunResult | null> => {
     setRunning(true)
     setResult(null)
+    const src = srcOverride ?? source
     try {
-      const res = await vmController.run(source, {
-        maxSteps: step ? 1 : maxSteps,
+      const res = await vmController.run(src, {
+        maxSteps: step ? 1 : clampSteps(maxSteps),
+        role,
         debug,
         keyboardInput: keyboardInput || undefined,
       })
       setResult(res)
+      return res
     } catch (err: unknown) {
       setResult({
         success: false,
@@ -410,10 +705,19 @@ export default function VMPage() {
         status: 'error',
         error: extractErrorMessage(err),
       })
+      return null
     } finally {
       setRunning(false)
     }
-  }, [source, maxSteps, debug])
+  }, [source, maxSteps, role, debug])
+
+  const handleLaunchTraining = useCallback(async () => {
+    const src = buildTrainSource(clampTrainConfig(trainConfig))
+    setSource(src)
+    const res = await handleRun(false, src)
+    const eax = res?.registers.find((r) => r.name === 'EAX')?.value
+    setLaunchedJob(eax != null && eax >= 1 ? eax : null)
+  }, [trainConfig, handleRun])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -472,6 +776,16 @@ export default function VMPage() {
                   aria-label="Keyboard input"
                   className="w-32 px-2 py-1 text-xs border rounded bg-background"
                 />
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  aria-label="VM role"
+                  className="px-2 py-1 text-xs border rounded bg-background"
+                >
+                  <option value="user">user</option>
+                  <option value="admin">admin</option>
+                  <option value="kernel">kernel</option>
+                </select>
                 <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
                   <input
                     type="checkbox"
@@ -530,7 +844,7 @@ export default function VMPage() {
             {result.error}
           </div>
         )}
-        {result && result.success && result.steps_executed >= maxSteps && (
+        {result && result.success && result.steps_executed >= clampSteps(maxSteps) && (
           <div className="bg-warning/10 border border-warning/30 text-warning text-xs p-2 rounded">
             Step limit reached ({result.steps_executed} steps). Increase steps or use HLT to stop earlier.
           </div>
@@ -651,9 +965,290 @@ export default function VMPage() {
                       {result.error}
                     </div>
                   )}
+                  {permissionDenied && (
+                    <div className="text-xs text-warning bg-warning/10 p-2 rounded">
+                      A syscall was denied for the current role (EAX = -2). Training and other
+                      privileged operations require the{' '}
+                      <span className="font-medium">admin</span> role — switch the role selector
+                      above and run again.
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
+
+            {/* Training */}
+            <TrainingCard job={trainingJob} onStop={handleStopTraining} />
+
+            {/* Training result */}
+            {result?.training_result && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Training result</CardTitle>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => navigator.clipboard.writeText(result.training_result as string)}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <pre className="text-xs font-mono bg-muted/30 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto text-success">
+                    {result.training_result}
+                  </pre>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Training launch */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Training launch</CardTitle>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setTrainConfig(DEFAULT_TRAIN_CONFIG)
+                      setCustomDataset(false)
+                    }}
+                  >
+                    Reset config
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  <label className="col-span-2 text-xs font-medium text-muted-foreground">
+                    Dataset
+                  </label>
+                  {datasetNames.length > 0 ? (
+                    <>
+                      <select
+                        className="col-span-2 px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Training dataset"
+                        value={
+                          customDataset ? '__custom__' : trainConfig.dataset
+                        }
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setCustomDataset(true)
+                          } else {
+                            setCustomDataset(false)
+                            setTrainConfig((c) => ({
+                              ...c,
+                              dataset: e.target.value,
+                            }))
+                          }
+                        }}
+                      >
+                        <option value="__custom__">Custom…</option>
+                        {[
+                          ...datasetNames,
+                          ...(datasetNames.includes(trainConfig.dataset)
+                            ? []
+                            : [trainConfig.dataset]),
+                        ].map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                      {customDataset && (
+                        <>
+                          <input
+                            className="col-span-2 px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                            value={trainConfig.dataset}
+                            aria-label="Training dataset"
+                            placeholder="Custom dataset name"
+                            onChange={(e) =>
+                              setTrainConfig((c) => ({
+                                ...c,
+                                dataset: e.target.value,
+                              }))
+                            }
+                          />
+                          {trainConfig.dataset.trim() !== '' &&
+                            !datasetNames.includes(trainConfig.dataset.trim()) && (
+                              <p className="col-span-2 text-xs text-destructive">
+                                Unknown dataset &quot;{trainConfig.dataset.trim()}&quot;
+                                — Training will fail to start. Available:{' '}
+                                {datasetNames.slice(0, 5).join(', ')}
+                                {datasetNames.length > 5
+                                  ? ` +${datasetNames.length - 5} more`
+                                  : ''}
+                                .
+                              </p>
+                            )}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <input
+                      className="col-span-2 px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                      value={trainConfig.dataset}
+                      aria-label="Training dataset"
+                      onChange={(e) =>
+                        setTrainConfig((c) => ({
+                          ...c,
+                          dataset: e.target.value,
+                        }))
+                      }
+                    />
+                  )}
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Epochs
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                    value={trainConfig.epochs}
+                    aria-label="Training epochs"
+                    onChange={(e) =>
+                      setTrainConfig((c) => ({
+                        ...c,
+                        epochs: num(e.target.value),
+                      }))
+                    }
+                  />
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Learning rate
+                  </label>
+                  <input
+                    className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                    value={trainConfig.lr}
+                    aria-label="Training learning rate"
+                    onChange={(e) =>
+                      setTrainConfig((c) => ({
+                        ...c,
+                        lr: num(e.target.value),
+                      }))
+                    }
+                  />
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Batch size
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                    value={trainConfig.batch_size}
+                    aria-label="Training batch size"
+                    onChange={(e) =>
+                      setTrainConfig((c) => ({
+                        ...c,
+                        batch_size: num(e.target.value),
+                      }))
+                    }
+                  />
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Layers
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                    value={trainConfig.n_layer}
+                    aria-label="Training layers"
+                    onChange={(e) =>
+                      setTrainConfig((c) => ({
+                        ...c,
+                        n_layer: num(e.target.value),
+                      }))
+                    }
+                  />
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Heads
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                    value={trainConfig.n_head}
+                    aria-label="Training heads"
+                    onChange={(e) =>
+                      setTrainConfig((c) => ({
+                        ...c,
+                        n_head: num(e.target.value),
+                      }))
+                    }
+                  />
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Embed size
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
+                    value={trainConfig.embed_dim}
+                    aria-label="Training embed size"
+                    onChange={(e) =>
+                      setTrainConfig((c) => ({
+                        ...c,
+                        embed_dim: num(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                {trainConfigHints(trainConfig).length > 0 && (
+                  <ul className="space-y-0.5 text-xs text-warning">
+                    {trainConfigHints(trainConfig).map((hint) => (
+                      <li key={hint.label}>
+                        <span className="font-medium">{hint.label}</span>: {hint.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Generates the{' '}
+                  <span className="font-mono">train</span> sample with this
+                  config and runs it. Requires the{' '}
+                  <span className="font-medium">admin</span> role — the
+                  Training card polls the job and shows the final result.
+                </p>
+                {role === 'user' && (
+                  <div className="flex items-center justify-between gap-2 rounded border border-warning/40 bg-warning/10 px-2 py-1.5">
+                    <p className="text-xs text-warning">
+                      Training is denied for the user role (EAX = -2).
+                    </p>
+                    <Button size="sm" variant="outline" onClick={() => setRole('admin')}>
+                      Switch to admin
+                    </Button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSource(buildTrainSource(clampTrainConfig(trainConfig)))}
+                  >
+                    Load sample
+                  </Button>
+                  <Button size="sm" onClick={handleLaunchTraining}>
+                    Launch training
+                  </Button>
+                </div>
+                {launchedJob != null && (
+                  <div className="flex items-center justify-between gap-2 rounded border border-success/40 bg-success/10 px-2 py-1.5">
+                    <p className="text-xs text-success">
+                      Launched training job #{launchedJob} — the Training card
+                      below polls it to completion.
+                    </p>
+                    <button
+                      type="button"
+                      className="text-xs underline text-success hover:text-success/80"
+                      onClick={() => setLaunchedJob(null)}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Registers */}
             {result && result.registers.length > 0 && (
@@ -808,7 +1403,7 @@ export default function VMPage() {
                 </div>
                 <div>
                   <p className="font-medium mb-1">Interrupts</p>
-                  <pre className="text-muted-foreground">{"INT 0x80\n  EAX=4 write\n  EAX=1 exit\n  EAX=3 read\nINT 0x10 video\nINT 0x16 keyboard"}</pre>
+                  <pre className="text-muted-foreground">{"INT 0x80\n  EAX=4 write\n  EAX=1 exit\n  EAX=3 read\n  EAX=28 train start\n  EAX=29 train status\n  EAX=30 train result\nINT 0x10 video\nINT 0x16 keyboard"}</pre>
                 </div>
                 <div>
                   <p className="font-medium mb-1">Registers</p>
@@ -829,6 +1424,61 @@ function StatusRow({ label, value }: { label: string; value: React.ReactNode }) 
       <span className="text-muted-foreground">{label}</span>
       <span className="font-mono">{value}</span>
     </div>
+  )
+}
+
+function TrainingCard({ job, onStop }: { job: VMTrainingJob | null; onStop: () => void }) {
+  if (!job) return null
+  const running = ['running', 'queued', 'starting'].includes(job.status)
+  const failed = ['failed', 'cancelled', 'not_found', 'error', 'interrupted'].includes(job.status)
+  const pct = Math.round((job.progress ?? 0) * 100)
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Training</CardTitle>
+          <div className="flex items-center gap-2">
+            {running && (
+              <Button size="sm" variant="ghost" onClick={onStop}>
+                Stop
+              </Button>
+            )}
+            <Badge
+              variant={job.status === 'completed' ? 'success' : failed ? 'error' : 'warning'}
+              size="sm"
+            >
+              {job.status}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <StatusRow label="Job" value={`#${job.job_id}`} />
+        {job.api_job_id && <StatusRow label="API job" value={job.api_job_id} />}
+        {running && (
+          <>
+            <Progress value={pct} variant={pct > 0 ? 'default' : 'warning'} size="sm" />
+            <p className="text-xs text-muted-foreground">Training in progress — {pct}%</p>
+          </>
+        )}
+        {job.status === 'completed' && (
+          <p className="text-xs text-success">Training completed successfully.</p>
+        )}
+        {job.status === 'completed' && job.result && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Result
+            </p>
+            <pre className="text-xs font-mono bg-muted/30 p-2 rounded overflow-x-auto whitespace-pre-wrap text-success">
+              {job.result}
+            </pre>
+          </div>
+        )}
+        {job.error && (
+          <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">{job.error}</div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

@@ -14,6 +14,22 @@ from dataclasses import dataclass
 
 logger = logging.getLogger("slo.data_import")
 
+
+def _retry(fn, retries=2, delay=1.0, exceptions=(urllib.error.URLError, ConnectionError, TimeoutError)):
+    """Retry a callable on transient network errors."""
+    import time
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except exceptions as e:
+            last_exc = e
+            if attempt < retries:
+                logger.warning(f"Retry {attempt + 1}/{retries} after {type(e).__name__}: {e}",
+                    extra={"tag": "TRAIN"},)
+                time.sleep(delay * (attempt + 1))
+    raise last_exc
+
 DEFAULT_IGNORES: Set[str] = {
     ".git",
     ".svn",
@@ -607,16 +623,15 @@ class BooksSearch:
             req = urllib.request.Request(url)
             req.add_header("User-Agent", "SloughGPT/1.0")
 
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = json.loads(response.read().decode())
-                return [
-                    {
-                        "key": r.get("key", ""),
-                        "title": r.get("title", ""),
-                        "author": r.get("author_name", [""])[0],
-                        "isbn": r.get("isbn", [""])[0],
-                        "year": r.get("first_publish_year"),
-                        "cover": r.get("cover_i"),
+            data = _retry(lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode()))
+            return [
+                {
+                    "key": r.get("key", ""),
+                    "title": r.get("title", ""),
+                    "author": r.get("author_name", [""])[0],
+                    "isbn": r.get("isbn", [""])[0],
+                    "year": r.get("first_publish_year"),
+                    "cover": r.get("cover_i"),
                     }
                     for r in data.get("docs", [])[:limit]
                     if r.get("title")
@@ -833,19 +848,18 @@ class GitHubSearch:
             req.add_header("Accept", "application/vnd.github.v3+json")
             req.add_header("User-Agent", "SloughGPT")
 
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = json.loads(response.read().decode())
-                return [
-                    {
-                        "full_name": r["full_name"],
-                        "description": r.get("description", ""),
-                        "html_url": r["html_url"],
-                        "stargazers_count": r.get("stargazers_count", 0),
-                        "forks_count": r.get("forks_count", 0),
-                        "language": r.get("language"),
-                    }
-                    for r in data.get("items", [])
-                ]
+            data = _retry(lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode()))
+            return [
+                {
+                    "full_name": r["full_name"],
+                    "description": r.get("description", ""),
+                    "html_url": r["html_url"],
+                    "stargazers_count": r.get("stargazers_count", 0),
+                    "forks_count": r.get("forks_count", 0),
+                    "language": r.get("language"),
+                }
+                for r in data.get("items", [])
+            ]
         except Exception as e:
             logger.error(f"GitHub search failed: {e}",
                 extra={"tag": "TRAIN"},)
@@ -965,24 +979,22 @@ class ISBNImporter:
         q = urllib.parse.quote(search_terms[:200], safe="")
 
         try:
-            url = f"http://gutendex.com/books?search={q}"
+            url = f"https://gutendex.com/books?search={q}"
             req = urllib.request.Request(url, headers={"User-Agent": "SloughGPT/1.0"})
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = json.loads(response.read().decode())
-                items = data.get("results", [])
-                if not items:
-                    logger.info(f"No Gutendex results for: {title}",
-                        extra={"tag": "TRAIN"},)
-                    return None
+            data = _retry(lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode()))
+            items = data.get("results", [])
+            if not items:
+                logger.info(f"No Gutendex results for: {title}",
+                    extra={"tag": "TRAIN"},)
+                return None
 
-                gutenberg_id = items[0]["id"]
-                text_url = f"https://www.gutenberg.org/cache/epub/{gutenberg_id}/pg{gutenberg_id}.txt"
-                text_req = urllib.request.Request(text_url, headers={"User-Agent": "SloughGPT/1.0"})
-                with urllib.request.urlopen(text_req, timeout=60) as text_resp:
-                    text = text_resp.read().decode("utf-8", errors="replace")
-                    logger.info(f"Downloaded {len(text)} chars from Gutenberg #{gutenberg_id}",
-                        extra={"tag": "TRAIN"},)
-                    return text
+            gutenberg_id = items[0]["id"]
+            text_url = f"https://www.gutenberg.org/cache/epub/{gutenberg_id}/pg{gutenberg_id}.txt"
+            text_req = urllib.request.Request(text_url, headers={"User-Agent": "SloughGPT/1.0"})
+            text = _retry(lambda: urllib.request.urlopen(text_req, timeout=60).read().decode("utf-8", errors="replace"))
+            logger.info(f"Downloaded {len(text)} chars from Gutenberg #{gutenberg_id}",
+                extra={"tag": "TRAIN"},)
+            return text
         except Exception as e:
             logger.warning(f"Gutenberg fetch failed for '{title}': {e}",
                 extra={"tag": "TRAIN"},)

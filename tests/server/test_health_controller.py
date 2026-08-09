@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'apps', '
 import controllers.health as controllers_health
 from controllers.health import (
     HealthController, _health_start_time, _get_model_info,
-    _get_model_device,
+    _get_model_device, _is_app_ready,
     _get_lifecycle_info, _get_inference_stats, _get_quantization_info,
     _get_kv_session_info, _get_resource_allocation, _get_process_info,
     _get_executor_stats, _get_process_guard_status, _get_mps_monitor_info,
@@ -230,6 +230,46 @@ class TestDetailedHealth:
         ctrl._cache_time = 0  # Force cache miss
         r2 = ctrl.get_detailed_health()
         assert r2 is not None
+
+
+class TestIsAppReady:
+    def test_ready_when_lifecycle_running(self):
+        mgr = MagicMock()
+        mgr.is_running.return_value = True
+        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr):
+            assert _is_app_ready() is True
+
+    def test_not_ready_when_lifecycle_not_running(self):
+        mgr = MagicMock()
+        mgr.is_running.return_value = False
+        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr):
+            assert _is_app_ready() is False
+
+    def test_ready_on_import_error(self):
+        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", side_effect=ImportError):
+            assert _is_app_ready() is True
+
+
+class TestGetModelInfoReadyGate:
+    def test_model_info_false_before_ready(self):
+        mgr = MagicMock()
+        mgr.is_running.return_value = False
+        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr), \
+             patch("controllers.health._get_model_info_with_registry",
+                   return_value=(True, "gpt2", {})):
+            loaded, model_type = _get_model_info()
+            assert loaded is False
+            assert model_type == "gpt2"
+
+    def test_model_info_true_after_ready(self):
+        mgr = MagicMock()
+        mgr.is_running.return_value = True
+        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr), \
+             patch("controllers.health._get_model_info_with_registry",
+                   return_value=(True, "gpt2", {})):
+            loaded, model_type = _get_model_info()
+            assert loaded is True
+            assert model_type == "gpt2"
 
 
 class TestIsModelLoading:

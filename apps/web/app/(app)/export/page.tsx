@@ -7,6 +7,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
+import { ExportHistoryCard, recordExport } from '@/components/export/ExportHistoryCard'
 import { downloadJson, downloadBlob } from '@/lib/download-utils'
 import { apiGet } from '@/lib/http-client'
 
@@ -84,6 +85,7 @@ export default function ExportPage() {
       )
       const fileCount = Object.keys(res.files ?? {}).length
       setExportResult(`Exported ${fileCount} file(s) in ${res.format} format`)
+      recordExport(res.format, fileCount)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Export failed')
     } finally {
@@ -145,6 +147,8 @@ export default function ExportPage() {
             <button className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
           </div>
         )}
+
+        <ExportHistoryCard />
 
         <Card>
           <CardHeader>

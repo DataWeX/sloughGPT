@@ -21,10 +21,10 @@ logger = logging.getLogger("slo.feedback.meta_weights")
 class MetaWeights:
     """Adjustable weights for generation."""
 
-    temperature: float = 0.8
-    repetition_penalty: float = 1.0
-    top_p: float = 0.9
-    top_k: int = 50
+    temperature: float = 0.7
+    repetition_penalty: float = 1.15
+    top_p: float = 0.85
+    top_k: int = 40
     length_penalty: float = 1.0
     style_bias: float = 0.0  # -1 to 1, creative to conservative
     confidence_boost: float = 0.0  # increase for more confident responses

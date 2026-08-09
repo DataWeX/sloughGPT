@@ -13,6 +13,7 @@ export default defineConfig({
       ['contexts/**/*.test.{ts,tsx}', 'jsdom'],
       ['hooks/**/*.test.{ts,tsx}', 'jsdom'],
       ['app/**/*.test.{ts,tsx}', 'jsdom'],
+      ['features/**/*.test.{ts,tsx}', 'jsdom'],
       ['lib/sync-html-theme.test.ts', 'jsdom'],
       ['lib/download-utils.test.ts', 'jsdom'],
       ['lib/reaction-store.test.ts', 'jsdom'],
@@ -21,11 +22,13 @@ export default defineConfig({
       ['lib/soulnet-webgpu/**/*.test.ts', 'jsdom'],
     ],
     include: [
+      'middleware.test.ts',
       'lib/**/*.test.ts',
       'contexts/**/*.test.{ts,tsx}',
       'hooks/**/*.test.{ts,tsx}',
       'components/**/*.test.{ts,tsx}',
       'app/**/*.test.{ts,tsx}',
+      'features/**/*.test.{ts,tsx}',
     ],
     // ModelDetailPage.test.tsx excluded: vitest fork pool never exits because the
     // page's setInterval (uptime timer) keeps the Node event loop alive even after

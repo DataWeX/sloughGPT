@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { datasetController, type ImportSource, type GitHubRepo, type BookResult, type ImportResponse } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { reportError } from '@/lib/error-reporter'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Label } from '@sloughgpt/strui'
@@ -39,7 +40,7 @@ const SOURCE_OPTIONS: SourceOption[] = [
   { value: 'local', label: 'Server Path', description: 'Folder on this machine' },
 ]
 
-const DEFAULT_EXTENSIONS = ['.py', '.js', '.ts', '.md', '.txt', '.json', '.pdf']
+const DEFAULT_EXTENSIONS = ['.py', '.js', '.ts', '.md', '.txt', '.json', '.yaml', '.csv', '.pdf']
 
 export function DatasetImportModal({
   open,
@@ -61,6 +62,11 @@ export function DatasetImportModal({
   const [searching, setSearching] = useState(false)
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null)
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (!open) abortRef.current?.abort()
+  }, [open])
 
   const resetForm = () => {
     setUrl('')
@@ -78,6 +84,7 @@ export function DatasetImportModal({
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
+      abortRef.current?.abort()
       resetForm()
     }
     onOpenChange(newOpen)
@@ -96,19 +103,25 @@ export function DatasetImportModal({
         setSearchResults(result.repos || [])
       }
     } catch (err) {
-      setError(extractErrorMessage(err, 'Search failed'))
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      const message = extractErrorMessage(err, 'Search failed')
+      setError(message)
+      reportError(message, 'dataset-import', { metadata: { source, action: 'search' } })
     } finally {
       setSearching(false)
     }
   }
 
   const handleImport = async () => {
+    const ac = new AbortController()
+    abortRef.current = ac
     setLoading(true)
     setError(null)
     setSuccess(null)
 
     try {
       let result: ImportResponse
+      const signal = ac.signal
 
       switch (source) {
         case 'github':
@@ -120,7 +133,7 @@ export function DatasetImportModal({
             url: url.trim(),
             name: repoName,
             extensions,
-          })
+          }, { signal })
           break
 
         case 'huggingface':
@@ -130,7 +143,7 @@ export function DatasetImportModal({
           result = await datasetController.importFromHuggingFace({
             dataset_id: datasetId.trim(),
             name: name.trim() || undefined,
-          })
+          }, { signal })
           break
 
         case 'isbn':
@@ -146,7 +159,7 @@ export function DatasetImportModal({
           result = await datasetController.importFromISBN({
             isbn: selectedBook?.isbn || url.trim(),
             name: name.trim(),
-          })
+          }, { signal })
           break
 
         case 'url':
@@ -159,7 +172,7 @@ export function DatasetImportModal({
           result = await datasetController.importFromURL({
             url: url.trim(),
             name: name.trim(),
-          })
+          }, { signal })
           break
 
         case 'local':
@@ -173,7 +186,7 @@ export function DatasetImportModal({
             path: path.trim(),
             name: name.trim(),
             extensions,
-          })
+          }, { signal })
           break
 
         case 'kaggle':
@@ -183,7 +196,7 @@ export function DatasetImportModal({
           result = await datasetController.importFromKaggle({
             dataset: kaggleDataset.trim(),
             name: name.trim() || undefined,
-          })
+          }, { signal })
           break
 
         case 'csv':
@@ -196,7 +209,7 @@ export function DatasetImportModal({
           result = await datasetController.importFromCSV({
             url: url.trim(),
             name: name.trim(),
-          })
+          }, { signal })
           break
       }
 
@@ -207,7 +220,10 @@ export function DatasetImportModal({
         onOpenChange(false)
       }, 2000)
     } catch (err) {
-      setError(extractErrorMessage(err, 'Import failed'))
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      const message = extractErrorMessage(err, 'Import failed')
+      setError(message)
+      reportError(message, 'dataset-import', { metadata: { source, action: 'import' } })
     } finally {
       setLoading(false)
     }
@@ -573,9 +589,15 @@ export function DatasetImportModal({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-            Cancel
-          </Button>
+          {loading ? (
+            <Button type="button" variant="outline" onClick={() => abortRef.current?.abort()}>
+              Cancel Import
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+              Cancel
+            </Button>
+          )}
           <Button type="button" onClick={handleImport} disabled={loading}>
             {loading ? 'Importing...' : 'Import'}
           </Button>

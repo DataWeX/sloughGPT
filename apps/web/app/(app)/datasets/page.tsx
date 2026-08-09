@@ -24,6 +24,7 @@ export default function DatasetsPage() {
   const addToast = useToastStore(s => s.addToast)
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(false)
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<Dataset | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -37,10 +38,12 @@ export default function DatasetsPage() {
 
   const fetchDatasets = useCallback(async () => {
     setLoading(true)
+    setFetchError(false)
     try {
       const list = await datasetController.list()
       setDatasets(list)
     } catch {
+      setFetchError(true)
       addToast('Failed to load datasets', 'error')
     } finally {
       setLoading(false)
@@ -143,12 +146,12 @@ export default function DatasetsPage() {
         left={<AppRouteHeaderLead title="Datasets" />}
         right={
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={fetchDatasets} disabled={loading}>
-              <IconRefresh className={loading ? 'animate-spin h-3 w-3 mr-1' : 'h-3 w-3 mr-1'} />
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={fetchDatasets} disabled={loading}>
+              <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5 mr-1' : 'h-3.5 w-3.5 mr-1'} />
               Refresh
             </Button>
-            <Button size="sm" className="h-7 text-xs" onClick={() => setImportOpen(true)}>
-              <IconPlus className="h-3 w-3 mr-1" />
+            <Button size="sm" className="h-8 text-xs" onClick={() => setImportOpen(true)}>
+              <IconPlus className="h-3.5 w-3.5 mr-1" />
               Import
             </Button>
           </div>
@@ -162,14 +165,14 @@ export default function DatasetsPage() {
               placeholder="Search datasets..."
               value={search}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-              className="h-8 text-sm max-w-xs"
+              className="h-9 text-sm max-w-xs"
             />
             <div className="flex items-center gap-1 ml-auto">
               {(['date', 'size', 'name'] as const).map(s => (
                 <button
                   key={s}
                   onClick={() => setSortBy(s)}
-                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                  className={`text-xs px-2 py-1 rounded border transition-colors ${sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
                 >
                   {s}
                 </button>
@@ -177,7 +180,7 @@ export default function DatasetsPage() {
             </div>
             {datasets.length > 1 && (
               <div className="flex-1 max-w-xs">
-                <div className="text-[10px] text-muted-foreground mb-1">Size comparison</div>
+                <div className="text-xs text-muted-foreground mb-1">Size comparison</div>
                 <div className="flex items-end gap-1 h-8">
                   {datasets.slice(0, 8).map(ds => {
                     const maxSize = Math.max(...datasets.map(d => d.size || 1))
@@ -199,10 +202,10 @@ export default function DatasetsPage() {
 
         {compareIds.size >= 2 && (
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={loadCompare}>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={loadCompare}>
               Compare {compareIds.size} datasets
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setCompareIds(new Set()); setCompareData([]) }}>
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setCompareIds(new Set()); setCompareData([]) }}>
               Clear
             </Button>
           </div>
@@ -247,6 +250,16 @@ export default function DatasetsPage() {
               <Skeleton key={i} className="h-20 rounded-lg" />
             ))}
           </div>
+        ) : fetchError && datasets.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <p className="text-sm text-destructive mb-3">Failed to load datasets</p>
+              <Button size="sm" variant="outline" onClick={fetchDatasets}>
+                <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
         ) : filtered.length === 0 ? (
           <EmptyCard
             message={datasets.length === 0 ? 'No datasets yet' : 'No datasets match your search'}
@@ -302,36 +315,36 @@ export default function DatasetsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
                         onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); router.push(`/training?dataset=${encodeURIComponent(ds.id)}`) }}
                         aria-label={`Train with ${ds.name}`}
                       >
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                       </Button>
                       <button
-                        className={`h-5 w-5 rounded border transition-colors flex items-center justify-center ${compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50'}`}
+                        className={`h-6 w-6 rounded border transition-colors flex items-center justify-center ${compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50'}`}
                         onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); toggleCompare(ds.id) }}
                         aria-label={`Select ${ds.name} for comparison`}
                       >
-                        {compareIds.has(ds.id) && <span className="text-[10px] font-bold">✓</span>}
+                        {compareIds.has(ds.id) && <span className="text-xs font-bold">✓</span>}
                       </button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
                         onClick={(e: React.MouseEvent<HTMLButtonElement>) => handlePreview(ds, e)}
                         aria-label={expandedId === ds.id ? `Hide preview for ${ds.name}` : `Preview ${ds.name}`}
                       >
-                        <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${expandedId === ds.id ? 'rotate-180' : ''}`} />
+                        <IconChevronDown className={`h-4 w-4 transition-transform ${expandedId === ds.id ? 'rotate-180' : ''}`} />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); setPendingDelete(ds) }}
                         aria-label={`Delete ${ds.name}`}
                       >
-                        <IconTrash className="h-3.5 w-3.5" />
+                        <IconTrash className="h-4 w-4" />
                       </Button>
                     </div>
                   </CardContent>

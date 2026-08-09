@@ -90,7 +90,7 @@ describe('DatasetInlineImportModal', () => {
     await waitFor(() => expect(mocks.mockImportFromLocal).toHaveBeenCalledWith({
       path: '/data',
       name: 'imported_dataset',
-    }))
+    }, { signal: expect.any(AbortSignal) }))
     expect(mocks.mockAddToast).toHaveBeenCalledWith('Imported 5 files', 'success')
     expect(onImported).toHaveBeenCalled()
     expect(screen.getByText('Imported successfully')).toBeDefined()
@@ -107,7 +107,7 @@ describe('DatasetInlineImportModal', () => {
     await waitFor(() => expect(mocks.mockImportFromLocal).toHaveBeenCalledWith({
       path: '/data',
       name: 'my-ds',
-    }))
+    }, { signal: expect.any(AbortSignal) }))
   })
 
   it('imports from a GitHub URL on the GitHub tab', async () => {
@@ -120,7 +120,7 @@ describe('DatasetInlineImportModal', () => {
     await waitFor(() => expect(mocks.mockImportFromGitHub).toHaveBeenCalledWith({
       url: 'https://github.com/a/b',
       name: 'imported_dataset',
-    }))
+    }, { signal: expect.any(AbortSignal) }))
   })
 
   it('leaves the name undefined for HuggingFace imports', async () => {
@@ -133,7 +133,7 @@ describe('DatasetInlineImportModal', () => {
     await waitFor(() => expect(mocks.mockImportFromHuggingFace).toHaveBeenCalledWith({
       dataset_id: 'org/ds',
       name: undefined,
-    }))
+    }, { signal: expect.any(AbortSignal) }))
   })
 
   it('shows an error toast when the active field is empty', async () => {
@@ -153,7 +153,7 @@ describe('DatasetInlineImportModal', () => {
     fireEvent.change(screen.getByPlaceholderText('/path/to/dataset/folder'), { target: { value: '/data' } })
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
 
-    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Import failed', 'error'))
+    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('boom', 'error'))
     expect(onImported).not.toHaveBeenCalled()
   })
 
@@ -164,9 +164,8 @@ describe('DatasetInlineImportModal', () => {
     fireEvent.change(screen.getByPlaceholderText('/path/to/dataset/folder'), { target: { value: '/data' } })
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
 
-    const importingButton = await waitFor(() => screen.getByRole('button', { name: /Importing/ }))
-    expect((importingButton as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByTestId('spinner')).toBeDefined()
+    const cancelBtn = await waitFor(() => screen.getByRole('button', { name: /Cancel Import/ }))
+    expect(cancelBtn).toBeDefined()
 
     resolveImport(SUCCESS)
     await waitFor(() => expect(screen.getByText('Imported successfully')).toBeDefined())

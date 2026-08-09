@@ -6,6 +6,7 @@ used by entity_extractor, soul engine prompt injection, and chat enrichment).
 """
 import json
 import re
+import asyncio
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -226,6 +227,16 @@ class KBRouter:
         import hashlib
         content_hash = hashlib.md5(req.content.encode()).hexdigest()
         item_id = f"fact_{memory._fact_counter}_{content_hash[:8]}"
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "knowledge.add",
+                resource=topic or "general",
+                detail="stored" if is_new else "duplicate",
+                extra={"source": req.source or ""},
+            )
+        except Exception:
+            pass
         return success_response(data={"status": "stored" if is_new else "duplicate", "id": item_id, "content": req.content, "topic": topic, "label": label})
 
     def update_knowledge(self, item_id: str, req: KnowledgeUpdate):
@@ -254,6 +265,11 @@ class KBRouter:
         # Delete old, add new
         memory.delete_by_id(item_id)
         ok = memory.add_fact(new_fact)
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("knowledge.update", resource=item_id, detail="updated" if ok else "stored")
+        except Exception:
+            pass
         return success_response(data={"status": "updated" if ok else "stored"})
 
     def batch_ingest(self, req: KnowledgeBatchRequest):
@@ -271,6 +287,11 @@ class KBRouter:
             )
             if memory.add_fact(fact):
                 stored += 1
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("knowledge.add", resource="batch", detail=f"stored={stored}")
+        except Exception:
+            pass
         return success_response(data={"stored": stored})
 
     def search_knowledge(self, query: str = ""):
@@ -284,8 +305,7 @@ class KBRouter:
     def knowledge_stats(self):
         """Return knowledge base statistics.
 
-        Uses batched iteration to avoid loading all 5000 entries into memory.
-        Fetches in chunks of 200 and aggregates topic/source counts incrementally.
+        Aggregates topic/source counts from the full store in a single pass.
         """
         memory = self._get_memory()
         topics: dict[str, int] = {}
@@ -293,22 +313,13 @@ class KBRouter:
         total = 0
         importance_sum = 0.0
 
-        batch_size = 200
-        offset = 0
-        while True:
-            batch = memory.list_all(top_k=batch_size)
-            if not batch:
-                break
-            for item in batch:
-                t = item.get("topic", "general")
-                topics[t] = topics.get(t, 0) + 1
-                s = item.get("source", "unknown")
-                sources[s] = sources.get(s, 0) + 1
-                importance_sum += item.get("importance", 0.5)
-                total += 1
-            if len(batch) < batch_size:
-                break
-            offset += batch_size
+        for item in memory.list_all(top_k=5000):
+            t = item.get("topic", "general")
+            topics[t] = topics.get(t, 0) + 1
+            s = item.get("source", "unknown")
+            sources[s] = sources.get(s, 0) + 1
+            importance_sum += item.get("importance", 0.5)
+            total += 1
 
         avg_importance = importance_sum / max(total, 1)
         return success_response(data={
@@ -347,6 +358,16 @@ class KBRouter:
             from domains.learner.knowledge import get_knowledge_ingestor
             ingestor = get_knowledge_ingestor()
             result = ingestor.ingest_url(req.url)
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "knowledge.add",
+                    resource=req.url,
+                    detail="url",
+                    extra={"new_facts": result.get("new_facts", 0), "rejected": result.get("rejected", False)},
+                )
+            except Exception:
+                pass
             return success_response(data={
                 "status": result.get("status", "ok"),
                 "new_facts": result.get("new_facts", 0),
@@ -370,6 +391,11 @@ class KBRouter:
         for item_id in req.ids:
             if memory.delete_by_id(item_id):
                 deleted += 1
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log("knowledge.batch.delete", resource="batch", detail=f"deleted={deleted}")
+        except Exception:
+            pass
         return success_response(data={"deleted": deleted})
 
     def suggest_topic(self, req: SuggestTopicRequest):
@@ -380,6 +406,11 @@ class KBRouter:
     def delete_knowledge(self, item_id: str):
         memory = self._get_memory()
         if memory.delete_by_id(item_id):
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log("knowledge.delete", resource=item_id)
+            except Exception:
+                pass
             return success_response(data={"status": "deleted"})
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -395,6 +426,15 @@ class KBRouter:
         )
 
         status = get_adapter_status()
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "knowledge.train",
+                resource="adapter",
+                extra={"facts": len(facts), "status": result.get("status", "")},
+            )
+        except Exception:
+            pass
         return success_response(data={**result, "adapter_status": status})
 
     def knowledge_adapter_status(self):
@@ -467,17 +507,16 @@ class KBRouter:
         memory = self._get_memory()
 
         def _store_chunks():
-            stored = 0
-            for chunk in chunks:
-                fact = KnowledgeFact(
+            facts = [
+                KnowledgeFact(
                     content=chunk,
                     topic=topic,
                     source=f"file:{file.filename or 'unknown'}",
                     importance=min(1.0, len(chunk) / 2000),
                 )
-                if memory.add_fact(fact):
-                    stored += 1
-            return stored
+                for chunk in chunks
+            ]
+            return memory.add_facts(facts)
 
         import asyncio
         stored = await asyncio.to_thread(_store_chunks)
@@ -625,18 +664,31 @@ class KBRouter:
         """Bulk ingest texts with automatic deduplication.
 
         Skips near-duplicate content and reports added/skipped/errors.
+        The synchronous ingest runs in a thread pool so the event loop is not
+        blocked for other requests.
         """
         from domains.learner.knowledge_ops import BulkProcessor
 
         memory = self._get_memory()
         bp = BulkProcessor(memory)
-        report = bp.ingest_texts(
+        report = await asyncio.to_thread(
+            bp.ingest_texts,
             req.items,
             topic=req.topic,
             source=req.source,
             dedup_threshold=req.dedup_threshold,
         )
 
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "knowledge.add",
+                resource=req.topic or "bulk",
+                detail="bulk",
+                extra={"added": report.get("added", 0), "skipped": report.get("skipped", 0)},
+            )
+        except Exception:
+            pass
         return {
             "status": "completed",
             **report,
@@ -710,7 +762,18 @@ class KBRouter:
                 "save_path": result["save_path"],
             }
 
-        return await asyncio.to_thread(_train)
+        result = await asyncio.to_thread(_train)
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "knowledge.train",
+                resource="embedder",
+                detail=result.get("status", "ok"),
+                extra={"texts_used": result.get("texts_used", 0)},
+            )
+        except Exception:
+            pass
+        return result
 
     async def embedder_status(self):
         """Check if a trained embedder checkpoint exists."""

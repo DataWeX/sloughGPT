@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, SearchInput } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-controller'
+import { SoulPersonalityCard } from '@/components/souls/SoulPersonalityCard'
 import { useToastStore } from '@/lib/toast-store'
 
 type Tab = 'souls' | 'checkpoints' | 'weights' | 'snapshots'
@@ -21,16 +22,19 @@ export default function SoulsPage() {
   const [newSnapshotName, setNewSnapshotName] = useState('')
   const [switching, setSwitching] = useState<string | null>(null)
   const [loadingCheckpoint, setLoadingCheckpoint] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
     Promise.all([
       soulsController.list().catch(() => ({ souls: [], current_soul: null })),
       soulsController.listCheckpoints().catch(() => ({ checkpoints: [] })),
-    ]).then(([s, c]) => {
+      soulsController.listWeightSnapshots().catch(() => []),
+    ]).then(([s, c, snaps]) => {
       setSouls(s.souls)
       setCurrentSoul(s.current_soul ?? null)
       setCheckpoints(c.checkpoints)
+      setSnapshots(snaps)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -120,16 +124,43 @@ export default function SoulsPage() {
       <div className="sl-page mx-auto max-w-4xl">
         <AppRouteHeader left={<AppRouteHeaderLead title="Souls" subtitle="Personality management" />} />
         <div className="space-y-4">
+          <KpiGrid>
+            <StatCard label="Loading" value="..." />
+            <StatCard label="Loading" value="..." />
+            <StatCard label="Loading" value="..." />
+            <StatCard label="Loading" value="..." />
+          </KpiGrid>
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+          <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>
       </div>
     )
   }
 
+  const filteredSouls = souls.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.traits?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
+  )
+
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Souls" subtitle={`${souls.length} personalities · ${currentSoul ?? 'none'} active`} />} />
       <div className="space-y-4">
+        <KpiGrid>
+          <StatCard label="Personalities" value={souls.length} />
+          <StatCard label="Active Soul" value={currentSoul ?? 'None'} />
+          <StatCard label="Checkpoints" value={checkpoints.length} />
+          <StatCard label="Snapshots" value={snapshots.length || '—'} />
+        </KpiGrid>
+
+        <SearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search personalities..."
+          className="max-w-sm"
+        />
+
         <div className="flex gap-1 border-b border-border/30 pb-0">
           {(['souls', 'checkpoints', 'weights', 'snapshots'] as Tab[]).map(t => (
             <button
@@ -153,15 +184,17 @@ export default function SoulsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Personalities</CardTitle>
               <Button size="sm" variant="ghost" onClick={handleRefresh}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent>
-              {souls.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No personalities found.</p>
+              {filteredSouls.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {searchQuery ? 'No personalities match your search.' : 'No personalities found.'}
+                </p>
               ) : (
                 <div className="space-y-2">
-                  {souls.map(soul => (
+                  {filteredSouls.map(soul => (
                     <div
                       key={soul.name}
                       className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors ${
@@ -174,7 +207,7 @@ export default function SoulsPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{soul.name}</span>
                           {currentSoul === soul.name && (
-                            <span className="text-[10px] bg-primary/10 text-primary px-1 rounded">active</span>
+                            <span className="text-xs bg-primary/10 text-primary px-1 rounded">active</span>
                           )}
                         </div>
                         {soul.description && (
@@ -183,7 +216,7 @@ export default function SoulsPage() {
                         {soul.traits && soul.traits.length > 0 && (
                           <div className="flex gap-1 mt-1 flex-wrap">
                             {soul.traits.slice(0, 4).map(trait => (
-                              <span key={trait} className="text-[10px] bg-muted px-1 rounded">{trait}</span>
+                              <span key={trait} className="text-xs bg-muted px-1 rounded">{trait}</span>
                             ))}
                           </div>
                         )}
@@ -201,12 +234,18 @@ export default function SoulsPage() {
           </Card>
         )}
 
+        {tab === 'souls' && (() => {
+          const activeSoul = souls.find(s => s.name === currentSoul)
+          if (!activeSoul?.personality || Object.keys(activeSoul.personality).length === 0) return null
+          return <SoulPersonalityCard personality={activeSoul.personality} traits={activeSoul.traits} soulName={activeSoul.name} />
+        })()}
+
         {tab === 'checkpoints' && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Checkpoints ({checkpoints.length})</CardTitle>
               <Button size="sm" variant="ghost" onClick={handleRefresh}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent>
@@ -220,7 +259,7 @@ export default function SoulsPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{cp.name}</span>
                           {cp.verdict && (
-                            <span className={`text-[10px] px-1 rounded ${
+                            <span className={`text-xs px-1 rounded ${
                               cp.verdict === 'improved' ? 'bg-success/10 text-success' :
                               cp.verdict === 'degraded' ? 'bg-destructive/10 text-destructive' :
                               'bg-muted text-muted-foreground'
@@ -249,7 +288,7 @@ export default function SoulsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Trait Weights</CardTitle>
               <Button size="sm" variant="ghost" onClick={handleLoadWeights}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent>
@@ -261,7 +300,7 @@ export default function SoulsPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {Object.entries(weights).map(([trait, value]) => (
                           <div key={trait} className="rounded-md bg-muted/30 px-3 py-2">
-                            <div className="text-[10px] text-muted-foreground capitalize">{trait.replace(/_/g, ' ')}</div>
+                            <div className="text-xs text-muted-foreground capitalize">{trait.replace(/_/g, ' ')}</div>
                             <div className="text-sm font-mono font-medium">{typeof value === 'number' ? value.toFixed(2) : String(value)}</div>
                           </div>
                         ))}
@@ -281,7 +320,7 @@ export default function SoulsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Weight Snapshots</CardTitle>
               <Button size="sm" variant="ghost" onClick={handleLoadSnapshots}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">

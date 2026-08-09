@@ -96,10 +96,10 @@ class VectorRouter:
         for i, text in enumerate(request.texts):
             embedding = request.embeddings[i] if request.embeddings and i < len(request.embeddings) else simple_embed(text)
             entry = VectorEntry(
-                id=request.ids[i] if request.ids else None,
+                id=request.ids[i] if request.ids and i < len(request.ids) else None,
                 text=text,
                 vector=embedding,
-                metadata=request.metadata[i] if request.metadata else {}
+                metadata=request.metadata[i] if request.metadata and i < len(request.metadata) else {}
             )
             entries.append(entry)
         count = await store.upsert(entries)

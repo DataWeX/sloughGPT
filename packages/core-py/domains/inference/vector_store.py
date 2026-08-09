@@ -107,12 +107,78 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / denom)
 
 
+def _build_matrix(entries: Dict[str, VectorEntry], ids: List[str]) -> np.ndarray:
+    """Stack ``entries[eid].vector`` for every id into one (N, dim) matrix.
+
+    A single ``np.array(list_of_lists)`` builds the 2-D array in one C pass,
+    avoiding per-row ``np.asarray`` overhead.
+    """
+    return np.array([entries[eid].vector for eid in ids], dtype=np.float64)
+
+
+def _matrix_norms(mat: np.ndarray) -> np.ndarray:
+    """Row L2 norms of *mat*; O(N*dim) once, cached alongside the matrix."""
+    return np.linalg.norm(mat, axis=1)
+
+
+def _rank_matrix(
+    mat: np.ndarray,
+    ids: List[str],
+    entries: Dict[str, VectorEntry],
+    q: np.ndarray,
+    top_k: int,
+    norms: Optional[np.ndarray] = None,
+) -> List[QueryResult]:
+    """Score a query against an (N, dim) matrix aligned with *ids*.
+
+    Cosine scores are ``dot(a, b) / (|a||b| + 1e-10)`` computed with a single
+    matrix-vector product. Ties keep *ids* order via stable argsort, mirroring
+    the old ``sorted(..., reverse=True)`` loop.
+
+    Args:
+        mat: (N, dim) float64 matrix; row i aligns with ``ids[i]``
+        ids: entry ids in matrix row order
+        entries: id -> entry mapping (for result payloads)
+        q: query vector (float64 array)
+        top_k: max results to return
+        norms: precomputed row L2 norms of *mat* (from ``_matrix_norms``).
+            When omitted the norm is recomputed here — callers that reuse a
+            matrix across queries should pass it to skip the O(N*dim) pass.
+
+    Returns:
+        top_k QueryResults ordered by descending score
+    """
+    q_norm = np.linalg.norm(q)
+    if norms is None:
+        norms = _matrix_norms(mat)
+    denom = norms * q_norm + 1e-10
+    scores = (mat @ q) / denom
+    order = np.argsort(-scores, kind="stable")
+    out: List[QueryResult] = []
+    for idx in order[:top_k]:
+        i = int(idx)
+        entry = entries[ids[i]]
+        out.append(QueryResult(
+            id=entry.id,
+            score=float(scores[i]),
+            text=entry.text,
+            metadata=dict(entry.metadata),
+        ))
+    return out
+
+
 class InMemoryVectorStore(VectorStore):
     """Simple cosine-similarity store for development and tests."""
 
     def __init__(self, dimension: int = 384):
         self.dimension = dimension
         self._entries: Dict[str, VectorEntry] = {}
+        # Full-matrix cache: (version, ids, mat). _version bumps on every
+        # mutation; a query rebuilds when the cached version is stale, so a
+        # tuple assigned concurrently with an upsert self-heals on next read
+        # (no locks needed — tuple reads are GIL-atomic).
+        self._version = 0
+        self._matrix_cache: Optional[tuple] = None
 
     async def connect(self) -> bool:
         return True
@@ -120,40 +186,59 @@ class InMemoryVectorStore(VectorStore):
     async def disconnect(self) -> None:
         pass
 
+    def _cached_matrix(self) -> tuple:
+        """Return (ids, mat, norms) for all entries, rebuilding when stale.
+
+        Row norms are computed once per rebuild so repeated queries skip the
+        O(N*dim) ``np.linalg.norm`` pass (recomputed only on mutation).
+        """
+        cache = self._matrix_cache
+        if cache is None or cache[0] != self._version:
+            ids = list(self._entries.keys())
+            mat = _build_matrix(self._entries, ids)
+            cache = (self._version, ids, mat, _matrix_norms(mat))
+            self._matrix_cache = cache
+        return cache[1], cache[2], cache[3]
+
     def query_sync(
         self,
         vector: List[float],
         top_k: int = 5,
         filter_metadata: Optional[Dict[str, Any]] = None,
     ) -> List[QueryResult]:
-        """Synchronous query — avoids event-loop deadlock from _run_async."""
+        """Synchronous query — avoids event-loop deadlock from _run_async.
+
+        Unfiltered queries reuse a cached (ids, matrix, norms) so repeated
+        searches skip the per-query Python matrix build and row-norm pass.
+        Filtered queries build on demand. The cache is version-guarded
+        against concurrent upserts.
+        """
         if not self._entries:
             return []
         q = np.asarray(vector, dtype=np.float64)
-        scored: List[tuple[float, VectorEntry]] = []
-        for entry in self._entries.values():
-            if filter_metadata and entry.metadata:
-                if not all(entry.metadata.get(k) == v for k, v in filter_metadata.items()):
-                    continue
-            v = np.asarray(entry.vector, dtype=np.float64)
-            scored.append((_cosine_similarity(q, v), entry))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        out: List[QueryResult] = []
-        for score, entry in scored[:top_k]:
-            out.append(
-                QueryResult(
-                    id=entry.id,
-                    score=score,
-                    text=entry.text,
-                    metadata=dict(entry.metadata),
-                )
-            )
-        return out
+        if filter_metadata:
+            ids = [
+                eid for eid, e in self._entries.items()
+                if e.metadata and all(e.metadata.get(k) == v for k, v in filter_metadata.items())
+            ]
+            if not ids:
+                return []
+            mat = _build_matrix(self._entries, ids)
+            norms = _matrix_norms(mat)
+        else:
+            ids, mat, norms = self._cached_matrix()
+        return _rank_matrix(mat, ids, self._entries, q, top_k, norms=norms)
+
+    def _bump_version(self) -> None:
+        """Invalidate the matrix cache after any mutation."""
+        self._version += 1
+        self._matrix_cache = None
 
     def upsert_sync(self, entries: List[VectorEntry]) -> int:
         """Synchronous upsert — avoids event-loop deadlock from _run_async."""
         for e in entries:
             self._entries[e.id] = e
+        self._bump_version()
         return len(entries)
 
     def count_sync(self) -> int:
@@ -163,6 +248,7 @@ class InMemoryVectorStore(VectorStore):
     async def upsert(self, entries: List[VectorEntry]) -> int:
         for e in entries:
             self._entries[e.id] = e
+        self._bump_version()
         return len(entries)
 
     async def query(
@@ -179,6 +265,8 @@ class InMemoryVectorStore(VectorStore):
             if i in self._entries:
                 del self._entries[i]
                 removed += 1
+        if removed:
+            self._bump_version()
         return removed > 0
 
     async def count(self) -> int:
@@ -206,6 +294,10 @@ class MogDBVectorStore(VectorStore):
         self._entries: Dict[str, VectorEntry] = {}
         self._mogdb: Optional[Any] = None
         self._coll: Optional[Any] = None
+        # Full-matrix cache: (version, ids, mat). Version-guarded against
+        # concurrent mutation (see InMemoryVectorStore).
+        self._version = 0
+        self._matrix_cache: Optional[tuple] = None
 
     async def connect(self) -> bool:
         from mogdb import MogDB
@@ -230,34 +322,47 @@ class MogDBVectorStore(VectorStore):
             self._mogdb = None
             self._coll = None
 
+    def _cached_matrix(self) -> tuple:
+        """Return (ids, mat, norms) for all entries, rebuilding when stale.
+
+        Row norms are computed once per rebuild so repeated queries skip the
+        O(N*dim) ``np.linalg.norm`` pass (recomputed only on mutation).
+        """
+        cache = self._matrix_cache
+        if cache is None or cache[0] != self._version:
+            ids = list(self._entries.keys())
+            mat = _build_matrix(self._entries, ids)
+            cache = (self._version, ids, mat, _matrix_norms(mat))
+            self._matrix_cache = cache
+        return cache[1], cache[2], cache[3]
+
+    def _bump_version(self) -> None:
+        """Invalidate the matrix cache after any mutation."""
+        self._version += 1
+        self._matrix_cache = None
+
     def query_sync(
         self,
         vector: List[float],
         top_k: int = 5,
         filter_metadata: Optional[Dict[str, Any]] = None,
     ) -> List[QueryResult]:
+        """Synchronous query over in-memory entries (cached matrix)."""
         if not self._entries:
             return []
         q = np.asarray(vector, dtype=np.float64)
-        scored: List[tuple[float, VectorEntry]] = []
-        for entry in self._entries.values():
-            if filter_metadata and entry.metadata:
-                if not all(entry.metadata.get(k) == v for k, v in filter_metadata.items()):
-                    continue
-            v = np.asarray(entry.vector, dtype=np.float64)
-            scored.append((_cosine_similarity(q, v), entry))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        out: List[QueryResult] = []
-        for score, entry in scored[:top_k]:
-            out.append(
-                QueryResult(
-                    id=entry.id,
-                    score=score,
-                    text=entry.text,
-                    metadata=dict(entry.metadata),
-                )
-            )
-        return out
+        if filter_metadata:
+            ids = [
+                eid for eid, e in self._entries.items()
+                if e.metadata and all(e.metadata.get(k) == v for k, v in filter_metadata.items())
+            ]
+            if not ids:
+                return []
+            mat = _build_matrix(self._entries, ids)
+            norms = _matrix_norms(mat)
+        else:
+            ids, mat, norms = self._cached_matrix()
+        return _rank_matrix(mat, ids, self._entries, q, top_k, norms=norms)
 
     def upsert_sync(self, entries: List[VectorEntry]) -> int:
         if not self._coll:
@@ -277,6 +382,7 @@ class MogDBVectorStore(VectorStore):
                     "text": e.text,
                     "metadata": e.metadata,
                 })
+        self._bump_version()
         return len(entries)
 
     def count_sync(self) -> int:
@@ -301,6 +407,8 @@ class MogDBVectorStore(VectorStore):
                 removed += 1
             if self._coll:
                 self._coll.delete_one({"_id": i})
+        if removed:
+            self._bump_version()
         return removed > 0
 
     async def count(self) -> int:

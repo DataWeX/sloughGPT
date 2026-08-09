@@ -77,11 +77,11 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[Message]
     model: str = "gpt2"
-    temperature: float = Field(default=0.8, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=64, ge=1, le=2048)
-    top_p: float = Field(default=0.9, ge=0.0, le=1.0)
-    top_k: int = Field(default=50, ge=0, le=500)
-    repetition_penalty: float = Field(default=1.2, ge=0.5, le=2.0)
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=128, ge=1, le=2048)
+    top_p: float = Field(default=0.85, ge=0.0, le=1.0)
+    top_k: int = Field(default=40, ge=0, le=500)
+    repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
     session_id: Optional[str] = None
     user_id: Optional[str] = None
     system_prompt: Optional[str] = None
@@ -110,10 +110,10 @@ class ContextInspectorResponse(BaseModel):
 class GenerateRequest(BaseModel):
     prompt: str
     max_new_tokens: int = Field(default=256, ge=1, le=2048)
-    temperature: float = Field(default=0.8, ge=0.0, le=2.0)
-    top_p: float = Field(default=0.9, ge=0.0, le=1.0)
-    top_k: int = Field(default=50, ge=0, le=500)
-    repetition_penalty: float = Field(default=1.2, ge=0.5, le=2.0)
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    top_p: float = Field(default=0.85, ge=0.0, le=1.0)
+    top_k: int = Field(default=40, ge=0, le=500)
+    repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
     model: str = "gpt2"
 
 
@@ -458,6 +458,10 @@ class InferenceRouter:
             start = datetime.datetime.now()
             token_count = 0
             collected = []
+            _token_gen_start = time.time()
+            _max_token_wait_s = 120.0
+            _heartbeat_interval_s = 10.0
+            _last_heartbeat = time.time()
             try:
                 async for token in provider.chat_stream(
                     provider_messages,
@@ -471,9 +475,20 @@ class InferenceRouter:
                         logger.info("Client disconnected from generate stream", extra={"tag": "INF"})
                         return
                     if token:
+                        _token_gen_start = time.time()
                         token_count += 1
                         collected.append(token)
                         yield sse_token("generate", token)
+                    else:
+                        now = time.time()
+                        if now - _last_heartbeat >= _heartbeat_interval_s:
+                            yield ": heartbeat\n\n"
+                            _last_heartbeat = now
+                    elapsed_since_token = time.time() - _token_gen_start
+                    if elapsed_since_token > _max_token_wait_s:
+                        logger.warning("Generate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
+                        yield sse_error("generate", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                        return
             except Exception as e:
                 from domains.infrastructure.errors import classify_exception, emit_error_event
                 err = classify_exception(e)
@@ -790,8 +805,10 @@ class InferenceRouter:
                 if provider is not None:
                     full_response_parts: list[str] = []
                     logger.debug("chat_stream: about to call provider.chat_stream()")
-                    _token_gen_start = datetime.datetime.now()
-                    _max_token_wait_s = 30.0
+                    _token_gen_start = time.time()
+                    _max_token_wait_s = 120.0
+                    _heartbeat_interval_s = 10.0
+                    _last_heartbeat = time.time()
                     try:
                         try:
                             async for token in provider.chat_stream(
@@ -804,16 +821,20 @@ class InferenceRouter:
                                 cancel_event=cancel_event,
                                 session_id=session_id,
                             ):
-                                _token_gen_start = datetime.datetime.now()
                                 if await request.is_disconnected():
                                     cancel_event.set()
                                     logger.info("Client disconnected from chat stream (request)", extra={"tag": "INF", "context": {"session_id": session_id}})
                                     return
                                 if token:
+                                    _token_gen_start = time.time()
                                     full_response_parts.append(token)
                                     yield sse_token("chat", token)
-                                    _token_gen_start = datetime.datetime.now()
-                                elapsed_since_token = (datetime.datetime.now() - _token_gen_start).total_seconds()
+                                else:
+                                    now = time.time()
+                                    if now - _last_heartbeat >= _heartbeat_interval_s:
+                                        yield ": heartbeat\n\n"
+                                        _last_heartbeat = now
+                                elapsed_since_token = time.time() - _token_gen_start
                                 if elapsed_since_token > _max_token_wait_s:
                                     logger.warning("Token generation stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
                                     cancel_event.set()

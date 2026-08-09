@@ -28,6 +28,7 @@ class MetaWeightsRouter:
         self._register_routes()
 
     def _register_routes(self):
+        self.router.add_api_route("/ping", self.ping, methods=["GET"])
         self.router.add_api_route("/get", self.get_meta_weights, methods=["POST"], response_model=MetaWeightResponse)
         self.router.add_api_route("/stats", self.get_meta_weight_stats, methods=["GET"])
 
@@ -55,6 +56,18 @@ class MetaWeightsRouter:
         if manager is None:
             raise HTTPException(status_code=503, detail="Meta-weight system not available")
         return success_response(data=manager.get_stats())
+
+    async def ping(self):
+        """
+        Health probe for the meta-weights system.
+
+        Returns:
+            dict: ``{"status": "ok"}``
+
+        Side effects:
+            - none
+        """
+        return success_response(data={"status": "ok"})
 
 
 router = MetaWeightsRouter().router

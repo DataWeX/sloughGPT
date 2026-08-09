@@ -141,6 +141,10 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class DatasetExportRequest(BaseModel):
+    format: str = Field(default="jsonl", pattern="^(jsonl|csv)$")
+
+
 class FromChatRequest(BaseModel):
     """Request body for POST /datasets/from-chat."""
     messages: List[ChatMessage]

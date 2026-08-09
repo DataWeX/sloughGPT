@@ -5,6 +5,7 @@ Delegates to message_feedback in main.py for storage (in-process singleton).
 import asyncio
 import json
 import logging
+import time
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -208,6 +209,10 @@ class SessionRouter:
                                       data={}, message="Regenerating...")
 
                 full_response = ""
+                _token_gen_start = time.time()
+                _max_token_wait_s = 120.0
+                _heartbeat_interval_s = 10.0
+                _last_heartbeat = time.time()
                 try:
                     async for token in provider.chat_stream(
                         msgs,
@@ -219,8 +224,19 @@ class SessionRouter:
                             logger.info("Client disconnected from regenerate stream (request)", extra={"tag": "REQ", "context": {"session_id": session_id}})
                             return
                         if token:
+                            _token_gen_start = time.time()
                             full_response += token
                             yield self._sse_token("chat", token)
+                        else:
+                            now = time.time()
+                            if now - _last_heartbeat >= _heartbeat_interval_s:
+                                yield ": heartbeat\n\n"
+                                _last_heartbeat = now
+                        elapsed_since_token = time.time() - _token_gen_start
+                        if elapsed_since_token > _max_token_wait_s:
+                            logger.warning("Regenerate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "REQ"})
+                            yield self._sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                            return
                     yield self._sse_token("chat", "", done=True)
                 except GeneratorExit:
                     return

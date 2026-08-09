@@ -27,8 +27,10 @@ vi.mock('@/lib/knowledge-controller', () => ({
   },
 }))
 
+const mockAddToast = vi.fn()
+
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: vi.fn() }),
+  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: mockAddToast }),
 }))
 
 vi.mock('@/lib/download-utils', () => ({

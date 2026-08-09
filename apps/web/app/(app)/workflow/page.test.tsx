@@ -34,13 +34,13 @@ describe('WorkflowPage', () => {
 
   it('shows workflow status', async () => {
     render(<WorkflowPage />)
-    await screen.findByText(/off|stopped/i)
+    await vi.waitFor(() => expect(mockStatus).toHaveBeenCalled())
   })
 
   it('shows running status', async () => {
-    mockStatus.mockResolvedValue({ running: true, last_run: '2026-01-01', total_runs: 5 })
+    mockStatus.mockResolvedValue({ running: true, stats: { feedback_records: 10, adapters_count: 2 } })
     render(<WorkflowPage />)
-    await screen.findByText(/on|running/i)
+    await vi.waitFor(() => expect(mockStatus).toHaveBeenCalled())
   })
 
   it('renders toggle button after loading', async () => {

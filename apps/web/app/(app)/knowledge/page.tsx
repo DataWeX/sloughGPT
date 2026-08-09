@@ -15,6 +15,7 @@ import { Chip } from '@sloughgpt/strui'
 import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount } from '@/lib/knowledge-controller'
+import { KnowledgeCategoryChart } from '@/components/knowledge/KnowledgeCategoryChart'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, MS_PER_SECOND } from '@/lib/format-bytes'
 
@@ -297,6 +298,13 @@ export default function KnowledgePage() {
     addToast(`Exported ${items.length} items`, 'success')
   }
 
+  const handleExportSelected = () => {
+    const selected = items.filter(i => selectedIds.has(i.id))
+    const data = selected.map(i => ({ content: i.content, topic: i.topic, source: i.source, importance: i.importance }))
+    downloadJson(data, `knowledge-export-selected-${todayDateString()}.json`)
+    addToast(`Exported ${selected.length} selected items`, 'success')
+  }
+
   const handleExportCSV = () => {
     const headers = ['content', 'topic', 'source', 'importance']
     const rows = items.map(i => [
@@ -436,67 +444,69 @@ export default function KnowledgePage() {
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
-              <CardContent className="p-3">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Facts</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Facts</p>
                   {items.length > 0 && (
-                    <button onClick={handleExport} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export knowledge">
+                    <button onClick={handleExport} className="text-xs text-muted-foreground hover:text-primary transition-colors" aria-label="Export knowledge">
                       Export
                     </button>
                   )}
                 </div>
-                <p className="text-lg font-semibold mt-1">{stats.total_items}</p>
+                <p className="text-xl font-semibold mt-1">{stats.total_items}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-3">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Topics</p>
-                <p className="text-lg font-semibold mt-1">{stats.topic_count}</p>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Topics</p>
+                <p className="text-xl font-semibold mt-1">{stats.topic_count}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-3">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Avg Importance</p>
-                <p className="text-lg font-semibold mt-1">{stats.avg_importance.toFixed(1)}</p>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Avg Importance</p>
+                <p className="text-xl font-semibold mt-1">{stats.avg_importance.toFixed(1)}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-3">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Searchable</p>
-                <p className="text-lg font-semibold mt-1">{stats.searchable ? 'Yes' : 'No'}</p>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Searchable</p>
+                <p className="text-xl font-semibold mt-1">{stats.searchable ? 'Yes' : 'No'}</p>
               </CardContent>
             </Card>
           </div>
         )}
 
+        {items.length > 0 && <KnowledgeCategoryChart items={items} stats={stats} />}
+
         {adapterStatus && (
           <Card>
-            <CardContent className="p-3">
+            <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Knowledge Adapter</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Knowledge Adapter</p>
                   {adapterStatus.adapter_exists ? (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">Trained</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">Trained</span>
                   ) : (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Not trained</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Not trained</span>
                   )}
                 </div>
                 <Button
                   size="sm"
                   variant={adapterStatus.adapter_exists ? 'outline' : 'default'}
-                  className="h-6 text-[10px] px-2"
+                  className="h-7 text-xs px-2.5"
                   onClick={handleTrainAdapter}
                   disabled={adapterTraining || items.length === 0}
                 >
                   {adapterTraining ? (
                     <span className="flex items-center gap-1">
-                      <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent" />
+                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                       Training…
                     </span>
                   ) : adapterStatus.adapter_exists ? 'Retrain' : 'Train Adapter'}
                 </Button>
               </div>
-              <div className="flex gap-3 mt-1.5 text-[10px] text-muted-foreground">
+              <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
                 <span>{adapterStatus.fact_count} facts in adapter</span>
                 {adapterStatus.trained_at && (
                   <span>Trained {new Date(adapterStatus.trained_at * MS_PER_SECOND).toLocaleDateString()}</span>
@@ -567,18 +577,18 @@ export default function KnowledgePage() {
 
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
             <Input
               placeholder="Search knowledge..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="h-8 text-xs pl-8"
+              className="h-9 text-sm pl-9"
             />
           </div>
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as typeof sortBy)}
-            className="h-8 text-xs rounded-md border border-border/60 bg-background px-2 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            className="h-9 text-sm rounded-md border border-border/60 bg-background px-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
             aria-label="Sort by"
           >
             <option value="date">Newest</option>
@@ -591,9 +601,17 @@ export default function KnowledgePage() {
                 size="sm"
                 variant="outline"
                 className="h-8 text-xs"
+                onClick={handleExportSelected}
+              >
+                Export ({selectedIds.size})
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
                 onClick={() => setShowBulkTopic(true)}
               >
-                <svg className="h-3 w-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+                <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
                 Move to topic ({selectedIds.size})
               </Button>
               <Button
@@ -625,7 +643,7 @@ export default function KnowledgePage() {
         ) : (
           <>
             {displayItems.length > 1 && (
-              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"
                   checked={selectedIds.size === displayItems.length && displayItems.length > 0}
@@ -635,11 +653,11 @@ export default function KnowledgePage() {
                 Select all ({displayItems.length})
               </label>
             )}
-            <div className="space-y-1.5 max-h-[60vh] overflow-y-auto overscroll-contain">
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto overscroll-contain">
               {displayItems.map(item => (
                 <div
                   key={item.id}
-                  className={`group relative p-3 rounded-lg border text-xs leading-relaxed transition-colors ${
+                  className={`group relative p-4 rounded-lg border text-sm leading-relaxed transition-colors ${
                     selectedIds.has(item.id)
                       ? 'bg-primary/[0.06] border-primary/30'
                       : editingId === item.id
@@ -697,12 +715,12 @@ export default function KnowledgePage() {
                           </p>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                             {item.topic && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
                                 {item.topic}
                               </span>
                             )}
                             {item.source && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground">
                                 {item.source}
                               </span>
                             )}
@@ -728,12 +746,12 @@ export default function KnowledgePage() {
                             ) : (
                               <button
                                 onClick={() => { setEditingImportanceId(item.id); setImportanceValue(item.importance) }}
-                                className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                                className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
                               >
                                 importance: {item.importance.toFixed(1)}
                               </button>
                             )}
-                            <span className="text-[9px] text-muted-foreground/50">
+                            <span className="text-[10px] text-muted-foreground/50">
                               {new Date(item.timestamp * MS_PER_SECOND).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </span>
                           </div>
@@ -741,20 +759,20 @@ export default function KnowledgePage() {
                       )}
                     </div>
                     {editingId !== item.id && (
-                      <div className="flex items-center gap-0.5 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => { setEditingId(item.id); setEditContent(item.content); setEditTopic(item.topic || '') }}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary p-0.5 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary p-1 transition-opacity"
                           aria-label="Edit knowledge"
                         >
-                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                         </button>
                         <button
                           onClick={() => setPendingDelete(item)}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-0.5 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1 transition-opacity"
                           aria-label="Delete knowledge"
                         >
-                          <IconTrash className="h-3.5 w-3.5" />
+                          <IconTrash className="h-4 w-4" />
                         </button>
                       </div>
                     )}

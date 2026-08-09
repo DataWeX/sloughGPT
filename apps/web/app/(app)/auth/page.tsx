@@ -1,18 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
+import { authController, type UserInfo } from '@/lib/auth-controller'
 
 type Mode = 'login' | 'register'
-
-interface UserInfo {
-  id: string
-  username: string
-  email: string
-}
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>('login')
@@ -29,10 +24,7 @@ export default function AuthPage() {
     const saved = localStorage.getItem('auth_token')
     if (saved) {
       setToken(saved)
-      fetch(`${PUBLIC_API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${saved}` },
-      })
-        .then(r => r.ok ? r.json() : Promise.reject())
+      authController.getMe(saved)
         .then(d => setCurrentUser(d))
         .catch(() => { localStorage.removeItem('auth_token'); setToken(null) })
         .finally(() => setChecking(false))
@@ -46,20 +38,9 @@ export default function AuthPage() {
     setLoading(true)
     setError(null)
     try {
-      const endpoint = mode === 'login' ? '/auth/login' : '/auth/register'
-      const body = mode === 'login'
-        ? { username, password }
-        : { username, email, password }
-      const res = await fetch(`${PUBLIC_API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.detail ?? 'Authentication failed')
-        return
-      }
+      const data = mode === 'login'
+        ? await authController.login(username, password)
+        : await authController.register(username, email, password)
       setToken(data.token)
       setCurrentUser(data.user)
       localStorage.setItem('auth_token', data.token)
@@ -81,7 +62,13 @@ export default function AuthPage() {
       <div className="sl-page mx-auto max-w-4xl">
         <AppRouteHeader left={<AppRouteHeaderLead title="Auth" subtitle="Authentication" />} />
         <div className="space-y-4">
+          <KpiGrid>
+            <StatCard label="Loading" value="..." />
+            <StatCard label="Loading" value="..." />
+            <StatCard label="Loading" value="..." />
+          </KpiGrid>
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+          <Card><CardContent><div className="h-24 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>
       </div>
     )
@@ -91,29 +78,38 @@ export default function AuthPage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Auth" subtitle={currentUser ? `Logged in as ${currentUser.username}` : 'Authentication'} />} />
       <div className="space-y-4">
+        <KpiGrid>
+          <StatCard label="Status" value={currentUser ? 'Logged In' : 'Guest'} />
+          <StatCard label="User" value={currentUser?.username ?? '—'} />
+          <StatCard label="Token" value={token ? 'Active' : 'None'} />
+        </KpiGrid>
+
         {currentUser ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Current User</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Username</div>
-                  <div className="text-sm font-mono font-medium">{currentUser.username}</div>
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Current User</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground">Username</div>
+                    <div className="text-sm font-mono font-medium">{currentUser.username}</div>
+                  </div>
+                  <div className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground">Email</div>
+                    <div className="text-sm font-mono font-medium">{currentUser.email}</div>
+                  </div>
+                  <div className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground">User ID</div>
+                    <div className="text-sm font-mono font-medium truncate">{currentUser.id}</div>
+                  </div>
                 </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Email</div>
-                  <div className="text-sm font-mono font-medium">{currentUser.email}</div>
-                </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">User ID</div>
-                  <div className="text-sm font-mono font-medium truncate">{currentUser.id}</div>
-                </div>
-              </div>
-              <Button size="sm" variant="outline" onClick={handleLogout}>Logout</Button>
-            </CardContent>
-          </Card>
+                <Button size="sm" variant="outline" onClick={handleLogout}>Logout</Button>
+              </CardContent>
+            </Card>
+            <AuthSessionInfoCard token={token} user={currentUser} onLogout={handleLogout} />
+          </>
         ) : (
           <Card>
             <CardHeader>
@@ -177,11 +173,7 @@ export default function AuthPage() {
                   variant="ghost"
                   onClick={async () => {
                     try {
-                      const res = await fetch(`${PUBLIC_API_URL}/auth/verify`, {
-                        method: 'POST',
-                        headers: { Authorization: `Bearer ${token}` },
-                      })
-                      const data = await res.json()
+                      const data = await authController.verify(token!)
                       alert(data?.data?.valid ? 'Token valid' : 'Token invalid')
                     } catch { alert('Verification failed') }
                   }}

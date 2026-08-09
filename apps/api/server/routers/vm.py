@@ -57,6 +57,19 @@ class VMRunResponse(BaseModel):
     vga_cells: Optional[list[dict]] = None
     keyboard_buffer: Optional[str] = None
     memory_dump: Optional[str] = None
+    training_job_id: Optional[int] = None
+    training_result: Optional[str] = None
+
+
+class VMTrainingJobResponse(BaseModel):
+    """Status of a training job launched from a VM syscall."""
+
+    job_id: int
+    api_job_id: str
+    status: str
+    progress: float
+    error: Optional[str] = None
+    result: Optional[str] = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -119,13 +132,41 @@ async def run_assembly(req: VMRunRequest):
                 return count
             return original_write(fd, buf_addr, count)
 
+        launched_job_id: Optional[int] = None
+        original_train_start = vs._syscall._sys_train_start
+
+        def _captured_train_start(config_addr):
+            job_id = original_train_start(config_addr)
+            nonlocal launched_job_id
+            if job_id is not None and job_id >= 1:
+                launched_job_id = job_id
+            return job_id
+
+        training_result: Optional[str] = None
+        original_train_get_result = vs._syscall._sys_train_get_result
+
+        def _captured_train_get_result(job_id, buf_addr, buf_size):
+            nonlocal training_result
+            written = original_train_get_result(job_id, buf_addr, buf_size)
+            if written and written > 0:
+                try:
+                    data = bytes(vs.cpu._read8(buf_addr + i) for i in range(written))
+                    training_result = data.decode("utf-8", errors="replace")
+                except Exception:
+                    training_result = None
+            return written
+
         vs._syscall._sys_write = _captured_write
+        vs._syscall._sys_train_start = _captured_train_start
+        vs._syscall._sys_train_get_result = _captured_train_get_result
         vs.cpu._trace_enabled = req.debug
         vs.cpu._trace.clear()
         try:
             vs.cpu.run(max_steps=req.max_steps)
         finally:
             vs._syscall._sys_write = original_write
+            vs._syscall._sys_train_start = original_train_start
+            vs._syscall._sys_train_get_result = original_train_get_result
 
         exit_code = vs.cpu._regs[0] & 0xFFFFFFFF
         elapsed = (time.monotonic() - t0) * 1000
@@ -219,6 +260,8 @@ async def run_assembly(req: VMRunRequest):
             vga_cells=vga_cells,
             keyboard_buffer=kbd_state,
             memory_dump=mem_dump,
+            training_job_id=launched_job_id,
+            training_result=training_result,
         )
 
     except Exception as e:
@@ -230,6 +273,57 @@ async def run_assembly(req: VMRunRequest):
             registers=[], eip=0, eip_hex="0x0", status="error",
             error=str(e),
         )
+
+
+@router.get("/training/jobs/{job_id}", response_model=VMTrainingJobResponse)
+async def training_job_status(job_id: int):
+    """Return the status of a training job launched via VM syscall.
+
+    Delegates to the VM training bridge, which proxies ``GET /training/jobs/{id}``.
+    Returns 404 when the bridge has no record of the job.
+    """
+    try:
+        from domains.shell.vm_training_bridge import get_bridge
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=f"VM training bridge unavailable: {e}")
+
+    bridge = get_bridge()
+    status = bridge.status(job_id)
+    if status["status"] == "not_found":
+        raise HTTPException(status_code=404, detail="Training job not found")
+
+    info = bridge.job_info(job_id) or {}
+    result = None
+    if status["status"] == "completed":
+        result = bridge.get_result_json(job_id)
+    return VMTrainingJobResponse(
+        job_id=job_id,
+        api_job_id=str(info.get("api_job_id", "")),
+        status=status["status"],
+        progress=status["progress"],
+        error=status["error"],
+        result=result,
+    )
+
+
+@router.post("/training/jobs/{job_id}/stop")
+async def training_job_stop(job_id: int):
+    """Request a stop for a running training job launched via VM syscall.
+
+    Delegates to the VM training bridge, which proxies
+    ``POST /training/jobs/{api_job_id}/stop``.  Returns 404 when the bridge
+    has no record of the job or the stop call failed.
+    """
+    try:
+        from domains.shell.vm_training_bridge import get_bridge
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=f"VM training bridge unavailable: {e}")
+
+    bridge = get_bridge()
+    ok = bridge.stop(job_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Training job not found or not stoppable")
+    return {"status": "stopping", "job_id": job_id}
 
 
 @router.get("/builtins")
@@ -247,6 +341,8 @@ async def list_builtins():
             {"name": "factorial", "description": "Compute 6! = 720, display on VGA"},
             {"name": "guess", "description": "Number guessing game (keyboard input)"},
             {"name": "rainbow", "description": "Rainbow colored 'HELLO VM!' text"},
+            {"name": "train", "description": "Launch a training job via SYS_TRAIN_START (requires ADMIN role)"},
+            {"name": "train-status", "description": "Poll a training job via SYS_TRAIN_STATUS / SYS_TRAIN_GET_RESULT (requires ADMIN role)"},
         ]
     }
 

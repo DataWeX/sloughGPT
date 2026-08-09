@@ -5,9 +5,10 @@ import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/str
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { userAdaptersController, type UserAdapterInfo, type UserAdapterStats } from '@/lib/user-adapters-controller'
+import { loraEvalController, type LoraEvalResult } from '@/lib/lora-eval-controller'
+import { AdapterHealthCard } from '@/components/adapters/AdapterHealthCard'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useToastStore } from '@/lib/toast-store'
-import { PUBLIC_API_URL } from '@/lib/config'
 
 export default function AdaptersPage() {
   const [stats, setStats] = useState<UserAdapterStats | null>(null)
@@ -19,7 +20,7 @@ export default function AdaptersPage() {
   const [aggregating, setAggregating] = useState(false)
   const [aggregateResult, setAggregateResult] = useState<string | null>(null)
   const [pruning, setPruning] = useState(false)
-  const [evalHistory, setEvalHistory] = useState<Record<string, unknown>[]>([])
+  const [evalHistory, setEvalHistory] = useState<LoraEvalResult[]>([])
   const [runningEval, setRunningEval] = useState(false)
 
   const fetchData = async () => {
@@ -34,9 +35,8 @@ export default function AdaptersPage() {
       setQuality(qualityRes)
       setAdapters(qualityRes.adapters ?? [])
       try {
-        const evalRes = await fetch(`${PUBLIC_API_URL}/lora-eval/history?limit=10`)
-        const evalData = await evalRes.json()
-        setEvalHistory(evalData?.data?.results ?? [])
+        const evalResults = await loraEvalController.getHistory(10)
+        setEvalHistory(evalResults)
       } catch { /* optional */ }
     } catch (e) {
       setError(extractErrorMessage(e, 'Failed to load adapters'))
@@ -112,10 +112,9 @@ export default function AdaptersPage() {
   const handleRunEval = async () => {
     setRunningEval(true)
     try {
-      await fetch(`${PUBLIC_API_URL}/lora-eval/run?adapter_path=data/user_adapters/best_aggregated.npz`, { method: 'GET' })
-      const evalRes = await fetch(`${PUBLIC_API_URL}/lora-eval/history?limit=10`)
-      const evalData = await evalRes.json()
-      setEvalHistory(evalData?.data?.results ?? [])
+      await loraEvalController.runEval('data/user_adapters/best_aggregated.npz')
+      const evalResults = await loraEvalController.getHistory(10)
+      setEvalHistory(evalResults)
       addToast('Evaluation complete', 'success')
     } catch {
       addToast('Eval failed', 'error')
@@ -185,11 +184,13 @@ export default function AdaptersPage() {
           </Card>
         )}
 
+        <AdapterHealthCard adapters={adapters} />
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Actions</CardTitle>
             <Button size="sm" variant="ghost" onClick={fetchData}>
-              <IconRefresh className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           </CardHeader>
           <CardContent>
@@ -233,7 +234,7 @@ export default function AdaptersPage() {
                       className="text-destructive"
                       onClick={() => handleReset(a.user_id)}
                     >
-                      <IconTrash className="h-3.5 w-3.5" />
+                      <IconTrash className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
@@ -255,7 +256,7 @@ export default function AdaptersPage() {
                 {evalHistory.map((r, i) => (
                   <div key={i} className="flex items-center gap-3 rounded-md bg-muted/20 p-2 text-xs">
                     <span className="font-medium">{String(r.adapter_path ?? '—')}</span>
-                    <span className="text-muted-foreground">{String(r.status ?? '—')}</span>
+                    <span className="text-muted-foreground">{String(r.verdict ?? '—')}</span>
                   </div>
                 ))}
               </div>

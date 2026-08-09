@@ -69,6 +69,11 @@ class TestListModels:
         resp = client.post("/registry/models")
         assert resp.status_code == 405
 
+    def test_put_and_delete_models_405(self, client):
+        assert client.put("/registry/models").status_code == 405
+        assert client.delete("/registry/models").status_code == 405
+        assert client.patch("/registry/models/gpt2").status_code == 405
+
     def test_registry_error_returns_500(self, client):
         with patch("domains.infrastructure.model_registry.get_model_registry", side_effect=RuntimeError("broken")):
             resp = client.get("/registry/models")
@@ -170,6 +175,10 @@ class TestBestModel:
         resp = client.post("/registry/best")
         assert resp.status_code == 405
 
+    def test_put_and_delete_best_405(self, client):
+        assert client.put("/registry/best").status_code == 405
+        assert client.delete("/registry/best").status_code == 405
+
     def test_best_error_returns_500(self, client):
         with patch("domains.infrastructure.model_registry.get_model_registry", side_effect=RuntimeError("broken")):
             resp = client.get("/registry/best")
@@ -214,6 +223,10 @@ class TestRegistryStats:
     def test_wrong_method_returns_405(self, client):
         resp = client.put("/registry/stats")
         assert resp.status_code == 405
+
+    def test_post_and_delete_stats_405(self, client):
+        assert client.post("/registry/stats").status_code == 405
+        assert client.delete("/registry/stats").status_code == 405
 
     def test_stats_error_returns_500(self, client):
         with patch("domains.infrastructure.model_registry.get_model_registry", side_effect=RuntimeError("broken")):

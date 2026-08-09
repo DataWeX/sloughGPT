@@ -7,8 +7,7 @@
  *   for await (const line of systemController.streamOutput()) { ... }
  */
 
-import { apiGet } from './http-client'
-import { PUBLIC_API_URL } from './config'
+import { apiGet, streamSSE } from './http-client'
 
 export interface SystemMetrics {
   cpu_percent: number
@@ -174,25 +173,12 @@ export const systemController = {
   },
 
   async *streamOutput(tail: number = 50): AsyncGenerator<OutputLine> {
-    const res = await fetch(`${PUBLIC_API_URL}/system/stream?tail=${tail}`)
-    if (!res.ok) throw new Error(`Stream failed: ${res.status}`)
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('Stream not available')
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const events = buffer.split('\n\n')
-      buffer = events.pop()!
-      for (const evt of events) {
-        const line = evt.replace(/^data: /, '').trim()
-        if (!line) continue
-        try {
-          yield JSON.parse(line)
-        } catch { /* malformed SSE event — skip */ }
+    try {
+      for await (const event of streamSSE(`/system/stream?tail=${tail}`, { method: 'GET' })) {
+        yield event as unknown as OutputLine
       }
+    } catch (err) {
+      throw new Error(`Stream failed: ${err instanceof Error ? err.message : 'unknown'}`)
     }
   },
 

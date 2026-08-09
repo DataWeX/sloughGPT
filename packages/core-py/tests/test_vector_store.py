@@ -231,6 +231,219 @@ def test_cosine_similarity_opposite():
     assert abs(_cosine_similarity(a, b) - (-1.0)) < 1e-9
 
 
+def _brute_force_query(entries, vector, top_k, filter_metadata=None):
+    """Reference implementation matching the pre-vectorization loop."""
+    q = np.asarray(vector, dtype=np.float64)
+    scored = []
+    for entry in entries.values():
+        if filter_metadata and entry.metadata:
+            if not all(entry.metadata.get(k) == v for k, v in filter_metadata.items()):
+                continue
+        scored.append((_cosine_similarity(q, np.asarray(entry.vector, dtype=np.float64)), entry))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [(s, e.id, e.text) for s, e in scored[:top_k]]
+
+
+class TestQuerySyncVectorized:
+    """Vectorized query_sync must match the brute-force loop exactly."""
+
+    def test_matches_brute_force_random_store(self):
+        rng = np.random.default_rng(42)
+        store = InMemoryVectorStore(dimension=8)
+        entries = []
+        for i in range(200):
+            vec = rng.normal(size=8).tolist()
+            entries.append(VectorEntry(id=f"e{i}", vector=vec, text=f"fact {i}",
+                                       metadata={"topic": "a" if i % 2 else "b"}))
+        store.upsert_sync(entries)
+        q = rng.normal(size=8).tolist()
+        for top_k in (1, 5, 50):
+            got = store.query_sync(q, top_k=top_k)
+            want = _brute_force_query(store._entries, q, top_k)
+            assert [(r.id, r.text) for r in got] == [(eid, txt) for _, eid, txt in want]
+            assert [r.score for r in got] == pytest.approx([s for s, _, _ in want], rel=1e-12)
+
+    def test_matches_brute_force_with_filter(self):
+        rng = np.random.default_rng(7)
+        store = InMemoryVectorStore(dimension=8)
+        store.upsert_sync([
+            VectorEntry(id=f"e{i}", vector=rng.normal(size=8).tolist(), text=f"fact {i}",
+                        metadata={"topic": "a" if i % 3 == 0 else "b"})
+            for i in range(60)
+        ])
+        q = rng.normal(size=8).tolist()
+        got = store.query_sync(q, top_k=10, filter_metadata={"topic": "a"})
+        want = _brute_force_query(store._entries, q, 10, {"topic": "a"})
+        assert [r.id for r in got] == [eid for _, eid, _ in want]
+        assert [r.score for r in got] == pytest.approx([s for s, _, _ in want], rel=1e-12)
+
+    def test_ties_keep_insertion_order(self):
+        vec = [0.5, 0.5, 0.0]
+        store = InMemoryVectorStore(dimension=3)
+        store.upsert_sync([
+            VectorEntry(id="first", vector=vec, text="a"),
+            VectorEntry(id="second", vector=vec, text="b"),
+            VectorEntry(id="third", vector=vec, text="c"),
+        ])
+        got = store.query_sync([0.5, 0.5, 0.0], top_k=3)
+        assert [r.id for r in got] == ["first", "second", "third"]
+        assert all(abs(r.score - 1.0) < 1e-9 for r in got)
+
+    def test_zero_query_vector_scores_zero(self):
+        store = InMemoryVectorStore(dimension=3)
+        store.upsert_sync([
+            VectorEntry(id="e1", vector=[1.0, 0.0, 0.0], text="x"),
+            VectorEntry(id="e2", vector=[0.0, 1.0, 0.0], text="y"),
+        ])
+        got = store.query_sync([0.0, 0.0, 0.0], top_k=2)
+        assert len(got) == 2
+        assert all(r.score == 0.0 for r in got)
+
+    def test_filter_skips_entries_without_metadata(self):
+        store = InMemoryVectorStore(dimension=3)
+        store.upsert_sync([
+            VectorEntry(id="with-meta", vector=[1.0, 0.0, 0.0], text="x", metadata={"topic": "a"}),
+            VectorEntry(id="no-meta", vector=[0.0, 1.0, 0.0], text="y"),
+        ])
+        got = store.query_sync([1.0, 0.0, 0.0], top_k=5, filter_metadata={"topic": "a"})
+        assert [r.id for r in got] == ["with-meta"]
+
+    def test_filter_no_match_returns_empty(self):
+        store = InMemoryVectorStore(dimension=3)
+        store.upsert_sync([VectorEntry(id="e1", vector=[1.0, 0.0, 0.0], text="x", metadata={"topic": "a"})])
+        assert store.query_sync([1.0, 0.0, 0.0], top_k=5, filter_metadata={"topic": "z"}) == []
+        assert store.query_sync([1.0, 0.0, 0.0], top_k=5) != []
+
+    def test_cached_query_matches_brute_force(self):
+        rng = np.random.default_rng(11)
+        store = InMemoryVectorStore(dimension=8)
+        store.upsert_sync([
+            VectorEntry(id=f"e{i}", vector=rng.normal(size=8).tolist(), text=f"fact {i}")
+            for i in range(80)
+        ])
+        q = rng.normal(size=8).tolist()
+        first = store.query_sync(q, top_k=7)
+        second = store.query_sync(q, top_k=7)
+        want = _brute_force_query(store._entries, q, 7)
+        assert [r.id for r in first] == [eid for _, eid, _ in want]
+        assert [r.id for r in second] == [eid for _, eid, _ in want]
+        assert store._matrix_cache is not None
+
+    def test_upsert_sync_invalidates_cache(self):
+        store = InMemoryVectorStore(dimension=3)
+        store.upsert_sync([VectorEntry(id="a", vector=[1.0, 0.0, 0.0], text="a"),
+                           VectorEntry(id="b", vector=[0.0, 1.0, 0.0], text="b")])
+        store.query_sync([1.0, 0.0, 0.0], top_k=5)
+        assert store._matrix_cache is not None
+        store.upsert_sync([VectorEntry(id="c", vector=[0.99, 0.01, 0.0], text="c")])
+        assert store._matrix_cache is None
+        got = store.query_sync([1.0, 0.0, 0.0], top_k=5)
+        assert [r.id for r in got][:2] == ["a", "c"]
+
+    def test_async_upsert_invalidates_cache(self):
+        store = InMemoryVectorStore(dimension=3)
+        store.upsert_sync([VectorEntry(id="a", vector=[1.0, 0.0, 0.0], text="a")])
+        store.query_sync([1.0, 0.0, 0.0], top_k=5)
+        import asyncio
+
+        asyncio.run(store.upsert([VectorEntry(id="b", vector=[0.0, 1.0, 0.0], text="b")]))
+        assert store._matrix_cache is None
+        got = store.query_sync([0.0, 1.0, 0.0], top_k=5)
+        assert got[0].id == "b"
+
+    def test_delete_invalidates_cache(self):
+        store = InMemoryVectorStore(dimension=3)
+        store.upsert_sync(
+            [
+                VectorEntry(id="a", vector=[1.0, 0.0, 0.0], text="a"),
+                VectorEntry(id="b", vector=[0.0, 1.0, 0.0], text="b"),
+            ]
+        )
+        store.query_sync([1.0, 0.0, 0.0], top_k=5)
+        assert store._matrix_cache is not None
+        import asyncio
+
+        asyncio.run(store.delete(["a"]))
+        assert store._matrix_cache is None
+        got = store.query_sync([1.0, 0.0, 0.0], top_k=5)
+        assert [r.id for r in got] == ["b"]
+
+    def test_filtered_query_keeps_full_cache_valid(self):
+        rng = np.random.default_rng(3)
+        store = InMemoryVectorStore(dimension=8)
+        store.upsert_sync(
+            [
+                VectorEntry(
+                    id=f"e{i}",
+                    vector=rng.normal(size=8).tolist(),
+                    text=f"fact {i}",
+                    metadata={"topic": "a" if i % 3 == 0 else "b"},
+                )
+                for i in range(60)
+            ]
+        )
+        q = rng.normal(size=8).tolist()
+        store.query_sync(q, top_k=5)
+        assert store._matrix_cache is not None
+        store.query_sync(q, top_k=5, filter_metadata={"topic": "a"})
+        want = _brute_force_query(store._entries, q, 5)
+        got = store.query_sync(q, top_k=5)
+        assert [r.id for r in got] == [eid for _, eid, _ in want]
+        assert [r.score for r in got] == pytest.approx([s for s, _, _ in want], rel=1e-12)
+
+    def test_stale_cache_self_heals_on_version_bump(self):
+        """A stale (ids, mat) tuple surviving a mutation must be rebuilt."""
+        store = InMemoryVectorStore(dimension=3)
+        store.upsert_sync([VectorEntry(id="a", vector=[1.0, 0.0, 0.0], text="a")])
+        store.query_sync([1.0, 0.0, 0.0], top_k=5)
+        cached = store._matrix_cache
+        assert cached is not None
+        # Simulate the interleaving that leaves the stale tuple assigned:
+        # upsert bumps the version but the query's older tuple wins the race.
+        store._entries["b"] = VectorEntry(id="b", vector=[0.0, 1.0, 0.0], text="b")
+        store._bump_version()
+        assert store._matrix_cache is None or store._matrix_cache is cached
+        got = store.query_sync([0.0, 1.0, 0.0], top_k=5)
+        assert got[0].id == "b"
+        assert store._matrix_cache[0] == store._version
+
+    def test_concurrent_upsert_and_query_never_goes_stale(self):
+        import threading
+
+        rng = np.random.default_rng(5)
+        store = InMemoryVectorStore(dimension=4)
+        base = [
+            VectorEntry(id=f"base{i}", vector=rng.normal(size=4).tolist(), text=f"base {i}")
+            for i in range(50)
+        ]
+        store.upsert_sync(base)
+        stop = threading.Event()
+
+        def reader():
+            q = rng.normal(size=4).tolist()
+            while not stop.is_set():
+                store.query_sync(q, top_k=5)
+
+        def writer():
+            for i in range(200):
+                store.upsert_sync(
+                    [VectorEntry(id=f"w{i}", vector=rng.normal(size=4).tolist(), text=f"w {i}")]
+                )
+
+        r = threading.Thread(target=reader)
+        w = threading.Thread(target=writer)
+        r.start()
+        w.start()
+        w.join(timeout=30)
+        stop.set()
+        r.join(timeout=30)
+        assert not r.is_alive() and not w.is_alive()
+        got = store.query_sync([1.0, 0.0, 0.0, 0.0], top_k=5)
+        assert len(got) == 5
+        assert store.count_sync() == 50 + 200
+        assert store._matrix_cache[0] == store._version
+
+
 class TestSimpleEmbed:
     def test_returns_list_of_correct_length(self):
         vec = simple_embed("hello world")
@@ -657,5 +870,3 @@ class TestCreateVectorStore:
     async def test_unknown_provider_raises(self):
         with pytest.raises(NotImplementedError, match="not implemented"):
             await create_vector_store("unknown")
-
-

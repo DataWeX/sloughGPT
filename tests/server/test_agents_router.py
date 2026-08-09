@@ -36,6 +36,20 @@ class TestListAgents:
         assert resp.status_code == 200
         assert resp.json() == []
 
+    @patch("domains.agents.system.get_agent_system")
+    def test_returns_passthrough_entries(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+        sys.list.return_value = [
+            {"id": "a", "name": "A", "description": "d", "instructions": "", "tools": ["search"], "avatar": ""},
+            {"id": "b", "name": "B", "description": "", "instructions": "i", "tools": [], "avatar": "x"},
+        ]
+        resp = client.get("/agents")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 2
+        assert body[0]["tools"] == ["search"]
+        assert body[1]["avatar"] == "x"
+
 
 class TestCreateAgent:
     @patch("domains.agents.system.get_agent_system")
@@ -138,6 +152,29 @@ class TestUpdateAgent:
         resp = client.put("/agents/nonexistent", json={"name": "X"})
         assert resp.status_code == 404
 
+    @patch("domains.agents.system.get_agent_system")
+    def test_update_passthrough_all_fields(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+        sys.update.return_value = {"id": "helper", "name": "U", "description": "d", "instructions": "i", "tools": ["web"], "avatar": "a"}
+        client.put("/agents/helper", json={
+            "name": "U", "description": "d", "instructions": "i",
+            "tools": ["web"], "avatar": "a",
+        })
+        args, kwargs = sys.update.call_args
+        assert kwargs["description"] == "d"
+        assert kwargs["instructions"] == "i"
+        assert kwargs["tools"] == ["web"]
+        assert kwargs["avatar"] == "a"
+
+    @patch("domains.agents.system.get_agent_system")
+    def test_update_empty_body_keeps_all_none(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+        sys.update.return_value = {"id": "helper", "name": "U", "description": "", "instructions": "", "tools": [], "avatar": ""}
+        client.put("/agents/helper", json={})
+        _, kwargs = sys.update.call_args
+        assert kwargs["name"] is None
+        assert kwargs["tools"] is None
+
 
 class TestDeleteAgent:
     @patch("domains.agents.system.get_agent_system")
@@ -153,6 +190,13 @@ class TestDeleteAgent:
         sys.delete.return_value = False
         resp = client.delete("/agents/nonexistent")
         assert resp.status_code == 404
+
+    @patch("domains.agents.system.get_agent_system")
+    def test_delete_returns_status(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+        sys.delete.return_value = True
+        resp = client.delete("/agents/helper")
+        assert resp.json()["data"]["status"] == "deleted"
 
 
 class TestExecuteAgent:
@@ -327,3 +371,35 @@ class TestOrchestrate:
         assert "inference down" in body
         assert task.error == "inference down"
         assert task.status == "failed"
+
+
+class TestAgentMethodCoverage:
+    """405s for method mismatches on agents routes."""
+
+    def test_create_wrong_method_405(self, client):
+        resp = client.put("/agents")
+        assert resp.status_code == 405
+
+    def test_get_agent_wrong_method_405(self, client):
+        resp = client.post("/agents/helper")
+        assert resp.status_code == 405
+
+    def test_execute_wrong_method_405(self, client):
+        resp = client.get("/agents/helper/execute")
+        assert resp.status_code == 405
+
+    @patch("domains.agents.system.get_agent_system")
+    def test_orchestrate_wrong_method_shadowed_by_agent_lookup(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+        sys.get.return_value = None
+        resp = client.get("/agents/orchestrate")
+        assert resp.status_code == 404
+        sys.get.assert_called_once_with("orchestrate")
+
+    def test_list_runs_wrong_method_405(self, client):
+        resp = client.post("/agents/runs")
+        assert resp.status_code == 405
+
+    def test_get_run_wrong_method_405(self, client):
+        resp = client.delete("/agents/runs/run_1")
+        assert resp.status_code == 405

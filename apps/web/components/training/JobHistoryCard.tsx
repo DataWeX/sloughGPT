@@ -28,6 +28,9 @@ export function JobHistoryCard({
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
   const [showComparison, setShowComparison] = useState(false)
+  const [loadingAction, setLoadingAction] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [batchDeleting, setBatchDeleting] = useState(false)
 
   const completedJobs = allJobs.filter(j => j.status === 'completed')
   const totalLoss = completedJobs.reduce((sum, j) => sum + (j.loss ?? 0), 0)
@@ -64,6 +67,38 @@ export function JobHistoryCard({
     }))
     downloadJson(data, `training-comparison-${todayDateString()}.json`)
     addToast(`Exported ${data.length} jobs`, 'success')
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === allJobs.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(allJobs.map(j => j.id)))
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    setBatchDeleting(true)
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => trainingController.delete(id)))
+      setSelectedIds(new Set())
+      addToast(`Deleted ${selectedIds.size} jobs`, 'success')
+      void checkpoints.fetchJobs()
+    } catch {
+      addToast('Batch delete failed', 'error')
+    } finally {
+      setBatchDeleting(false)
+    }
   }
 
   const hasJobs = allJobs.length > 0 || checkpoints.loadingJobs
@@ -189,7 +224,32 @@ export function JobHistoryCard({
               ))}
             </div>
         ) : (
-          <div className="divide-y divide-border/50">
+          <>
+            {allJobs.length > 2 && (
+              <div className="px-4 py-2 border-b border-border/30 flex items-center gap-3">
+                <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === allJobs.length && allJobs.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-border"
+                  />
+                  Select all ({allJobs.length})
+                </label>
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-2 ml-auto">
+                    <span className="text-[10px] text-destructive font-medium">{selectedIds.size} selected</span>
+                    <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={handleBatchDelete} disabled={batchDeleting}>
+                      {batchDeleting ? 'Deleting...' : 'Delete Selected'}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setSelectedIds(new Set())}>
+                      Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="divide-y divide-border/50">
             {allJobs.slice().reverse().map((job) => {
               const relativeTime = (() => {
                 if (!job.created_at) return ''
@@ -210,9 +270,20 @@ export function JobHistoryCard({
                 const mins = Math.floor(secs / 60)
                 return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`
               })()
+              const isSelected = selectedIds.has(job.id)
               return (
-              <div key={job.id} role="button" tabIndex={0} className="flex items-center justify-between px-4 py-3 text-sm cursor-pointer hover:bg-muted/20 transition-colors" onClick={() => router.push(`/training/job/${job.id}`)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/training/job/${job.id}`) } }} aria-label={`View job ${job.name || job.id}`}>
-                <div className="min-w-0 flex-1">
+              <div key={job.id} role="button" tabIndex={0} className={`flex items-center justify-between px-4 py-3 text-sm cursor-pointer hover:bg-muted/20 transition-colors ${isSelected ? 'bg-primary/5' : ''}`} onClick={() => router.push(`/training/job/${job.id}`)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/training/job/${job.id}`) } }} aria-label={`View job ${job.name || job.id}`}>
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  {allJobs.length > 2 && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(job.id)}
+                      onClick={e => e.stopPropagation()}
+                      className="mt-1 rounded border-border shrink-0"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{job.name || job.id}</p>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     {job.model && (
@@ -246,22 +317,38 @@ export function JobHistoryCard({
                   {job.status === 'running' && (
                     <>
                       <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-success" /></span>
-                      <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive hover:text-destructive" onClick={async () => {
-                        try { await trainingController.stop(job.id); addToast('Stopped', 'info'); void checkpoints.fetchJobs() }
-                        catch { addToast('Failed to stop job', 'error') }
-                      }}>
-                        Stop
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-xs text-destructive hover:text-destructive"
+                        disabled={loadingAction === `stop-${job.id}`}
+                        onClick={async () => {
+                          setLoadingAction(`stop-${job.id}`)
+                          try { await trainingController.stop(job.id); addToast('Stopped', 'info'); void checkpoints.fetchJobs() }
+                          catch { addToast('Failed to stop job', 'error') }
+                          finally { setLoadingAction(null) }
+                        }}
+                      >
+                        {loadingAction === `stop-${job.id}` ? '...' : 'Stop'}
                       </Button>
                     </>
                   )}
                   {job.status === 'completed' && (
                     <>
                       {job.checkpoint && (
-                        <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={async () => {
-                          try { const cp = job.checkpoint; if (cp) await checkpoints.handleLoadCheckpoint(cp, addToast) }
-                          catch { addToast('Failed to load trained version', 'error') }
-                        }}>
-                          Use
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-xs"
+                          disabled={loadingAction === `use-${job.id}`}
+                          onClick={async () => {
+                            setLoadingAction(`use-${job.id}`)
+                            try { const cp = job.checkpoint; if (cp) await checkpoints.handleLoadCheckpoint(cp, addToast) }
+                            catch { addToast('Failed to load trained version', 'error') }
+                            finally { setLoadingAction(null) }
+                          }}
+                        >
+                          {loadingAction === `use-${job.id}` ? '...' : 'Use'}
                         </Button>
                       )}
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-success/15 text-success font-medium shrink-0">Done</span>
@@ -278,21 +365,31 @@ export function JobHistoryCard({
                   {['stopping', 'stopped'].includes(job.status) && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Stopped</span>
                   )}
-                  <Button size="sm" variant="ghost" className="h-6 text-xs text-muted-foreground hover:text-destructive" onClick={async () => {
-                    if (!confirm(`Delete job "${job.name || job.id}"?`)) return
-                    try {
-                      await trainingController.delete(job.id)
-                      addToast('Job deleted', 'info')
-                      void checkpoints.fetchJobs()
-                    } catch { addToast('Failed to delete job', 'error') }
-                  }}>
-                    Delete
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-xs text-muted-foreground hover:text-destructive"
+                    disabled={loadingAction === `delete-${job.id}`}
+                    onClick={async () => {
+                      if (!confirm(`Delete job "${job.name || job.id}"?`)) return
+                      setLoadingAction(`delete-${job.id}`)
+                      try {
+                        await trainingController.delete(job.id)
+                        addToast('Job deleted', 'info')
+                        void checkpoints.fetchJobs()
+                      } catch { addToast('Failed to delete job', 'error') }
+                      finally { setLoadingAction(null) }
+                    }}
+                  >
+                    {loadingAction === `delete-${job.id}` ? '...' : 'Delete'}
                   </Button>
+                </div>
                 </div>
               </div>
               )
             })}
           </div>
+          </>
         )}
       </div>
       </CardContent>

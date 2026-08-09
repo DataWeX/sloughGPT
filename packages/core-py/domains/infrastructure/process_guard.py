@@ -83,7 +83,7 @@ class ProcessGuard:
         self,
         worker_id: str = "guard",
         generate_timeout: float = 120.0,
-        stall_timeout: float = 30.0,
+        stall_timeout: float = 120.0,
         max_restarts: int = 3,
         restart_delay: float = 1.0,
         health_check_interval: float = 1.0,
@@ -354,7 +354,7 @@ def create_model_guard(
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
     generate_timeout: float = 120.0,
-    stall_timeout: float = 30.0,
+    stall_timeout: float = 120.0,
     max_concurrent: Optional[int] = None,
 ) -> ProcessGuard:
     """Create a ProcessGuard for an HF model (legacy path).
@@ -399,7 +399,7 @@ def create_slo_guard(
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
     generate_timeout: float = 120.0,
-    stall_timeout: float = 30.0,
+    stall_timeout: float = 120.0,
     max_concurrent: Optional[int] = None,
     quantize: bool = False,
     quant_bits: int = 8,

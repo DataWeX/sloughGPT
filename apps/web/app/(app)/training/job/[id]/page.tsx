@@ -164,13 +164,13 @@ export default function TrainingJobDetailPage() {
         right={
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" onClick={fetchJob} disabled={loading} aria-label="Refresh job status">
-              <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5' : 'h-3.5 w-3.5'} />
+              <IconRefresh className={loading ? 'animate-spin h-4 w-4' : 'h-4 w-4'} />
             </Button>
             <Button variant="ghost" size="sm" onClick={handleExport} disabled={!job} aria-label="Export job details">
-              <IconDownload className="h-3.5 w-3.5" />
+              <IconDownload className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setShowDelete(true)} disabled={!job} aria-label="Delete job">
-              <IconTrash className="h-3.5 w-3.5" />
+              <IconTrash className="h-4 w-4" />
             </Button>
           </div>
         }
@@ -204,7 +204,7 @@ export default function TrainingJobDetailPage() {
                 {summaryLoading ? (
                   <div className="space-y-2">
                     <Skeleton className="h-3 w-full" />
-                    <Skeleton className="h-3 w-3/4" />
+                    <Skeleton className="h-4 w-4/4" />
                     <Skeleton className="h-3 w-1/2" />
                   </div>
                 ) : summaryText ? (
@@ -230,7 +230,7 @@ export default function TrainingJobDetailPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     {job.status === 'running' && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={async () => {
+                      <Button size="sm" variant="outline" className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={async () => {
                         try {
                           await trainingJobsController.stop(job.id)
                           addToast('Training stopped', 'info')
@@ -242,21 +242,21 @@ export default function TrainingJobDetailPage() {
                     )}
                     {job.checkpoint && job.status === 'completed' && (
                       <>
-                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleLoadCheckpoint}>
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleLoadCheckpoint}>
                           Load saved version
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={async () => {
+                        <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={async () => {
                           try {
                             const blob = await trainingJobsController.downloadTrainingJob(job.id)
                             downloadBlob(blob, `${job.id}.checkpoint`)
                             addToast('Checkpoint downloaded', 'success')
                           } catch { addToast('Download failed', 'error') }
                         }}>
-                          <IconDownload className="h-3 w-3 mr-1" /> Export
+                          <IconDownload className="h-4 w-4 mr-1" /> Export
                         </Button>
                       </>
                     )}
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={async () => {
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={async () => {
                       if (job?.checkpoint) {
                         try {
                           await modelController.loadModelPath(job.checkpoint)
@@ -305,8 +305,8 @@ export default function TrainingJobDetailPage() {
                   const stepsPerMin = elapsed > 0 ? (job.global_step / elapsed) * 60 : 0
                   return stepsPerMin > 0 ? (
                     <div className="mt-2 flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground">Speed:</span>
-                      <span className="text-[10px] font-mono text-primary">{stepsPerMin.toFixed(1)} steps/min</span>
+                      <span className="text-xs text-muted-foreground">Speed:</span>
+                      <span className="text-xs font-mono text-primary">{stepsPerMin.toFixed(1)} steps/min</span>
                     </div>
                   ) : null
                 })()}

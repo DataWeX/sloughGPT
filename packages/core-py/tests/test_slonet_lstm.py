@@ -142,3 +142,60 @@ def test_slice_backward_basic_vs_fancy_equal():
         np.array([[0, 4, 8, 0], [0, 20, 24, 0], [0, 36, 40, 0]], dtype=np.float32),
         atol=1e-5,
     )
+
+
+def test_generate_returns_expected_length():
+    lstm = _make_lstm(num_layers=1)
+    prompt = _ids(seq_len=4)
+    out = lstm.generate(prompt, max_new_tokens=7, temperature=0.0)
+    assert out.shape == (7,)
+    assert np.issubdtype(out.dtype, np.integer)
+    assert (out >= 0).all() and (out < lstm.vocab_size).all()
+
+
+def test_generate_two_layer_matches_length():
+    lstm = _make_lstm(num_layers=2)
+    out = lstm.generate(_ids(seq_len=4), max_new_tokens=5, temperature=0.0)
+    assert out.shape == (5,)
+
+
+def test_generate_stops_on_eos():
+    lstm = _make_lstm(num_layers=1)
+    eos = 7
+    out = lstm.generate(_ids(seq_len=3), max_new_tokens=20, temperature=0.0, eos_token=eos)
+    assert out.shape[0] <= 20
+    if out.shape[0] == 20:
+        assert eos not in out
+    else:
+        assert out[-1] == eos
+
+
+def test_generate_sampling_does_not_collapse_to_single_token():
+    """Greedy argmax on a fresh LSTM collapses to one repeated token; sampled
+    decoding with temperature/top-k must stay diverse."""
+    rng = np.random.default_rng(0)
+    text = "the quick brown fox jumps over the lazy dog and then runs away home"
+    vocab = sorted(set(text))
+    stoi = {c: i for i, c in enumerate(vocab)}
+    ids = np.array([stoi[c] for c in text], dtype=np.int64)
+
+    lstm = sn.SloLSTM(vocab_size=len(vocab), embed_dim=24, hidden_dim=40,
+                      num_layers=1, dropout=0.0)
+    opt = sn.SloAdam(lr=0.05)
+    for step in range(20):
+        i = (step * 8) % (len(ids) - 8)
+        x = sn.tensor(ids[i:i + 8].reshape(1, -1), requires_grad=True)
+        y = sn.tensor(ids[i + 1:i + 9].reshape(1, -1))
+        logits, _ = lstm.forward(x)
+        loss = sn.cross_entropy(logits, y)
+        loss.backward()
+        opt.step(list(lstm.parameters()))
+        for p in lstm.parameters():
+            p.grad = None
+
+    prompt = np.array([stoi[c] for c in "the qu"], dtype=np.int64)
+    greedy = lstm.generate(prompt, max_new_tokens=25, temperature=0.0)
+    sampled = lstm.generate(prompt, max_new_tokens=25, temperature=0.9, top_k=15)
+    assert len(set(greedy)) > 0
+    assert len(set(sampled)) >= 2, "sampled decoding collapsed to a single token"
+

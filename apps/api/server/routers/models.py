@@ -81,6 +81,17 @@ class ModelsRouter:
         self.router.add_api_route(path="/process-guard", endpoint=self.get_process_guard, methods=["GET"])
         self.router.add_api_route(path="/process-guard", endpoint=self.set_process_guard, methods=["POST"])
 
+    @staticmethod
+    def _audit_model_id(provider) -> str:
+        """Best-effort resolve the current model id from a provider for audit events."""
+        if provider is None:
+            return "unknown"
+        return (
+            getattr(provider, "_model_id", None)
+            or getattr(provider, "_model_id_str", None)
+            or "unknown"
+        )
+
     def _describe_model(self, model_id: str, parameters: int, loaded: bool) -> str:
         """Generate a plain-language description of a model."""
         parts = []
@@ -233,6 +244,17 @@ class ModelsRouter:
                 ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
         except Exception as e:
             logger.debug("Failed to record model load event: %s", e)
+        try:
+            from infrastructure.auth import get_audit_logger, audit_user
+            get_audit_logger().log(
+                "model.load",
+                user=audit_user(auth_user),
+                resource=req.model_id,
+                detail=result.get("status", ""),
+                extra={"device": req.device.value, "quantize": req.quantize},
+            )
+        except Exception:
+            pass
         return success_response(data=result)
 
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)):
@@ -252,6 +274,16 @@ class ModelsRouter:
             ss.record_model_event("unload", model_id or "unknown")
         except Exception as e:
             logger.debug("Failed to record model unload event: %s", e)
+        try:
+            from infrastructure.auth import get_audit_logger, audit_user
+            get_audit_logger().log(
+                "model.unload",
+                user=audit_user(auth_user),
+                resource=model_id or "unknown",
+                detail=result.get("status", ""),
+            )
+        except Exception:
+            pass
         return success_response(data=result)
 
     async def current_model(self):
@@ -390,7 +422,7 @@ class ModelsRouter:
         from domains.training.export import list_export_formats
         return success_response(data=list_export_formats())
 
-    async def start_download(self, req: DownloadRequest) -> Dict[str, Any]:
+    async def start_download(self, req: DownloadRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
         """
         Start downloading a model from HuggingFace Hub with progress tracking.
 
@@ -408,6 +440,17 @@ class ModelsRouter:
             return success_response(data={"model_id": req.model_id}, message="already_downloading")
 
         asyncio.create_task(self._run_download(req.model_id, req.total_bytes_hint))
+        try:
+            from infrastructure.auth import get_audit_logger, audit_user
+            get_audit_logger().log(
+                "model.download",
+                user=audit_user(auth_user),
+                resource=req.model_id,
+                detail="started",
+                extra={"total_bytes_hint": req.total_bytes_hint},
+            )
+        except Exception:
+            pass
         return success_response(data={"model_id": req.model_id}, message="started")
 
     async def _run_download(self, model_id: str, total_bytes_hint: int):
@@ -444,12 +487,22 @@ class ModelsRouter:
         mgr.cleanup_stale()
         return success_response(data=mgr.list_downloads())
 
-    async def cancel_download(self, model_id: str) -> Dict[str, Any]:
+    async def cancel_download(self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
         """Cancel an in-progress download."""
         from domains.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         if mgr.cancel(model_id):
+            try:
+                from infrastructure.auth import get_audit_logger, audit_user
+                get_audit_logger().log(
+                    "model.cancel",
+                    user=audit_user(auth_user),
+                    resource=model_id,
+                    detail="cancelled",
+                )
+            except Exception:
+                pass
             return success_response(data={"model_id": model_id}, message="cancelled")
         return success_response(data={"model_id": model_id}, message="not_found")
 
@@ -574,7 +627,7 @@ class ModelsRouter:
             raise HTTPException(status_code=400, detail="Either model_dir or model_id required")
         return success_response(data=result, message=result.get("status", "ok"))
 
-    async def quantize_model(self, req: QuantizeRequest):
+    async def quantize_model(self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)):
         """Apply int8/int4 quantization to the currently loaded model.
 
         Works with both SloNet and HuggingFace models. Quantizes all
@@ -681,6 +734,18 @@ class ModelsRouter:
         except Exception:
             report["avx2_enabled"] = False
 
+        try:
+            from infrastructure.auth import get_audit_logger, audit_user
+            get_audit_logger().log(
+                "model.quantize",
+                user=audit_user(auth_user),
+                resource=self._audit_model_id(provider),
+                detail=f"bits={bits} mode={mode}",
+                extra={"bits": bits, "mode": mode, "layers_quantized": quantized_count, "model_type": model_type},
+            )
+        except Exception:
+            pass
+
         return success_response(data=report)
 
     async def dequantize_model(self, auth_user: dict = Depends(require_auth_if_enabled)):
@@ -730,13 +795,25 @@ class ModelsRouter:
         # Clear the quantization engine
         provider._quant_engine = None
 
+        try:
+            from infrastructure.auth import get_audit_logger, audit_user
+            get_audit_logger().log(
+                "model.dequantize",
+                user=audit_user(auth_user),
+                resource=self._audit_model_id(provider),
+                detail=f"model_type={model_type}",
+                extra={"layers_reset": len(layers)},
+            )
+        except Exception:
+            pass
+
         return success_response(data={
             "dequantized": True,
             "model_type": model_type,
             "layers_reset": len(layers),
         })
 
-    async def set_precision(self, req: PrecisionRequest):
+    async def set_precision(self, req: PrecisionRequest, auth_user: dict = Depends(require_auth_if_enabled)):
         """Switch compute precision on-the-fly without model reload.
 
         Works on both GPU (fp16 via accelerator) and CPU (fp32/int8/int4).
@@ -805,6 +882,18 @@ class ModelsRouter:
             result["precision"] = active
             result["fp16_mode"] = acc._fp16_mode
             result["reason"] = f"Accelerator {acc.name} set to {active}"
+
+        try:
+            from infrastructure.auth import get_audit_logger, audit_user
+            get_audit_logger().log(
+                "model.precision",
+                user=audit_user(auth_user),
+                resource=acc.name,
+                detail=str(result.get("precision", "")),
+                extra={"mode": acc_mode},
+            )
+        except Exception:
+            pass
 
         return success_response(data=result)
 

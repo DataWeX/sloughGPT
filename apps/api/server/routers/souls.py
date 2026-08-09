@@ -392,6 +392,17 @@ Be yourself — let your personality shape how you respond."""
             except Exception:
                 pass
 
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "soul.switch",
+                    resource=req.name,
+                    detail="checkpoint_loaded" if req.checkpoint_name else "",
+                    extra={"checkpoint_name": req.checkpoint_name or ""},
+                )
+            except Exception:
+                pass
+
             return success_response(data=result)
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
@@ -500,6 +511,16 @@ Be yourself — let your personality shape how you respond."""
                     for k, v in traits.items():
                         flat[k] = float(v)
             config.set_many(flat)
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "soul.weights.save",
+                    resource="traits",
+                    detail=f"traits_saved={len(flat)}",
+                    extra={"groups": [g for g in ("personality", "cognition", "emotion") if getattr(body, g, None)]},
+                )
+            except Exception:
+                pass
             return success_response(message="saved")
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
@@ -603,6 +624,11 @@ Be yourself — let your personality shape how you respond."""
             from domains.context.managers import get_trait_config
             config = get_trait_config()
             path = config.save_snapshot(name)
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log("weights.snapshot.save", resource=name)
+            except Exception:
+                pass
             return success_response(data={"path": path}, message="saved")
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
@@ -627,6 +653,15 @@ Be yourself — let your personality shape how you respond."""
             from domains.context.managers import get_trait_config
             config = get_trait_config()
             count = config.load_snapshot(name)
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "weights.snapshot.load",
+                    resource=name,
+                    detail=f"traits_loaded={count}",
+                )
+            except Exception:
+                pass
             return success_response(data={"traits_loaded": count}, message="loaded")
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
@@ -651,6 +686,15 @@ Be yourself — let your personality shape how you respond."""
             from domains.context.managers import get_trait_config
             config = get_trait_config()
             ok = config.delete_snapshot(name)
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "weights.snapshot.delete",
+                    resource=name,
+                    detail=f"deleted={ok}",
+                )
+            except Exception:
+                pass
             return success_response(data={"deleted": ok})
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event

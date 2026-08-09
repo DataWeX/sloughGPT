@@ -264,6 +264,46 @@ class TestSimBaby:
         action = baby.react(p, -5.0)
         assert len(action.writes) == 0
 
+    def test_react_gate_suppresses_writes(self):
+        baby = SimBaby(initial_energy=100.0)
+        world = WorldGrid((16, 8, 16))
+        p = baby.perceive(world)
+        baby.perceptron_cells.b[0] = -20.0  # drive gate fully off
+        action = baby.react(p, 0.0)
+        assert len(action.writes) == 0
+
+    def test_react_gate_maximizes_writes(self):
+        baby = SimBaby(initial_energy=100.0)
+        world = WorldGrid((16, 8, 16))
+        p = baby.perceive(world)
+        baby.perceptron_cells.b[0] = 20.0   # drive gate fully on
+        action = baby.react(p, 0.0)
+        assert len(action.writes) == 6
+
+    def test_react_material_gate_selects_material(self):
+        baby = SimBaby(initial_energy=100.0)
+        world = WorldGrid((16, 8, 16))
+        p = baby.perceive(world)
+        baby.perceptron_cells.b[0] = 20.0
+        baby.perceptron_cells.b[1] = -20.0  # material gate at 0
+        action = baby.react(p, 0.0)
+        assert all(w.material == MATERIAL_AIR for w in action.writes)
+
+    def test_perception_features_normalized_range(self):
+        baby = SimBaby(initial_energy=100.0)
+        world = WorldGrid((16, 8, 16))
+        p = baby.perceive(world)
+        feat = baby._perception_features(p)
+        assert feat.shape == (baby.params.cells_input_dim,)
+        assert np.all(feat >= 0.0) and np.all(feat <= 1.0)
+
+    def test_learn_updates_cells_perceptron(self):
+        baby = SimBaby(initial_energy=100.0)
+        baby.perceive(WorldGrid((16, 8, 16)))
+        before = baby.perceptron_cells.W.copy()
+        baby.learn(5.0)
+        assert not np.allclose(baby.perceptron_cells.W, before)
+
     def test_apply_action_writes_cells(self):
         baby = SimBaby(initial_energy=100.0,
                        position=np.array([8.0, 4.0, 8.0]))
@@ -723,3 +763,252 @@ class TestSimulationExtra:
         assert s["total_baby_ticks"] == 1
         assert "alive_at_end" in s
         assert "deaths" in s
+
+
+# ── Multi-Agent (Social) ─────────────────────────────────────────────────────
+
+_POS_A = np.array([4.0, 2.0, 4.0], dtype=np.float64)
+_POS_B = np.array([4.0, 2.0, 5.0], dtype=np.float64)
+_POS_FAR = np.array([7.0, 3.0, 7.0], dtype=np.float64)
+
+
+class TestSceneNearbyBabies:
+    def test_returns_neighbors_in_radius(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(position=_POS_B, params=_SIM_PARAMS)
+        scene.add_baby(a)
+        scene.add_baby(b)
+        n = scene.nearby_babies(_POS_A, radius=3.0)
+        assert len(n) == 2
+        assert n[0].entity.id == a.entity.id  # self first (distance 0)
+        assert n[1].entity.id == b.entity.id
+
+    def test_includes_self_without_exclude_id(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        scene.add_baby(a)
+        n = scene.nearby_babies(_POS_A, radius=3.0)
+        assert len(n) == 1
+        assert n[0].entity.id == a.entity.id
+
+    def test_excludes_self(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(position=_POS_B, params=_SIM_PARAMS)
+        scene.add_baby(a)
+        scene.add_baby(b)
+        n = scene.nearby_babies(_POS_A, radius=3.0, exclude_id=a.entity.id)
+        assert len(n) == 1
+        assert n[0].entity.id == b.entity.id
+
+    def test_outside_radius_excluded(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        far = SimBaby(position=_POS_FAR, params=_SIM_PARAMS)
+        scene.add_baby(a)
+        scene.add_baby(far)
+        n = scene.nearby_babies(_POS_A, radius=3.0)
+        assert len(n) == 1
+        assert n[0].entity.id == a.entity.id
+
+    def test_sorted_by_distance(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        close = SimBaby(position=np.array([4.0, 2.0, 4.5]), params=_SIM_PARAMS)
+        farther = SimBaby(position=_POS_B, params=_SIM_PARAMS)
+        scene.add_baby(a)
+        scene.add_baby(close)
+        scene.add_baby(farther)
+        n = scene.nearby_babies(_POS_A, radius=5.0)
+        assert n[0].entity.id == a.entity.id
+        assert n[1].entity.id == close.entity.id
+        assert n[2].entity.id == farther.entity.id
+
+    def test_skips_dead_babies(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        dead = SimBaby(position=_POS_B, params=_SIM_PARAMS)
+        dead.entity.alive = False
+        dead.entity.energy = 0.0
+        scene.add_baby(a)
+        scene.add_baby(dead)
+        n = scene.nearby_babies(_POS_A, radius=3.0)
+        assert len(n) == 1
+        assert n[0].entity.id == a.entity.id
+
+
+class TestSocialPerception:
+    def test_perceive_detects_nearby_agents(self):
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(position=_POS_B, params=_SIM_PARAMS)
+        p = a.perceive(WorldGrid(_SIM_PARAMS.grid_size), babies=[a, b])
+        assert len(p.nearby_entities) == 1
+        ent = p.nearby_entities[0]
+        assert ent["id"] == b.entity.id
+        assert ent["type"] == int(EntityType.AGENT)
+        assert ent["distance"] == pytest.approx(1.0, abs=1e-6)
+
+    def test_perceive_no_babies_arg_returns_empty(self):
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        p = a.perceive(WorldGrid(_SIM_PARAMS.grid_size))
+        assert p.nearby_entities == []
+
+    def test_perceive_excludes_self(self):
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        p = a.perceive(WorldGrid(_SIM_PARAMS.grid_size), babies=[a])
+        assert p.nearby_entities == []
+
+    def test_perceive_excludes_far_agents(self):
+        a = SimBaby(position=_POS_A, params=_SIM_PARAMS)
+        far = SimBaby(position=np.array([0.0, 0.0, 0.0]), params=_SIM_PARAMS)
+        p = a.perceive(WorldGrid(_SIM_PARAMS.grid_size), babies=[a, far])
+        assert p.nearby_entities == []
+
+
+class TestSocialMechanics:
+    def test_share_energy_transfers(self):
+        a = SimBaby(initial_energy=200.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        moved = a.share_energy(b)
+        assert moved > 0.0
+        assert a.energy == pytest.approx(200.0 - moved, abs=1e-6)
+        assert b.energy == pytest.approx(50.0 + moved, abs=1e-6)
+
+    def test_share_energy_conserved(self):
+        a = SimBaby(initial_energy=200.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        total_before = a.energy + b.energy
+        a.share_energy(b)
+        assert a.energy + b.energy == pytest.approx(total_before, abs=1e-6)
+
+    def test_share_energy_dead_target_zero(self):
+        a = SimBaby(initial_energy=200.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        b.entity.alive = False
+        b.entity.energy = 0.0
+        assert a.share_energy(b) == 0.0
+
+    def test_contest_energy_takes_from_weaker(self):
+        a = SimBaby(initial_energy=100.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        taken = a.contest_energy(b)
+        assert taken > 0.0
+        assert a.energy == pytest.approx(100.0 + taken, abs=1e-6)
+        assert b.energy == pytest.approx(50.0 - taken, abs=1e-6)
+
+    def test_contest_energy_no_take_from_stronger(self):
+        a = SimBaby(initial_energy=50.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=100.0, position=_POS_B, params=_SIM_PARAMS)
+        assert a.contest_energy(b) == 0.0
+        assert b.energy == pytest.approx(100.0, abs=1e-6)
+
+    def test_contest_energy_conserved(self):
+        a = SimBaby(initial_energy=100.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        total_before = a.energy + b.energy
+        a.contest_energy(b)
+        assert a.energy + b.energy == pytest.approx(total_before, abs=1e-6)
+
+    def test_contest_energy_capped_by_target_energy(self):
+        a = SimBaby(initial_energy=100.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=1.0, position=_POS_B, params=_SIM_PARAMS)
+        taken = a.contest_energy(b)
+        assert taken <= 1.0
+        assert b.energy == 0.0
+
+
+class TestSocialStep:
+    def _force_perceptron(self, baby, compete, cooperate):
+        baby.perceptron_entity.W[:] = 0.0
+        baby.perceptron_entity.b[0] = compete
+        baby.perceptron_entity.b[1] = cooperate
+
+    def test_cooperates_when_gate_high_and_surplus(self):
+        a = SimBaby(initial_energy=200.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        self._force_perceptron(a, compete=-10.0, cooperate=10.0)
+        result = a.social_step(b)
+        assert result["act"] == "cooperate"
+        assert result["energy_moved"] > 0.0
+
+    def test_contests_when_gate_high(self):
+        a = SimBaby(initial_energy=100.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        self._force_perceptron(a, compete=10.0, cooperate=-10.0)
+        result = a.social_step(b)
+        assert result["act"] == "contest"
+        assert result["energy_moved"] > 0.0
+
+    def test_no_action_when_gates_low(self):
+        a = SimBaby(initial_energy=100.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        self._force_perceptron(a, compete=-10.0, cooperate=-10.0)
+        result = a.social_step(b)
+        assert result["act"] == "none"
+        assert result["energy_moved"] == 0.0
+
+    def test_no_contest_against_stronger(self):
+        a = SimBaby(initial_energy=50.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=100.0, position=_POS_B, params=_SIM_PARAMS)
+        self._force_perceptron(a, compete=10.0, cooperate=-10.0)
+        result = a.social_step(b)
+        assert result["act"] == "none"
+        assert result["energy_moved"] == 0.0
+
+    def test_no_cooperate_without_surplus(self):
+        a = SimBaby(initial_energy=10.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=5.0, position=_POS_B, params=_SIM_PARAMS)
+        self._force_perceptron(a, compete=-10.0, cooperate=10.0)
+        result = a.social_step(b)
+        assert result["act"] == "none"
+
+    def test_dead_neighbor_no_action(self):
+        a = SimBaby(initial_energy=100.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        b.entity.alive = False
+        b.entity.energy = 0.0
+        self._force_perceptron(a, compete=10.0, cooperate=10.0)
+        result = a.social_step(b)
+        assert result["act"] == "none"
+
+
+class TestSimulationSocial:
+    def test_step_includes_social_fields(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=10)
+        results = sim.step()
+        assert results[0]["social_act"] == "none"
+        assert results[0]["social_energy"] == 0.0
+
+    def test_summary_has_social_stats(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=10)
+        sim.step()
+        s = sim.summary()
+        assert s["cooperations"] == 0
+        assert s["contests"] == 0
+        assert s["social_energy_moved"] == 0.0
+
+    def test_two_close_babies_interact(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        a = SimBaby(initial_energy=200.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        a.perceptron_entity.W[:] = 0.0
+        a.perceptron_entity.b[:] = 0.0
+        scene.add_baby(a)
+        scene.add_baby(b)
+        sim = Simulation(scene, max_ticks=5)
+        results = sim.run()
+        social_acts = {r["social_act"] for r in results}
+        assert "cooperate" in social_acts or "contest" in social_acts
+
+    def test_learn_updates_entity_perceptron(self):
+        a = SimBaby(initial_energy=100.0, position=_POS_A, params=_SIM_PARAMS)
+        b = SimBaby(initial_energy=50.0, position=_POS_B, params=_SIM_PARAMS)
+        a.perceive(WorldGrid(_SIM_PARAMS.grid_size), babies=[a, b])
+        w_before = a.perceptron_entity.W.copy()
+        a.learn(5.0)
+        assert not np.array_equal(a.perceptron_entity.W, w_before)

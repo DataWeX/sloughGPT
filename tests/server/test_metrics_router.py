@@ -307,3 +307,37 @@ class TestPrometheusMetrics:
         mock_get_coll.side_effect = RuntimeError("collector broken")
         resp = client.get("/metrics")
         assert resp.status_code == 500
+
+    @patch("apps.api.server.routers.metrics.get_metrics_collector")
+    def test_prometheus_render_error_returns_500(self, mock_get_coll, client):
+        coll = MagicMock()
+        coll.render.side_effect = RuntimeError("render broken")
+        mock_get_coll.return_value = coll
+        resp = client.get("/metrics/prometheus")
+        assert resp.status_code == 500
+
+    @patch("apps.api.server.routers.metrics.get_metrics_collector")
+    def test_metrics_json_content_type(self, mock_get_coll, client):
+        coll = MagicMock()
+        coll._start_time = 0.0
+        coll._model_loaded = False
+        coll._model_name = None
+        coll._active_requests = 0
+        coll._inference_count = 0
+        coll._tokens_generated = 0
+        mock_get_coll.return_value = coll
+        resp = client.get("/metrics")
+        assert resp.headers["content-type"].startswith("application/json")
+
+    @patch("apps.api.server.routers.metrics.get_metrics_collector")
+    def test_uptime_int_start_time(self, mock_get_coll, client):
+        coll = MagicMock()
+        coll._start_time = 123
+        coll._model_loaded = False
+        coll._model_name = None
+        coll._active_requests = 0
+        coll._inference_count = 0
+        coll._tokens_generated = 0
+        mock_get_coll.return_value = coll
+        resp = client.get("/metrics")
+        assert resp.json()["data"]["uptime_seconds"] == "123"

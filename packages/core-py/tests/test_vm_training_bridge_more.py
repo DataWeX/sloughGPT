@@ -220,6 +220,31 @@ class TestJobTracking:
         assert b.alive_count() == 2
 
 
+class TestStop:
+    def test_stop_success_marks_stopping(self):
+        b = _bridge([_FakeResp(status_code=200, payload={"status": "stopping"})])
+        b._jobs[1] = {"api_job_id": "api-1", "status": "running"}
+        assert b.stop(1) is True
+        assert b._jobs[1]["status"] == "stopping"
+        url = b._session.posts[0][0][0]
+        assert url == "http://localhost:8000/training/jobs/api-1/stop"
+
+    def test_stop_missing_job_returns_false(self):
+        assert _bridge([]).stop(99) is False
+
+    def test_stop_without_api_job_id_returns_false(self):
+        b = _bridge([])
+        b._jobs[1] = {"api_job_id": "", "status": "running"}
+        assert b.stop(1) is False
+
+    def test_stop_api_error_returns_false(self):
+        import requests
+        b = _bridge([_FakeResp(raise_exc=requests.RequestException("boom"))])
+        b._jobs[1] = {"api_job_id": "api-1", "status": "running"}
+        assert b.stop(1) is False
+        assert b._jobs[1]["status"] == "running"
+
+
 class TestSingleton:
     def test_get_bridge_singleton(self):
         vm_training_bridge._bridge = None

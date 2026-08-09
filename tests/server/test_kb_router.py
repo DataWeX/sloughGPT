@@ -94,6 +94,46 @@ class TestAddKnowledge:
         assert resp.status_code == 200
 
 
+class TestBulkIngest:
+    @patch("domains.learner.knowledge.get_knowledge_memory")
+    def test_bulk_ingest_returns_report(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem._vector_store.query_sync.return_value = []
+        mem.add_facts.return_value = 2
+        resp = client.post(
+            "/knowledge/bulk-ingest",
+            json={
+                "items": ["first fact long enough here", "second fact long enough here"],
+                "topic": "imported",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "completed"
+        assert data["added"] == 2
+        assert data["errors"] == 0
+
+    @patch("domains.learner.knowledge.get_knowledge_memory")
+    def test_bulk_ingest_uses_batch_path(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem._vector_store.query_sync.return_value = []
+        mem.add_facts.return_value = 2
+        client.post(
+            "/knowledge/bulk-ingest",
+            json={"items": ["first fact long enough here", "second fact long enough here"]},
+        )
+        mem.add_facts.assert_called_once()
+
+    def test_bulk_ingest_empty_items(self, client):
+        with patch("domains.learner.knowledge.get_knowledge_memory") as mock_get_mem:
+            mem = mock_get_mem.return_value
+            resp = client.post("/knowledge/bulk-ingest", json={"items": []})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "completed"
+        assert data["added"] == 0
+
+
 class TestSearchKnowledge:
     @patch("domains.learner.knowledge.get_knowledge_memory")
     def test_searches(self, mock_get_mem, client):

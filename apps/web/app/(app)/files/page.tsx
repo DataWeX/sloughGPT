@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@slough
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { filesController, type FileEntry } from '@/lib/files-controller'
+import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function FilesPage() {
@@ -14,6 +15,8 @@ export default function FilesPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
   const [ingesting, setIngesting] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [batchDeleting, setBatchDeleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const addToast = useToastStore(s => s.addToast)
 
@@ -78,6 +81,38 @@ export default function FilesPage() {
     }
   }
 
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map(f => f.id)))
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    if (selected.size === 0) return
+    setBatchDeleting(true)
+    try {
+      await filesController.deleteBatch(Array.from(selected))
+      setSelected(new Set())
+      await fetchFiles()
+      addToast(`Deleted ${selected.size} files`, 'success')
+    } catch {
+      addToast('Batch delete failed', 'error')
+    } finally {
+      setBatchDeleting(false)
+    }
+  }
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -85,7 +120,7 @@ export default function FilesPage() {
   }
 
   const filtered = searchQuery.trim()
-    ? files
+    ? files.filter(f => f.filename.toLowerCase().includes(searchQuery.toLowerCase()) || f.content_type.toLowerCase().includes(searchQuery.toLowerCase()))
     : files
 
   if (loading) {
@@ -103,12 +138,14 @@ export default function FilesPage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Files" subtitle={`${files.length} files`} />} />
       <div className="space-y-4">
+        <FileStatsCard files={files} />
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Files</CardTitle>
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" onClick={fetchFiles}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
               <input
                 ref={fileInputRef}
@@ -138,32 +175,62 @@ export default function FilesPage() {
             {filtered.length === 0 ? (
               <p className="text-sm text-muted-foreground">No files uploaded yet. Click Upload to add one.</p>
             ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {filtered.map(f => (
-                  <div key={f.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm group hover:bg-muted/50 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{f.filename}</span>
-                        {f.ingested && <span className="text-[10px] bg-success/10 text-success px-1 rounded">indexed</span>}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {formatSize(f.size)} · {f.content_type ?? 'unknown'} · {f.uploaded_at ? new Date(f.uploaded_at).toLocaleDateString() : '—'}
-                        {f.chunk_count != null && ` · ${f.chunk_count} chunks`}
-                      </div>
-                    </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {!f.ingested && (
-                        <Button size="sm" variant="ghost" onClick={() => handleIngest(f.id)} disabled={ingesting === f.id}>
-                          {ingesting === f.id ? 'Indexing...' : 'Index'}
-                        </Button>
-                      )}
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(f.id)}>
-                        Delete
-                      </Button>
-                    </div>
+              <>
+                {selected.size > 0 && (
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2">
+                    <span className="text-sm text-destructive font-medium">{selected.size} selected</span>
+                    <Button size="sm" variant="ghost" className="text-destructive h-8 text-xs ml-auto" onClick={handleBatchDelete} disabled={batchDeleting}>
+                      {batchDeleting ? 'Deleting...' : 'Delete Selected'}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setSelected(new Set())}>
+                      Clear
+                    </Button>
                   </div>
-                ))}
-              </div>
+                )}
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  <label className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground cursor-pointer hover:bg-muted/30 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selected.size === filtered.length && filtered.length > 0}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    Select all ({filtered.length})
+                  </label>
+                  {filtered.map(f => (
+                    <div key={f.id} className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm group hover:bg-muted/50 transition-colors ${selected.has(f.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60'}`}>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(f.id)}
+                          onChange={() => toggleSelect(f.id)}
+                          className="h-4 w-4 rounded border-border shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium truncate">{f.filename}</span>
+                            {f.ingested && <span className="text-xs bg-success/10 text-success px-1 rounded">indexed</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {formatSize(f.size)} · {f.content_type ?? 'unknown'} · {f.uploaded_at ? new Date(f.uploaded_at).toLocaleDateString() : '—'}
+                            {f.chunk_count != null && ` · ${f.chunk_count} chunks`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {!f.ingested && (
+                          <Button size="sm" variant="ghost" onClick={() => handleIngest(f.id)} disabled={ingesting === f.id}>
+                            {ingesting === f.id ? 'Indexing...' : 'Index'}
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(f.id)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

@@ -118,6 +118,16 @@ class LoraEvalRouter:
                 run_eval=run_eval,
             )
 
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "adapter.eval.aggregate",
+                    resource=output_name,
+                    extra={"user_count": result.get("user_count", 0), "total_feedback": result.get("total_feedback", 0)},
+                )
+            except Exception:
+                pass
+
             if "error" in result:
                 return success_response(data={"status": "no_adapters", "message": result["error"]})
 

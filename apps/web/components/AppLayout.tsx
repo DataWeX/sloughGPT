@@ -12,7 +12,7 @@ import { ErrorPanel } from '@sloughgpt/strui'
 import { StatusBar } from '@/components/StatusBar'
 import { OutputPanel } from '@/components/OutputPanel'
 import { useApiMonitor } from '@/lib/api-monitor-store'
-import { RadixToastContainer } from '@/components/chat/Toast'
+import { RadixToastContainer } from '@/features/chat/components/feedback/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useToastStore } from '@/lib/toast-store'
@@ -20,7 +20,7 @@ import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
-import { ConvSidebarProvider, useConvSidebar } from '@/contexts/ConvSidebarContext'
+import { ConvSidebarProvider, useConvSidebar } from '@/features/chat/contexts/ConvSidebarContext'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (

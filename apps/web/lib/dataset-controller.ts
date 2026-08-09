@@ -2,13 +2,11 @@
  * Dataset Controller — axios-based API for dataset management.
  */
 
-import { apiGet, apiPost, apiPatch, apiDelete } from './http-client'
-import { PUBLIC_API_URL } from './config'
-import { useAuthStore } from './auth'
+import { apiGet, apiPost, apiPatch, apiDelete, authFetch } from './http-client'
 import type { Method } from '@/hooks/useTrainingForm'
 
 export type ImportSource = 'github' | 'huggingface' | 'url' | 'local' | 'kaggle' | 'csv' | 'isbn'
-export type DatasetFormat = 'jsonl' | 'csv' | 'json'
+export type DatasetFormat = 'jsonl' | 'csv' | 'json' | 'messages' | 'dialogue' | 'text'
 
 export interface DatasetStats {
   format: DatasetFormat
@@ -117,13 +115,9 @@ export const datasetController = {
   },
 
   async export(id: string, format: string = 'jsonl'): Promise<Blob> {
-    const token = useAuthStore.getState().token
-    const res = await fetch(`${PUBLIC_API_URL}/datasets/${id}/export`, {
+    const res = await authFetch(`/datasets/${id}/export`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ format }),
     })
     return res.blob()
@@ -141,32 +135,32 @@ export const datasetController = {
     return apiGet<{ books: BookResult[] }>(`/datasets/search/books`, { q: query, limit: String(limit) })
   },
 
-  async importFromGitHub(request: { url: string; name: string; extensions?: string[]; max_files?: number }): Promise<ImportResponse> {
-    return apiPost<ImportResponse>('/datasets/import/github', request)
+  async importFromGitHub(request: { url: string; name: string; extensions?: string[]; max_files?: number }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+    return apiPost<ImportResponse>('/datasets/import/github', request, { signal: opts?.signal })
   },
 
-  async importFromHuggingFace(request: { dataset_id: string; name?: string }): Promise<ImportResponse> {
-    return apiPost<ImportResponse>('/datasets/import/huggingface', request)
+  async importFromHuggingFace(request: { dataset_id: string; name?: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+    return apiPost<ImportResponse>('/datasets/import/huggingface', request, { signal: opts?.signal })
   },
 
-  async importFromURL(request: { url: string; name: string }): Promise<ImportResponse> {
-    return apiPost<ImportResponse>('/datasets/import/url', request)
+  async importFromURL(request: { url: string; name: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+    return apiPost<ImportResponse>('/datasets/import/url', request, { signal: opts?.signal })
   },
 
-  async importFromLocal(request: { path: string; name: string; extensions?: string[] }): Promise<ImportResponse> {
-    return apiPost<ImportResponse>('/datasets/import/local', request)
+  async importFromLocal(request: { path: string; name: string; extensions?: string[] }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+    return apiPost<ImportResponse>('/datasets/import/local', request, { signal: opts?.signal })
   },
 
-  async importFromKaggle(request: { dataset: string; name?: string }): Promise<ImportResponse> {
-    return apiPost<ImportResponse>('/datasets/import/kaggle', request)
+  async importFromKaggle(request: { dataset: string; name?: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+    return apiPost<ImportResponse>('/datasets/import/kaggle', request, { signal: opts?.signal })
   },
 
-  async importFromCSV(request: { url: string; name: string; delimiter?: string; encoding?: string }): Promise<ImportResponse> {
-    return apiPost<ImportResponse>('/datasets/import/csv', request)
+  async importFromCSV(request: { url: string; name: string; delimiter?: string; encoding?: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+    return apiPost<ImportResponse>('/datasets/import/csv', request, { signal: opts?.signal })
   },
 
-  async importFromISBN(request: { isbn: string; name: string }): Promise<ImportResponse> {
-    return apiPost<ImportResponse>('/datasets/import/isbn', request)
+  async importFromISBN(request: { isbn: string; name: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+    return apiPost<ImportResponse>('/datasets/import/isbn', request, { signal: opts?.signal })
   },
 
   async batchImport(sources: string[]): Promise<{ imported: number; errors: string[] }> {

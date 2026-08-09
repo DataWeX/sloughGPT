@@ -193,3 +193,76 @@ class TestStatus:
         body = resp.json()
         assert "data" in body
         assert "status" in body
+
+
+class TestTTSValidation:
+    """Request body validation bounds."""
+
+    def test_missing_text_422(self, client):
+        resp = client.post("/voice/tts", json={})
+        assert resp.status_code == 422
+
+    def test_text_wrong_type_422(self, client):
+        resp = client.post("/voice/tts", json={"text": 42})
+        assert resp.status_code == 422
+
+    def test_voice_wrong_type_422(self, client):
+        resp = client.post("/voice/tts", json={"text": "hi", "voice": 7})
+        assert resp.status_code == 422
+
+    def test_voice_param_passed_to_backend(self, client):
+        backend = MagicMock()
+        backend.load.return_value = True
+        backend.generate.return_value = _make_wav()
+        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+            client.post("/voice/tts", json={"text": "hello", "voice": "en-us-female"})
+        assert backend.generate.call_args.args[0] == "hello"
+
+
+class TestVoiceMethodMismatch:
+    """Wrong HTTP methods on voice routes."""
+
+    def test_tts_get_405(self, client):
+        resp = client.get("/voice/tts")
+        assert resp.status_code == 405
+
+    def test_status_post_405(self, client):
+        resp = client.post("/voice/status")
+        assert resp.status_code == 405
+
+
+class TestVoiceStatusFailure:
+    """Status when backend load raises."""
+
+    def test_status_reports_error_after_load_failure(self, client):
+        backend = MagicMock()
+        backend.load.side_effect = RuntimeError("crashed")
+        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+            resp = client.get("/voice/status")
+        assert resp.status_code == 500
+
+    def test_status_load_success_reports_model(self, client):
+        backend = MagicMock()
+        backend.load.return_value = True
+        backend._model_id = "some/tts"
+        backend._error = None
+        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+            resp = client.get("/voice/status")
+        data = resp.json()["data"]
+        assert data["server_tts"] is True
+        assert data["model"] == "some/tts"
+
+
+class TestTTSErrorAfterLoad:
+    """tts failure inside the try block falls back to browser."""
+
+    def test_wav_read_error_falls_back(self, client):
+        backend = MagicMock()
+        backend.load.return_value = True
+        backend.generate.return_value = b"not-a-real-wav"
+        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+            resp = client.post("/voice/tts", json={"text": "hello"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["backend"] == "browser-fallback"
+        assert data["audio"] == ""

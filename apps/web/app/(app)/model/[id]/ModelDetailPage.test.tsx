@@ -131,8 +131,8 @@ afterEach(() => {
 describe('ModelDetailPage', () => {
   it('renders header with model name', async () => {
     render(<ModelDetailPage />)
-    await waitFor(() => expect(screen.getByText('GPT-2')).toBeDefined())
-    expect(screen.getByText('← Models')).toBeDefined()
+    await waitFor(() => expect(screen.getAllByText('GPT-2').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('Models').length).toBeGreaterThan(0)
   })
 
   it('shows loading skeleton while fetching', () => {
@@ -226,8 +226,8 @@ describe('ModelDetailPage', () => {
       size_mb: 2.5, final_loss: 0.3333, epochs: 2, model_path: '/tmp/x',
     }])
     render(<ModelDetailPage />)
-    await waitFor(() => expect(screen.getByText('gpt2_dataset_x')).toBeDefined())
-    expect(screen.getByText(/fine-tuned/i)).toBeDefined()
+    await waitFor(() => expect(screen.getAllByText('gpt2_dataset_x').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('finetuned').length).toBeGreaterThan(0)
     expect(screen.getByText('Load model')).toBeDefined()
   })
 
@@ -241,7 +241,7 @@ describe('ModelDetailPage', () => {
     }])
     mockLoadFineTuned.mockResolvedValue({ status: 'loaded', name: 'my_model_dataset_x', model_path: '/tmp/x', model_id: 'my_model_dataset_x' })
     render(<ModelDetailPage />)
-    await waitFor(() => expect(screen.getByText('my_model_dataset_x')).toBeDefined())
+    await waitFor(() => expect(screen.getAllByText('my_model_dataset_x').length).toBeGreaterThan(0))
     fireEvent.click(screen.getByText('Load model'))
     await waitFor(() => expect(mockLoadFineTuned).toHaveBeenCalledWith('my_model_dataset_x'))
     expect(mockModelLoad).not.toHaveBeenCalled()

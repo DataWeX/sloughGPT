@@ -178,6 +178,9 @@ class MobileRouter:
                     return resp.json()
                 return None
             except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="mobile_internal_get")
                 logger.warning(f"Internal GET {path} failed: {e}", extra={"tag": "REQ"})
                 return None
 
@@ -191,6 +194,9 @@ class MobileRouter:
                     return resp.json()
                 return None
             except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="mobile_internal_post")
                 logger.warning(f"Internal POST {path} failed: {e}", extra={"tag": "REQ"})
                 return None
 
@@ -204,6 +210,9 @@ class MobileRouter:
                     return resp.json()
                 return None
             except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="mobile_internal_patch")
                 logger.warning(f"Internal PATCH {path} failed: {e}", extra={"tag": "REQ"})
                 return None
 
@@ -217,6 +226,9 @@ class MobileRouter:
                     return resp.json()
                 return None
             except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="mobile_internal_delete")
                 logger.warning(f"Internal DELETE {path} failed: {e}", extra={"tag": "REQ"})
                 return None
 
@@ -645,6 +657,9 @@ class MobileRouter:
                         error="No response from server",
                     ))
             except Exception as e:
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="mobile_sync_offline")
                 results.append(SyncResult(
                     id=msg.id,
                     status="error",
@@ -932,6 +947,9 @@ class MobileRouter:
         except HTTPException:
             raise
         except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="mobile_train")
             logger.error("Mobile training failed: %s", e, extra={"tag": "REQ"})
             raise HTTPException(500, f"Training failed: {e}")
 
@@ -1325,6 +1343,9 @@ class MobileRouter:
                 bufsize=1,
             )
         except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="mobile_train_from_sessions")
             logger.error("Failed to start training subprocess: %s", e, extra={"tag": "REQ"})
             yield sse_error("training", "TRAIN", f"Failed to start training: {e}")
             return

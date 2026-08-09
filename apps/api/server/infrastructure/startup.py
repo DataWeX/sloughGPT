@@ -16,6 +16,7 @@ Hooks are scoped to startup profiles:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 import os
 import sys
@@ -62,6 +63,7 @@ _PREWARM_MODEL_LOAD_IMPORTS = [
     "domains.infrastructure.task_queue",
     "domains.infrastructure.training_queue",
     "domains.api.sse_envelope",
+    "pydantic.v1",
 ]
 _TIMEOUT_REGISTER_GENERATE = 120.0
 
@@ -440,7 +442,7 @@ class StartupOrchestrator:
         """
         STARTUP_PHASE.update(phase="registering_routers", step=8, total=9, message="Registering routes...")
         last_exc: Optional[BaseException] = None
-        for attempt in (1, 2):
+        for attempt in range(3):
             try:
                 from routers import get_all_routers
                 # Collect prefixes already registered (health/status are
@@ -475,10 +477,10 @@ class StartupOrchestrator:
                 transient = isinstance(e, ImportError) or (
                     isinstance(e, OSError) and getattr(e, "errno", None) == 9
                 )
-                if attempt == 1 and transient:
+                if transient and attempt < 2:
                     logger.warning(
-                        "Phase: router registration transient import failure (%s) — retrying",
-                        e, extra={"tag": "START"},
+                        "Phase: router registration transient import failure (%s) — retrying (attempt %d/3)",
+                        e, attempt + 1, extra={"tag": "START"},
                     )
                     import traceback as _tb
                     import faulthandler as _fth
@@ -487,7 +489,11 @@ class StartupOrchestrator:
                     except Exception:
                         pass
                     _tb.print_exc(file=sys.stderr)
-                    await asyncio.sleep(0.5)
+                    # Clear import caches (not sys.modules entries) so the
+                    # next import attempt re-reads from disk instead of
+                    # using stale/broken file descriptors.
+                    importlib.invalidate_caches()
+                    await asyncio.sleep(0.5 * (attempt + 1))
                     continue
                 self._routers_registered = False
                 import traceback as _tb

@@ -341,6 +341,26 @@ describe('trainingJobsController.deleteCheckpoint', () => {
   })
 })
 
+describe('trainingJobsController.deleteCheckpointsBatch', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('deletes multiple checkpoints in parallel', async () => {
+    apiClient.apiDelete.mockResolvedValue({ success: true })
+    const result = await trainingJobsController.deleteCheckpointsBatch(['cp1', 'cp2', 'cp3'])
+    expect(result.deleted).toBe(3)
+    expect(apiClient.apiDelete).toHaveBeenCalledTimes(3)
+  })
+
+  it('counts partial successes', async () => {
+    apiClient.apiDelete
+      .mockResolvedValueOnce({ success: true })
+      .mockRejectedValueOnce(new Error('not found'))
+      .mockResolvedValueOnce({ success: true })
+    const result = await trainingJobsController.deleteCheckpointsBatch(['cp1', 'cp2', 'cp3'])
+    expect(result.deleted).toBe(2)
+  })
+})
+
 describe('trainingJobsController.listFineTuned', () => {
   beforeEach(() => { vi.clearAllMocks() })
 

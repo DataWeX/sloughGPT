@@ -28,7 +28,18 @@ class ConfigRouter:
         """Update generation config"""
         ctrl = get_config_controller()
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
-        return success_response(data=ctrl.update_generation_config(**updates))
+        result = ctrl.update_generation_config(**updates)
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "config.generation.save",
+                resource="generation",
+                detail=str(updates),
+                extra={k: str(v) for k, v in updates.items()},
+            )
+        except Exception:
+            pass
+        return success_response(data=result)
 
 
 router = ConfigRouter().router

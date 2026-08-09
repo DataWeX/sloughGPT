@@ -272,9 +272,9 @@ sloughGPT/
 │   └── web/                     # Next.js frontend (app router)
 │       ├── app/(app)/           # Authenticated pages (chat, models, auto-train, etc.)
 │       ├── components/          # Reusable UI components
-│       │   ├── chat/            # Chat-specific components (MessageBubble, ChatInput, etc.)
 │       │   └── ui/              # shadcn/ui base components (Card, Button, Dialog, etc.)
-│       ├── lib/                 # Utilities (api.ts, feedback-store.ts, config.ts)
+│       ├── features/chat/       # Chat feature-folder (ChatPage, hooks/, contexts/, components/)
+│       ├── lib/                 # Utilities (controllers, stores, config.ts)
 │       ├── hooks/               # React hooks (useApiHealth, useLocale)
 │       └── contexts/            # React contexts (ModelContext)
 └── packages/
@@ -606,7 +606,7 @@ The training page is the main user-facing training interface:
 6. User can test the trained model inline via the test dialog
 
 ### Components
-Chat UI components are in [`apps/web/components/chat/`](apps/web/components/chat/):
+Chat UI components are in [`apps/web/features/chat/`](apps/web/features/chat/) (hooks in `features/chat/hooks/`, contexts in `features/chat/contexts/`, components in `features/chat/components/`):
 
 | Component | Description |
 |-----------|-------------|

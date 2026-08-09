@@ -263,3 +263,110 @@ class TestRegenerateSession:
         assert resp.status_code == 200
         assert "error" in resp.text
         assert "tokenizer broke" in resp.text
+
+
+class TestSessionMethodMismatch:
+    """Wrong HTTP methods on session routes."""
+
+    def test_context_get_405(self, client):
+        resp = client.get("/session/sess-1/context")
+        assert resp.status_code == 405
+
+    def test_messages_post_405(self, client):
+        resp = client.post("/session/sess-1/messages")
+        assert resp.status_code == 405
+
+    def test_inspector_post_405(self, client):
+        resp = client.post("/session/sess-1/inspector")
+        assert resp.status_code == 405
+
+    def test_regenerate_get_405(self, client):
+        resp = client.get("/session/sess-1/regenerate")
+        assert resp.status_code == 405
+
+
+class TestSessionContextValidation:
+    """SessionContext request body validation."""
+
+    def test_messages_wrong_type_422(self, client):
+        resp = client.post("/session/sess-1/context", json={"messages": "not a list"})
+        assert resp.status_code == 422
+
+    def test_system_prompt_wrong_type_422(self, client):
+        resp = client.post("/session/sess-1/context", json={"system_prompt": 42})
+        assert resp.status_code == 422
+
+    def test_knowledge_wrong_type_422(self, client):
+        resp = client.post("/session/sess-1/context", json={"knowledge": "not-a-list"})
+        assert resp.status_code == 422
+
+
+class TestInspectorEdgePaths:
+    """Inspector error and data-source branches."""
+
+    @patch("domains.infrastructure.session_core.SessionCore.get_messages")
+    def test_inspector_error_returns_500(self, mock_get, client):
+        mock_get.side_effect = RuntimeError("storage error")
+        resp = client.get("/session/sess-1/inspector")
+        assert resp.status_code == 500
+
+    @patch("domains.infrastructure.session_core.SessionCore.get_messages")
+    @patch("domains.infrastructure.context_core.get_context_core")
+    def test_inspector_includes_workspace(self, mock_cc, mock_get, client):
+        mock_get.return_value = [{"role": "user", "content": "Hi"}]
+        cc = MagicMock()
+        cc.get_context_inspector.return_value = {
+            "working_memory": ["note1"],
+            "semantic_keys": ["k1"],
+            "episodic_count": 3,
+            "sensory_buffer_size": 5,
+            "system_prompt": "You are a helper.",
+        }
+        mock_cc.return_value = cc
+        resp = client.get("/session/sess-1/inspector")
+        assert resp.status_code == 200
+        ws = resp.json()["workspace"]
+        assert ws["working_memory"] == ["note1"]
+        assert ws["episodic_count"] == 3
+        assert ws["system_prompt"] == "You are a helper."
+
+
+class TestRegenerateDisconnect:
+    """Regenerate streaming branch coverage."""
+
+    @patch("domains.infrastructure.session_core.SessionCore.get_messages")
+    @patch("domains.models.provider.get_provider")
+    @patch("fastapi.Request.is_disconnected")
+    def test_regenerate_stops_on_disconnect(self, mock_disc, mock_get_provider, mock_get, client):
+        mock_get.return_value = [{"role": "user", "content": "Hello"}]
+        mock_prov = MagicMock()
+
+        async def _stream(*a, **kw):
+            yield "First"
+            yield "Second"
+
+        mock_prov.chat_stream = _stream
+        mock_get_provider.return_value = mock_prov
+        mock_disc.side_effect = [False, True]
+
+        resp = client.post("/session/sess-1/regenerate")
+        assert resp.status_code == 200
+        assert "Regenerating" in resp.text
+        assert "First" in resp.text
+        assert "Second" not in resp.text
+
+    @patch("domains.infrastructure.session_core.SessionCore.get_messages")
+    @patch("domains.models.provider.get_provider")
+    def test_regenerate_emits_thinking_event(self, mock_get_provider, mock_get, client):
+        mock_get.return_value = [{"role": "user", "content": "Hello"}]
+        mock_prov = MagicMock()
+
+        async def _stream(*a, **kw):
+            yield "Token"
+
+        mock_prov.chat_stream = _stream
+        mock_get_provider.return_value = mock_prov
+        resp = client.post("/session/sess-1/regenerate")
+        assert resp.status_code == 200
+        assert "thinking" in resp.text
+        assert "Token" in resp.text

@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { apiPost } from '@/lib/http-client'
+import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 
 type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity'
@@ -125,11 +126,21 @@ export default function BenchmarkPage() {
         </div>
 
         {tab === 'metrics' && (
-          <Card>
+          <>
+            <BenchmarkInsightsCard metrics={metrics} quality={quality} stats={stats} />
+            <KpiGrid>
+              <StatCard label="Model" value={String(metrics?.model ?? '—')} />
+              <StatCard label="Inferences" value={String(metrics?.inference_count ?? 0)} />
+              <StatCard label="Tokens/s" value={String(metrics?.tokens_per_second ?? 0)} />
+              <StatCard label="Memory" value={`${metrics?.memory_mb ?? 0} MB`} />
+              <StatCard label="Total Tokens" value={String(metrics?.total_tokens ?? 0)} />
+              <StatCard label="Loaded" value={metrics?.model_loaded ? 'Yes' : 'No'} />
+            </KpiGrid>
+            <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Model Metrics</CardTitle>
               <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running}>
-                <IconRefresh className={`h-3.5 w-3.5 ${running ? 'animate-spin' : ''}`} />
+                <IconRefresh className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
               </Button>
             </CardHeader>
             <CardContent>
@@ -159,6 +170,7 @@ export default function BenchmarkPage() {
               )}
             </CardContent>
           </Card>
+          </>
         )}
 
         {tab === 'quality' && (
@@ -193,7 +205,7 @@ export default function BenchmarkPage() {
               <CardTitle className="text-base">Logged Responses ({responses.length})</CardTitle>
               <div className="flex gap-1">
                 <Button size="sm" variant="ghost" onClick={handleLoadResponses}>
-                  <IconRefresh className="h-3.5 w-3.5" />
+                  <IconRefresh className="h-4 w-4" />
                 </Button>
                 <Button size="sm" variant="ghost" className="text-destructive" onClick={handleClearHistory}>
                   Clear

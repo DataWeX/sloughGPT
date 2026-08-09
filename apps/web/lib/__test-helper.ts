@@ -23,7 +23,10 @@ const { mockApiGet, mockApiPost, mockApiPut, mockApiDelete, mockApiPatch }
   }))
 
 // Hoisted mock – runs at top level, before any imports
-vi.mock('./http-client', () => {
+vi.mock('./http-client', async () => {
+  // Preserve the real streaming/utility exports (streamSSE reads global fetch,
+  // which streaming tests stub) while mocking the axios-style REST surface.
+  const actual = await vi.importActual<typeof import('./http-client')>('./http-client')
   const makeClient = () => ({
     defaults: { baseURL: 'http://127.0.0.1:9' },
     get: vi.fn(),
@@ -37,6 +40,7 @@ vi.mock('./http-client', () => {
 
   return {
     __esModule: true,
+    ...actual,
     apiGet: mockApiGet,
     apiPost: mockApiPost,
     apiPut: mockApiPut,

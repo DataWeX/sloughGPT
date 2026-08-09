@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { companionController, type CompanionTraits, type CompanionPreset } from '@/lib/companion-controller'
+import { CompanionInsightsCard } from '@/components/companion/CompanionInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 
 const TRAIT_LABELS: Record<string, { label: string; color: string }> = {
@@ -106,6 +107,12 @@ export default function CompanionPage() {
       <div className="sl-page mx-auto max-w-4xl">
         <AppRouteHeader left={<AppRouteHeaderLead title="Companion" subtitle="AI personality management" />} />
         <div className="space-y-4">
+          <KpiGrid>
+            <StatCard label="Active Preset" value="..." />
+            <StatCard label="Warmth" value="..." />
+            <StatCard label="Curiosity" value="..." />
+            <StatCard label="Creativity" value="..." />
+          </KpiGrid>
           <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>
       </div>
@@ -128,10 +135,19 @@ export default function CompanionPage() {
     )
   }
 
+  const avgTrait = traits ? Math.round(Object.values(traits).reduce((a, b) => a + b, 0) / Object.values(traits).length) : 0
+
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Companion" subtitle="AI personality management" />} />
       <div className="space-y-4">
+        <KpiGrid>
+          <StatCard label="Active Preset" value={presets.length > 0 ? presets[0].name : 'Custom'} />
+          <StatCard label="Warmth" value={traits ? String(traits.warmth ?? 0) : '...'} />
+          <StatCard label="Curiosity" value={traits ? String(traits.curiosity ?? 0) : '...'} />
+          <StatCard label="Avg Trait" value={String(avgTrait)} />
+        </KpiGrid>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Presets</CardTitle>
@@ -152,13 +168,15 @@ export default function CompanionPage() {
           </CardContent>
         </Card>
 
+        <CompanionInsightsCard traits={traits as unknown as Record<string, number>} presets={presets} />
+
         {traits && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Personality Traits</CardTitle>
               <div className="flex gap-1.5">
                 <Button size="sm" variant="ghost" onClick={handleReset}>
-                  <IconRefresh className="h-3.5 w-3.5" />
+                  <IconRefresh className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
@@ -166,7 +184,7 @@ export default function CompanionPage() {
               <div className="grid gap-3">
                 {Object.entries(TRAIT_LABELS).map(([key, { label, color }]) => (
                   <div key={key} className="flex items-center gap-3">
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${color} w-20 text-center`}>
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${color} w-20 text-center`}>
                       {label}
                     </span>
                     <input

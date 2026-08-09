@@ -309,3 +309,93 @@ class TestAggregate:
     def test_min_feedback_zero_is_422(self):
         resp = client.post("/lora-eval/aggregate", params={"min_feedback": 0})
         assert resp.status_code == 422
+
+
+class TestRunEvalCompareFailure:
+    """GET /lora-eval/run — comparison failure falls back to baseline_only"""
+
+    @patch("pathlib.Path")
+    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    def test_adapter_exists_but_compare_raises_returns_baseline(self, mock_get_eval, mock_path_cls):
+        evaluator = MagicMock()
+        evaluator.run.side_effect = [_mock_eval_result(), RuntimeError("compare blew up")]
+        mock_get_eval.return_value = evaluator
+        mock_path_instance = MagicMock()
+        mock_path_instance.exists.return_value = True
+        mock_path_cls.return_value = mock_path_instance
+
+        resp = client.get("/lora-eval/run", params={"adapter_path": "x.npz"})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "baseline_only"
+        assert "note" in data
+
+    @patch("pathlib.Path")
+    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    def test_adapter_exists_but_second_run_raises_returns_baseline(self, mock_get_eval, mock_path_cls):
+        evaluator = MagicMock()
+        evaluator.run.side_effect = [_mock_eval_result(), RuntimeError("load failed")]
+        mock_get_eval.return_value = evaluator
+        mock_path_instance = MagicMock()
+        mock_path_instance.exists.return_value = True
+        mock_path_cls.return_value = mock_path_instance
+
+        resp = client.get("/lora-eval/run", params={"adapter_path": "x.npz"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["status"] == "baseline_only"
+
+
+class TestLoraEvalMethods:
+    """405s for disallowed methods"""
+
+    def test_run_post_is_405(self):
+        resp = client.post("/lora-eval/run")
+        assert resp.status_code == 405
+
+    def test_history_post_is_405(self):
+        resp = client.post("/lora-eval/history")
+        assert resp.status_code == 405
+
+    def test_aggregate_get_is_405(self):
+        resp = client.get("/lora-eval/aggregate")
+        assert resp.status_code == 405
+
+    def test_run_delete_is_405(self):
+        resp = client.delete("/lora-eval/run")
+        assert resp.status_code == 405
+
+
+class TestAggregateEvalDeltaDefaults:
+    """POST /lora-eval/aggregate — missing delta fields default to unknown"""
+
+    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    def test_eval_without_delta_uses_unknown_verdict(self, mock_get_store):
+        store = MagicMock()
+        store.aggregate_best_adapters.return_value = {
+            "output_path": "data/user_adapters/best.npz",
+            "user_count": 1,
+            "total_feedback": 2,
+            "eval": {"report": "no delta computed"},
+        }
+        mock_get_store.return_value = store
+        resp = client.post("/lora-eval/aggregate")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "aggregated_with_eval"
+        assert data["eval"]["verdict"] == "unknown"
+        assert data["eval"]["perplexity_delta"] is None
+
+    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    def test_eval_error_uses_aggregated_no_eval(self, mock_get_store):
+        store = MagicMock()
+        store.aggregate_best_adapters.return_value = {
+            "output_path": "x.npz",
+            "user_count": 2,
+            "total_feedback": 4,
+            "eval": {"error": "eval crashed"},
+        }
+        mock_get_store.return_value = store
+        resp = client.post("/lora-eval/aggregate")
+        data = resp.json()["data"]
+        assert data["status"] == "aggregated_no_eval"
+        assert "eval" not in data

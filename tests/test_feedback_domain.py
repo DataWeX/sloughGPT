@@ -1003,7 +1003,9 @@ class TestFeedbackWorkflowManager:
     def test_health_check_loop_increments_workflow_runs(self):
         wfm = FeedbackWorkflowManager(config=WorkflowConfig(health_check_interval_seconds=0.05))
         wfm.start()
-        time.sleep(0.3)
+        deadline = time.time() + 5.0
+        while wfm._stats["workflow_runs"] < 1 and time.time() < deadline:
+            time.sleep(0.05)
         wfm.stop()
         assert wfm._stats["workflow_runs"] >= 1
 

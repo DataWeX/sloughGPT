@@ -49,7 +49,7 @@ describe('BestCheckpointCard', () => {
     render(
       <BestCheckpointCard
         checkpoints={[
-          mkCp({ name: 'plain', loss: 1.0 }),
+          mkCp({ name: 'plain', loss: 2.0 }),
           mkCp({ name: 'good', loss: 1.5, verdict: 'Good' }),
         ]}
       />
@@ -62,7 +62,7 @@ describe('BestCheckpointCard', () => {
     render(
       <BestCheckpointCard
         checkpoints={[
-          mkCp({ name: 'plain', loss: 0.8 }),
+          mkCp({ name: 'plain', loss: 1.0 }),
           mkCp({ name: 'excellent', loss: 1.2, verdict: 'Excellent' }),
         ]}
       />

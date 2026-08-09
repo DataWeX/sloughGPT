@@ -112,7 +112,7 @@ class TestRecordFeedback:
         assert resp.status_code == 200
 
 
-@patch("apps.api.server.routers.feedback.get_feedback_controller")
+@patch("controllers.feedback.get_feedback_controller")
 class TestRecordFeedbackWorkflow:
     """POST /feedback/workflow-record"""
 
@@ -164,6 +164,49 @@ class TestRecordFeedbackWorkflow:
             "rating": "thumbs_down",
         })
         assert resp.status_code == 200
+
+    def test_workflow_passes_mapped_fields(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.record_feedback.return_value = {"feedback_id": "fb-wf-4"}
+        mock_get_ctrl.return_value = ctrl
+        resp = client.post("/feedback/workflow-record", json={
+            "conversation_id": "conv-9",
+            "rating": "thumbs_up",
+            "assistant_response": "ai text",
+            "user_message": "user text",
+        })
+        assert resp.status_code == 200
+        kwargs = ctrl.record_feedback.call_args.kwargs
+        assert kwargs["message_id"] == "conv-9"
+        assert kwargs["session_id"] == "conv-9"
+        assert kwargs["message_content"] == "ai text"
+        assert kwargs["assistant_response"] == "ai text"
+        assert kwargs["user_message"] == "user text"
+
+    def test_workflow_feedback_id_empty_fallback(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.record_feedback.return_value = {}
+        mock_get_ctrl.return_value = ctrl
+        resp = client.post("/feedback/workflow-record", json={
+            "conversation_id": "conv-1",
+            "rating": "thumbs_up",
+        })
+        assert resp.json()["data"]["feedback_id"] == ""
+
+    def test_workflow_overlong_assistant_response_422(self, mock_get_ctrl, client):
+        resp = client.post("/feedback/workflow-record", json={
+            "conversation_id": "conv-1",
+            "rating": "thumbs_up",
+            "assistant_response": "x" * 10001,
+        })
+        assert resp.status_code == 422
+
+    def test_workflow_overlong_conversation_id_422(self, mock_get_ctrl, client):
+        resp = client.post("/feedback/workflow-record", json={
+            "conversation_id": "c" * 257,
+            "rating": "thumbs_up",
+        })
+        assert resp.status_code == 422
 
 
 @patch("apps.api.server.routers.feedback.get_feedback_controller")
@@ -219,6 +262,20 @@ class TestConversations:
         assert resp.status_code == 200
         ctrl.list_conversations.assert_called_once_with(limit=10)
 
+    def test_list_conversations_default_limit(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.list_conversations.return_value = []
+        mock_get_ctrl.return_value = ctrl
+        client.get("/feedback/conversations")
+        ctrl.list_conversations.assert_called_once_with(limit=50)
+
+    def test_list_conversations_zero_limit_passthrough(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.list_conversations.return_value = []
+        mock_get_ctrl.return_value = ctrl
+        client.get("/feedback/conversations?limit=0")
+        ctrl.list_conversations.assert_called_once_with(limit=0)
+
     def test_get_conversation_found(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_conversation.return_value = dict(CONV_RESPONSE)
@@ -258,6 +315,23 @@ class TestConversations:
         resp = client.patch("/feedback/conversations/conv-1", json={"pinned": True})
         assert resp.status_code == 200
         assert resp.json()["pinned"] is True
+
+    def test_update_conversation_exclude_unset(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.update_conversation.return_value = dict(CONV_RESPONSE)
+        mock_get_ctrl.return_value = ctrl
+        client.patch("/feedback/conversations/conv-1", json={"name": "Renamed"})
+        args = ctrl.update_conversation.call_args.args
+        assert args[0] == "conv-1"
+        assert args[1] == {"name": "Renamed"}
+
+    def test_delete_conversation_calls_controller(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        mock_get_ctrl.return_value = ctrl
+        resp = client.delete("/feedback/conversations/conv-7")
+        assert resp.status_code == 200
+        ctrl.delete_conversation.assert_called_once_with("conv-7")
+        assert resp.json()["id"] == "conv-7"
 
     def test_delete_conversation(self, mock_get_ctrl, client):
         ctrl = MagicMock()
@@ -307,3 +381,23 @@ class TestGetFeedback:
         assert resp.status_code == 200
         assert resp.json()["message_id"] == "msg-99"
         assert resp.json()["rating"] == "thumbs_down"
+
+
+@patch("apps.api.server.routers.feedback.get_feedback_controller")
+class TestFeedbackMethodRestrictions:
+    """Wrong-method rejection across feedback routes."""
+
+    def test_put_root_405(self, mock_get_ctrl, client):
+        assert client.put("/feedback", json={}).status_code == 405
+
+    def test_post_stats_405(self, mock_get_ctrl, client):
+        assert client.post("/feedback/stats/summary").status_code == 405
+
+    def test_put_conversation_list_405(self, mock_get_ctrl, client):
+        assert client.put("/feedback/conversations", json={}).status_code == 405
+
+    def test_post_conversation_detail_405(self, mock_get_ctrl, client):
+        assert client.post("/feedback/conversations/conv-1").status_code == 405
+
+    def test_get_message_feedback_wrong_method_405(self, mock_get_ctrl, client):
+        assert client.post("/feedback/msg-1", json={}).status_code == 405

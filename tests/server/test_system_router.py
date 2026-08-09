@@ -217,4 +217,119 @@ class TestInferencePool:
         assert "initialized" in data
 
 
+class TestOutputStream:
+    """GET /system/stream — SSE output stream."""
+
+    def _make_sub(self, lines=(), timeout_raises=False):
+        import threading
+
+        class FakeSub:
+            name = "fake-sub"
+
+            def __init__(self, items):
+                self._items = list(items)
+
+            def read(self, timeout=0.1):
+                if timeout_raises:
+                    raise Exception("timeout")
+                out = self._items
+                self._items = []
+                return out
+
+        return FakeSub(lines)
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_stream_emits_history_then_exits(self, mock_get_buf, client):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        buf = MagicMock()
+        hist = [MagicMock(to_sse=lambda: '{"text": "boot"}')]
+        buf.tail.return_value = hist
+        sub = self._make_sub([])
+        buf.subscribe.return_value = sub
+        mock_get_buf.return_value = buf
+
+        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            with client.stream("GET", "/system/stream") as resp:
+                assert resp.status_code == 200
+                assert resp.headers["content-type"].startswith("text/event-stream")
+                body = resp.read().decode()
+                assert '{"text": "boot"}' in body
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_stream_pushes_live_lines(self, mock_get_buf, client):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        buf = MagicMock()
+        buf.tail.return_value = []
+        sub = self._make_sub([MagicMock(to_sse=lambda: '{"text": "live"}')])
+        buf.subscribe.return_value = sub
+        mock_get_buf.return_value = buf
+
+        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            with client.stream("GET", "/system/stream") as resp:
+                body = resp.read().decode()
+                assert '{"text": "live"}' in body
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_stream_unsubscribes_on_close(self, mock_get_buf, client):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        buf = MagicMock()
+        buf.tail.return_value = []
+        buf.subscribe.return_value = self._make_sub([])
+        mock_get_buf.return_value = buf
+
+        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            with client.stream("GET", "/system/stream") as resp:
+                resp.read()
+        buf.unsubscribe.assert_called_once()
+
+
+class TestSystemValidation:
+    """Validation bounds and method mismatches."""
+
+    def test_metrics_wrong_method_405(self, client):
+        resp = client.post("/system/metrics")
+        assert resp.status_code == 405
+
+    def test_disk_wrong_method_405(self, client):
+        resp = client.post("/system/disk")
+        assert resp.status_code == 405
+
+    def test_info_wrong_method_405(self, client):
+        resp = client.post("/system/info")
+        assert resp.status_code == 405
+
+    def test_output_wrong_method_405(self, client):
+        resp = client.post("/system/output")
+        assert resp.status_code == 405
+
+    def test_executor_wrong_method_405(self, client):
+        resp = client.post("/system/executor")
+        assert resp.status_code == 405
+
+    def test_output_n_above_max_422(self, client):
+        resp = client.get("/system/output?n=1001")
+        assert resp.status_code == 422
+
+    def test_output_n_below_min_422(self, client):
+        resp = client.get("/system/output?n=0")
+        assert resp.status_code == 422
+
+    def test_stream_tail_above_max_422(self, client):
+        resp = client.get("/system/stream?tail=501")
+        assert resp.status_code == 422
+
+    def test_purge_max_age_below_zero_422(self, client):
+        resp = client.post("/system/executor/purge?max_age_s=0")
+        assert resp.status_code == 422
+
+
 

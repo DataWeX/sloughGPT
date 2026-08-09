@@ -182,3 +182,140 @@ class TestSupportedExtensions:
         assert ".txt" in isolated_router.SUPPORTED_EXTENSIONS
         assert ".pdf" in isolated_router.SUPPORTED_EXTENSIONS
         assert ".py" in isolated_router.SUPPORTED_EXTENSIONS
+
+
+class TestUploadEdgeCases:
+    def test_upload_missing_file_field_422(self, client):
+        resp = client.post("/files/upload")
+        assert resp.status_code == 422
+
+    def test_upload_empty_filename_422(self, client):
+        resp = client.post("/files/upload", files={
+            "file": ("", b"content", "text/plain"),
+        })
+        assert resp.status_code == 422
+
+    def test_upload_dotfile_has_extension(self, client):
+        resp = client.post("/files/upload", files={
+            "file": (".env", b"SECRET=1", "text/plain"),
+        })
+        assert resp.status_code == 200
+        assert resp.json()["filename"] == ".env"
+
+    def test_upload_uppercase_extension(self, client):
+        resp = client.post("/files/upload", files={
+            "file": ("DATA.TXT", b"hello", "text/plain"),
+        })
+        assert resp.status_code == 200
+        assert resp.json()["filename"] == "DATA.TXT"
+
+    def test_upload_invalid_tags_ignored(self, client):
+        resp = client.post("/files/upload", files={
+            "file": ("tagged.txt", b"hello", "text/plain"),
+        }, data={"tags": "not-json"})
+        assert resp.status_code == 200
+
+    def test_upload_stores_actual_content(self, client):
+        payload = b"x" * 100
+        resp = client.post("/files/upload", files={
+            "file": ("big.txt", payload, "text/plain"),
+        })
+        assert resp.json()["size_bytes"] == 100
+
+
+class TestListSorting:
+    def test_list_tag_filter(self, client):
+        client.post("/files/upload", files={
+            "file": ("filtered.txt", b"c", "text/plain"),
+        }, data={"tags": '["keep"]'})
+        resp = client.get("/files?tag=keep")
+        assert resp.json()["total"] >= 1
+        resp2 = client.get("/files?tag=absent")
+        assert resp2.json()["total"] == 0
+
+    def test_list_asc_order(self, client):
+        client.post("/files/upload", files={
+            "file": ("asc.txt", b"c", "text/plain"),
+        })
+        resp = client.get("/files?order=asc")
+        assert resp.status_code == 200
+
+
+class TestSearchEdgeCases:
+    def test_search_empty_query_422(self, client):
+        resp = client.get("/files/search")
+        assert resp.status_code == 422
+
+    def test_search_case_insensitive(self, client):
+        client.post("/files/upload", files={
+            "file": ("MyReport.TXT", b"content", "text/plain"),
+        })
+        resp = client.get("/files/search?q=myreport")
+        assert resp.json()["total"] >= 1
+
+    def test_search_by_tag(self, client):
+        client.post("/files/upload", files={
+            "file": ("tagged_search.txt", b"content", "text/plain"),
+        }, data={"tags": '["searchable"]'})
+        resp = client.get("/files/search?q=tagged&tag=searchable")
+        assert resp.json()["total"] >= 1
+        resp2 = client.get("/files/search?q=tagged&tag=nope")
+        assert resp2.json()["total"] == 0
+
+
+class TestGetFileDetail:
+    def test_get_returns_text_content(self, client):
+        upload = client.post("/files/upload", files={
+            "file": ("content.txt", b"Hello World", "text/plain"),
+        })
+        file_id = upload.json()["id"]
+        resp = client.get(f"/files/{file_id}")
+        assert resp.json()["text"] == "Hello World"
+
+    def test_get_returns_tags(self, client):
+        upload = client.post("/files/upload", files={
+            "file": ("tagged2.txt", b"c", "text/plain"),
+        }, data={"tags": '["alpha", "beta"]'})
+        file_id = upload.json()["id"]
+        resp = client.get(f"/files/{file_id}")
+        assert resp.json()["tags"] == ["alpha", "beta"]
+
+
+class TestIngestChunking:
+    @patch("domains.learner.knowledge.get_knowledge_memory")
+    def test_ingest_chunks_long_text(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.add_fact.return_value = True
+        long_text = ("This is a long sentence that continues. "
+                     "And another one follows it. And a third. ") * 20
+        upload = client.post("/files/upload", files={
+            "file": ("long_ingest.txt", long_text.encode(), "text/plain"),
+        })
+        file_id = upload.json()["id"]
+        resp = client.post(f"/files/{file_id}/ingest")
+        assert resp.status_code == 200
+        assert mem.add_fact.call_count >= 1
+
+    @patch("domains.learner.knowledge.get_knowledge_memory")
+    def test_ingest_empty_text_zero_facts(self, mock_get_mem, client):
+        upload = client.post("/files/upload", files={
+            "file": ("empty_ingest.txt", b"", "text/plain"),
+        })
+        file_id = upload.json()["id"]
+        resp = client.post(f"/files/{file_id}/ingest")
+        assert resp.status_code == 200
+        assert resp.json()["facts_stored"] == 0
+
+
+class TestMethodCoverage:
+    def test_upload_get_captured_by_file_id(self, client):
+        resp = client.get("/files/upload")
+        assert resp.status_code == 404
+
+    def test_search_wrong_method_405(self, client):
+        resp = client.post("/files/search")
+        assert resp.status_code == 405
+
+    def test_ingest_wrong_method_405(self, client):
+        resp = client.get("/files/x/ingest")
+        assert resp.status_code == 405

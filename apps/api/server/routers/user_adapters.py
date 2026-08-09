@@ -69,6 +69,11 @@ class UserAdaptersRouter:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.update_adapter(user_id, rating=req.rating)
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log("adapter.update", resource=user_id, detail=f"rating={req.rating}")
+            except Exception:
+                pass
             return success_response(data={"status": "updated", "user_id": user_id})
         except ImportError:
             raise HTTPException(status_code=503, detail="Not available")
@@ -79,6 +84,11 @@ class UserAdaptersRouter:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.reset_adapter(user_id)
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log("adapter.reset", resource=user_id)
+            except Exception:
+                pass
             return success_response(data={"status": "reset", "user_id": user_id})
         except ImportError:
             raise HTTPException(status_code=503, detail="Not available")
@@ -89,6 +99,11 @@ class UserAdaptersRouter:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.merge_all()
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log("adapter.merge", resource="all")
+            except Exception:
+                pass
             return success_response(data={"status": "merged"})
         except ImportError:
             raise HTTPException(status_code=503, detail="Not available")
@@ -103,6 +118,15 @@ class UserAdaptersRouter:
                 min_feedback_count=req.min_feedback_count,
                 output_name=req.output_name,
             )
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "adapter.aggregate",
+                    resource=req.output_name or "best_aggregated",
+                    extra={"user_count": result.get("user_count", 0), "total_feedback": result.get("total_feedback", 0)},
+                )
+            except Exception:
+                pass
             eval_result = result.get("eval", {})
             if "error" not in eval_result:
                 return success_response(data={
@@ -137,6 +161,11 @@ class UserAdaptersRouter:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.delete_adapter(user_id)
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log("adapter.delete", resource=user_id)
+            except Exception:
+                pass
             return success_response(data={"status": "deleted", "user_id": user_id})
         except ImportError:
             raise HTTPException(status_code=503, detail="Per-user LoRA not available")
@@ -150,6 +179,16 @@ class UserAdaptersRouter:
                 min_feedback_count=request.min_feedback_count,
                 max_age_days=request.max_age_days,
             )
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "adapter.prune",
+                    resource="all",
+                    detail=f"deleted={len(deleted)}",
+                    extra={"deleted_users": deleted},
+                )
+            except Exception:
+                pass
             return success_response(data={
                 "status": "pruned",
                 "deleted_count": len(deleted),

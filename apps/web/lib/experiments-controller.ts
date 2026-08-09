@@ -41,9 +41,25 @@ export const experimentsController = {
   },
 
   async complete(experimentId: string): Promise<{ status: string }> {
-    return apiPost<{ status: string }>(
+    const data = await apiPost<{ status: string }>(
       `/experiments/${encodeURIComponent(experimentId)}/complete`,
       {},
     )
+    return data
+  },
+
+  async getExperimentData(experimentId: string): Promise<{
+    id: string
+    metrics: Array<{ metric: string; value: number; step: number; timestamp: string }>
+    params: Array<{ param: string; value: string; timestamp: string }>
+    status: { status: string; completed_at?: string } | null
+  }> {
+    const data = await apiGet<{
+      id: string
+      metrics: Array<{ metric: string; value: number; step: number; timestamp: string }>
+      params: Array<{ param: string; value: string; timestamp: string }>
+      status: { status: string; completed_at?: string } | null
+    }>(`/experiments/${encodeURIComponent(experimentId)}/data`)
+    return data
   },
 }

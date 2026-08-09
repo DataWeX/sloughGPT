@@ -43,9 +43,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${outfit.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrapInline }} />
       </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapInline }} />
         <WebVitals />
         <ErrorLifecycle />
         <ErrorBoundary>

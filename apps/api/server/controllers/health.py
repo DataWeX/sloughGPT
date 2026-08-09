@@ -67,9 +67,26 @@ def _is_model_loading() -> bool:
         return False
 
 
+def _is_app_ready() -> bool:
+    """True only when the app has finished startup (routers registered).
+
+    Health must not report the model as loaded until the lifecycle reaches
+    RUNNING — otherwise clients see ``model_loaded: true`` during the startup
+    window and hit routes that are not registered yet (404 "Not Found").
+    """
+    try:
+        from domains.infrastructure.lifecycle import get_lifecycle_manager
+        mgr = get_lifecycle_manager()
+        return mgr.is_running()
+    except Exception:
+        return True
+
+
 def _get_model_info() -> Tuple[bool, Optional[str]]:
     """Get model info from registry, controller, or server_state."""
     loaded, model_type, _ = _get_model_info_with_registry()
+    if loaded and not _is_app_ready():
+        return False, model_type
     return loaded, model_type
 
 

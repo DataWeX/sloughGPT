@@ -295,3 +295,113 @@ class TestListPresets:
             assert "id" in p
             assert "name" in p
             assert "description" in p
+
+
+class TestSetPersonalityEdgeCases:
+    """POST /companion/personality — validation + propagation."""
+
+    def test_warmth_exactly_one_ok(self):
+        resp = client.post("/companion/personality", json={"name": "Edge", "warmth": 1.0})
+        assert resp.status_code == 200
+
+    def test_warmth_exactly_zero_ok(self):
+        resp = client.post("/companion/personality", json={"name": "Edge", "humor": 0.0})
+        assert resp.status_code == 200
+
+    def test_missing_name_uses_default(self):
+        resp = client.post("/companion/personality", json={"warmth": 0.5})
+        assert resp.status_code == 200
+
+    def test_negative_humor_rejected(self):
+        resp = client.post("/companion/personality", json={"humor": -0.01})
+        assert resp.status_code == 422
+
+    def test_name_too_long_rejected(self):
+        resp = client.post("/companion/personality", json={"name": "x" * 101})
+        assert resp.status_code == 422
+
+
+class TestPatchPersonalityEdgeCases:
+    """PATCH /companion/personality — validation edges."""
+
+    def test_patch_name_only(self):
+        resp = client.patch("/companion/personality", json={"name": "OnlyName"})
+        assert resp.status_code == 200
+
+    def test_patch_nulls_ignored(self):
+        resp = client.patch("/companion/personality", json={
+            "warmth": None, "curiosity": None,
+        })
+        assert resp.status_code == 200
+
+    def test_patch_all_fields(self):
+        resp = client.patch("/companion/personality", json={
+            "name": "All", "warmth": 0.1, "curiosity": 0.2,
+            "creativity": 0.3, "confidence": 0.4, "humor": 0.5,
+        })
+        assert resp.status_code == 200
+
+    def test_patch_negative_creativity_rejected(self):
+        resp = client.patch("/companion/personality", json={"creativity": -0.5})
+        assert resp.status_code == 422
+
+    def test_patch_above_one_rejected(self):
+        resp = client.patch("/companion/personality", json={"curiosity": 1.01})
+        assert resp.status_code == 422
+
+
+class TestChatValidation:
+    """POST /companion/chat — request validation."""
+
+    def test_missing_message_422(self):
+        resp = client.post("/companion/chat", json={})
+        assert resp.status_code == 422
+
+    def test_empty_message_ok(self):
+        resp = client.post("/companion/chat", json={"message": ""})
+        assert resp.status_code == 200
+
+    def test_message_too_long_rejected(self):
+        resp = client.post("/companion/chat", json={"message": "x" * 10001})
+        assert resp.status_code == 422
+
+    @patch(COMPANION_TARGET)
+    def test_no_provider_returns_error_response(self, mock_get):
+        comp = _mock_companion()
+        mock_get.return_value = comp
+        with patch("domains.models.provider.get_provider", return_value=None):
+            resp = client.post("/companion/chat", json={"message": "Hello"})
+            assert resp.status_code == 200
+            assert "Error" in resp.json()["response"]
+
+
+class TestPresetValidation:
+    """POST /companion/preset — validation edges."""
+
+    def test_preset_name_too_long_rejected(self):
+        resp = client.post("/companion/preset", json={"name": "x" * 101, "preset": "warm"})
+        assert resp.status_code == 422
+
+    def test_unknown_preset_name_still_ok(self):
+        resp = client.post("/companion/preset", json={"name": "X", "preset": "nonexistent"})
+        assert resp.status_code == 200
+
+
+class TestMethodCoverage:
+    """Method mismatch coverage."""
+
+    def test_info_wrong_method_405(self):
+        resp = client.post("/companion/")
+        assert resp.status_code == 405
+
+    def test_prompt_wrong_method_405(self):
+        resp = client.post("/companion/prompt")
+        assert resp.status_code == 405
+
+    def test_presets_wrong_method_405(self):
+        resp = client.post("/companion/presets")
+        assert resp.status_code == 405
+
+    def test_chat_wrong_method_405(self):
+        resp = client.get("/companion/chat")
+        assert resp.status_code == 405

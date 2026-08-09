@@ -1763,6 +1763,87 @@ class SloLSTM(SloLayer):
     def init_hidden(self, batch=1) -> Tuple[Tensor, Tensor]:
         return zeros((batch, self.hidden_dim)), zeros((batch, self.hidden_dim))
 
+    @no_grad()
+    def generate(
+        self,
+        input_ids,
+        max_new_tokens: int = 50,
+        temperature: float = 0.8,
+        top_k: Optional[int] = 40,
+        top_p: Optional[float] = 0.95,
+        repetition_penalty: float = 1.0,
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
+        eos_token: Optional[int] = None,
+        extra_stop_ids: Optional[Sequence[int]] = None,
+        adapter=None,
+    ) -> np.ndarray:
+        """Autoregressive sampled generation over the last-timestep logits.
+
+        Feeds the prompt through ``forward_numpy`` (no autograd), then carries
+        the ``(h, c)`` hidden state forward one token at a time. Every step is
+        routed through ``_sample_from_logits`` so temperature/top-k/top-p and
+        the repetition penalties keep decoding diverse — greedy argmax on a
+        small char-level LSTM collapses into repeated-token loops.
+
+        Args:
+            input_ids: prompt tokens — numpy array, list, or SloNet Tensor.
+            max_new_tokens: tokens to generate beyond the prompt.
+            temperature: sampling temperature (>0; low = greedy).
+            top_k: keep only the top-k logits before sampling.
+            top_p: nucleus sampling threshold.
+            repetition_penalty: >1 scales down previously generated tokens.
+            frequency_penalty: subtract penalty * count per repeated token.
+            presence_penalty: subtract penalty for any token that has appeared.
+            eos_token: token id that ends generation when sampled.
+            extra_stop_ids: additional token ids that end generation.
+            adapter: optional ``SloAdapterLayer`` applied inside the LSTM.
+
+        Returns:
+            1D numpy array of generated token ids (prompt excluded).
+
+        Side effects:
+            - reads the model weights via the fast numpy forward path
+        """
+        if isinstance(input_ids, Tensor):
+            tokens = input_ids.data.copy()
+        else:
+            tokens = np.array(input_ids, dtype=np.int64)
+        if tokens.ndim > 1:
+            tokens = tokens.reshape(-1)
+        tokens = np.ascontiguousarray(tokens)
+
+        stop_ids = set()
+        if eos_token is not None:
+            stop_ids.add(eos_token)
+        if extra_stop_ids:
+            stop_ids.update(extra_stop_ids)
+
+        logits, (h, c) = self.forward_numpy(tokens, None, adapter=adapter)
+        hidden = (h.reshape(1, -1), c.reshape(1, -1))
+        generated = np.zeros(0, dtype=np.int64)
+
+        for _ in range(max_new_tokens):
+            next_token = _sample_from_logits(
+                logits,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                frequency_penalty=frequency_penalty,
+                presence_penalty=presence_penalty,
+                generated_ids=np.concatenate([tokens, generated]),
+                eos_token=eos_token,
+            )
+            generated = np.append(generated, next_token)
+            if next_token in stop_ids:
+                break
+            logits, (h, c) = self.forward_numpy(
+                np.array([[next_token]], dtype=np.int64), hidden, adapter=adapter
+            )
+            hidden = (h.reshape(1, -1), c.reshape(1, -1))
+        return generated
+
     def parameters(self) -> List[Tensor]:
         ps = self.embedding.parameters()+self.W_ih.parameters()+self.W_hh.parameters()+self.fc_out.parameters()
         if hasattr(self,'W_ih2'): ps += self.W_ih2.parameters()+self.W_hh2.parameters()

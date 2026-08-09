@@ -24,7 +24,7 @@ describe('useAppStore', () => {
   it('has default settings', () => {
     const { settings } = useAppStore.getState()
     expect(settings.apiUrl).toBe('http://localhost:8000')
-    expect(settings.defaultTemp).toBe(0.8)
+    expect(settings.defaultTemp).toBe(0.7)
     expect(settings.theme).toBe('light')
     expect(settings.streaming).toBe(true)
   })

@@ -153,7 +153,7 @@ def _worker_loop(
             session_id = None
             try:
                 session_id, prompt, kwargs = payload
-                stream_fn(prompt, resp_q, session_id=session_id, **kwargs)
+                stream_fn(prompt, resp_q, session_id=session_id, hb_q=hb_q, **kwargs)
                 requests_served += 1
             except Exception as e:
                 tb = traceback.format_exc()
@@ -270,6 +270,7 @@ def _slo_worker_main(
         prompt: str,
         resp_q_inner: mp.Queue,
         session_id: Optional[str] = None,
+        hb_q: Optional[mp.Queue] = None,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
         top_p: float = 0.9,
@@ -293,6 +294,11 @@ def _slo_worker_main(
             top_p=top_p,
             repetition_penalty=repetition_penalty,
         ):
+            if hb_q is not None:
+                try:
+                    hb_q.put_nowait(("alive", os.getpid()))
+                except Exception:
+                    pass
             decoded = provider._tokenizer.decode([tok_id])
             if decoded:
                 try:
@@ -415,6 +421,7 @@ def _hf_worker_main(
         prompt: str,
         resp_q_inner: mp.Queue,
         session_id: Optional[str] = None,
+        hb_q: Optional[mp.Queue] = None,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
         top_p: float = 0.9,
@@ -458,6 +465,11 @@ def _hf_worker_main(
         tokens_generated = 0
         start = time.time()
         for text_chunk in streamer:
+            if hb_q is not None:
+                try:
+                    hb_q.put_nowait(("alive", os.getpid()))
+                except Exception:
+                    pass
             try:
                 resp_q_inner.put(("token", session_id, text_chunk), timeout=_STREAM_PUT_TIMEOUT_S)
             except Exception:

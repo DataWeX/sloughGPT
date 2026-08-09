@@ -2,6 +2,8 @@
 Tests for the errors router — log, recent, grouped, trends, export, clear, unread.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -240,3 +242,147 @@ class TestUnreadCount:
         router_instance._error_count_since_clear = 0
         resp = client.get("/errors/unread")
         assert resp.json()["data"]["unread_count"] == 0
+
+
+class TestIngestFrontendLogs:
+    """POST /errors/logs/ingest"""
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_ingests_single_log(self, mock_get_buf, client):
+        buf = MagicMock()
+        mock_get_buf.return_value = buf
+        resp = client.post("/errors/logs/ingest", json={
+            "logs": [{"level": "info", "logger": "chat", "message": "hello"}],
+        })
+        assert resp.status_code == 200
+        assert resp.json()["data"]["ingested"] == 1
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_ingests_multiple_logs(self, mock_get_buf, client):
+        buf = MagicMock()
+        mock_get_buf.return_value = buf
+        resp = client.post("/errors/logs/ingest", json={
+            "logs": [
+                {"level": "debug", "message": "a"},
+                {"level": "error", "message": "b"},
+                {"level": "critical", "message": "c"},
+            ],
+        })
+        assert resp.status_code == 200
+        assert resp.json()["data"]["ingested"] == 3
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_ingest_maps_levels(self, mock_get_buf, client):
+        buf = MagicMock()
+        mock_get_buf.return_value = buf
+        resp = client.post("/errors/logs/ingest", json={
+            "logs": [{"level": "warning", "logger": "models", "message": "warn"}],
+        })
+        assert resp.status_code == 200
+        buf.append_log.assert_called_once()
+        kwargs = buf.append_log.call_args.kwargs
+        assert kwargs["level"] == "warning"
+        assert kwargs["source"] == "web.models"
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_ingest_unknown_level_defaults_info(self, mock_get_buf, client):
+        buf = MagicMock()
+        mock_get_buf.return_value = buf
+        resp = client.post("/errors/logs/ingest", json={
+            "logs": [{"level": "bogus", "message": "x"}],
+        })
+        assert resp.status_code == 200
+        assert buf.append_log.call_args.kwargs["level"] == "info"
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_ingest_with_exception_context(self, mock_get_buf, client):
+        buf = MagicMock()
+        mock_get_buf.return_value = buf
+        resp = client.post("/errors/logs/ingest", json={
+            "logs": [{
+                "level": "error",
+                "logger": "store",
+                "message": "boom",
+                "exception": "TypeError: x",
+                "context": {"page": "/settings"},
+            }],
+        })
+        assert resp.status_code == 200
+        ctx = buf.append_log.call_args.kwargs["context"]
+        assert ctx["page"] == "/settings"
+        assert ctx["exception"] == "TypeError: x"
+
+    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    def test_ingest_empty_batch(self, mock_get_buf, client):
+        buf = MagicMock()
+        mock_get_buf.return_value = buf
+        resp = client.post("/errors/logs/ingest", json={"logs": []})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["ingested"] == 0
+
+
+class TestOpencodeLog:
+    """GET /errors/log — opencode error log."""
+
+    def test_returns_entries(self, client):
+        resp = client.get("/errors/log")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "entries" in data
+        assert "total" in data
+
+
+class TestErrorsValidation:
+    """Validation bounds and method mismatches."""
+
+    def test_log_message_too_long_422(self, client):
+        resp = client.post("/errors/log", json={
+            "errors": [{"message": "x" * 5001}],
+        })
+        assert resp.status_code == 422
+
+    def test_log_too_many_errors_422(self, client):
+        resp = client.post("/errors/log", json={
+            "errors": [{"message": f"e{i}"} for i in range(101)],
+        })
+        assert resp.status_code == 422
+
+    def test_log_missing_errors_field_422(self, client):
+        resp = client.post("/errors/log", json={})
+        assert resp.status_code == 422
+
+    def test_ingest_missing_logs_field_422(self, client):
+        resp = client.post("/errors/logs/ingest", json={})
+        assert resp.status_code == 422
+
+    def test_recent_wrong_method_405(self, client):
+        resp = client.post("/errors/recent")
+        assert resp.status_code == 405
+
+    def test_grouped_wrong_method_405(self, client):
+        resp = client.post("/errors/grouped")
+        assert resp.status_code == 405
+
+    def test_trends_wrong_method_405(self, client):
+        resp = client.put("/errors/trends")
+        assert resp.status_code == 405
+
+    def test_export_wrong_method_405(self, client):
+        resp = client.post("/errors/export")
+        assert resp.status_code == 405
+
+    def test_unread_wrong_method_405(self, client):
+        resp = client.post("/errors/unread")
+        assert resp.status_code == 405
+
+    def test_log_wrong_method_405(self, client):
+        resp = client.delete("/errors/log")
+        assert resp.status_code == 405
+
+    def test_ingest_wrong_method_405(self, client):
+        resp = client.get("/errors/logs/ingest")
+        assert resp.status_code == 405
+
+    def test_clear_wrong_method_405(self, client):
+        resp = client.post("/errors/clear")
+        assert resp.status_code == 405

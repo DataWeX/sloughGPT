@@ -28,9 +28,59 @@ class TestKnowledgeMemory:
         assert km.add_fact(fact) is True
 
     def test_add_duplicate_content_returns_false(self, km):
-        fact = KnowledgeFact(content="Duplicate content", topic="test", source="test", timestamp=time.time(), importance=0.5)
+        fact = KnowledgeFact(content="The earth is round", topic="science", source="test")
         assert km.add_fact(fact) is True
         assert km.add_fact(fact) is False
+
+
+class TestAddFactsBatch:
+    def test_add_facts_returns_new_count(self, km):
+        facts = [
+            KnowledgeFact(content=f"Batch fact {i} with enough length", topic="bulk", source="test")
+            for i in range(3)
+        ]
+        assert km.add_facts(facts) == 3
+        assert len(km.list_all()) == 3
+
+    def test_add_facts_empty_batch(self, km):
+        assert km.add_facts([]) == 0
+
+    def test_add_facts_dedup_within_batch(self, km):
+        fact = KnowledgeFact(content="identical batch fact content", topic="t", source="test")
+        assert km.add_facts([fact, fact]) == 1
+
+    def test_add_facts_dedup_against_existing(self, km):
+        km.add_fact(KnowledgeFact(content="existing fact content here", topic="t", source="test"))
+        assert km.add_facts([KnowledgeFact(content="existing fact content here", topic="t", source="test")]) == 0
+
+    def test_add_facts_precomputed_vectors_skip_embedding(self, km, monkeypatch):
+        def boom(text):
+            raise AssertionError("embedding should be skipped when vectors are precomputed")
+
+        monkeypatch.setattr(km, "_get_embedding", boom)
+        facts = [
+            KnowledgeFact(content=f"precomputed fact {i} long enough", topic="t", source="test")
+            for i in range(2)
+        ]
+        vecs = [[0.5] * km._vector_store.dimension for _ in facts]
+        assert km.add_facts(facts, vectors=vecs) == 2
+
+    def test_add_facts_persists_store_once(self, km, monkeypatch):
+        saves = []
+        monkeypatch.setattr(km, "_save_entries", lambda: saves.append(1))
+        facts = [
+            KnowledgeFact(content=f"persist fact {i} long enough", topic="t", source="test")
+            for i in range(5)
+        ]
+        assert km.add_facts(facts) == 5
+        assert len(saves) == 1
+
+    def test_add_facts_requires_aligned_vectors(self, km):
+        with pytest.raises(ValueError):
+            km.add_facts(
+                [KnowledgeFact(content="x", topic="t", source="s")],
+                vectors=[[0.5, 0.5], [0.5, 0.5]],
+            )
 
     def test_list_all_returns_added_facts(self, km):
         km.add_fact(KnowledgeFact(content="Fact A", topic="topic_a", source="test", timestamp=time.time(), importance=0.6))

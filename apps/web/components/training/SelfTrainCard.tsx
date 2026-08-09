@@ -2,14 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
-import { PUBLIC_API_URL } from '@/lib/config'
-
-interface SelfTrainStatus {
-  status: string
-  pid?: number
-  returncode?: number
-  history: string[]
-}
+import { selfTrainController, type SelfTrainStatus } from '@/lib/self-train-controller'
 
 export function SelfTrainCard() {
   const [status, setStatus] = useState<SelfTrainStatus | null>(null)
@@ -21,9 +14,8 @@ export function SelfTrainCard() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/self-train/status`)
-      const data = await res.json()
-      setStatus(data?.data ?? data)
+      const data = await selfTrainController.getStatus()
+      setStatus(data)
     } catch { /* offline */ }
   }, [])
 
@@ -37,18 +29,13 @@ export function SelfTrainCard() {
     setLoading(true)
     setError(null)
     try {
-      const body: Record<string, unknown> = {}
-      if (model.trim()) body.model = model.trim()
-      if (temperature) body.temperature = parseFloat(temperature)
-      if (forever) body.forever = true
-      const res = await fetch(`${PUBLIC_API_URL}/self-train/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const result = await selfTrainController.start({
+        model: model.trim() || undefined,
+        temperature: temperature ? parseFloat(temperature) : undefined,
+        forever,
       })
-      const data = await res.json()
-      if (data?.data?.status === 'error') {
-        setError(data.data.error)
+      if (result?.status === 'error') {
+        setError(result.error ?? 'Unknown error')
       } else {
         await fetchStatus()
       }
@@ -62,7 +49,7 @@ export function SelfTrainCard() {
   const handleStop = async () => {
     setLoading(true)
     try {
-      await fetch(`${PUBLIC_API_URL}/self-train/stop`, { method: 'POST' })
+      await selfTrainController.stop()
       await fetchStatus()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed')

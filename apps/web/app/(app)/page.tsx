@@ -222,20 +222,20 @@ export default function HomePage() {
               <CardContent className="py-3">
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">Feedback</span>
-                    <span className="text-xs font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
+                    <span className="text-sm text-muted-foreground">Feedback</span>
+                    <span className="text-sm font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-success">👍 {feedbackStats.db_stats.thumbs_up}</span>
-                    <span className="text-xs text-destructive">👎 {feedbackStats.db_stats.thumbs_down}</span>
+                    <span className="text-sm text-success">👍 {feedbackStats.db_stats.thumbs_up}</span>
+                    <span className="text-sm text-destructive">👎 {feedbackStats.db_stats.thumbs_down}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">Ratio</span>
-                    <span className={`text-xs font-medium ${feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning'}`}>
+                    <span className="text-sm text-muted-foreground">Ratio</span>
+                    <span className={`text-sm font-medium ${feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning'}`}>
                       {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
                     </span>
                   </div>
-                  <Link href="/training" className="ml-auto text-xs text-primary hover:text-primary/80 shrink-0">
+                  <Link href="/training" className="ml-auto text-sm text-primary hover:text-primary/80 shrink-0">
                     Train from feedback →
                   </Link>
                 </div>
@@ -256,7 +256,7 @@ export default function HomePage() {
                       <p className="text-sm font-medium truncate">Training: {runningTraining.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{runningTraining.status_message}</p>
                     </div>
-                    <span className="text-xs text-primary shrink-0">View →</span>
+                    <span className="text-sm text-primary shrink-0">View →</span>
                   </div>
                 </CardContent>
               </Card>
@@ -271,13 +271,13 @@ export default function HomePage() {
             <CardContent className="py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium">Quick test</p>
-                  <p className="text-[10px] text-muted-foreground">Send &quot;Hello!&quot; to verify the model works</p>
+                  <p className="text-sm font-medium">Quick test</p>
+                  <p className="text-xs text-muted-foreground">Send &quot;Hello!&quot; to verify the model works</p>
                 </div>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs shrink-0"
+                  className="h-8 text-xs shrink-0"
                   disabled={data.testRunning}
                   onClick={async () => {
                     data.setTestRunning(true)
@@ -305,8 +305,8 @@ export default function HomePage() {
           <Card>
             <CardContent className="py-3">
               <div className="flex items-center gap-2 mb-2">
-                <p className="text-xs font-medium">Quick note</p>
-                <p className="text-[10px] text-muted-foreground">Add a fact the AI can remember</p>
+                <p className="text-sm font-medium">Quick note</p>
+                <p className="text-xs text-muted-foreground">Add a fact the AI can remember</p>
               </div>
               <form onSubmit={async (e) => {
                 e.preventDefault()
@@ -323,7 +323,7 @@ export default function HomePage() {
                 <input
                   type="text"
                   placeholder="e.g., I prefer Python over JavaScript"
-                  className="flex-1 h-8 rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  className="flex-1 h-9 rounded-md border border-border/60 bg-background px-2.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <Button size="sm" type="submit" className="h-8 text-xs shrink-0">Save</Button>
               </form>
@@ -335,7 +335,7 @@ export default function HomePage() {
       {apiStatus === 'online' && modelStatus.loaded && (
         <Card>
           <CardContent className="py-3">
-            <p className="text-xs font-medium mb-2">Recent activity</p>
+            <p className="text-sm font-medium mb-2">Recent activity</p>
             <div className="space-y-1.5">
               {recentSessions.slice(0, 3).map(s => (
                 <button
@@ -345,9 +345,9 @@ export default function HomePage() {
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
                   <span className="text-xs truncate flex-1">{s.name}</span>
-                  {s.starred && <span className="text-[10px] shrink-0">★</span>}
-                  {s.pinned && <span className="text-[10px] text-primary shrink-0">📌</span>}
-                  <span className="text-[10px] text-muted-foreground shrink-0">
+                  {s.starred && <span className="text-xs shrink-0">★</span>}
+                  {s.pinned && <span className="text-xs text-primary shrink-0">📌</span>}
+                  <span className="text-xs text-muted-foreground shrink-0">
                     {s.message_count != null && <span>{s.message_count}m · </span>}
                     {(() => {
                       const d = Date.now() - new Date(s.updated_at).getTime()
@@ -364,7 +364,7 @@ export default function HomePage() {
                 <div key={j.id} className="flex items-center gap-2 px-1.5 py-1">
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40'}`} />
                   <span className="text-xs truncate flex-1">{j.name || j.id}</span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'}`}>{j.status}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'}`}>{j.status}</span>
                 </div>
               ))}
             </div>
@@ -378,12 +378,12 @@ export default function HomePage() {
         return (
           <Card className="border-dashed border-primary/20 bg-primary/[0.02]">
             <CardContent className="py-3 flex items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">New here?</span>{' '}
                 Start chatting, then train the model on your conversations. The more you chat, the better it gets.
               </p>
               <button
-                className="text-[10px] text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground shrink-0 transition-colors"
                 onClick={(e) => { localStorage.setItem('onboarding_dismissed', '1'); e.currentTarget.closest('.space-y-4 > div')?.remove() }}
               >
                 Got it

@@ -201,7 +201,7 @@ export default function MultimodalPage() {
         left={<AppRouteHeaderLead title="Multimodal" subtitle="Vision, speech, and image generation" />}
         right={
           <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading}>
-            <IconRefresh className="h-3.5 w-3.5 mr-1" /> Refresh
+            <IconRefresh className="h-4 w-4 mr-1" /> Refresh
           </Button>
         }
       />

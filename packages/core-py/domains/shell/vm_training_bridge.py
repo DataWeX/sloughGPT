@@ -189,10 +189,57 @@ class VMTrainingBridge:
             "epochs_completed": data.get("current_epoch", 0),
         })
 
+    def stop(self, job_id: int) -> bool:
+        """Ask the API to stop a running training job.
+
+        POSTs to ``/training/jobs/{api_job_id}/stop`` and marks the local
+        record as ``stopping``.  Returns True when the API accepted the stop.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return False
+            api_job_id = job.get("api_job_id", "")
+
+        if not api_job_id:
+            return False
+
+        try:
+            resp = self._session.post(
+                f"{_API_BASE}/training/jobs/{api_job_id}/stop",
+                timeout=_TRAINING_TIMEOUT_S,
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            logger.warning("TRAIN_STOP job=%d: API call failed: %s", job_id, e)
+            return False
+
+        with self._lock:
+            if job_id in self._jobs:
+                self._jobs[job_id]["status"] = "stopping"
+        logger.info("TRAIN_STOP job=%d api_job_id=%s", job_id, api_job_id)
+        return True
+
     def remove(self, job_id: int) -> bool:
         """Remove a completed/failed job from tracking. Returns True if found."""
         with self._lock:
             return self._jobs.pop(job_id, None) is not None
+
+    def job_info(self, job_id: int) -> Optional[dict[str, Any]]:
+        """Return the tracked record for a job, or None if unknown.
+
+        Keys: ``api_job_id``, ``status``, ``progress`` (0-1), ``error``.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            return {
+                "api_job_id": job.get("api_job_id", ""),
+                "status": job.get("status", "running"),
+                "progress": job.get("progress", 0.0),
+                "error": job.get("error"),
+            }
 
     def alive_count(self) -> int:
         """Return number of jobs still running."""

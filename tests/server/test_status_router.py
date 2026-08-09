@@ -138,3 +138,44 @@ class TestLiveness:
         data = client.get("/status").json()["data"]
         assert set(data.keys()) == {"status", "uptime_seconds", "timestamp"}
         assert data["status"] == "healthy"
+
+
+class TestStatusMethods:
+    """405s for disallowed methods on status endpoints"""
+
+    def test_status_put_rejected(self, client):
+        assert client.put("/status").status_code == 405
+
+    def test_status_delete_rejected(self, client):
+        assert client.delete("/status").status_code == 405
+
+    def test_ready_put_rejected(self, client):
+        assert client.put("/ready").status_code == 405
+
+    def test_ready_delete_rejected(self, client):
+        assert client.delete("/ready").status_code == 405
+
+    def test_live_put_rejected(self, client):
+        assert client.put("/live").status_code == 405
+
+    def test_live_delete_rejected(self, client):
+        assert client.delete("/live").status_code == 405
+
+    def test_status_patch_rejected(self, client):
+        assert client.patch("/status").status_code == 405
+
+
+class TestTimestampFormat:
+    """GET /status timestamp is ISO-8601 parseable"""
+
+    def test_timestamp_parseable(self, client):
+        from datetime import datetime
+        ts = client.get("/status").json()["data"]["timestamp"]
+        parsed = datetime.fromisoformat(ts)
+        assert parsed.year >= 2026
+
+    def test_uptime_changes_over_time(self, client):
+        first = client.get("/status").json()["data"]["uptime_seconds"]
+        time.sleep(0.02)
+        second = client.get("/status").json()["data"]["uptime_seconds"]
+        assert second >= first

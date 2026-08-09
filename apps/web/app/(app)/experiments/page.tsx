@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { experimentsController } from '@/lib/experiments-controller'
+import { ExperimentDetailsCard } from '@/components/experiments/ExperimentDetailsCard'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function ExperimentsPage() {
@@ -20,6 +21,8 @@ export default function ExperimentsPage() {
   const [logMsg, setLogMsg] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [batchDeleting, setBatchDeleting] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
@@ -99,11 +102,50 @@ export default function ExperimentsPage() {
     } catch { setLogMsg('Failed') }
   }
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    const filtered = experiments.filter(exp => !search || exp.id.toLowerCase().includes(search.toLowerCase()))
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(exp => exp.id)))
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    setBatchDeleting(true)
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => experimentsController.delete(id)))
+      setSelectedIds(new Set())
+      await fetchExperiments()
+      addToast(`Deleted ${selectedIds.size} experiments`, 'success')
+    } catch {
+      addToast('Batch delete failed', 'error')
+    } finally {
+      setBatchDeleting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="sl-page mx-auto max-w-4xl">
         <AppRouteHeader left={<AppRouteHeaderLead title="Experiments" subtitle="ML experiment tracking" />} />
         <div className="space-y-4">
+          <KpiGrid>
+            <StatCard label="Total" value="..." />
+            <StatCard label="Selected" value="..." />
+            <StatCard label="Auto-refresh" value="..." />
+            <StatCard label="Last Created" value="..." />
+          </KpiGrid>
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>
       </div>
@@ -114,6 +156,13 @@ export default function ExperimentsPage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Experiments" subtitle={`${experiments.length} experiments`} />} />
       <div className="space-y-4">
+        <KpiGrid>
+          <StatCard label="Total Experiments" value={String(experiments.length)} />
+          <StatCard label="Selected" value={String(selectedIds.size)} />
+          <StatCard label="Auto-refresh" value={autoRefresh ? 'ON' : 'OFF'} />
+          <StatCard label="Last Created" value={experiments.length > 0 ? experiments[0].id.slice(0, 20) : 'None'} />
+        </KpiGrid>
+
         {logMsg && (
           <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
             {logMsg}
@@ -148,13 +197,13 @@ export default function ExperimentsPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search..."
-                className="h-7 w-32 text-xs"
+                className="h-9 w-32 text-sm"
               />
               <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
                 {autoRefresh ? 'Auto' : 'Refresh'}
               </Button>
               <Button size="sm" variant="ghost" onClick={fetchExperiments}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
@@ -162,33 +211,64 @@ export default function ExperimentsPage() {
             {experiments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No experiments yet.</p>
             ) : (
-              <div className="space-y-2">
-                {experiments
-                  .filter(exp => !search || exp.id.toLowerCase().includes(search.toLowerCase()))
-                  .map(exp => (
-                  <div
-                    key={exp.id}
-                    className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors cursor-pointer ${
-                      selectedId === exp.id
-                        ? 'border-primary/40 bg-primary/5'
-                        : 'border-border/60 hover:bg-muted/50'
-                    }`}
-                    onClick={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
-                  >
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{exp.id}</div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); handleComplete(exp.id) }}>
-                        Done
-                      </Button>
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={e => { e.stopPropagation(); handleDelete(exp.id) }}>
-                        <IconTrash className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+              <>
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 mb-2">
+                    <span className="text-sm text-destructive font-medium">{selectedIds.size} selected</span>
+                    <Button size="sm" variant="ghost" className="text-destructive h-8 text-xs ml-auto" onClick={handleBatchDelete} disabled={batchDeleting}>
+                      {batchDeleting ? 'Deleting...' : 'Delete Selected'}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setSelectedIds(new Set())}>
+                      Clear
+                    </Button>
                   </div>
-                ))}
-              </div>
+                )}
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === experiments.filter(exp => !search || exp.id.toLowerCase().includes(search.toLowerCase())).length && experiments.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-border"
+                  />
+                  Select all
+                </label>
+                <div className="space-y-2">
+                  {experiments
+                    .filter(exp => !search || exp.id.toLowerCase().includes(search.toLowerCase()))
+                    .map(exp => (
+                    <div
+                      key={exp.id}
+                      className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors cursor-pointer ${
+                        selectedId === exp.id
+                          ? 'border-primary/40 bg-primary/5'
+                          : selectedIds.has(exp.id)
+                            ? 'border-primary/40 bg-primary/5'
+                            : 'border-border/60 hover:bg-muted/50'
+                      }`}
+                      onClick={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(exp.id)}
+                          onChange={() => toggleSelect(exp.id)}
+                          onClick={e => e.stopPropagation()}
+                          className="rounded border-border shrink-0"
+                        />
+                        <div className="font-medium truncate">{exp.id}</div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); handleComplete(exp.id) }}>
+                          Done
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={e => { e.stopPropagation(); handleDelete(exp.id) }}>
+                          <IconTrash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -211,6 +291,10 @@ export default function ExperimentsPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {selectedId && (
+          <ExperimentDetailsCard experimentId={selectedId} />
         )}
       </div>
     </div>

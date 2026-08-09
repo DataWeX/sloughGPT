@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet, apiPost } from '@/lib/http-client'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 
 interface GalleryImage {
@@ -86,7 +87,7 @@ export default function ImagesPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Generate</CardTitle>
             <Button size="sm" variant="ghost" onClick={fetchData}>
-              <IconRefresh className="h-3.5 w-3.5" />
+              <IconRefresh className="h-4 w-4" />
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -151,7 +152,7 @@ export default function ImagesPage() {
                       className="w-full aspect-square object-cover"
                       loading="lazy"
                     />
-                    <div className="px-2 py-1 text-[10px] text-muted-foreground truncate">
+                    <div className="px-2 py-1 text-xs text-muted-foreground truncate">
                       {new Date(img.created * 1000).toLocaleDateString()}
                     </div>
                   </div>
@@ -160,6 +161,8 @@ export default function ImagesPage() {
             )}
           </CardContent>
         </Card>
+
+        {gallery.length > 0 && <ImageGalleryInsightsCard gallery={gallery} styles={styles} />}
       </div>
     </div>
   )

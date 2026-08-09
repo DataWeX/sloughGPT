@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { workflowController } from '@/lib/workflow-controller'
+import { WorkflowPipeline } from '@/components/workflow/WorkflowPipeline'
+import { WorkflowHealthCard } from '@/components/workflow/WorkflowHealthCard'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function WorkflowPage() {
@@ -63,6 +65,12 @@ export default function WorkflowPage() {
       <div className="sl-page mx-auto max-w-4xl">
         <AppRouteHeader left={<AppRouteHeaderLead title="Workflow" subtitle="Automated feedback pipeline" />} />
         <div className="space-y-4">
+          <KpiGrid>
+            <StatCard label="Status" value="Loading..." />
+            <StatCard label="Feedback" value="..." />
+            <StatCard label="Adapters" value="..." />
+            <StatCard label="Health" value="..." />
+          </KpiGrid>
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>
       </div>
@@ -73,6 +81,25 @@ export default function WorkflowPage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Workflow" subtitle="Automated feedback pipeline" />} />
       <div className="space-y-4">
+        <KpiGrid>
+          <StatCard
+            label="Status"
+            value={status?.running ? 'Running' : 'Stopped'}
+          />
+          <StatCard
+            label="Feedback Records"
+            value={String(status?.stats?.feedback_records ?? 0)}
+          />
+          <StatCard
+            label="Adapters"
+            value={String(status?.stats?.adapters_count ?? 0)}
+          />
+          <StatCard
+            label="Last Aggregate"
+            value={status?.stats?.last_aggregate ? new Date(status.stats.last_aggregate).toLocaleDateString() : 'Never'}
+          />
+        </KpiGrid>
+
         {triggerMsg && (
           <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
             {triggerMsg}
@@ -85,7 +112,7 @@ export default function WorkflowPage() {
             <CardTitle className="text-base">Status</CardTitle>
             <div className="flex gap-1.5">
               <Button size="sm" variant="ghost" onClick={fetchStatus}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
@@ -105,6 +132,10 @@ export default function WorkflowPage() {
             </div>
           </CardContent>
         </Card>
+
+        <WorkflowHealthCard status={status} />
+
+        <WorkflowPipeline status={status} />
 
         {status?.config && (
           <Card>

@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
+import { VoicePresetCard } from '@/components/voice/VoicePresetCard'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function VoicePage() {
@@ -14,6 +15,7 @@ export default function VoicePage() {
   const [generating, setGenerating] = useState(false)
   const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string; sample_rate: number } | null>(null)
   const [ttsError, setTtsError] = useState<string | null>(null)
+  const [ttsCount, setTtsCount] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
@@ -44,6 +46,7 @@ export default function VoicePage() {
         return
       }
       setLastResult({ duration_ms: data.duration_ms, backend: data.backend, sample_rate: data.sample_rate })
+      setTtsCount(c => c + 1)
       if (data.audio && data.backend === 'hf-model') {
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
         audioRef.current = audio
@@ -66,7 +69,13 @@ export default function VoicePage() {
       <div className="sl-page mx-auto max-w-4xl">
         <AppRouteHeader left={<AppRouteHeaderLead title="Voice" subtitle="Text-to-speech settings" />} />
         <div className="space-y-4">
+          <KpiGrid>
+            <StatCard label="Loading" value="..." />
+            <StatCard label="Loading" value="..." />
+            <StatCard label="Loading" value="..." />
+          </KpiGrid>
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+          <Card><CardContent><div className="h-40 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>
       </div>
     )
@@ -76,39 +85,55 @@ export default function VoicePage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Voice" subtitle="Text-to-speech settings" />} />
       <div className="space-y-4">
+        <KpiGrid>
+          <StatCard label="Server TTS" value={status?.server_tts ? 'Available' : 'Unavailable'} />
+          <StatCard label="Model" value={status?.model ?? 'None'} />
+          <StatCard label="TTS Calls" value={ttsCount} />
+        </KpiGrid>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">TTS Backend</CardTitle>
             <Button size="sm" variant="ghost" onClick={handleRefreshStatus}>
-              <IconRefresh className="h-3.5 w-3.5" />
+              <IconRefresh className="h-4 w-4" />
             </Button>
           </CardHeader>
           <CardContent>
             {status ? (
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Server TTS</div>
-                  <div className={`text-sm font-mono font-medium ${status.server_tts ? 'text-success' : 'text-muted-foreground'}`}>
-                    {status.server_tts ? 'Available' : 'Unavailable'}
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="rounded-md bg-muted/30 p-2 text-center">
+                    <div className="text-xs text-muted-foreground">Server</div>
+                    <div className={`text-xs font-medium ${status.server_tts ? 'text-success' : 'text-muted-foreground'}`}>
+                      {status.server_tts ? 'Online' : 'Offline'}
+                    </div>
+                  </div>
+                  <div className="rounded-md bg-muted/30 p-2 text-center">
+                    <div className="text-xs text-muted-foreground">Model</div>
+                    <div className="text-xs font-medium truncate">{status.model ?? '—'}</div>
+                  </div>
+                  <div className="rounded-md bg-muted/30 p-2 text-center">
+                    <div className="text-xs text-muted-foreground">Fallback</div>
+                    <div className="text-xs font-medium text-muted-foreground">Browser</div>
+                  </div>
+                  <div className="rounded-md bg-muted/30 p-2 text-center">
+                    <div className="text-xs text-muted-foreground">Status</div>
+                    <div className={`text-xs font-medium ${status.error ? 'text-destructive' : 'text-success'}`}>
+                      {status.error ? 'Error' : 'Ready'}
+                    </div>
                   </div>
                 </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Model</div>
-                  <div className="text-sm font-mono font-medium">{status.model ?? '—'}</div>
-                </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Fallback</div>
-                  <div className="text-sm font-mono font-medium text-muted-foreground">Browser TTS</div>
-                </div>
+                {status.error && (
+                  <div className="text-xs text-destructive bg-destructive/5 rounded-md p-2">{status.error}</div>
+                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Could not load TTS status.</p>
             )}
-            {status?.error && (
-              <div className="mt-2 text-xs text-destructive">{status.error}</div>
-            )}
           </CardContent>
         </Card>
+
+        <VoicePresetCard />
 
         <Card>
           <CardHeader>

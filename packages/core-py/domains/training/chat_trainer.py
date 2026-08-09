@@ -419,32 +419,22 @@ def generate_from_chat_model(
     if not tokens:
         tokens = [0]
 
-    for _ in range(max_tokens):
-        # Truncate to block_size
-        ctx = tokens[-model.block_size:] if hasattr(model, 'block_size') else tokens[-128:]
-        x = tensor([ctx], requires_grad=False)
-        logits, _ = model.forward(x)
-        if hasattr(logits, 'data'):
-            logits_np = logits.data
-        else:  # pragma: no cover (SloNet always returns Tensors with .data)
-            logits_np = np.array(logits)
+    eos = stoi.get("<PAD>", 0)
+    inp = np.array([tokens[-model.block_size:]], dtype=np.int64)
+    out = model.generate(
+        inp,
+        max_new_tokens=max_tokens,
+        temperature=temperature,
+        top_k=40,
+        top_p=0.95,
+        repetition_penalty=1.1,
+        eos_token=eos,
+    )
+    out_ids = out.data.flatten().tolist()
+    if eos in out_ids:
+        out_ids = out_ids[:out_ids.index(eos)]
 
-        next_logits = logits_np[0, -1]
-
-        if temperature > 0:
-            next_logits = next_logits / temperature
-            exp_logits = np.exp(next_logits - next_logits.max())
-            probs = exp_logits / exp_logits.sum()
-            rng = np.random.default_rng()
-            next_id = int(rng.choice(len(probs), p=probs))
-        else:
-            next_id = int(np.argmax(next_logits))
-
-        if next_id == 0:
-            break
-        tokens.append(next_id)
-
-    return "".join(itos.get(t, "") for t in tokens[len(tokens) - (max_tokens):])
+    return "".join(itos.get(t, "") for t in out_ids[len(tokens):])
 
 
 def evaluate_chat_model(

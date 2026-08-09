@@ -70,6 +70,10 @@ class TestAutoTrainIntegration:
             assert True  # Stream initiated
 
 
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("transformers") is None,
+    reason="transformers not installed (auto-train teacher is SloNet now)",
+)
 class TestAutoTrainErrorHandling:
     """Tests for error handling in auto-train."""
 

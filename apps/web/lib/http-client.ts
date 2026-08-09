@@ -211,3 +211,105 @@ function createApiClient(baseURL?: string) {
 
 export const apiClient = createApiClient()
 export { createApiClient }
+
+// ── Shared fetch helpers ──────────────────────────────────────────────
+
+export interface SSEEvent {
+  stream?: string
+  phase?: string
+  status?: string
+  data?: Record<string, unknown>
+  meta?: Record<string, unknown>
+  message?: string
+  error?: string
+}
+
+interface AuthFetchOptions extends RequestInit {
+  noAuth?: boolean
+}
+
+/**
+ * Fetch with automatic auth token injection. Use for blob downloads and
+ * SSE streaming where the shared request() helper's JSON parsing is
+ * unsuitable.
+ */
+export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<Response> {
+  const headers: Record<string, string> = {}
+  if (!opts?.noAuth) {
+    const token = useAuthStore.getState().token
+    if (token) headers['Authorization'] = `Bearer ${token}`
+  }
+  if (opts?.headers) {
+    if (opts.headers instanceof Headers) {
+      opts.headers.forEach((v, k) => { headers[k] = v })
+    } else {
+      Object.assign(headers, opts.headers)
+    }
+  }
+  return fetch(url, { ...opts, headers })
+}
+
+interface StreamSSEOptions {
+  method?: string
+  body?: unknown
+  signal?: AbortSignal
+  noAuth?: boolean
+}
+
+/**
+ * Connect to an SSE endpoint and yield parsed events. Handles the
+ * fetch → reader → decode → split → parse lifecycle shared by all
+ * streaming controllers.
+ */
+export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGenerator<SSEEvent> {
+  const method = opts?.method ?? 'POST'
+  const headers: Record<string, string> = {}
+  if (method !== 'GET') headers['Content-Type'] = 'application/json'
+  if (!opts?.noAuth) {
+    const token = useAuthStore.getState().token
+    if (token) headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const res = await fetch(`${PUBLIC_API_URL}${url}`, {
+    method,
+    headers,
+    body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
+    signal: opts?.signal,
+  })
+
+  if (!res.ok || !res.body) {
+    yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}` }
+    return
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        const trimmed = line.trimEnd()
+        if (!trimmed.startsWith('data:')) continue
+        const payload = trimmed.slice(5).trim()
+        if (!payload || payload === '[DONE]') continue
+        try {
+          yield JSON.parse(payload) as SSEEvent
+        } catch { /* skip malformed */ }
+      }
+    }
+    // Drain remaining buffer
+    if (buffer.startsWith('data:')) {
+      const payload = buffer.slice(5).trim()
+      if (payload && payload !== '[DONE]') {
+        try { yield JSON.parse(payload) as SSEEvent } catch { /* skip */ }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}

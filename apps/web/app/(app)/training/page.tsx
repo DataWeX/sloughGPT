@@ -279,7 +279,7 @@ export default function TrainingPage() {
                 <CardTitle className="text-base">Schedule</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <span className="inline-block h-2 w-2 rounded-full bg-success" />
                     <span>Training runs immediately when started</span>
@@ -290,7 +290,7 @@ export default function TrainingPage() {
                   </div>
                 </div>
                 {form.allJobs.filter(j => j.status === 'running').length > 0 && (
-                  <p className="text-[11px] text-warning mt-2">
+                  <p className="text-xs text-warning mt-2">
                     {form.allJobs.filter(j => j.status === 'running').length} job(s) running — new jobs will queue automatically
                   </p>
                 )}
@@ -305,7 +305,7 @@ export default function TrainingPage() {
                   <CardTitle className="text-base text-muted-foreground">No training activity yet</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="text-xs text-muted-foreground/70 space-y-1.5 max-w-sm text-left">
+                  <div className="text-sm text-muted-foreground/70 space-y-1.5 max-w-sm text-left">
                     <p>Pick a dataset above and click <span className="font-medium text-foreground">Start training</span></p>
                     <p>Use <span className="font-medium text-foreground">Paste text</span> to train on your own content</p>
                     <p>Conversation-format data (JSONL) trains better than plain text</p>

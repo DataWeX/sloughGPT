@@ -29,5 +29,8 @@ declare namespace Cypress {
 
     /** Mock /agents CRUD and execute endpoints */
     mockAgents(overrides?: any[]): Chainable<null>
+
+    /** Mock /vm/run, /vm/builtins, /vm/info, and training job endpoints */
+    mockVm(runOverrides?: Record<string, unknown>): Chainable<null>
   }
 }

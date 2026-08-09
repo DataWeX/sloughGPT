@@ -16,8 +16,10 @@ import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { Breadcrumbs } from '@sloughgpt/strui'
 import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh, IconClock, IconChevronDown } from '@sloughgpt/strui'
-import { datasetController, type Dataset, type DatasetStats } from '@/lib/dataset-controller'
+import { datasetController, type Dataset, type DatasetStats, type DatasetPreview as DatasetPreviewData } from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
+import { DatasetQualityCard } from '@/components/dataset/DatasetQualityCard'
+import { DatasetInsightsCard } from '@/components/dataset/DatasetInsightsCard'
 import { formatBytes } from '@/lib/format-bytes'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { useToastStore } from '@/lib/toast-store'
@@ -41,6 +43,7 @@ export default function DatasetDetailPage() {
   const [snapshotting, setSnapshotting] = useState(false)
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [previewData, setPreviewData] = useState<DatasetPreviewData | null>(null)
 
   const fetchDataset = useCallback(async () => {
     setLoading(true)
@@ -61,6 +64,16 @@ export default function DatasetDetailPage() {
       setStats(s)
     } catch {
       // stats are optional — silently ignore
+    }
+  }, [datasetId])
+
+  const fetchPreview = useCallback(async () => {
+    if (!datasetId) return
+    try {
+      const p = await datasetController.preview(datasetId, 200)
+      setPreviewData(p)
+    } catch {
+      // preview is optional
     }
   }, [datasetId])
 
@@ -113,8 +126,9 @@ export default function DatasetDetailPage() {
     if (dataset) {
       fetchStats()
       fetchVersions()
+      fetchPreview()
     }
-  }, [dataset, fetchStats, fetchVersions])
+  }, [dataset, fetchStats, fetchVersions, fetchPreview])
 
   const startRename = () => {
     setRenameText(dataset?.name || '')
@@ -202,11 +216,11 @@ export default function DatasetDetailPage() {
         }
         right={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setImportOpen(true)}>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setImportOpen(true)}>
               Import Data
             </Button>
             <Button variant="secondary" size="sm" onClick={fetchDataset} disabled={loading}>
-              <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5 mr-1' : 'h-3.5 w-3.5 mr-1'} />
+              <IconRefresh className={loading ? 'animate-spin h-4 w-4 mr-1' : 'h-4 w-4 mr-1'} />
               Refresh
             </Button>
           </div>
@@ -237,8 +251,8 @@ export default function DatasetDetailPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="relative group">
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
-                        <IconDownload className="h-3 w-3 mr-1" /> Export
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleExport}>
+                        <IconDownload className="h-4 w-4 mr-1" /> Export
                       </Button>
                       <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
                         <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
@@ -251,8 +265,8 @@ export default function DatasetDetailPage() {
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => setShowDelete(true)}>
-                      <IconTrash className="h-3 w-3 mr-1" /> Delete
+                    <Button size="sm" variant="outline" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => setShowDelete(true)}>
+                      <IconTrash className="h-4 w-4 mr-1" /> Delete
                     </Button>
                   </div>
                 </div>
@@ -263,14 +277,14 @@ export default function DatasetDetailPage() {
                     <Input
                       value={renameText}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRenameText(e.target.value)}
-                      className="h-8 text-sm max-w-xs"
+                      className="h-9 text-sm max-w-xs"
                       autoFocus
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false) }}
                     />
-                    <Button variant="ghost" size="icon-sm" className="h-7 w-7" onClick={commitRename} aria-label="Confirm rename">
+                    <Button variant="ghost" size="icon-sm" className="h-8 w-8" onClick={commitRename} aria-label="Confirm rename">
                       <IconCheck className="h-4 w-4 text-success" />
                     </Button>
-                    <Button variant="ghost" size="icon-sm" className="h-7 w-7" onClick={() => setRenaming(false)} aria-label="Cancel rename">
+                    <Button variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => setRenaming(false)} aria-label="Cancel rename">
                       <IconX className="h-4 w-4" />
                     </Button>
                   </div>
@@ -278,7 +292,7 @@ export default function DatasetDetailPage() {
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-sm font-medium">{dataset.name}</span>
                     <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={startRename} aria-label="Rename dataset">
-                      <IconEdit className="h-3 w-3" />
+                      <IconEdit className="h-4 w-4" />
                     </Button>
                   </div>
                 )}
@@ -339,6 +353,12 @@ export default function DatasetDetailPage() {
               </Card>
             )}
 
+            {/* Quality card */}
+            <DatasetQualityCard datasetId={datasetId} />
+
+            {/* Insights card */}
+            <DatasetInsightsCard preview={previewData} />
+
             {/* Preview card */}
             <Card>
               <CardHeader>
@@ -354,8 +374,8 @@ export default function DatasetDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Versions</CardTitle>
-                  <Button size="sm" className="h-7 text-xs" onClick={handleCreateVersion} disabled={snapshotting}>
-                    <IconClock className="h-3 w-3 mr-1" />
+                  <Button size="sm" className="h-8 text-xs" onClick={handleCreateVersion} disabled={snapshotting}>
+                    <IconClock className="h-4 w-4 mr-1" />
                     {snapshotting ? 'Snapshotting…' : 'Create snapshot'}
                   </Button>
                 </div>
@@ -372,13 +392,13 @@ export default function DatasetDetailPage() {
                     {versions.map(v => (
                       <li key={v} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
                         <div className="flex items-center gap-2 text-sm">
-                          <IconClock className="h-3.5 w-3.5 text-muted-foreground" />
+                          <IconClock className="h-4 w-4 text-muted-foreground" />
                           <span className="font-mono text-xs">{v}</span>
                           <span className="text-xs text-muted-foreground">
                             {new Date(`${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}T${v.slice(8,10)}:${v.slice(10,12)}:${v.slice(12,14)}Z`).toLocaleString()}
                           </span>
                         </div>
-                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setRestoreTarget(v)}>
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setRestoreTarget(v)}>
                           Restore
                         </Button>
                       </li>

@@ -166,6 +166,9 @@ class CompanionRouter:
             else:
                 error_msg = "No model loaded"
         except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="companion_chat")
             error_msg = str(e)
             logger.warning("Companion chat failed: %s", e, extra={"tag": "MODEL", "context": {"error": str(e)}})
 

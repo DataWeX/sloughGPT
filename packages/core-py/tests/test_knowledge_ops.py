@@ -7,6 +7,15 @@ import os
 from pathlib import Path
 
 
+@pytest.fixture(autouse=True)
+def isolated_knowledge_paths(tmp_path, monkeypatch):
+    """Keep KnowledgeMemory persistence off the real data dir."""
+    from domains.learner import knowledge as K
+    monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
+    monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")
+    monkeypatch.setattr(K, "ENTRIES_PATH", tmp_path / "entries.json")
+
+
 # ---------------------------------------------------------------------------
 # FileIndex
 # ---------------------------------------------------------------------------
@@ -622,7 +631,6 @@ def test_bulk_processor_error():
 
     def bad_embed(text):
         raise RuntimeError("embed boom")
-
     mem._embed_fn = bad_embed
     bp = BulkProcessor(mem)
     report = bp.ingest_texts(["some text that triggers failure"])
@@ -735,3 +743,41 @@ class TestChunkingStrategies:
         from domains.learner.knowledge import chunk_text
         with pytest.raises(ValueError, match="Unknown strategy"):
             chunk_text("text", strategy="nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# BulkProcessor batch regression tests
+# ---------------------------------------------------------------------------
+
+def test_bulk_processor_persists_once_per_batch(monkeypatch):
+    """Ingesting N texts rewrites the store once, not once per fact."""
+    from domains.learner.knowledge_ops import BulkProcessor
+    mem = _fresh_memory()
+    saves = []
+    monkeypatch.setattr(mem, "_save_entries", lambda: saves.append(1))
+    bp = BulkProcessor(mem)
+    texts = [
+        "quantum computing uses qubits for parallel processing",
+        "blockchain technology enables decentralized ledger systems",
+        "augmented reality overlays digital content on the real world",
+    ]
+    report = bp.ingest_texts(texts, topic="tech", dedup_threshold=0.999)
+    assert report["added"] == 3
+    assert len(saves) == 1
+
+
+def test_bulk_processor_embeds_once_per_text(monkeypatch):
+    """Each text is embedded once (dedup check reuses the same vector)."""
+    from domains.learner.knowledge_ops import BulkProcessor
+    mem = _fresh_memory()
+    calls = []
+    monkeypatch.setattr(mem, "_get_embedding",
+                        lambda t: calls.append(t) or [0.0] * 384)
+    bp = BulkProcessor(mem)
+    texts = [
+        "quantum computing uses qubits for parallel processing",
+        "blockchain technology enables decentralized ledger systems",
+    ]
+    report = bp.ingest_texts(texts, dedup_threshold=0.999)
+    assert report["added"] == 2
+    assert len(calls) == 2

@@ -225,9 +225,8 @@ class TestAPI:
         from apps.api.server.main import app
         from fastapi.testclient import TestClient
 
-        client = TestClient(app)
-
-        response = client.get("/health")
+        with TestClient(app) as client:
+            response = client.get("/health")
 
         assert response.status_code == 200
 
@@ -236,13 +235,12 @@ class TestAPI:
         from apps.api.server.main import app
         from fastapi.testclient import TestClient
 
-        client = TestClient(app)
-
-        response = client.get("/souls")
+        with TestClient(app) as client:
+            response = client.get("/souls")
 
         assert response.status_code == 200
-        assert 'souls' in response.json()
-        assert isinstance(response.json()['souls'], list)
+        data = response.json()["data"]
+        assert isinstance(data, list)
 
 
 if __name__ == "__main__":

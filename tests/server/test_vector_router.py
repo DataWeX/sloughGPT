@@ -189,3 +189,102 @@ class TestUpsertBranches:
         assert "text" in results[0]
         assert "score" in results[0]
         assert results[0]["id"] == "doc-1"
+
+
+class TestVectorMethodMismatch:
+    """Wrong HTTP methods on vector routes."""
+
+    def test_init_get_405(self, client):
+        resp = client.get("/vector/init")
+        assert resp.status_code == 405
+
+    def test_stats_post_405(self, client):
+        resp = client.post("/vector/stats")
+        assert resp.status_code == 405
+
+    def test_upsert_get_405(self, client):
+        resp = client.get("/vector/upsert")
+        assert resp.status_code == 405
+
+    def test_search_get_405(self, client):
+        resp = client.get("/vector/search")
+        assert resp.status_code == 405
+
+    def test_ingest_status_post_405(self, client):
+        resp = client.post("/vector/ingest/status")
+        assert resp.status_code == 405
+
+
+class TestVectorValidation:
+    """Request body validation."""
+
+    def test_search_missing_query_422(self, client):
+        resp = client.post("/vector/search", json={})
+        assert resp.status_code == 422
+
+    def test_upsert_missing_texts_422(self, client):
+        resp = client.post("/vector/upsert", json={})
+        assert resp.status_code == 422
+
+    def test_upsert_texts_wrong_type_422(self, client):
+        resp = client.post("/vector/upsert", json={"texts": "not-a-list"})
+        assert resp.status_code == 422
+
+    def test_upsert_ids_wrong_type_422(self, client):
+        resp = client.post("/vector/upsert", json={"texts": ["x"], "ids": "id1"})
+        assert resp.status_code == 422
+
+    def test_init_provider_wrong_type_422(self, client):
+        resp = client.post("/vector/init", json={"provider": 42})
+        assert resp.status_code == 422
+
+
+class TestUpsertIdMapping:
+    """id/metadata indexing per text."""
+
+    def test_upsert_without_ids_uses_default(self, client):
+        client.post("/vector/init", json={"provider": "in_memory", "dimension": 64})
+        resp = client.post("/vector/upsert", json={"texts": ["a", "b"]})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 2
+
+    def test_upsert_partial_ids(self, client):
+        client.post("/vector/init", json={"provider": "in_memory", "dimension": 64})
+        resp = client.post("/vector/upsert", json={
+            "texts": ["a", "b"],
+            "ids": ["only-one"],
+        })
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 2
+
+    def test_upsert_partial_metadata(self, client):
+        client.post("/vector/init", json={"provider": "in_memory", "dimension": 64})
+        resp = client.post("/vector/upsert", json={
+            "texts": ["a", "b"],
+            "metadata": [{"source": "first"}],
+        })
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 2
+
+    def test_search_empty_query_returns_results_field(self, client):
+        client.post("/vector/init", json={"provider": "in_memory", "dimension": 64})
+        resp = client.post("/vector/search", json={"query": ""})
+        assert resp.status_code == 200
+        assert "results" in resp.json()["data"]
+
+
+class TestLazyStoreInit:
+    """get_vector_store lazy-initialization branch."""
+
+    @patch("domains.inference.vector_store.create_vector_store",
+           new=AsyncMock(return_value=None))
+    def test_upsert_error_path_500(self, client):
+        resp = client.post("/vector/upsert", json={"texts": ["x"]})
+        assert resp.status_code == 500
+
+    @patch("domains.inference.vector_store.create_vector_store",
+           new=AsyncMock(return_value=None))
+    def test_search_no_store_returns_empty_results(self, client):
+        resp = client.post("/vector/search", json={"query": "anything"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["results"] == []

@@ -787,10 +787,10 @@ class TestProcessGuardDelegation:
         assert out == "hello world"
         mock_model.generate_numpy.assert_called_once()
 
-    async def test_generate_stream_delegates_to_guard_when_alive(self, guarded_server, mock_model):
+    async def test_generate_stream_always_uses_in_process(self, guarded_server, mock_model):
         tokens = [t async for t in guarded_server.generate_stream("hi")]
-        assert tokens == ["guarded", "stream"]
-        mock_model.generate_numpy_stream.assert_not_called()
+        assert tokens == ["hello world", "hello world"]
+        mock_model.generate_numpy_stream.assert_called_once()
 
     async def test_generate_stream_falls_back_when_guard_dead(self, mock_model, mock_tokenizer):
         dead = _FakeGuard(alive=False)

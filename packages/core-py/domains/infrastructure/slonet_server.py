@@ -263,9 +263,9 @@ class SloNetServer:
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         cancel_event: Optional[threading.Event] = None,
         session_id: Optional[str] = None,
     ) -> str:
@@ -314,26 +314,17 @@ class SloNetServer:
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         cancel_event: Optional[threading.Event] = None,
         session_id: Optional[str] = None,
     ) -> Iterator[str]:
-        if self._use_guard():
-            for token in self._process_guard.generate_stream(
-                prompt,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                repetition_penalty=repetition_penalty,
-            ):
-                if cancel_event and cancel_event.is_set():
-                    return
-                if token:
-                    yield token
-            return
+        # Streaming always runs in-process: tokens flow directly to the
+        # client, so subprocess crash isolation adds no value — and the
+        # IPC queue + stall detection causes false-positive restarts on
+        # slow CPU generation.  Non-streaming generate() still uses the
+        # guard for crash isolation.
         model = self._acquire_model()
         try:
             tokens = self._tokenizer.encode(prompt)
@@ -436,9 +427,9 @@ class SloNetServer:
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         cancel_event: Optional[threading.Event] = None,
         session_id: Optional[str] = None,
     ) -> AsyncIterator[str]:

@@ -233,3 +233,44 @@ class TestConfigValidation:
     def test_delete_rejected(self, mock_get_ctrl, client):
         resp = client.delete("/config/generation")
         assert resp.status_code == 405
+
+    def test_max_new_tokens_wrong_type_returns_422(self, client):
+        resp = client.put("/config/generation", json={"max_new_tokens": "lots"})
+        assert resp.status_code == 422
+
+    def test_top_k_wrong_type_returns_422(self, client):
+        resp = client.put("/config/generation", json={"top_k": "fifty"})
+        assert resp.status_code == 422
+
+    def test_repetition_penalty_wrong_type_returns_422(self, client):
+        resp = client.put("/config/generation", json={"repetition_penalty": {"value": 1.2}})
+        assert resp.status_code == 422
+
+    def test_top_p_wrong_type_returns_422(self, client):
+        resp = client.put("/config/generation", json={"top_p": [0.9]})
+        assert resp.status_code == 422
+
+    @patch("apps.api.server.routers.config.get_config_controller")
+    def test_put_with_all_nulls_returns_current(self, mock_get_ctrl, client):
+        ctrl = MagicMock()
+        ctrl.update_generation_config.return_value = dict(DEFAULT_CFG)
+        mock_get_ctrl.return_value = ctrl
+        resp = client.put("/config/generation", json={"temperature": None, "top_p": None,
+                                                      "top_k": None, "repetition_penalty": None,
+                                                      "max_new_tokens": None, "max_context_length": None})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["temperature"] == 0.8
+
+    def test_patch_wrong_type_returns_422(self, client):
+        resp = client.patch("/config/generation", json={"max_context_length": "big"})
+        assert resp.status_code == 422
+
+    def test_put_wrong_json_type_returns_422(self, client):
+        resp = client.put("/config/generation", json=[1, 2, 3])
+        assert resp.status_code == 422
+
+    @patch("apps.api.server.routers.config.get_config_controller")
+    def test_controller_error_on_patch_returns_500(self, mock_get_ctrl, client):
+        mock_get_ctrl.side_effect = RuntimeError("broken")
+        resp = client.patch("/config/generation", json={"temperature": 0.4})
+        assert resp.status_code == 500

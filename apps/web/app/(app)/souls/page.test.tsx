@@ -36,6 +36,7 @@ describe('SoulsPage', () => {
     vi.clearAllMocks()
     mockList.mockResolvedValue({ souls: [], current_soul: null })
     mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
+    mockListWeightSnapshots.mockResolvedValue([])
   })
 
   it('renders page header', async () => {

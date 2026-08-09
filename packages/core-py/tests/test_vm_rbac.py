@@ -286,3 +286,122 @@ class TestX86VMIntegration:
         vs.cpu.run(max_steps=200)
         result = vs.cpu._read32(0x5000)
         assert result == 16, f"expected 16 bytes written, got {result}"
+
+    def _run_train_syscall(self, vs, role=Role.USER):
+        """Run SYS_TRAIN_START (eax=28) and return EAX via [0x5000]."""
+        self._write_at(vs, 0x80000, b'{"dataset":"shakespeare","epochs":1}\x00')
+        return self._run_process(vs, """
+            [BITS 32]
+            mov eax, 28
+            mov ebx, 0x80000
+            int 0x80
+            mov [0x5000], eax
+            hlt
+        """, role=role)
+
+    def test_train_denied_for_user(self, monkeypatch):
+        """USER calling SYS_TRAIN_START is denied with EAX=-2 and never hits the bridge."""
+        calls = []
+
+        class FakeBridge:
+            def start(self, config_json):
+                calls.append(config_json)
+                return 1
+
+        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        vs = X86VirtualSystem()
+        result = self._run_train_syscall(vs, role=Role.USER)
+        assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
+        assert calls == [], "bridge must not be invoked for a USER-role training syscall"
+
+    def test_train_allowed_for_admin(self, monkeypatch):
+        """ADMIN calling SYS_TRAIN_START returns a job_id and reaches the bridge."""
+        calls = []
+
+        class FakeBridge:
+            def start(self, config_json):
+                calls.append(config_json)
+                return 1
+
+        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        vs = X86VirtualSystem()
+        result = self._run_train_syscall(vs, role=Role.ADMIN)
+        assert result == 1, f"expected job_id 1, got {result}"
+        assert calls == ['{"dataset":"shakespeare","epochs":1}'], f"unexpected calls: {calls}"
+
+    def test_train_status_denied_for_user(self):
+        """USER calling SYS_TRAIN_STATUS (eax=29) is denied with EAX=-2."""
+        vs = X86VirtualSystem()
+        result = self._run_process(vs, """
+            [BITS 32]
+            mov eax, 29
+            mov ebx, 1
+            int 0x80
+            mov [0x5000], eax
+            hlt
+        """, role=Role.USER)
+        assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
+
+    def test_train_get_result_denied_for_user(self):
+        """USER calling SYS_TRAIN_GET_RESULT (eax=30) is denied with EAX=-2."""
+        vs = X86VirtualSystem()
+        result = self._run_process(vs, """
+            [BITS 32]
+            mov eax, 30
+            mov ebx, 1
+            mov ecx, 0x90000
+            mov edx, 64
+            int 0x80
+            mov [0x5000], eax
+            hlt
+        """, role=Role.USER)
+        assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
+
+    def test_train_full_flow_start_status_result(self, monkeypatch):
+        """ADMIN START→STATUS→GET_RESULT flow returns job_id, status code, and result JSON."""
+
+        class FakeBridge:
+            def start(self, config_json):
+                return 1
+
+            def status(self, job_id):
+                assert job_id == 1
+                return {"status": "completed", "progress": 1.0, "error": None}
+
+            def get_result_json(self, job_id):
+                assert job_id == 1
+                return '{"loss": 1.5}'
+
+        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        vs = X86VirtualSystem()
+        self._write_at(vs, 0x80000, b'{"dataset":"shakespeare","epochs":1}\x00')
+        self._write_at(vs, 0x90000, b"\x00" * 64)
+        pid = vs.spawn("test", """
+            [BITS 32]
+            mov ebx, 0x80000
+            mov eax, 28
+            int 0x80
+            mov [0x5000], eax
+            mov ebx, 1
+            mov eax, 29
+            int 0x80
+            mov [0x5004], eax
+            mov ebx, 1
+            mov eax, 30
+            mov ecx, 0x90000
+            mov edx, 256
+            int 0x80
+            mov [0x5008], eax
+            hlt
+        """)
+        assert pid is not None
+        vs._syscall._rbac.assign(pid, Role.ADMIN)
+        vs.scheduler.start(vs.cpu)
+        current = vs.scheduler.current
+        assert current is not None
+        current.restore_to_cpu(vs.cpu)
+        vs.cpu.run(max_steps=200)
+        assert vs.cpu._read32(0x5000) == 1, "expected job_id 1 from SYS_TRAIN_START"
+        assert vs.cpu._read32(0x5004) == 1, "expected status 1 (completed) from SYS_TRAIN_STATUS"
+        assert vs.cpu._read32(0x5008) == 13, "expected 13 bytes written by SYS_TRAIN_GET_RESULT"
+        assert vs._syscall._read_string(0x90000) == '{"loss": 1.5}'

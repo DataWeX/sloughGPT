@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@sloughgpt/strui'
 import { Spinner } from '@sloughgpt/strui'
 import { datasetController } from '@/lib/dataset-controller'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { useToastStore } from '@/lib/toast-store'
 
 interface Props {
@@ -26,30 +27,36 @@ export default function DatasetInlineImportModal({ open, onOpenChange, onImporte
   const [githubUrl, setGithubUrl] = useState('')
   const [hfId, setHfId] = useState('')
   const [url, setUrl] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
 
   const reset = () => { setName(''); setLocalPath(''); setGithubUrl(''); setHfId(''); setUrl(''); setResult(null) }
 
   const handleImport = async () => {
+    const ac = new AbortController()
+    abortRef.current = ac
     setImporting(true); setResult(null)
     try {
+      const signal = ac.signal
       let res
       if (activeTab === 'local' && localPath.trim()) {
-        res = await datasetController.importFromLocal({ path: localPath.trim(), name: name.trim() || 'imported_dataset' })
+        res = await datasetController.importFromLocal({ path: localPath.trim(), name: name.trim() || 'imported_dataset' }, { signal })
       } else if (activeTab === 'github' && githubUrl.trim()) {
-        res = await datasetController.importFromGitHub({ url: githubUrl.trim(), name: name.trim() || 'imported_dataset' })
+        res = await datasetController.importFromGitHub({ url: githubUrl.trim(), name: name.trim() || 'imported_dataset' }, { signal })
       } else if (activeTab === 'huggingface' && hfId.trim()) {
-        res = await datasetController.importFromHuggingFace({ dataset_id: hfId.trim(), name: name.trim() || undefined })
+        res = await datasetController.importFromHuggingFace({ dataset_id: hfId.trim(), name: name.trim() || undefined }, { signal })
       } else if (activeTab === 'url' && url.trim()) {
-        res = await datasetController.importFromURL({ url: url.trim(), name: name.trim() || 'imported_dataset' })
+        res = await datasetController.importFromURL({ url: url.trim(), name: name.trim() || 'imported_dataset' }, { signal })
       } else {
         addToast('Fill in the required field', 'error'); setImporting(false); return
       }
       setResult({ datasetId: res.dataset_id, message: res.message })
       addToast(res.message || 'Imported successfully', 'success')
       onImported()
-    } catch {
-      addToast('Import failed', 'error')
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      addToast(extractErrorMessage(err, 'Import failed'), 'error')
     } finally {
+      abortRef.current = null
       setImporting(false)
     }
   }
@@ -91,9 +98,15 @@ export default function DatasetInlineImportModal({ open, onOpenChange, onImporte
                 <Input placeholder="https://example.com/data.txt" value={url} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrl(e.target.value)} className="h-8 text-xs" />
               </TabsContent>
             </Tabs>
-            <Button className="w-full h-8 text-xs" onClick={handleImport} disabled={importing}>
-              {importing ? <><Spinner className="h-3.5 w-3.5 mr-1.5" /> Importing...</> : 'Import'}
-            </Button>
+            {importing ? (
+              <Button className="w-full h-8 text-xs" variant="outline" onClick={() => abortRef.current?.abort()}>
+                Cancel Import
+              </Button>
+            ) : (
+              <Button className="w-full h-8 text-xs" onClick={handleImport}>
+                Import
+              </Button>
+            )}
           </div>
         )}
       </DialogContent>

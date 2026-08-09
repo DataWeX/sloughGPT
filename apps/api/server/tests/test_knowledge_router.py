@@ -281,3 +281,31 @@ def test_add_returns_duplicate_status():
     })
     body = _data(resp2)
     assert body["status"] in ("duplicate", "stored")
+
+
+def test_stats_with_many_facts_terminates():
+    """Regression: stats must terminate and aggregate when >200 facts exist.
+
+    The old batching loop incremented ``offset`` without passing it to
+    ``list_all``, so a store larger than one batch looped forever.
+    """
+    client = get_test_client()
+    _cleanup(client)
+
+    for i in range(250):
+        resp = client.post("/knowledge", json={
+            "content": f"Fact number {i} about vector search and retrieval",
+            "topic": "bulk" if i % 2 == 0 else "misc",
+            "source": "regression",
+        })
+        assert resp.status_code == 200
+
+    resp = client.get("/knowledge/stats")
+    assert resp.status_code == 200
+    body = _data(resp)
+    assert body["total_items"] == 250
+    assert body["topic_count"] == 2
+    assert body["topics"]["bulk"] == 125
+    assert body["topics"]["misc"] == 125
+    assert body["sources"]["regression"] == 250
+    assert isinstance(body["avg_importance"], float)

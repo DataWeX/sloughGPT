@@ -204,3 +204,146 @@ class TestLogParam:
             params={"param_name": "model", "value": "gpt2"}
         )
         assert resp.status_code == 200
+
+
+class TestExperimentData:
+    """GET /experiments/{id}/data"""
+
+    def test_empty_experiment_data(self, client):
+        resp = client.get("/experiments/zzz_12345/data")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["metrics"] == []
+        assert data["params"] == []
+        assert data["status"] is None
+
+    def test_data_invalid_id_is_400(self, client):
+        resp = client.get("/experiments/invalid..id/data")
+        assert resp.status_code == 400
+
+    def test_data_reads_logged_metrics_and_params(self, client):
+        import os, json
+        from apps.api.server.routers import experiments as exp_mod
+        e_id = "readback_123"
+        log_dir = os.path.join(os.path.dirname(exp_mod.__file__), "..", "data", "experiments")
+        metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
+        params_file = os.path.join(log_dir, f"{e_id}_params.jsonl")
+        os.makedirs(log_dir, exist_ok=True)
+        try:
+            with open(metrics_file, "w") as f:
+                f.write(json.dumps({"metric": "loss", "value": 0.5, "step": 1}) + "\n")
+            with open(params_file, "w") as f:
+                f.write(json.dumps({"param": "lr", "value": 0.001}) + "\n")
+            resp = client.get(f"/experiments/{e_id}/data")
+            data = resp.json()["data"]
+            assert data["metrics"][0]["value"] == 0.5
+            assert data["params"][0]["value"] == 0.001
+        finally:
+            for p in (metrics_file, params_file):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_data_skips_corrupt_json_lines(self, client):
+        import os
+        from apps.api.server.routers import experiments as exp_mod
+        e_id = "corrupt_123"
+        log_dir = os.path.join(os.path.dirname(exp_mod.__file__), "..", "data", "experiments")
+        metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
+        os.makedirs(log_dir, exist_ok=True)
+        try:
+            with open(metrics_file, "w") as f:
+                f.write("not valid json\n")
+            resp = client.get(f"/experiments/{e_id}/data")
+            assert resp.json()["data"]["metrics"] == []
+        finally:
+            if os.path.exists(metrics_file):
+                os.remove(metrics_file)
+
+
+class TestCompleteExperimentEdges:
+    """POST /experiments/{id}/complete — persistence and validation"""
+
+    def test_complete_invalid_id_is_400(self, client):
+        resp = client.post("/experiments/invalid..id/complete")
+        assert resp.status_code == 400
+
+    def test_complete_persists_status_readable_by_data(self, client):
+        import os
+        from apps.api.server.routers import experiments as exp_mod
+        e_id = "persist_123"
+        log_dir = os.path.join(os.path.dirname(exp_mod.__file__), "..", "data", "experiments")
+        status_file = os.path.join(log_dir, f"{e_id}_status.json")
+        os.makedirs(log_dir, exist_ok=True)
+        try:
+            resp = client.post(f"/experiments/{e_id}/complete")
+            assert resp.status_code == 200
+            data = client.get(f"/experiments/{e_id}/data").json()["data"]
+            assert data["status"]["status"] == "completed"
+            assert data["status"]["experiment_id"] == e_id
+        finally:
+            if os.path.exists(status_file):
+                os.remove(status_file)
+
+    def test_complete_get_is_405(self, client):
+        resp = client.get("/experiments/some_exp/complete")
+        assert resp.status_code == 405
+
+
+class TestExperimentsMethods:
+    """405s for disallowed methods"""
+
+    def test_runs_post_is_405(self, client):
+        resp = client.post("/experiments/some_exp/runs")
+        assert resp.status_code == 405
+
+    def test_data_post_is_405(self, client):
+        resp = client.post("/experiments/some_exp/data")
+        assert resp.status_code == 405
+
+    def test_log_metric_get_is_405(self, client):
+        resp = client.get("/experiments/some_exp/log_metric")
+        assert resp.status_code == 405
+
+    def test_log_param_delete_is_405(self, client):
+        resp = client.delete("/experiments/some_exp/log_param")
+        assert resp.status_code == 405
+
+    def test_put_experiment_is_405(self, client):
+        resp = client.put("/experiments/some_exp")
+        assert resp.status_code == 405
+
+
+class TestExperimentsValidation:
+    """422s and traversal protection"""
+
+    def test_create_missing_name_is_422(self, client):
+        resp = client.post("/experiments", json={})
+        assert resp.status_code == 422
+
+    def test_create_name_wrong_type_is_422(self, client):
+        resp = client.post("/experiments", json={"name": 123})
+        assert resp.status_code == 422
+
+    def test_get_dotdot_is_400(self, client):
+        resp = client.get("/experiments/foo..bar")
+        assert resp.status_code == 400
+
+    def test_get_experiment_with_config_ignored(self, client):
+        resp = client.post("/experiments", json={"name": "cfg_run", "config": {"lr": 0.1}})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["created"] is True
+
+    def test_list_ignores_files_in_dir(self, client, experiments_router, tmp_path):
+        client.post("/experiments", json={"name": "only_dir"})
+        (experiments_router.EXPERIMENTS_DIR / "loose_file.txt").write_text("x")
+        resp = client.get("/experiments")
+        names = resp.json()["data"]["experiments"]
+        assert "loose_file.txt" not in names
+
+    def test_get_experiment_accepts_file_path(self, client, experiments_router):
+        """get_experiment only checks existence — a loose file is accepted."""
+        experiments_router.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+        (experiments_router.EXPERIMENTS_DIR / "afile").write_text("x")
+        resp = client.get("/experiments/afile")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["id"] == "afile"

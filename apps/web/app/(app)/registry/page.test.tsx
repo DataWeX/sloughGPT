@@ -49,8 +49,8 @@ describe('RegistryPage', () => {
       { model_id: 'gpt2', status: 'loaded', registered_at: '2026-01-01' },
     ])
     render(<RegistryPage />)
-    await screen.findByText('gpt2')
-    expect(screen.getByText('loaded')).toBeTruthy()
+    await screen.findAllByText('gpt2')
+    expect(screen.getAllByText('loaded').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows circuit breaker open state', async () => {

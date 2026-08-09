@@ -223,15 +223,15 @@ export default function ModelDetailPage() {
                   <div className="flex items-center gap-2">
                     {isLoaded ? (
                       <>
-                        <Button size="sm" className="h-7 text-xs" onClick={() => router.push('/chat')}>
+                        <Button size="sm" className="h-8 text-xs" onClick={() => router.push('/chat')}>
                           Chat with this model
                         </Button>
-                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleUnload}>
-                           <IconTrash className="h-3 w-3 mr-1" /> Remove
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleUnload}>
+                           <IconTrash className="h-4 w-4 mr-1" /> Remove
                         </Button>
                       </>
                     ) : (
-                      <Button size="sm" className="h-7 text-xs" onClick={handleLoad} disabled={loadState === 'loading'}>
+                      <Button size="sm" className="h-8 text-xs" onClick={handleLoad} disabled={loadState === 'loading'}>
                         {loadState === 'loading' ? 'Loading…' : 'Load model'}
                       </Button>
                     )}
@@ -259,8 +259,8 @@ export default function ModelDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Metrics</CardTitle>
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={runBenchmark} disabled={benchmarking || !isLoaded}>
-                    <IconRefresh className={cn("h-3 w-3 mr-1", benchmarking && "animate-spin")} />
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={runBenchmark} disabled={benchmarking || !isLoaded}>
+                    <IconRefresh className={cn("h-4 w-4 mr-1", benchmarking && "animate-spin")} />
                     {benchmarking ? 'Benchmarking…' : benchmark ? 'Rerun' : 'Run benchmark'}
                   </Button>
                 </div>
@@ -307,7 +307,7 @@ export default function ModelDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Generation Config</CardTitle>
-                  <Button size="sm" className="h-7 text-xs" onClick={handleSaveConfig} disabled={configLoading || configSaving}>
+                  <Button size="sm" className="h-8 text-xs" onClick={handleSaveConfig} disabled={configLoading || configSaving}>
                     {configSaving ? 'Saving…' : 'Save'}
                   </Button>
                 </div>
@@ -393,13 +393,13 @@ export default function ModelDetailPage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Recent Activity</CardTitle>
                 <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => /* activity log refresh failed */ {})}>
-                  <IconRefresh className="h-3 w-3" />
+                  <IconRefresh className="h-4 w-4" />
                 </Button>
               </CardHeader>
               <CardContent>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
                   {modelLogs.map((log) => (
-                    <p key={log} className="text-[11px] font-mono text-muted-foreground/70 truncate">{log}</p>
+                    <p key={log} className="text-xs font-mono text-muted-foreground/70 truncate">{log}</p>
                   ))}
                 </div>
               </CardContent>
@@ -441,7 +441,7 @@ function ModelTestPrompt({ modelId }: { modelId: string }) {
           onChange={e => setPrompt(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleTest() }}
           placeholder="Type a prompt to test..."
-          className="flex-1 h-8 rounded-md border border-border/60 bg-background px-3 text-sm"
+          className="flex-1 h-9 rounded-md border border-border/60 bg-background px-3 text-sm"
           disabled={loading}
         />
         <Button size="sm" onClick={handleTest} disabled={loading || !prompt.trim()}>

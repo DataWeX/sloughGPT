@@ -189,8 +189,14 @@ class DuplicateDetector:
     def load_from_store(self, store) -> None:
         self._store = store
 
-    def check(self, text: str, embed_fn=None) -> Tuple[bool, Optional[str], float]:
+    def check(self, text: str, embed_fn=None, query_vector=None) -> Tuple[bool, Optional[str], float]:
         """Check if text is a near-duplicate of existing facts.
+
+        Args:
+            text: text to check
+            embed_fn: optional callable(text) -> embedding vector
+            query_vector: optional precomputed embedding for ``text``;
+                skips the embed step entirely when provided
 
         Returns:
             (is_duplicate, best_matching_text, similarity_score)
@@ -198,7 +204,9 @@ class DuplicateDetector:
         if not self._store:
             return False, None, 0.0
 
-        if embed_fn:
+        if query_vector is not None:
+            q_vec = query_vector
+        elif embed_fn:
             q_vec = embed_fn(text)
         else:
             from domains.inference.vector_store import simple_embed
@@ -592,6 +600,8 @@ class BulkProcessor:
 
         from domains.learner.knowledge import KnowledgeFact
 
+        facts = []
+        vectors = []
         for i, text in enumerate(texts):
             if progress_callback:
                 progress_callback(i + 1, len(texts))
@@ -601,24 +611,26 @@ class BulkProcessor:
                 continue
 
             try:
-                is_dup, _, score = dup.check(text, embed_fn=self._memory._get_embedding)
+                vec = self._memory._get_embedding(text)
+                is_dup, _, score = dup.check(text, query_vector=vec)
                 if is_dup:
                     self._skipped += 1
                     continue
 
-                fact = KnowledgeFact(
+                facts.append(KnowledgeFact(
                     content=text.strip(),
                     topic=topic,
                     source=source,
                     importance=min(1.0, len(text) / 2000),
-                )
-                if self._memory.add_fact(fact):
-                    self._added += 1
-                else:
-                    self._skipped += 1
+                ))
+                vectors.append(vec)
             except Exception as e:
                 logger.warning("Bulk ingest error at %d: %s", i, e, extra={"tag": "LEARN"})
                 self._errors += 1
+
+        if facts:
+            self._added = self._memory.add_facts(facts, vectors=vectors)
+            self._skipped += len(facts) - self._added
 
         return self.get_report()
 

@@ -47,6 +47,10 @@ class FilesController {
     return apiDelete(`/files/${id}`)
   }
 
+  async deleteBatch(ids: string[]): Promise<void> {
+    await Promise.all(ids.map(id => apiDelete(`/files/${id}`)))
+  }
+
   async ingest(id: string): Promise<void> {
     return apiPost(`/files/${id}/ingest`)
   }

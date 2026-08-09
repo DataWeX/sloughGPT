@@ -2,25 +2,6 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 const IGNORE_PATHS = ['/_next', '/favicon', '/sw.js', '/workbox']
-const SENSITIVE_HEADERS = ['authorization', 'cookie', 'x-api-key']
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-}
-
-function sanitizeHeaders(headers: Headers): Record<string, string> {
-  const sanitized: Record<string, string> = {}
-  headers.forEach((value, key) => {
-    if (SENSITIVE_HEADERS.includes(key.toLowerCase())) {
-      sanitized[key] = '[REDACTED]'
-    } else {
-      sanitized[key] = value
-    }
-  })
-  return sanitized
-}
 
 export function middleware(request: NextRequest) {
   const start = Date.now()

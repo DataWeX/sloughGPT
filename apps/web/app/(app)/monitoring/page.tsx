@@ -276,13 +276,13 @@ export default function SystemHealthPage() {
         {/* Loading skeletons */}
         {!loaded && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Card className="p-3"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
               {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
             </div></CardContent></Card>
-            <Card className="p-3"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
               {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
             </div></CardContent></Card>
-            <Card className="p-3"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
               {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
             </div></CardContent></Card>
           </div>
@@ -336,7 +336,7 @@ export default function SystemHealthPage() {
         <RateViolationsCard liveHealth={liveHealth} />
 
         {/* Row 1a8: Health & memory trend — server-side history charted from SSE */}
-        <Card className="p-3">
+        <Card className="p-4">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Health &amp; memory trend</span>
           <CardContent className="p-0">
             <div className="h-40">
@@ -385,7 +385,7 @@ export default function SystemHealthPage() {
 
         {/* Row 4: Chart */}
         {chartHistory.length > 1 && (
-          <Card className="p-3">
+          <Card className="p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time (last {MAX_HISTORY}s)</span>
               <button onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
@@ -419,7 +419,7 @@ export default function SystemHealthPage() {
           <div className="md:col-span-2">
             <ActivityTicker />
           </div>
-          <Card className="p-3">
+          <Card className="p-4">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Errors</span>
             <CardContent className="p-0 max-h-[200px] overflow-y-auto">
               <ErrorList />
@@ -428,7 +428,7 @@ export default function SystemHealthPage() {
         </div>
 
         {error && (
-          <Card className="p-3 border-destructive/50">
+          <Card className="p-4 border-destructive/50">
             <CardContent className="p-0 py-2 text-sm text-destructive">{error}</CardContent>
           </Card>
         )}

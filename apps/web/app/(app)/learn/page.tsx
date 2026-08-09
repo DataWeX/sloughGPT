@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } fro
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
+import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 
 type Tab = 'search' | 'ingest' | 'knowledge' | 'feeds'
@@ -137,13 +138,15 @@ export default function LearnPage() {
               { label: 'Feeds', value: status.feeds_count },
               { label: 'Status', value: status.learner_active ? 'Active' : 'Idle' },
             ].map(s => (
-              <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
+              <div key={s.label} className="rounded-md bg-muted/30 p-4 text-center">
                 <div className="text-xs text-muted-foreground">{s.label}</div>
                 <div className="text-lg font-mono font-medium">{s.value}</div>
               </div>
             ))}
           </div>
         )}
+
+        {knowledge.length > 0 && <LearningInsightsCard facts={knowledge} />}
 
         <div className="flex gap-1 border-b border-border/30 pb-0">
           {(['search', 'ingest', 'knowledge', 'feeds'] as Tab[]).map(t => (
@@ -212,7 +215,7 @@ export default function LearnPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Knowledge ({knowledge.length})</CardTitle>
               <Button size="sm" variant="ghost" onClick={handleLoadKnowledge}>
-                <IconRefresh className={`h-3.5 w-3.5 ${loadingKnowledge ? 'animate-spin' : ''}`} />
+                <IconRefresh className={`h-4 w-4 ${loadingKnowledge ? 'animate-spin' : ''}`} />
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">

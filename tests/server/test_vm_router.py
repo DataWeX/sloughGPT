@@ -150,6 +150,71 @@ class TestVmRun:
         resp = client.post("/vm/run", json={"source": "hlt", "role": "admin"})
         assert resp.status_code == 200
 
+    def test_missing_source_returns_422(self, client):
+        resp = client.post("/vm/run", json={})
+        assert resp.status_code == 422
+
+    def test_source_overlong_returns_422(self, client):
+        resp = client.post("/vm/run", json={"source": "nop\n" * 15000})
+        assert resp.status_code == 422
+
+    def test_role_overlong_returns_422(self, client):
+        resp = client.post("/vm/run", json={"source": "hlt", "role": "x" * 21})
+        assert resp.status_code == 422
+
+    def test_keyboard_input_overlong_returns_422(self, client):
+        resp = client.post("/vm/run", json={"source": "hlt", "keyboard_input": "x" * 10001})
+        assert resp.status_code == 422
+
+    def test_max_steps_below_one_returns_422(self, client):
+        resp = client.post("/vm/run", json={"source": "hlt", "max_steps": 0})
+        assert resp.status_code == 422
+
+    def test_debug_returns_memory_dump(self, client):
+        resp = client.post("/vm/run", json={"source": "push eax\nhlt", "debug": True})
+        body = resp.json()
+        assert body.get("memory_dump") is None or isinstance(body.get("memory_dump"), str)
+
+    def test_response_has_vga_fields(self, client):
+        resp = client.post("/vm/run", json={"source": "hlt"})
+        body = resp.json()
+        assert "vga_text" in body
+        assert "vga_cells" in body
+        assert "keyboard_buffer" in body
+        assert "memory_dump" in body
+
+    @patch("domains.shell.vm.X86VirtualSystem")
+    def test_spawn_failed_path(self, mock_vs_cls, client):
+        vs = mock_vs_cls.return_value
+        vs.spawn.return_value = None
+        resp = client.post("/vm/run", json={"source": "hlt"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is False
+        assert body["status"] == "spawn_failed"
+        assert "Failed to spawn" in body["error"]
+
+    @patch("domains.shell.vm.X86VirtualSystem")
+    def test_no_process_path(self, mock_vs_cls, client):
+        vs = mock_vs_cls.return_value
+        vs.spawn.return_value = 1
+        vs.scheduler.current = None
+        resp = client.post("/vm/run", json={"source": "hlt"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is False
+        assert body["status"] == "no_process"
+
+    @patch("domains.shell.vm.X86VirtualSystem")
+    def test_run_error_path(self, mock_vs_cls, client):
+        mock_vs_cls.side_effect = RuntimeError("vm crashed")
+        resp = client.post("/vm/run", json={"source": "hlt"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is False
+        assert body["status"] == "error"
+        assert "vm crashed" in body["error"]
+
 
 # ── GET /vm/builtins ──────────────────────────────────────────────────────────
 

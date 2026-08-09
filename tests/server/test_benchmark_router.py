@@ -3,7 +3,7 @@ Tests for the benchmark router — run, metrics, quality, responses, stats, clea
 """
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -182,3 +182,147 @@ class TestClearHistory:
         bench = mock_get_bench.return_value
         client.post("/benchmark/history/clear")
         bench.clear_history.assert_called_once()
+
+
+class TestBenchmarkMethodMismatch:
+    """Wrong HTTP methods on benchmark routes."""
+
+    def test_run_get_405(self, client):
+        resp = client.get("/benchmark/run")
+        assert resp.status_code == 405
+
+    def test_metrics_post_405(self, client):
+        resp = client.post("/benchmark/metrics")
+        assert resp.status_code == 405
+
+    def test_quality_post_405(self, client):
+        resp = client.post("/benchmark/quality")
+        assert resp.status_code == 405
+
+    def test_responses_post_405(self, client):
+        resp = client.post("/benchmark/responses")
+        assert resp.status_code == 405
+
+    def test_stats_post_405(self, client):
+        resp = client.post("/benchmark/stats")
+        assert resp.status_code == 405
+
+    def test_clear_get_405(self, client):
+        resp = client.get("/benchmark/history/clear")
+        assert resp.status_code == 405
+
+    def test_perplexity_get_405(self, client):
+        resp = client.get("/benchmark/perplexity")
+        assert resp.status_code == 405
+
+
+class TestPerplexityPath:
+    """Perplexity with a working controller."""
+
+    @staticmethod
+    def _torch_ctx():
+        import sys
+        class NoGrad:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        class FakeTensor:
+            def __init__(self, value):
+                self._value = value
+
+            def item(self):
+                return self._value
+
+        class FakeTorch:
+            def no_grad(self):
+                return NoGrad()
+
+            def exp(self, t):
+                return FakeTensor(4.0)
+
+            def tensor(self, loss):
+                return FakeTensor(1.38629436)
+
+        return patch.dict(sys.modules, {"torch": FakeTorch()})
+
+    def test_perplexity_controller_missing_model(self, client):
+        ctrl = MagicMock()
+        ctrl._tokenizer = None
+        ctrl._hf_model = MagicMock()
+        with self._torch_ctx(), \
+             patch("controllers.models.get_models_controller", return_value=ctrl):
+            resp = client.post("/benchmark/perplexity?text=hello")
+        assert resp.status_code == 400
+
+    def test_perplexity_controller_raise_returns_500(self, client):
+        with self._torch_ctx(), \
+             patch("controllers.models.get_models_controller",
+                   side_effect=RuntimeError("controller crash")), \
+             patch("domains.infrastructure.errors.emit_error_event"):
+            resp = client.post("/benchmark/perplexity?text=hello")
+        assert resp.status_code == 500
+
+    def test_perplexity_computes_value(self, client):
+        class FakeOut:
+            class FakeLoss:
+                def item(self):
+                    return 1.38629436
+            loss = FakeLoss()
+
+        class FakeModel:
+            class _Device:
+                type = "cpu"
+            device = _Device()
+
+            def __call__(self, **kwargs):
+                return FakeOut()
+
+        class FakeInputs:
+            input_ids = MagicMock()
+            input_ids.shape = [1, 5]
+
+        class FakeTokenizer:
+            def __call__(self, *a, **kw):
+                return {"input_ids": FakeInputs().input_ids}
+
+        ctrl = MagicMock()
+        ctrl._tokenizer = FakeTokenizer()
+        ctrl._hf_model = FakeModel()
+        with self._torch_ctx(), \
+             patch("controllers.models.get_models_controller", return_value=ctrl):
+            resp = client.post("/benchmark/perplexity?text=hello")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["perplexity"] == 4.0
+        assert data["tokens"] == 5
+
+
+class TestErrorPaths:
+    """Exception propagation in benchmark endpoints."""
+
+    @patch("domains.get_benchmark_domain")
+    def test_quality_error_raises_500(self, mock_get_bench, client):
+        mock_get_bench.side_effect = RuntimeError("bench down")
+        resp = client.get("/benchmark/quality")
+        assert resp.status_code == 500
+
+    @patch("domains.feedback.response_tracker.get_response_tracker")
+    def test_responses_error_raises_500(self, mock_get_tracker, client):
+        mock_get_tracker.side_effect = RuntimeError("tracker down")
+        resp = client.get("/benchmark/responses")
+        assert resp.status_code == 500
+
+    @patch("domains.get_benchmark_domain")
+    def test_stats_error_raises_500(self, mock_get_bench, client):
+        mock_get_bench.side_effect = RuntimeError("stats down")
+        resp = client.get("/benchmark/stats")
+        assert resp.status_code == 500
+
+    @patch("domains.get_benchmark_domain")
+    def test_clear_error_raises_500(self, mock_get_bench, client):
+        mock_get_bench.side_effect = RuntimeError("clear down")
+        resp = client.post("/benchmark/history/clear")
+        assert resp.status_code == 500

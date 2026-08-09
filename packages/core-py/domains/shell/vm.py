@@ -7290,6 +7290,12 @@ class X86VirtualSystem:
         stack_pages = 1
         pcb.stack_base = base + ((code_size + 0xFFF) & ~0xFFF)
         pcb.stack_size = stack_pages * 0x1000
+        # Keep the stack inside allocated memory: the code region sits at
+        # `base` and grows upward, so when its natural stack placement would
+        # exceed `_mem_size`, move the stack to the top of memory.
+        if pcb.stack_base + pcb.stack_size > self._cpu._mem_size:
+            pcb.stack_base = ((self._cpu._mem_size - pcb.stack_size) & ~0xFFF) or 0
+            pcb.stack_base = max(pcb.stack_base, 0)
         pcb.esp = pcb.stack_base + pcb.stack_size - 4
 
         self._scheduler.enqueue(pcb.pid)

@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { tokenizerController, type TokenizerStats, type SampleWord } from '@/lib/tokenizer-controller'
+import { TokenizerEfficiencyCard } from '@/components/tokenizer/TokenizerEfficiencyCard'
 import { useToastStore } from '@/lib/toast-store'
 
 type Tab = 'playground' | 'vocab' | 'samples' | 'train'
@@ -99,20 +100,15 @@ export default function TokenizerPage() {
       <AppRouteHeader left={<AppRouteHeaderLead title="Tokenizer" subtitle={stats ? `Vocab: ${stats.vocab_size} · Merges: ${stats.total_merges}` : 'BPE tokenizer'} />} />
       <div className="space-y-4">
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: 'Vocab Size', value: stats.vocab_size },
-              { label: 'Base Chars', value: stats.base_chars },
-              { label: 'Merges', value: stats.total_merges },
-              { label: 'Special', value: stats.special_tokens },
-            ].map(s => (
-              <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                <div className="text-xs text-muted-foreground">{s.label}</div>
-                <div className="text-lg font-mono font-medium">{s.value}</div>
-              </div>
-            ))}
-          </div>
+          <KpiGrid>
+            <StatCard label="Vocab Size" value={String(stats.vocab_size)} />
+            <StatCard label="Base Chars" value={String(stats.base_chars)} />
+            <StatCard label="Merges" value={String(stats.total_merges)} />
+            <StatCard label="Special Tokens" value={String(stats.special_tokens)} />
+          </KpiGrid>
         )}
+
+        <TokenizerEfficiencyCard stats={stats} samples={samples} />
 
         <div className="flex gap-1 border-b border-border/30 pb-0">
           {(['playground', 'vocab', 'samples', 'train'] as Tab[]).map(t => (
@@ -150,7 +146,7 @@ export default function TokenizerPage() {
                     <div className="text-xs text-muted-foreground mb-1">Tokens ({tokenResult.tokens.length})</div>
                     <div className="flex flex-wrap gap-1">
                       {tokenResult.tokens.map((t, i) => (
-                        <span key={i} className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                        <span key={i} className="text-xs font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">
                           {t}
                         </span>
                       ))}
@@ -171,7 +167,7 @@ export default function TokenizerPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Vocabulary ({vocabTotal})</CardTitle>
               <Button size="sm" variant="ghost" onClick={() => handleLoadVocab(vocabOffset)}>
-                <IconRefresh className="h-3.5 w-3.5" />
+                <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent>

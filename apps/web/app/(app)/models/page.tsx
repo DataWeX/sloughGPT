@@ -10,6 +10,8 @@ import { Button, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/str
 import { IconRefresh } from '@sloughgpt/strui'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useToastStore } from '@/lib/toast-store'
+import { downloadJson } from '@/lib/download-utils'
+import { todayDateString } from '@/lib/format-bytes'
 import { modelDisplayName } from '@/lib/inference-display'
 import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
@@ -22,6 +24,7 @@ import ModelCatalogCard from '@/components/models/ModelCatalogCard'
 import { FineTunedModelsCard } from '@/components/training/FineTunedModelsCard'
 import ModelPlaygroundCard from '@/components/models/ModelPlaygroundCard'
 import ModelCacheCard from '@/components/models/ModelCacheCard'
+import ModelUsageCard from '@/components/models/ModelUsageCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
@@ -42,14 +45,14 @@ export default function ModelsPage() {
   const router = useRouter()
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
   const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(null)
-  const { healthLegacy: health } = useLiveStatus()
+  const { healthLegacy: health, health: liveHealth } = useLiveStatus()
   const refreshHealth = useCallback(async () => {
     await modelController.getHealth()
   }, [])
   const addToast = useToastStore(s => s.addToast)
 
-  const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels } = useModels()
-  const { data: soulsData, isLoading: soulsLoading, refetch: refetchSouls } = useSouls()
+  const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels, error: modelsError } = useModels()
+  const { data: soulsData, isLoading: soulsLoading, refetch: refetchSouls, error: soulsError } = useSouls()
   const { data: currentSoulData, refetch: refetchCurrentSoul } = useCurrentSoul()
   const { data: checkpointsData, isLoading: checkpointsLoading, refetch: refetchCheckpoints } = useCheckpoints()
   const { mutateAsync: switchSoul } = useSwitchSoul()
@@ -173,12 +176,45 @@ export default function ModelsPage() {
             <Button type="button" variant="outline" size="sm" onClick={() => router.push('/compare')}>
               Compare
             </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => {
+              const data = models.map(m => ({
+                id: m.id,
+                name: m.name,
+                type: m.type,
+                source: m.source,
+                params: m.params,
+                size_mb: m.size_mb,
+                size_gb: m.size_gb,
+                cached: m.cached,
+                loaded: m.loaded,
+              }))
+              downloadJson(data, `models-export-${todayDateString()}.json`)
+              addToast(`Exported ${models.length} models`, 'success')
+            }}>
+              Export
+            </Button>
             <Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
           </div>
         }
       />
 
       <div className="space-y-4">
+        {modelsError && models.length === 0 && (
+          <Card>
+            <CardContent className="py-4 flex items-center justify-between">
+              <span className="text-sm text-destructive">Failed to load models</span>
+              <Button size="sm" variant="outline" onClick={() => refetchModels()}>Retry</Button>
+            </CardContent>
+          </Card>
+        )}
+        {soulsError && souls.length === 0 && (
+          <Card>
+            <CardContent className="py-4 flex items-center justify-between">
+              <span className="text-sm text-destructive">Failed to load personalities</span>
+              <Button size="sm" variant="outline" onClick={() => refetchSouls()}>Retry</Button>
+            </CardContent>
+          </Card>
+        )}
         <ModelStatusCard
           isOnline={isOnline}
           health={health}
@@ -190,6 +226,12 @@ export default function ModelsPage() {
           modelsLoading={modelsLoading}
           soulsLoading={soulsLoading}
           checkpointsLoading={checkpointsLoading}
+        />
+        <ModelUsageCard
+          inferenceCount={liveHealth?.inference_count ?? 0}
+          requestCount={liveHealth?.request_count ?? 0}
+          modelType={health && health !== 'offline' ? health.model_type : null}
+          isOnline={isOnline}
         />
         <ComposableLayersCard
           modelsCount={models.length}
@@ -236,7 +278,7 @@ export default function ModelsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-base">Model Comparison</CardTitle>
-                <p className="text-xs text-muted-foreground">Side-by-side benchmark results across models</p>
+                <p className="text-sm text-muted-foreground">Side-by-side benchmark results across models</p>
               </div>
               <Button variant="outline" size="sm" onClick={runAllBenchmarks} disabled={compareLoading || compareRunning.size > 0}>
                 <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
@@ -245,11 +287,19 @@ export default function ModelsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+            {completedCompareResults.length === 0 && compareRunning.size === 0 && !compareLoading ? (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                Run a benchmark on one or more models to see comparison results here.
+              </div>
+            ) : (
+              <>
             <ModelsCard models={compareModels} loading={compareLoading} results={compareResults} running={compareRunning} onBenchmark={runBenchmark} onClear={clearCompareResult} />
             <ComparisonTableCard completedResults={completedCompareResults} models={compareModels} bestMetrics={bestMetrics} />
             <SummaryCard completedResults={completedCompareResults} models={compareModels} />
             <OutputComparisonCard models={compareModels} />
             <VisualComparisonCard chartData={chartData} />
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

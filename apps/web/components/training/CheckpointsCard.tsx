@@ -8,8 +8,9 @@ import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { IconSearch, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { downloadBlob } from '@/lib/download-utils'
+import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { trainingJobsController } from '@/lib/controllers'
+import { todayDateString } from '@/lib/format-bytes'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 
 export function CheckpointsCard({
@@ -29,6 +30,7 @@ export function CheckpointsCard({
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [sortBy, setSortBy] = useState<'date' | 'loss' | 'name'>('date')
+  const [loadingCheckpoint, setLoadingCheckpoint] = useState<string | null>(null)
 
   const filteredCheckpoints = useMemo(() => {
     const list = checkpoints.checkpoints.filter(cp =>
@@ -62,15 +64,15 @@ export function CheckpointsCard({
 
   const bulkDelete = async () => {
     if (selectedIds.size === 0) return
-    let deleted = 0
-    for (const name of selectedIds) {
-      try {
-        await checkpoints.handleDeleteCheckpoint(name, addToast)
-        deleted++
-      } catch { /* skip */ }
+    const names = Array.from(selectedIds)
+    try {
+      const result = await trainingJobsController.deleteCheckpointsBatch(names)
+      setSelectedIds(new Set())
+      addToast(`Deleted ${result.deleted} checkpoints`, 'success')
+      checkpoints.fetchCheckpoints()
+    } catch (e) {
+      addToast(extractErrorMessage(e, 'Batch delete failed'), 'error')
     }
-    setSelectedIds(new Set())
-    addToast(`Deleted ${deleted} checkpoints`, 'success')
   }
 
   const hasCheckpoints = checkpoints.checkpoints.length > 0 || checkpoints.loadingCheckpoints
@@ -138,10 +140,40 @@ export function CheckpointsCard({
                   ))}
                 </div>
                 {selectedIds.size > 0 && (
-                  <Button size="sm" variant="destructive" className="h-6 text-[10px]" onClick={bulkDelete}>
-                    <IconTrash className="h-3 w-3 mr-1" />
-                    Delete {selectedIds.size}
-                  </Button>
+                  <>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => {
+                      const selected = checkpoints.checkpoints.filter(cp => selectedIds.has(cp.name))
+                      const data = selected.map(cp => ({
+                        name: cp.name,
+                        loss: cp.loss,
+                        epochs: cp.epochs_trained,
+                        dataset: cp.training_dataset,
+                        duration_s: cp.training_duration_s,
+                        size_mb: cp.size_mb,
+                        model_type: cp.model_type,
+                      }))
+                      downloadJson(data, `checkpoints-export-${todayDateString()}.json`)
+                      addToast(`Exported ${selected.length} checkpoint metadata`, 'success')
+                    }}>
+                      Export {selectedIds.size}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={async () => {
+                      for (const name of selectedIds) {
+                        try {
+                          const blob = await trainingJobsController.downloadCheckpoint(name)
+                          downloadBlob(blob, `${name}.sou`)
+                        } catch { /* skip */ }
+                      }
+                      addToast(`Downloaded ${selectedIds.size} checkpoints`, 'success')
+                    }}>
+                      <IconDownload className="h-3 w-3 mr-1" />
+                      Download {selectedIds.size}
+                    </Button>
+                    <Button size="sm" variant="destructive" className="h-6 text-[10px]" onClick={bulkDelete}>
+                      <IconTrash className="h-3 w-3 mr-1" />
+                      Delete {selectedIds.size}
+                    </Button>
+                  </>
                 )}
                 <button type="button" onClick={selectAll} className="text-[10px] text-muted-foreground hover:text-foreground">
                   {selectedIds.size === filteredCheckpoints.length ? 'Deselect' : 'Select'} all
@@ -186,7 +218,22 @@ export function CheckpointsCard({
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
                       {!isActive && (
-                        <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => checkpoints.handleLoadCheckpoint(cp.name, addToast)}>Load</Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-xs"
+                          disabled={loadingCheckpoint === cp.name}
+                          onClick={async () => {
+                            setLoadingCheckpoint(cp.name)
+                            try {
+                              await checkpoints.handleLoadCheckpoint(cp.name, addToast)
+                            } finally {
+                              setLoadingCheckpoint(null)
+                            }
+                          }}
+                        >
+                          {loadingCheckpoint === cp.name ? 'Loading...' : 'Load'}
+                        </Button>
                       )}
                       <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => onContinue(cp.name)}>Continue</Button>
                       <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={async () => {
@@ -201,7 +248,22 @@ export function CheckpointsCard({
                       }} aria-label="Download checkpoint">
                         <IconDownload className="h-3 w-3" />
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => checkpoints.handleDeleteCheckpoint(cp.name, addToast)}>Del</Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-xs text-destructive hover:text-destructive"
+                        disabled={loadingCheckpoint === cp.name}
+                        onClick={async () => {
+                          setLoadingCheckpoint(cp.name)
+                          try {
+                            await checkpoints.handleDeleteCheckpoint(cp.name, addToast)
+                          } finally {
+                            setLoadingCheckpoint(null)
+                          }
+                        }}
+                      >
+                        {loadingCheckpoint === cp.name ? '...' : 'Del'}
+                      </Button>
                     </div>
                   </div>
                 )

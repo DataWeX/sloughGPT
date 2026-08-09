@@ -15,6 +15,7 @@ import { todayDateString, getJsonItem } from '@/lib/format-bytes'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
+import { ModelComparisonInsightsCard } from '@/components/compare/ModelComparisonInsightsCard'
 import dynamicNext from 'next/dynamic'
 
 const outputComparisonCardPath = '@/components/compare/OutputComparisonCard'
@@ -245,6 +246,7 @@ export default function ComparePage() {
         ) : (
           <>
             <ComparisonTableCard completedResults={completedResults} models={models} bestMetrics={bestMetrics} />
+            <ModelComparisonInsightsCard completedResults={completedResults} models={models} bestMetrics={bestMetrics} />
             <SummaryCard completedResults={completedResults} models={models} />
             <OutputComparisonCard models={models} />
             <VisualComparisonCard chartData={chartData} />

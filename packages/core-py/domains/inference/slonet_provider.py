@@ -1249,7 +1249,7 @@ class SloNetChatProvider:
         )
         return self._tokenizer.decode(result[0].tolist())
 
-    async def chat_stream(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+    async def chat_stream(self, messages, max_tokens=512, temperature=0.7, **kwargs):
         """Streaming chat — yields token strings with KV cache.
 
         Pre-fills prompt in one forward pass, then generates one token at a time

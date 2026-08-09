@@ -222,3 +222,51 @@ class TestGetStats:
         assert body["status"] == "success"
         for key, value in full.items():
             assert body["data"][key] == value
+
+
+class TestMetaWeightsMethodMismatch:
+    """Wrong HTTP methods on meta-weights routes."""
+
+    def test_get_get_405(self, client):
+        resp = client.get("/meta-weights/get")
+        assert resp.status_code == 405
+
+    def test_stats_post_405(self, client):
+        resp = client.post("/meta-weights/stats")
+        assert resp.status_code == 405
+
+
+class TestMetaWeightsValidation:
+    """Request body validation bounds."""
+
+    def test_user_message_wrong_type_422(self, client):
+        resp = client.post("/meta-weights/get", json={"user_message": 42})
+        assert resp.status_code == 422
+
+    def test_k_wrong_type_422(self, client):
+        resp = client.post("/meta-weights/get", json={"user_message": "hi", "k": "five"})
+        assert resp.status_code == 422
+
+    def test_user_id_wrong_type_422(self, client):
+        resp = client.post("/meta-weights/get", json={"user_message": "hi", "user_id": 9})
+        assert resp.status_code == 422
+
+
+class TestPing:
+    """GET /meta-weights/ping"""
+
+    def test_ping_ok(self, client):
+        resp = client.get("/meta-weights/ping")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert body["data"] == {"status": "ok"}
+
+    def test_ping_wrong_method_405(self, client):
+        assert client.post("/meta-weights/ping").status_code == 405
+        assert client.put("/meta-weights/ping").status_code == 405
+
+    def test_ping_no_manager_required(self, client):
+        """ping does not consult the manager — works without a DB-backed store."""
+        resp = client.get("/meta-weights/ping")
+        assert resp.status_code == 200

@@ -93,6 +93,29 @@ class TestGenerate:
         resp = client.post("/inference/generate", json={"prompt": "Hi"})
         assert resp.status_code == 503
 
+    def test_generate_missing_prompt_422(self, client):
+        resp = client.post("/inference/generate", json={"max_new_tokens": 16})
+        assert resp.status_code == 422
+
+    def test_generate_max_new_tokens_zero_422(self, client):
+        resp = client.post("/inference/generate", json={"prompt": "Hi", "max_new_tokens": 0})
+        assert resp.status_code == 422
+
+    def test_generate_temperature_too_high_422(self, client):
+        resp = client.post("/inference/generate", json={"prompt": "Hi", "temperature": 2.5})
+        assert resp.status_code == 422
+
+    def test_generate_temperature_negative_422(self, client):
+        resp = client.post("/inference/generate", json={"prompt": "Hi", "temperature": -1})
+        assert resp.status_code == 422
+
+    def test_generate_top_k_too_large_422(self, client):
+        resp = client.post("/inference/generate", json={"prompt": "Hi", "top_k": 9999})
+        assert resp.status_code == 422
+
+    def test_generate_wrong_method_405(self, client):
+        assert client.get("/inference/generate").status_code == 405
+
     @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
     @patch("domains.models.provider.get_provider")
     def test_generate_custom_params(self, mock_get_provider, client):
@@ -136,6 +159,34 @@ class TestGenerateStream:
         assert resp.status_code == 200
         assert "error" in resp.text
 
+    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
+    @patch("domains.models.provider.get_provider", return_value=None)
+    def test_generate_stream_no_provider(self, mock_get_provider, client):
+        resp = client.post("/inference/generate/stream", json={"prompt": "Hi"})
+        assert resp.status_code == 200
+        assert "No provider available" in resp.text
+
+
+class TestChatStream:
+    """POST /chat/stream"""
+
+    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
+    def test_chat_stream_no_user_message(self, client):
+        resp = client.post("/chat/stream", json={
+            "messages": [{"role": "system", "content": "You are helpful."}],
+        })
+        assert resp.status_code == 200
+        assert "No user message" in resp.text
+
+    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
+    @patch("domains.models.provider.get_provider", return_value=None)
+    def test_chat_stream_no_provider(self, mock_get_provider, client):
+        resp = client.post("/chat/stream", json={
+            "messages": [{"role": "user", "content": "Hi"}],
+        })
+        assert resp.status_code == 200
+        assert "No inference provider loaded" in resp.text
+
 
 class TestChat:
     """POST /chat"""
@@ -166,6 +217,30 @@ class TestChat:
         resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hi"}]})
         assert resp.status_code == 503
 
+    def test_chat_temperature_too_high_422(self, client):
+        resp = client.post("/chat", json={
+            "messages": [{"role": "user", "content": "Hi"}],
+            "temperature": 3.0,
+        })
+        assert resp.status_code == 422
+
+    def test_chat_max_tokens_zero_422(self, client):
+        resp = client.post("/chat", json={
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 0,
+        })
+        assert resp.status_code == 422
+
+    def test_chat_repetition_penalty_out_of_range_422(self, client):
+        resp = client.post("/chat", json={
+            "messages": [{"role": "user", "content": "Hi"}],
+            "repetition_penalty": 3.0,
+        })
+        assert resp.status_code == 422
+
+    def test_chat_wrong_method_405(self, client):
+        assert client.get("/chat").status_code == 405
+
 
 class TestListSessions:
     """GET /chat/sessions"""
@@ -188,6 +263,19 @@ class TestListSessions:
         resp = client.get("/chat/sessions")
         assert resp.status_code == 200
         assert resp.json()["data"] == []
+
+    @patch.object(_inference_router, "_build_session_cache")
+    def test_list_sessions_archived_filter(self, mock_build, client):
+        mock_build.return_value = [
+            {"id": "s1", "archived": True},
+            {"id": "s2", "archived": False},
+            {"id": "s3", "archived": True},
+        ]
+        resp = client.get("/chat/sessions?archived=true")
+        data = resp.json()["data"]
+        assert [s["id"] for s in data] == ["s1", "s3"]
+        resp = client.get("/chat/sessions?archived=false")
+        assert [s["id"] for s in resp.json()["data"]] == ["s2"]
 
 
 class TestInfo:
@@ -236,6 +324,78 @@ class TestContextEndpoints:
         assert resp.status_code == 200
 
 
+class TestContextStoreFact:
+    """POST /context/fact"""
+
+    @patch.object(_inference_router, "_get_context_core")
+    def test_store_fact(self, mock_get_core, client):
+        core = MagicMock()
+        mock_get_core.return_value = core
+        resp = client.post("/context/fact?key=name&value=alice")
+        assert resp.status_code == 200
+        assert resp.json()["stored"] == "name"
+        core.store_fact.assert_called_once_with("name", "alice")
+
+    @patch.object(_inference_router, "_get_context_core")
+    def test_store_fact_no_core(self, mock_get_core, client):
+        mock_get_core.return_value = None
+        resp = client.post("/context/fact?key=k&value=v")
+        assert resp.status_code == 200
+        assert resp.json()["error"] == "ContextCore not available"
+
+    @patch.object(_inference_router, "_get_context_core")
+    def test_store_fact_wrong_method_405(self, mock_get_core, client):
+        assert client.get("/context/fact").status_code == 405
+
+
+class TestContextReset:
+    """POST /context/reset"""
+
+    @patch.object(_inference_router, "_get_context_core")
+    def test_reset_session(self, mock_get_core, client):
+        core = MagicMock()
+        mock_get_core.return_value = core
+        resp = client.post("/context/reset")
+        assert resp.status_code == 200
+        assert resp.json()["reset"] == "session"
+        core.reset_session.assert_called_once()
+
+    @patch.object(_inference_router, "_get_context_core")
+    def test_reset_all(self, mock_get_core, client):
+        core = MagicMock()
+        mock_get_core.return_value = core
+        resp = client.post("/context/reset?all=true")
+        assert resp.status_code == 200
+        assert resp.json()["reset"] == "all"
+        core.reset_all.assert_called_once()
+
+    @patch.object(_inference_router, "_get_context_core")
+    def test_reset_no_core(self, mock_get_core, client):
+        mock_get_core.return_value = None
+        resp = client.post("/context/reset")
+        assert resp.json()["error"] == "ContextCore not available"
+
+
+class TestContextFactsQuery:
+    """GET /context/facts?query=..."""
+
+    @patch.object(_inference_router, "_get_context_core")
+    def test_get_facts_with_query(self, mock_get_core, client):
+        core = MagicMock()
+        core.search_semantic.return_value = [{"fact": "1"}]
+        mock_get_core.return_value = core
+        resp = client.get("/context/facts?query=ai")
+        assert resp.json()["facts"] == [{"fact": "1"}]
+        core.search_semantic.assert_called_once_with("ai")
+
+    @patch.object(_inference_router, "_get_context_core")
+    def test_get_facts_no_core(self, mock_get_core, client):
+        mock_get_core.return_value = None
+        resp = client.get("/context/facts")
+        assert resp.status_code == 200
+        assert resp.json()["facts"] == []
+
+
 class TestSearchSessions:
     """GET /chat/sessions/search"""
 
@@ -246,6 +406,20 @@ class TestSearchSessions:
         ]
         resp = client.get("/chat/sessions/search?q=Test")
         assert resp.status_code == 200
+
+    @patch.object(_inference_router, "_build_session_cache")
+    def test_search_sessions_empty_query(self, mock_build, client):
+        resp = client.get("/chat/sessions/search")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"] == []
+        assert body["meta"]["query"] == ""
+        assert body["meta"]["total"] == 0
+
+    @patch.object(_inference_router, "_build_session_cache")
+    def test_search_sessions_whitespace_query(self, mock_build, client):
+        resp = client.get("/chat/sessions/search?q=%20%20")
+        assert resp.json()["data"] == []
 
 
 class TestSuggestions:
@@ -258,6 +432,45 @@ class TestSuggestions:
     def test_chat_suggestions_alt_path(self, client):
         resp = client.get("/chat/suggestions")
         assert resp.status_code == 200
+
+    def test_suggestions_data_shape(self, client):
+        resp = client.get("/suggestions")
+        data = resp.json()["data"]
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        for item in data:
+            assert "text" in item
+            assert "icon" in item
+
+
+class TestVoice:
+    """Voice message upload + audio retrieval."""
+
+    def test_voice_rejects_non_audio(self, client):
+        resp = client.post(
+            "/chat/voice/voice-test-sess",
+            files={"file": ("note.txt", b"not audio", "text/plain")},
+        )
+        assert resp.status_code == 400
+
+    def test_voice_rejects_no_file(self, client):
+        resp = client.post("/chat/voice/voice-test-sess")
+        assert resp.status_code in (400, 422)
+
+    def test_audio_traversal_rejected(self, client):
+        resp = client.get("/chat/audio/safe-sess/..%2F..%2Fetc%2Fpasswd")
+        assert resp.status_code in (403, 404)
+
+    def test_audio_traversal_guard_direct(self):
+        import asyncio
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(_inference_router.get_voice_audio("../evil", "msg"))
+        assert exc_info.value.status_code == 403
+
+    def test_audio_not_found(self, client):
+        resp = client.get("/chat/audio/missing-sess/does-not-exist")
+        assert resp.status_code == 404
 
 
 class TestProviders:
@@ -276,6 +489,13 @@ class TestCurrentSession:
     def test_get_current_session(self, client):
         resp = client.get("/chat/sessions/current")
         assert resp.status_code == 200
+
+    @patch.object(_inference_router, "_build_session_cache")
+    def test_get_current_session_empty(self, mock_build, client):
+        mock_build.return_value = []
+        resp = client.get("/chat/sessions/current")
+        assert resp.status_code == 200
+        assert resp.json()["data"] is None
 
 
 class TestCreateSession:

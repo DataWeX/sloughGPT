@@ -45,6 +45,8 @@ except ImportError:
 class AutoTrainState:
     running: bool = False
     config: dict = field(default_factory=dict)
+    student_net: Optional[object] = None
+    student_tokenizer: Optional[object] = None
 
 
 _auto_train_cancel_event: Optional[threading.Event] = None
@@ -466,6 +468,21 @@ class AutoTrainRouter:
         import state as _srv_state
         _srv_state.training_active = True
         autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs, extra={"tag": "TRAIN"})
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "training.start",
+                resource=req.dataset_id or req.checkpoint_name or (req.soul_name if req.source_text else "inline"),
+                detail="resume" if resume else "fresh",
+                extra={
+                    "method": method,
+                    "epochs": req.epochs,
+                    "dataset_id": req.dataset_id or "",
+                    "checkpoint_name": req.checkpoint_name or "",
+                },
+            )
+        except Exception:
+            pass
         return {"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": self.state.config}
 
     async def start_turbo(self, req: TurboStartRequest):
@@ -502,7 +519,17 @@ class AutoTrainRouter:
             autotrain_logger.info("Starting SloughGPTTrainer with method=%s data=%s", req.method, data_path, extra={"tag": "TRAIN"})
             result = trainer.train()
             autotrain_logger.info("SloughGPTTrainer result: %s", result, extra={"tag": "TRAIN"})
-
+            if not (isinstance(result, dict) and result.get("status") == "error"):
+                try:
+                    from infrastructure.auth import get_audit_logger
+                    get_audit_logger().log(
+                        "training.start",
+                        resource=data_path or req.dataset_id or "turbo",
+                        detail="turbo",
+                        extra={"method": req.method or "", "epochs": req.epochs},
+                    )
+                except Exception:
+                    pass
             return result
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
@@ -516,6 +543,16 @@ class AutoTrainRouter:
         self.state.running = False
         if _auto_train_cancel_event is not None:
             _auto_train_cancel_event.set()
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "training.stop",
+                    resource=(self.state.config or {}).get("soul_name") or "auto-train",
+                    detail="cancelling",
+                    extra={"method": (self.state.config or {}).get("method", "")},
+                )
+            except Exception:
+                pass
             return {"status": "cancelling", "message": "Cancelling auto-training"}
         return {"status": "stopped"}
 
@@ -525,6 +562,14 @@ class AutoTrainRouter:
         if _auto_train_pause_event.is_set():
             return {"success": False, "message": "Training is already paused"}
         _auto_train_pause_event.set()
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "training.pause",
+                resource=(self.state.config or {}).get("soul_name") or "auto-train",
+            )
+        except Exception:
+            pass
         return {"success": True, "message": "Training paused"}
 
     async def resume(self):
@@ -533,6 +578,14 @@ class AutoTrainRouter:
         if not _auto_train_pause_event.is_set():
             return {"success": False, "message": "Training is not paused"}
         _auto_train_pause_event.clear()
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "training.resume",
+                resource=(self.state.config or {}).get("soul_name") or "auto-train",
+            )
+        except Exception:
+            pass
         return {"success": True, "message": "Training resumed"}
 
     async def status(self):
@@ -577,6 +630,7 @@ class AutoTrainRouter:
         autotrain_logger.info("Training task enqueued via task queue: %s", task_id, extra={"tag": "TRAIN"})
 
         async def event_generator():
+            global _auto_train_cancel_event, _auto_train_pause_event
             deadline = time.time() + 3600
             heartbeat_interval = 10.0
             last_yield = time.time()
@@ -684,6 +738,15 @@ class AutoTrainRouter:
                     meta.unlink()
 
         if deleted:
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "training.checkpoint.delete",
+                    resource=name,
+                    detail=",".join(deleted),
+                )
+            except Exception:
+                pass
             return success_response(data={"name": deleted}, message="deleted")
         return success_response(data={"name": name}, message="not_found")
 
@@ -734,6 +797,16 @@ class AutoTrainRouter:
                 cp.name, len(stoi), soul_net.num_parameters(),
                 extra={"tag": "TRAIN", "context": {"checkpoint": cp.name, "vocab_size": len(stoi), "params": soul_net.num_parameters()}},
             )
+
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "training.checkpoint.load",
+                    resource=cp.name,
+                    detail="vocab=%d params=%d" % (len(stoi), soul_net.num_parameters()),
+                )
+            except Exception:
+                pass
 
             return success_response(data={
                 "name": cp.name,
@@ -903,6 +976,16 @@ class AutoTrainRouter:
             "session_ids": req.session_ids,
             "started_at": time.time(),
         }
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "training.start",
+                resource=req.soul_name or "from-sessions",
+                detail="from-sessions",
+                extra={"session_ids": len(req.session_ids), "epochs": req.epochs},
+            )
+        except Exception:
+            pass
         return success_response(data=self.state.config, message="Training started")
 
     async def stream_from_sessions(self, request: Request):
@@ -940,6 +1023,7 @@ class AutoTrainRouter:
         autotrain_logger.info("From-sessions training task enqueued: %s", task_id, extra={"tag": "TRAIN"})
 
         async def event_generator():
+            global _auto_train_cancel_event
             deadline = time.time() + 3600
             heartbeat_interval = 10.0
             last_yield = time.time()
@@ -998,6 +1082,15 @@ class AutoTrainRouter:
         global _auto_train_cancel_event
         if _auto_train_cancel_event is not None:
             _auto_train_cancel_event.set()
+        try:
+            from infrastructure.auth import get_audit_logger
+            get_audit_logger().log(
+                "training.stop",
+                resource=(self.state.config or {}).get("soul_name") or "from-sessions",
+                detail="cancelled",
+            )
+        except Exception:
+            pass
         return success_response(message="Cancel signal sent")
 
     def _load_soul(self, name: str) -> dict:

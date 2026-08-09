@@ -272,12 +272,18 @@ async def stop_training_job(job_id: str):
     job = training_jobs[job_id]
     if job.get("status") not in ("running", "queued", "starting"):
         raise HTTPException(status_code=400, detail=f"Job is not running (status: {job.get('status', 'unknown')})")
+    prev_status = job.get("status", "unknown")
     job["status"] = "stopping"
     cancel_event = job.get("_cancel_event")
     if cancel_event is not None:
         cancel_event.set()
     executor = get_training_executor()
     executor.cancel(job_id)
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log("training.stop", resource=job_id, detail=f"from={prev_status}")
+    except Exception:
+        pass
     return {"status": "stopping", "job_id": job_id}
 
 
@@ -377,6 +383,16 @@ async def delete_training_job(job_id: str):
                 pass
 
     del training_jobs[job_id]
+
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log(
+            "training.delete",
+            resource=job_id,
+            detail=f"deleted_files={len(deleted_files)}",
+        )
+    except Exception:
+        pass
 
     return {
         "status": "deleted",
@@ -481,6 +497,18 @@ async def start_training(request: TrainingRequest):
     # Update global training controller
     controller = get_training_controller()
     controller.start(job_id, request.name or "training")
+
+    # Audit trail — training job start (char-level fine-tune)
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log(
+            "training.start",
+            resource=request.dataset.strip() if request.dataset else out_stem,
+            detail="char",
+            extra={"job_id": job_id, "model": request.model, "epochs": request.epochs, "source_kind": source_kind},
+        )
+    except Exception:
+        pass
 
     # Trigger webhook notification for training started
     try:
@@ -682,6 +710,18 @@ async def start_hf_training(request: HFTrainingRequest):
         "reward_history": [],
     }
     training_jobs[job_id] = job
+
+    # Audit trail — HF fine-tune job start
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log(
+            "training.start",
+            resource=request.dataset or request.manifest_uri or "custom",
+            detail="hf",
+            extra={"job_id": job_id, "model": request.model, "epochs": request.epochs, "use_lora": request.use_lora},
+        )
+    except Exception:
+        pass
 
     # Auto-configure when model not specified
     model_name = request.model
@@ -1531,7 +1571,7 @@ async def train_from_feedback():
                         training_jobs[jid]["loss"] = float(el)
                         training_jobs[jid].setdefault("loss_history", []).append({"step": info.get("global_step", 0), "value": float(el), "type": "eval"})
 
-                result = trainer.train(on_progress=on_progress, cancel_event=cancel_event)
+                result = trainer.train(on_progress=on_progress)
                 safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
                 trainer.save(f"models/{safe_stem}.pt")
 
@@ -1813,6 +1853,16 @@ async def register_webhook(
 
     webhook = store.get(webhook_id)
 
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log(
+            "training.webhook.register",
+            resource=url,
+            extra={"webhook_id": webhook_id, "events": events_list},
+        )
+    except Exception:
+        pass
+
     return {
         "id": webhook_id,
         "url": url,
@@ -1838,6 +1888,12 @@ async def unregister_webhook(webhook_id: str):
         raise HTTPException(status_code=404, detail="Webhook not found")
 
     store.unregister(webhook_id)
+
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log("training.webhook.delete", resource=webhook_id)
+    except Exception:
+        pass
 
     return {"status": "deleted", "webhook_id": webhook_id}
 

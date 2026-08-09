@@ -4,9 +4,7 @@
  * Uses apiClient for REST calls, fetch for SSE streaming.
  */
 
-import { apiPost, apiGet } from './http-client'
-import { PUBLIC_API_URL } from './config'
-import { useAuthStore } from './auth'
+import { apiPost, apiGet, streamSSE } from './http-client'
 import { modelController, type ModelStatus } from './model-controller'
 
 export interface ChatMessage {
@@ -14,21 +12,10 @@ export interface ChatMessage {
   content: string
 }
 
-interface ChatRequest {
-  messages: ChatMessage[]
-  max_tokens?: number
-  temperature?: number
-}
-
 interface ChatResponse {
   message: string
   session_id: string
   done: boolean
-}
-
-function authHeaders(): Record<string, string> {
-  const token = useAuthStore.getState().token
-  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 export const chatController = {
@@ -47,7 +34,7 @@ export const chatController = {
           messages: [{ role: 'user', content: message }],
           max_tokens: options?.max_tokens ?? 100,
           temperature: options?.temperature ?? 0.8,
-        } as ChatRequest,
+        },
       )
       return {
         message: data.message || data.text || '',
@@ -78,48 +65,24 @@ export const chatController = {
     const modelStatus = await modelController.status()
     if (!modelStatus.loaded) { yield '[No model loaded]'; return }
 
-    let res: Response
-    try {
-      res = await fetch(`${PUBLIC_API_URL}/chat/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: message }],
-          max_new_tokens: options?.max_tokens ?? 100,
-          temperature: options?.temperature ?? 0.8,
-        }),
-      })
-    } catch (err) {
-      yield `[Connection error: ${err instanceof Error ? err.message : 'unknown'}]`
-      return
+    const body = {
+      messages: [{ role: 'user', content: message }],
+      max_new_tokens: options?.max_tokens ?? 100,
+      temperature: options?.temperature ?? 0.8,
     }
 
-    const reader = res.body?.getReader()
-    if (!reader) { yield '[Stream error]'; return }
-    const decoder = new TextDecoder()
     try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        for (const line of decoder.decode(value).split('\n')) {
-          if (line.startsWith('data: ')) {
-            try {
-              const envelope = JSON.parse(line.slice(6)) as {
-                stream?: string; phase?: string; status?: string
-                data?: { token?: string; error?: string }
-                error?: string; message?: string
-              }
-              if (envelope.status === 'error') {
-                yield `[${envelope.message || envelope.data?.error || 'Stream error'}]`
-                return
-              }
-              if (envelope.data?.token) yield envelope.data.token
-              if (envelope.status === 'complete') return
-            } catch { /* skip */ }
-          }
+      for await (const event of streamSSE('/chat/stream', { body })) {
+        if (event.status === 'error') {
+          yield `[${event.message || (event.data?.error as string) || 'Stream error'}]`
+          return
         }
+        if (event.data?.token) yield event.data.token as string
+        if (event.status === 'complete') return
       }
-    } finally { reader.releaseLock() }
+    } catch (err) {
+      yield `[Connection error: ${err instanceof Error ? err.message : 'unknown'}]`
+    }
   },
 
   async checkReady(): Promise<ModelStatus> {
@@ -127,45 +90,19 @@ export const chatController = {
   },
 
   async *regenerateStream(sessionId: string, messages: ChatMessage[]): AsyncGenerator<{ token?: string; done?: boolean; error?: string }> {
-    let res: Response
+    const body = { session_id: sessionId, messages, regenerate: true }
     try {
-      res = await fetch(`${PUBLIC_API_URL}/session/${sessionId}/regenerate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ session_id: sessionId, messages, regenerate: true }),
-      })
+      for await (const event of streamSSE(`/session/${sessionId}/regenerate`, { body })) {
+        if (event.status === 'error') {
+          yield { error: event.message || (event.data?.error as string) || 'Stream error' }
+          return
+        }
+        if (event.data?.token) yield { token: event.data.token as string }
+        if (event.status === 'complete') { yield { done: true }; return }
+      }
     } catch (err) {
       yield { error: `Connection error: ${err instanceof Error ? err.message : 'unknown'}` }
-      return
     }
-    const reader = res.body?.getReader()
-    if (!reader) { yield { error: 'Stream error' }; return }
-    const decoder = new TextDecoder()
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        for (const line of decoder.decode(value).split('\n')) {
-          const trimmed = line.trimEnd()
-          if (!trimmed.startsWith('data:')) continue
-          const payload = trimmed.slice(5).trim()
-          if (!payload || payload === '[DONE]') continue
-          try {
-            const envelope = JSON.parse(payload) as {
-              stream?: string; phase?: string; status?: string
-              data?: { token?: string; error?: string }
-              error?: string; message?: string
-            }
-            if (envelope.status === 'error') {
-              yield { error: envelope.message || envelope.data?.error || 'Stream error' }
-              return
-            }
-            if (envelope.data?.token) yield { token: envelope.data.token }
-            if (envelope.status === 'complete') { yield { done: true }; return }
-          } catch { /* skip */ }
-        }
-      }
-    } finally { reader.releaseLock() }
   },
 
   async saveSessionContext(sessionId: string, messages: ChatMessage[]): Promise<void> {

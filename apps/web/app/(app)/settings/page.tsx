@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  IconRefresh,
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
@@ -72,8 +73,10 @@ export default function SettingsPage() {
   const [connectionTest, setConnectionTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'error'; latency?: number; error?: string }>({ status: 'idle' })
   const [settingsErrors, setSettingsErrors] = useState<{ apiUrl?: string; hfToken?: string }>({})
   const [processGuard, setProcessGuard] = useState<import('@/lib/system-controller').ProcessGuardStatus | null>(null)
+  const [healthError, setHealthError] = useState(false)
 
   const fetchHealth = useCallback(async () => {
+    setHealthError(false)
     const [d, m, dk, inf] = await Promise.allSettled([
       systemController.getDetailedHealth(),
       systemController.getMetrics(),
@@ -84,6 +87,9 @@ export default function SettingsPage() {
     if (m.status === 'fulfilled') setMetrics(m.value)
     if (dk.status === 'fulfilled') setDisk(dk.value)
     if (inf.status === 'fulfilled') setInfo(inf.value)
+    if (d.status === 'rejected' && m.status === 'rejected' && dk.status === 'rejected' && inf.status === 'rejected') {
+      setHealthError(true)
+    }
   }, [])
 
   useEffect(() => { fetchHealth() }, [fetchHealth])
@@ -152,7 +158,7 @@ export default function SettingsPage() {
                 <CardDescription>Theme preference</CardDescription>
               </div>
               {settings.theme !== 'light' && (
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateSettings({ theme: 'light' })}>
+                <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => updateSettings({ theme: 'light' })}>
                   Reset
                 </Button>
               )}
@@ -194,7 +200,7 @@ export default function SettingsPage() {
                   key={l.code}
                   size="sm"
                   variant={locale === l.code ? 'default' : 'outline'}
-                  className="h-8 text-xs gap-1.5"
+                  className="h-9 text-xs gap-1.5"
                   onClick={() => setLocale(l.code)}
                 >
                   <span>{l.flag}</span>
@@ -249,10 +255,10 @@ export default function SettingsPage() {
                 className="font-mono text-xs"
                 aria-label="HuggingFace API token"
               />
-              <p className="text-[11px] text-muted-foreground">Required for loading private HuggingFace models. Stored locally in your browser.</p>
+              <p className="text-xs text-muted-foreground">Required for loading private HuggingFace models. Stored locally in your browser.</p>
             </div>
             <div className="flex items-center gap-2 pt-2">
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleTestConnection} disabled={connectionTest.status === 'testing'}>
+              <Button size="sm" variant="outline" className="h-9 text-xs" onClick={handleTestConnection} disabled={connectionTest.status === 'testing'}>
                 {connectionTest.status === 'testing' ? 'Testing...' : 'Test connection'}
               </Button>
               {connectionTest.status === 'ok' && (
@@ -274,7 +280,7 @@ export default function SettingsPage() {
                 <CardDescription>Default model and generation settings</CardDescription>
               </div>
               {(settings.defaultTemp !== DEFAULT_SETTINGS.defaultTemp || settings.defaultMaxTokens !== DEFAULT_SETTINGS.defaultMaxTokens || settings.defaultTopP !== DEFAULT_SETTINGS.defaultTopP || settings.defaultTopK !== DEFAULT_SETTINGS.defaultTopK) && (
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateSettings({ defaultTemp: DEFAULT_SETTINGS.defaultTemp, defaultMaxTokens: DEFAULT_SETTINGS.defaultMaxTokens, defaultTopP: DEFAULT_SETTINGS.defaultTopP, defaultTopK: DEFAULT_SETTINGS.defaultTopK })}>
+                <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => updateSettings({ defaultTemp: DEFAULT_SETTINGS.defaultTemp, defaultMaxTokens: DEFAULT_SETTINGS.defaultMaxTokens, defaultTopP: DEFAULT_SETTINGS.defaultTopP, defaultTopK: DEFAULT_SETTINGS.defaultTopK })}>
                   Reset
                 </Button>
               )}
@@ -427,6 +433,16 @@ export default function SettingsPage() {
             <CardDescription>Backend status and resource usage</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {healthError && !detailed && !metrics ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-destructive mb-3">Could not connect to server</p>
+                <Button size="sm" variant="outline" onClick={fetchHealth}>
+                  <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
+                  Retry
+                </Button>
+              </div>
+            ) : (
+              <>
             {/* Top row: API + Model + Uptime + Responses */}
             <KpiGrid columns={4}>
               <StatCard
@@ -489,8 +505,10 @@ export default function SettingsPage() {
               <Button variant="ghost" size="sm" className="text-xs" onClick={fetchHealth}>
                 Refresh health
               </Button>
-              <span className="text-[10px] text-muted-foreground font-mono">v1.0.0</span>
+              <span className="text-xs text-muted-foreground font-mono">v1.0.0</span>
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
 
@@ -504,23 +522,23 @@ export default function SettingsPage() {
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Platform</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Platform</p>
                   <p className="text-sm font-medium mt-0.5">{info.platform} {info.platform_release}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Architecture</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Architecture</p>
                   <p className="text-sm font-medium mt-0.5">{info.architecture}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Processor</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Processor</p>
                   <p className="text-sm font-medium mt-0.5 truncate">{info.processor}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">CPU cores</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">CPU cores</p>
                   <p className="text-sm font-medium mt-0.5">{info.cpu_count}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Platform version</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Platform version</p>
                   <p className="text-sm font-medium mt-0.5 font-mono">{info.platform_version}</p>
                 </div>
               </div>

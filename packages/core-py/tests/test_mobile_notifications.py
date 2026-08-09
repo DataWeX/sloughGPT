@@ -151,10 +151,12 @@ class TestSendNotification:
         service.register_device("tok1", "ios")
         monkeypatch.delitem("sys.modules", "httpx", raising=False)
 
+        real_import = __import__
+
         def fake_import(name, *args, **kwargs):
             if name == "httpx":
                 raise ImportError("no httpx")
-            return __import__(name, *args, **kwargs)
+            return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr("builtins.__import__", fake_import)
         result = service.send_notification(

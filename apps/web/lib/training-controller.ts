@@ -2,12 +2,8 @@
  * Training Jobs Controller — axios-based API for training job management.
  */
 
-import { apiGet, apiPost, apiDelete, apiPatch } from './http-client'
+import { apiGet, apiPost, apiDelete, apiPatch, authFetch, streamSSE } from './http-client'
 import type { Checkpoint } from './souls-controller'
-
-function getAuthToken(): string | null {
-  return localStorage.getItem('auth_token')
-}
 
 export interface TrainingJob {
   id: string
@@ -364,22 +360,19 @@ export const trainingJobsController = {
     return apiDelete(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
   },
 
+  async deleteCheckpointsBatch(names: string[]): Promise<{ deleted: number }> {
+    const results = await Promise.allSettled(names.map(n => this.deleteCheckpoint(n)))
+    return { deleted: results.filter(r => r.status === 'fulfilled').length }
+  },
+
   async downloadCheckpoint(name: string): Promise<Blob> {
-    const { PUBLIC_API_URL } = await import('./config')
-    const token = getAuthToken()
-    const res = await fetch(`${PUBLIC_API_URL}/auto-train/checkpoints/${encodeURIComponent(name)}/download`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    const res = await authFetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
     if (!res.ok) throw new Error(`Download failed (${res.status})`)
     return res.blob()
   },
 
   async exportMetrics(): Promise<Blob> {
-    const { PUBLIC_API_URL } = await import('./config')
-    const token = getAuthToken()
-    const res = await fetch(`${PUBLIC_API_URL}/auto-train/metrics/export`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    const res = await authFetch('/auto-train/metrics/export')
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
   },
@@ -389,11 +382,7 @@ export const trainingJobsController = {
   },
 
   async downloadTrainingJob(jobId: string): Promise<Blob> {
-    const { PUBLIC_API_URL } = await import('./config')
-    const token = getAuthToken()
-    const res = await fetch(`${PUBLIC_API_URL}/training/export/${jobId}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    const res = await authFetch(`/training/export/${jobId}`)
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
   },
@@ -415,49 +404,13 @@ export const trainingJobsController = {
     meta: Record<string, unknown>
     message: string
   }> {
-    const { PUBLIC_API_URL } = await import('./config')
-    const token = getAuthToken()
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (token) headers['Authorization'] = `Bearer ${token}`
-
-    const res = await fetch(`${PUBLIC_API_URL}/mobile/train/from-sessions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(params ?? {}),
-    })
-
-    if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => '')
-      throw new Error(`Training request failed (${res.status}): ${text.slice(0, 200)}`)
-    }
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event = JSON.parse(line.slice(6))
-            yield event
-            if (event.status === 'complete' || event.status === 'error') return
-          } catch { /* skip malformed */ }
-        }
+    try {
+      for await (const event of streamSSE('/mobile/train/from-sessions', { body: params ?? {} })) {
+        yield event as { stream: string; phase: string; status: string; data: Record<string, unknown>; meta: Record<string, unknown>; message: string }
+        if (event.status === 'complete' || event.status === 'error') return
       }
-    }
-
-    // Drain remaining buffer
-    if (buffer.startsWith('data: ')) {
-      try {
-        const event = JSON.parse(buffer.slice(6))
-        yield event
-      } catch { /* skip */ }
+    } catch (err) {
+      throw new Error(`Training request failed: ${err instanceof Error ? err.message : 'unknown'}`)
     }
   },
 
@@ -520,33 +473,13 @@ export const trainingJobsController = {
     meta: Record<string, unknown>
     message: string
   }> {
-    const { PUBLIC_API_URL } = await import('./config')
-    const res = await fetch(`${PUBLIC_API_URL}/auto-train/from-sessions/stream`)
-    if (!res.ok || !res.body) throw new Error(`Stream failed (${res.status})`)
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event = JSON.parse(line.slice(6))
-            yield event
-            if (event.status === 'complete' || event.status === 'error') return
-          } catch { /* skip malformed */ }
-        }
+    try {
+      for await (const event of streamSSE('/auto-train/from-sessions/stream', { method: 'GET' })) {
+        yield event as { stream: string; phase: string; status: string; data: Record<string, unknown>; meta: Record<string, unknown>; message: string }
+        if (event.status === 'complete' || event.status === 'error') return
       }
-    }
-    if (buffer.startsWith('data: ')) {
-      try {
-        const event = JSON.parse(buffer.slice(6))
-        yield event
-      } catch { /* skip */ }
+    } catch (err) {
+      throw new Error(`Stream failed: ${err instanceof Error ? err.message : 'unknown'}`)
     }
   },
 
@@ -641,16 +574,12 @@ export const trainingJobsController = {
     session_id?: string
     limit?: number
   }): Promise<Blob> {
-    const { PUBLIC_API_URL } = await import('./config')
-    const token = getAuthToken()
     const query = new URLSearchParams()
     if (params?.min_quality != null) query.set('min_quality', String(params.min_quality))
     if (params?.session_id) query.set('session_id', params.session_id)
     if (params?.limit != null) query.set('limit', String(params.limit))
     const qs = query.toString()
-    const res = await fetch(`${PUBLIC_API_URL}/mobile/train/export${qs ? `?${qs}` : ''}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    const res = await authFetch(`/mobile/train/export${qs ? `?${qs}` : ''}`)
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
   },
