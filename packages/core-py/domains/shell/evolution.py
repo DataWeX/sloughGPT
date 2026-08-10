@@ -49,6 +49,71 @@ from .simulation import (
     Simulation,
     WorldParams,
 )
+from .memory import WorldMemory
+
+# Dedicated RNG stream for the cultural (teach) brain. The teach brain is
+# genetic material too, but drawing it from the SHARED stream would change the
+# four behavior brains' draws (and the perception-noise stream) whenever
+# teaching is enabled — breaking the locked proofs and un-controlling the
+# culture benchmark. A dedicated stream keeps every other draw bit-identical
+# whether or not teaching is on.
+_TEACH_RNG_SEED = 0xC001
+
+
+def _teach_rng(group_id: int = 0) -> np.random.Generator:
+    """Seeded Generator for the cultural brain, independent of the shared one.
+
+    Args:
+        group_id: tribe id, so the initial teach gate varies across tribes.
+
+    Returns:
+        np.random.Generator whose draws never touch the shared RNG streams.
+    """
+    return np.random.default_rng(_TEACH_RNG_SEED + int(group_id))
+
+
+# Seed for the predator brain's dedicated RNG stream. The predation weights
+# are drawn from their own generator (``_PREDATION_RNG_SEED + group_id``) so
+# enabling predation never perturbs the shared stream — and therefore the
+# four behavior brains' draws (and the perception-noise stream) stay
+# bit-identical whether or not predation is enabled (locked proofs and a
+# controlled predator-prey benchmark).
+_PREDATION_RNG_SEED = 0x0BAD
+
+
+def _predation_rng(group_id: int = 0) -> np.random.Generator:
+    """Seeded Generator for the predator brain, independent of the shared one.
+
+    Args:
+        group_id: tribe id, so the initial predation gate varies across
+            tribes.
+
+    Returns:
+        np.random.Generator whose draws never touch the shared RNG streams.
+    """
+    return np.random.default_rng(_PREDATION_RNG_SEED + int(group_id))
+
+
+# Seed for the territory brain's dedicated RNG stream. The territory weights
+# are drawn from their own generator (``_TERRITORY_RNG_SEED + group_id``) so
+# enabling territoriality never perturbs the shared stream — and therefore
+# the four behavior brains' draws (and the perception-noise stream) stay
+# bit-identical whether or not territoriality is enabled (locked proofs and
+# a controlled territoriality benchmark).
+_TERRITORY_RNG_SEED = 0x1E07
+
+
+def _territory_rng(group_id: int = 0) -> np.random.Generator:
+    """Seeded Generator for the territory brain, independent of the shared one.
+
+    Args:
+        group_id: tribe id, so the initial territory gate varies across
+            tribes.
+
+    Returns:
+        np.random.Generator whose draws never touch the shared RNG streams.
+    """
+    return np.random.default_rng(_TERRITORY_RNG_SEED + int(group_id))
 
 
 class Genome:
@@ -104,6 +169,14 @@ class Genome:
         names = ("cells", "body", "entity", "move")
         if hasattr(baby, "perceptron_message") and baby.perceptron_message is not None:
             names = names + ("message",)
+        if hasattr(baby, "perceptron_teach") and baby.perceptron_teach is not None:
+            names = names + ("teach",)
+        if (hasattr(baby, "perceptron_predation")
+                and baby.perceptron_predation is not None):
+            names = names + ("predation",)
+        if (hasattr(baby, "perceptron_territory")
+                and baby.perceptron_territory is not None):
+            names = names + ("territory",)
         for name in names:
             p = getattr(baby, f"perceptron_{name}")
             tensors[f"{name}.W"] = p.W.copy()
@@ -156,6 +229,33 @@ class Genome:
             if hidden > 0 and name in ("cells", "move"):
                 tensors[f"{name}.H"] = (rng.standard_normal((n_in, hidden)) * 0.5).astype(np.float32)
                 tensors[f"{name}.bh"] = (rng.standard_normal(hidden) * 0.1).astype(np.float32)
+        if params.teaching_enabled:
+            # Cultural brain: one gate over the target's entity features,
+            # drawn from the DEDICATED teach stream so the shared stream —
+            # and therefore the four behavior brains' draws — is unchanged
+            # whether or not teaching is enabled (locked proofs and a
+            # perfectly controlled culture benchmark).
+            teach = _teach_rng(group_id)
+            tensors["teach.W"] = (teach.standard_normal((params.entity_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["teach.b"] = np.zeros(1, dtype=np.float32)
+        if params.predation_enabled:
+            # Predator brain: one gate over the target's entity features,
+            # drawn from the DEDICATED predation stream so the shared stream
+            # — and therefore the four behavior brains' draws — is unchanged
+            # whether or not predation is enabled (locked proofs and a
+            # perfectly controlled predator-prey benchmark).
+            pred = _predation_rng(group_id)
+            tensors["predation.W"] = (pred.standard_normal((params.entity_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["predation.b"] = np.zeros(1, dtype=np.float32)
+        if params.territoriality_enabled:
+            # Territory brain: one gate over a trespasser's entity features,
+            # drawn from the DEDICATED territory stream so the shared stream
+            # — and therefore the four behavior brains' draws — is unchanged
+            # whether or not territoriality is enabled (locked proofs and a
+            # perfectly controlled territoriality benchmark).
+            terr = _territory_rng(group_id)
+            tensors["territory.W"] = (terr.standard_normal((params.entity_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["territory.b"] = np.zeros(1, dtype=np.float32)
         return cls(tensors, group_id=group_id)
 
     def apply_to(self, baby: SimBaby) -> None:
@@ -186,6 +286,24 @@ class Genome:
             if "message.H" in self.tensors:
                 p.H = np.array(self.tensors["message.H"], dtype=np.float32).copy()
                 p.bh = np.array(self.tensors["message.bh"], dtype=np.float32).copy()
+        if (hasattr(baby, "perceptron_teach")
+                and baby.perceptron_teach is not None
+                and "teach.W" in self.tensors):
+            p = baby.perceptron_teach
+            p.W[:] = self.tensors["teach.W"]
+            p.b[:] = self.tensors["teach.b"]
+        if (hasattr(baby, "perceptron_predation")
+                and baby.perceptron_predation is not None
+                and "predation.W" in self.tensors):
+            p = baby.perceptron_predation
+            p.W[:] = self.tensors["predation.W"]
+            p.b[:] = self.tensors["predation.b"]
+        if (hasattr(baby, "perceptron_territory")
+                and baby.perceptron_territory is not None
+                and "territory.W" in self.tensors):
+            p = baby.perceptron_territory
+            p.W[:] = self.tensors["territory.W"]
+            p.b[:] = self.tensors["territory.b"]
         for m in self.memories:
             baby.memory.record(
                 features=np.asarray(m["features"], dtype=np.float32),
@@ -213,7 +331,15 @@ class Genome:
         """
         mixed: dict[str, np.ndarray] = {}
         for k, v in self.tensors.items():
-            mask = rng.random(v.shape) < 0.5
+            if k.startswith("teach."):
+                mask_rng = _teach_rng(self.group_id)
+            elif k.startswith("predation."):
+                mask_rng = _predation_rng(self.group_id)
+            elif k.startswith("territory."):
+                mask_rng = _territory_rng(self.group_id)
+            else:
+                mask_rng = rng
+            mask = mask_rng.random(v.shape) < 0.5
             mixed[k] = np.where(mask, v, other.tensors[k]).astype(np.float32)
         return Genome(mixed, memories=self.memories, group_id=self.group_id)
 
@@ -232,8 +358,16 @@ class Genome:
         """
         for k in list(self.tensors):
             v = self.tensors[k]
-            mask = rng.random(v.shape) < rate
-            noise = rng.standard_normal(v.shape) * scale
+            if k.startswith("teach."):
+                draw_rng = _teach_rng(self.group_id)
+            elif k.startswith("predation."):
+                draw_rng = _predation_rng(self.group_id)
+            elif k.startswith("territory."):
+                draw_rng = _territory_rng(self.group_id)
+            else:
+                draw_rng = rng
+            mask = draw_rng.random(v.shape) < rate
+            noise = draw_rng.standard_normal(v.shape) * scale
             self.tensors[k] = (v + mask * noise).astype(np.float32)
         return self
 
@@ -270,6 +404,13 @@ class EvolutionEngine:
                 collective survival count toward a member's breeding chances,
                 which can select for cooperative acts.
             seed: random seed for reproducible runs.
+
+        The engine carries a ``WorldMemory`` reservoir whenever
+        ``params.memory_enabled``: every generation's scene shares the same
+        reservoir, dead babies deposit in-sim, survivors deposit at the
+        generation boundary, and the next generation's newborns are seeded
+        from it — so lived experience accumulates across generations, beyond
+        the capped parent->child memotype.
     """
 
     def __init__(self, params: WorldParams | None = None,
@@ -299,6 +440,12 @@ class EvolutionEngine:
         self.group_weight = float(group_weight)
         self.seed = seed
         self.history: list[dict] = []
+        # World-level long-term memory: one reservoir per engine run, shared
+        # by every generation's scene so deposits survive across generations.
+        self.world_memory = (WorldMemory()
+                             if self.params.memory_enabled else None)
+        self._run_seeds_given = 0
+        self._run_seeds_total = 0
         if self.spawn_positions is None and self.group_count > 1:
             self.spawn_positions = self._grouped_spawn_positions()
 
@@ -432,7 +579,7 @@ class EvolutionEngine:
             food_rng = np.random.default_rng(int(self.params.world_seed))
         else:
             food_rng = rng
-        scene = SimScene(params=gen_params)
+        scene = SimScene(params=gen_params, world_memory=self.world_memory)
         self._place_food(scene, food_rng)
         babies: list[SimBaby] = []
         for i, g in enumerate(genomes):
@@ -445,10 +592,21 @@ class EvolutionEngine:
             babies.append(b)
         sim = Simulation(scene, max_ticks=self.ticks_per_generation)
         sim.run()
+        # Generation boundary: every survivor also deposits its best episodes
+        # into the world reservoir (dead babies deposited in-sim at death), so
+        # the collective record grows monotonically across generations.
+        for b in babies:
+            if b.alive:
+                scene.deposit_memory(b)
+        self._run_seeds_given = scene.memory_seeds_given
+        self._run_seeds_total += self._run_seeds_given
         social = sim.summary()
         total_baby_ticks = max(int(social.get("total_baby_ticks", 1)), 1)
         social["cooperate_rate"] = social["cooperations"] / total_baby_ticks
         social["contest_rate"] = social["contests"] / total_baby_ticks
+        social["teach_rate"] = social["lessons"] / total_baby_ticks
+        social["predation_rate"] = social["predations"] / total_baby_ticks
+        social["defend_rate"] = social["defenses"] / total_baby_ticks
         social["mean_home_displacement"] = self._home_displacement(babies, genomes)
         return babies, [self._fitness(b) for b in babies], social
 
@@ -591,6 +749,8 @@ class EvolutionEngine:
             np.random.seed(self.seed)
         rng = np.random.default_rng(self.seed)
 
+        self._run_seeds_total = 0
+
         genomes = [Genome.random(self.params, rng, group_id=i % self.group_count)
                    for i in range(self.population_size)]
         best_genome: Genome | None = None
@@ -609,6 +769,7 @@ class EvolutionEngine:
                     babies[best_idx], group_id=genomes[best_idx].group_id,
                 )
 
+            seeds = self._run_seeds_given
             entry = {
                 "generation": gen,
                 "best_fitness": gen_best,
@@ -620,6 +781,18 @@ class EvolutionEngine:
                 "contest_rate": social["contest_rate"],
                 "social_energy_moved": social["social_energy_moved"],
                 "mean_home_displacement": social["mean_home_displacement"],
+                "lessons": social["lessons"],
+                "teach_rate": social["teach_rate"],
+                "predations": social["predations"],
+                "predation_rate": social["predation_rate"],
+                "predation_energy_moved": social["predation_energy_moved"],
+                "defenses": social["defenses"],
+                "defend_rate": social["defend_rate"],
+                "defend_energy_moved": social["defend_energy_moved"],
+                "nests_built": social["nests_built"],
+                "memory_size": len(self.world_memory)
+                if self.world_memory is not None else 0,
+                "memory_seeds": seeds,
             }
             if self.group_count > 1:
                 entry["group_means"] = self._group_means(babies, genomes)
@@ -638,6 +811,9 @@ class EvolutionEngine:
             "best_genome": best_genome,
             "inherited_episodes": best_genome.memory_count if best_genome else 0,
             "history": list(self.history),
+            "memory_size": len(self.world_memory)
+            if self.world_memory is not None else 0,
+            "memory_seeds_total": self._run_seeds_total,
         }
 
     def run_frozen(self) -> dict:
@@ -677,6 +853,17 @@ class EvolutionEngine:
                 "contest_rate": social["contest_rate"],
                 "social_energy_moved": social["social_energy_moved"],
                 "mean_home_displacement": social["mean_home_displacement"],
+                "lessons": social["lessons"],
+                "teach_rate": social["teach_rate"],
+                "predations": social["predations"],
+                "predation_rate": social["predation_rate"],
+                "predation_energy_moved": social["predation_energy_moved"],
+                "defenses": social["defenses"],
+                "defend_rate": social["defend_rate"],
+                "defend_energy_moved": social["defend_energy_moved"],
+                "nests_built": social["nests_built"],
+                "memory_size": 0,
+                "memory_seeds": 0,
             })
         return {
             "generations": self.generations,
@@ -685,6 +872,8 @@ class EvolutionEngine:
             "best_genome": None,
             "inherited_episodes": 0,
             "history": history,
+            "memory_size": 0,
+            "memory_seeds_total": 0,
         }
 
 
@@ -834,4 +1023,330 @@ def benchmark_social(params: WorldParams | None = None, *,
         "individual_contest_rate": float(ind_contest),
         "group_contest_rate": float(grp_contest),
         "cooperation_emerged": bool(grp_rate > ind_rate),
+    }
+
+
+def benchmark_culture(params: WorldParams | None = None, *,
+                      population_size: int = 8,
+                      generations: int = 12,
+                      ticks_per_generation: int = 24,
+                      organic_pools: int = 3,
+                      group_count: int = 2,
+                      group_weight: float = 0.5,
+                      hidden_units: int = 0,
+                      seed: int = 1) -> dict:
+    """
+    Deterministic cultural transmission proof (Stage 7): two transmission
+    channels.
+
+    Both arms evolve on the SAME grouped world — the same generated terrain,
+    the same per-group food pools, the same per-tribe spawn territories, and
+    the same initial core genomes (the teach brain's weights are drawn last,
+    so the four behavior brains are bit-identical between arms). In-life
+    delta-rule learning is enabled in BOTH arms: the only difference is the
+    transmission channel:
+      - ``control``: teaching disabled. Learned behavior moves vertically
+        only — consolidated into an offspring's memotype at birth.
+      - ``culture``: teaching enabled. A baby with surplus can teach the
+        neediest tribe-mate in range: the student's behavior weights blend
+        toward the teacher's learned weights and up to ``teach_memotype_cap``
+        of the teacher's best episodes are copied into the student's memory
+        (default 1; bulk copies raised the student's reward baseline and
+        dampened its learning, so episode transfer is kept minimal). Learned
+        behavior now also moves laterally between living agents.
+
+    Teaching is never hardcoded: the teach perceptron must learn to open its
+    gate (and pay the energy cost) only when the lesson is worth it.
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``,
+            ``world_seed=seed`` and ``learning_enabled=True``.
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation.
+        organic_pools: food pools distributed across the group territories.
+        group_count: number of tribes (territories).
+        group_weight: tribe-mean share of group-arm selection fitness.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``culture`` runs, their last-generation
+        ``avg_fitness``/``teach_rate`` and the ``culture_emerged`` verdict
+        (culture-arm final average fitness beats the control arm's).
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    base = replace(base, generate_world=True, world_seed=seed,
+                   learning_enabled=True, brain_hidden_units=int(hidden_units),
+                   teaching_enabled=False)
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, group_count=group_count,
+                  group_weight=group_weight, seed=seed)
+    control = EvolutionEngine(params=base, **shared).run()
+    culture = EvolutionEngine(params=replace(base, teaching_enabled=True),
+                              **shared).run()
+
+    ctrl_avg = control["history"][-1]["avg_fitness"]
+    cult_avg = culture["history"][-1]["avg_fitness"]
+    return {
+        "control": control,
+        "culture": culture,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "control_last_avg": float(ctrl_avg),
+        "culture_last_avg": float(cult_avg),
+        "control_teach_rate": float(control["history"][-1]["teach_rate"]),
+        "culture_teach_rate": float(culture["history"][-1]["teach_rate"]),
+        "culture_emerged": bool(cult_avg > ctrl_avg),
+    }
+
+
+def benchmark_memory(params: WorldParams | None = None, *,
+                     population_size: int = 8,
+                     generations: int = 12,
+                     ticks_per_generation: int = 24,
+                     organic_pools: int = 3,
+                     group_count: int = 2,
+                     group_weight: float = 0.5,
+                     hidden_units: int = 0,
+                     seed: int = 1) -> dict:
+    """
+    Deterministic long-term memory proof (Stage 7): two memory channels.
+
+    Both arms evolve on the SAME grouped world — the same generated terrain,
+    the same per-group food pools, the same per-tribe spawn territories, and
+    the same initial core genomes. In-life delta-rule learning is enabled in
+    BOTH arms and teaching is off in both: the only difference is how lived
+    experience persists:
+      - ``control``: memory disabled. Experience survives only through the
+        memotype — each offspring inherits its winning parents' consolidated
+        episodes at birth, capped and parent->child only.
+      - ``memory``: the world keeps an append-only reservoir. Every dead baby
+        deposits its best episodes in-sim and every survivor deposits at the
+        generation boundary; the reservoir never evicts, so the collective
+        record spans the whole run; and each newborn is seeded with the
+        reservoir's best episodes on top of its memotype, so experience also
+        crosses lineages.
+
+    Memory is never hardcoded: the reservoir holds honest episode rewards and
+    only the episodes babies actually learned from.
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``,
+            ``world_seed=seed`` and ``learning_enabled=True``.
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation.
+        organic_pools: food pools distributed across the group territories.
+        group_count: number of tribes (territories).
+        group_weight: tribe-mean share of group-arm selection fitness.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``memory`` runs, the last-generation
+        ``avg_fitness`` of each, the final reservoir ``memory_size`` and total
+        ``memory_seeds`` of the memory arm, and the ``memory_emerged`` verdict
+        (memory-arm final average fitness beats the control arm's).
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    base = replace(base, generate_world=True, world_seed=seed,
+                   learning_enabled=True, brain_hidden_units=int(hidden_units),
+                   teaching_enabled=False, memory_enabled=False)
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, group_count=group_count,
+                  group_weight=group_weight, seed=seed)
+    control = EvolutionEngine(params=base, **shared).run()
+    memory = EvolutionEngine(params=replace(base, memory_enabled=True),
+                             **shared).run()
+
+    ctrl_avg = control["history"][-1]["avg_fitness"]
+    mem_avg = memory["history"][-1]["avg_fitness"]
+    return {
+        "control": control,
+        "memory": memory,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "control_last_avg": float(ctrl_avg),
+        "memory_last_avg": float(mem_avg),
+        "memory_size": int(memory["memory_size"]),
+        "memory_seeds": int(memory["memory_seeds_total"]),
+        "memory_emerged": bool(mem_avg > ctrl_avg),
+    }
+
+
+def benchmark_predation(params: WorldParams | None = None, *,
+                        population_size: int = 8,
+                        generations: int = 12,
+                        ticks_per_generation: int = 24,
+                        organic_pools: int = 3,
+                        group_count: int = 2,
+                        group_weight: float = 0.5,
+                        hidden_units: int = 0,
+                        seed: int = 1) -> dict:
+    """
+    Deterministic predator-prey proof (Stage 8): two interaction channels.
+
+    Both arms evolve on the SAME grouped world — the same generated terrain,
+    the same per-group food pools, the same per-tribe spawn territories, and
+    the same initial core genomes (the predation brain's weights are drawn
+    last from a dedicated stream, so the four behavior brains are
+    bit-identical between arms). In-life delta-rule learning is enabled in
+    BOTH arms and teaching/memory are off in both: the only difference is the
+    interaction channel:
+      - ``control``: predation disabled. Agents gather, forage, and may
+        contest neighbors (a small energy theft), but no strike is lethal.
+      - ``predation``: a baby can hunt the weakest nearby baby within range
+        when its predation gate clears ``predation_gate_threshold``: the
+        strike is lethal, transfers the prey's full energy to the predator,
+        and costs ``predation_cost``.
+
+    Predation is never hardcoded: the predation perceptron must learn to
+    open its gate only when the hunt pays (prey energy exceeds the strike
+    cost), and group selection shapes the balance between predators and prey
+    — the kin feature lets a tribe learn not to eat its own members while
+    hunting rival tribes.
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``,
+            ``world_seed=seed`` and ``learning_enabled=True``.
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation.
+        organic_pools: food pools distributed across the group territories.
+        group_count: number of tribes (territories).
+        group_weight: tribe-mean share of group-arm selection fitness.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``predation`` runs, their last-generation
+        ``avg_fitness``, the predation arm's ``predation_rate``,
+        ``predations`` count and total ``predation_energy_moved``, and the
+        ``predation_emerged`` verdict (predation-arm final average fitness
+        beats the control arm's).
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    base = replace(base, generate_world=True, world_seed=seed,
+                   learning_enabled=True, brain_hidden_units=int(hidden_units),
+                   teaching_enabled=False, memory_enabled=False,
+                   predation_enabled=False)
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, group_count=group_count,
+                  group_weight=group_weight, seed=seed)
+    control = EvolutionEngine(params=base, **shared).run()
+    predation = EvolutionEngine(params=replace(base, predation_enabled=True),
+                                **shared).run()
+
+    ctrl_avg = control["history"][-1]["avg_fitness"]
+    pred_avg = predation["history"][-1]["avg_fitness"]
+    return {
+        "control": control,
+        "predation": predation,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "control_last_avg": float(ctrl_avg),
+        "predation_last_avg": float(pred_avg),
+        "predation_rate": float(predation["history"][-1]["predation_rate"]),
+        "predations": int(predation["history"][-1]["predations"]),
+        "predation_energy_moved": float(
+            predation["history"][-1]["predation_energy_moved"]),
+        "predation_emerged": bool(pred_avg > ctrl_avg),
+    }
+
+
+def benchmark_territoriality(params: WorldParams | None = None, *,
+                             population_size: int = 8,
+                             generations: int = 12,
+                             ticks_per_generation: int = 24,
+                             organic_pools: int = 3,
+                             group_count: int = 2,
+                             group_weight: float = 0.5,
+                             hidden_units: int = 0,
+                             seed: int = 1) -> dict:
+    """
+    Deterministic territoriality proof (Stage 9): the defense channel.
+
+    Both arms evolve on the SAME grouped world — the same generated terrain,
+    the same per-group food pools, the same per-tribe spawn territories, and
+    the same initial core genomes. Durable nests are enabled in BOTH arms
+    (territories are claimed by building nests, so the same structures exist
+    either way); ``write_energy_scale`` is raised so energy-depositing writes
+    actually seed nests and territories form. The territory brain's weights
+    are drawn last from a dedicated stream, so the four behavior brains are
+    bit-identical between arms. In-life delta-rule learning is enabled in both
+    arms and teaching/memory are off in both: the only difference is the
+    interaction channel:
+      - ``control``: territoriality disabled. Tribes gather, forage, and
+        build nests, but standing on their own ground never evicts anyone.
+      - ``territoriality``: standing within ``territory_radius`` of its
+        tribe's nearest nest, a baby whose territory gate clears
+        ``defend_gate_threshold`` evicts the nearest foreign baby within
+        ``defend_range`` — shoving it ``defend_push`` cells away (a pure
+        relocation, never a kill) and transferring ``defend_take_fraction``
+        of its energy to the defender (a toll that scales with what the
+        trespasser carries), who pays ``defend_cost`` (a transfer, not
+        creation — the world conserves energy).
+
+    Territoriality is never hardcoded: the territory perceptron must learn to
+    open its gate only when the eviction pays (the trespasser carries more
+    energy than the eviction costs), and the honest same-tick net reward
+    shapes the gate from the true outcome. The kin feature lets a tribe
+    defend its own region while leaving foreign ground alone.
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``,
+            ``world_seed=seed``, ``structure_enabled=True`` and
+            ``learning_enabled=True``.
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation.
+        organic_pools: food pools distributed across the group territories.
+        group_count: number of tribes (territories).
+        group_weight: tribe-mean share of group-arm selection fitness.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``territoriality`` runs, their last-
+        generation ``avg_fitness``, the territoriality arm's ``defend_rate``,
+        ``defenses`` count and total ``defend_energy_moved``, and the
+        ``territoriality_emerged`` verdict (territoriality-arm final average
+        fitness beats the control arm's).
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    base = replace(base, generate_world=True, world_seed=seed,
+                   learning_enabled=True, brain_hidden_units=int(hidden_units),
+                   teaching_enabled=False, memory_enabled=False,
+                   structure_enabled=True, write_energy_scale=10.0,
+                   territoriality_enabled=False)
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, group_count=group_count,
+                  group_weight=group_weight, seed=seed)
+    control = EvolutionEngine(params=base, **shared).run()
+    territory = EvolutionEngine(
+        params=replace(base, territoriality_enabled=True), **shared).run()
+
+    ctrl_avg = control["history"][-1]["avg_fitness"]
+    terr_avg = territory["history"][-1]["avg_fitness"]
+    return {
+        "control": control,
+        "territoriality": territory,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "control_last_avg": float(ctrl_avg),
+        "territoriality_last_avg": float(terr_avg),
+        "defend_rate": float(territory["history"][-1]["defend_rate"]),
+        "defenses": int(territory["history"][-1]["defenses"]),
+        "defend_energy_moved": float(
+            territory["history"][-1]["defend_energy_moved"]),
+        "territoriality_emerged": bool(terr_avg > ctrl_avg),
     }

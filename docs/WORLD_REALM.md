@@ -7,7 +7,7 @@ The environment is not a backdrop — it is a complete programmable computing sy
 Babies are not scripted — they perceive, feel, and react.
 The world computes on its own. Babies read results.
 
-## The Seven Stages
+## The Seven Stages (plus Stages 8 & 9)
 
 The world engine is not built in one leap. It is built in stages,
 each depending on the last. Each stage is a working system.
@@ -73,9 +73,59 @@ STAGE 7: AUTONOMOUS CIVILIZATION
   Babies modify the world, build structures, teach each other.
   The world becomes the computer, babies are the programs.
   Culture, evolution, artificial life emerge.
-  Status: NOT BUILT
-  What it gives us: a self-sustaining universe
+  Status: BUILT (final wave — infinite long-term memory / world reservoir)
+  Mechanism: opt-in (`teaching_enabled`). A surplus baby whose teach
+  perceptron gate clears `teach_gate_threshold` teaches the neediest
+  tribe-mate in range (cultural transmission is in-group): the student's
+  behavior weights blend toward the teacher's and a capped number of the
+  teacher's best episodes are copied into the student's memory. The teacher
+  pays `teach_cost * amplitude` and the cost lands in the same tick's net
+  reward, so the teach perceptron is shaped by the honest outcome of the
+  lesson. Teaching amplifies lineage quality — good or bad — so the culture
+  arm of `benchmark_culture` beats its vertical-only control on 3/5 seeds
+  (locked). The world reservoir (`memory_enabled`) completes the picture:
+  one append-only `WorldMemory` spans every generation — dead babies and
+  survivors deposit their best episodes, newborns are seeded from the
+  reservoir's best episodes on top of their memotype, and nothing is ever
+  evicted, so lived experience survives death AND crosses lineages. Off by
+  default so the locked selection proofs keep their exact energy flow and
+  genome layout.
+  What it gives us: structures, lateral culture, and world-level memory —
+  the full "world becomes the computer" milestone. No stage roadmap items
+  remain.
 ```
+
+**Stage 8 — PREDATION (predator-prey dynamics).**
+An opt-in lethal interaction channel added after Stage 7. `predation_enabled`
+gives each baby a `perceptron_predation` (entity-input → 1 gate) that decides
+whether to hunt the weakest nearby baby within `predation_range` when the gate
+clears `predation_gate_threshold`. A strike is lethal and transfers the prey's
+full energy to the predator (a transfer, never creation — energy still
+conserves), and costs `predation_cost`; the gate is shaped by the honest
+same-tick net reward, so hunting pays while prey energy exceeds the strike
+cost and self-limits as prey grows scarce. Weights draw last from a dedicated
+RNG stream, so the four behavior brains stay bit-identical with the channel
+off — the locked selection proofs keep their exact genome layout and energy
+flow. CLI: `--predation`.
+
+**Stage 9 — TERRITORIALITY (claim / defend regions).**
+An opt-in spatial channel added after Stage 8. `territoriality_enabled` gives
+each baby a `perceptron_territory` (entity-input → 1 gate) that reads a
+trespasser's features and, when the gate clears `defend_gate_threshold`,
+defends its tribe's region. Territory is CLAIMED by building nests (Stage 7):
+a tribe's region is the ground within `territory_radius` of the nearest nest
+it owns, so defense only triggers while the defender stands on its own ground.
+A cleared gate evicts the nearest foreign baby within `defend_range`: the
+trespasser is softly shoved `defend_push` cells away from the defender (a pure
+relocation, never a kill or a stranding) and `defend_take_fraction` of its
+energy transfers to the defender — a toll that scales with what the trespasser
+carries, so evicting a rich foreigner pays and the gate has an honest gradient
+to learn it. The defender pays `defend_cost`, a transfer that lands in the
+same tick's net reward, so the gate is shaped by the true outcome. The
+territory perceptron is built from fixed zeros when the channel is off, and
+genome weights draw from a dedicated RNG stream, so the four behavior brains
+stay bit-identical with the channel off — the locked selection proofs keep
+their exact genome layout and energy flow. CLI: `--territory`.
 
 **The critical transition was Stage 4 → Stage 5.**
 We no longer run HuggingFace models for cognition inside the world.
@@ -344,6 +394,25 @@ class WorldParams:
     metal_conduction_boost: float          # extra diffusion carried by metal
     water_signal_dampen: float             # signal removed at water cells
     water_cool_rate: float                 # water relaxes to ambient per tick
+    # Durable structures (nests, Stage 7)
+    structure_enabled: bool                # nests built, fed, and drawn (opt-in)
+    nest_radius: float                     # feed writes must land within this of a nest
+    nest_seed_energy: float                # energy needed to seed a new nest
+    nest_draw_rate: float                  # max energy a starving baby draws per tick
+    nest_use_radius: float                 # draw range around the nest
+    nest_decay: float                      # fraction of bank lost per tick
+    max_nests: int                         # world-wide nest cap
+    # Cultural transmission (teaching, Stage 7)
+    teaching_enabled: bool                 # lateral teaching between living agents (opt-in)
+    teach_cost: float                      # energy spent per unit of lesson amplitude
+    teach_range: float                     # max distance for a lesson
+    teach_gate_threshold: float            # perceptron gate must clear to teach
+    teach_weight_blend: float              # fraction of the weight gap closed per lesson
+    teach_memotype_cap: int                # best episodes copied per lesson (1 default, 0 = none)
+    # World-level long-term memory (Stage 7)
+    memory_enabled: bool                   # scene carries an append-only world reservoir (opt-in)
+    memory_deposit: int                    # best episodes a baby deposits into the reservoir
+    memory_seed: int                       # best reservoir episodes seeded into a newborn
 ```
 
 No agent gets this list. No agent gets a manual.
@@ -376,7 +445,7 @@ This is simulation, not a game.
 | Rule | Constraint |
 |------|-----------|
 | **No magic** | Perceptrons are fixed at spawn. Can't rewire themselves. |
-| **No infinite memory** | Each perception is independent. The living episodic buffer holds only recent episodes (ring buffer); experience survives death only as the inherited memotype (top-reward episodes, capped at memory_inherit). |
+| **No infinite memory** | Each perception is independent. The living episodic buffer holds only recent episodes (ring buffer). Experience survives death two ways: the inherited memotype (top-reward episodes, capped at memory_inherit) and, when the world-memory channel is on, the append-only world reservoir that never evicts. |
 | **No concepts** | No labels, no names, no categories. Just numbers. |
 
 ## What Exists Now
@@ -391,9 +460,9 @@ This is simulation, not a game.
 | Terrain Generation | `simulation.py` | `generate_world()` fills an empty grid using a local `default_rng` (deterministic on `(grid_size, world_seed)`, never the global stream — snapshots/restore stay RNG-neutral): stone floor, water pools and organic food patches on the surface, buried ember vents. Enabled via `generate_world=True`; `SimScene.spawn_babies` drops babies on the ground surface instead of inside solid rock |
 | Entity | `simulation.py` | Minimal: id + position + energy + type + alive |
 | Perceptron | `simulation.py` | Simple neural unit — sigmoid(Wx + b), delta-rule learning. Stage 5 deep brain: optional hidden projection (`brain_hidden_units > 0`, fixed random H/bh, never trained — no backpropagation), readout W/b delta-rule updated on a skip-connected raw+hidden feature vector |
-| SimBaby | `simulation.py` | Perceive (read cells, nearby agents, body), feel (energy delta), react (cells perceptron gates what/how much to write), learn (reinforce/weaken body, cells, and entity perceptrons, scaled by surprise vs. the episodic-reward baseline), absorb energy from organic, share energy (cooperate), contest energy (compete), episodic memory (records every learning event, recalls recent experience) |
+| SimBaby | `simulation.py` | Perceive (read cells, nearby agents, body), feel (energy delta), react (cells perceptron gates what/how much to write), learn (reinforce/weaken body, cells, and entity perceptrons, scaled by surprise vs. the episodic-reward baseline), absorb energy from organic, share energy (cooperate), contest energy (compete), teach tribe-mates (opt-in), episodic memory (records every learning event, recalls recent experience) |
 | SimScene | `simulation.py` | World + babies + entities + cell updates + baby lifecycle + nearby_babies neighbor query |
-| Simulation | `simulation.py` | Tick loop: world compute → perceive → feel → react → write → social step (cooperate/contest) → learn → drain. Stop/run/summary with social stats |
+| Simulation | `simulation.py` | Tick loop: world compute → perceive → feel → react → write → social step (cooperate/contest) → teach (opt-in) → learn (honest net tick delta) → drain. Stop/run/summary with social stats |
 | Multi-Agent Social | `simulation.py` | Babies perceive nearby agents (id, type, energy, distance, angle), cooperate by sharing surplus energy, compete by contesting weaker agents — driven by the entity perceptron and learned from energy deltas |
 | EpisodicMemory | `memory.py` | Ring-buffer episodic memory — record, recall (k, by reward), mean reward, stats. SimBaby records a feature/action/reward/tick episode each learn; recall_memories() surfaces recent experience (Stage 5+) |
 | Evolution Engine | `evolution.py` | Genetic algorithm — Genome (serializable perceptron weights + inherited memotype, incl. `group_id`) crossover/mutate; EvolutionEngine runs generations, scores by energy (0 if dead), elite + tournament selection (both crossover parents are tournament winners); offspring are born with the winning lineage's consolidated memories seeded into their episodic memory. `run_frozen()` is the no-selection baseline. Supports a fixed environment (deterministic terrain via `world_seed`, food pools re-seeded per generation, optional fixed `spawn_positions`) so fitness measures genetic quality, not spawn luck. With `group_weight > 0` selection becomes two-level: tribes compete by the geometric mean of member energy, parents mate uniformly within the chosen tribe, and offspring inherit their tribe |
@@ -405,14 +474,23 @@ This is simulation, not a game.
 | Scene Persistence | `simulation.py`, `memory.py` | Save/load the entire world: `WorldGrid.to_dict()`/`from_dict()` (all four arrays), `Entity`, `Perceptron`, `SimBaby` (weights + memory + counters), `EpisodicMemory` (exact ring-buffer state incl. head), `SimScene` (params + tick + entity-id counter). JSON-safe snapshots; restore is RNG-neutral — a resumed run is bit-identical to an uninterrupted run, and new spawns never reuse a restored id |
 | Signal Communication | `simulation.py` | First-class broadcast channel: SIGNAL-material writes transfer deposited energy into the `signal` field, waves carry it outward (`wave_speed`, `signal_decay`), `get_nearby_cells` returns the `signal` array, and `_perception_features` exposes it as a learnable 5th cells feature (`cells_input_dim = 5`). Emission is conservation-safe (a transfer, not creation); the channel round-trips through scene persistence |
 | Directed Communication | `simulation.py`, `evolution.py` | Opt-in (`message_enabled`) inter-agent messaging channel. Each baby gains a `perceptron_message` (entity-input → 1 gate) that reads a chosen neighbor's features and, if the gate clears `message_gate_threshold`, emits a message whose amplitude is the gate value. Emission is a step-4c act, posted to the scene's pending bus and delivered to the target's inbox at the start of the next tick — a message is perceived exactly one tick after it is sent. The target is the neediest baby within `message_range` (ties broken deterministically, strongest amplitude wins per sender). Cost is `message_cost * amplitude`, so signaling has a real energetic price. The recipient sees the amplitude as the entity feature at index 5 — visible only to brains built with `entity_input_dim >= 6`. Genome serialization carries the message weights only when the channel is on, preserving the exact RNG layout of the locked selection proofs; the CLI exposes it as `--messages` |
+| Durable Structures (Nests) | `simulation.py`, `world_driver.py` | Opt-in (`structure_enabled`) durable structures. A baby's cell-write deposit near a nest feeds its bank; a substantial deposit far from any nest seeds a new nest owned by the writer's tribe; a baby under its start energy can draw from its own tribe's nearest nest (a starvation buffer). Fed/seed writes leave the cell as rubble with zero energy, so a deposit is a transfer into the bank — never creation — and the world's conservation invariant holds. Nests decay every tick (`nest_decay`) and empty ones erode away; the world-wide nest cap (`max_nests`) bounds territory. Nests are visible to the entity brain as `EntityType.OBJECT` entries keyed by stored energy (`is_nest`), so territoriality and resource pooling are evolvable. Scene snapshots carry nests and their id counter; the CLI exposes it as `--structures`. Off by default so the locked selection proofs keep their exact energy flow and genome layout |
+| Cultural Transmission (Teaching) | `simulation.py`, `evolution.py`, `world_driver.py` | Opt-in (`teaching_enabled`) lateral learning between living agents. Each baby gains a `perceptron_teach` (entity-input → 1 gate, constructed RNG-neutral so the four behavior brains' draw order is unchanged) that reads a chosen tribe-mate's features. When the gate clears `teach_gate_threshold` a lesson is given with the gate value as amplitude: the student's behavior weights blend toward the teacher's by `teach_weight_blend * amplitude`, and up to `teach_memotype_cap` (default 1) of the teacher's best episodes are copied into the student's memory. The target is the neediest baby within `teach_range` among same-tribe neighbors (cultural transmission is in-group, mirroring the tribe-scoped nest draw); the teacher pays `teach_cost * amplitude`, which lands in the same tick's net reward so the teach perceptron is shaped by the honest outcome of the lesson. Episode bulk copies raised the student's reward baseline and dampened its own learning, so the cap is minimal by default and `0` disables episode transfer entirely. Genome serialization carries the teach weights only when the channel is on. CLI: `--culture` |
+| Infinite Long-Term Memory (World Reservoir) | `memory.py`, `simulation.py`, `evolution.py`, `world_driver.py` | Opt-in (`memory_enabled`) world-level long-term memory. The engine carries one `WorldMemory` reservoir that spans every generation and never evicts (append-only — growth is bounded by the deposit cadence, not a capacity). Dead babies deposit their best episodes in-sim; every survivor deposits at the generation boundary; each newborn is seeded with the reservoir's best episodes (`memory_seed`) on top of its memotype — so lived experience survives death AND crosses lineages, the collective counterpart to the parent→child memotype. Episodes are stamped with the donor's tribe and id; `run()` reports `memory_size` and `memory_seeds_total` per generation. Off by default so the locked selection proofs keep their exact energy flow and genome layout. The reservoir round-trips through scene snapshots. CLI: `--memory` |
+| Predator-Prey (Predation) | `simulation.py`, `evolution.py`, `world_driver.py` | Opt-in (`predation_enabled`) lethal interaction channel. Each baby gains a `perceptron_predation` (entity-input → 1 gate, weights drawn last from a dedicated RNG stream so the four behavior brains' draw order is unchanged) that reads a chosen neighbor's features and, when the gate clears `predation_gate_threshold`, hunts the **weakest** nearby baby within `predation_range`. `hunt()` is lethal: the prey's full energy transfers to the predator (a transfer, never creation — the conservation invariant holds) and the prey dies; the predator pays `predation_cost`, which lands in the same tick's honest net reward so the gate is shaped by the true outcome — hunting pays while prey energy exceeds the strike cost and self-limits as prey runs scarce. The strike executes in the tick's predation step (after social, before absorption); dead prey is swept at the end of the tick. The kin feature lets a tribe learn not to eat its own members while hunting rival tribes. Genome/scene serialization carries the predation weights only when the channel is on. CLI: `--predation` |
+| Predation Emergence Proof | `evolution.py`, `world_driver.py` | `benchmark_predation()` runs two arms on the SAME grouped world (same terrain, same per-group food pools, same per-tribe spawn territories, same initial core genomes — the predation weights draw from a dedicated stream so the behavior brains are bit-identical): predation disabled vs. enabled. Predation is never hardcoded — the perceptron must learn to open its gate only when the hunt pays. Verdict: predation-arm final average fitness beats the control arm's. CLI: `--predation` |
+| Territoriality (Defense) | `simulation.py`, `evolution.py`, `world_driver.py` | Opt-in (`territoriality_enabled`) spatial defense channel. Territory is CLAIMED by building nests (Stage 7): a tribe's region is the ground within `territory_radius` of the nearest nest it owns. Each baby gains a `perceptron_territory` (entity-input → 1 gate, weights drawn from a dedicated RNG stream so the four behavior brains' draw order is unchanged) that reads a trespasser's features; standing on its own tribe's territory, a gate that clears `defend_gate_threshold` evicts the nearest foreign baby within `defend_range`. The eviction is a soft shove — `defend_push` cells away from the defender (a pure relocation, never a kill or a stranding) — plus a toll: `defend_take_fraction` of the trespasser's energy transfers to the defender (capped non-lethal, so evicting a rich foreigner pays), and the defender pays `defend_cost`, which lands in the same tick's honest net reward so the gate is shaped by the true outcome — defending pays while a trespasser carries more than the eviction costs and self-limits as trespassers run scarce. The kin feature keeps a tribe from evicting its own members. Genome/scene serialization carries the territory weights only when the channel is on. CLI: `--territory` |
+| Territoriality Emergence Proof | `evolution.py`, `world_driver.py` | `benchmark_territoriality()` runs two arms on the SAME grouped world (same terrain, same per-group food pools, same per-tribe spawn territories, same initial core genomes — the territory weights draw from a dedicated stream so the behavior brains are bit-identical): territoriality disabled vs. enabled. Territoriality is never hardcoded — the territory perceptron must learn to open its gate only when the eviction pays. Verdict: territoriality-arm final average fitness beats the control arm's. CLI: `--territory` |
+| 26 Tests | `test_territoriality.py` | Territory brain (off-by-default locked-proof guard, gate-below-threshold no-defend, zero-init gate on the threshold, open gate full strength), defend mechanics (fraction toll + shove displacement, conservation safety, noop on dead trespasser / without a brain, push-away shove), scene (off-by-default runs no defense, evicts the nearest foreign trespasser, requires standing on own territory, ignores tribe-mates, range limits evictions, eviction is relocation never kill — geometric toll across repeated evictions, defender pays `defend_cost`, summary totals match the tick log), persistence (serialization round-trip preserves the territory brain), learning (delta-rule shapes the gate from the defense outcome, determinism with territoriality on), evolution (genome round-trip, dedicated stream keeps shared draws identical, run history carries territory fields, run-off-default has no territory brains, benchmark structure + verdict keys, benchmark determinism) — all pass |
+| 23 Tests | `test_predation.py` | Predation brain (off-by-default locked-proof guard, gate-below-threshold no-hunt, zero-init gate on the threshold, open gate full strength), hunt mechanics (energy transfer + kill, conservation safety, noop on dead prey / without a brain), scene (off-by-default runs no predation, strikes the neediest weaker prey with full energy accounting incl. passive drain, strike requires strictly weaker prey, range limits strikes, prey removed next step, summary totals match the tick log), brain persistence (serialization round-trip preserves the predation brain), learning (delta-rule shapes the gate from the hunt outcome, determinism with predation on), evolution (genome round-trip, dedicated stream keeps shared draws identical, run history carries predation fields, run-off-default has no predation brains, benchmark structure + verdict keys, benchmark determinism) — all pass |
 | 117 Tests | `test_simulation.py` | WorldGrid (11), CellUpdate (5), Entity (3), Perceptron (4), BabyAction (2), SimBaby (20), SimScene (9), Simulation (9), Social Perception (4), Social Mechanics (6), Social Step (6), Simulation Social (4) — all pass |
-| 68 Tests | `test_evolution.py` | Genome serialization/crossover/mutation, engine determinism, elitism, memotype inheritance (consolidation, capping, seeding, generation transition), emergence proof (evolved beats frozen, benchmark determinism, no-selection baseline, shared spawn, surface spawns, identical generation 1 across arms), trait-group selection (dispatches to group mode, single-population ignores groups, geometric-mean tribe ranking, group-id inheritance, grouped-run group means), kin signal (perception carries `group_id`, entity-input shape vs. world dim, dim-4 compat), social acts (cooperate transfers surplus fraction, needs surplus, contest takes from weaker only, no contest vs. stronger, neediest-neighbor targeting), social benchmark (determinism, structure, group coop > individual coop, individual sharing punished, group contests less), directed message (off-by-default guard, gate-gated emission, amplitude = gate value, one-tick-latent delivery to the neediest neighbor, message feature at index 5, dim-5 slicing, genome tensor round-trip, scene pending-bus round-trip, message-brain learning) — all pass |
-| 22 Tests | `test_memory.py` | EpisodicMemory buffer semantics (record/recall/ring-wrap/reward), SimBaby wiring, memory fills over ticks, surprise-scaled learning (baseline/surprise/scale, weight-update ratio) — all pass |
+| 109 Tests | `test_evolution.py` | Genome serialization/crossover/mutation, engine determinism, elitism, memotype inheritance (consolidation, capping, seeding, generation transition), emergence proof (evolved beats frozen, benchmark determinism, no-selection baseline, shared spawn, surface spawns, identical generation 1 across arms), trait-group selection (dispatches to group mode, single-population ignores groups, geometric-mean tribe ranking, group-id inheritance, grouped-run group means), kin signal (perception carries `group_id`, entity-input shape vs. world dim, dim-4 compat), social acts (cooperate transfers surplus fraction, needs surplus, contest takes from weaker only, no contest vs. stronger, neediest-neighbor targeting), social benchmark (determinism, structure, group coop > individual coop, individual sharing punished, group contests less), directed message (off-by-default guard, gate-gated emission, amplitude = gate value, one-tick-latent delivery to the neediest neighbor, message feature at index 5, dim-5 slicing, genome tensor round-trip, scene pending-bus round-trip, message-brain learning), durable structures/nests (off-by-default guard, nearest-nest group filtering, feed near bank / seed far away, seed energy threshold, world-wide nest cap, deposit-draw conservation, draw gating by hunger/rate/tribe, decay + empty-nest pruning, nest perception, disabled invisibility, nest serialization round-trip + id continuity, legacy snapshot without nests, structures emerging end-to-end in a simulation), delta-rule sign (loss weakens, gain reinforces, neutral no-op), teaching (off-by-default guard, surplus gate, gate threshold, weight blend + episode cap, highest-reward episode copy, neediest same-tribe targeting in a simulation, teach-brain serialization), culture benchmark (determinism, structure, only-culture-arm teaches, locked 3/5 verdict across seeds 1–5, culture wins on an emerged seed), world long-term memory (off-by-default guard, enabled engine carries reservoir, reservoir grows across generations, newborns seeded, deposits stamped with tribe+donor, determinism with memory on, deposit cap) — all pass |
+| 42 Tests | `test_memory.py` | EpisodicMemory buffer semantics (record/recall/ring-wrap/reward), SimBaby wiring, memory fills over ticks, surprise-scaled learning (baseline/surprise/scale, weight-update ratio), WorldMemory reservoir (append-only never evicts, record stamps group/donor, consolidate top-reward, zero-cap no-op, recall by reward/recent/group, stats, lossless serialization), scene wiring (off by default, reservoir on demand, deposit consolidation, newborn seeding from reservoir, no-reservoir no-seed guard, scene snapshot preserves reservoir, dead-baby deposit before the sweep, deposit cap on death) — all pass |
 | 22 Tests | `test_scene_persistence.py` | WorldGrid/Entity/Perceptron/Memory/Baby/Scene round-trips (lossless, dtype-stable), JSON dump/load, size-mismatch rejection, entity identity after restore, non-baby entity survival, no RNG consumed by restore, resume-matches-continuous-run determinism, id continuity on post-restore spawns, multi-cycle stability — all pass |
 | 18 Tests | `test_signal_communication.py` | Signal emission (write/place/air/OOB), perception (nearby signal array, empty read, feature zero/positive, learnable signal row, untouched row without signal), propagation (wave carries to neighbors, reaches distance over ticks), end-to-end loop (B perceives A's broadcast, snapshot survival, full tick loop) — all pass |
 | 26 Tests | `test_environment.py` | Material behaviors (organic ignition above `ignition_temp`, full-pipeline combustion, rot metabolism, ember radiation + energy conservation + burnout to stone, living growth + determinism + poverty rest, water signal dampening + cooling, metal conduction faster than baseline + conservation, ambient temperature relaxation), terrain generation (floor/food/water/ember present, deterministic on seed, seed-sensitive, global-RNG neutral), scene integration (opt-in generation, default empty, surface spawn, persistence round-trip, resume-matches-continuous with terrain, babies survive longer with food) — all pass |
-| World Driver | `world_driver.py` | Headless observability harness: `WorldDriver` builds a world (empty or deterministic terrain), runs N ticks via the real simulation loop, and reports per-tick energy economy, material populations, and a conservation invariant (grid+entity energy must never increase — a physics regression tripwire). `run_evolution()` delegates to `EvolutionEngine` for genetic sweeps; `--emergence` runs the emergence benchmark; `--social` runs the trait-group-vs-individual cooperation benchmark; `--messages` switches on the directed inter-agent message channel. CLI: `python3 -m domains.shell.world_driver --grid 64,32,64 --seed 42 --ticks 50 --every 5` (or `--evolution --generations N --population N --ticks-per-gen N`, or `--emergence`, or `--social`, or `--messages`). Pure observability — adds no physics, mutates nothing beyond the live scene |
-| 22 Tests | `test_world_driver.py` | Material naming (derived from constants, never hardcoded), grid parsing, empty-vs-terrain populations, snapshot shape, per-tick cadence, energy-ledger consistency, conservation monotonicity + violation detection, seed determinism, mean baby energy, evolution summary shape, emergence CLI path, CLI output paths — all pass |
+| World Driver | `world_driver.py` | Headless observability harness: `WorldDriver` builds a world (empty or deterministic terrain), runs N ticks via the real simulation loop, and reports per-tick energy economy, material populations, and a conservation invariant (grid+entity energy must never increase — a physics regression tripwire). `run_evolution()` delegates to `EvolutionEngine` for genetic sweeps; `--emergence` runs the emergence benchmark; `--social` runs the trait-group-vs-individual cooperation benchmark; `--messages` switches on the directed inter-agent message channel; `--structures` switches on durable nest building; `--culture` runs the teaching-vs-vertical-only cultural transmission benchmark; `--memory` runs the world-reservoir-vs-memotype-only long-term memory benchmark; `--predation` runs the predator-prey-on-vs-off benchmark (Stage 8); `--territory` runs the territoriality-on-vs-off defense benchmark (Stage 9). CLI: `python3 -m domains.shell.world_driver --grid 64,32,64 --seed 42 --ticks 50 --every 5` (or `--evolution --generations N --population N --ticks-per-gen N`, or `--emergence`, or `--social`, or `--messages`, or `--structures`, or `--culture`, or `--memory`, or `--predation`, or `--territory`). Pure observability — adds no physics, mutates nothing beyond the live scene |
+| 22 Tests | `test_world_driver.py` | Material naming (derived from constants, never hardcoded), grid parsing, empty-vs-terrain populations, snapshot shape (incl. `nests` + `nest_energy` keys), per-tick cadence, energy-ledger consistency (incl. nest energy in the total), conservation monotonicity + violation detection, seed determinism, mean baby energy, evolution summary shape, emergence CLI path, CLI output paths — all pass |
 
 ### Built but Incomplete
 
@@ -421,13 +499,6 @@ This is simulation, not a game.
 | CyclesRenderer | `cycles.py` | Path tracer — GGX BSDF, BVH, multi-bounce, state tensors | Not used in world engine (Stage 3 infra) |
 | CyclesDevice | `cycles_device.py` | VM device wrapper for renderer | Not used in world engine |
 | RenderNeuralDevice | `render_neural.py` | CNN feature extractor on rendered tensors | Not used in world engine |
-
-### Not Built
-
-| Component | What it needs |
-|-----------|--------------|
-| Stage 7 Civilization | Babies modify the world, build structures, teach each other — the world becomes the computer |
-| Infinite Long-Term Memory | Beyond the per-baby ring buffer and inherited memotype |
 
 ## Standalone
 
@@ -453,12 +524,12 @@ Everything else is built on top.
 
 With enough babies and ticks:
 
-1. **Territoriality** — babies claim and defend regions
+1. **Territoriality** — babies claim and defend regions. Built (Stage 9, opt-in `--territory`): territory is claimed by building nests (Stage 7) — a tribe's region is the ground within `territory_radius` of the nearest nest it owns. Standing on its own ground, a baby whose `perceptron_territory` gate clears `defend_gate_threshold` evicts the nearest foreign baby within `defend_range`: the trespasser is shoved `defend_push` cells away (a pure relocation, never a kill) and `defend_take_fraction` of its energy transfers to the defender — a toll that scales with what the trespasser carries, so evicting a rich foreigner pays. The defender pays `defend_cost`, and the honest same-tick net reward shapes the gate (the territory brain's weights draw last from a dedicated RNG stream, so the four behavior brains stay bit-identical with the channel off). The territoriality benchmark (`benchmark_territoriality`) runs defense-on vs defense-off arms on the same grouped world; selection shapes the gate — the kin feature lets a tribe defend its own region while leaving foreign ground alone
 2. **Resource competition** — energy is finite, babies compete
 3. **Communication protocols** — babies develop signaling through cell writes. The channel is now live: writing SIGNAL material emits amplitude into the `signal` field, waves broadcast it across the grid, and other babies perceive it as a learnable feature — B can now learn what A's broadcasts mean, not just that they exist. Stage 6 adds the directed channel: a baby can address one specific neighbor directly, pay an energy cost for the amplitude, and that neighbor perceives it exactly one tick later (`--messages`)
 4. **Cooperation** — babies form groups for mutual benefit. Demonstrated: under trait-group selection a cooperating population outlasts a free-riding one (`--social` benchmark), driven by the kin signal and neediest-neighbor targeting
-5. **Predation** — babies consume other entities for energy
-6. **Structure building** — babies write cell patterns that persist (the world itself is now saveable — a scene snapshot preserves every written cell, so structures survive across sessions, not just ticks)
+5. **Predation** — babies consume other entities for energy. Built (Stage 8, opt-in `--predation`): a `perceptron_predation` (entity-input → 1 gate) decides whether to hunt the weakest nearby baby within `predation_range` when the gate clears `predation_gate_threshold`. A strike is lethal — the prey's full energy transfers to the predator (a transfer, not creation, so the world still conserves energy) and the prey dies; the predator pays `predation_cost`, so the gate is shaped by the honest same-tick net reward: hunting pays while prey energy exceeds the strike cost, and self-limits as prey grows scarce. The predation brain's weights draw last from a dedicated RNG stream so the four behavior brains stay bit-identical with the channel off. The predator-prey benchmark (`benchmark_predation`) runs predation-on vs predation-off arms on the same grouped world; selection shapes the balance — the kin feature lets a tribe learn not to eat its own while hunting rival tribes
+6. **Structure building** — babies write cell patterns that persist (the world itself is now saveable — a scene snapshot preserves every written cell, so structures survive across sessions, not just ticks). Stage 7 makes structure *durable and shared*: opt-in nest banks hold tribal energy (`--structures`), feeding/seeding/drawing are conservation-safe transfers, and the cap on nests turns building into territorial strategy
 7. **Culture** — transmitted behaviors evolve over generations
 
 ## Engineering Notes
@@ -551,12 +622,21 @@ Two teachers exist, and they are not equally strong:
    breed. Selection is the teacher. In this mode in-life delta-rule updates
    are off (`learning_enabled=False`), so the genome's own weights carry the
    entire signal.
-2. **In-life delta-rule learning (optional).** Each baby adjusts its own
-   readout weights from its energy deltas. This is the classic loop above,
-   still present for the interactive world, but under selection it can
-   reinforce the self-funding write that drains the baby (a uniform scalar
-   error strengthens whatever it most recently did), so it is not used in
-   the emergence benchmark.
+2. **In-life delta-rule learning (optional, honest reward).** Each baby
+   adjusts its own readout weights from its **net tick delta** — the full
+   energy flow across the tick (perception cost, movement, writes, social
+   transfers, teaching cost, absorption, nest draw, passive drain), measured
+   at step 8b after every gain and drain has landed. A baby that reaches food
+   genuinely feels the gain; one that wastes energy feels the loss. The
+   delta-rule direction comes from the error sign and the learning rate is
+   always positive — two defects had to be fixed for this to work: the reward
+   used to collapse to the uniform −0.5 see_cost (absorption was measured
+   after the delta was captured), and the "weaken" branch double-flipped its
+   sign (`error * lr` came out positive) so losses actually reinforced the
+   bad behavior and drove the perceptrons to saturation. With both fixed,
+   honest rewards make the world thrive under learning, and teaching (below)
+   builds on them. Emergence still runs `learning_enabled=False` — under pure
+   selection the genome's own weights carry the entire signal.
 
 ### Memory
 
@@ -573,12 +653,16 @@ worse-than-expected loss teaches hardest; unsurprising outcomes barely
 nudge weights. The sign rule is unchanged — gains reinforce, losses weaken —
 so the loop stays compatible with energy conservation.
 
-What still doesn't exist: infinite long-term memory. Each baby's living
-buffer holds only its recent episodes, and memory dies with the baby. But
-experience now survives death through the lineage: when a genome is bred,
-it consolidates the parent's highest-reward episodes (the memotype, capped
-at memory_inherit) and the offspring is born with those episodes seeded
-into its episodic memory. Generations inherit experience AND weights.
+Beyond the living buffer and the lineage, the world itself now remembers.
+When the world-memory channel is on (`memory_enabled`), the simulation
+carries a single append-only reservoir (`WorldMemory`) that spans the whole
+run and never evicts: every dead baby deposits its best episodes in-sim,
+every survivor deposits at the generation boundary, and every newborn is
+seeded with the reservoir's best episodes (`memory_seed`) on top of its
+memotype — so lived experience survives death AND crosses lineages, not
+just parent→child. The reservoir is the collective counterpart to the
+memotype; growth is bounded only by the deposit cadence, not a capacity.
+The reservoir serializes into the scene snapshot like any other state.
 
 ### Evolution
 
@@ -699,6 +783,91 @@ amplitude, pays `message_cost * amplitude`, and the scene delivers the message t
 inbox at the start of the next tick. The recipient sees it as the entity feature at index 5 —
 visible only to brains built with `entity_input_dim >= 6`. Same inference story: the target doesn't
 know what the message means and must learn from context, but now the message has an address.
+
+**Durable structures / nests (Stage 7).** An opt-in third channel that turns cell writes into
+shared, persistent resources. With `structure_enabled`, a baby's deposit write (the `write` action)
+is routed: if it lands within `nest_radius` of an existing nest it feeds that nest's energy bank
+and the cell is left as zero-energy rubble (a **transfer** into the bank — never creation, so the
+conservation invariant holds); if it lands far from any nest and the deposit is at least
+`nest_seed_energy`, it seeds a **new nest** owned by the writer's tribe. A baby below its start
+energy can draw up to `nest_draw_rate` per tick from its own tribe's nearest nest within
+`nest_use_radius`. Nests decay by `nest_decay` each tick, erode away when their bank empties, and
+the world-wide `max_nests` cap bounds territory. Nests are perceived as `EntityType.OBJECT`
+entities keyed by stored energy (`is_nest`), so brains can learn to defend, share, and build near
+them. Snapshot round-trip includes every nest and the id counter, so structures survive sessions
+and new spawns never reuse a nest id.
+
+| Piece | What it does |
+|-------|--------------|
+| Feed | deposit within `nest_radius` → energy moves into the nearest nest's bank; the written cell is rubble with zero energy |
+| Seed | deposit ≥ `nest_seed_energy` far from any nest → a new `Nest` owned by the writer's `group_id`; cell left as rubble |
+| Draw | baby below its start energy → transfers up to `nest_draw_rate` from its tribe's nearest nest within `nest_use_radius` |
+| Decay | each tick, `stored_energy *= (1 - nest_decay)`; a nest below the pruning floor erodes away |
+| Cap | `max_nests` nests world-wide; a deposit that would seed past the cap stays an ordinary cell deposit |
+| Perception | `nearest_nest`/nearby-entity dicts expose nests as OBJECT entities with `energy` + `is_nest` + owner `group_id` |
+| Conservation | feed/seed/draw are all transfers (cell energy → bank, or bank → baby); total grid+entity+nest energy never increases |
+| Persistence | `nests` + `next_nest_id` round-trip through scene snapshots; a legacy snapshot without them defaults to none |
+| CLI | `--structures` enables the channel; tick table gains a `nest_energy` column, energy ledger total includes nests |
+
+**Cultural transmission / teaching (Stage 7).** An opt-in fourth channel that lets learned behavior
+spread *laterally* between living agents, not just vertically through genomes. With
+`teaching_enabled`, each baby gains a `perceptron_teach` (entity-input → 1 gate) that reads a
+chosen tribe-mate's features; when the gate clears `teach_gate_threshold`, a lesson is given at the
+gate value's amplitude. The student's behavior weights blend toward the teacher's by
+`teach_weight_blend * amplitude`, and up to `teach_memotype_cap` (default 1) of the teacher's
+best-reward episodes are copied into the student's memory — a culture *with* a memory, not just
+weights. The teacher pays `teach_cost * amplitude`, which lands in the same tick's net reward, so
+the teach perceptron itself is shaped by the honest outcome of its lesson. Target selection mirrors
+the nests' tribe scoping: the **neediest** same-tribe baby within `teach_range`.
+
+The locked benchmark `benchmark_culture` compares an arm with teaching on (`culture`) against one
+with vertical inheritance only (`control`) on identical worlds and selection pressure. Verdict at
+the default config (`teach_memotype_cap=1`): **3/5 seeds emerged, mean Δ +9.24** — seeds 2, 3, 5
+win (Δ +42.6, +22.5, +84.6), seeds 1 and 4 lose (Δ −10.4, −93.0). Teaching amplifies lineage
+quality in both directions: seed 4's culture lineage drifted into aggression and teaching spread
+the trait to tribe-mates. Culture is a real lateral channel, not a guarantee on every world.
+
+| Piece | What it does |
+|-------|--------------|
+| Perceptron | `perceptron_teach` (entity-input → 1 gate), constructed RNG-neutral so the four behavior brains' draw order is unchanged |
+| Gate | lesson fires only when the gate clears `teach_gate_threshold`; gate value becomes the lesson amplitude |
+| Blend | student behavior weights move toward the teacher's by `teach_weight_blend * amplitude` per lesson |
+| Memory | `teach_memotype_cap` (default 1) of the teacher's best episodes copied into the student's memory; `0` disables episode transfer |
+| Target | the neediest same-tribe baby within `teach_range` — cultural transmission is in-group |
+| Cost | teacher pays `teach_cost * amplitude`, landing in the same tick's net reward (honest step-8b reward) |
+| Default | `teaching_enabled=False` so the locked selection proofs keep their exact genome layout and RNG order |
+| Serialization | genome tensor carries teach weights only when the channel is on |
+| CLI | `--culture` runs the teaching-vs-vertical-only benchmark (3/5 seeds emerged at cap=1) |
+
+**Infinite long-term memory / world reservoir (Stage 7).** The memotype moves experience only
+parent→child. The world reservoir is the collective counterpart: with `memory_enabled`, the engine
+carries a single `WorldMemory` reservoir that every generation's scene shares. Dead babies deposit
+their best episodes in-sim; every survivor deposits at the generation boundary; and each newborn is
+seeded with the reservoir's best episodes (`memory_seed`) on top of its memotype — so lived
+experience survives death AND crosses lineages. The reservoir is **append-only and never evicts**:
+growth is bounded by the deposit cadence, not a fixed capacity. Episodes are honest (features →
+action → reward as the baby actually learned them), stamped with the donor's tribe and id.
+
+| Piece | What it does |
+|-------|--------------|
+| Reservoir | `WorldMemory` — append-only `WorldEpisode` list; `record`, `consolidate` (top-`memory_deposit` from a baby's ring buffer), `recall` (by reward or recent, optionally per tribe), `mean_reward`, `stats`, `to_dict`/`from_dict` |
+| Deposit (death) | the simulation's dead-baby cleanup calls `scene.deposit_memory` before the body leaves the world |
+| Deposit (boundary) | the evolution engine deposits every survivor after each generation's run |
+| Seed | `scene.add_baby` seeds the newborn with the reservoir's `memory_seed` best episodes on top of the memotype `apply_to` recorded first |
+| Survival | the reservoir spans the whole engine run, so generation N+1 sees generation 1's deposits |
+| Stamps | each episode carries `group_id` and `donor_id`, so tribal experience is attributable and recallable per tribe |
+| Default | `memory_enabled=False` so the locked selection proofs keep their exact energy flow and genome layout |
+| Persistence | the reservoir round-trips through scene snapshots (lossless `to_dict`/`from_dict`) |
+| Reporting | `run()` history rows carry `memory_size` (reservoir length) and `memory_seeds` (episodes seeded this generation); the result carries `memory_size` and `memory_seeds_total` |
+| CLI | `--memory` runs the reservoir-vs-memotype-only benchmark with per-generation reservoir size and seeds |
+
+The locked benchmark `benchmark_memory` compares an arm with the world reservoir on (`memory`)
+against vertical memotype inheritance only (`control`) on identical worlds, learning enabled in both
+arms. Verdict at the default config: **2/5 seeds emerged, mean Δ +5.12** — seeds 2 and 5 win
+(Δ +51.6, +147.3), seeds 1, 3, 4 lose (Δ −39.0, −53.0, −81.3). Like teaching, the reservoir is an
+honest lateral channel: it preserves whatever experience actually happened — good or bad — so on the
+losing seeds it faithfully propagated drifted lineages' dead ends. It is a genuine collective
+counterpart to the memotype, not a guarantee on every world.
 
 The signal channel is first-class and learnable:
 

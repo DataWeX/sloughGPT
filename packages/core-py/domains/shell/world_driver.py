@@ -23,7 +23,15 @@ from typing import Any
 
 import numpy as np
 
-from .evolution import EvolutionEngine, benchmark_emergence, benchmark_social
+from .evolution import (
+    EvolutionEngine,
+    benchmark_culture,
+    benchmark_emergence,
+    benchmark_memory,
+    benchmark_predation,
+    benchmark_social,
+    benchmark_territoriality,
+)
 from .simulation import (
     NUM_MATERIALS,
     SimScene,
@@ -80,16 +88,19 @@ class WorldDriver:
 
     def energy_ledger(self) -> dict[str, Any]:
         """
-        Energy bookkeeping: grid total, entity totals, and per-material sums.
+        Energy bookkeeping: grid total, entity totals, structure banks, and
+        per-material sums.
 
         Returns:
             Dict with ``grid`` (sum of all cell energy), ``entities`` (sum of
-            every baby's energy), ``total`` (grid + entities), and
-            ``per_material`` (dict material id -> summed cell energy).
+            every baby's energy), ``nests`` (sum of stored structure energy),
+            ``total`` (grid + entities + nests), and ``per_material`` (dict
+            material id -> summed cell energy).
         """
         g = self.scene.world
         grid_total = float(np.sum(g.energy))
         entity_total = float(sum(b.energy for b in self.scene.babies))
+        nest_total = float(sum(n.stored_energy for n in self.scene.nests))
         per_material: dict[int, float] = {}
         for m in range(NUM_MATERIALS):
             mask = g.material == m
@@ -97,7 +108,8 @@ class WorldDriver:
         return {
             "grid": grid_total,
             "entities": entity_total,
-            "total": grid_total + entity_total,
+            "nests": nest_total,
+            "total": grid_total + entity_total + nest_total,
             "per_material": per_material,
         }
 
@@ -107,20 +119,23 @@ class WorldDriver:
 
         Returns:
             Dict with tick, alive_babies, grid_energy, entity_energy,
-            total_energy, total_signal, mean_baby_energy, and materials
-            (material id -> cell count).
+            nest_energy, total_energy, total_signal, mean_baby_energy,
+            and materials (material id -> cell count).
         """
         g = self.scene.world
         alive = self.scene.alive_babies
         grid_energy = float(np.sum(g.energy))
         entity_energy = float(sum(b.energy for b in self.scene.babies))
+        nest_energy = float(sum(n.stored_energy for n in self.scene.nests))
         mean_energy = float(np.mean([b.energy for b in alive])) if alive else 0.0
         return {
             "tick": self.scene.tick,
             "alive_babies": len(alive),
             "grid_energy": grid_energy,
             "entity_energy": entity_energy,
-            "total_energy": grid_energy + entity_energy,
+            "nest_energy": nest_energy,
+            "nests": len(self.scene.nests),
+            "total_energy": grid_energy + entity_energy + nest_energy,
             "total_signal": float(np.sum(g.signal)),
             "mean_baby_energy": mean_energy,
             "materials": self.material_populations(),
@@ -240,7 +255,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--grid", type=_parse_grid, default=None,
                         help="world size as W,H,D (default 64,32,64; "
-                             "16,8,16 for --social)")
+                             "16,8,16 for --social/--culture/--memory"
+                             "/--predation/--territory)")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for terrain and spawns")
     parser.add_argument("--world", action="store_true", default=True,
@@ -257,7 +273,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="run an evolution sweep instead of ticks")
     parser.add_argument("--generations", type=int, default=None,
                         help="generations for --evolution/--emergence/--social "
-                             "(default 5, or 12 for --social)")
+                             "/--culture/--memory/--predation/--territory "
+                             "(default 5, or 12 for --social/--culture"
+                             "/--memory/--predation/--territory)")
     parser.add_argument("--population", type=int, default=8,
                         help="population per generation for --evolution")
     parser.add_argument("--ticks-per-gen", type=int, default=20,
@@ -268,16 +286,32 @@ def main(argv: list[str] | None = None) -> int:
                         help="brain hidden units for --emergence")
     parser.add_argument("--social", action="store_true",
                         help="run the social benchmark (trait-group vs individual)")
+    parser.add_argument("--culture", action="store_true",
+                        help="run the cultural transmission benchmark "
+                             "(teaching on vs off, Stage 7)")
+    parser.add_argument("--memory", action="store_true",
+                        help="run the long-term memory benchmark "
+                             "(world reservoir on vs off, Stage 7)")
+    parser.add_argument("--predation", action="store_true",
+                        help="run the predator-prey benchmark "
+                             "(predation on vs off, Stage 8)")
+    parser.add_argument("--territory", action="store_true",
+                        help="run the territoriality benchmark "
+                             "(territoriality on vs off, Stage 9)")
     parser.add_argument("--social-pools", type=int, default=3,
                         help="organic food pools for --social")
     parser.add_argument("--social-ticks-per-gen", type=int, default=24,
                         help="ticks per generation for --social")
     parser.add_argument("--group-count", type=int, default=2,
-                        help="tribes/territories for --social")
+                        help="tribes/territories for --social/--culture/--memory"
+                             "/--predation/--territory")
     parser.add_argument("--group-weight", type=float, default=0.5,
-                        help="tribe-mean share of group-arm selection for --social")
+                        help="tribe-mean share of group-arm selection "
+                             "for --social/--culture/--memory/--predation/--territory")
     parser.add_argument("--messages", action="store_true",
                         help="enable directed inter-agent messaging (Stage 6)")
+    parser.add_argument("--structures", action="store_true",
+                        help="enable durable structures / nests (Stage 7)")
     try:
         args = parser.parse_args(argv)
     except SystemExit:
@@ -285,19 +319,140 @@ def main(argv: list[str] | None = None) -> int:
 
     params = WorldParams(
         grid_size=args.grid if args.grid is not None else (
-            (16, 8, 16) if args.social else (64, 32, 64)
+            (16, 8, 16) if (args.social or args.culture or args.memory
+                            or args.predation or args.territory)
+            else (64, 32, 64)
         ),
         generate_world=args.world,
         start_agents=args.babies,
         world_seed=args.seed,
         message_enabled=args.messages,
+        structure_enabled=args.structures,
     )
 
     driver = WorldDriver(params, seed=args.seed)
 
     generations = args.generations if args.generations is not None else (
-        12 if args.social else 5
+        12 if (args.social or args.culture or args.memory or args.predation
+               or args.territory) else 5
     )
+
+    if args.culture:
+        result = benchmark_culture(
+            params,
+            population_size=args.population,
+            generations=generations,
+            ticks_per_generation=args.social_ticks_per_gen,
+            organic_pools=args.social_pools,
+            group_count=args.group_count,
+            group_weight=args.group_weight,
+            hidden_units=args.hidden_units,
+            seed=args.seed,
+        )
+        ctrl = result["control"]
+        cult = result["culture"]
+        print("generation control_avg culture_avg control_best culture_best "
+              "control_lessons culture_lessons")
+        for ch, kh in zip(ctrl["history"], cult["history"]):
+            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
+                  f"{kh['avg_fitness']:<12.4f} {ch['best_fitness']:<13.4f} "
+                  f"{kh['best_fitness']:<14.4f} {ch['lessons']:<14d} "
+                  f"{kh['lessons']}")
+        print(f"control_last_avg={result['control_last_avg']:.4f} "
+              f"culture_last_avg={result['culture_last_avg']:.4f}")
+        print(f"control_teach_rate={result['control_teach_rate']:.4f} "
+              f"culture_teach_rate={result['culture_teach_rate']:.4f}")
+        print(f"culture_emerged={'yes' if result['culture_emerged'] else 'no'}")
+        return 0
+
+    if args.memory:
+        result = benchmark_memory(
+            params,
+            population_size=args.population,
+            generations=generations,
+            ticks_per_generation=args.social_ticks_per_gen,
+            organic_pools=args.social_pools,
+            group_count=args.group_count,
+            group_weight=args.group_weight,
+            hidden_units=args.hidden_units,
+            seed=args.seed,
+        )
+        ctrl = result["control"]
+        mem = result["memory"]
+        print("generation control_avg memory_avg control_best memory_best "
+              "reservoir_size seeds_given")
+        for ch, mh in zip(ctrl["history"], mem["history"]):
+            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
+                  f"{mh['avg_fitness']:<12.4f} {ch['best_fitness']:<13.4f} "
+                  f"{mh['best_fitness']:<14.4f} {mh['memory_size']:<14d} "
+                  f"{mh['memory_seeds']}")
+        print(f"control_last_avg={result['control_last_avg']:.4f} "
+              f"memory_last_avg={result['memory_last_avg']:.4f}")
+        print(f"memory_size={result['memory_size']} "
+              f"memory_seeds={result['memory_seeds']}")
+        print(f"memory_emerged={'yes' if result['memory_emerged'] else 'no'}")
+        return 0
+
+    if args.predation:
+        result = benchmark_predation(
+            params,
+            population_size=args.population,
+            generations=generations,
+            ticks_per_generation=args.social_ticks_per_gen,
+            organic_pools=args.social_pools,
+            group_count=args.group_count,
+            group_weight=args.group_weight,
+            hidden_units=args.hidden_units,
+            seed=args.seed,
+        )
+        ctrl = result["control"]
+        pred = result["predation"]
+        print("generation control_avg predation_avg control_best predation_best "
+              "predations pred_rate pred_energy")
+        for ch, ph in zip(ctrl["history"], pred["history"]):
+            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
+                  f"{ph['avg_fitness']:<12.4f} {ch['best_fitness']:<13.4f} "
+                  f"{ph['best_fitness']:<14.4f} {ph['predations']:<10d} "
+                  f"{ph['predation_rate']:<9.4f} "
+                  f"{ph['predation_energy_moved']:.4f}")
+        print(f"control_last_avg={result['control_last_avg']:.4f} "
+              f"predation_last_avg={result['predation_last_avg']:.4f}")
+        print(f"predation_rate={result['predation_rate']:.4f} "
+              f"predations={result['predations']}")
+        print(f"predation_energy_moved={result['predation_energy_moved']:.4f}")
+        print(f"predation_emerged={'yes' if result['predation_emerged'] else 'no'}")
+        return 0
+
+    if args.territory:
+        result = benchmark_territoriality(
+            params,
+            population_size=args.population,
+            generations=generations,
+            ticks_per_generation=args.social_ticks_per_gen,
+            organic_pools=args.social_pools,
+            group_count=args.group_count,
+            group_weight=args.group_weight,
+            hidden_units=args.hidden_units,
+            seed=args.seed,
+        )
+        ctrl = result["control"]
+        terr = result["territoriality"]
+        print("generation control_avg territory_avg control_best territory_best "
+              "defenses defend_rate defend_energy")
+        for ch, th in zip(ctrl["history"], terr["history"]):
+            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
+                  f"{th['avg_fitness']:<14.4f} {ch['best_fitness']:<13.4f} "
+                  f"{th['best_fitness']:<16.4f} {th['defenses']:<9d} "
+                  f"{th['defend_rate']:<11.4f} "
+                  f"{th['defend_energy_moved']:.4f}")
+        print(f"control_last_avg={result['control_last_avg']:.4f} "
+              f"territoriality_last_avg={result['territoriality_last_avg']:.4f}")
+        print(f"defend_rate={result['defend_rate']:.4f} "
+              f"defenses={result['defenses']}")
+        print(f"defend_energy_moved={result['defend_energy_moved']:.4f}")
+        print(f"territoriality_emerged="
+              f"{'yes' if result['territoriality_emerged'] else 'no'}")
+        return 0
 
     if args.social:
         result = benchmark_social(
@@ -364,14 +519,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"overall_best_fitness={result.get('best_fitness', -1.0):.4f}")
         return 0
 
-    header = "tick alive grid_energy entity_energy total_energy total_signal"
+    header = "tick alive grid_energy entity_energy nest_energy total_energy total_signal"
     print(header)
     for snap in driver.run_ticks(args.ticks):
         if snap["tick"] % args.every != 0:
             continue
         print(f"{snap['tick']:<5d} {snap['alive_babies']:<5d} "
               f"{snap['grid_energy']:<12.1f} {snap['entity_energy']:<14.1f} "
-              f"{snap['total_energy']:<13.1f} {snap['total_signal']:<12.3f}")
+              f"{snap['nest_energy']:<12.1f} {snap['total_energy']:<13.1f} "
+              f"{snap['total_signal']:<12.3f}")
 
     ledger = driver.energy_ledger()
     populations = driver.material_populations()
@@ -380,7 +536,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {_material_name(m):<8s} {populations[m]:>8d}")
     print("\nenergy_ledger")
     print(f"  grid={ledger['grid']:.1f} entities={ledger['entities']:.1f} "
-          f"total={ledger['total']:.1f}")
+          f"nests={ledger['nests']:.1f} total={ledger['total']:.1f}")
     return 0
 
 

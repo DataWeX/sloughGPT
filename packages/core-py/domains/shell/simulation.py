@@ -33,7 +33,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from .memory import EpisodicMemory
+from .memory import EpisodicMemory, WorldMemory
 
 logger = logging.getLogger("slo.sim")
 
@@ -100,6 +100,93 @@ class WorldParams:
     message_cost: float = 0.5       # energy spent per unit of message amplitude
     message_range: float = 5.0      # max distance for direct delivery
     message_gate_threshold: float = 0.5  # perceptron gate must clear to emit
+
+    # Durable structures (Stage 7). Opt-in: off by default so the locked
+    # single/group selection proofs keep their exact energy flow and genome
+    # layout. When on, cell-write deposits near a nest feed its bank (a
+    # transfer, never creation), enough deposited energy seeds a new nest at
+    # the written cell, and a baby under its start energy can draw from its
+    # own tribe's nearest nest — a starvation buffer that makes territoriality
+    # and resource pooling worth evolving.
+    structure_enabled: bool = False
+    nest_radius: float = 2.0        # a write within this distance of a nest feeds it
+    nest_seed_energy: float = 3.0   # deposited energy needed to seed a new nest
+    nest_draw_rate: float = 1.0     # max energy drawn per tick from one nest
+    nest_use_radius: float = 2.0    # a baby must stand this close to draw
+    nest_decay: float = 0.002       # fraction of stored energy lost per tick
+    max_nests: int = 8              # world-wide nest cap (limited territory)
+
+    # Cultural transmission (Stage 7). Opt-in: off by default so the locked
+    # single/group selection proofs keep their exact genome layout and RNG
+    # draw order. When on, each baby gains a ``perceptron_teach``
+    # (entity-input -> 1 gate) that decides whether to teach the neediest
+    # nearby baby: the teacher pays ``teach_cost * gate`` energy and blends
+    # the student's behavior perceptrons toward its own learned weights (a
+    # louder lesson has a stronger effect) — learned behavior moves laterally
+    # between living agents, not just vertically at birth (memotype) or via
+    # selection. Episode transfer is limited (``teach_memotype_cap=1``): bulk
+    # episode copies raised the student's reward baseline and dampened its own
+    # subsequent learning, making culture net-negative in the honest-reward
+    # world (benchmark_culture). ``0`` disables episode transfer entirely.
+    teaching_enabled: bool = False
+    teach_cost: float = 0.5          # energy spent per unit of lesson amplitude
+    teach_range: float = 5.0         # max distance for a lesson
+    teach_gate_threshold: float = 0.5  # perceptron gate must clear to teach
+    teach_weight_blend: float = 0.1  # fraction of the weight gap closed per lesson
+    teach_memotype_cap: int = 1      # best episodes copied per lesson (0 = none)
+
+    # World-level long-term memory (Stage 7). Opt-in: off by default so the
+    # locked selection proofs keep their exact energy flow and genome layout.
+    # When on, the scene carries a WorldMemory reservoir that never evicts:
+    # a dying baby deposits its best episodes (``memory_deposit``), the
+    # evolution engine deposits every survivor at generation boundaries, and
+    # a newborn is seeded (``memory_seed``) from the reservoir's best episodes
+    # — so lived experience survives death and crosses lineages, beyond the
+    # capped parent->child memotype.
+    memory_enabled: bool = False
+    memory_deposit: int = 8    # episodes a baby deposits into the world reservoir
+    memory_seed: int = 4       # episodes a newborn is seeded with from the reservoir
+
+    # Predator-prey dynamics (Stage 8). Opt-in: off by default so the locked
+    # selection proofs keep their exact genome layout and RNG draw order.
+    # When on, each baby gains a ``perceptron_predation`` (entity-input -> 1
+    # gate) that decides whether to hunt the weakest nearby baby within range.
+    # A strike is lethal: the prey's full energy transfers to the predator (a
+    # transfer, not creation — the world still conserves energy) and the prey
+    # dies. The predator pays ``predation_cost`` for the strike, so the gate
+    # is shaped by the honest same-tick net reward: hunting pays while prey
+    # energy exceeds the strike cost, and self-limits as prey grows scarce
+    # (a lone predator that eats its own population starves with it).
+    predation_enabled: bool = False
+    predation_cost: float = 0.5       # energy spent to execute a strike
+    predation_range: float = 3.0      # max distance a predator can strike
+    predation_gate_threshold: float = 0.5  # perceptron gate must clear to hunt
+
+    # Territoriality (Stage 9). Opt-in: off by default so the locked
+    # selection proofs keep their exact genome layout and RNG draw order.
+    # Territory is CLAIMED by building nests (Stage 7): a tribe's region is
+    # the ground within ``territory_radius`` of the nearest nest it owns
+    # (world-wide cap ``max_nests``). When the channel is on, each baby gains
+    # a ``perceptron_territory`` (entity-input -> 1 gate) that decides whether
+    # to DEFEND the region: standing on its own tribe's territory, a cleared
+    # gate evicts the nearest foreign baby within ``defend_range``. The toll
+    # scales with the trespasser's own energy — ``defend_take_fraction`` of
+    # it transfers to the defender (capped so the eviction is never lethal),
+    # so evicting a rich trespasser pays and the gate has an honest gradient
+    # to learn "this trespasser is worth evicting". The trespasser is softly
+    # pushed ``defend_push`` cells away from the defender (a pure relocation,
+    # never a kill — a small shove, not a stranding), and the defender pays
+    # ``defend_cost`` (a transfer, not creation — the world conserves
+    # energy). The gate is shaped by the honest same-tick net reward:
+    # defending pays while a trespasser carries more energy than the
+    # eviction costs and self-limits as trespassers grow scarce.
+    territoriality_enabled: bool = False
+    territory_radius: float = 3.0       # a tribe's region = within this of its nearest nest
+    defend_range: float = 3.0           # max distance a defender can evict a trespasser
+    defend_cost: float = 0.5            # energy spent to execute an eviction
+    defend_take_fraction: float = 0.5   # share of the trespasser's energy taken as toll
+    defend_push: float = 1.0            # cells the evicted trespasser is shoved away
+    defend_gate_threshold: float = 0.5  # perceptron gate must clear to defend
 
     # World generation (opt-in terrain, deterministic on (grid_size, world_seed))
     generate_world: bool = False
@@ -752,6 +839,65 @@ class Entity:
         return entity
 
 
+# ── Structures ───────────────────────────────────────────────────────────────
+
+@dataclass
+class Nest:
+    """
+    A durable structure — a bank of stored energy anchored to a grid cell.
+
+    Seeded by a baby's cell-write that carries enough deposited energy; fed
+    by later writes within ``nest_radius`` of it. Any tribe-mate that is
+    under its start energy can draw from the nearest same-group nest, so a
+    nest is a starvation buffer that makes territoriality and resource
+    pooling worth evolving. Stored energy decays a little every tick, so an
+    abandoned structure erodes to nothing.
+    """
+    id: int
+    position: np.ndarray
+    stored_energy: float
+    owner_group_id: int
+    alive: bool = True
+
+    def distance_to_point(self, point: np.ndarray) -> float:
+        """Euclidean distance to a point in world coordinates."""
+        return float(np.linalg.norm(self.position - point))
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Serialize the nest to a JSON-safe dict.
+
+        Returns:
+            Dict with id, position, stored_energy, owner_group_id, alive.
+        """
+        return {
+            "id": int(self.id),
+            "position": self.position.tolist(),
+            "stored_energy": float(self.stored_energy),
+            "owner_group_id": int(self.owner_group_id),
+            "alive": bool(self.alive),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Nest":
+        """
+        Rebuild a nest from :meth:`to_dict` output.
+
+        Args:
+            data: serialized nest dict.
+
+        Returns:
+            A new Nest with the stored state.
+        """
+        nest = cls.__new__(cls)
+        nest.id = int(data["id"])
+        nest.position = np.asarray(data["position"], dtype=np.float64)
+        nest.stored_energy = float(data["stored_energy"])
+        nest.owner_group_id = int(data["owner_group_id"])
+        nest.alive = bool(data["alive"])
+        return nest
+
+
 # ── Perception ───────────────────────────────────────────────────────────────
 
 @dataclass
@@ -837,8 +983,10 @@ class Perceptron:
 
         Args:
             x: input features.
-            error: scalar or vector reward signal.
-            lr: learning rate (sign encodes reinforce vs weaken).
+            error: scalar or vector reward signal (positive reinforces,
+            negative weakens; the sign is the direction, not a learning-rate
+            flag).
+            lr: learning rate (always positive).
         """
         features = self._features(x)
         pred = self._sigmoid(features @ self.W + self.b)
@@ -939,12 +1087,68 @@ class SimBaby:
             # Directed-signal brain: reads a target neighbor's entity features
             # and emits a single gate whose value is the message amplitude.
             self.perceptron_message = Perceptron(entity_input_dim, 1)
+        self.perceptron_teach: Perceptron | None = None
+        if self.params.teaching_enabled:
+            # Cultural brain: reads a target's entity features and emits a
+            # single gate whose value is the lesson amplitude. Constructed
+            # from fixed zeros (no RNG draw) so the four behavior brains'
+            # RNG draw order — and the whole perception-noise stream — is
+            # unchanged whether or not teaching is enabled (locked proofs and
+            # a perfectly controlled culture benchmark). The genome's
+            # ``apply_to`` overwrites these weights at birth anyway.
+            p = object.__new__(Perceptron)
+            p.hidden_units = 0
+            p.H = None
+            p.bh = None
+            p.W = np.zeros((entity_input_dim, 1), dtype=np.float32)
+            p.b = np.zeros(1, dtype=np.float32)
+            self.perceptron_teach = p
+
+        self.perceptron_predation: Perceptron | None = None
+        if self.params.predation_enabled:
+            # Predator brain: reads a target's entity features and emits a
+            # single gate whose value is the hunt decision strength.
+            # Constructed from fixed zeros (no RNG draw) so the behavior
+            # brains' RNG draw order — and the whole perception-noise
+            # stream — is unchanged whether or not predation is enabled
+            # (locked proofs and a controlled predator-prey benchmark). The
+            # genome's ``apply_to`` overwrites these weights at birth anyway.
+            p = object.__new__(Perceptron)
+            p.hidden_units = 0
+            p.H = None
+            p.bh = None
+            p.W = np.zeros((entity_input_dim, 1), dtype=np.float32)
+            p.b = np.zeros(1, dtype=np.float32)
+            self.perceptron_predation = p
+
+        self.perceptron_territory: Perceptron | None = None
+        if self.params.territoriality_enabled:
+            # Territory brain: reads a trespasser's entity features and emits
+            # a single gate whose value is the defense decision strength.
+            # Constructed from fixed zeros (no RNG draw) so the behavior
+            # brains' RNG draw order — and the whole perception-noise
+            # stream — is unchanged whether or not territoriality is enabled
+            # (locked proofs and a controlled territoriality benchmark). The
+            # genome's ``apply_to`` overwrites these weights at birth anyway.
+            p = object.__new__(Perceptron)
+            p.hidden_units = 0
+            p.H = None
+            p.bh = None
+            p.W = np.zeros((entity_input_dim, 1), dtype=np.float32)
+            p.b = np.zeros(1, dtype=np.float32)
+            self.perceptron_territory = p
 
         # Inbox — messages delivered to this baby this tick (sender_id -> amplitude).
         # Filled by the scene's delivery pass at the start of each tick.
         self._inbox: dict[int, float] = {}
         self._last_message_input: np.ndarray | None = None
         self._last_message_out: float | None = None
+        self._last_teach_input: np.ndarray | None = None
+        self._last_teach_out: float | None = None
+        self._last_predation_input: np.ndarray | None = None
+        self._last_predation_out: float | None = None
+        self._last_defend_input: np.ndarray | None = None
+        self._last_defend_out: float | None = None
 
         self._last_perception: Perception | None = None
         self._last_action: BabyAction | None = None
@@ -970,14 +1174,17 @@ class SimBaby:
         """Euclidean distance to a point in world coordinates."""
         return float(np.linalg.norm(self.position - point))
 
-    def perceive(self, world: WorldGrid, babies: list[SimBaby] | None = None) -> Perception:
+    def perceive(self, world: WorldGrid, babies: list[SimBaby] | None = None,
+                 nests: list[Nest] | None = None) -> Perception:
         """
-        Read nearby cells, detect entities, read own body.
+        Read nearby cells, detect entities and structures, read own body.
         Energy cost is deducted.
 
         Args:
             world: the world grid.
             babies: optional list of other agents to detect as entities.
+            nests: optional list of durable structures to detect (visible only
+                when ``structure_enabled``).
 
         Returns:
             Perception with nearby_cells, nearby_entities, agent_body.
@@ -1011,6 +1218,28 @@ class SimBaby:
                         "angle": angle,
                         "group_id": other.group_id,
                         "message": self._inbox.get(other.entity.id, 0.0),
+                    })
+
+        # Detect durable structures (Stage 7). Nests appear as objects keyed
+        # by their stored energy, so the entity brain can learn to approach a
+        # full bank, linger near its own tribe's, and avoid hostile territory.
+        if nests is not None and self.params.structure_enabled:
+            for nest in nests:
+                if not nest.alive:
+                    continue
+                d = nest.distance_to_point(self.position)
+                if d <= self.params.see_radius:
+                    entities.append({
+                        "id": nest.id,
+                        "type": int(EntityType.OBJECT),
+                        "energy": nest.stored_energy,
+                        "distance": d,
+                        "angle": float(np.arctan2(
+                            nest.position[2] - self.position[2],
+                            nest.position[0] - self.position[0])),
+                        "group_id": nest.owner_group_id,
+                        "message": 0.0,
+                        "is_nest": True,
                     })
 
         # Simple body readout
@@ -1192,12 +1421,12 @@ class SimBaby:
             "scale": scale,
         }
 
-        if energy_delta > 0:
-            # Good — reinforce
-            lr = 0.01 * scale
-        else:
-            # Bad — weaken
-            lr = -0.01 * scale
+        # lr is always positive: the error sign (from energy_delta) encodes
+        # direction — gains push outputs up, losses push them down. A negative
+        # lr on losses used to double-flip the delta-rule sign (error * lr
+        # becomes positive), so "weaken" actually reinforced the bad outcome
+        # and every loss drove the perceptrons toward saturation.
+        lr = 0.01 * scale
 
         error = np.sign(energy_delta) * min(abs(energy_delta), 1.0)
 
@@ -1249,6 +1478,38 @@ class SimBaby:
                 )
                 self._last_message_input = None
                 self._last_message_out = None
+
+            # Learn teaching from the last lesson decision (if any)
+            if self._last_teach_input is not None and self.perceptron_teach is not None:
+                self.perceptron_teach.update(
+                    self._last_teach_input,
+                    np.array([error]),
+                    lr=lr * 0.5,
+                )
+                self._last_teach_input = None
+                self._last_teach_out = None
+
+            # Learn predation from the last hunt decision (if any)
+            if (self._last_predation_input is not None
+                    and self.perceptron_predation is not None):
+                self.perceptron_predation.update(
+                    self._last_predation_input,
+                    np.array([error]),
+                    lr=lr * 0.5,
+                )
+                self._last_predation_input = None
+                self._last_predation_out = None
+
+            # Learn territoriality from the last defense decision (if any)
+            if (self._last_defend_input is not None
+                    and self.perceptron_territory is not None):
+                self.perceptron_territory.update(
+                    self._last_defend_input,
+                    np.array([error]),
+                    lr=lr * 0.5,
+                )
+                self._last_defend_input = None
+                self._last_defend_out = None
 
         # Remember this episode
         if self._last_features is not None and self._last_gates is not None:
@@ -1386,6 +1647,285 @@ class SimBaby:
             return gate
         return 0.0
 
+    def decide_teach(self, other: SimBaby) -> float:
+        """
+        Decide whether to teach a specific neighbor (cultural act).
+
+        Mirrors ``decide_message``: the teach perceptron reads the target's
+        entity features (so a lesson can be keyed to need, kin, or wealth)
+        and emits one sigmoid gate. When the gate clears
+        ``teach_gate_threshold`` a lesson is given with the gate value as its
+        amplitude — a louder lesson transfers more behavior and costs more
+        energy. The simulation loop picks the neediest nearby tribe-mate as
+        the target (cultural transmission is in-group) and charges the cost
+        immediately. Teaching cost is a real energy outlay and lands in the
+        teacher's same-tick net reward (step 8b), so the teach perceptron is
+        shaped by the full honest outcome of the tick.
+
+        Args:
+            other: the intended student.
+
+        Returns:
+            Lesson amplitude in [0, 1]; 0.0 means no lesson is given.
+        """
+        if (self.perceptron_teach is None or not other.alive
+                or self.energy <= self.params.start_energy):
+            # Teaching is only worth it when the teacher has surplus energy
+            # (mirrors cooperation's surplus condition) — a starving teacher
+            # that spends energy on a lesson is pure waste.
+            self._last_teach_input = None
+            self._last_teach_out = None
+            return 0.0
+        d = other.distance_to_point(self.position)
+        entity = {
+            "type": int(other.entity.entity_type),
+            "energy": other.energy,
+            "distance": d,
+            "angle": float(np.arctan2(other.position[2] - self.position[2],
+                                      other.position[0] - self.position[0])),
+            "group_id": other.group_id,
+            "id": other.entity.id,
+            "message": self._inbox.get(other.entity.id, 0.0),
+        }
+        features = self._entity_features(entity)
+        out = self.perceptron_teach.forward(features)
+        gate = float(out[0])
+        self._last_teach_input = features
+        self._last_teach_out = gate
+        if gate >= self.params.teach_gate_threshold:
+            return gate
+        return 0.0
+
+    def teach(self, other: SimBaby, amplitude: float) -> int:
+        """
+        Transfer learned behavior to a neighbor — cultural transmission.
+
+        The student's behavior perceptrons (cells, body, entity, move) blend
+        toward the teacher's learned weights by ``teach_weight_blend *
+        amplitude`` — a louder lesson closes a larger fraction of the weight
+        gap. The teacher's highest-reward episodes are then copied into the
+        student's episodic memory, so lived experience moves laterally between
+        living agents (the memotype still only moves vertically at birth).
+
+        Args:
+            other: the student agent (weights and memory modified in place).
+            amplitude: lesson amplitude in (0, 1] from the teach gate.
+
+        Returns:
+            Number of episodes copied into the student's memory.
+
+        Side effects:
+            - modifies ``other``'s behavior perceptron weights and memory.
+        """
+        if not other.alive or amplitude <= 0.0:
+            return 0
+        blend = self.params.teach_weight_blend * min(float(amplitude), 1.0)
+        for name in ("cells", "body", "entity", "move"):
+            t = getattr(self, f"perceptron_{name}")
+            s = getattr(other, f"perceptron_{name}")
+            s.W[:] = (s.W + blend * (t.W - s.W)).astype(np.float32)
+            s.b[:] = (s.b + blend * (t.b - s.b)).astype(np.float32)
+            if t.H is not None and s.H is not None:
+                s.H[:] = (s.H + blend * (t.H - s.H)).astype(np.float32)
+                s.bh[:] = (s.bh + blend * (t.bh - s.bh)).astype(np.float32)
+        cap = int(self.params.teach_memotype_cap)
+        copied = 0
+        for e in self.memory.recall(cap, by_reward=True):
+            other.memory.record(
+                features=np.asarray(e.features, dtype=np.float32),
+                action=tuple(e.action),
+                reward=float(e.reward),
+                tick=int(e.tick),
+            )
+            copied += 1
+        return copied
+
+    def decide_predation(self, other: SimBaby) -> float:
+        """
+        Decide whether to hunt a specific neighbor (predator-prey act).
+
+        Mirrors ``decide_message``: the predation perceptron reads the
+        target's entity features (so a hunt can be keyed to need, kin, or
+        wealth — the kin signal lets selection learn not to eat its own
+        tribe) and emits one sigmoid gate. When the gate clears
+        ``predation_gate_threshold`` a lethal strike is executed by the
+        simulation loop: the prey's full energy transfers to the predator
+        and the prey dies. The gate value itself is not scaled into energy —
+        the strike is all-or-nothing — but it is recorded so the delta-rule
+        learner can shape the gate from the honest same-tick net reward
+        (strike gain minus ``predation_cost``).
+
+        Args:
+            other: the intended prey.
+
+        Returns:
+            Hunt decision strength in [0, 1]; 0.0 means no strike.
+        """
+        if self.perceptron_predation is None or not other.alive:
+            self._last_predation_input = None
+            self._last_predation_out = None
+            return 0.0
+        d = other.distance_to_point(self.position)
+        entity = {
+            "type": int(other.entity.entity_type),
+            "energy": other.energy,
+            "distance": d,
+            "angle": float(np.arctan2(other.position[2] - self.position[2],
+                                      other.position[0] - self.position[0])),
+            "group_id": other.group_id,
+            "id": other.entity.id,
+            "message": self._inbox.get(other.entity.id, 0.0),
+        }
+        features = self._entity_features(entity)
+        out = self.perceptron_predation.forward(features)
+        gate = float(out[0])
+        self._last_predation_input = features
+        self._last_predation_out = gate
+        if gate >= self.params.predation_gate_threshold:
+            return gate
+        return 0.0
+
+    def hunt(self, other: SimBaby) -> float:
+        """
+        Execute a lethal strike: consume a weaker neighbor for energy.
+
+        The prey's full energy transfers to the predator and the prey dies —
+        a transfer, not creation, so the world still conserves energy. The
+        predator's strike cost (``predation_cost``) is charged by the
+        simulation loop after the strike, so it lands in the same tick's
+        honest net reward and shapes the predation gate.
+
+        Args:
+            other: the prey agent (killed in place).
+
+        Returns:
+            Energy gained by the predator (the prey's full energy).
+
+        Side effects:
+            - sets ``other``'s energy to 0 and ``other``'s alive flag to False
+            - adds the prey's energy to ``self``'s energy
+        """
+        if not other.alive or self.perceptron_predation is None:
+            return 0.0
+        gained = float(other.entity.energy)
+        other.entity.energy = 0.0
+        other.entity.alive = False
+        self.entity.energy += gained
+        return gained
+
+    def decide_defend(self, other: SimBaby) -> float:
+        """
+        Decide whether to evict a trespasser from the tribe's territory.
+
+        The territory perceptron reads the trespasser's entity features and
+        emits a single gate. When the gate clears ``defend_gate_threshold``
+        an eviction is executed by the simulation loop: the trespasser is
+        shoved ``defend_push`` cells away and ``defend_take_fraction`` of its
+        energy transfers to the defender, who pays ``defend_cost``. The
+        gate value itself is not scaled into energy — the eviction is
+        all-or-nothing — but it is recorded so the delta-rule learner can
+        shape the gate from the honest same-tick net reward (toll gained minus
+        ``defend_cost``). Because the toll scales with the trespasser's own
+        energy, the gate reads that feature and learns to evict rich
+        trespassers and leave lean ones alone. The simulation loop only
+        offers decisions when the defender stands on its own tribe's
+        territory, so the gate learns "this trespasser is worth evicting",
+        not "where is my territory".
+
+        Args:
+            other: the intended trespasser (a baby of another tribe).
+
+        Returns:
+            Defense decision strength in [0, 1]; 0.0 means no eviction.
+        """
+        if self.perceptron_territory is None or not other.alive:
+            self._last_defend_input = None
+            self._last_defend_out = None
+            return 0.0
+        d = other.distance_to_point(self.position)
+        entity = {
+            "type": int(other.entity.entity_type),
+            "energy": other.energy,
+            "distance": d,
+            "angle": float(np.arctan2(other.position[2] - self.position[2],
+                                      other.position[0] - self.position[0])),
+            "group_id": other.group_id,
+            "id": other.entity.id,
+            "message": self._inbox.get(other.entity.id, 0.0),
+        }
+        features = self._entity_features(entity)
+        out = self.perceptron_territory.forward(features)
+        gate = float(out[0])
+        self._last_defend_input = features
+        self._last_defend_out = gate
+        if gate >= self.params.defend_gate_threshold:
+            return gate
+        return 0.0
+
+    def defend(self, other: SimBaby, anchor: np.ndarray) -> float:
+        """
+        Execute an eviction: shove a trespasser away and take a toll.
+
+        ``defend_take_fraction`` of the trespasser's energy transfers to the
+        defender, capped so the eviction is never lethal — it is a toll, not
+        a strike, and it scales with how much the trespasser is carrying, so
+        evicting a rich foreigner pays. The trespasser is shoved one small
+        step (``defend_push`` cells) away from the defender in the ground
+        plane (a pure relocation, never a kill, and never a stranding). The
+        defender's own ``defend_cost`` is charged by the simulation loop
+        after the eviction, so it lands in the same tick's honest net reward
+        and shapes the territory gate.
+
+        Args:
+            other: the trespassing agent (drained and shoved in place).
+            anchor: the defended nest's position (retained for signature
+                compatibility; the push no longer targets the territory edge).
+
+        Returns:
+            Energy gained by the defender (the toll taken from the trespasser).
+
+        Side effects:
+            - reduces ``other``'s energy and relocates ``other`` one cell
+            - adds the toll to ``self``'s energy
+        """
+        if not other.alive or self.perceptron_territory is None:
+            return 0.0
+        take = min(self.params.defend_take_fraction
+                   * float(other.entity.energy),
+                   max(float(other.entity.energy) - 1e-6, 0.0))
+        if take > 0.0:
+            other.entity.energy -= take
+            self.entity.energy += take
+        other.entity.position = self._push_away(other)
+        return take
+
+    def _push_away(self, other: SimBaby) -> np.ndarray:
+        """
+        Compute the soft shove position for an evicted trespasser.
+
+        The evicted baby is pushed ``defend_push`` cells away from the
+        defender along the defender->baby ground-plane direction, keeping its
+        height. The world is a torus, so the new point wraps at the grid
+        edges. This is a small relocation, never a stranding: the trespasser
+        stays close to where it was, just outside arm's reach of the
+        defender.
+
+        Args:
+            other: the evicted trespasser.
+
+        Returns:
+            A new (x, y, z) position one shove away from the defender.
+        """
+        dx = float(other.position[0] - self.position[0])
+        dz = float(other.position[2] - self.position[2])
+        d = float(np.hypot(dx, dz))
+        if d < 1e-9:
+            dx, dz, d = 1.0, 0.0, 1.0
+        gx, gy, gz = self.params.grid_size
+        sx = (other.position[0] + dx / d * self.params.defend_push) % gx
+        sz = (other.position[2] + dz / d * self.params.defend_push) % gz
+        return np.array([sx, float(other.position[1]), sz], dtype=np.float64)
+
     def social_step(self, other: SimBaby) -> dict[str, float]:
         """
         Perceptron-driven social decision against one neighbor.
@@ -1467,6 +2007,12 @@ class SimBaby:
             "perceptron_move": self.perceptron_move.to_dict(),
             "perceptron_message": self.perceptron_message.to_dict()
             if self.perceptron_message is not None else None,
+            "perceptron_teach": self.perceptron_teach.to_dict()
+            if self.perceptron_teach is not None else None,
+            "perceptron_predation": self.perceptron_predation.to_dict()
+            if self.perceptron_predation is not None else None,
+            "perceptron_territory": self.perceptron_territory.to_dict()
+            if self.perceptron_territory is not None else None,
             "memory": self.memory.to_dict(),
             "total_ticks": int(self._total_ticks),
             "group_id": int(self.group_id),
@@ -1517,9 +2063,30 @@ class SimBaby:
             baby.perceptron_message = Perceptron.from_dict(message_data)
         else:
             baby.perceptron_message = None
+        teach_data = data.get("perceptron_teach")
+        if teach_data and teach_data.get("W"):
+            baby.perceptron_teach = Perceptron.from_dict(teach_data)
+        else:
+            baby.perceptron_teach = None
+        pred_data = data.get("perceptron_predation")
+        if pred_data and pred_data.get("W"):
+            baby.perceptron_predation = Perceptron.from_dict(pred_data)
+        else:
+            baby.perceptron_predation = None
+        terr_data = data.get("perceptron_territory")
+        if terr_data and terr_data.get("W"):
+            baby.perceptron_territory = Perceptron.from_dict(terr_data)
+        else:
+            baby.perceptron_territory = None
         baby._inbox = {}
         baby._last_message_input = None
         baby._last_message_out = None
+        baby._last_teach_input = None
+        baby._last_teach_out = None
+        baby._last_predation_input = None
+        baby._last_predation_out = None
+        baby._last_defend_input = None
+        baby._last_defend_out = None
         baby._last_perception = None
         baby._last_action = None
         baby._last_features = None
@@ -1534,7 +2101,8 @@ class SimBaby:
 class SimScene:
     """The virtual world — grid, entities, babies."""
 
-    def __init__(self, params: WorldParams | None = None):
+    def __init__(self, params: WorldParams | None = None,
+                 world_memory: WorldMemory | None = None):
         self.params = params or WorldParams()
         self.world = WorldGrid(self.params.grid_size)
         if self.params.generate_world:
@@ -1548,11 +2116,64 @@ class SimScene:
         # during the current tick, routed into targets' inboxes at the start of
         # the next tick so delivery is order-independent and one tick latent.
         self._pending_messages: list[tuple[int, int, float]] = []
+        # Durable structures (Stage 7) — banked-energy nests rooted at cells.
+        self.nests: list[Nest] = []
+        self._next_nest_id = 1
+        # World-level long-term memory (Stage 7) — the collective reservoir.
+        # When the channel is off the scene simply carries no reservoir; an
+        # injected one (from the evolution engine) persists across generations.
+        self.world_memory: WorldMemory | None = (
+            world_memory if world_memory is not None
+            else (WorldMemory() if self.params.memory_enabled else None)
+        )
+        self.memory_seeds_given = 0
 
     def add_baby(self, baby: SimBaby):
-        """Add a baby to the world."""
+        """
+        Add a baby to the world.
+
+        When the world memory channel is on and the reservoir holds episodes,
+        the newborn is seeded with the ``memory_seed`` best episodes — lived
+        experience crosses lineages at birth, on top of the memotype that
+        ``Genome.apply_to`` records into the same ring buffer beforehand.
+
+        Side effects:
+            - appends the baby to ``_devices`` and ``entities``
+            - records world-memory episodes into the baby's episodic memory
+            - raises ``memory_seeds_given`` by the number of episodes seeded
+        """
+        if self.world_memory is not None and self.params.memory_seed > 0:
+            for e in self.world_memory.recall(self.params.memory_seed,
+                                              by_reward=True):
+                baby.memory.record(e.features, e.action, e.reward, e.tick)
+                self.memory_seeds_given += 1
         self._devices.append(baby)
         self.entities.append(baby.entity)
+
+    def deposit_memory(self, baby: SimBaby) -> int:
+        """
+        Deposit a baby's best episodes into the world memory reservoir.
+
+        Called on death (in-sim) and on every survivor at a generation
+        boundary (evolution engine). Each deposit keeps the ``memory_deposit``
+        highest-reward episodes from the baby's ring buffer, stamped with its
+        tribe and id, and the reservoir never evicts.
+
+        Args:
+            baby: the depositing baby.
+
+        Returns:
+            Number of episodes deposited.
+
+        Side effects:
+            - appends episodes to ``self.world_memory``
+        """
+        if self.world_memory is None:
+            return 0
+        return self.world_memory.consolidate(
+            baby.memory, self.params.memory_deposit,
+            group_id=baby.group_id, donor_id=baby.entity.id,
+        )
 
     def _surface_y(self, x: int, z: int) -> int:
         """Lowest y whose cell is not air — the ground a baby can stand on."""
@@ -1667,6 +2288,141 @@ class SimScene:
                 continue
             tgt._inbox[sender_id] = max(tgt._inbox.get(sender_id, 0.0), amplitude)
 
+    def nearest_nest(self, point: np.ndarray, radius: float,
+                     group_id: int | None = None) -> Nest | None:
+        """
+        Find the closest alive nest within radius of a point.
+
+        Args:
+            point: query point.
+            radius: max distance to include.
+            group_id: when given, only nests owned by this tribe are considered.
+
+        Returns:
+            The nearest qualifying nest, or None.
+        """
+        best = None
+        best_d = float("inf")
+        for n in self.nests:
+            if not n.alive:
+                continue
+            if group_id is not None and n.owner_group_id != group_id:
+                continue
+            d = n.distance_to_point(point)
+            if d <= radius and d < best_d:
+                best, best_d = n, d
+        return best
+
+    def route_build(self, action: BabyAction, baby: SimBaby) -> tuple[float, int]:
+        """
+        Route a baby's cell-write deposits into durable structures.
+
+        When structures are enabled, each applied write that carries energy is
+        rerouted: a write near an existing nest feeds its bank; a write far
+        from any nest seeds a new nest if it carries enough energy and the
+        world-wide nest cap has not been reached; otherwise the cell keeps its
+        energy as usual. Fed and seed writes leave the cell as material with
+        zero energy, so the deposit is a transfer from the baby into the
+        structure bank — never creation.
+
+        Args:
+            action: the baby's action (its cell writes).
+            baby: the writing baby (owner of any newly seeded nest).
+
+        Returns:
+            Tuple (nested, seeded) — energy banked this call, nests seeded.
+
+        Side effects:
+            - grows the bank of an existing nest or appends a new Nest
+            - zeroes the energy of cells that fed or seeded a nest
+        """
+        if not self.params.structure_enabled:
+            return 0.0, 0
+        nested = 0.0
+        seeded = 0
+        for w in action.writes:
+            if w.energy <= 0:
+                continue
+            if not (0 <= w.x < self.world.nx
+                    and 0 <= w.y < self.world.ny
+                    and 0 <= w.z < self.world.nz):
+                continue
+            anchor = np.array([w.x + 0.5, w.y, w.z + 0.5], dtype=np.float64)
+            nest = self.nearest_nest(anchor, self.params.nest_radius)
+            if nest is not None:
+                nest.stored_energy += w.energy
+                nested += w.energy
+                self.world.energy[self.world.idx(w.x, w.y, w.z)] = 0.0
+            elif (len(self.nests) < self.params.max_nests
+                    and w.energy >= self.params.nest_seed_energy):
+                self.nests.append(Nest(
+                    id=self._next_nest_id,
+                    position=anchor,
+                    stored_energy=w.energy,
+                    owner_group_id=baby.group_id,
+                ))
+                self._next_nest_id += 1
+                seeded += 1
+                self.world.energy[self.world.idx(w.x, w.y, w.z)] = 0.0
+        return nested, seeded
+
+    def update_nests(self) -> None:
+        """
+        Apply structure upkeep — stored energy decays, empty nests erode away.
+
+        Each tick a fraction of every nest's bank is lost to entropy. A nest
+        whose bank is empty is pruned, leaving its anchor cell as ordinary
+        material rubble.
+
+        Side effects:
+            - reduces each nest's stored_energy
+            - removes empty nests from ``self.nests``
+        """
+        if not self.params.structure_enabled:
+            return
+        alive = []
+        for n in self.nests:
+            n.stored_energy -= self.params.nest_decay * n.stored_energy
+            if n.stored_energy > 1e-9:
+                alive.append(n)
+        self.nests = alive
+
+    def draw_nest(self, baby: SimBaby) -> float:
+        """
+        Draw stored energy from the baby's own tribe's nearest nest.
+
+        A baby only draws when it is under its start energy — the nest is a
+        starvation buffer, never a hoarding mechanism. The draw is limited by
+        the draw rate, the gap back to start energy, and the nest's remaining
+        bank, and only a nest owned by the baby's tribe can be tapped — other
+        tribes' structures are off-limits territory.
+
+        Args:
+            baby: the drawing baby.
+
+        Returns:
+            Energy transferred from the nest to the baby.
+
+        Side effects:
+            - reduces the nest's stored_energy
+            - raises the baby's energy
+        """
+        if not self.params.structure_enabled:
+            return 0.0
+        if baby.energy >= self.params.start_energy:
+            return 0.0
+        nest = self.nearest_nest(baby.position, self.params.nest_use_radius,
+                                 group_id=baby.group_id)
+        if nest is None:
+            return 0.0
+        gap = self.params.start_energy - baby.energy
+        draw = min(self.params.nest_draw_rate, gap, nest.stored_energy)
+        if draw <= 0:
+            return 0.0
+        nest.stored_energy -= draw
+        baby.entity.energy += draw
+        return float(draw)
+
     def info(self) -> dict:
         return {
             "tick": self._tick,
@@ -1675,6 +2431,8 @@ class SimScene:
             "total_signal": self.world.total_signal,
             "entities": len(self.entities),
             "alive_babies": len(self.alive_babies),
+            "nests": len(self.nests),
+            "nest_energy": float(sum(n.stored_energy for n in self.nests)),
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -1699,6 +2457,10 @@ class SimScene:
             "entities": [e.to_dict() for e in self.entities],
             "babies": [b.to_dict() for b in self._devices],
             "pending_messages": [list(m) for m in self._pending_messages],
+            "nests": [n.to_dict() for n in self.nests],
+            "next_nest_id": self._next_nest_id,
+            "world_memory": self.world_memory.to_dict()
+            if self.world_memory is not None else None,
         }
 
     @classmethod
@@ -1734,9 +2496,16 @@ class SimScene:
         scene._pending_messages = [
             tuple(m) for m in data.get("pending_messages", [])
         ]
+        scene.nests = [Nest.from_dict(n) for n in data.get("nests", [])]
+        scene._next_nest_id = int(data.get("next_nest_id", 1))
+        wm = data.get("world_memory")
+        scene.world_memory = WorldMemory.from_dict(wm) if wm else None
         max_id = max((e.id for e in entities), default=0)
         if SimBaby._next_id <= max_id:
             SimBaby._next_id = max_id + 1
+        max_nest = max((n.id for n in scene.nests), default=0)
+        if scene._next_nest_id <= max_nest:
+            scene._next_nest_id = max_nest + 1
         return scene
 
 
@@ -1748,17 +2517,25 @@ class Simulation:
 
     Each tick:
         1. Deliver last tick's directed messages (inbox fill)
+        1b. Structure upkeep (nest decay)
         2. World compute (diffusion, waves, conservation)
         3. For each alive baby:
-           a. Perceive (read cells, entities, body)
+           a. Perceive (read cells, entities, nests, body)
            b. Feel (energy change)
            c. React (write cells)
            d. Apply action (write to world)
-           e. Learn (update perceptron weights)
-           f. Directed message (signal a specific neighbor, delivered next tick)
-           g. Social step (cooperate or contest against nearest neighbor)
-           h. Passive drain + perception cost
-        4. Remove dead babies
+           e. Build (route write deposits into nests)
+           f. Move (born ability — one grid step per tick)
+           g. Directed message (signal a specific neighbor, delivered next tick)
+           h. Teach (cultural transfer to the neediest neighbor)
+           i. Social step (cooperate or contest against nearest neighbor)
+           i2. Defend (territoriality: evict trespassers from the tribe's region)
+           j. Learn (update perceptron weights)
+           k. Absorb (energy from nearby organic material)
+           l. Draw (tap own tribe's nest when under start energy)
+           m. Passive drain + perception cost
+        4. Remove dead babies (their best episodes are deposited into the
+           world memory reservoir first, when the channel is on)
     """
 
     def __init__(self, scene: SimScene, max_ticks: int = 100,
@@ -1778,6 +2555,10 @@ class Simulation:
         if self.scene.params.message_enabled:
             self.scene.deliver_messages()
 
+        # Structure upkeep — nest banks decay a little every tick.
+        if self.scene.params.structure_enabled:
+            self.scene.update_nests()
+
         results = []
 
         # World compute first
@@ -1792,27 +2573,42 @@ class Simulation:
             t0 = time.time()
             prev_energy = baby.energy
 
-            # 1. Perceive (cells + nearby agents)
-            perception = baby.perceive(self.scene.world, babies=alive)
+            # 1. Perceive (cells + nearby agents + structures)
+            perception = baby.perceive(self.scene.world, babies=alive,
+                                       nests=self.scene.nests)
             baby.entity.energy -= self.scene.params.see_cost
 
-            # 2. Feel
-            energy_delta = baby.feel(prev_energy)
+            # 2. Feel — the immediate sensation (only see_cost has been paid
+            #    so far this tick). This feeds the action decision, it is NOT
+            #    the reward: the honest reward is the net tick delta measured
+            #    after every gain and drain (step 8b).
+            sensation = baby.feel(prev_energy)
 
             # 3. React
-            action = baby.react(perception, energy_delta)
+            action = baby.react(perception, sensation)
 
             # 4. Apply action — the baby funds the cells it writes, so the
             #    world conserves energy (deposits are a transfer, not creation)
             cells_written = baby.apply_action(action, self.scene.world)
+
+            # 4a. Route write deposits into durable structures. A write near a
+            #     nest feeds its bank; a substantial write far from any nest
+            #     seeds a new one (the deposit becomes banked savings instead
+            #     of a free-standing cell, so the world still conserves energy).
+            nested = 0.0
+            seeded = 0
+            if self.scene.params.structure_enabled:
+                nested, seeded = self.scene.route_build(action, baby)
+
             deposited = float(sum(w.energy for w in action.writes))
             baby.entity.energy -= (
                 self.scene.params.write_cost * cells_written + deposited
             )
 
             # 4b. Move — a born ability to relocate one grid step per tick.
-            #     Charged move_cost; the cost shows up in the next tick's
-            #     energy_delta, which shapes the movement perceptron.
+            #     Charged move_cost; the cost lands in the same tick's net
+            #     reward (step 8b), giving the movement perceptron immediate
+            #     feedback on where it went.
             moved = False
             direction = baby.decide_move(perception)
             if direction is not None:
@@ -1852,6 +2648,42 @@ class Simulation:
                         )
                         baby.entity.energy -= message_energy
 
+            # 4d. Cultural act — teach the neediest nearby baby. The teach
+            #     perceptron decides whom to teach (the hungriest neighbor in
+            #     range); the gate value becomes the lesson amplitude, and the
+            #     cost scales with it (a louder lesson transfers more behavior
+            #     and costs more). The student's behavior weights blend toward
+            #     the teacher's learned weights and its best episodes are
+            #     copied into the student's memory — learned behavior moves
+            #     laterally between living agents.
+            teaching_energy = 0.0
+            teaching_amplitude = 0.0
+            taught_episodes = 0
+            if self.scene.params.teaching_enabled:
+                teach_neighbors = self.scene.nearby_babies(
+                    baby.position, self.scene.params.teach_range,
+                    exclude_id=baby.entity.id,
+                )
+                # Cultural transmission is IN-GROUP (mirrors the tribe-scoped
+                # nest draw): knowledge given to a rival tribe is a net tribe
+                # loss, so group selection would extinguish cross-tribe
+                # teaching before it can ever be selected for. The teach
+                # perceptron still decides whether and how loud to teach a
+                # tribe-mate, and pays the cost.
+                teach_neighbors = [n for n in teach_neighbors
+                                   if n.group_id == baby.group_id]
+                baby._last_teach_input = None
+                baby._last_teach_out = None
+                if teach_neighbors:
+                    teach_target = min(teach_neighbors, key=lambda n: n.energy)
+                    teaching_amplitude = baby.decide_teach(teach_target)
+                    if teaching_amplitude > 0.0:
+                        taught_episodes = baby.teach(teach_target, teaching_amplitude)
+                        teaching_energy = (
+                            self.scene.params.teach_cost * teaching_amplitude
+                        )
+                        baby.entity.energy -= teaching_energy
+
             # 5. Social step — cooperate or contest the neediest nearby baby.
             #    Cooperation targets the hungriest neighbor: a gift to a
             #    starving tribe-mate raises the tribe's geometric-mean fitness
@@ -1875,17 +2707,115 @@ class Simulation:
                     social_act = social["act"]
                     social_energy = social["energy_moved"]
 
-            # 6. Learn
-            baby.learn(energy_delta)
+            # 6. Predation — consume a weaker neighbor for energy. The
+            #     predation perceptron decides whether to hunt the weakest
+            #     nearby baby within range; a strike is lethal, transfers the
+            #     prey's full energy to the predator, and costs
+            #     ``predation_cost``. Predation is an opt-in channel (off by
+            #     default): when off no perceptron exists and no RNG is drawn,
+            #     so the locked selection proofs keep their exact genome
+            #     layout and energy flow. When on, the strike lands in the
+            #     same tick's honest net reward (step 8b), so the gate is
+            #     shaped by the true outcome — hunting pays while prey energy
+            #     exceeds the strike cost and self-limits as prey runs scarce.
+            predation_amplitude = 0.0
+            predation_energy = 0.0
+            prey_id = None
+            if self.scene.params.predation_enabled:
+                prey_neighbors = self.scene.nearby_babies(
+                    baby.position, self.scene.params.predation_range,
+                    exclude_id=baby.entity.id,
+                )
+                baby._last_predation_input = None
+                baby._last_predation_out = None
+                if prey_neighbors:
+                    weaker = [n for n in prey_neighbors if n.energy < baby.energy]
+                    if weaker:
+                        prey = min(weaker, key=lambda n: n.energy)
+                        predation_amplitude = baby.decide_predation(prey)
+                        if predation_amplitude > 0.0:
+                            predation_energy = baby.hunt(prey)
+                            prey_id = prey.entity.id
+                            baby.entity.energy -= self.scene.params.predation_cost
+
+            # 6b. Territoriality — defend the tribe's region. When a baby
+            #     stands on its own tribe's territory (within
+            #     ``territory_radius`` of its tribe's nearest nest) it may
+            #     evict the nearest foreign baby within ``defend_range``: the
+            #     territory perceptron decides whether the eviction pays, a
+            #     cleared gate shoves the trespasser ``defend_push`` cells
+            #     away and transfers ``defend_take_fraction`` of its energy to
+            #     the defender (a toll that scales with what the trespasser
+            #     carries, never lethal), and the defender pays
+            #     ``defend_cost``. Territoriality is an opt-in channel (off by
+            #     default): when off no perceptron exists and no RNG is drawn,
+            #     so the locked selection proofs keep their exact genome layout
+            #     and energy flow. When on, the eviction lands in the same
+            #     tick's honest net reward (step 8b), so the gate is shaped by
+            #     the true outcome — defending pays while a trespasser carries
+            #     more energy than the eviction costs and self-limits as
+            #     trespassers run scarce.
+            defended = False
+            defend_amplitude = 0.0
+            defend_energy = 0.0
+            defended_id = None
+            if self.scene.params.territoriality_enabled:
+                home_nest = self.scene.nearest_nest(
+                    baby.position, self.scene.params.territory_radius,
+                    group_id=baby.group_id,
+                )
+                baby._last_defend_input = None
+                baby._last_defend_out = None
+                if home_nest is not None:
+                    strangers = [
+                        n for n in self.scene.nearby_babies(
+                            baby.position, self.scene.params.defend_range,
+                            exclude_id=baby.entity.id,
+                        ) if n.group_id != baby.group_id
+                    ]
+                    if strangers:
+                        target = min(strangers,
+                                     key=lambda n: n.distance_to_point(
+                                         baby.position))
+                        defend_amplitude = baby.decide_defend(target)
+                        if defend_amplitude > 0.0:
+                            defend_energy = baby.defend(
+                                target, home_nest.position)
+                            defended_id = target.entity.id
+                            defended = True
+                            baby.entity.energy -= self.scene.params.defend_cost
 
             # 7. Absorb energy from nearby organic material
             absorbed = baby.absorb_energy(self.scene.world)
             baby.entity.energy += absorbed
 
+            # 7b. Draw from own tribe's nearest nest when under start energy —
+            #     a starvation buffer that rewards territoriality.
+            drawn = 0.0
+            if self.scene.params.structure_enabled:
+                drawn = self.scene.draw_nest(baby)
+
             # 8. Passive drain
             baby.entity.energy -= self.scene.params.passive_drain
             baby.entity.energy = max(0.0, baby.entity.energy)
             baby._total_ticks += 1
+
+            # 8b. Learn from the tick's honest net outcome. The reward is the
+            #     full energy delta across this tick — perception, movement,
+            #     writes, social transfers, teaching cost, absorption, nest
+            #     draw, and passive drain — so a baby that reaches food
+            #     genuinely feels the gain and one that wastes energy feels the
+            #     loss. Two defects had to be fixed for honesty to work: the
+            #     reward used to collapse to the uniform -0.5 see_cost (food
+            #     absorption was measured after the delta was captured), and
+            #     the delta rule's "weaken" branch double-flipped its sign
+            #     (error * lr came out positive), so losses actually reinforced
+            #     bad behavior and drove the perceptrons to saturation. With
+            #     both fixed, episodes carry real outcomes and memotype
+            #     inheritance plus lateral teaching copy genuinely good
+            #     experience (benchmark_culture).
+            net_delta = baby.energy - prev_energy
+            baby.learn(net_delta)
 
             elapsed = (time.time() - t0) * 1000
 
@@ -1893,12 +2823,25 @@ class Simulation:
                 "baby_id": baby.entity.id,
                 "tick": self.scene.tick,
                 "energy": baby.energy,
-                "energy_delta": energy_delta,
+                "energy_delta": net_delta,
                 "cells_written": cells_written,
                 "moved": moved,
                 "message_amplitude": message_amplitude,
                 "message_energy": message_energy,
+                "teaching_amplitude": teaching_amplitude,
+                "teaching_energy": teaching_energy,
+                "taught_episodes": taught_episodes,
+                "predation_amplitude": predation_amplitude,
+                "predation_energy": predation_energy,
+                "prey_id": prey_id,
+                "defended": defended,
+                "defend_amplitude": defend_amplitude,
+                "defend_energy": defend_energy,
+                "defended_id": defended_id,
                 "absorbed": absorbed,
+                "nested": nested,
+                "seeded": seeded,
+                "drawn": drawn,
                 "social_act": social_act,
                 "social_energy": social_energy,
                 "total_ms": elapsed,
@@ -1910,12 +2853,20 @@ class Simulation:
                 logger.info(
                     f"tick={self.scene.tick} baby={baby.entity.id} "
                     f"energy={baby.energy:.1f} "
-                    f"delta={energy_delta:+.1f} "
+                    f"delta={net_delta:+.1f} "
                     f"wrote={cells_written} "
                     f"social={social_act}({social_energy:+.1f})"
+                    f" prey={prey_id if predation_energy > 0.0 else '-'}"
+                    f" defend={defended_id if defend_energy > 0.0 else '-'}"
                 )
 
-        # Remove dead babies from entities
+        # 4. Remove dead babies from entities. Before a baby leaves the world
+        #    its best episodes are deposited into the world memory reservoir
+        #    (when the channel is on) — lived experience survives the body.
+        if self.scene.world_memory is not None:
+            for d in self.scene._devices:
+                if not d.alive:
+                    self.scene.deposit_memory(d)
         self.scene.entities = [e for e in self.scene.entities if e.alive]
         self._tick_log.extend(results)
         return results
@@ -1957,4 +2908,16 @@ class Simulation:
             "cooperations": sum(1 for r in self._tick_log if r["social_act"] == "cooperate"),
             "contests": sum(1 for r in self._tick_log if r["social_act"] == "contest"),
             "social_energy_moved": sum(r["social_energy"] for r in self._tick_log),
+            "total_nested": sum(r.get("nested", 0.0) for r in self._tick_log),
+            "total_drawn": sum(r.get("drawn", 0.0) for r in self._tick_log),
+            "nests_built": sum(r.get("seeded", 0) for r in self._tick_log),
+            "lessons": sum(1 for r in self._tick_log if r.get("taught_episodes", 0) > 0),
+            "episodes_taught": sum(r.get("taught_episodes", 0) for r in self._tick_log),
+            "predations": sum(1 for r in self._tick_log
+                              if r.get("predation_energy", 0.0) > 0.0),
+            "predation_energy_moved": sum(r.get("predation_energy", 0.0)
+                                          for r in self._tick_log),
+            "defenses": sum(1 for r in self._tick_log if r.get("defended", False)),
+            "defend_energy_moved": sum(r.get("defend_energy", 0.0)
+                                       for r in self._tick_log),
         }
