@@ -26,26 +26,22 @@ describe('Models page', () => {
   it('displays model list from API', () => {
     cy.visit('/models')
     cy.wait('@modelsHf')
-    cy.contains('GPT-2').should('be.visible')
-    cy.contains('GPT-2 Medium').should('be.visible')
+    cy.contains('GPT-2').scrollIntoView().should('be.visible')
+    cy.contains('GPT-2 Medium').scrollIntoView().should('be.visible')
   })
 
   it('shows loaded model indicator', () => {
     cy.visit('/models')
     cy.wait('@modelsHf')
-    cy.contains('GPT-2').should('be.visible')
-    cy.get('body').then(($body) => {
-      const text = $body.text()
-      expect(text).to.satisfy((t: string) => t.includes('Loaded') || t.includes('loaded') || t.includes('Active'))
-    })
+    cy.contains('GPT-2').scrollIntoView().should('be.visible')
+    cy.contains('Loaded').scrollIntoView().should('be.visible')
   })
 
   it('shows model sizes', () => {
     cy.visit('/models')
     cy.wait('@modelsHf')
-    cy.get('body').then(($body) => {
-      const text = $body.text()
-      expect(text).to.satisfy((t: string) => t.includes('GB') || t.includes('0.5') || t.includes('124M'))
-    })
+    cy.contains('GPT-2 Medium').scrollIntoView().should('be.visible')
+    cy.contains('0.5 GB').should('be.visible')
+    cy.contains('1.5 GB').should('be.visible')
   })
 })

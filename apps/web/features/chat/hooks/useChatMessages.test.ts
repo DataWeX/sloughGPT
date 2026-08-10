@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest'
 import { chatDB } from '@/lib/db'
+import { sessionController } from '@/lib/session-controller'
 
 // ── Set up hoisted mocks first ──────────────────────────────────────────────
 const { mockGetErrorInfo, mockGenerateSessionId, mockGetOrCreateUserId, mockStreamChatResponse } = vi.hoisted(() => ({
@@ -39,7 +40,7 @@ vi.mock('@/lib/multimodal-controller', () => ({
   multimodalController: { trainImage: vi.fn().mockResolvedValue({ caption: 'test' }), getCapabilities: vi.fn().mockResolvedValue({}), getTrainingReport: vi.fn().mockResolvedValue({}) },
 }))
 
-vi.mock('@/lib/error-store', () => ({ useErrorStore: { getState: vi.fn(() => ({ addError: vi.fn() })) } }))
+vi.mock('@/lib/error-store', () => ({ useErrorStore: { getState: vi.fn(() => ({ addError: vi.fn() })) }, addGlobalError: vi.fn() }))
 
 vi.mock('@/lib/dev-log', () => ({
   devDebug: vi.fn(),
@@ -69,7 +70,7 @@ function makeConfig(overrides = {}) {
 }
 
 describe('useChatMessages', () => {
-  const spies: ReturnType<typeof vi.spyOn>[] = []
+  const spies: MockInstance[] = []
 
   beforeEach(() => {
     mockGetErrorInfo.mockReturnValue(null)
@@ -79,6 +80,8 @@ describe('useChatMessages', () => {
     spies.push(vi.spyOn(db, 'getKV').mockResolvedValue(undefined))
     spies.push(vi.spyOn(db, 'setKV').mockResolvedValue(undefined))
     spies.push(vi.spyOn(db, 'getDraft').mockResolvedValue(''))
+    spies.push(vi.spyOn(db, 'loadSessions').mockResolvedValue([]))
+    spies.push(vi.spyOn(sessionController, 'list').mockResolvedValue([]))
   })
 
   afterEach(() => {

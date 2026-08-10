@@ -233,22 +233,67 @@ export default function FeedbackPage() {
         )}
 
         {tab === 'training' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Training Data</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {trainStats ? (
-                <KpiGrid>
-                  <StatCard label="Feedback Pairs" value={String(trainStats.feedback_pairs ?? 0)} />
-                  <StatCard label="Last Training" value={trainStats.last_training ? new Date(trainStats.last_training).toLocaleDateString() : 'Never'} />
-                  <StatCard label="Quality Score" value={trainStats.quality_score != null ? `${(trainStats.quality_score * 100).toFixed(1)}%` : '—'} />
-                </KpiGrid>
-              ) : (
-                <p className="text-sm text-muted-foreground">No training data available.</p>
-              )}
-            </CardContent>
-          </Card>
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Training Data</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {trainStats ? (
+                  <KpiGrid>
+                    <StatCard label="Feedback Pairs" value={String(trainStats.feedback_pairs ?? 0)} />
+                    <StatCard label="Last Training" value={trainStats.last_training ? new Date(trainStats.last_training).toLocaleDateString() : 'Never'} />
+                    <StatCard label="Quality Score" value={trainStats.quality_score != null ? `${(trainStats.quality_score * 100).toFixed(1)}%` : '—'} />
+                  </KpiGrid>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No training data available.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {workflow && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">Workflow Controls</CardTitle>
+                  <Button size="sm" variant="ghost" onClick={handleRefreshStats}>
+                    <IconRefresh className="h-4 w-4" />
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Status', value: workflow.running ? 'Running' : 'Stopped', color: workflow.running ? 'text-success' : 'text-muted-foreground' },
+                      { label: 'Workflow Runs', value: String(workflow.stats?.workflow_runs ?? 0) },
+                      { label: 'Aggregations', value: String(workflow.stats?.aggregations_performed ?? 0) },
+                      { label: 'Prunes', value: String(workflow.stats?.prunes_performed ?? 0) },
+                    ].map(s => (
+                      <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
+                        <div className="text-xs text-muted-foreground">{s.label}</div>
+                        <div className={`text-lg font-mono font-medium ${s.color ?? ''}`}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {workflow.stats?.feedback_recorded != null && (
+                    <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                      <span>Feedback recorded: {workflow.stats.feedback_recorded}</span>
+                      <span>Exports: {workflow.stats.exports_performed ?? 0}</span>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => feedbackController.triggerWorkflowAction('aggregate').then(() => { addToast('Aggregation triggered', 'success'); handleRefreshStats() }).catch(() => addToast('Aggregation failed', 'error'))}>
+                      Aggregate
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => feedbackController.triggerWorkflowAction('prune').then(() => { addToast('Prune triggered', 'success'); handleRefreshStats() }).catch(() => addToast('Prune failed', 'error'))}>
+                      Prune
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => feedbackController.triggerWorkflowAction('export').then(() => { addToast('Export triggered', 'success') }).catch(() => addToast('Export failed', 'error'))}>
+                      Export
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -9,23 +9,11 @@
 
 import { apiGet, apiPost } from './http-client'
 import { logger } from './dev-log'
+import type { ModelInfo } from './types'
 
 const _log = logger.child('model-controller')
 
-export interface ModelInfo {
-  id: string
-  name: string
-  type?: string
-  source?: string
-  description?: string
-  tags?: string[]
-  size_mb?: number
-  size_gb?: number
-  params?: string
-  cached?: boolean
-  loaded?: boolean
-  thumbnail?: string
-}
+export type { ModelInfo } from './types'
 
 export interface ModelLoadResponse {
   status: string

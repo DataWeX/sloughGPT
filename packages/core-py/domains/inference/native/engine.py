@@ -35,6 +35,29 @@ def _detect_model_type(config: dict) -> str:
     return "qwen2"
 
 
+def _hf_id_from_slnc_path(slnc_path: str) -> Optional[str]:
+    """Derive the HuggingFace model id from a .slnc path when possible.
+
+    Handles HuggingFace cache layouts of the form ``models--<org>--<name>``
+    (a segment starting with ``models--``) and maps the double-dash back to
+    ``<org>/<name>``. Returns None when no cache segment is present.
+
+    Args:
+        slnc_path: filesystem path to a .slnc file
+
+    Returns:
+        HuggingFace model id string, or None if not derivable
+    """
+    import os
+    parts = os.path.normpath(slnc_path).split(os.sep)
+    for part in parts:
+        if part.startswith("models--"):
+            slug = part[len("models--"):]
+            if "--" in slug:
+                return slug.replace("--", "/", 1)
+    return None
+
+
 def _format_chat_qwen(messages: List[Dict[str, str]], system: str = "") -> str:
     parts = []
     if system:
@@ -122,10 +145,61 @@ class NativeEngine:
         self._cache = None
         self._model_type = "qwen2"
         self._config = {}
+        self._tokenizer = None
+        self._stop_ids_cache = None
         self._loaded = False
 
+    def set_tokenizer(self, tokenizer) -> None:
+        """Attach a real tokenizer (e.g. MorphTokenizer) to the engine.
+
+        The tokenizer is used for prompt encoding, chat template rendering,
+        output decoding, and stop-token detection. Pass ``None`` to revert to
+        the ``get_tokenizer()`` fallback used by synthetic-weight tests.
+
+        Args:
+            tokenizer: object with ``encode``/``decode``/``vocab_size`` and
+                optionally ``apply_chat_template``/``chat_stop_ids``.
+
+        Returns:
+            None
+
+        Side effects:
+            - replaces the engine tokenizer
+            - invalidates the cached stop-token set
+        """
+        self._tokenizer = tokenizer
+        self._stop_ids_cache = None
+
+    def _resolve_tokenizer(self, hf_model_id=None, tokenizer=None):
+        """Resolve the effective tokenizer for a loaded model.
+
+        Priority: explicit ``tokenizer`` > explicit ``hf_model_id`` >
+        config ``_name_or_path`` > None (falls back to ``get_tokenizer()``
+        at tokenize time).
+
+        Args:
+            hf_model_id: HuggingFace model id, optional
+            tokenizer: prebuilt tokenizer object, optional
+
+        Returns:
+            tokenizer object or None
+        """
+        if tokenizer is not None:
+            return tokenizer
+        model_id = hf_model_id or self._config.get("_name_or_path")
+        if not model_id:
+            return None
+        try:
+            from domains.infrastructure.morph_tokenizer import MorphTokenizer
+            return MorphTokenizer.from_pretrained(model_id)
+        except Exception as exc:
+            logger.warning("could not load tokenizer for %s: %s", model_id, exc,
+                           extra={"tag": "MODEL"})
+            return None
+
     def load_from_slnc(self, slnc_tensors: dict, slnc_config: dict,
-                       seq_capacity: int = 2048) -> dict:
+                       seq_capacity: int = 2048,
+                       hf_model_id: str = None, tokenizer=None) -> dict:
         self._config = slnc_config
         self._model_type = _detect_model_type(slnc_config)
         n_layers = slnc_config.get("num_hidden_layers", 12)
@@ -163,9 +237,54 @@ class NativeEngine:
 
         self._cache = B.load_lib()._KVCache()
         self._lib.transformer_kv_cache_init(self._cache, cfg, seq_capacity)
+
+        self._tokenizer = self._resolve_tokenizer(hf_model_id, tokenizer)
+        if self._tokenizer is not None:
+            tv = int(getattr(self._tokenizer, "vocab_size", 0) or 0)
+            if tv > vocab:
+                logger.warning(
+                    "tokenizer vocab %d exceeds model vocab %d; tokens above %d "
+                    "will be masked", tv, vocab, vocab, extra={"tag": "MODEL"})
+            elif 0 < tv < vocab:
+                logger.info("tokenizer vocab %d < model vocab %d; masking %d ids",
+                            tv, vocab, vocab - tv, extra={"tag": "MODEL"})
+        self._stop_ids_cache = None
         self._loaded = True
 
         return {"model_type": self._model_type, "layers": n_layers, "hidden": hidden}
+
+    @classmethod
+    def from_slnc_file(cls, slnc_path: str, hf_model_id: str = None,
+                       seq_capacity: int = 2048) -> "NativeEngine":
+        """Build an engine directly from a .slnc file on disk.
+
+        Loads weights through the mmap-based ``SLNCParser`` and auto-attaches
+        the matching tokenizer (explicit ``hf_model_id``, else the model
+        ``_name_or_path`` from the config block).
+
+        Args:
+            slnc_path: path to a compiled .slnc weight file
+            hf_model_id: HuggingFace model id for tokenizer resolution, optional
+            seq_capacity: KV cache sequence capacity
+
+        Returns:
+            a loaded ``NativeEngine``
+
+        Side effects:
+            - mmap-allocates the weight file and copies it into the C weight block
+        """
+        from domains.infrastructure.slnc.parser import SLNCParser
+
+        parser = SLNCParser(slnc_path)
+        try:
+            config = parser.config
+            tensors = parser.get_weights_dict()
+            engine = cls()
+            engine.load_from_slnc(tensors, config, seq_capacity=seq_capacity,
+                                  hf_model_id=hf_model_id or _hf_id_from_slnc_path(slnc_path))
+            return engine
+        finally:
+            parser.close()
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 128,
                  temperature: float = 0.7, top_p: float = 0.9, top_k: int = 50,
@@ -173,7 +292,7 @@ class NativeEngine:
         if not self._loaded:
             raise RuntimeError("No model loaded")
 
-        prompt = format_chat(messages, self._model_type, system)
+        prompt = self._build_prompt(messages, system)
         logger.info("prompt: %r", prompt[:200])
 
         tokens = self._tokenize_simple(prompt)
@@ -193,11 +312,12 @@ class NativeEngine:
         t_prompt = time.perf_counter() - t0
         logger.info("prompt eval: %.3fs (%d tokens)", t_prompt, len(tokens))
 
+        stop_ids = self._stop_ids()
         generated = []
         t0 = time.perf_counter()
         for step in range(max_tokens):
-            tok = sample_token(logits_buf, temperature, top_p, top_k, rng)
-            if tok == self._config.get("eos_token_id", 2):
+            tok = self._sample(logits_buf, temperature, top_p, top_k, rng)
+            if tok in stop_ids:
                 break
             generated.append(tok)
             self._lib.transformer_forward_step(
@@ -218,7 +338,7 @@ class NativeEngine:
         if not self._loaded:
             raise RuntimeError("No model loaded")
 
-        prompt = format_chat(messages, self._model_type, system)
+        prompt = self._build_prompt(messages, system)
         tokens = self._tokenize_simple(prompt)
         self._lib.transformer_kv_cache_reset(self._cache)
 
@@ -231,9 +351,10 @@ class NativeEngine:
                 logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
             )
 
+        stop_ids = self._stop_ids()
         for step in range(max_tokens):
-            tok = sample_token(logits_buf, temperature, top_p, top_k, rng)
-            if tok == self._config.get("eos_token_id", 2):
+            tok = self._sample(logits_buf, temperature, top_p, top_k, rng)
+            if tok in stop_ids:
                 break
             piece = self._detokenize_simple([tok])
             yield piece
@@ -242,7 +363,83 @@ class NativeEngine:
                 logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
             )
 
+    def _build_prompt(self, messages: List[Dict[str, str]], system: str = "") -> str:
+        """Render a chat prompt, preferring the model's real chat template.
+
+        Args:
+            messages: conversation turns
+            system: system prompt (prepended as a system message)
+
+        Returns:
+            prompt string ready for tokenization
+        """
+        tok = self._tokenizer
+        if tok is not None and hasattr(tok, "apply_chat_template"):
+            msgs = list(messages)
+            if system:
+                msgs = [{"role": "system", "content": system}] + msgs
+            try:
+                rendered = tok.apply_chat_template(msgs)
+                if rendered:
+                    return rendered
+            except Exception as exc:
+                logger.warning("apply_chat_template failed, falling back: %s",
+                               exc, extra={"tag": "MODEL"})
+        return format_chat(messages, self._model_type, system)
+
+    def _stop_ids(self) -> set:
+        """Resolve the generation stop-token set.
+
+        Uses the tokenizer's ``chat_stop_ids()`` when available, else the
+        model config ``eos_token_id`` (default 2).
+
+        Returns:
+            set of integer token ids that end generation
+        """
+        if self._stop_ids_cache is not None:
+            return self._stop_ids_cache
+        tok = self._tokenizer
+        if tok is not None and hasattr(tok, "chat_stop_ids"):
+            try:
+                ids = tok.chat_stop_ids()
+                if ids:
+                    self._stop_ids_cache = {int(i) for i in ids}
+                    return self._stop_ids_cache
+            except Exception:
+                pass
+        eos = self._config.get("eos_token_id", 2)
+        self._stop_ids_cache = {int(eos)}
+        return self._stop_ids_cache
+
+    def _sample(self, logits: np.ndarray, temperature: float, top_p: float,
+                top_k: int, rng) -> int:
+        """Sample a token, masking ids beyond the tokenizer vocab.
+
+        Args:
+            logits: raw model logits over the full model vocab
+            temperature: sampling temperature
+            top_p: nucleus mass
+            top_k: top-k cutoff
+            rng: numpy Generator
+
+        Returns:
+            sampled token id
+        """
+        tv = getattr(self._tokenizer, "vocab_size", 0)
+        if tv and tv < len(logits):
+            logits = np.asarray(logits).copy()
+            logits[tv:] = -1e9
+        return sample_token(logits, temperature, top_p, top_k, rng)
+
     def _tokenize_simple(self, text: str) -> list:
+        tok = self._tokenizer
+        if tok is not None:
+            try:
+                ids = tok.encode(text)
+                return ids if isinstance(ids, list) else list(ids)
+            except Exception as exc:
+                logger.warning("tokenizer encode failed, falling back: %s",
+                               exc, extra={"tag": "MODEL"})
         try:
             from ..tokenizer import get_tokenizer
             tok = get_tokenizer()
@@ -252,6 +449,13 @@ class NativeEngine:
             return list(text.encode("utf-8", errors="replace"))
 
     def _detokenize_simple(self, tokens: list) -> str:
+        tok = self._tokenizer
+        if tok is not None:
+            try:
+                return tok.decode(tokens)
+            except Exception as exc:
+                logger.warning("tokenizer decode failed, falling back: %s",
+                               exc, extra={"tag": "MODEL"})
         try:
             from ..tokenizer import get_tokenizer
             tok = get_tokenizer()

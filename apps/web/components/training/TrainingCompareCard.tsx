@@ -78,17 +78,17 @@ export function TrainingCompareCard({ checkpoints, onLoad }: TrainingCompareCard
     [checkpoints]
   )
 
-  if (sorted.length < 2) return null
-
   const a = sorted[Math.min(idxA, sorted.length - 1)]
   const b = sorted[Math.min(idxB, sorted.length - 1)]
 
   const allTraitKeys = useMemo(() => {
     const keys = new Set<string>()
-    if (a.traits) Object.keys(a.traits).forEach(k => keys.add(k))
-    if (b.traits) Object.keys(b.traits).forEach(k => keys.add(k))
+    if (a?.traits) Object.keys(a.traits).forEach(k => keys.add(k))
+    if (b?.traits) Object.keys(b.traits).forEach(k => keys.add(k))
     return [...keys]
   }, [a, b])
+
+  if (sorted.length < 2) return null
 
   return (
     <Card data-testid="training-compare-card">

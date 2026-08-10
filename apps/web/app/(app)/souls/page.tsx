@@ -250,7 +250,11 @@ export default function SoulsPage() {
             </CardHeader>
             <CardContent>
               {checkpoints.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No checkpoints found. Train a model first.</p>
+                <div className="text-center py-6 space-y-2">
+                  <p className="text-sm text-muted-foreground">No checkpoints found.</p>
+                  <a href="/training" className="text-sm text-primary hover:underline">Train a model</a>
+                  <span className="text-sm text-muted-foreground"> to create checkpoints.</span>
+                </div>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {checkpoints.map(cp => (

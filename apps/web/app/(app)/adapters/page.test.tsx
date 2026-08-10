@@ -104,8 +104,8 @@ describe('AdaptersPage', () => {
     render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
     expect(screen.getAllByText('user-2').length).toBeGreaterThan(0)
-    expect(screen.getByText(/5 feedback · rank 8/)).toBeTruthy()
-    expect(screen.getByText(/3 feedback · rank 8/)).toBeTruthy()
+    expect(screen.getAllByText('5 feedback').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('rank 8').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Adapters (2)')).toBeTruthy()
   })
 
@@ -185,21 +185,25 @@ describe('AdaptersPage', () => {
   })
 
   it('resets an adapter and refetches', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mockReset.mockResolvedValue({ status: 'ok', user_id: 'user-1', feedback_count: 0 })
     const { container } = render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
     const delBtns = container.querySelectorAll('button.text-destructive')
     await act(async () => { (delBtns[0] as HTMLElement).click() })
     await waitFor(() => { expect(mockReset).toHaveBeenCalledWith('user-1') })
+    vi.mocked(window.confirm).mockRestore()
   })
 
   it('shows error toast when reset fails', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mockReset.mockRejectedValue(new Error('boom'))
     const { container } = render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
     const delBtns = container.querySelectorAll('button.text-destructive')
     await act(async () => { (delBtns[0] as HTMLElement).click() })
     await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to reset adapter', 'error') })
+    vi.mocked(window.confirm).mockRestore()
   })
 
   it('runs LoRA eval and shows eval history', async () => {
@@ -227,7 +231,7 @@ describe('AdaptersPage', () => {
     render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getByText('Adapter Stats')).toBeTruthy() })
     expect(screen.queryByText('best_aggregated.npz')).toBeNull()
-    await act(async () => { screen.getByTestId('icon-refresh').click() })
+    await act(async () => { screen.getAllByTestId('icon-refresh')[0].click() })
     await waitFor(() => { expect(screen.getByText('best_aggregated.npz')).toBeTruthy() })
   })
 })

@@ -7,58 +7,9 @@
  */
 
 import { apiGet, apiPost } from './http-client'
+import type { WorkflowStatus, FeedbackStats, TrainingStats } from './types'
 
-export interface FeedbackStats {
-  db_stats: {
-    conversations: number
-    messages: number
-    feedback_total: number
-    thumbs_up: number
-    thumbs_down: number
-    ratio: number
-  }
-  current_weights: {
-    temperature: number
-    repetition_penalty: number
-  }
-  history_length: number
-}
-
-export interface WorkflowConfig {
-  aggregate_interval_minutes: number
-  prune_interval_minutes: number
-  export_interval_hours: number
-  health_check_interval_seconds: number
-  auto_aggregate_threshold: number
-  auto_prune_threshold: number
-  min_feedback_for_aggregation: number
-}
-
-export interface WorkflowStatus {
-  running: boolean
-  stats: {
-    workflow_runs: number
-    aggregations_performed: number
-    prunes_performed: number
-    exports_performed: number
-    feedback_recorded: number
-    start_time: number | null
-  }
-  config: WorkflowConfig
-  last_runs: {
-    aggregate: number
-    prune: number
-    export: number
-    health_check: number
-  }
-  systems: Record<string, unknown>
-}
-
-export interface TrainingStats {
-  feedback_pairs: number
-  last_training: string | null
-  quality_score: number | null
-}
+export type { WorkflowStatus, WorkflowConfig, WorkflowStats, FeedbackStats, TrainingStats } from './types'
 
 export const feedbackController = {
   async recordFeedbackWorkflow(params: {

@@ -87,16 +87,16 @@ export default function WorkflowPage() {
             value={status?.running ? 'Running' : 'Stopped'}
           />
           <StatCard
-            label="Feedback Records"
-            value={String(status?.stats?.feedback_records ?? 0)}
+            label="Feedback Recorded"
+            value={String(status?.stats?.feedback_recorded ?? 0)}
           />
           <StatCard
-            label="Adapters"
-            value={String(status?.stats?.adapters_count ?? 0)}
+            label="Auto-train Steps"
+            value={String(status?.stats?.auto_train_steps ?? 0)}
           />
           <StatCard
-            label="Last Aggregate"
-            value={status?.stats?.last_aggregate ? new Date(status.stats.last_aggregate).toLocaleDateString() : 'Never'}
+            label="Workflow Runs"
+            value={String(status?.stats?.workflow_runs ?? 0)}
           />
         </KpiGrid>
 
@@ -168,25 +168,21 @@ export default function WorkflowPage() {
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Feedback Records</div>
-                  <div className="text-lg font-mono font-medium">{status.stats.feedback_records ?? 0}</div>
+                  <div className="text-xs text-muted-foreground">Feedback Recorded</div>
+                  <div className="text-lg font-mono font-medium">{status.stats.feedback_recorded ?? 0}</div>
                 </div>
                 <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Adapters</div>
-                  <div className="text-lg font-mono font-medium">{status.stats.adapters_count ?? 0}</div>
+                  <div className="text-xs text-muted-foreground">Auto-train Steps</div>
+                  <div className="text-lg font-mono font-medium">{status.stats.auto_train_steps ?? 0}</div>
                 </div>
-                {status.stats.last_aggregate && (
-                  <div className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground">Last Aggregate</div>
-                    <div className="text-xs font-mono">{new Date(status.stats.last_aggregate).toLocaleString()}</div>
-                  </div>
-                )}
-                {status.stats.last_prune && (
-                  <div className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground">Last Prune</div>
-                    <div className="text-xs font-mono">{new Date(status.stats.last_prune).toLocaleString()}</div>
-                  </div>
-                )}
+                <div className="rounded-md bg-muted/30 p-3 text-center">
+                  <div className="text-xs text-muted-foreground">Workflow Runs</div>
+                  <div className="text-lg font-mono font-medium">{status.stats.workflow_runs ?? 0}</div>
+                </div>
+                <div className="rounded-md bg-muted/30 p-3 text-center">
+                  <div className="text-xs text-muted-foreground">DPO Train Steps</div>
+                  <div className="text-lg font-mono font-medium">{status.stats.dpo_train_steps ?? 0}</div>
+                </div>
               </div>
             </CardContent>
           </Card>

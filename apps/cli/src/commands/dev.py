@@ -125,10 +125,11 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
                 clean = line.rstrip("\n\r")
                 lines.append(clean)
                 if echo:
-                    # Add timestamp to all output
-                    ts = datetime.now().strftime("%H:%M:%S")
-                    # Clear any progress bar on current line, then print log
-                    sys.stdout.write(f"\r\033[2K\033[90m│\033[0m {ts} {clean}\n")
+                    # Skip adding timestamp if line already has one from the server
+                    import re
+                    has_ts = re.match(r"^\d{2}:\d{2}:\d{2}", clean)
+                    ts_prefix = "" if has_ts else f"{datetime.now().strftime('%H:%M:%S')} "
+                    sys.stdout.write(f"\r\033[2K\033[90m│\033[0m {ts_prefix}{clean}\n")
                     sys.stdout.flush()
             else:
                 break

@@ -160,7 +160,7 @@ def _register_defaults():
     FeatureFlags.register(
         "native_c_inference",
         description="C transformer forward pass using Apple Accelerate BLAS",
-        status=FlagStatus.DISABLED,  # not yet wired into provider chain
+        status=FlagStatus.DISABLED,  # opt-in: use setup_providers(native_slnc_path=...) instead
     )
     FeatureFlags.register(
         "cloud_vector_store",
@@ -270,6 +270,16 @@ def _register_defaults():
     FeatureFlags.register(
         "slonet_provider_tests",
         description="Tests for SloNetChatProvider features",
+        status=FlagStatus.ENABLED,
+    )
+    FeatureFlags.register(
+        "slonet_provider_wave_i",
+        description="Wave I: slonet_provider 100% coverage, chat_stream error propagation",
+        status=FlagStatus.ENABLED,
+    )
+    FeatureFlags.register(
+        "slonet_wave_f",
+        description="Wave F: from_slnc (plain + quantized), chat/chat_stream coverage",
         status=FlagStatus.ENABLED,
     )
 

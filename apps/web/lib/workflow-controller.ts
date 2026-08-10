@@ -1,30 +1,12 @@
 import { apiGet, apiPost } from './http-client'
+import type { WorkflowStatus } from './types'
 
-export interface WorkflowConfig {
-  aggregate_interval_minutes: number
-  prune_interval_minutes: number
-  export_interval_hours: number
-  health_check_interval_seconds: number
-}
-
-export interface WorkflowStats {
-  feedback_records: number
-  adapters_count: number
-  last_aggregate?: string
-  last_prune?: string
-  last_export?: string
-}
-
-export interface WorkflowStatus {
-  running: boolean
-  config?: WorkflowConfig
-  stats?: WorkflowStats
-}
+export type { WorkflowStatus, WorkflowConfig, WorkflowStats, WorkflowLastRuns } from './types'
 
 export const workflowController = {
   async status(): Promise<WorkflowStatus> {
     const data = await apiGet<WorkflowStatus>('/workflow/status')
-    return data ?? { running: false }
+    return data ?? { running: false } as WorkflowStatus
   },
 
   async start(): Promise<{ status: string }> {

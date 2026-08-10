@@ -76,9 +76,9 @@ export const agentsController = {
     return apiGet<AgentRun>(`/agents/runs/${encodeURIComponent(runId)}`)
   },
 
-  async orchestrate(goal: string, context: string, callbacks: OrchestrateCallbacks, signal?: AbortSignal): Promise<void> {
+  async orchestrate(goal: string, context: string, callbacks: OrchestrateCallbacks, signal?: AbortSignal, agentIds?: string[]): Promise<void> {
     try {
-      for await (const event of streamSSE('/agents/orchestrate', { body: { goal, context }, signal })) {
+      for await (const event of streamSSE('/agents/orchestrate', { body: { goal, context, agent_ids: agentIds ?? [] }, signal })) {
         if (event.status === 'error') {
           callbacks.onError(event.message || (event.data?.error as string) || 'Orchestration failed')
           return

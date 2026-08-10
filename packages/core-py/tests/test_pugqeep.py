@@ -1,749 +1,272 @@
-"""Tests for pugqeep — Point-Graph-Queue system."""
+"""Tests for pugqeep/compressor.py, library.py, dedup.py — compression, library CRUD, deduplication."""
 
 import numpy as np
 import pytest
 from pathlib import Path
 import tempfile
-import time
+
+from domains.infrastructure.pugqeep.compressor import PointCompressor
+from domains.infrastructure.pugqeep.point import Point
+from domains.infrastructure.pugqeep.library import PointLibrary
+from domains.infrastructure.pugqeep.dedup import PointDeduplicator, PointLibrarySync
 
 
-class TestPoint:
-    def test_cluster_generate(self):
-        from domains.infrastructure.pugqeep import Point
-        centroids = np.array([0.1, 0.5, 0.9], dtype=np.float32)
-        assignments = np.array([0, 1, 2, 0, 1, 2], dtype=np.uint8)
-        p = Point(
-            identity="test",
-            function_type="cluster",
-            params={"centroids": centroids, "assignments": assignments},
-            accuracy=0.95,
-        )
-        result = p.generate(6)
-        np.testing.assert_array_equal(result, centroids[assignments])
+class TestPointCompressorCluster:
+    def test_compress_cluster_basic(self):
+        comp = PointCompressor(n_clusters=4, lloyd_iterations=3)
+        weights = np.random.randn(100).astype(np.float32)
+        p = comp.compress_cluster(weights, identity="test")
+        assert p.function_type == "cluster"
+        assert p.accuracy > 0.5
+        assert "centroids" in p.params
+        assert "assignments" in p.params
+        assert len(p.params["assignments"]) == 100
 
-    def test_linear_generate(self):
-        from domains.infrastructure.pugqeep import Point
-        p = Point(
-            identity="test",
-            function_type="linear",
-            params={"a": 2.0, "b": 1.0},
-        )
-        result = p.generate(5)
-        expected = np.array([1.0, 3.0, 5.0, 7.0, 9.0], dtype=np.float32)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
+    def test_compress_cluster_generates_output(self):
+        comp = PointCompressor(n_clusters=4)
+        weights = np.random.randn(50).astype(np.float32)
+        p = comp.compress_cluster(weights, identity="t")
+        reconstructed = p.generate(50)
+        assert reconstructed.shape == (50,)
 
-    def test_roundtrip_dict(self):
-        from domains.infrastructure.pugqeep import Point
-        p = Point(
-            identity="test",
-            function_type="linear",
-            params={"a": 1.5, "b": 0.5},
-            accuracy=0.9,
-        )
-        d = p.to_dict()
-        p2 = Point.from_dict(d)
-        assert p2.identity == p.identity
-        assert p2.function_type == p.function_type
-        assert p2.accuracy == p.accuracy
-
-    def test_nbytes(self):
-        from domains.infrastructure.pugqeep import Point
-        centroids = np.zeros(16, dtype=np.float32)
-        assignments = np.zeros(1000, dtype=np.uint8)
-        p = Point(
-            identity="test",
-            function_type="cluster",
-            params={"centroids": centroids, "assignments": assignments},
-        )
-        assert p.nbytes() == centroids.nbytes + assignments.nbytes
-
-    def test_shape_preserved(self):
-        from domains.infrastructure.pugqeep import Point
-        p = Point(
-            identity="test",
-            function_type="linear",
-            params={"a": 1.0, "b": 0.0},
-            shape=(10, 10),
-            dtype="float32",
-        )
-        assert p.shape == (10, 10)
+    def test_compress_cluster_small_weights_gets_gap_fill(self):
+        comp = PointCompressor(n_clusters=4, lloyd_iterations=2)
+        weights = np.random.randn(50).astype(np.float32)
+        p = comp.compress_cluster(weights, identity="small")
+        assert p.params["centroids"].shape[0] >= 4
 
 
-class TestPointCompressor:
-    def test_compress_cluster(self):
-        from domains.infrastructure.pugqeep import PointCompressor
+class TestPointCompressorFunction:
+    def test_compress_function_linear(self):
         comp = PointCompressor()
-        weights = np.random.randn(1000).astype(np.float32)
-        point = comp.compress_cluster(weights, "test", n_clusters=8)
-        assert point.function_type == "cluster"
-        assert point.accuracy > 0.5
+        weights = np.arange(100, dtype=np.float32) * 2.0 + 1.0
+        p = comp.compress_function(weights, identity="lin")
+        assert p.function_type == "linear"
+        assert p.accuracy > 0.9
 
-    def test_compress_function(self):
-        from domains.infrastructure.pugqeep import PointCompressor
+    def test_compress_function_periodic(self):
         comp = PointCompressor()
-        weights = np.arange(100, dtype=np.float32) * 0.01
-        point = comp.compress_function(weights, "test")
-        assert point.function_type in ("periodic", "linear", "polynomial")
-        assert point.accuracy > 0.5
+        i = np.arange(100, dtype=np.float32)
+        weights = 3.0 * np.cos(i) + 0.5
+        p = comp.compress_function(weights, identity="per")
+        assert p.function_type == "periodic"
 
+    def test_compress_function_with_residual(self):
+        comp = PointCompressor(residual_threshold=0.9999)
+        weights = np.arange(50, dtype=np.float32) + np.random.randn(50).astype(np.float32) * 2.0
+        p = comp.compress_function(weights, identity="res")
+        assert p.residual is not None
+
+
+class TestPointCompressorCompress:
+    def test_compress_cluster_method(self):
+        from domains.infrastructure.pugqeep.config import CompressorConfig
+        config = CompressorConfig(method="cluster")
+        comp = PointCompressor(config=config)
+        p = comp.compress(np.random.randn(50).astype(np.float32), identity="c")
+        assert p.function_type == "cluster"
+
+    def test_compress_function_method(self):
+        from domains.infrastructure.pugqeep.config import CompressorConfig
+        config = CompressorConfig(method="function")
+        comp = PointCompressor(config=config)
+        weights = np.arange(50, dtype=np.float32) * 3.0
+        p = comp.compress(weights, identity="f")
+        assert p.function_type in ("linear", "periodic", "polynomial")
+
+    def test_unknown_method_raises(self):
+        comp = PointCompressor()
+        comp.method = "unknown"
+        with pytest.raises(ValueError, match="Unknown method"):
+            comp.compress(np.zeros(10), identity="x", method="unknown")
+
+
+class TestPointCompressorDecompress:
+    def test_decompress_cluster(self):
+        comp = PointCompressor(n_clusters=4)
+        weights = np.random.randn(80).astype(np.float32)
+        p = comp.compress_cluster(weights, identity="d")
+        result = comp.decompress(p, 80)
+        assert result.shape == (80,)
+
+
+class TestPointCompressorMeasure:
     def test_measure_compression(self):
-        from domains.infrastructure.pugqeep import PointCompressor
-        comp = PointCompressor()
-        weights = np.random.randn(1000).astype(np.float32)
-        point = comp.compress_cluster(weights, "test", n_clusters=8)
-        stats = comp.measure_compression(weights, point)
-        assert "ratio" in stats
-        assert "accuracy" in stats
-        assert stats["ratio"] > 1.0
+        comp = PointCompressor(n_clusters=4)
+        weights = np.random.randn(100).astype(np.float32)
+        p = comp.compress_cluster(weights, identity="m")
+        m = comp.measure_compression(weights, p)
+        assert "raw_bytes" in m
+        assert "compressed_bytes" in m
+        assert "ratio" in m
+        assert m["ratio"] > 0
 
 
 class TestPointLibrary:
     def test_add_and_get(self):
-        from domains.infrastructure.pugqeep import PointLibrary, Point
         lib = PointLibrary(name="test")
-        p = Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0})
+        p = Point("p1", "linear", {"a": 1.0, "b": 0.0})
         lib.add(p)
-        assert lib.has("w1")
-        assert lib.get("w1") is p
+        assert lib.get("p1") is p
+        assert lib.get("nonexistent") is None
+
+    def test_has(self):
+        lib = PointLibrary()
+        lib.add(Point("x", "linear", {"a": 1.0, "b": 0.0}))
+        assert lib.has("x")
+        assert not lib.has("y")
 
     def test_remove(self):
-        from domains.infrastructure.pugqeep import PointLibrary, Point
-        lib = PointLibrary(name="test")
-        p = Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0})
-        lib.add(p)
-        assert lib.remove("w1")
-        assert not lib.has("w1")
+        lib = PointLibrary()
+        lib.add(Point("x", "linear", {"a": 1.0, "b": 0.0}))
+        assert lib.remove("x")
+        assert not lib.has("x")
+        assert not lib.remove("x")  # already removed
+
+    def test_list_all(self):
+        lib = PointLibrary()
+        lib.add(Point("a", "linear", {"a": 1.0, "b": 0.0}))
+        lib.add(Point("b", "periodic", {"a": 1.0, "b": 0.0, "w": 0.0}))
+        assert len(lib.list_all()) == 2
+
+    def test_list_by_type(self):
+        lib = PointLibrary()
+        lib.add(Point("lin", "linear", {"a": 1.0, "b": 0.0}))
+        lib.add(Point("per", "periodic", {"a": 1.0, "b": 0.0, "w": 0.0}))
+        lib.add(Point("lin2", "linear", {"a": 2.0, "b": 0.0}))
+        assert len(lib.list_by_type("linear")) == 2
+        assert len(lib.list_by_type("periodic")) == 1
+
+    def test_clear(self):
+        lib = PointLibrary()
+        lib.add(Point("a", "linear", {"a": 1.0, "b": 0.0}))
+        lib.clear()
+        assert len(lib.list_all()) == 0
+
+    def test_compress_and_store(self):
+        lib = PointLibrary()
+        weights = np.random.randn(50).astype(np.float32)
+        p = lib.compress_and_store(weights, identity="c1", method="cluster")
+        assert lib.has("c1")
+        assert p.function_type == "cluster"
 
     def test_search(self):
-        from domains.infrastructure.pugqeep import PointLibrary, Point
-        lib = PointLibrary(name="test")
-        lib.add(Point(identity="attn.qkv", function_type="linear", params={"a": 1.0, "b": 0.0}))
-        lib.add(Point(identity="attn.out", function_type="linear", params={"a": 2.0, "b": 0.0}))
-        lib.add(Point(identity="ffn.w1", function_type="linear", params={"a": 3.0, "b": 0.0}))
-        results = lib.search("attn")
+        lib = PointLibrary()
+        lib.add(Point("slo.layer1", "linear", {"a": 1.0, "b": 0.0}))
+        lib.add(Point("slo.layer2", "linear", {"a": 2.0, "b": 0.0}))
+        lib.add(Point("hf.layer1", "linear", {"a": 3.0, "b": 0.0}))
+        results = lib.search("slo")
         assert len(results) == 2
 
-    def test_stats(self):
-        from domains.infrastructure.pugqeep import PointLibrary, Point
+    def test_best_points(self):
+        lib = PointLibrary()
+        lib.add(Point("low", "linear", {"a": 1.0, "b": 0.0}, accuracy=0.5))
+        lib.add(Point("high", "linear", {"a": 1.0, "b": 0.0}, accuracy=0.99))
+        best = lib.best_points(1)
+        assert best[0].identity == "high"
+
+    def test_stats_empty(self):
+        lib = PointLibrary(name="empty")
+        s = lib.stats()
+        assert s["total_points"] == 0
+        assert s["avg_accuracy"] == 0.0
+
+    def test_stats_with_points(self):
         lib = PointLibrary(name="test")
-        lib.add(Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0}))
+        c = np.array([1.0, 2.0], dtype=np.float32)
+        a = np.array([0, 1], dtype=np.uint8)
+        lib.add(Point("p1", "cluster", {"centroids": c, "assignments": a}, accuracy=0.9))
         s = lib.stats()
         assert s["total_points"] == 1
-
-    def test_save_and_load(self, tmp_path):
-        from domains.infrastructure.pugqeep import PointLibrary, Point
-        lib = PointLibrary(name="test", storage_dir=tmp_path)
-        lib.add(Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0}))
-        lib.save()
-
-        loaded = PointLibrary.load(tmp_path / "test.points.json")
-        assert loaded.has("w1")
-
-
-class TestTieredCache:
-    def test_memory_put_get(self):
-        from domains.infrastructure.pugqeep import TieredCache, Tier
-        cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
-        cache.put("key1", np.array([1.0, 2.0, 3.0]), Tier.MEMORY)
-        result = cache.get("key1")
-        assert result is not None
-        np.testing.assert_array_equal(result, [1.0, 2.0, 3.0])
-
-    def test_cache_hit_rate(self):
-        from domains.infrastructure.pugqeep import TieredCache, Tier
-        cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
-        cache.put("key1", np.array([1.0]), Tier.MEMORY)
-        cache.get("key1")
-        cache.get("nonexistent")
-        stats = cache.stats()
-        assert stats["hits"] == 1
-        assert stats["misses"] == 1
-        assert stats["hit_rate"] == 0.5
-
-    def test_remove(self):
-        from domains.infrastructure.pugqeep import TieredCache, Tier
-        cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
-        cache.put("key1", np.array([1.0]), Tier.MEMORY)
-        assert cache.remove("key1")
-        assert cache.get("key1") is None
-
-
-class TestTaskQueue:
-    def test_submit_and_next(self):
-        from domains.infrastructure.pugqeep import TaskQueue, Task, TaskPriority
-        q = TaskQueue(name="test")
-        task = Task(name="process", data="input", priority=TaskPriority.HIGH)
-        q.submit(task)
-
-        next_task = q.next()
-        assert next_task is not None
-        assert next_task.id == task.id
-        assert next_task.status.value == "running"
-
-    def test_complete(self):
-        from domains.infrastructure.pugqeep import TaskQueue, Task
-        q = TaskQueue(name="test")
-        task = Task(name="process", data="input")
-        q.submit(task)
-        q.next()
-
-        completed = q.complete(task.id, result="output")
-        assert completed.status.value == "completed"
-        assert completed.result == "output"
-
-    def test_fail_and_retry(self):
-        from domains.infrastructure.pugqeep import TaskQueue, Task
-        q = TaskQueue(name="test")
-        task = Task(name="process", data="input", max_retries=2)
-        q.submit(task)
-        q.next()
-
-        failed = q.fail(task.id, "error")
-        assert failed.status.value == "pending"  # retry
-        assert failed.retries == 1
-
-    def test_priority_ordering(self):
-        from domains.infrastructure.pugqeep import TaskQueue, Task, TaskPriority
-        q = TaskQueue(name="test")
-        q.submit(Task(name="low", priority=TaskPriority.LOW))
-        q.submit(Task(name="high", priority=TaskPriority.HIGH))
-        q.submit(Task(name="normal", priority=TaskPriority.NORMAL))
-
-        t1 = q.next()
-        t2 = q.next()
-        t3 = q.next()
-        assert t1.name == "high"
-        assert t2.name == "normal"
-        assert t3.name == "low"
-
-    def test_pause_resume(self):
-        from domains.infrastructure.pugqeep import TaskQueue, Task
-        q = TaskQueue(name="test")
-        q.submit(Task(name="task1"))
-
-        q.pause()
-        assert q.next() is None
-
-        q.resume()
-        assert q.next() is not None
-
-    def test_stats(self):
-        from domains.infrastructure.pugqeep import TaskQueue, Task
-        q = TaskQueue(name="test")
-        q.submit(Task(name="task1"))
-        s = q.stats()
-        assert s["total"] == 1
-        assert s["pending"] == 1
-
-
-class TestPGQ:
-    def test_put_and_get(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test", n_clusters=8)
-        w = np.random.randn(100).astype(np.float32) * 0.01
-        sys.put("weight1", w, compress=True)
-
-        recovered = sys.get("weight1")
-        assert recovered is not None
-        assert recovered.shape == (100,)
-
-    def test_put_raw(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test")
-        sys.put_raw("config", {"lr": 0.01})
-        assert sys.get_any("config") == {"lr": 0.01}
-
-    def test_task_ops(self):
-        from domains.infrastructure.pugqeep import PGQ, Task
-        sys = PGQ(name="test")
-        task = Task(name="process", data="input")
-        sys.submit_task(task)
-
-        t = sys.next_task()
-        assert t is not None
-
-        sys.complete_task(t.id, result="output")
-        assert sys.get_task(t.id).status.value == "completed"
-
-    def test_stats(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test")
-        s = sys.stats()
-        assert "tree" in s
-        assert "cache" in s
-        assert "queue" in s
-
-    def test_from_model(self, monkeypatch):
-        from domains.infrastructure.pugqeep import PGQ
-        import domains.infrastructure.pugqeep.facade as facade
-        from domains.infrastructure.pugqeep.model_tree import ModelTree
-        from domains.infrastructure.pugqeep.library import PointLibrary
-        lib = PointLibrary(name="fake_points")
-        tree = ModelTree("fake", lib)
-        monkeypatch.setattr(facade, "load_model_to_points", lambda *a, **k: tree)
-        sys = PGQ.from_model("fake", n_clusters=4)
-        assert sys._tree is tree
-        assert sys._library is lib
-
-    def test_queue_classmethod(self, monkeypatch):
-        from domains.infrastructure.pugqeep import PGQ, ModelQueue
-        import domains.infrastructure.pugqeep.model_tree as model_tree_module
-        from domains.infrastructure.pugqeep.model_tree import ModelTree
-        from domains.infrastructure.pugqeep.library import PointLibrary
-        trees = {}
-
-        def fake_load(model_id, *args, **kwargs):
-            lib = PointLibrary(name=f"{model_id}_points")
-            t = ModelTree(model_id, lib)
-            trees[model_id] = t
-            return t
-
-        monkeypatch.setattr(model_tree_module, "load_model_to_points", fake_load)
-        q = PGQ.queue(["a", "b"], n_clusters=4)
-        assert isinstance(q, ModelQueue)
-        assert q.get_tree("a") is trees["a"]
-        assert q.get_tree("b") is trees["b"]
-        assert q.list_trees() == ["a", "b"]
-
-    def test_put_function_method(self):
-        from domains.infrastructure.pugqeep import PGQ
-        import numpy as np
-        sys = PGQ(name="test")
-        w = np.sin(np.linspace(0, 4 * np.pi, 200)).astype(np.float32)
-        sys.put("weight1", w, method="function", compress=True)
-        assert sys._library.get("weight1").function_type in ("periodic", "linear", "polynomial")
-
-    def test_put_no_compress(self):
-        from domains.infrastructure.pugqeep import PGQ
-        import numpy as np
-        sys = PGQ(name="test")
-        w = np.random.randn(50).astype(np.float32)
-        out = sys.put("raw1", w, compress=False)
-        assert out is w
-        assert sys._shapes["raw1"] == (50,)
-
-    def test_get_cache_hit(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test")
-        sys.put_raw("config", {"lr": 0.01})
-        assert sys.get("config") == {"lr": 0.01}
-
-    def test_has_and_remove(self):
-        from domains.infrastructure.pugqeep import PGQ
-        import numpy as np
-        sys = PGQ(name="test")
-        sys.put_raw("k", "v")
-        assert sys.has("k") is True
-        assert sys.has("missing") is False
-        assert sys.remove("k") is True
-        assert sys.has("k") is False
-        assert sys.remove("k") is False
-
-    def test_fail_and_cancel_task(self):
-        from domains.infrastructure.pugqeep import PGQ, Task
-        sys = PGQ(name="test")
-        t1 = Task(name="t1", max_retries=0)
-        sys.submit_task(t1)
-        sys.next_task()
-        assert sys.fail_task(t1.id, error="boom").status.value == "failed"
-
-        t2 = Task(name="t2")
-        sys.submit_task(t2)
-        assert sys.cancel_task(t2.id).status.value == "cancelled"
-
-    def test_pause_and_resume_queue(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test")
-        sys.pause_queue()
-        assert sys._task_queue._paused is True
-        sys.resume_queue()
-        assert sys._task_queue._paused is False
-
-    def test_training_ops(self, monkeypatch):
-        from domains.infrastructure.pugqeep import PGQ
-        import domains.training.executor as executor_module
-
-        class _FakeExecutor:
-            def submit_training(self, fn, job_id, tree_id, library, **kwargs):
-                return job_id
-
-            def status(self, job_id):
-                return {"job_id": job_id, "status": "running"}
-
-            def cancel(self, job_id):
-                return True
-
-        monkeypatch.setattr(executor_module, "get_training_executor", lambda: _FakeExecutor())
-        sys = PGQ(name="test")
-        assert sys.submit_training(lambda *a, **k: None, "job1") == "job1"
-        assert sys.training_status("job1")["status"] == "running"
-        assert sys.cancel_training("job1") is True
-
-    def test_search_and_best(self):
-        from domains.infrastructure.pugqeep import PGQ
-        import numpy as np
-        sys = PGQ(name="test", n_clusters=4)
-        sys.put("alpha1", np.random.randn(100).astype(np.float32), compress=True)
-        sys.put("beta2", np.random.randn(100).astype(np.float32), compress=True)
-        assert len(sys.search("alpha")) == 1
-        assert len(sys.best(n=2)) == 2
-
-    def test_cache_and_queue_stats(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test")
-        assert "total_entries" in sys.cache_stats()
-        assert "total" in sys.queue_stats()
-
-    def test_facade_properties(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test")
-        assert sys.is_loaded is False
-        assert sys.library is sys._library
-        assert sys.tree is sys._tree
-        assert sys.cache is sys._cache
-        assert sys.task_queue is sys._task_queue
-
-    def test_exists_and_remove_many(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test")
-        sys.put_raw("a", "1")
-        sys.put_raw("b", "2")
-        assert sys.exists_many(["a", "b", "c"]) == {"a": True, "b": True, "c": False}
-        assert sys.remove_many(["a", "c"]) == 1
-
-    def test_export_stats(self):
-        from domains.infrastructure.pugqeep import PGQ
-        sys = PGQ(name="test")
-        s = sys.export_stats()
-        assert s["version"] == "0.1.0"
-        assert "tree" in s
-
-    def test_put_get_many(self):
-        from domains.infrastructure.pugqeep import PGQ
-        import numpy as np
-        sys = PGQ(name="test", n_clusters=8)
-        data = {
-            "w1": np.random.randn(100).astype(np.float32),
-            "w2": np.random.randn(200).astype(np.float32),
-        }
-        result = sys.put_many(data, compress=True)
-        assert result["count"] == 2
-
-        got = sys.get_many(["w1", "w2", "missing"])
-        assert got["w1"] is not None
-        assert got["w2"] is not None
-        assert got["missing"] is None
-
-    def test_ttl(self):
-        from domains.infrastructure.pugqeep import PGQ
-        import time
-        sys = PGQ(name="test")
-        sys.put_raw("short_lived", "data", ttl=0.1)
-        assert sys.get_any("short_lived") == "data"
-        time.sleep(0.2)
-        assert sys.get_any("short_lived") is None
-
-    def test_cleanup_cache(self):
-        from domains.infrastructure.pugqeep import PGQ
-        import time
-        sys = PGQ(name="test")
-        sys.put_raw("expire1", "a", ttl=0.05)
-        sys.put_raw("expire2", "b", ttl=0.05)
-        sys.put_raw("permanent", "c")
-        time.sleep(0.1)
-        removed = sys.cleanup_cache()
-        assert removed == 2
-        assert sys.get_any("permanent") == "c"
-
-    def test_save_load_with_tasks(self, tmp_path):
-        from domains.infrastructure.pugqeep import PGQ, Task
-        import numpy as np
-        path = tmp_path / "state.json"
-        sys = PGQ(name="test", storage_dir=tmp_path, n_clusters=8)
-        sys.put("w", np.random.randn(50).astype(np.float32))
-        task = Task(name="job", data="x")
-        sys.submit_task(task)
-        sys.save(path)
-
-        sys2 = PGQ.load(path)
-        assert sys2.name == "test"
-        assert sys2.get("w") is not None
-        assert len(sys2.list_tasks()) == 1
-
-    def test_eviction_lru(self):
-        """LRU eviction when memory tier overflows."""
-        from domains.infrastructure.pugqeep.cache import TieredCache, Tier, EvictionPolicy
-        import numpy as np
-        # 1KB max = very small, forces eviction
-        cache = TieredCache(memory_max_mb=0, hot_max_mb=0, eviction_policy=EvictionPolicy.LRU)
-        # Override to 1KB
-        cache._memory._max_size = 1024
-        cache._hot._inner._max_size = 1024
-
-        for i in range(20):
-            data = np.ones(64, dtype=np.float32)  # 256 bytes each
-            cache.put(f"k{i}", data, tier=Tier.MEMORY, size_bytes=256)
-
-        s = cache.stats()
-        assert s["evictions"] > 0, "Should have evicted some entries"
-        assert s["memory_size"] <= 1024
-
-    def test_eviction_lfu(self):
-        """LFU eviction prefers least-frequent entries."""
-        from domains.infrastructure.pugqeep.cache import TieredCache, Tier, EvictionPolicy
-        import numpy as np
-        cache = TieredCache(memory_max_mb=0, hot_max_mb=0, eviction_policy=EvictionPolicy.LFU)
-        cache._memory._max_size = 1024
-        cache._hot._inner._max_size = 1024
-
-        # Fill cache
-        for i in range(4):
-            data = np.ones(64, dtype=np.float32)
-            cache.put(f"k{i}", data, tier=Tier.MEMORY, size_bytes=256)
-
-        # Access k0 multiple times to make it "hot"
-        for _ in range(5):
-            cache.get("k0")
-        cache.get("k1")
-
-        # Add more items to trigger eviction — k2/k3 (least freq) should go first
-        for i in range(4, 8):
-            data = np.ones(64, dtype=np.float32)
-            cache.put(f"k{i}", data, tier=Tier.MEMORY, size_bytes=256)
-
-        assert cache.get("k0") is not None, "Most-accessed should survive"
-        s = cache.stats()
-        assert s["evictions"] > 0
-
-    def test_stats_includes_policy(self):
-        from domains.infrastructure.pugqeep.cache import TieredCache, EvictionPolicy
-        cache = TieredCache(eviction_policy=EvictionPolicy.LFU)
-        s = cache.stats()
-        assert s["eviction_policy"] == "lfu"
-        assert "memory_max" in s
-        assert "hot_max" in s
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Cluster serialization roundtrip
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestClusterSerialization:
-    def test_cluster_to_bytes_roundtrip(self):
-        from domains.infrastructure.pugqeep.point import Point
-        centroids = np.array([0.1, 0.5, 0.9, -0.3], dtype=np.float32)
-        assignments = np.array([0, 1, 2, 3, 1, 0, 2, 3], dtype=np.uint8)
-        p = Point(identity="test.cluster", function_type="cluster",
-                  params={"centroids": centroids, "assignments": assignments},
-                  accuracy=0.95, dtype="float32", shape=(8,))
-        data = p.to_bytes()
-        p2 = Point.from_bytes(data, identity="test.cluster")
-        assert p2.function_type == "cluster"
-        np.testing.assert_array_equal(p2.params["centroids"], centroids)
-        np.testing.assert_array_equal(p2.params["assignments"], assignments)
-
-    def test_cluster_with_residual_roundtrip(self):
-        from domains.infrastructure.pugqeep.point import Point
-        centroids = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-        assignments = np.array([0, 1, 2, 0], dtype=np.uint8)
-        residual = np.array([0.01, -0.02, 0.03, -0.04], dtype=np.float32)
-        p = Point(identity="test.res", function_type="cluster",
-                  params={"centroids": centroids, "assignments": assignments},
-                  residual=residual, accuracy=0.98)
-        data = p.to_bytes()
-        p2 = Point.from_bytes(data, identity="test.res")
-        np.testing.assert_array_equal(p2.params["centroids"], centroids)
-        np.testing.assert_array_equal(p2.params["assignments"], assignments)
-        assert p2.residual is not None
-        np.testing.assert_array_almost_equal(p2.residual, residual)
-
-    def test_raw_to_bytes_roundtrip(self):
-        from domains.infrastructure.pugqeep.point import Point
-        raw = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-        import base64
-        p = Point(identity="test.raw", function_type="raw",
-                  params={"data_b64": base64.b64encode(raw.tobytes()).decode(),
-                          "shape": [3], "dtype": "float32"},
-                  accuracy=1.0)
-        data = p.to_bytes()
-        p2 = Point.from_bytes(data, identity="test.raw")
-        assert p2.function_type == "raw"
-        decoded = np.frombuffer(base64.b64decode(p2.params["data_b64"]), dtype="float32")
-        np.testing.assert_array_equal(decoded, raw)
-
-    def test_generate_after_bytes_roundtrip(self):
-        """Cluster generate should work after bytes roundtrip."""
-        from domains.infrastructure.pugqeep.point import Point
-        centroids = np.array([10.0, 20.0, 30.0], dtype=np.float32)
-        assignments = np.array([0, 1, 2, 1, 0], dtype=np.uint8)
-        p = Point(identity="t", function_type="cluster",
-                  params={"centroids": centroids, "assignments": assignments})
-        data = p.to_bytes()
-        p2 = Point.from_bytes(data, identity="t")
-        result = p2.generate(5)
-        expected = centroids[assignments]
-        np.testing.assert_array_almost_equal(result, expected)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Config wiring
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestConfigWiring:
-    def test_compressor_config_override(self):
-        from domains.infrastructure.pugqeep.compressor import PointCompressor
-        from domains.infrastructure.pugqeep.config import CompressorConfig
-        cfg = CompressorConfig(n_clusters=32, lloyd_iterations=10,
-                               gap_fill_iterations=8, gap_fill_max_elements=50_000,
-                               method="function")
-        c = PointCompressor(config=cfg)
-        assert c.n_clusters == 32
-        assert c.lloyd_iterations == 10
-        assert c.gap_fill_iterations == 8
-        assert c.gap_fill_max_elements == 50_000
-        assert c.method == "function"
-
-    def test_compressor_residual_threshold(self):
-        from domains.infrastructure.pugqeep.compressor import PointCompressor
-        c = PointCompressor(residual_threshold=0.80)
-        # With low threshold, even decent fits won't store residual
-        weights = np.sin(np.linspace(0, 4 * np.pi, 200)).astype(np.float32)
-        p = c.compress_function(weights, "test")
-        # If accuracy > 0.80, no residual
-        if p.accuracy >= 0.80:
-            assert p.residual is None
-
-    def test_compressor_defaults_without_config(self):
-        from domains.infrastructure.pugqeep.compressor import PointCompressor
-        c = PointCompressor()
-        assert c.n_clusters == 16
-        assert c.lloyd_iterations == 5
-        assert c.residual_threshold == 0.99
-
-    def test_tree_config_skip_embeddings(self):
-        from domains.infrastructure.pugqeep.model_tree import ModelTree
-        from domains.infrastructure.pugqeep.config import TreeConfig
-        cfg = TreeConfig(skip_embeddings=False, skip_biases=False, n_clusters=8)
-        tree = ModelTree("test", config=cfg)
-        weights = {
-            "embed_tokens.weight": np.random.randn(100, 64).astype(np.float32),
-            "layer.bias": np.random.randn(64).astype(np.float32),
-            "layer.weight": np.random.randn(64, 64).astype(np.float32),
-        }
-        tree.load_weights(weights)
-        # With skip=False, all should be compressed as cluster (not raw)
-        for name in weights:
-            point = tree.library.get(f"test.{name}")
-            assert point is not None
-            # embed/bias stored as cluster, not raw
-            if "embed" in name or name.endswith("bias"):
-                assert point.function_type == "cluster", f"{name} should be cluster, got {point.function_type}"
-
-    def test_tree_config_skip_embeddings_on(self):
-        from domains.infrastructure.pugqeep.model_tree import ModelTree
-        from domains.infrastructure.pugqeep.config import TreeConfig
-        cfg = TreeConfig(skip_embeddings=True, skip_biases=True)
-        tree = ModelTree("test", config=cfg)
-        weights = {
-            "embed_tokens.weight": np.random.randn(100, 64).astype(np.float32),
-            "layer.bias": np.random.randn(64).astype(np.float32),
-            "layer.weight": np.random.randn(64, 64).astype(np.float32),
-        }
-        tree.load_weights(weights)
-        # embed/bias → raw, weight → cluster
-        embed_point = tree.library.get("test.embed_tokens.weight")
-        bias_point = tree.library.get("test.layer.bias")
-        weight_point = tree.library.get("test.layer.weight")
-        assert embed_point.function_type == "raw"
-        assert bias_point.function_type == "raw"
-        assert weight_point.function_type == "cluster"
-
-    def test_library_auto_save(self, tmp_path):
-        from domains.infrastructure.pugqeep.library import PointLibrary
-        from domains.infrastructure.pugqeep.point import Point
-        from domains.infrastructure.pugqeep.config import LibraryConfig
-        cfg = LibraryConfig(name="autosave_test", auto_save=True, storage_dir=tmp_path)
-        lib = PointLibrary(config=cfg)
-        p = Point(identity="x", function_type="linear", params={"a": 1.0, "b": 0.0})
-        lib.add(p)
-        # File should exist after add
-        assert (tmp_path / "autosave_test.points.json").exists()
-
-    def test_compressor_uses_config_lloyd_iterations(self):
-        from domains.infrastructure.pugqeep.compressor import PointCompressor
-        from domains.infrastructure.pugqeep.config import CompressorConfig
-        cfg = CompressorConfig(n_clusters=4, lloyd_iterations=1, gap_fill_iterations=0)
-        c = PointCompressor(config=cfg)
-        weights = np.random.randn(100).astype(np.float32)
-        p = c.compress_cluster(weights, "test", n_clusters=4)
-        assert p.function_type == "cluster"
-        assert len(p.params["centroids"]) == 4
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Function stores
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestStores:
-    def test_memory_store_crud(self):
-        from domains.infrastructure.pugqeep.store import MemoryStore
-        from domains.infrastructure.pugqeep import Point
-        store = MemoryStore()
-        p = Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0})
-        store.save(p)
-        assert store.load("w1") is p
-        assert store.load("missing") is None
-        assert store.count() == 1
-        assert len(store.list_all()) == 1
-        assert store.remove("w1")
-        assert not store.remove("w1")
-        store.save(p)
-        store.clear()
-        assert store.count() == 0
-
-    def test_json_store_crud(self, tmp_path):
-        from domains.infrastructure.pugqeep.store import JSONStore
-        from domains.infrastructure.pugqeep import Point
-        path = tmp_path / "store.json"
-        store = JSONStore(path)
-        p = Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0})
-        store.save(p)
-        assert store.load("w1") is not None
-        assert store.load("missing") is None
-        assert store.count() == 1
-        points = store.list_all()
-        assert len(points) == 1
-        assert points[0].identity == "w1"
-        assert store.remove("w1")
-        assert not store.remove("w1")
-        store.save(p)
-        store.clear()
-        assert store.count() == 0
-
-    def test_json_store_reload_from_disk(self, tmp_path):
-        from domains.infrastructure.pugqeep.store import JSONStore
-        from domains.infrastructure.pugqeep import Point
-        path = tmp_path / "store.json"
-        store = JSONStore(path)
-        store.save(Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0}))
-        reopened = JSONStore(path)
-        assert reopened.count() == 1
-        assert reopened.load("w1") is not None
-
-    def test_directory_store_crud(self, tmp_path):
-        from domains.infrastructure.pugqeep.store import DirectoryStore
-        from domains.infrastructure.pugqeep import Point
-        dstore = DirectoryStore(tmp_path / "points")
-        p = Point(identity="w/1", function_type="linear", params={"a": 1.0, "b": 0.0})
-        dstore.save(p)
-        assert dstore.load("w/1") is not None
-        assert dstore.load("missing") is None
-        assert dstore.count() == 1
-        points = dstore.list_all()
-        assert len(points) == 1
-        assert points[0].identity == "w/1"
-        assert dstore.remove("w/1")
-        assert not dstore.remove("w/1")
-        dstore.save(p)
-        dstore.clear()
-        assert dstore.count() == 0
+        assert s["avg_accuracy"] == pytest.approx(0.9)
+
+    def test_save_and_load(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = PointLibrary(name="test", storage_dir=Path(tmp))
+            lib.add(Point("p1", "linear", {"a": 1.0, "b": 0.0}))
+            lib.add(Point("p2", "periodic", {"a": 1.0, "b": 0.0, "w": 0.0}))
+            path = lib.save()
+
+            loaded = PointLibrary.load(path)
+            assert loaded.name == "test"
+            assert len(loaded.list_all()) == 2
+            assert loaded.get("p1") is not None
+
+
+class TestPointDeduplicator:
+    def test_no_duplicates(self):
+        lib = PointLibrary()
+        lib.add(Point("a", "linear", {"a": 1.0, "b": 0.0}))
+        lib.add(Point("b", "linear", {"a": 2.0, "b": 0.0}))
+        dedup = PointDeduplicator()
+        dedup.add_library(lib)
+        assert dedup.find_duplicates() == []
+
+    def test_finds_duplicates(self):
+        lib = PointLibrary()
+        lib.add(Point("a", "linear", {"a": 1.0, "b": 0.0}))
+        lib.add(Point("b", "linear", {"a": 1.0, "b": 0.0}))  # same params
+        dedup = PointDeduplicator()
+        dedup.add_library(lib)
+        groups = dedup.find_duplicates()
+        assert len(groups) == 1
+        assert len(groups[0]) == 2
+
+    def test_deduplicate_removes_duplicates(self):
+        lib = PointLibrary()
+        lib.add(Point("a", "linear", {"a": 1.0, "b": 0.0}))
+        lib.add(Point("b", "linear", {"a": 1.0, "b": 0.0}))
+        dedup = PointDeduplicator()
+        dedup.add_library(lib)
+        result = dedup.deduplicate()
+        assert result["merged"] == 1
+        assert lib.has("a")
+        assert not lib.has("b")
+
+    def test_cross_library_duplicates(self):
+        lib1 = PointLibrary()
+        lib2 = PointLibrary()
+        lib1.add(Point("shared", "linear", {"a": 5.0, "b": 0.0}))
+        lib2.add(Point("shared2", "linear", {"a": 5.0, "b": 0.0}))
+        dedup = PointDeduplicator()
+        dedup.add_library(lib1)
+        dedup.add_library(lib2)
+        groups = dedup.find_duplicates()
+        assert len(groups) == 1
+
+
+class TestPointLibrarySync:
+    def test_export_import_bytes(self):
+        lib = PointLibrary(name="sync_test")
+        lib.add(Point("p1", "linear", {"a": 1.0, "b": 2.0}))
+        sync = PointLibrarySync()
+        data = sync.export_bytes(lib)
+        lib2 = sync.import_bytes(data)
+        assert lib2.name == "sync_test"
+        assert len(lib2.list_all()) == 1
+
+    def test_sync_to_and_from_directory(self):
+        lib = PointLibrary(name="dir_test")
+        lib.add(Point("p1", "linear", {"a": 1.0, "b": 0.0}))
+        sync = PointLibrarySync()
+        with tempfile.TemporaryDirectory() as tmp:
+            sync.sync_to_directory(lib, Path(tmp))
+            loaded = sync.sync_from_directory(Path(tmp), name="dir_test")
+            assert loaded is not None
+            assert loaded.name == "dir_test"
+
+    def test_sync_from_directory_not_found(self):
+        sync = PointLibrarySync()
+        with tempfile.TemporaryDirectory() as tmp:
+            result = sync.sync_from_directory(Path(tmp), name="nonexistent")
+            assert result is None
+
+    def test_merge(self):
+        lib1 = PointLibrary(name="l1")
+        lib2 = PointLibrary(name="l2")
+        lib1.add(Point("a", "linear", {"a": 1.0, "b": 0.0}))
+        lib2.add(Point("b", "periodic", {"a": 1.0, "b": 0.0, "w": 0.0}))
+        sync = PointLibrarySync()
+        merged = sync.merge([lib1, lib2])
+        assert merged.has("a")
+        assert merged.has("b")

@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
 from routers.datasets import router as datasets_router
+from controllers.datasets import DatasetsController
 
 app = FastAPI()
 app.include_router(datasets_router)
@@ -148,6 +149,47 @@ class TestSearch:
         mock_controller.search_datasets.assert_called_with("poem")
 
 
+# ── Controller: search_datasets returns full summaries ───────────────────
+
+class TestControllerSearch:
+    """Direct controller test — the router mocks the controller, so a shape
+    regression (names instead of full summaries) can only be caught here."""
+
+    def _make_controller(self, tmp_path: Path) -> DatasetsController:
+        datasets_dir = tmp_path / "datasets"
+        (datasets_dir / "shakespeare").mkdir(parents=True)
+        (datasets_dir / "shakespeare" / "input.txt").write_text("To be or not to be.\n")
+        (datasets_dir / "poetry").mkdir(parents=True)
+        (datasets_dir / "poetry" / "input.txt").write_text("Roses are red.\n")
+        return DatasetsController(repo_root=tmp_path)
+
+    def test_search_returns_full_dataset_summaries(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        results = ctrl.search_datasets("shake")
+
+        assert len(results) == 1
+        entry = results[0]
+        assert isinstance(entry, dict)
+        assert entry["id"] == "shakespeare"
+        assert entry["name"] == "Shakespeare"
+        assert entry["size"] == entry["size_bytes"]
+        assert entry["samples"] == entry["num_samples"]
+        assert "path" in entry and "type" in entry
+
+    def test_search_matches_case_insensitively(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        assert len(ctrl.search_datasets("SHAKESPEARE")) == 1
+        assert len(ctrl.search_datasets("SHAKE")) == 1
+
+    def test_search_no_match_returns_empty(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        assert ctrl.search_datasets("zzz-nothing") == []
+
+    def test_search_no_datasets_dir_returns_empty(self, tmp_path):
+        ctrl = DatasetsController(repo_root=tmp_path)
+        assert ctrl.search_datasets("anything") == []
+
+
 # ── GET /datasets/{id} ───────────────────────────────────────────────────
 
 class TestGetDataset:
@@ -266,14 +308,30 @@ class TestExport:
         tmp.close()
         mock_controller.export_dataset.return_value = tmp.name
 
-        resp = client.post("/datasets/shakespeare/export?format=jsonl")
+        resp = client.post(
+            "/datasets/shakespeare/export",
+            json={"format": "jsonl"},
+        )
         assert resp.status_code == 200
+        assert "shakespeare" in resp.headers.get("content-disposition", "")
+
+        Path(tmp.name).unlink(missing_ok=True)
+
+    def test_export_defaults_to_jsonl(self, mock_controller):
+        tmp = tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False)
+        tmp.write(b"{}")
+        tmp.close()
+        mock_controller.export_dataset.return_value = tmp.name
+
+        resp = client.post("/datasets/shakespeare/export", json={})
+        assert resp.status_code == 200
+        mock_controller.export_dataset.assert_called_with("shakespeare", "jsonl")
 
         Path(tmp.name).unlink(missing_ok=True)
 
     def test_export_nonexistent(self, mock_controller):
         mock_controller.export_dataset.return_value = None
-        resp = client.post("/datasets/nonexistent/export")
+        resp = client.post("/datasets/nonexistent/export", json={})
         assert resp.status_code == 404
 
 

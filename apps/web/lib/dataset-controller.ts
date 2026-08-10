@@ -90,6 +90,11 @@ export const datasetController = {
     return data.datasets || []
   },
 
+  async search(query: string): Promise<Dataset[]> {
+    const data = await apiGet<{ results: Dataset[] }>(`/datasets/search?q=${encodeURIComponent(query)}`)
+    return data.results || []
+  },
+
   async get(id: string): Promise<Dataset | null> {
     try {
       return await apiGet<Dataset>(`/datasets/${id}`)

@@ -38,6 +38,7 @@ export default function DatasetDetailPage() {
   const [renameText, setRenameText] = useState('')
   const [stats, setStats] = useState<DatasetStats | null>(null)
   const [showDelete, setShowDelete] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [versions, setVersions] = useState<string[]>([])
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [snapshotting, setSnapshotting] = useState(false)
@@ -129,6 +130,13 @@ export default function DatasetDetailPage() {
       fetchPreview()
     }
   }, [dataset, fetchStats, fetchVersions, fetchPreview])
+
+  useEffect(() => {
+    if (!exportOpen) return
+    const handleClick = () => setExportOpen(false)
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [exportOpen])
 
   const startRename = () => {
     setRenameText(dataset?.name || '')
@@ -250,20 +258,30 @@ export default function DatasetDetailPage() {
                     {dataset.type && <Badge variant={"secondary" as const} className="text-xs">{dataset.type}</Badge>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="relative group">
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleExport}>
-                        <IconDownload className="h-4 w-4 mr-1" /> Export
+                    <div className="relative">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() => setExportOpen(!exportOpen)}
+                        onKeyDown={(e) => { if (e.key === 'Escape') setExportOpen(false) }}
+                        aria-expanded={exportOpen}
+                        aria-haspopup="true"
+                      >
+                        <IconDownload className="h-4 w-4 mr-1" /> Export <IconChevronDown className="h-3 w-3 ml-1" />
                       </Button>
-                      <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
-                        <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
-                          <button onClick={handleExport} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
-                            Export as JSONL
-                          </button>
-                          <button onClick={handleExportCSV} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
-                            Export as CSV
-                          </button>
+                      {exportOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-50">
+                          <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
+                            <button onClick={() => { handleExport(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                              Export as JSONL
+                            </button>
+                            <button onClick={() => { handleExportCSV(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                              Export as CSV
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                     <Button size="sm" variant="outline" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => setShowDelete(true)}>
                       <IconTrash className="h-4 w-4 mr-1" /> Delete

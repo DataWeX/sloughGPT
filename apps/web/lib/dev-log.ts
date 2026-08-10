@@ -18,6 +18,8 @@
  *   logger.child('chat').info('user typed')
  */
 
+import { PUBLIC_API_URL } from '@/lib/config'
+
 type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical'
 
 interface LogContext {
@@ -59,8 +61,6 @@ let _logBatch: LogRecord[] = []
 let _logTimer: ReturnType<typeof setTimeout> | null = null
 
 function _getApiUrl(): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { PUBLIC_API_URL } = require('@/lib/config') as { PUBLIC_API_URL: string }
   return PUBLIC_API_URL
 }
 

@@ -14,22 +14,43 @@ function makeStatus(overrides: Partial<WorkflowStatus> = {}): WorkflowStatus {
       aggregate_interval_minutes: 30,
       prune_interval_minutes: 60,
       export_interval_hours: 24,
+      auto_dpo_interval_minutes: 60,
       health_check_interval_seconds: 30,
+      background_training_interval_seconds: 300,
+      background_training_enabled: true,
     },
     stats: {
-      feedback_records: 100,
-      adapters_count: 5,
-      last_aggregate: new Date(Date.now() - 600000).toISOString(),
-      last_prune: new Date(Date.now() - 1200000).toISOString(),
-      last_export: new Date(Date.now() - 1800000).toISOString(),
+      workflow_runs: 10,
+      aggregations_performed: 3,
+      prunes_performed: 2,
+      exports_performed: 1,
+      feedback_recorded: 100,
+      auto_train_steps: 0,
+      dpo_train_steps: 0,
+      dpo_train_rejected: 0,
+      user_adapter_trained: 5,
+      user_adapter_rejected: 0,
+      start_time: null,
     },
+    pending_thumbs_up: 0,
+    auto_train_threshold: 3,
+    last_runs: {
+      aggregate: Math.floor(Date.now() / 1000) - 600,
+      prune: Math.floor(Date.now() / 1000) - 1200,
+      export: Math.floor(Date.now() / 1000) - 1800,
+      dpo: 0,
+      health_check: 0,
+      last_rollback: 0,
+      background_training: 0,
+    },
+    systems: {},
     ...overrides,
   }
 }
 
 describe('WorkflowHealthCard', () => {
   it('returns null when no stats', () => {
-    const { container } = render(<WorkflowHealthCard status={{ running: true }} />)
+    const { container } = render(<WorkflowHealthCard status={{ running: true } as unknown as WorkflowStatus} />)
     expect(container.querySelector('[data-testid="workflow-health"]')).toBeNull()
   })
 
@@ -67,10 +88,7 @@ describe('WorkflowHealthCard', () => {
   })
 
   it('shows never for missing last operation', () => {
-    render(<WorkflowHealthCard status={makeStatus({ stats: {
-      feedback_records: 10,
-      adapters_count: 2,
-    }})} />)
+    render(<WorkflowHealthCard status={makeStatus({ last_runs: { aggregate: 0, prune: 0, export: 0, dpo: 0, health_check: 0, last_rollback: 0, background_training: 0 } })} />)
     expect(screen.getAllByText('never').length).toBeGreaterThanOrEqual(1)
   })
 })

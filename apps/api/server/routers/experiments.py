@@ -95,18 +95,16 @@ class ExperimentsRouter:
 
     async def get_experiment_data(self, experiment_id: str):
         """Get logged metrics and params for an experiment."""
-        import os
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
-        metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
-        params_file = os.path.join(log_dir, f"{e_id}_params.jsonl")
-        status_file = os.path.join(log_dir, f"{e_id}_status.json")
+        metrics_file = self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl"
+        params_file = self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl"
+        status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
         metrics = []
         params = []
         status = None
-        if os.path.exists(metrics_file):
+        if metrics_file.exists():
             with open(metrics_file) as f:
                 for line in f:
                     line = line.strip()
@@ -115,7 +113,7 @@ class ExperimentsRouter:
                             metrics.append(json.loads(line))
                         except json.JSONDecodeError:
                             pass
-        if os.path.exists(params_file):
+        if params_file.exists():
             with open(params_file) as f:
                 for line in f:
                     line = line.strip()
@@ -124,7 +122,7 @@ class ExperimentsRouter:
                             params.append(json.loads(line))
                         except json.JSONDecodeError:
                             pass
-        if os.path.exists(status_file):
+        if status_file.exists():
             with open(status_file) as f:
                 try:
                     status = json.load(f)
@@ -134,13 +132,11 @@ class ExperimentsRouter:
 
     async def complete_experiment(self, experiment_id: str):
         """Mark experiment as complete and persist status to disk."""
-        import os
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
-        os.makedirs(log_dir, exist_ok=True)
-        status_file = os.path.join(log_dir, f"{e_id}_status.json")
+        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+        status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
         status_data = {
             "experiment_id": e_id,
             "status": "completed",
@@ -152,27 +148,23 @@ class ExperimentsRouter:
 
     async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0):
         """Log a metric for an experiment."""
-        import os
         e_id = experiment_id
-        log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
-        os.makedirs(log_dir, exist_ok=True)
+        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise HTTPException(status_code=400, detail="Invalid experiment ID")
         entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
-        with open(os.path.join(log_dir, f"{e_id}_metrics.jsonl"), "a") as f:
+        with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
             f.write(json.dumps(entry) + "\n")
         return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
 
     async def log_param(self, experiment_id: str, param_name: str, value: Any):
         """Log a parameter for an experiment."""
-        import os
         e_id = experiment_id
-        log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
-        os.makedirs(log_dir, exist_ok=True)
+        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise HTTPException(status_code=400, detail="Invalid experiment ID")
         entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
-        with open(os.path.join(log_dir, f"{e_id}_params.jsonl"), "a") as f:
+        with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
             f.write(json.dumps(entry) + "\n")
         return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})
 

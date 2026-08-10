@@ -2,19 +2,24 @@
   "$schema": "https://opencode.ai/config.json",
   "command": {
     "fix": {
-      "template": "Diagnose and fix the most recent CLI error. Read ~/.opencode-error-log.json, identify root cause, and apply the fix.",
-      "description": "Diagnose and fix the most recent CLI error using the log monitor",
+      "template": "Diagnose and fix the most recent CLI error. Read ~/.opencode-autofix-log.json, identify root cause, and apply the fix.",
+      "description": "Diagnose and fix the most recent CLI error",
       "agent": "error-fixer"
+    },
+    "fix-tests": {
+      "template": "Read ~/.opencode-test-failures.json and ~/.opencode-autofix-log.json. For each test failure, find the test file and source file, identify the root cause, and apply minimal fixes. Verify each fix by re-running the failing test.",
+      "description": "Diagnose and fix the most recent test failures",
+      "agent": "error-fixer"
+    },
+    "ui-fix": {
+      "template": "Read the UI error log at ~/.opencode-ui-error-log.json and the live backend errors at http://localhost:8000/errors/recent. Diagnose the most recent frontend error, identify the file and root cause, and apply a fix.",
+      "description": "Diagnose and fix the most recent frontend UI error",
+      "agent": "ui-error-fixer"
     },
     "doc-aware": {
       "template": "Load relevant docs for the given task area (frontend, backend, core, sdk, infra, cli). Read the doc map in .opencode/agents/doc-aware-engineer.md, then load the docs.",
       "description": "Load relevant project docs before making changes",
       "agent": "doc-aware-engineer"
-    },
-    "ui-fix": {
-      "template": "Read the UI error log at ~/.opencode-ui-error-log.json and the live backend errors at http://localhost:8000/errors/recent. Diagnose the most recent frontend error, identify the file and root cause, and apply a fix.",
-      "description": "Diagnose and fix the most recent frontend UI error using the UI error watcher",
-      "agent": "ui-error-fixer"
     }
   },
   "agent": {

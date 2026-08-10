@@ -181,6 +181,83 @@ export default function CompanionPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Radar chart */}
+              {(() => {
+                const traitKeys = Object.keys(TRAIT_LABELS)
+                const n = traitKeys.length
+                const cx = 100, cy = 100, r = 70
+                const angleStep = (2 * Math.PI) / n
+                const points = traitKeys.map((key, i) => {
+                  const val = (traits[key as keyof CompanionTraits] as number) ?? 0.5
+                  const angle = angleStep * i - Math.PI / 2
+                  return { x: cx + r * val * Math.cos(angle), y: cy + r * val * Math.sin(angle) }
+                })
+                const polygonPoints = points.map(p => `${p.x},${p.y}`).join(' ')
+                return (
+                  <div className="flex justify-center">
+                    <svg viewBox="0 0 200 200" className="w-48 h-48">
+                      {/* Grid rings */}
+                      {[0.25, 0.5, 0.75, 1].map(scale => (
+                        <polygon
+                          key={scale}
+                          points={traitKeys.map((_, i) => {
+                            const angle = angleStep * i - Math.PI / 2
+                            return `${cx + r * scale * Math.cos(angle)},${cy + r * scale * Math.sin(angle)}`
+                          }).join(' ')}
+                          fill="none"
+                          stroke="currentColor"
+                          className="text-border/40"
+                          strokeWidth="0.5"
+                        />
+                      ))}
+                      {/* Axis lines */}
+                      {traitKeys.map((_, i) => {
+                        const angle = angleStep * i - Math.PI / 2
+                        return (
+                          <line
+                            key={i}
+                            x1={cx}
+                            y1={cy}
+                            x2={cx + r * Math.cos(angle)}
+                            y2={cy + r * Math.sin(angle)}
+                            stroke="currentColor"
+                            className="text-border/30"
+                            strokeWidth="0.5"
+                          />
+                        )
+                      })}
+                      {/* Trait polygon */}
+                      <polygon
+                        points={polygonPoints}
+                        fill="rgb(var(--primary))"
+                        fillOpacity="0.15"
+                        stroke="rgb(var(--primary))"
+                        strokeWidth="1.5"
+                      />
+                      {/* Data points + labels */}
+                      {traitKeys.map((key, i) => {
+                        const angle = angleStep * i - Math.PI / 2
+                        const labelR = r + 18
+                        return (
+                          <g key={key}>
+                            <circle cx={points[i].x} cy={points[i].y} r="3" fill="rgb(var(--primary))" />
+                            <text
+                              x={cx + labelR * Math.cos(angle)}
+                              y={cy + labelR * Math.sin(angle)}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              className="fill-muted-foreground"
+                              fontSize="8"
+                            >
+                              {TRAIT_LABELS[key].label}
+                            </text>
+                          </g>
+                        )
+                      })}
+                    </svg>
+                  </div>
+                )
+              })()}
               <div className="grid gap-3">
                 {Object.entries(TRAIT_LABELS).map(([key, { label, color }]) => (
                   <div key={key} className="flex items-center gap-3">

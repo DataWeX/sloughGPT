@@ -1,16 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, act } from '@testing-library/react'
+import React from 'react'
+
+const {
+  mockGetCapabilities, mockGetTrainingReport, mockGetTrainingStatus, mockAddToast,
+} = vi.hoisted(() => ({
+  mockGetCapabilities: vi.fn(), mockGetTrainingReport: vi.fn(),
+  mockGetTrainingStatus: vi.fn(), mockAddToast: vi.fn(),
+}))
 
 vi.mock('@/lib/controllers', () => ({
   multimodalController: {
-    getCapabilities: vi.fn().mockResolvedValue(null),
-    getTrainingReport: vi.fn().mockResolvedValue(null),
-    getTrainingStatus: vi.fn().mockResolvedValue(null),
+    getCapabilities: (...a: unknown[]) => mockGetCapabilities(...a),
+    getTrainingReport: (...a: unknown[]) => mockGetTrainingReport(...a),
+    getTrainingStatus: (...a: unknown[]) => mockGetTrainingStatus(...a),
   },
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: vi.fn() }),
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 
 vi.mock('@/lib/error-utils', () => ({
@@ -44,9 +52,21 @@ vi.mock('@/components/multimodal/AudioCard', () => ({ default: () => <div data-t
 
 import MultimodalPage from './page'
 
-describe('MultimodalPage', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-  afterEach(() => { cleanup() })
+afterEach(cleanup)
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockGetCapabilities.mockResolvedValue({ vision: true, audio: true, image_gen: false })
+  mockGetTrainingReport.mockResolvedValue({ total_samples: 100 })
+  mockGetTrainingStatus.mockResolvedValue({ training: false })
+})
+
+describe('MultimodalPage — initial load flow', () => {
+  it('renders page header', async () => {
+    render(<MultimodalPage />)
+    expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
+    await act(async () => {})
+  })
 
   it('renders without crashing', async () => {
     render(<MultimodalPage />)
@@ -54,9 +74,66 @@ describe('MultimodalPage', () => {
     await act(async () => {})
   })
 
-  it('renders page header', async () => {
+  it('fetches capabilities on mount', async () => {
     render(<MultimodalPage />)
-    expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
     await act(async () => {})
+    expect(mockGetCapabilities).toHaveBeenCalled()
+  })
+})
+
+describe('MultimodalPage — capabilities display', () => {
+  it('shows capabilities card', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('capabilities-card')).toBeTruthy()
+  })
+})
+
+describe('MultimodalPage — training cards', () => {
+  it('shows image training card', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('image-training-card')).toBeTruthy()
+  })
+
+  it('shows batch training card', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('batch-training-card')).toBeTruthy()
+  })
+})
+
+describe('MultimodalPage — other cards', () => {
+  it('shows visual dataset card', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('visual-dataset-card')).toBeTruthy()
+  })
+
+  it('shows DPO card', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('dpo-card')).toBeTruthy()
+  })
+
+  it('shows image generation card', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('image-generation-card')).toBeTruthy()
+  })
+
+  it('shows audio card', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('audio-card')).toBeTruthy()
+  })
+})
+
+describe('MultimodalPage — error handling', () => {
+  it('handles capabilities failure gracefully', async () => {
+    mockGetCapabilities.mockRejectedValue(new Error('network'))
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
   })
 })

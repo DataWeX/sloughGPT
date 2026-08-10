@@ -101,9 +101,11 @@ export default function AdaptersPage() {
   }
 
   const handleReset = async (userId: string) => {
+    if (!window.confirm(`Reset adapter for ${userId}? This cannot be undone.`)) return
     try {
       await userAdaptersController.reset(userId)
       await fetchData()
+      addToast(`Adapter for ${userId} reset`, 'success')
     } catch {
       addToast('Failed to reset adapter', 'error')
     }
@@ -152,7 +154,10 @@ export default function AdaptersPage() {
 
   return (
     <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Adapters" subtitle="Per-user LoRA adapter management" />} />
+      <AppRouteHeader
+        left={<AppRouteHeaderLead title="Adapters" subtitle="Per-user LoRA adapter management" />}
+        right={<Button size="sm" variant="ghost" onClick={fetchData}><IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>}
+      />
       <div className="space-y-4">
         {aggregateResult && (
           <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
@@ -211,9 +216,11 @@ export default function AdaptersPage() {
           </CardHeader>
           <CardContent>
             {adapters.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No adapters yet. Use the chat to generate feedback that creates adapters.
-              </p>
+              <div className="text-center py-6 space-y-2">
+                <p className="text-sm text-muted-foreground">No adapters yet.</p>
+                <a href="/chat" className="text-sm text-primary hover:underline">Start a chat</a>
+                <span className="text-sm text-muted-foreground"> and give feedback to create adapters.</span>
+              </div>
             ) : (
               <div className="space-y-2">
                 {adapters.map(a => (
@@ -221,11 +228,14 @@ export default function AdaptersPage() {
                     key={a.user_id}
                     className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="font-medium truncate">{a.user_id}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {a.feedback_count} feedback · rank {a.rank}
-                        {a.created_at && <> · {new Date(a.created_at).toLocaleDateString()}</>}
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+                        <span>{a.feedback_count} feedback</span>
+                        <span>rank {a.rank}</span>
+                        <span>alpha {a.alpha}</span>
+                        <span>dim {a.model_dim}</span>
+                        {a.updated_at && <span>updated {new Date(a.updated_at).toLocaleDateString()}</span>}
                       </div>
                     </div>
                     <Button
@@ -252,11 +262,28 @@ export default function AdaptersPage() {
               {runningEval ? 'Running...' : 'Run LoRA Eval'}
             </Button>
             {evalHistory.length > 0 && (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <div className="space-y-2 max-h-64 overflow-y-auto">
                 {evalHistory.map((r, i) => (
-                  <div key={i} className="flex items-center gap-3 rounded-md bg-muted/20 p-2 text-xs">
-                    <span className="font-medium">{String(r.adapter_path ?? '—')}</span>
-                    <span className="text-muted-foreground">{String(r.verdict ?? '—')}</span>
+                  <div key={i} className="rounded-md border border-border/60 p-3 text-xs space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{String(r.adapter_path ?? '—')}</span>
+                      <span className={`px-1.5 py-0.5 rounded font-medium ${
+                        r.verdict === 'accept' ? 'bg-success/15 text-success' :
+                        r.verdict === 'reject' ? 'bg-destructive/15 text-destructive' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {String(r.verdict ?? '—')}
+                      </span>
+                      {r.timestamp && (
+                        <span className="text-muted-foreground ml-auto">{new Date(r.timestamp).toLocaleString()}</span>
+                      )}
+                    </div>
+                    {(r.perplexity != null || r.bleu != null) && (
+                      <div className="flex gap-4 text-muted-foreground">
+                        {r.perplexity != null && <span>Perplexity: {Number(r.perplexity).toFixed(3)}</span>}
+                        {r.bleu != null && <span>BLEU: {Number(r.bleu).toFixed(3)}</span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

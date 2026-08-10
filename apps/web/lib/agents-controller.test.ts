@@ -146,13 +146,29 @@ describe('agentsController.orchestrate', () => {
       'http://127.0.0.1:9/agents/orchestrate',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ goal: 'test goal', context: 'context' }),
+        body: JSON.stringify({ goal: 'test goal', context: 'context', agent_ids: [] }),
       }),
     )
     expect(planFn).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: '1' })]))
     expect(statusFn).toHaveBeenCalled()
     expect(composeFn).toHaveBeenCalled()
     expect(completeFn).toHaveBeenCalledWith('final result', [])
+  })
+
+  it('passes agentIds through to the payload', async () => {
+    mockFetchSSE([
+      JSON.stringify({ stream: 'agent-orchestrate', phase: 'COMPLETE', status: 'complete', data: { response: 'done', tasks: [] } }),
+    ])
+
+    await agentsController.orchestrate('goal', 'ctx', { onComplete: vi.fn(), onError: vi.fn() }, undefined, ['a1', 'a2'])
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:9/agents/orchestrate',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ goal: 'goal', context: 'ctx', agent_ids: ['a1', 'a2'] }),
+      }),
+    )
   })
 
   it('calls onError on HTTP error', async () => {

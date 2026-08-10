@@ -8,6 +8,7 @@ import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Tabs } from '@sloughgpt/strui'
+import { FoldSection } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController, modelController } from '@/lib/controllers'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -106,10 +107,6 @@ export default function TrainingPage() {
       if (e.key === 'h' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault()
         setActiveTab('history')
-      }
-      if (e.key === 'e' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault()
-        setActiveTab('eval')
       }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
         e.preventDefault()
@@ -274,29 +271,6 @@ export default function TrainingPage() {
 
             <TrainingDataCard />
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Schedule</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block h-2 w-2 rounded-full bg-success" />
-                    <span>Training runs immediately when started</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block h-2 w-2 rounded-full bg-primary" />
-                    <span>Queue multiple jobs with &ldquo;Start training&rdquo;</span>
-                  </div>
-                </div>
-                {form.allJobs.filter(j => j.status === 'running').length > 0 && (
-                  <p className="text-xs text-warning mt-2">
-                    {form.allJobs.filter(j => j.status === 'running').length} job(s) running — new jobs will queue automatically
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
             <SelfTrainCard />
 
             {!session.trainingRunning && !checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 && form.allJobs.length === 0 && (
@@ -338,95 +312,111 @@ export default function TrainingPage() {
 
             <TrainingProgress job={runningJob ?? null} />
 
-            <TrainingTimeline checkpoints={searchResults} />
+            <FoldSection heading="Checkpoints">
+              <div className="space-y-4">
+                <TrainingTimeline checkpoints={searchResults} />
 
-            <TrainingQuickActions
-              checkpoints={searchResults}
-              onLoadBest={async (name) => {
-                try {
-                  await soulsController.loadCheckpoint(name)
-                  addToast(`Loaded ${name}`, 'success')
-                  await modelController.status()
-                } catch {
-                  addToast('Failed to load checkpoint', 'error')
-                }
-              }}
-              onExportMetrics={handleExportMetrics}
-            />
+                <TrainingSearchBar query={query} onQueryChange={setQuery} total={filteredCheckpoints.length} shown={searchResults.length} />
 
-            <TrainingSearchBar query={query} onQueryChange={setQuery} total={filteredCheckpoints.length} shown={searchResults.length} />
+                <CheckpointFilterBar
+                  types={types}
+                  typeFilter={typeFilter}
+                  onTypeFilterChange={setTypeFilter}
+                  lossMax={lossMax}
+                  onLossMaxChange={setLossMax}
+                  total={checkpoints.checkpoints.length}
+                  shown={filteredCheckpoints.length}
+                />
 
-            <CheckpointFilterBar
-              types={types}
-              typeFilter={typeFilter}
-              onTypeFilterChange={setTypeFilter}
-              lossMax={lossMax}
-              onLossMaxChange={setLossMax}
-              total={checkpoints.checkpoints.length}
-              shown={filteredCheckpoints.length}
-            />
+                <CheckpointsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }} onContinue={form.startTraining} onTest={() => test.setTestDialogOpen(true)} />
 
-            <CheckpointsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }} onContinue={form.startTraining} onTest={() => test.setTestDialogOpen(true)} />
-
-            <BestCheckpointCard
-              checkpoints={searchResults}
-              onLoad={async (name) => {
-                try {
-                  await soulsController.loadCheckpoint(name)
-                  addToast(`Loaded ${name}`, 'success')
-                  await modelController.status()
-                } catch {
-                  addToast('Failed to load checkpoint', 'error')
-                }
-              }}
-            />
-
-            <CheckpointLossChart checkpoints={searchResults} />
-
-            <div className="space-y-2">
-              {searchResults.map((c, i) => (
-                <TrainingRunCard
-                  key={c.name}
-                  checkpoint={c}
-                  index={i}
-                  isBest={c.name === bestName}
-                  onLoad={async (cp) => {
+                <BestCheckpointCard
+                  checkpoints={searchResults}
+                  onLoad={async (name) => {
                     try {
-                      await soulsController.loadCheckpoint(cp.name)
-                      addToast(`Loaded ${cp.name}`, 'success')
+                      await soulsController.loadCheckpoint(name)
+                      addToast(`Loaded ${name}`, 'success')
                       await modelController.status()
                     } catch {
                       addToast('Failed to load checkpoint', 'error')
                     }
                   }}
                 />
-              ))}
-            </div>
+              </div>
+            </FoldSection>
 
-            <CheckpointCompareCard checkpoints={searchResults} />
+            <FoldSection heading="Analysis" className="mt-4">
+              <div className="space-y-4">
+                <CheckpointLossChart checkpoints={searchResults} />
 
-            <TrainingCompareCard
-              checkpoints={searchResults}
-              onLoad={async (name) => {
-                try {
-                  await soulsController.loadCheckpoint(name)
-                  addToast(`Loaded ${name}`, 'success')
-                  await modelController.status()
-                } catch {
-                  addToast('Failed to load checkpoint', 'error')
-                }
-              }}
-            />
+                <TrainingQuickActions
+                  checkpoints={searchResults}
+                  onLoadBest={async (name) => {
+                    try {
+                      await soulsController.loadCheckpoint(name)
+                      addToast(`Loaded ${name}`, 'success')
+                      await modelController.status()
+                    } catch {
+                      addToast('Failed to load checkpoint', 'error')
+                    }
+                  }}
+                  onExportMetrics={handleExportMetrics}
+                />
 
-            <CheckpointNotes checkpoints={searchResults} />
+                <div className="space-y-2">
+                  {searchResults.map((c, i) => (
+                    <TrainingRunCard
+                      key={c.name}
+                      checkpoint={c}
+                      index={i}
+                      isBest={c.name === bestName}
+                      onLoad={async (cp) => {
+                        try {
+                          await soulsController.loadCheckpoint(cp.name)
+                          addToast(`Loaded ${cp.name}`, 'success')
+                          await modelController.status()
+                        } catch {
+                          addToast('Failed to load checkpoint', 'error')
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
 
-            <FineTunedModelsCard activeModelId={currentModelId} onLoaded={() => { void checkpoints.fetchCheckpoints(); void modelController.status().then(s => setCurrentModelId(s.model_type)) }} />
+                <CheckpointCompareCard checkpoints={searchResults} />
 
-            <EvalReportCard />
+                <TrainingCompareCard
+                  checkpoints={searchResults}
+                  onLoad={async (name) => {
+                    try {
+                      await soulsController.loadCheckpoint(name)
+                      addToast(`Loaded ${name}`, 'success')
+                      await modelController.status()
+                    } catch {
+                      addToast('Failed to load checkpoint', 'error')
+                    }
+                  }}
+                />
 
-            <JobHistoryCard allJobs={form.allJobs} checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }} />
+                <CheckpointNotes checkpoints={searchResults} />
+              </div>
+            </FoldSection>
 
-            <OutputCard />
+            <FoldSection heading="Models & Eval" className="mt-4">
+              <div className="space-y-4">
+                <FineTunedModelsCard activeModelId={currentModelId} onLoaded={() => { void checkpoints.fetchCheckpoints(); void modelController.status().then(s => setCurrentModelId(s.model_type)) }} />
+
+                <EvalReportCard />
+              </div>
+            </FoldSection>
+
+            <FoldSection heading="Jobs & Logs" className="mt-4">
+              <div className="space-y-4">
+                <JobHistoryCard allJobs={form.allJobs} checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }} />
+
+                <OutputCard />
+              </div>
+            </FoldSection>
           </div>
         )}
       </div>

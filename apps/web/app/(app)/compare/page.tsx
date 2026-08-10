@@ -18,8 +18,7 @@ import SummaryCard from '@/components/compare/SummaryCard'
 import { ModelComparisonInsightsCard } from '@/components/compare/ModelComparisonInsightsCard'
 import dynamicNext from 'next/dynamic'
 
-const outputComparisonCardPath = '@/components/compare/OutputComparisonCard'
-const OutputComparisonCard = dynamicNext<{ models: ModelEntry[] }>(() => import(outputComparisonCardPath) as Promise<{ default: React.ComponentType<{ models: ModelEntry[] }> }>, { ssr: false })
+const OutputComparisonCard = dynamicNext<{ models: ModelEntry[] }>(() => import('@/components/compare/OutputComparisonCard') as Promise<{ default: React.ComponentType<{ models: ModelEntry[] }> }>, { ssr: false })
 
 const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
 

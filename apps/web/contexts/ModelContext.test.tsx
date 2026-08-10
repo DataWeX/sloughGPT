@@ -69,9 +69,9 @@ describe('ModelContext', () => {
     await act(async () => {})
     expect(mockController.modelController.list).toHaveBeenCalled()
     expect(result.current.models).toEqual([
-      { id: 'm1', name: 'GPT-2', type: 'huggingface', loaded: true, sizeMb: 512, params: '124M', description: 'base', tags: ['gen'] },
-      { id: 'm2', name: 'Local Net', type: 'local', loaded: false, sizeMb: 8, params: undefined, description: undefined, tags: undefined },
-      { id: 'm3', name: 'No Type', type: 'huggingface', loaded: false, sizeMb: undefined, params: undefined, description: undefined, tags: undefined },
+      { id: 'm1', name: 'GPT-2', type: 'huggingface', loaded: true, size_mb: 512, size_gb: undefined, params: '124M', description: 'base', tags: ['gen'] },
+      { id: 'm2', name: 'Local Net', type: 'local', loaded: false, size_mb: 8, size_gb: undefined, params: undefined, description: undefined, tags: undefined },
+      { id: 'm3', name: 'No Type', type: 'huggingface', loaded: false, size_mb: undefined, size_gb: undefined, params: undefined, description: undefined, tags: undefined },
     ])
   })
 

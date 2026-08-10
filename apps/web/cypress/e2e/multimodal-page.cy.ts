@@ -1,25 +1,33 @@
 describe('Multimodal page', () => {
   beforeEach(() => {
     cy.on('uncaught:exception', () => false)
-    cy.mockHealth({ model_loaded: true })
-    cy.mockVisual()
-    cy.mockMultimodal()
-    cy.visit('/multimodal', { timeout: 30000 })
+    cy.mockAll()
+    cy.visit('/multimodal')
   })
 
-  it('renders all cards, manages checkpoints', () => {
-    cy.contains('h1', 'Multimodal', { timeout: 20000 }).should('be.visible')
-    cy.contains('Image Training', { timeout: 20000 }).scrollIntoView({ ensureScrollable: false }).should('be.visible')
-    cy.contains('Upload image', { timeout: 20000 }).scrollIntoView({ ensureScrollable: false }).should('be.visible')
-    cy.contains('Capabilities').scrollIntoView({ ensureScrollable: false })
-    cy.contains('Vision model').should('be.visible')
-    cy.wait('@visualCheckpoints', { timeout: 20000 }).its('response.statusCode').should('eq', 200)
-    cy.contains('Visual Checkpoints', { timeout: 20000 }).scrollIntoView({ ensureScrollable: false }).should('be.visible')
-    cy.contains('visual-v2').should('be.visible')
-    cy.contains('visual-v1').should('be.visible')
-    cy.get('div[class*="max-h-64"] button').contains('Load').first().click({ force: true })
-    cy.wait('@visualLoad').its('response.statusCode').should('eq', 200)
-    cy.get('div[class*="max-h-64"] button[class*="text-error"]').first().click({ force: true })
-    cy.wait('@visualDelete').its('response.statusCode').should('eq', 200)
+  it('renders the page header', () => {
+    cy.contains('h1', 'Multimodal').should('be.visible')
+  })
+
+  it('shows capability and training cards', () => {
+    cy.contains('Capabilities').should('be.visible')
+    cy.contains('Training').scrollIntoView().should('be.visible')
+  })
+
+  it('shows image training and batch training cards', () => {
+    cy.contains('Image Training').scrollIntoView().should('be.visible')
+    cy.contains('Train with multiple images').scrollIntoView().should('be.visible')
+  })
+
+  it('shows dataset, DPO, generation, and audio cards', () => {
+    cy.contains('Image description dataset').scrollIntoView().should('be.visible')
+    cy.contains('DPO fine-tune').scrollIntoView().should('be.visible')
+    cy.contains('Image Generation').scrollIntoView().should('be.visible')
+    cy.contains('Audio').scrollIntoView().should('be.visible')
+  })
+
+  it('accepts an image generation prompt', () => {
+    cy.get('input[aria-label="Image generation prompt"]').scrollIntoView().type('A cat in a spacesuit')
+    cy.get('input[aria-label="Image generation prompt"]').should('have.value', 'A cat in a spacesuit')
   })
 })

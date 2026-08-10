@@ -8,6 +8,7 @@ const nextConfig = {
   },
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
+  distDir: process.env.BUILD_DIST || (process.env.NODE_ENV === 'development' ? '.next-dev' : '.next'),
 }
 
 module.exports = nextConfig

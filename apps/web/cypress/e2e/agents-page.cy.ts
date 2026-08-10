@@ -22,14 +22,15 @@ describe('Agents page', () => {
   })
 
   it('executes an agent inline', () => {
-    cy.contains('Run').first().click()
+    cy.contains('button', 'Run').first().click()
     cy.get('input[placeholder*="What should"]').type('Write a poem{enter}')
     cy.wait('@agentsExecute')
     cy.contains('simulated agent response').should('exist')
   })
 
   it('deletes an agent', () => {
-    cy.get('.text-destructive-foreground').first().click()
+    cy.get('[aria-label^="Delete "]').first().click()
+    cy.get('[role="alertdialog"]').contains('button', 'Delete').click()
     cy.wait('@agentsDelete')
   })
 })

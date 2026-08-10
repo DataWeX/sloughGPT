@@ -16,7 +16,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "clean": "rm -rf .next",
+    "clean": "rm -rf .next .next-dev",
     "dev": "next dev",
     "dev:clean": "npm run clean && next dev",
     "dev:restart": "lsof -ti :3000 | xargs kill -9 2>/dev/null; npm run dev",

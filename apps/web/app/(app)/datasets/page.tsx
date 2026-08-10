@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, EmptyCard } from '@sloughgpt/
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
-import { IconRefresh, IconPlus, IconTrash, IconChevronDown } from '@sloughgpt/strui'
+import { IconRefresh, IconPlus, IconTrash, IconChevronDown, IconDownload } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController, type Dataset, type DatasetPreview as PreviewData } from '@/lib/dataset-controller'
 import { formatBytes } from '@/lib/format-bytes'
@@ -35,6 +35,8 @@ export default function DatasetsPage() {
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set())
   const [compareData, setCompareData] = useState<Array<{ id: string; name: string; preview: PreviewData | null }>>([])
   const [sortBy, setSortBy] = useState<'date' | 'size' | 'name'>('date')
+  const [versionCounts, setVersionCounts] = useState<Record<string, number>>({})
+  const [searching, setSearching] = useState(false)
 
   const fetchDatasets = useCallback(async () => {
     setLoading(true)
@@ -55,6 +57,25 @@ export default function DatasetsPage() {
   }, [fetchDatasets])
 
   useEffect(() => {
+    if (datasets.length === 0) return
+    const fetchVersions = async () => {
+      const counts: Record<string, number> = {}
+      await Promise.all(
+        datasets.map(async ds => {
+          try {
+            const res = await datasetController.listVersions(ds.id)
+            counts[ds.id] = res.count || 0
+          } catch {
+            counts[ds.id] = 0
+          }
+        })
+      )
+      setVersionCounts(counts)
+    }
+    fetchVersions()
+  }, [datasets])
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return
       if (e.key === 'n' && !e.ctrlKey && !e.metaKey) {
@@ -70,6 +91,25 @@ export default function DatasetsPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  useEffect(() => {
+    if (!search) {
+      fetchDatasets()
+      return
+    }
+    setSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const results = await datasetController.search(search)
+        setDatasets(results)
+      } catch {
+        // fallback to client-side filter
+      } finally {
+        setSearching(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
   const handleDelete = async () => {
     if (!pendingDelete) return
     const deleted = pendingDelete
@@ -83,6 +123,22 @@ export default function DatasetsPage() {
     } catch {
       setDatasets(prev => [deleted, ...prev])
       addToast('Delete failed', 'error')
+    }
+  }
+
+  const handleExport = async (ds: Dataset, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      const blob = await datasetController.export(ds.id, 'jsonl')
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${ds.name || ds.id}.jsonl`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast(`Exported "${ds.name}"`, 'success')
+    } catch {
+      addToast('Export failed', 'error')
     }
   }
 
@@ -167,6 +223,12 @@ export default function DatasetsPage() {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
               className="h-9 text-sm max-w-xs"
             />
+            {searching && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1.5" role="status">
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Searching…
+              </span>
+            )}
             <div className="flex items-center gap-1 ml-auto">
               {(['date', 'size', 'name'] as const).map(s => (
                 <button
@@ -308,22 +370,36 @@ export default function DatasetsPage() {
                           </span>
                         )}
                         {ds.samples != null && <span>{ds.samples.toLocaleString()} samples</span>}
+                        {versionCounts[ds.id] != null && versionCounts[ds.id] > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                            {versionCounts[ds.id]} version{versionCounts[ds.id] !== 1 ? 's' : ''}
+                          </span>
+                        )}
                         {ds.created_at && <span>{formatDate(ds.created_at)}</span>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                    <div className="flex items-center gap-1 ml-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); router.push(`/training?dataset=${encodeURIComponent(ds.id)}`) }}
+                        onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
                         aria-label={`Train with ${ds.name}`}
                       >
                         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={(e) => handleExport(ds, e)}
+                        aria-label={`Export ${ds.name}`}
+                      >
+                        <IconDownload className="h-4 w-4" />
+                      </Button>
                       <button
                         className={`h-6 w-6 rounded border transition-colors flex items-center justify-center ${compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50'}`}
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); toggleCompare(ds.id) }}
+                        onClick={() => toggleCompare(ds.id)}
                         aria-label={`Select ${ds.name} for comparison`}
                       >
                         {compareIds.has(ds.id) && <span className="text-xs font-bold">✓</span>}
@@ -332,7 +408,7 @@ export default function DatasetsPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => handlePreview(ds, e)}
+                        onClick={(e) => handlePreview(ds, e)}
                         aria-label={expandedId === ds.id ? `Hide preview for ${ds.name}` : `Preview ${ds.name}`}
                       >
                         <IconChevronDown className={`h-4 w-4 transition-transform ${expandedId === ds.id ? 'rotate-180' : ''}`} />
@@ -341,7 +417,7 @@ export default function DatasetsPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); setPendingDelete(ds) }}
+                        onClick={() => setPendingDelete(ds)}
                         aria-label={`Delete ${ds.name}`}
                       >
                         <IconTrash className="h-4 w-4" />

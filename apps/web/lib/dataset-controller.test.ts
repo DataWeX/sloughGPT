@@ -48,6 +48,72 @@ describe('datasetController.list', () => {
   })
 })
 
+describe('datasetController.search', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('GETs /datasets/search with the query and returns results', async () => {
+    const results = [{ id: 'ds2', name: 'shakespeare', source: 'local', size: 10, created_at: '2026-01-02' }]
+    apiClient.apiGet.mockResolvedValue({ results, count: 1 })
+
+    const rows = await datasetController.search('shakes')
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/search?q=shakes')
+    expect(rows).toEqual(results)
+  })
+
+  it('encodes special characters in the query', async () => {
+    apiClient.apiGet.mockResolvedValue({ results: [], count: 0 })
+
+    await datasetController.search('s&p 500 dataset')
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/search?q=s%26p%20500%20dataset')
+  })
+
+  it('returns empty array when no results key', async () => {
+    apiClient.apiGet.mockResolvedValue({})
+
+    const rows = await datasetController.search('nothing')
+
+    expect(rows).toEqual([])
+  })
+})
+
+describe('datasetController.export', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs to /datasets/{id}/export and returns the blob', async () => {
+    const blob = new Blob(['{"a":1}'], { type: 'application/json' })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await datasetController.export('ds1', 'jsonl')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/datasets/ds1/export',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ format: 'jsonl' }),
+      }),
+    )
+    expect(result).toBe(blob)
+    vi.unstubAllGlobals()
+  })
+
+  it('defaults to jsonl format', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob() })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await datasetController.export('ds1')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/datasets/ds1/export',
+      expect.objectContaining({ body: JSON.stringify({ format: 'jsonl' }) }),
+    )
+    vi.unstubAllGlobals()
+  })
+})
+
 describe('datasetController versioning', () => {
   beforeEach(() => { vi.clearAllMocks() })
 

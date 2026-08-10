@@ -166,20 +166,24 @@ class WorldParams:
     # selection proofs keep their exact genome layout and RNG draw order.
     # Territory is CLAIMED by building nests (Stage 7): a tribe's region is
     # the ground within ``territory_radius`` of the nearest nest it owns
-    # (world-wide cap ``max_nests``). When the channel is on, each baby gains
-    # a ``perceptron_territory`` (entity-input -> 1 gate) that decides whether
-    # to DEFEND the region: standing on its own tribe's territory, a cleared
-    # gate evicts the nearest foreign baby within ``defend_range``. The toll
-    # scales with the trespasser's own energy — ``defend_take_fraction`` of
-    # it transfers to the defender (capped so the eviction is never lethal),
-    # so evicting a rich trespasser pays and the gate has an honest gradient
-    # to learn "this trespasser is worth evicting". The trespasser is softly
-    # pushed ``defend_push`` cells away from the defender (a pure relocation,
-    # never a kill — a small shove, not a stranding), and the defender pays
-    # ``defend_cost`` (a transfer, not creation — the world conserves
-    # energy). The gate is shaped by the honest same-tick net reward:
-    # defending pays while a trespasser carries more energy than the
-    # eviction costs and self-limits as trespassers grow scarce.
+    # (world-wide cap ``max_nests``). When the channel is on, the region
+    # becomes a two-sided resource: a hungry baby standing on foreign ground
+    # (within ``territory_radius`` of a foreign tribe's nearest nest) can RAID
+    # that bank — a one-way drain, ``nest_draw_rate`` per tick, that is the
+    # value defending protects — and each baby gains a ``perceptron_territory``
+    # (entity-input -> 1 gate) that decides whether to DEFEND: standing on its
+    # own tribe's territory, a cleared gate evicts the nearest foreign baby
+    # within ``defend_range``. The toll scales with the trespasser's own
+    # energy — ``defend_take_fraction`` of it transfers to the defender
+    # (capped so the eviction is never lethal), so evicting a rich trespasser
+    # pays and the gate has an honest gradient to learn "this trespasser is
+    # worth evicting". The trespasser is softly pushed ``defend_push`` cells
+    # away from the defender (a pure relocation, never a kill — a small shove,
+    # not a stranding), and the defender pays ``defend_cost`` (a transfer, not
+    # creation — the world conserves energy). The gate is shaped by the honest
+    # same-tick net reward: defending pays while a trespasser carries more
+    # energy than the eviction costs and self-limits as trespassers grow
+    # scarce.
     territoriality_enabled: bool = False
     territory_radius: float = 3.0       # a tribe's region = within this of its nearest nest
     defend_range: float = 3.0           # max distance a defender can evict a trespasser
@@ -1822,15 +1826,16 @@ class SimBaby:
         an eviction is executed by the simulation loop: the trespasser is
         shoved ``defend_push`` cells away and ``defend_take_fraction`` of its
         energy transfers to the defender, who pays ``defend_cost``. The
-        gate value itself is not scaled into energy — the eviction is
-        all-or-nothing — but it is recorded so the delta-rule learner can
-        shape the gate from the honest same-tick net reward (toll gained minus
-        ``defend_cost``). Because the toll scales with the trespasser's own
-        energy, the gate reads that feature and learns to evict rich
-        trespassers and leave lean ones alone. The simulation loop only
-        offers decisions when the defender stands on its own tribe's
-        territory, so the gate learns "this trespasser is worth evicting",
-        not "where is my territory".
+        eviction also keeps a rival raider off the tribe's nest bank (step
+        7b), so a cleared gate protects real shared energy. The gate value
+        itself is not scaled into energy — the eviction is all-or-nothing —
+        but it is recorded so the delta-rule learner can shape the gate from
+        the honest same-tick net reward (toll gained minus ``defend_cost``).
+        Because the toll scales with the trespasser's own energy, the gate
+        reads that feature and learns to evict rich trespassers and leave lean
+        ones alone. The simulation loop only offers decisions when the
+        defender stands on its own tribe's territory, so the gate learns "this
+        trespasser is worth evicting", not "where is my territory".
 
         Args:
             other: the intended trespasser (a baby of another tribe).
@@ -2423,6 +2428,51 @@ class SimScene:
         baby.entity.energy += draw
         return float(draw)
 
+    def raid_nest(self, baby: SimBaby) -> float:
+        """
+        Foreign theft: drain stored energy from a rival tribe's nest.
+
+        When territoriality is on, a hungry baby standing on foreign ground —
+        within ``territory_radius`` of a FOREIGN tribe's nearest nest — can
+        draw from that bank at the same rate as an owner (``nest_draw_rate``,
+        capped by the gap back to start energy and the bank). The draw is a
+        transfer, never creation: the rival tribe's shared bank is the value
+        that defending (evicting the raider) protects. This is the one-way
+        drain that makes territoriality worth evolving — an unguarded bank is
+        siphoned, a defended one is kept.
+
+        Args:
+            baby: the raiding agent.
+
+        Returns:
+            Energy stolen from the foreign nest into the baby.
+
+        Side effects:
+            - reduces the foreign nest's stored_energy
+            - raises the baby's energy
+        """
+        if not self.params.territoriality_enabled:
+            return 0.0
+        if baby.energy >= self.params.start_energy:
+            return 0.0
+        best = None
+        best_d = float("inf")
+        for n in self.nests:
+            if not n.alive or n.owner_group_id == baby.group_id:
+                continue
+            d = n.distance_to_point(baby.position)
+            if d <= self.params.territory_radius and d < best_d:
+                best, best_d = n, d
+        if best is None:
+            return 0.0
+        gap = self.params.start_energy - baby.energy
+        steal = min(self.params.nest_draw_rate, gap, best.stored_energy)
+        if steal <= 0:
+            return 0.0
+        best.stored_energy -= steal
+        baby.entity.energy += steal
+        return float(steal)
+
     def info(self) -> dict:
         return {
             "tick": self._tick,
@@ -2747,14 +2797,16 @@ class Simulation:
             #     away and transfers ``defend_take_fraction`` of its energy to
             #     the defender (a toll that scales with what the trespasser
             #     carries, never lethal), and the defender pays
-            #     ``defend_cost``. Territoriality is an opt-in channel (off by
-            #     default): when off no perceptron exists and no RNG is drawn,
-            #     so the locked selection proofs keep their exact genome layout
-            #     and energy flow. When on, the eviction lands in the same
-            #     tick's honest net reward (step 8b), so the gate is shaped by
-            #     the true outcome — defending pays while a trespasser carries
-            #     more energy than the eviction costs and self-limits as
-            #     trespassers run scarce.
+            #     ``defend_cost``. Eviction is what keeps a rival raider from
+            #     draining the tribe's nest bank (step 7b), so defense
+            #     protects a real shared resource. Territoriality is an opt-in
+            #     channel (off by default): when off no perceptron exists and
+            #     no RNG is drawn, so the locked selection proofs keep their
+            #     exact genome layout and energy flow. When on, the eviction
+            #     lands in the same tick's honest net reward (step 8b), so
+            #     the gate is shaped by the true outcome — defending pays
+            #     while a trespasser carries more energy than the eviction
+            #     costs and self-limits as trespassers run scarce.
             defended = False
             defend_amplitude = 0.0
             defend_energy = 0.0
@@ -2790,10 +2842,15 @@ class Simulation:
             baby.entity.energy += absorbed
 
             # 7b. Draw from own tribe's nearest nest when under start energy —
-            #     a starvation buffer that rewards territoriality.
+            #     a starvation buffer that rewards territoriality. When the
+            #     territoriality channel is on, a hungry baby on foreign
+            #     ground can instead raid a rival tribe's nearest nest (the
+            #     theft that defense protects).
             drawn = 0.0
+            raided = 0.0
             if self.scene.params.structure_enabled:
                 drawn = self.scene.draw_nest(baby)
+                raided = self.scene.raid_nest(baby)
 
             # 8. Passive drain
             baby.entity.energy -= self.scene.params.passive_drain
@@ -2842,6 +2899,7 @@ class Simulation:
                 "nested": nested,
                 "seeded": seeded,
                 "drawn": drawn,
+                "raided": raided,
                 "social_act": social_act,
                 "social_energy": social_energy,
                 "total_ms": elapsed,
@@ -2920,4 +2978,7 @@ class Simulation:
             "defenses": sum(1 for r in self._tick_log if r.get("defended", False)),
             "defend_energy_moved": sum(r.get("defend_energy", 0.0)
                                        for r in self._tick_log),
+            "raids": sum(1 for r in self._tick_log if r.get("raided", 0.0) > 0.0),
+            "raid_energy_moved": sum(r.get("raided", 0.0)
+                                     for r in self._tick_log),
         }

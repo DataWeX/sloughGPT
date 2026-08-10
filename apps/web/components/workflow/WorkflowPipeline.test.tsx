@@ -14,20 +14,46 @@ const runningStatus: WorkflowStatus = {
     aggregate_interval_minutes: 30,
     prune_interval_minutes: 60,
     export_interval_hours: 24,
+    auto_dpo_interval_minutes: 60,
     health_check_interval_seconds: 30,
+    background_training_interval_seconds: 300,
+    background_training_enabled: true,
   },
   stats: {
-    feedback_records: 150,
-    adapters_count: 3,
-    last_aggregate: new Date(Date.now() - 600000).toISOString(),
-    last_prune: new Date(Date.now() - 3600000).toISOString(),
+    workflow_runs: 10,
+    aggregations_performed: 3,
+    prunes_performed: 2,
+    exports_performed: 1,
+    feedback_recorded: 150,
+    auto_train_steps: 0,
+    dpo_train_steps: 0,
+    dpo_train_rejected: 0,
+    user_adapter_trained: 3,
+    user_adapter_rejected: 0,
+    start_time: null,
   },
+  pending_thumbs_up: 0,
+  auto_train_threshold: 3,
+  last_runs: {
+    aggregate: Math.floor(Date.now() / 1000) - 600,
+    prune: Math.floor(Date.now() / 1000) - 3600,
+    export: 0,
+    dpo: 0,
+    health_check: 0,
+    last_rollback: 0,
+    background_training: 0,
+  },
+  systems: {},
 }
 
 const stoppedStatus: WorkflowStatus = {
   running: false,
   config: runningStatus.config,
   stats: runningStatus.stats,
+  pending_thumbs_up: 0,
+  auto_train_threshold: 3,
+  last_runs: runningStatus.last_runs,
+  systems: {},
 }
 
 describe('WorkflowPipeline', () => {
@@ -37,7 +63,8 @@ describe('WorkflowPipeline', () => {
   })
 
   it('returns null when no config', () => {
-    const { container } = render(<WorkflowPipeline status={{ running: false }} />)
+    const noConfigStatus = { ...runningStatus, config: undefined as unknown as WorkflowStatus['config'] }
+    const { container } = render(<WorkflowPipeline status={noConfigStatus} />)
     expect(container.querySelector('[data-testid="workflow-pipeline"]')).toBeNull()
   })
 
@@ -90,7 +117,23 @@ describe('WorkflowPipeline', () => {
     const statusNoRuns: WorkflowStatus = {
       running: true,
       config: runningStatus.config,
-      stats: { feedback_records: 0, adapters_count: 0 },
+      stats: {
+        workflow_runs: 0,
+        aggregations_performed: 0,
+        prunes_performed: 0,
+        exports_performed: 0,
+        feedback_recorded: 0,
+        auto_train_steps: 0,
+        dpo_train_steps: 0,
+        dpo_train_rejected: 0,
+        user_adapter_trained: 0,
+        user_adapter_rejected: 0,
+        start_time: null,
+      },
+      pending_thumbs_up: 0,
+      auto_train_threshold: 3,
+      last_runs: { aggregate: 0, prune: 0, export: 0, dpo: 0, health_check: 0, last_rollback: 0, background_training: 0 },
+      systems: {},
     }
     render(<WorkflowPipeline status={statusNoRuns} />)
     expect(screen.getAllByText('never').length).toBeGreaterThanOrEqual(1)

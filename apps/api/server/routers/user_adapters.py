@@ -31,12 +31,12 @@ class UserAdaptersRouter:
 
     def _register_routes(self):
         self.router.add_api_route("", self.list_adapters, methods=["GET"])
+        self.router.add_api_route("/quality", self.get_quality, methods=["GET"])
         self.router.add_api_route("/{user_id}", self.get_adapter, methods=["GET"])
         self.router.add_api_route("/{user_id}/update", self.update_adapter, methods=["POST"])
         self.router.add_api_route("/{user_id}/reset", self.reset_adapter, methods=["POST"])
         self.router.add_api_route("/merge", self.merge_adapters, methods=["POST"])
         self.router.add_api_route("/aggregate-best", self.aggregate_best, methods=["POST"])
-        self.router.add_api_route("/quality", self.get_quality, methods=["GET"])
         self.router.add_api_route("/{user_id}", self.delete_user_adapter, methods=["DELETE"])
         self.router.add_api_route("/prune", self.prune_low_quality_adapters, methods=["POST"])
 

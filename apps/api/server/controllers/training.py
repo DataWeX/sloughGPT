@@ -78,7 +78,7 @@ class TrainingController:
                 "name": ckpt.stem,
                 "path": str(ckpt),
                 "size_mb": ckpt.stat().st_size / (1024 * 1024),
-                "created": datetime.fromtimestamp(ckpt.stat().st_ctime).isoformat(),
+                "created_at": datetime.fromtimestamp(ckpt.stat().st_ctime).isoformat(),
             })
         return checkpoints
 

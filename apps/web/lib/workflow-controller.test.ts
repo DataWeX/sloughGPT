@@ -21,14 +21,18 @@ describe('workflowController.status', () => {
   it('GETs /workflow/status', async () => {
     apiClient.apiGet.mockResolvedValue({
       running: true,
-      config: { aggregate_interval_minutes: 30, prune_interval_minutes: 60, export_interval_hours: 24, health_check_interval_seconds: 10 },
-      stats: { feedback_records: 100, adapters_count: 5 },
+      config: { aggregate_interval_minutes: 30, prune_interval_minutes: 60, export_interval_hours: 24, auto_dpo_interval_minutes: 60, health_check_interval_seconds: 10, background_training_interval_seconds: 300, background_training_enabled: true },
+      stats: { workflow_runs: 0, aggregations_performed: 0, prunes_performed: 0, exports_performed: 0, feedback_recorded: 100, auto_train_steps: 0, dpo_train_steps: 0, dpo_train_rejected: 0, user_adapter_trained: 5, user_adapter_rejected: 0, start_time: null },
+      pending_thumbs_up: 0,
+      auto_train_threshold: 3,
+      last_runs: { aggregate: 0, prune: 0, export: 0, dpo: 0, health_check: 0, last_rollback: 0, background_training: 0 },
+      systems: {},
     })
 
     const result = await workflowController.status()
     expect(result.running).toBe(true)
     expect(result.config?.aggregate_interval_minutes).toBe(30)
-    expect(result.stats?.feedback_records).toBe(100)
+    expect(result.stats?.feedback_recorded).toBe(100)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/workflow/status')
   })
 

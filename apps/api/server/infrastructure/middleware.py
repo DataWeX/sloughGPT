@@ -112,6 +112,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Logs every request with method, path, status, duration, and correlation ID."""
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        if request.method == "OPTIONS":
+            return await call_next(request)
         corr_id = getattr(request.state, "correlation_id", "-")
         start = time.monotonic()
         try:

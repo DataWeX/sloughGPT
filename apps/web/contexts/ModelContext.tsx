@@ -3,22 +3,14 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
+import type { ModelInfo } from '@/lib/types'
 import { useLiveStatus, useApiReady } from '@/hooks/useLiveStatus'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 
 const _log = logger.child('model-context')
 
-export interface ModelInfo {
-  id: string
-  name: string
-  type: string
-  loaded: boolean
-  sizeMb?: number
-  params?: string
-  description?: string
-  tags?: string[]
-}
+export type { ModelInfo } from '@/lib/types'
 
 export interface ModelContextValue {
   models: ModelInfo[]
@@ -79,7 +71,8 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         name: m.name,
         type: m.type || 'huggingface',
         loaded: m.loaded ?? false,
-        sizeMb: m.size_mb,
+        size_mb: m.size_mb,
+        size_gb: m.size_gb,
         params: m.params,
         description: m.description,
         tags: m.tags,

@@ -86,10 +86,11 @@ def test_snapshot_keys():
     assert snap["tick"] == 0
     assert set(snap) == {
         "tick", "alive_babies", "grid_energy", "entity_energy",
-        "total_energy", "total_signal", "mean_baby_energy", "materials",
+        "nest_energy", "nests", "total_energy", "total_signal",
+        "mean_baby_energy", "materials",
     }
     assert snap["total_energy"] == pytest.approx(
-        snap["grid_energy"] + snap["entity_energy"])
+        snap["grid_energy"] + snap["entity_energy"] + snap["nest_energy"])
 
 
 def test_run_ticks_returns_one_snapshot_per_tick():
@@ -103,7 +104,7 @@ def test_energy_ledger_consistent():
     driver = WorldDriver(_small_params(), seed=7)
     ledger = driver.energy_ledger()
     assert ledger["total"] == pytest.approx(
-        ledger["grid"] + ledger["entities"])
+        ledger["grid"] + ledger["entities"] + ledger["nests"])
     per_mat = sum(ledger["per_material"].values())
     assert per_mat == pytest.approx(ledger["grid"])
     assert set(ledger["per_material"]) == set(range(NUM_MATERIALS))

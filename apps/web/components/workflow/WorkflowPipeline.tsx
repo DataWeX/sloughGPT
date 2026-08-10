@@ -12,14 +12,14 @@ interface PipelineStep {
   key: string
   label: string
   interval: string
-  lastRun?: string
+  lastRun?: number
   enabled: boolean
 }
 
 function buildSteps(status: WorkflowStatus | null): PipelineStep[] {
   if (!status?.config) return []
   const c = status.config
-  const s = status.stats
+  const lr = status.last_runs
   return [
     {
       key: 'feedback',
@@ -31,40 +31,38 @@ function buildSteps(status: WorkflowStatus | null): PipelineStep[] {
       key: 'aggregate',
       label: 'Aggregate',
       interval: `${c.aggregate_interval_minutes}m`,
-      lastRun: s?.last_aggregate,
+      lastRun: lr?.aggregate,
       enabled: status.running,
     },
     {
       key: 'train',
       label: 'Train',
       interval: `${c.aggregate_interval_minutes}m`,
-      lastRun: s?.last_aggregate,
+      lastRun: lr?.aggregate,
       enabled: status.running,
     },
     {
       key: 'prune',
       label: 'Prune',
       interval: `${c.prune_interval_minutes}m`,
-      lastRun: s?.last_prune,
+      lastRun: lr?.prune,
       enabled: status.running,
     },
     {
       key: 'export',
       label: 'Export',
       interval: `${c.export_interval_hours}h`,
-      lastRun: s?.last_export,
+      lastRun: lr?.export,
       enabled: status.running,
     },
   ]
 }
 
-function timeAgo(ts?: string): string {
-  if (!ts) return 'never'
+function timeAgo(ts?: number): string {
+  if (!ts || ts === 0) return 'never'
   try {
-    const d = new Date(ts)
-    if (isNaN(d.getTime())) return 'never'
-    const diffMs = Date.now() - d.getTime()
-    const diffM = Math.floor(diffMs / 60000)
+    const diff = Date.now() / 1000 - ts
+    const diffM = Math.floor(diff / 60)
     const diffH = Math.floor(diffM / 60)
     const diffD = Math.floor(diffH / 24)
     if (diffD > 0) return `${diffD}d ago`
@@ -117,7 +115,7 @@ export function WorkflowPipeline({ status }: WorkflowPipelineProps) {
             <span className="h-2 w-2 rounded-full bg-muted border border-border" />
             Idle
           </div>
-          <span className="ml-auto">{status?.stats?.feedback_records ?? 0} feedback records</span>
+          <span className="ml-auto">{status?.stats?.feedback_recorded ?? 0} feedback records</span>
         </div>
       </CardContent>
     </Card>

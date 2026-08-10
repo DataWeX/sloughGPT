@@ -789,6 +789,8 @@ class EvolutionEngine:
                 "defenses": social["defenses"],
                 "defend_rate": social["defend_rate"],
                 "defend_energy_moved": social["defend_energy_moved"],
+                "raids": social["raids"],
+                "raid_energy_moved": social["raid_energy_moved"],
                 "nests_built": social["nests_built"],
                 "memory_size": len(self.world_memory)
                 if self.world_memory is not None else 0,
@@ -861,6 +863,8 @@ class EvolutionEngine:
                 "defenses": social["defenses"],
                 "defend_rate": social["defend_rate"],
                 "defend_energy_moved": social["defend_energy_moved"],
+                "raids": social["raids"],
+                "raid_energy_moved": social["raid_energy_moved"],
                 "nests_built": social["nests_built"],
                 "memory_size": 0,
                 "memory_seeds": 0,
@@ -1284,15 +1288,20 @@ def benchmark_territoriality(params: WorldParams | None = None, *,
     arms and teaching/memory are off in both: the only difference is the
     interaction channel:
       - ``control``: territoriality disabled. Tribes gather, forage, and
-        build nests, but standing on their own ground never evicts anyone.
-      - ``territoriality``: standing within ``territory_radius`` of its
-        tribe's nearest nest, a baby whose territory gate clears
+        build nests, but the nest banks are never raided and standing on
+        their own ground never evicts anyone.
+      - ``territoriality``: the full two-sided channel. A hungry baby
+        standing on foreign ground (within ``territory_radius`` of a foreign
+        tribe's nearest nest) RAIDS that bank — ``nest_draw_rate`` per tick,
+        a one-way drain. Standing within ``territory_radius`` of its tribe's
+        nearest nest, a baby whose territory gate clears
         ``defend_gate_threshold`` evicts the nearest foreign baby within
         ``defend_range`` — shoving it ``defend_push`` cells away (a pure
         relocation, never a kill) and transferring ``defend_take_fraction``
         of its energy to the defender (a toll that scales with what the
-        trespasser carries), who pays ``defend_cost`` (a transfer, not
-        creation — the world conserves energy).
+        trespasser carries), who pays ``defend_cost``. Eviction keeps a rival
+        raider off the tribe's shared bank, so defense protects a real
+        resource (all transfers — the world conserves energy).
 
     Territoriality is never hardcoded: the territory perceptron must learn to
     open its gate only when the eviction pays (the trespasser carries more

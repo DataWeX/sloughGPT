@@ -27,19 +27,20 @@ describe('Chat page', () => {
   it('loads the chat page with input', () => {
     cy.visit('/chat')
     cy.get('body').should('not.be.empty')
-    cy.get('textarea, input[type="text"], [contenteditable]').should('exist')
+    cy.get('textarea[aria-label="Message input"]').should('be.enabled')
   })
 
   it('sends a message and displays response', () => {
     cy.visit('/chat')
-    cy.get('textarea, input[type="text"], [contenteditable]').first().type('Hello{enter}')
-    cy.wait('@chatStream')
+    cy.get('textarea[aria-label="Message input"]', { timeout: 10000 }).should('be.enabled')
+    cy.get('textarea[aria-label="Message input"]').type('Hello{enter}')
+    cy.wait('@chatStream', { timeout: 15000 })
     cy.contains('Hello!').should('be.visible')
   })
 
   it('shows loading state during streaming', () => {
     cy.visit('/chat')
-    cy.get('textarea, input[type="text"], [contenteditable]').first().type('Test{enter}')
+    cy.get('textarea[aria-label="Message input"]').type('Test{enter}')
     cy.get('body').then(($body) => {
       const hasLoading = $body.find('[class*="animate"]').length > 0 ||
         $body.text().includes('...')

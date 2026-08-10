@@ -19,6 +19,7 @@ vi.mock('@sloughgpt/strui', () => {
         ))}
       </div>
     ),
+    FoldSection: ({ heading, children }: any) => <details open><summary>{heading}</summary><div>{children}</div></details>,
   }
 })
 
@@ -255,11 +256,11 @@ describe('TrainingPage', () => {
 
   it('switches tabs via the h and t keyboard shortcuts', async () => {
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Schedule')).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('train') })
     await act(async () => { fireEvent.keyDown(window, { key: 'h' }) })
-    await waitFor(() => { expect(screen.queryByText('Schedule')).toBeFalsy() })
+    await waitFor(() => { expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('history') })
     await act(async () => { fireEvent.keyDown(window, { key: 't' }) })
-    await waitFor(() => { expect(screen.getByText('Schedule')).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('train') })
   })
 
   it('switches to the history tab on click and shows a checkpoint count', async () => {
@@ -267,7 +268,6 @@ describe('TrainingPage', () => {
     render(<Page />)
     await waitFor(() => { expect(screen.getByText('History (1)')).toBeTruthy() })
     await act(async () => { screen.getByText('History (1)').click() })
-    await waitFor(() => { expect(screen.queryByText('Schedule')).toBeFalsy() })
-    expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('history')
+    await waitFor(() => { expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('history') })
   })
 })

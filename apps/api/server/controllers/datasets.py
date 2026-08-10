@@ -240,12 +240,21 @@ class DatasetsController:
 
         return " ".join(parts) + "."
 
-    def search_datasets(self, q: str) -> List[str]:
-        """Search datasets by name"""
-        if not self.datasets_dir.exists():
-            return []
+    def search_datasets(self, q: str) -> List[Dict[str, Any]]:
+        """Search datasets by name — returns full dataset summaries.
 
-        return [d.name for d in self.datasets_dir.iterdir() if d.is_dir() and q.lower() in d.name.lower()]
+        Args:
+            q: case-insensitive substring matched against the directory name
+               and the humanized title.
+
+        Returns:
+            List of dataset summary dicts (same shape as ``list_datasets``)
+            whose name or title contains ``q``.
+
+        Side effects:
+            - reads dataset directories to build summaries
+        """
+        return self.list_datasets(q=q)
 
     def create_dataset(self, name: str, description: Optional[str] = None) -> Dict[str, Any]:
         """Create a new dataset"""

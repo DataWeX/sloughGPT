@@ -37,6 +37,7 @@ import { ExecutorPool } from '@/components/monitoring/ExecutorPool'
 import { ProcessCard } from '@/components/monitoring/ProcessCard'
 import { KvCacheCard } from '@/components/monitoring/KvCacheCard'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
+import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
@@ -364,6 +365,7 @@ export default function SystemHealthPage() {
         {loaded && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {autoTrainStatus && <AutoTrainCard status={autoTrainStatus} />}
+            <WorkflowCard onRefresh={fetchAll} />
             {benchQuality && <QualityCard quality={benchQuality} stats={benchStats} />}
             <FeedbackCard
               dpoStatus={dpoStatus}

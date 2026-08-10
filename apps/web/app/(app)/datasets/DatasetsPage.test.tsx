@@ -3,12 +3,15 @@ import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-libra
 import React from 'react'
 
 const {
-  mockPush, mockAddToast, mockList, mockDelete,
+  mockPush, mockAddToast, mockList, mockDelete, mockSearch, mockListVersions, mockExport,
 } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockAddToast: vi.fn(),
   mockList: vi.fn(),
   mockDelete: vi.fn(),
+  mockSearch: vi.fn(),
+  mockListVersions: vi.fn(),
+  mockExport: vi.fn(),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
@@ -26,7 +29,7 @@ vi.mock('@sloughgpt/strui', () => {
       <input value={value} onChange={onChange} className={className} placeholder={placeholder} />
     ),
     Skeleton: ({ className }: any) => <div className={className} />,
-    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconChevronDown: iconMock('chevron-down'),
+    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconChevronDown: iconMock('chevron-down'), IconDownload: iconMock('download'),
     AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
@@ -48,6 +51,9 @@ vi.mock('@/lib/dataset-controller', () => ({
     list: mockList,
     delete: mockDelete,
     preview: vi.fn(),
+    search: mockSearch,
+    listVersions: mockListVersions,
+    export: mockExport,
   },
 }))
 
@@ -58,6 +64,18 @@ vi.mock('@/lib/toast-store', () => ({
 vi.mock('@/components/DatasetInlineImportModal', () => ({
   __esModule: true,
   default: ({ open, onOpenChange }: any) => open ? <div data-testid="import-modal">Import Modal</div> : null,
+}))
+
+vi.mock('@/lib/conversations-utils', () => ({
+  formatDate: (d: string) => d,
+}))
+
+vi.mock('@/lib/format-bytes', () => ({
+  formatBytes: (b: number) => {
+    if (b < 1024) return `${b} B`
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`
+  },
 }))
 
 import DatasetsPage from './page'
@@ -82,6 +100,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockList.mockResolvedValue(mockDatasets)
   mockDelete.mockResolvedValue(undefined)
+  mockSearch.mockResolvedValue(mockDatasets)
+  mockListVersions.mockResolvedValue({ versions: [], count: 0 })
+  mockExport.mockResolvedValue(new Blob(['test'], { type: 'application/json' }))
 })
 
 afterEach(cleanup)
@@ -109,15 +130,81 @@ describe('DatasetsPage', () => {
     })
   })
 
+  it('shows a version count badge when the dataset has versions', async () => {
+    mockListVersions.mockImplementation((id: string) =>
+      id === 'ds1'
+        ? Promise.resolve({ versions: ['20260801120000', '20260801110000'], count: 2 })
+        : Promise.resolve({ versions: [], count: 0 }),
+    )
+    render(<DatasetsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('2 versions')).toBeDefined()
+    })
+  })
+
+  it('does not render a version badge for versionless datasets', async () => {
+    mockListVersions.mockResolvedValue({ versions: [], count: 0 })
+    render(<DatasetsPage />)
+    await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
+    await new Promise(r => setTimeout(r, 20))
+    expect(screen.queryByText(/\d+ versions?/)).toBeNull()
+  })
+
+  it('exports a dataset to a downloadable jsonl file', async () => {
+    const createObjectURL = vi.fn(() => 'blob:test')
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL: vi.fn() })
+    render(<DatasetsPage />)
+    await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
+
+    fireEvent.click(screen.getByLabelText('Export Shakespeare'))
+
+    await waitFor(() => {
+      expect(mockExport).toHaveBeenCalledWith('ds1', 'jsonl')
+      expect(createObjectURL).toHaveBeenCalled()
+      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Exported'), 'success')
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it('shows an error toast when export fails', async () => {
+    mockExport.mockRejectedValue(new Error('network'))
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(), revokeObjectURL: vi.fn() })
+    render(<DatasetsPage />)
+    await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
+
+    fireEvent.click(screen.getByLabelText('Export Shakespeare'))
+
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Export failed', 'error')
+    })
+    vi.unstubAllGlobals()
+  })
+
   it('filters datasets by search', async () => {
+    mockSearch.mockResolvedValue([mockDatasets[0]])
     render(<DatasetsPage />)
     await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
     const searchInput = screen.getByPlaceholderText('Search datasets...')
-    fireEvent.change(searchInput, { target: { value: 'shakes' } })
+    await act(async () => { fireEvent.change(searchInput, { target: { value: 'shakes' } }) })
     await waitFor(() => {
-      expect(screen.getByText('Shakespeare')).toBeDefined()
+      expect(mockSearch).toHaveBeenCalledWith('shakes')
     })
-    expect(screen.queryByText('GitHub Code')).toBeNull()
+  })
+
+  it('shows a searching indicator while the search is in flight', async () => {
+    let resolveSearch: (v: unknown) => void
+    mockSearch.mockReturnValue(new Promise(res => { resolveSearch = res }))
+    render(<DatasetsPage />)
+    await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
+    const searchInput = screen.getByPlaceholderText('Search datasets...')
+    await act(async () => { fireEvent.change(searchInput, { target: { value: 'pending' } }) })
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeDefined()
+    })
+    await act(async () => { resolveSearch!([mockDatasets[0]]) })
+    await waitFor(() => {
+      expect(screen.queryByRole('status')).toBeNull()
+    })
   })
 
   it('shows empty state when no datasets', async () => {

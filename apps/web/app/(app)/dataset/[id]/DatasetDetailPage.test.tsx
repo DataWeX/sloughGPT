@@ -25,6 +25,7 @@ vi.mock('@sloughgpt/strui', () => {
     Skeleton: ({ className }: any) => <div className={className} />,
     IconTrash: iconMock('trash'), IconDownload: iconMock('download'), IconEdit: iconMock('edit'),
     IconCheck: iconMock('check'), IconX: iconMock('x'), IconRefresh: iconMock('refresh'), IconClock: iconMock('clock'),
+    IconChevronDown: iconMock('chevron-down'),
     AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
@@ -162,6 +163,7 @@ describe('DatasetDetailPage', () => {
     render(<DatasetDetailPage />)
     await waitForName()
     await act(async () => { screen.getByText('Export').click() })
+    await act(async () => { screen.getByText('Export as JSONL').click() })
     await waitFor(() => { expect(mockExport).toHaveBeenCalledWith('shakespeare') })
   })
 

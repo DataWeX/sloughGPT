@@ -55,6 +55,29 @@ function taskBadgeStyle(status: RunStatus): string {
   return 'bg-muted text-muted-foreground'
 }
 
+function formatDuration(startedAt: string | null, finishedAt: string | null): string {
+  if (!startedAt) return ''
+  const start = new Date(startedAt).getTime()
+  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now()
+  const ms = end - start
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  const min = Math.floor(ms / 60000)
+  const sec = Math.floor((ms % 60000) / 1000)
+  return `${min}m ${sec}s`
+}
+
+function getAgentTaskStats(tasks: OrchestrateTask[]): Record<string, { completed: number; failed: number; total: number }> {
+  const stats: Record<string, { completed: number; failed: number; total: number }> = {}
+  for (const t of tasks) {
+    if (!stats[t.agent]) stats[t.agent] = { completed: 0, failed: 0, total: 0 }
+    stats[t.agent].total++
+    if (t.status === 'completed') stats[t.agent].completed++
+    else if (t.status === 'failed') stats[t.agent].failed++
+  }
+  return stats
+}
+
 export default function AgentsPage() {
   const addToast = useToastStore(s => s.addToast)
   const [agents, setAgents] = useState<Agent[]>([])
@@ -90,6 +113,7 @@ export default function AgentsPage() {
   const [orchTotalLevels, setOrchTotalLevels] = useState(0)
   const [orchResponse, setOrchResponse] = useState<string | null>(null)
   const [orchError, setOrchError] = useState<string | null>(null)
+  const [orchAgentIds, setOrchAgentIds] = useState<string[]>([])
 
   const [runs, setRuns] = useState<AgentRun[]>([])
   const [runsLoading, setRunsLoading] = useState(false)
@@ -399,7 +423,7 @@ export default function AgentsPage() {
         addToast(error, 'error')
         fetchRuns()
       },
-    })
+    }, undefined, orchAgentIds.length > 0 ? orchAgentIds : undefined)
   }
 
   const toolCount = agents.reduce((acc, a) => acc + (a.tools?.length ?? 0), 0)
@@ -459,7 +483,7 @@ export default function AgentsPage() {
                   <button
                     key={t.name}
                     onClick={() => { setNewName(t.name); setNewDesc(t.desc); setNewInstructions(t.instructions); setNewTools([...t.tools]) }}
-                    className="rounded-full px-3 py-1 text-xs font-medium border border-border/60 bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
+                    className="rounded-full px-3 py-1 text-xs font-medium border border-border/60 bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 focus:ring-2 focus:ring-primary/30 transition-colors"
                   >
                     {t.name}
                   </button>
@@ -559,10 +583,10 @@ export default function AgentsPage() {
                       <>
                         <span className="text-muted-foreground">·</span>
                         <span className="text-muted-foreground">{selectedIds.size} selected</span>
-                        <Button size="sm" variant="ghost" onClick={handleBulkExport} className="h-7 text-xs">
+                        <Button size="sm" variant="ghost" onClick={handleBulkExport} className="h-8 text-xs">
                           Export
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={handleBulkDelete} className="h-7 text-xs text-destructive hover:text-destructive">
+                        <Button size="sm" variant="ghost" onClick={handleBulkDelete} className="h-8 text-xs text-destructive hover:text-destructive">
                           Delete
                         </Button>
                       </>
@@ -570,7 +594,12 @@ export default function AgentsPage() {
                   </div>
                 )}
                 {filteredAgents.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No agents matching &quot;{agentSearch}&quot;</p>
+                  <div className="text-center py-4">
+                    <p className="text-xs text-muted-foreground">No agents matching &quot;{agentSearch}&quot;</p>
+                    <Button size="sm" variant="ghost" className="h-8 text-xs mt-2" onClick={() => setAgentSearch('')}>
+                      Clear search
+                    </Button>
+                  </div>
                 ) : (
                   filteredAgents.map(agent => (
                 <div key={agent.id} className={`rounded-lg border p-4 space-y-2 transition-colors ${execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50'}`}>
@@ -647,7 +676,7 @@ export default function AgentsPage() {
                       {agent.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {agent.tools.map(t => (
-                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                            <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                               {t.replace(/_/g, ' ')}
                             </span>
                           ))}
@@ -732,6 +761,31 @@ export default function AgentsPage() {
               value={orchContext}
               onChange={e => setOrchContext(e.target.value)}
             />
+            {agents.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">Agents (optional — leave empty for all)</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {agents.map(a => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => {
+                        setOrchAgentIds(prev =>
+                          prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
+                        )
+                      }}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${
+                        orchAgentIds.includes(a.id)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-muted-foreground border-border hover:border-primary/50'
+                      }`}
+                    >
+                      {a.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button onClick={handleOrchestrate} disabled={orchRunning || !orchGoal.trim()}>
                 {orchRunning ? 'Orchestrating...' : 'Orchestrate'}
@@ -902,6 +956,11 @@ export default function AgentsPage() {
                       <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                         {run.completed_count}/{run.completed_count + run.failed_count} tasks
                       </span>
+                      {run.started_at && (
+                        <span className="shrink-0 text-xs text-muted-foreground/70">
+                          {formatDuration(run.started_at, run.finished_at)}
+                        </span>
+                      )}
                       <span className="shrink-0 text-xs text-muted-foreground">
                         {run.started_at ? new Date(run.started_at).toLocaleString() : ''}
                       </span>
@@ -913,22 +972,44 @@ export default function AgentsPage() {
                             {run.error}
                           </div>
                         )}
-                        {run.tasks.length > 0 && (
-                          <div className="space-y-1.5">
-                            <p className="text-xs font-medium text-muted-foreground">Tasks ({run.tasks.length})</p>
-                            {run.tasks.map(task => (
-                              <div key={task.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                                <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                                  task.status === 'completed' ? 'bg-success' :
-                                  task.status === 'failed' ? 'bg-destructive' :
-                                  'bg-muted-foreground/30'
-                                }`} />
-                                <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
-                                <span className="flex-1 truncate">{task.description}</span>
+                        {run.tasks.length > 0 && (() => {
+                          const agentStats = getAgentTaskStats(run.tasks)
+                          const agentNames = Object.keys(agentStats)
+                          return (
+                            <div className="space-y-2">
+                              {agentNames.length > 1 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {agentNames.map(name => {
+                                    const s = agentStats[name]
+                                    return (
+                                      <span key={name} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground font-medium">
+                                        {name}: {s.completed}/{s.total}
+                                        {s.failed > 0 && <span className="text-destructive ml-1">({s.failed} failed)</span>}
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-medium text-muted-foreground">Tasks ({run.tasks.length})</p>
+                                {run.tasks.map(task => (
+                                  <div key={task.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                                    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                                      task.status === 'completed' ? 'bg-success' :
+                                      task.status === 'failed' ? 'bg-destructive' :
+                                      'bg-muted-foreground/30'
+                                    }`} />
+                                    <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
+                                    <span className="flex-1 truncate">{task.description}</span>
+                                    {task.result_preview && (
+                                      <span className="text-xs text-muted-foreground/50 truncate max-w-[200px]">{task.result_preview}</span>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            </div>
+                          )
+                        })()}
                         {run.response && (
                           <div className="rounded-lg border bg-muted/30 p-3">
                             <p className="text-xs font-medium text-muted-foreground mb-1">Result</p>
@@ -937,8 +1018,8 @@ export default function AgentsPage() {
                         )}
                         {run.logs.length > 0 && (
                           <div className="rounded-lg bg-muted/50 p-3">
-                            <p className="text-xs font-medium text-muted-foreground mb-1">Logs</p>
-                            <pre className="text-xs text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto">
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Logs ({run.logs.length})</p>
+                            <pre className="text-xs text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
                               {run.logs.join('\n')}
                             </pre>
                           </div>
@@ -961,6 +1042,11 @@ export default function AgentsPage() {
                             <div className="flex items-center gap-2">
                               <span className={`text-xs font-medium ${statusColor}`}>{run.status}</span>
                               <span className="text-sm flex-1 truncate">{run.goal}</span>
+                              {run.started_at && (
+                                <span className="text-xs text-muted-foreground/70">
+                                  {formatDuration(run.started_at, run.finished_at)}
+                                </span>
+                              )}
                               <span className="text-xs text-muted-foreground">{run.started_at ? new Date(run.started_at).toLocaleString() : ''}</span>
                             </div>
                             <div className="ml-2 border-l-2 border-border/60 pl-4 space-y-2">

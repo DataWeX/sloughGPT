@@ -13,21 +13,36 @@ class JobStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     STOPPED = "stopped"
+    CANCELLED = "cancelled"
 
 
 class TrainingJob(BaseModel):
     id: str
-    name: str
+    name: str = ""
     status: JobStatus = JobStatus.PENDING
-    model: str = "sloughgpt"
-    dataset: str = "shakespeare"
-    epochs: int = 3
+    progress: int = 0
+    model: str = ""
+    dataset: str = ""
+    method: str = ""
+    epochs: int = 0
+    current_epoch: int = 0
+    global_step: int = 0
+    loss: float = 0.0
+    train_loss: float = 0.0
+    eval_loss: float = 0.0
+    checkpoint: str = ""
+    data_source: str = ""
     batch_size: int = 32
     learning_rate: float = 1e-4
-    progress: int = 0
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    error: str = ""
+    explanation: str = ""
+    loss_history: List[float] = []
+    reward_history: List[float] = []
+    epochs_completed: int = 0
+    status_message: str = ""
 
 
 class JobCreate(BaseModel):
@@ -47,10 +62,10 @@ class JobResponse(BaseModel):
 
 
 class CheckpointInfo(BaseModel):
-    name: str
-    path: str
-    size_mb: float
-    created: str
+    name: str = ""
+    path: str = ""
+    size_mb: float = 0
+    created_at: Optional[str] = None
 
 
 class DatasetInfo(BaseModel):

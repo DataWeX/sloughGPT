@@ -939,11 +939,13 @@ def setup_providers(
     quant_mode: str = "symmetric",
     personality_traits: Optional[Dict[str, float]] = None,
     slonet_path: Optional[str] = None,
+    native_slnc_path: Optional[str] = None,
 ) -> None:
     """Register providers and build the default processor pipeline.
 
     Registers:
-    - ``"native-c"``: NativeTransformerProvider (C-accelerated, if feature flag enabled)
+    - ``"native-c"``: NativeTransformerProvider (C-accelerated, if feature flag enabled
+      or ``native_slnc_path`` given)
     - ``"slonet-native"``: SloNetChatProvider (if slonet_hf_id or slonet_provider given)
     - ``"default"``: ProviderRouter with processor chain → text provider
 
@@ -975,15 +977,21 @@ def setup_providers(
         personality_traits: Optional personality traits dict
         slonet_path: Direct path to a local .slnc file (e.g. a compiled
             fine-tuned model) to load via ``SloNetChatProvider.from_slnc``
+        native_slnc_path: Direct path to a local .slnc file to load through
+            the native C engine (``NativeEngine.from_slnc_file``). When given,
+            ``native-c`` is registered and becomes the text provider.
     """
     text_provider_name = None
 
     # Try native C inference engine first (highest priority if enabled)
     try:
         from domains.shared.feature_flags import is_enabled
-        if is_enabled("native_c_inference"):
+        native_on = is_enabled("native_c_inference")
+        if native_on or native_slnc_path:
             from domains.inference.native.engine import get_engine, NativeTransformerProvider
             engine = get_engine()
+            if not engine.loaded and native_slnc_path:
+                engine = engine.from_slnc_file(native_slnc_path)
             if engine.loaded:
                 register_provider("native-c", NativeTransformerProvider(engine, model_id="native-c"))
                 text_provider_name = "native-c"

@@ -34,6 +34,8 @@ class WorkflowConfig:
     export_interval_hours: int = 24
 
     health_check_interval_seconds: int = 30
+    background_training_interval_seconds: int = 300  # 5 minutes
+    background_training_enabled: bool = True
 
     auto_aggregate_threshold: int = 50
     auto_prune_threshold: int = 100
@@ -724,6 +726,46 @@ class FeedbackWorkflowManager:
         except Exception as e:
             logger.warning("Health check error: %s", e, extra={"tag": "INFRA"})
 
+    def _run_background_training(self):
+        """Run background training on accumulated feedback.
+
+        Periodically trains the model on feedback data that hasn't been
+        used for training yet. This ensures continuous improvement even
+        when no new feedback events are happening.
+        """
+        net = getattr(self, '_model', None)
+        tok = getattr(self._lora_updater, '_tokenizer', None)
+        if net is None or tok is None:
+            return
+
+        try:
+            from .training import FeedbackTrainer
+            trainer = FeedbackTrainer()
+            sft_data = trainer.prepare_sft_data(min_quality=0.4)
+            if not sft_data or len(sft_data) < 3:
+                return
+
+            last_training = self._stats.get("last_background_training_time", 0)
+            recent_data = [
+                d for d in sft_data
+                if d.get("timestamp", 0) > last_training
+            ]
+            if not recent_data or len(recent_data) < 2:
+                return
+
+            logger.info(
+                "Background training: %d new feedback items", len(recent_data),
+                extra={"tag": "INFRA"}
+            )
+
+            self._maybe_auto_train()
+
+            self._stats["last_background_training_time"] = time.time()
+            self._stats["background_trainings"] = self._stats.get("background_trainings", 0) + 1
+
+        except Exception as e:
+            logger.warning("Background training error: %s", e, extra={"tag": "INFRA"})
+
     def start(self):
         """Start the automated workflow in background threads."""
         if self._running:
@@ -735,10 +777,23 @@ class FeedbackWorkflowManager:
         def scheduler_loop():
             while self._running:
                 self._health_check()
+                self.run_scheduled_tasks()
                 time.sleep(self.config.health_check_interval_seconds)
 
         self._scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
         self._scheduler_thread.start()
+
+        if self.config.background_training_enabled:
+            def background_training_loop():
+                while self._running:
+                    try:
+                        self._run_background_training()
+                    except Exception as e:
+                        logger.error("Background training failed: %s", e, extra={"tag": "INFRA"})
+                    time.sleep(self.config.background_training_interval_seconds)
+
+            self._training_thread = threading.Thread(target=background_training_loop, daemon=True)
+            self._training_thread.start()
 
         logger.info("Started automated feedback workflow", extra={"tag": "INFRA"})
 
@@ -760,6 +815,8 @@ class FeedbackWorkflowManager:
                 "export_interval_hours": self.config.export_interval_hours,
                 "auto_dpo_interval_minutes": self.config.auto_dpo_interval_minutes,
                 "health_check_interval_seconds": self.config.health_check_interval_seconds,
+                "background_training_interval_seconds": self.config.background_training_interval_seconds,
+                "background_training_enabled": self.config.background_training_enabled,
             },
             "last_runs": {
                 "aggregate": self._last_aggregate_time,
@@ -768,6 +825,7 @@ class FeedbackWorkflowManager:
                 "dpo": self._last_dpo_time,
                 "health_check": self._last_health_check,
                 "last_rollback": self._last_rollback_time,
+                "background_training": self._stats.get("last_background_training_time", 0),
             },
             "systems": {
                 "feedback_db": self.db.get_stats() if hasattr(self.db, "get_stats") else {},

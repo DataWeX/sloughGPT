@@ -139,6 +139,27 @@ def _loaded_engine(seed: int = 7, **cfg_overrides):
     return engine
 
 
+class _FakeTokenizer:
+    """Deterministic stand-in for a real tokenizer in wiring tests."""
+
+    def __init__(self, vocab_size=V, stop_ids=(2,), template=True):
+        self.vocab_size = vocab_size
+        self._stop = tuple(stop_ids)
+        self._template = template
+
+    def encode(self, text: str) -> list:
+        return [ord(c) for c in text[:8]]
+
+    def decode(self, ids: list) -> str:
+        return "".join(chr(i) if 32 <= i < 127 else "?" for i in ids)
+
+    def apply_chat_template(self, messages: list) -> str:
+        return "CHAT:" + "|".join(f"{m['role']}={m['content']}" for m in messages) + ":ASST"
+
+    def chat_stop_ids(self):
+        return self._stop
+
+
 class TestBindings:
     def test_load_lib_returns_c_library(self):
         lib = B.load_lib()
@@ -459,6 +480,161 @@ class TestNativeEngine:
                             lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
         engine = _loaded_engine()
         assert engine._detokenize_simple([0, 255]) == "??"
+
+
+class TestTokenizerWiring:
+    def test_set_tokenizer_routes_encode_decode(self):
+        engine = _loaded_engine()
+        fake = _FakeTokenizer()
+        engine.set_tokenizer(fake)
+        assert engine._tokenize_simple("hi") == [ord("h"), ord("i")]
+        assert engine._detokenize_simple([72, 105]) == "Hi"
+
+    def test_set_tokenizer_none_restores_fallback(self):
+        from domains.inference.tokenizer import get_tokenizer
+        engine = _loaded_engine()
+        engine.set_tokenizer(_FakeTokenizer())
+        engine.set_tokenizer(None)
+        assert engine._tokenize_simple("hi") == get_tokenizer().encode("hi")
+
+    def test_load_from_slnc_with_tokenizer_sets_stop_ids(self):
+        engine = NativeEngine()
+        engine.load_from_slnc(_weights(), _config(eos_token_id=999),
+                              tokenizer=_FakeTokenizer(stop_ids=(2,)))
+        assert engine._tokenizer is not None
+        assert engine._stop_ids() == {2}
+
+    def test_generate_stops_at_tokenizer_stop_id(self, monkeypatch):
+        engine = NativeEngine()
+        engine.load_from_slnc(_weights(), _config(eos_token_id=999),
+                              tokenizer=_FakeTokenizer(stop_ids=(2,)))
+
+        def _step_picks_stop(weights, cache, tok, pos, logits_ptr):
+            buf = np.ctypeslib.as_array(
+                ctypes.cast(logits_ptr, ctypes.POINTER(ctypes.c_float)),
+                shape=(V,),
+            )
+            buf[:] = -1.0
+            buf[2] = 10.0
+
+        monkeypatch.setattr(engine._lib, "transformer_forward_step", _step_picks_stop)
+        assert engine.generate([{"role": "user", "content": "hi"}],
+                               max_tokens=8, temperature=0.0) == ""
+
+    def test_build_prompt_prefers_apply_chat_template(self):
+        engine = _loaded_engine()
+        engine.set_tokenizer(_FakeTokenizer())
+        prompt = engine._build_prompt([{"role": "user", "content": "hi"}], system="sys")
+        assert prompt == "CHAT:system=sys|user=hi:ASST"
+
+    def test_build_prompt_falls_back_to_format_chat(self):
+        engine = _loaded_engine()
+        assert engine._build_prompt([{"role": "user", "content": "hi"}], system="sys") == \
+            format_chat([{"role": "user", "content": "hi"}], "qwen2", "sys")
+
+    def test_sample_masks_beyond_tokenizer_vocab(self):
+        engine = _loaded_engine()
+        engine.set_tokenizer(_FakeTokenizer(vocab_size=4))
+        logits = np.full(V, -1.0, dtype=np.float32)
+        logits[200] = 10.0
+        logits[0] = 5.0
+        tok = engine._sample(logits, 0.0, 0.9, 50, np.random.default_rng())
+        assert tok == 0
+
+    def test_load_from_slnc_hf_model_id_uses_real_tokenizer(self):
+        from domains.infrastructure.morph_tokenizer import MorphTokenizer
+        try:
+            real = MorphTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
+        except FileNotFoundError:
+            pytest.skip("Qwen tokenizer not cached locally")
+        engine = NativeEngine()
+        engine.load_from_slnc(_weights(), _config(), hf_model_id="Qwen/Qwen2.5-0.5B-Instruct")
+        assert engine._tokenizer is not None
+        assert engine._tokenize_simple("Hello world") == [9707, 1879]
+        assert engine._stop_ids() == {int(i) for i in real.chat_stop_ids()}
+
+    def test_from_slnc_file_roundtrip(self, tmp_path):
+        slnc_path = str(tmp_path / "tiny.slnc")
+        _build_slnc(slnc_path, _weights(), _config())
+        engine = NativeEngine.from_slnc_file(slnc_path, seq_capacity=16)
+        assert engine.loaded
+        assert engine._model_type == "qwen2"
+        out = engine.generate([{"role": "user", "content": "hi"}], max_tokens=8,
+                              temperature=0.0)
+        assert isinstance(out, str)
+
+    def test_hf_id_from_slnc_path(self):
+        from domains.inference.native.engine import _hf_id_from_slnc_path
+        assert _hf_id_from_slnc_path(
+            "/x/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/a/model.slnc"
+        ) == "Qwen/Qwen2.5-0.5B-Instruct"
+        assert _hf_id_from_slnc_path("/tmp/model.slnc") is None
+
+
+class TestRealModelEndToEnd:
+    SLNC = ("models/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/model.slnc")
+
+    def _available_mem_kb(self) -> int:
+        try:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemAvailable:"):
+                        return int(line.split()[1])
+        except OSError:
+            return 0
+        return 0
+
+    @pytest.mark.slow
+    @pytest.mark.integration
+    def test_real_qwen_slnc_native_generation(self, tmp_path):
+        from pathlib import Path
+        repo_root = Path(__file__).resolve().parents[3]
+        slnc = repo_root / self.SLNC
+        if not slnc.exists():
+            pytest.skip("real Qwen .slnc not present on disk")
+        if self._available_mem_kb() < 5 * 1024 * 1024:
+            pytest.skip("less than 5GB available memory")
+
+        engine = NativeEngine.from_slnc_file(str(slnc), seq_capacity=512)
+        assert engine.loaded
+        assert engine._model_type == "qwen2"
+        assert engine._tokenizer is not None
+        assert 151643 in engine._stop_ids()
+
+        out = engine.generate([{"role": "user", "content": "Hello"}],
+                              max_tokens=16, temperature=0.0)
+        assert isinstance(out, str) and len(out) > 0
+        assert "?" not in out
+
+
+class TestNativeProviderWiring:
+    @pytest.fixture(autouse=True)
+    def _clean_registries(self):
+        import domains.models.provider as mod
+        mod._providers.clear()
+        mod._processors.clear()
+        yield
+        mod._providers.clear()
+        mod._processors.clear()
+
+    def test_setup_providers_native_slnc_path(self, tmp_path):
+        from domains.models.provider import setup_providers, get_provider
+        slnc_path = str(tmp_path / "tiny.slnc")
+        _build_slnc(slnc_path, _weights(), _config())
+        setup_providers(native_slnc_path=slnc_path)
+        default = get_provider("default")
+        assert default.metadata["text_provider"] == "native-c"
+        provider = get_provider("native-c")
+        assert provider is not None
+        assert provider.metadata["type"] == "native-c"
+        assert provider.metadata["loaded"] is True
+
+    def test_setup_providers_missing_slnc_degrades_gracefully(self):
+        from domains.models.provider import setup_providers, get_provider
+        setup_providers(native_slnc_path="/nonexistent/model.slnc")
+        default = get_provider("default")
+        assert default.metadata["text_provider"] is None
+        assert get_provider("native-c") is None
 
 
 class TestNativeTransformerProvider:

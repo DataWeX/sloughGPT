@@ -52,6 +52,7 @@ class ExecuteRequest(BaseModel):
 class OrchestrateRequest(BaseModel):
     goal: str = Field(..., min_length=1, description="The goal for multi-agent orchestration")
     context: str = Field(default="", description="Additional context for the orchestrator")
+    agent_ids: List[str] = Field(default_factory=list, description="Specific agent IDs to use (empty = all agents)")
 
 
 class AgentsRouter:
@@ -183,6 +184,11 @@ class AgentsRouter:
             run_id = None
             try:
                 orch = MultiAgentOrchestrator()
+                # Filter agents if specific IDs provided
+                if req.agent_ids:
+                    filtered = {k: v for k, v in orch.agents.items() if k in req.agent_ids or v.name in req.agent_ids}
+                    if filtered:
+                        orch = MultiAgentOrchestrator(agents=filtered)
                 run_id = store.start(req.goal, req.context or "")
                 try:
                     from infrastructure.auth import get_audit_logger
