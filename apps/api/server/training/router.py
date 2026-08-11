@@ -16,8 +16,10 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+
+from infrastructure.auth import require_auth_if_enabled, audit_user, get_audit_logger
 
 try:
     from domains.api.sse_envelope import sse_event, sse_error, sse_complete
@@ -352,7 +354,7 @@ async def get_training_summary(job_id: str):
 
 
 @router.delete("/training/jobs/{job_id}")
-async def delete_training_job(job_id: str):
+async def delete_training_job(job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """Delete a training job and optionally its checkpoint files.
 
     Removes job from registry. If ``delete_files`` is true, removes checkpoint
@@ -454,7 +456,7 @@ async def export_feedback_pairs(request: Request):
 
 
 @router.post("/training/start")
-async def start_training(request: TrainingRequest):
+async def start_training(request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     """Start a tracked training job (web UI).
 
     ``step_*.pt`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
@@ -653,7 +655,7 @@ async def start_training(request: TrainingRequest):
 
 
 @router.post("/training/hf-start")
-async def start_hf_training(request: HFTrainingRequest):
+async def start_hf_training(request: HFTrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     """Fine-tune a HuggingFace model (causal LM) on text data with optional LoRA.
 
     Uses transformers.Trainer + peft. The ``model`` field specifies which
@@ -2168,7 +2170,7 @@ async def load_finetuned_model(name: str):
 
 
 @router.delete("/training/finetuned-models/{name}")
-async def delete_finetuned_model(name: str):
+async def delete_finetuned_model(name: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """Delete a fine-tuned model directory."""
     target = _resolve_finetuned(name)
     shutil.rmtree(str(target))

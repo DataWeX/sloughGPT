@@ -17,7 +17,7 @@
 ## Medium-term goals
 4. **Incremental training from feedback** — Wire OnlineLoRAUpdater + PerUserLORAStore into a continuous background loop (currently only fires on explicit aggregation).
 5. **Multi-agent orchestration polish** — Async executor works, needs UI for agent creation/editing and dashboard for runs.
-6. **Dataset management UI** — Import/export/versioning/search frontend (backend endpoints exist, frontend stubs).
+6. ~~**Dataset management UI** — Import/export/versioning/search frontend.~~ **Done** — list page (search/sort/preview/compare/export/delete/version badges), detail page (rename/stats/quality/insights/preview/snapshots/JSONL+CSV export/convert-to-chat-format), import modals (local/GitHub/HF/URL/ISBN/Kaggle/CSV), chat→dataset export. Backend convert + versioning covered by tests.
 
 ## Deferred (potential Rust)
 | Item | When | Why Rust |

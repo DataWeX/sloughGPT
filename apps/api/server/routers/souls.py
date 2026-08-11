@@ -5,7 +5,7 @@ Encapsulates router state in ``SloRouterState`` dataclass rather than module-lev
 mutable globals. Actual soul state lives in ``SloManager`` singleton.
 """
 from dataclasses import dataclass
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ import re
 import json, asyncio, numpy as np, logging
 
 from schemas.common import success_response, error_response
+from infrastructure.auth import require_auth_if_enabled, audit_user, get_audit_logger
 
 try:
     from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
@@ -330,6 +331,7 @@ Be yourself — let your personality shape how you respond."""
         self,
         req: SwitchRequest,
         checkpoint_name: Optional[str] = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
     ):
         """Switch to a different soul and update ContextCore system prompt.
 

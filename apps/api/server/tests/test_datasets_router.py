@@ -6,12 +6,14 @@ Only registers the datasets router to avoid pulling in heavy dependencies.
 
 import tempfile
 from pathlib import Path
+import json
+import asyncio
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
-from routers.datasets import router as datasets_router
+from routers.datasets import router as datasets_router, DatasetsRouter
 from controllers.datasets import DatasetsController
 
 app = FastAPI()
@@ -370,3 +372,85 @@ class TestVersions:
         mock_controller.restore_version.return_value = False
         resp = client.post("/datasets/nonexistent/versions/v2")
         assert resp.status_code == 404
+
+
+# ── Convert to messages ──────────────────────────────────────────────────
+# The convert endpoint reads input.jsonl directly from the datasets dir and
+# creates the converted dataset via the controller. A fresh router instance
+# with a temp _DATASETS_DIR keeps it off the real filesystem.
+
+def _make_convert_router(tmp_path, source_id, source_name="Corpus"):
+    router = DatasetsRouter()
+    router._DATASETS_DIR = tmp_path / "datasets"
+    router._DATASETS_DIR.mkdir(parents=True, exist_ok=True)
+
+    ctrl = MagicMock()
+    ctrl.list_datasets.return_value = [{"id": source_id, "name": source_name}]
+    ctrl.create_dataset.return_value = {
+        "id": f"{source_id}-messages",
+        "name": f"{source_name}-messages",
+    }
+    return router, ctrl
+
+
+def _write_jsonl(router, ds_id, lines):
+    d = router._DATASETS_DIR / ds_id
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "input.jsonl").write_text("\n".join(json.dumps(row) for row in lines) + "\n")
+
+
+def _read_rows(router, ds_id):
+    out = router._DATASETS_DIR / ds_id / "input.jsonl"
+    return [json.loads(x) for x in out.read_text().splitlines() if x.strip()]
+
+
+class TestConvertToMessages:
+
+    def test_convert_text_rows_wraps_in_messages(self, tmp_path):
+        router, ctrl = _make_convert_router(tmp_path, "corpus")
+        _write_jsonl(router, "corpus", [{"text": "hello"}, {"text": "world"}])
+        with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
+            res = asyncio.run(router.convert_to_messages("corpus"))
+        assert res["status"] == "converted"
+        assert res["new_dataset_id"] == "corpus-messages"
+        assert res["total_conversations"] == 2
+        rows = _read_rows(router, "corpus-messages")
+        assert rows[0]["messages"][0]["role"] == "system"
+        assert rows[0]["messages"][1]["content"] == "hello"
+        ctrl.create_dataset.assert_called_once()
+
+    def test_convert_applies_custom_system_prompt(self, tmp_path):
+        router, ctrl = _make_convert_router(tmp_path, "corpus")
+        _write_jsonl(router, "corpus", [{"text": "hi"}])
+        with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
+            res = asyncio.run(router.convert_to_messages("corpus", "You are a poet."))
+        rows = _read_rows(router, "corpus-messages")
+        assert rows[0]["messages"][0] == {"role": "system", "content": "You are a poet."}
+
+    def test_convert_keeps_existing_system_message(self, tmp_path):
+        router, ctrl = _make_convert_router(tmp_path, "chat")
+        _write_jsonl(router, "chat", [{"messages": [
+            {"role": "system", "content": "You are a bot."},
+            {"role": "user", "content": "hi"},
+        ]}])
+        with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
+            res = asyncio.run(router.convert_to_messages("chat"))
+        rows = _read_rows(router, "chat-messages")
+        assert rows[0]["messages"][0]["content"] == "You are a bot."
+        assert res["total_conversations"] == 1
+
+    def test_convert_missing_dataset_raises_404(self, tmp_path):
+        router, ctrl = _make_convert_router(tmp_path, "corpus")
+        ctrl.list_datasets.return_value = []
+        with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
+            with pytest.raises(HTTPException) as ei:
+                asyncio.run(router.convert_to_messages("nope"))
+        assert ei.value.status_code == 404
+
+    def test_convert_missing_jsonl_raises_404(self, tmp_path):
+        router, ctrl = _make_convert_router(tmp_path, "corpus")
+        (router._DATASETS_DIR / "corpus").mkdir(parents=True)
+        with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
+            with pytest.raises(HTTPException) as ei:
+                asyncio.run(router.convert_to_messages("corpus"))
+        assert ei.value.status_code == 404

@@ -1,11 +1,12 @@
 """
 User Adapters Router - Per-user LoRA adapter management
 """
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 
 from schemas.common import success_response
+from infrastructure.auth import require_auth_if_enabled, audit_user, get_audit_logger
 
 
 class AggregateBestRequest(BaseModel):
@@ -108,7 +109,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise HTTPException(status_code=503, detail="Not available")
 
-    async def aggregate_best(self, req: AggregateBestRequest):
+    async def aggregate_best(self, req: AggregateBestRequest, auth_user: dict = Depends(require_auth_if_enabled)):
         """Aggregate top-k best user adapters with auto-evaluation."""
         try:
             from domains.feedback import get_per_user_lora
@@ -155,15 +156,14 @@ class UserAdaptersRouter:
         except ImportError:
             raise HTTPException(status_code=503, detail="Not available")
 
-    async def delete_user_adapter(self, user_id: str, req: Request):
+    async def delete_user_adapter(self, user_id: str, req: Request, auth_user: dict = Depends(require_auth_if_enabled)):
         """Delete a user's LoRA adapter."""
         try:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.delete_adapter(user_id)
             try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log("adapter.delete", resource=user_id)
+                get_audit_logger().log("adapter.delete", user=audit_user(auth_user), resource=user_id)
             except Exception:
                 pass
             return success_response(data={"status": "deleted", "user_id": user_id})

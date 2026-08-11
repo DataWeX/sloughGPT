@@ -24,6 +24,39 @@
   ],
   "cards": [
     {
+      "id": "20260810_235237_territoriality-raids-tests-cli",
+      "title": "Territoriality raids: tests + CLI",
+      "description": "Added raid support to Stage 9 territoriality: a hungry baby standing on foreign ground (within territory_radius of a rival nest) drains the bank (nest_draw_rate/tick, transfer not creation), the value defense protects. Implemented raid_nest in simulation.py, raided field in tick log, raids/raid_energy_moved in summary(), history rows and benchmark_territoriality verdict in evolution.py, and raids columns in world_driver --territory. Added TestRaid class (11 tests) covering: channel-off no-op, hunger requirement, own-bank protection, foreign-ground requirement, nearest-nest targeting, transfer conservation, gap/bank capping, scene summary recording, off-channel scene, and exact energy flow (including nest_decay ordering). Fixed stale history key-set assertion in test_evolution.py::test_run_structure (added defenses/defend_rate/defend_energy_moved/raids/raid_energy_moved/nests_built). All tests pass; CLI verified.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "core-py",
+        "territoriality",
+        "raid"
+      ],
+      "created_at": "2026-08-10T23:52:37.048067+00:00",
+      "updated_at": "2026-08-10T23:52:37.048067+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260810_234849_dataset-management-ui-importexportversioningsearch",
+      "title": "Dataset management UI \u2014 import/export/versioning/search",
+      "description": "Dataset management UI: wired convert-to-chat-format into dataset detail page (new card with optional system prompt, success banner + Open converted dataset link, error toast). Added 5 backend tests for the convert endpoint (text wrapping, custom system prompt, existing system kept, 404s) and 4 frontend tests for the new card. Verified: tsc 0 errors, 103 dataset frontend tests pass, 68 backend tests pass. ROADMAP item #6 marked done.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "datasets"
+      ],
+      "created_at": "2026-08-10T23:48:49.507058+00:00",
+      "updated_at": "2026-08-10T23:48:49.507058+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260810_130514_stage-9-territoriality-claimdefend-regions",
       "title": "Stage 9 territoriality: claim/defend regions",
       "description": "",

@@ -39,15 +39,16 @@ vi.mock('@sloughgpt/strui', () => {
 })
 
 // ── controller & router mocks ──
-const { mockGet, mockUpdate, mockDelete, mockExport, mockGetStats, mockPush, mockAddToast, mockListVersions, mockCreateVersion, mockRestoreVersion } = vi.hoisted(() => ({
+const { mockGet, mockUpdate, mockDelete, mockExport, mockGetStats, mockPush, mockAddToast, mockListVersions, mockCreateVersion, mockRestoreVersion, mockConvertToMessages } = vi.hoisted(() => ({
   mockGet: vi.fn(), mockUpdate: vi.fn(), mockDelete: vi.fn(),
   mockExport: vi.fn(), mockGetStats: vi.fn(), mockPush: vi.fn(), mockAddToast: vi.fn(),
   mockListVersions: vi.fn(), mockCreateVersion: vi.fn(), mockRestoreVersion: vi.fn(),
+  mockConvertToMessages: vi.fn(),
 }))
 const stableRouter = { push: mockPush }
 
 vi.mock('next/navigation', () => ({ useRouter: () => stableRouter, useParams: () => ({ id: 'shakespeare' }) }))
-vi.mock('@/lib/dataset-controller', () => ({ datasetController: { get: mockGet, update: mockUpdate, delete: mockDelete, export: mockExport, getStats: mockGetStats, listVersions: mockListVersions, createVersion: mockCreateVersion, restoreVersion: mockRestoreVersion } }))
+vi.mock('@/lib/dataset-controller', () => ({ datasetController: { get: mockGet, update: mockUpdate, delete: mockDelete, export: mockExport, getStats: mockGetStats, listVersions: mockListVersions, createVersion: mockCreateVersion, restoreVersion: mockRestoreVersion, convertToMessages: mockConvertToMessages } }))
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
 vi.mock('@/components/DatasetPreview', () => ({ DatasetPreview: () => null }))
 vi.stubGlobal('URL', { createObjectURL: vi.fn(), revokeObjectURL: vi.fn() })
@@ -227,5 +228,47 @@ describe('DatasetDetailPage', () => {
     const confirmBtn = dialog.querySelector('button:last-child') as HTMLElement
     await act(async () => { confirmBtn.click() })
     await waitFor(() => { expect(mockRestoreVersion).toHaveBeenCalledWith('shakespeare', '20260801120000') })
+  })
+
+  it('converts dataset to chat format with default system prompt', async () => {
+    mockGet.mockResolvedValue(mockDataset)
+    mockConvertToMessages.mockResolvedValue({ status: 'converted', new_dataset_id: 'shakespeare-messages', total_conversations: 3 })
+    render(<DatasetDetailPage />)
+    await waitForName()
+    await act(async () => { screen.getByRole('button', { name: /Convert to chat format/ }).click() })
+    await waitFor(() => { expect(mockConvertToMessages).toHaveBeenCalledWith('shakespeare', 'You are a helpful assistant.') })
+    expect(screen.getByText(/Created Shakespeare Works-messages with 3 conversations/)).toBeTruthy()
+  })
+
+  it('uses a custom system prompt when provided', async () => {
+    mockGet.mockResolvedValue(mockDataset)
+    mockConvertToMessages.mockResolvedValue({ status: 'converted', new_dataset_id: 'shakespeare-messages', total_conversations: 1 })
+    render(<DatasetDetailPage />)
+    await waitForName()
+    await act(async () => { fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'You are a poet.' } }) })
+    await act(async () => { screen.getByRole('button', { name: /Convert to chat format/ }).click() })
+    await waitFor(() => { expect(mockConvertToMessages).toHaveBeenCalledWith('shakespeare', 'You are a poet.') })
+    expect(screen.getByText(/1 conversation/)).toBeTruthy()
+  })
+
+  it('shows an error toast when conversion fails', async () => {
+    mockGet.mockResolvedValue(mockDataset)
+    mockConvertToMessages.mockRejectedValueOnce(new Error('conversion failed'))
+    render(<DatasetDetailPage />)
+    await waitForName()
+    await act(async () => { screen.getByRole('button', { name: /Convert to chat format/ }).click() })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Conversion failed', 'error') })
+    expect(screen.queryByText('Open converted dataset')).toBeFalsy()
+  })
+
+  it('opens the converted dataset from the result banner', async () => {
+    mockGet.mockResolvedValue(mockDataset)
+    mockConvertToMessages.mockResolvedValue({ status: 'converted', new_dataset_id: 'shakespeare-messages', total_conversations: 3 })
+    render(<DatasetDetailPage />)
+    await waitForName()
+    await act(async () => { screen.getByRole('button', { name: /Convert to chat format/ }).click() })
+    await waitFor(() => { expect(screen.getByText('Open converted dataset')).toBeTruthy() })
+    await act(async () => { screen.getByText('Open converted dataset').click() })
+    expect(mockPush).toHaveBeenCalledWith('/dataset/shakespeare-messages')
   })
 })

@@ -45,6 +45,9 @@ export default function DatasetDetailPage() {
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [previewData, setPreviewData] = useState<DatasetPreviewData | null>(null)
+  const [convertPrompt, setConvertPrompt] = useState('')
+  const [converting, setConverting] = useState(false)
+  const [convertResult, setConvertResult] = useState<{ status: string; new_dataset_id: string; total_conversations: number } | null>(null)
 
   const fetchDataset = useCallback(async () => {
     setLoading(true)
@@ -202,6 +205,24 @@ export default function DatasetDetailPage() {
       addToast('Exported as CSV', 'success')
     } catch {
       addToast('CSV export failed', 'error')
+    }
+  }
+
+  const handleConvert = async () => {
+    if (!dataset) return
+    setConverting(true)
+    setConvertResult(null)
+    try {
+      const res = await datasetController.convertToMessages(
+        dataset.id,
+        convertPrompt.trim() || 'You are a helpful assistant.',
+      )
+      setConvertResult(res)
+      addToast('Converted to chat format', 'success')
+    } catch {
+      addToast('Conversion failed', 'error')
+    } finally {
+      setConverting(false)
     }
   }
 
@@ -422,6 +443,41 @@ export default function DatasetDetailPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Convert to chat format card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Convert to chat format</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Turn this dataset into chat-style conversations (system / user / assistant) so it can fine-tune chat models. This creates a new dataset.
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <Input
+                    value={convertPrompt}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConvertPrompt(e.target.value)}
+                    placeholder="System prompt (optional)"
+                    aria-label="System prompt"
+                    className="h-8 text-xs max-w-sm"
+                  />
+                  <Button size="sm" className="h-8 text-xs" onClick={handleConvert} disabled={converting}>
+                    <IconClock className="h-4 w-4 mr-1" />
+                    {converting ? 'Converting…' : 'Convert to chat format'}
+                  </Button>
+                </div>
+                {convertResult && (
+                  <div className="mt-3 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm">
+                    <p>
+                      Created {dataset.name}-messages with {convertResult.total_conversations} conversation{convertResult.total_conversations !== 1 ? 's' : ''}.
+                    </p>
+                    <Button size="sm" variant="outline" className="mt-2 h-8 text-xs" onClick={() => router.push(`/dataset/${encodeURIComponent(convertResult.new_dataset_id)}`)}>
+                      Open converted dataset
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
