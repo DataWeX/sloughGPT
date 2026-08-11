@@ -115,6 +115,15 @@ vi.mock('@/components/training/TrainingTips', () => ({ TrainingTips: stub.Traini
 vi.mock('@/components/training/TrainingActivity', () => ({ TrainingActivity: stub.TrainingActivity }))
 vi.mock('@/components/OutputCard', () => ({ OutputCard: stub.OutputCard }))
 vi.mock('@/components/training/TestModelDialog', () => ({ TestModelDialog: stub.TestModelDialog }))
+vi.mock('@/components/training/TrainingPipeline', () => ({
+  TrainingPipeline: ({ form, datasets, session, checkpoints, onTest }: any) => (
+    <div data-testid="training-pipeline">
+      <span>pipeline:{checkpoints.checkpoints.length}</span>
+      <span>jobs:{form.allJobs.length}</span>
+      {session.trainingRunning && <span>running</span>}
+    </div>
+  ),
+}))
 
 import Page from './page'
 
@@ -161,29 +170,11 @@ describe('TrainingPage', () => {
     expect(screen.getByTestId('stat-Saved versions').textContent).toContain('2')
   })
 
-  it('shows the empty state card when there is no training activity', async () => {
-    render(<Page />)
-    await waitFor(() => { expect(screen.getByText('No training activity yet')).toBeTruthy() })
-    expect(screen.getByText(/Pick a dataset above and click/)).toBeTruthy()
-  })
-
-  it('hides the empty state card when a checkpoint exists', async () => {
-    mockCheckpoints.checkpoints = [{ name: 'cp-1' }]
-    render(<Page />)
-    await waitFor(() => { expect(screen.getByTestId('stat-Saved versions').textContent).toContain('1') })
-    expect(screen.queryByText('No training activity yet')).toBeFalsy()
-  })
-
   it('fetches datasets, checkpoints, and jobs on mount', async () => {
     render(<Page />)
     await waitFor(() => { expect(mockDatasets.fetchDatasets).toHaveBeenCalled() })
     expect(mockCheckpoints.fetchCheckpoints).toHaveBeenCalled()
     expect(mockCheckpoints.fetchJobs).toHaveBeenCalled()
-  })
-
-  it('loads the current model id from modelController.status on mount', async () => {
-    render(<Page />)
-    await waitFor(() => { expect(mockModelStatus).toHaveBeenCalled() })
   })
 
   it('previews the selected dataset in dataset mode', async () => {
@@ -252,22 +243,5 @@ describe('TrainingPage', () => {
       fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
     })
     expect(mockForm.startTraining).not.toHaveBeenCalled()
-  })
-
-  it('switches tabs via the h and t keyboard shortcuts', async () => {
-    render(<Page />)
-    await waitFor(() => { expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('train') })
-    await act(async () => { fireEvent.keyDown(window, { key: 'h' }) })
-    await waitFor(() => { expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('history') })
-    await act(async () => { fireEvent.keyDown(window, { key: 't' }) })
-    await waitFor(() => { expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('train') })
-  })
-
-  it('switches to the history tab on click and shows a checkpoint count', async () => {
-    mockCheckpoints.checkpoints = [{ name: 'cp-1' }]
-    render(<Page />)
-    await waitFor(() => { expect(screen.getByText('History (1)')).toBeTruthy() })
-    await act(async () => { screen.getByText('History (1)').click() })
-    await waitFor(() => { expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('history') })
   })
 })
