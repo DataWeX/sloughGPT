@@ -77,7 +77,16 @@ export function TrainingPipeline({
   const isTraining = session.trainingRunning || !!runningJob
 
   const canAdvanceData = !!datasets.selectedDataset || (form.inputMode === 'text' && form.textInput.trim().length > 0)
-  const canAdvanceConfigure = form.canStart
+
+  const hpErrors = useMemo(() => {
+    const errors: string[] = []
+    if (form.trainingEpochs < 1 || form.trainingEpochs > 500) errors.push('Epochs must be 1–500')
+    if (form.trainingBatchSize < 1 || form.trainingBatchSize > 256) errors.push('Batch size must be 1–256')
+    if (form.trainingLR <= 0 || form.trainingLR > 1) errors.push('Learning rate must be 0–1')
+    return errors
+  }, [form.trainingEpochs, form.trainingBatchSize, form.trainingLR])
+
+  const canAdvanceConfigure = form.canStart && hpErrors.length === 0
 
   const stepIdx = STEPS.findIndex(s => s.id === step)
 
@@ -279,21 +288,39 @@ export function TrainingPipeline({
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Epochs</label>
                 <input type="number" min={1} max={500} value={form.trainingEpochs}
                   onChange={e => form.setTrainingEpochs(Number(e.target.value))}
-                  className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono" />
+                  className={`h-8 rounded-md bg-background px-2 text-xs font-mono ${
+                    form.trainingEpochs < 1 || form.trainingEpochs > 500
+                      ? 'border border-destructive/60 text-destructive'
+                      : 'border border-border/60'
+                  }`} />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Batch size</label>
                 <input type="number" min={1} max={256} value={form.trainingBatchSize}
                   onChange={e => form.setTrainingBatchSize(Number(e.target.value))}
-                  className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono" />
+                  className={`h-8 rounded-md bg-background px-2 text-xs font-mono ${
+                    form.trainingBatchSize < 1 || form.trainingBatchSize > 256
+                      ? 'border border-destructive/60 text-destructive'
+                      : 'border border-border/60'
+                  }`} />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Learning rate</label>
                 <input type="text" value={form.trainingLR}
                   onChange={e => form.setTrainingLR(Number(e.target.value) || 1e-3)}
-                  className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono" />
+                  className={`h-8 rounded-md bg-background px-2 text-xs font-mono ${
+                    form.trainingLR <= 0 || form.trainingLR > 1
+                      ? 'border border-destructive/60 text-destructive'
+                      : 'border border-border/60'
+                  }`} />
               </div>
             </div>
+
+            {hpErrors.length > 0 && (
+              <div className="text-[11px] text-destructive space-y-0.5">
+                {hpErrors.map(e => <div key={e}>{e}</div>)}
+              </div>
+            )}
 
             {form.method === 'finetune' && (
               <label className="flex items-center gap-2 text-xs">
