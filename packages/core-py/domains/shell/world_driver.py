@@ -438,18 +438,20 @@ def main(argv: list[str] | None = None) -> int:
         ctrl = result["control"]
         terr = result["territoriality"]
         print("generation control_avg territory_avg control_best territory_best "
-              "defenses defend_rate defend_energy")
+              "defenses defend_rate defend_energy raids")
         for ch, th in zip(ctrl["history"], terr["history"]):
             print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
                   f"{th['avg_fitness']:<14.4f} {ch['best_fitness']:<13.4f} "
                   f"{th['best_fitness']:<16.4f} {th['defenses']:<9d} "
                   f"{th['defend_rate']:<11.4f} "
-                  f"{th['defend_energy_moved']:.4f}")
+                  f"{th['defend_energy_moved']:<13.4f} {th['raids']}")
         print(f"control_last_avg={result['control_last_avg']:.4f} "
               f"territoriality_last_avg={result['territoriality_last_avg']:.4f}")
         print(f"defend_rate={result['defend_rate']:.4f} "
               f"defenses={result['defenses']}")
         print(f"defend_energy_moved={result['defend_energy_moved']:.4f}")
+        print(f"raids={result['raids']} "
+              f"raid_energy_moved={result['raid_energy_moved']:.4f}")
         print(f"territoriality_emerged="
               f"{'yes' if result['territoriality_emerged'] else 'no'}")
         return 0

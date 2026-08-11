@@ -1325,9 +1325,9 @@ def benchmark_territoriality(params: WorldParams | None = None, *,
     Returns:
         Dict with ``control`` and ``territoriality`` runs, their last-
         generation ``avg_fitness``, the territoriality arm's ``defend_rate``,
-        ``defenses`` count and total ``defend_energy_moved``, and the
-        ``territoriality_emerged`` verdict (territoriality-arm final average
-        fitness beats the control arm's).
+        ``defenses`` count, total ``defend_energy_moved``, ``raids`` and total
+        ``raid_energy_moved``, and the ``territoriality_emerged`` verdict
+        (territoriality-arm final average fitness beats the control arm's).
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
     base = replace(base, generate_world=True, world_seed=seed,
@@ -1357,5 +1357,8 @@ def benchmark_territoriality(params: WorldParams | None = None, *,
         "defenses": int(territory["history"][-1]["defenses"]),
         "defend_energy_moved": float(
             territory["history"][-1]["defend_energy_moved"]),
+        "raids": int(territory["history"][-1]["raids"]),
+        "raid_energy_moved": float(
+            territory["history"][-1]["raid_energy_moved"]),
         "territoriality_emerged": bool(terr_avg > ctrl_avg),
     }

@@ -1,5 +1,5 @@
 """
-Tests for Stage 9 territoriality (claim / defend regions).
+Tests for Stage 9 territoriality (claim / defend / raid).
 
 Territory is CLAIMED by building nests (Stage 7): a tribe's region is the
 ground within ``territory_radius`` of the nearest nest it owns. Territoriality
@@ -11,8 +11,12 @@ evicts the nearest foreign baby within ``defend_range`` — shoving it
 ``defend_take_fraction`` of its energy to the defender (a toll that scales
 with what the trespasser carries, so evicting a rich foreigner pays), who
 pays ``defend_cost`` (a transfer, not creation — the world conserves energy).
-When off, no brain exists and no RNG is drawn, so the locked selection proofs
-keep their exact genome layout and energy flow.
+The territory is also a two-sided resource: a hungry baby standing on FOREIGN
+ground (within ``territory_radius`` of a rival tribe's nearest nest) can RAID
+that bank — draining ``nest_draw_rate`` per tick, a one-way transfer that is
+exactly the shared value defending protects. When off, no brain exists and no
+RNG is drawn, so the locked selection proofs keep their exact genome layout
+and energy flow.
 """
 
 from __future__ import annotations
@@ -479,3 +483,168 @@ class TestTerritoryEvolution:
         assert a["territoriality_last_avg"] == b["territoriality_last_avg"]
         assert a["defenses"] == b["defenses"]
         assert a["territoriality_emerged"] == b["territoriality_emerged"]
+
+    def test_run_history_carries_raid_fields(self):
+        eng = EvolutionEngine(
+            params=self._params(),
+            population_size=4, generations=2, ticks_per_generation=3,
+            organic_pools=1, seed=3,
+        )
+        result = eng.run()
+        assert "raids" in result["history"][0]
+        assert "raid_energy_moved" in result["history"][0]
+        assert result["history"][0]["raids"] >= 0
+        assert result["history"][0]["raid_energy_moved"] >= 0.0
+
+    def test_benchmark_structure_and_verdict_keys_carry_raids(self):
+        result = benchmark_territoriality(
+            population_size=4, generations=3, ticks_per_generation=8,
+            organic_pools=1, seed=1,
+        )
+        assert "raids" in result
+        assert "raid_energy_moved" in result
+        assert result["raids"] == result["territoriality"]["history"][-1]["raids"]
+        assert result["raid_energy_moved"] == result["territoriality"][
+            "history"][-1]["raid_energy_moved"]
+
+
+class TestRaid:
+    def test_raid_requires_territoriality_channel(self):
+        params = WorldParams(grid_size=(8, 4, 8), structure_enabled=True)
+        scene = SimScene(params=params)
+        scene.nests.append(_nest((4.0, 1.0, 4.0), group_id=1, stored_energy=50.0))
+        raider = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        assert scene.params.territoriality_enabled is False
+        assert scene.raid_nest(raider) == 0.0
+        assert raider.energy == 20.0
+        assert scene.nests[0].stored_energy == 50.0
+
+    def test_raid_requires_hunger(self):
+        # A baby at or above start energy has no gap to fill — nothing is taken.
+        params = _params()
+        scene = SimScene(params=params)
+        scene.nests.append(_nest((4.0, 1.0, 4.0), group_id=1, stored_energy=50.0))
+        raider = _quiet_baby(params, 120.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        assert scene.raid_nest(raider) == 0.0
+        assert scene.nests[0].stored_energy == 50.0
+
+    def test_raid_never_touches_own_tribe_bank(self):
+        # A baby only drains a RIVAL's nest — its own tribe's bank is safe.
+        params = _params()
+        scene = SimScene(params=params)
+        scene.nests.append(_nest((4.0, 1.0, 4.0), group_id=0, stored_energy=50.0))
+        raider = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        assert scene.raid_nest(raider) == 0.0
+        assert scene.nests[0].stored_energy == 50.0
+
+    def test_raid_requires_standing_on_foreign_ground(self):
+        # The nearest foreign nest is beyond territory_radius — no raid.
+        params = _params()
+        scene = SimScene(params=params)
+        scene.nests.append(_nest((7.0, 1.0, 7.0), group_id=1, stored_energy=50.0))
+        raider = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        assert scene.raid_nest(raider) == 0.0
+        assert scene.nests[0].stored_energy == 50.0
+
+    def test_raid_transfers_energy_from_foreign_nest(self):
+        params = _params()
+        scene = SimScene(params=params)
+        nest = _nest((4.0, 1.0, 4.0), group_id=1, stored_energy=50.0)
+        scene.nests.append(nest)
+        raider = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        stolen = scene.raid_nest(raider)
+        # min(nest_draw_rate=1.0, gap=80, bank=50) = 1.0
+        assert stolen == pytest.approx(params.nest_draw_rate)
+        assert nest.stored_energy == pytest.approx(50.0 - stolen)
+        assert raider.energy == pytest.approx(20.0 + stolen)
+        # Conservation: a raid is a transfer, never creation.
+        assert raider.energy + nest.stored_energy == pytest.approx(70.0)
+
+    def test_raid_capped_by_gap_and_bank(self):
+        # A nearly-full baby steals only the gap back to start energy.
+        params = _params()
+        scene = SimScene(params=params)
+        scene.nests.append(_nest((4.0, 1.0, 4.0), group_id=1, stored_energy=50.0))
+        raider = _quiet_baby(params, 99.5, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        assert scene.raid_nest(raider) == pytest.approx(0.5)
+        assert raider.energy == pytest.approx(100.0)
+        # A small bank is drained only as far as it holds.
+        scene2 = SimScene(params=params)
+        scene2.nests.append(_nest((4.0, 1.0, 4.0), group_id=1, stored_energy=0.4))
+        raider2 = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene2.add_baby(raider2)
+        assert scene2.raid_nest(raider2) == pytest.approx(0.4)
+        assert scene2.nests[0].stored_energy == pytest.approx(0.0)
+
+    def test_raid_targets_nearest_foreign_nest(self):
+        params = _params()
+        scene = SimScene(params=params)
+        near = Nest(id=1, position=np.array([4.0, 1.0, 4.0], dtype=np.float64),
+                    stored_energy=50.0, owner_group_id=1)
+        far = Nest(id=2, position=np.array([6.0, 1.0, 4.0], dtype=np.float64),
+                   stored_energy=50.0, owner_group_id=2)
+        scene.nests.extend([near, far])
+        raider = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        stolen = scene.raid_nest(raider)
+        assert stolen == pytest.approx(params.nest_draw_rate)
+        assert near.stored_energy == pytest.approx(50.0 - stolen)
+        assert far.stored_energy == pytest.approx(50.0)
+
+    def test_scene_records_raid_in_summary(self):
+        params = _params(structure_enabled=True)
+        scene = SimScene(params=params)
+        scene.nests.append(_nest((4.0, 1.0, 4.0), group_id=1, stored_energy=50.0))
+        raider = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        sim = Simulation(scene, max_ticks=2)
+        sim.run()
+        # One raid per tick: the raider stays hungry (steal 1.0 balances the
+        # see_cost + passive_drain of 1.0), so it drains the bank twice. The
+        # bank also pays nest_decay upkeep each tick (before the raid).
+        assert sim.summary()["raids"] == 2
+        assert sim.summary()["raid_energy_moved"] == pytest.approx(
+            2.0 * params.nest_draw_rate)
+        row = [r for r in sim._tick_log if r.get("raided", 0.0) > 0.0][0]
+        assert row["raided"] == pytest.approx(params.nest_draw_rate)
+        assert scene.nests[0].stored_energy < 50.0 - 2.0 * params.nest_draw_rate
+
+    def test_scene_off_channel_runs_no_raids(self):
+        params = WorldParams(grid_size=(8, 4, 8), structure_enabled=True)
+        scene = SimScene(params=params)
+        scene.nests.append(_nest((4.0, 1.0, 4.0), group_id=1, stored_energy=50.0))
+        raider = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        sim = Simulation(scene, max_ticks=2)
+        sim.run()
+        assert sim.summary()["raids"] == 0
+        assert sim.summary()["raid_energy_moved"] == 0.0
+        # Only nest upkeep applies when the channel is off — no theft.
+        assert scene.nests[0].stored_energy == pytest.approx(
+            50.0 * (1.0 - params.nest_decay) ** 2, abs=1e-6,
+        )
+
+    def test_raider_energy_flow_is_exact(self):
+        # With an empty world, a single raid tick is exactly balanced: the
+        # stolen 1.0 offsets see_cost (0.5) + passive_drain (0.5). The bank
+        # pays nest_decay upkeep first (50 * 0.002 = 0.1), then the raid.
+        params = _params(structure_enabled=True)
+        scene = SimScene(params=params)
+        scene.nests.append(_nest((4.0, 1.0, 4.0), group_id=1, stored_energy=50.0))
+        raider = _quiet_baby(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(raider)
+        sim = Simulation(scene, max_ticks=1)
+        sim.run()
+        assert raider.energy == pytest.approx(
+            20.0 - params.see_cost - params.passive_drain
+            + params.nest_draw_rate, abs=1e-6,
+        )
+        assert scene.nests[0].stored_energy == pytest.approx(
+            50.0 * (1.0 - params.nest_decay) - params.nest_draw_rate, abs=1e-6,
+        )

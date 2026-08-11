@@ -191,6 +191,8 @@ class TestEvolutionEngine:
             "lessons", "teach_rate",
             "memory_size", "memory_seeds",
             "predations", "predation_rate", "predation_energy_moved",
+            "defenses", "defend_rate", "defend_energy_moved",
+            "raids", "raid_energy_moved", "nests_built",
         }
 
     def test_run_history_fitness_monotone_in_hypothesis(self):
