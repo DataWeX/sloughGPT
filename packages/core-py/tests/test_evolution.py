@@ -193,6 +193,9 @@ class TestEvolutionEngine:
             "predations", "predation_rate", "predation_energy_moved",
             "defenses", "defend_rate", "defend_energy_moved",
             "raids", "raid_energy_moved", "nests_built",
+            "births", "birth_energy_moved", "deaths", "alive_count",
+            "role_deposits", "role_deposit_rate", "role_deposit_energy",
+            "role_raids", "role_raid_rate", "role_raid_energy",
         }
 
     def test_run_history_fitness_monotone_in_hypothesis(self):

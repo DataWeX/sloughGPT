@@ -192,6 +192,52 @@ class WorldParams:
     defend_push: float = 1.0            # cells the evicted trespasser is shoved away
     defend_gate_threshold: float = 0.5  # perceptron gate must clear to defend
 
+    # In-world life cycle (Stage 10). Opt-in: off by default so the locked
+    # selection proofs keep their exact genome layout and RNG draw order.
+    # When on, each baby gains a ``perceptron_reproduce`` (body-input -> 1
+    # gate) that decides whether it is ready to breed. A baby whose gate
+    # clears while it stands above ``reproduce_energy_threshold`` spawns an
+    # offspring near itself: the child's starting energy is ``birth_cost`` —
+    # up to ``birth_nest_fraction`` of it drawn from the tribe's nearest
+    # nest bank (the tribe funds the child's start), the rest from the
+    # parent — a pure transfer, never creation, so the world conserves
+    # energy. The child inherits the parent's learned behavior weights and
+    # best episodes (an asexual offspring of the living lineage), joins the
+    # parent's tribe, and is seeded from the world reservoir like any
+    # newborn. Starvation (energy <= 0) still removes babies every tick, so
+    # births and deaths now happen INSIDE the tick loop and a scene's
+    # population can self-sustain without the evolution engine re-seeding
+    # it. Population is bounded by ``max_entities`` and, ultimately, by the
+    # world's conserved energy budget — a birth is a transfer, never
+    # creation, so energy is the carrying capacity.
+    lifecycle_enabled: bool = False
+    reproduce_gate_threshold: float = 0.5   # perceptron gate must clear to breed
+    reproduce_energy_threshold: float = 150.0  # parent must exceed this energy to breed
+    birth_cost: float = 50.0      # total energy transferred to the offspring at birth
+    birth_nest_fraction: float = 0.5  # share of birth_cost drawn from the tribe's nest bank
+    birth_range: float = 2.0      # max distance the offspring is placed from the parent
+
+    # Division of labor (Stage 11). Opt-in: off by default so the locked
+    # selection proofs keep their exact genome layout and RNG draw order.
+    # When on, each baby gains a ``perceptron_role`` (body-input -> 1 gate)
+    # whose value is a heritable POSTURE. Below ``role_gate_threshold`` the
+    # baby is a BUILDER: while it carries genuine surplus (above
+    # ``start_energy``) and stands within ``nest_use_radius`` of its tribe's
+    # nearest nest, it banks ``role_deposit_fraction`` of that surplus into
+    # the bank (a deliberate transfer, replacing the noisy cell-write
+    # deposits — a builder lifts its tribe's famine floor). At or above the
+    # threshold the baby is a WARRIOR: standing within ``territory_radius``
+    # of a FOREIGN tribe's nearest nest it raids that bank even when not
+    # hungry, capped at ``role_raid_fraction`` of ``nest_draw_rate`` and the
+    # bank (a warrior lifts its tribe's mean). Both acts land in the same
+    # tick's honest net reward (step 8b), so the posture is selected for only
+    # where it pays, and geometric-mean group selection rewards tribes that
+    # field both postures.
+    specialization_enabled: bool = False
+    role_gate_threshold: float = 0.5  # gate < threshold = Builder, >= = Warrior
+    role_deposit_fraction: float = 0.1  # share of surplus a Builder banks per tick
+    role_raid_fraction: float = 0.5     # share of nest_draw_rate a Warrior may raid
+
     # World generation (opt-in terrain, deterministic on (grid_size, world_seed))
     generate_world: bool = False
     world_seed: int = 0
@@ -1142,6 +1188,41 @@ class SimBaby:
             p.b = np.zeros(1, dtype=np.float32)
             self.perceptron_territory = p
 
+        self.perceptron_reproduce: Perceptron | None = None
+        if self.params.lifecycle_enabled:
+            # Reproduction brain: reads the parent's own body state (energy,
+            # position) and emits a single gate whose value is the readiness
+            # to breed. Constructed from fixed zeros (no RNG draw) so the
+            # behavior brains' RNG draw order — and the whole perception-noise
+            # stream — is unchanged whether or not lifecycle is enabled
+            # (locked proofs and a controlled lifecycle benchmark). The
+            # genome's ``apply_to`` overwrites these weights at birth anyway.
+            p = object.__new__(Perceptron)
+            p.hidden_units = 0
+            p.H = None
+            p.bh = None
+            p.W = np.zeros((body_input_dim, 1), dtype=np.float32)
+            p.b = np.zeros(1, dtype=np.float32)
+            self.perceptron_reproduce = p
+
+        self.perceptron_role: Perceptron | None = None
+        if self.params.specialization_enabled:
+            # Role brain: reads the baby's own body state (energy, position)
+            # and emits a single gate whose value is its posture — Builder
+            # below ``role_gate_threshold``, Warrior at or above it.
+            # Constructed from fixed zeros (no RNG draw) so the behavior
+            # brains' RNG draw order — and the whole perception-noise stream
+            # — is unchanged whether or not specialization is enabled (locked
+            # proofs and a controlled division-of-labor benchmark). The
+            # genome's ``apply_to`` overwrites these weights at birth anyway.
+            p = object.__new__(Perceptron)
+            p.hidden_units = 0
+            p.H = None
+            p.bh = None
+            p.W = np.zeros((body_input_dim, 1), dtype=np.float32)
+            p.b = np.zeros(1, dtype=np.float32)
+            self.perceptron_role = p
+
         # Inbox — messages delivered to this baby this tick (sender_id -> amplitude).
         # Filled by the scene's delivery pass at the start of each tick.
         self._inbox: dict[int, float] = {}
@@ -1153,6 +1234,10 @@ class SimBaby:
         self._last_predation_out: float | None = None
         self._last_defend_input: np.ndarray | None = None
         self._last_defend_out: float | None = None
+        self._last_reproduce_input: np.ndarray | None = None
+        self._last_reproduce_out: float | None = None
+        self._last_role_input: np.ndarray | None = None
+        self._last_role_out: float | None = None
 
         self._last_perception: Perception | None = None
         self._last_action: BabyAction | None = None
@@ -1867,6 +1952,128 @@ class SimBaby:
             return gate
         return 0.0
 
+    def decide_reproduce(self) -> float:
+        """
+        Decide whether this baby is ready to breed.
+
+        The reproduction perceptron reads the baby's own body state — its
+        energy relative to start and its position — and emits one sigmoid
+        gate. When the gate clears ``reproduce_gate_threshold`` (and the
+        simulation loop has confirmed the baby stands above
+        ``reproduce_energy_threshold`` with room in the world) an offspring
+        is attempted. Reproduction is a heritable strategy trait, not an
+        in-life reflex: like the predation/territory gates it is shaped by
+        selection (the genome's dedicated RNG stream), and the offspring's
+        survival is its payoff. The immediate energy outlay still lands in
+        the parent's honest same-tick net reward (step 8b), so the gate is
+        selected for only when breeding is affordable.
+
+        Args:
+            None.
+
+        Returns:
+            Gate value in [0, 1]; 0.0 means no offspring is attempted.
+        """
+        if self.perceptron_reproduce is None:
+            self._last_reproduce_input = None
+            self._last_reproduce_out = None
+            return 0.0
+        body = np.array([
+            self.energy / max(self.params.start_energy, 1.0),
+            self.position[0] / max(self.params.grid_size[0], 1.0),
+            self.position[1] / max(self.params.grid_size[1], 1.0),
+        ], dtype=np.float32)[:self.params.body_input_dim]
+        out = self.perceptron_reproduce.forward(body)
+        gate = float(out[0])
+        self._last_reproduce_input = body
+        self._last_reproduce_out = gate
+        if gate >= self.params.reproduce_gate_threshold:
+            return gate
+        return 0.0
+
+    def decide_role(self) -> float:
+        """
+        Decide this baby's role posture: Builder or Warrior.
+
+        The role perceptron reads the baby's own body state (energy,
+        position) and emits one sigmoid gate. Below ``role_gate_threshold``
+        the baby is a BUILDER — while it carries genuine surplus and stands
+        near its tribe's nearest nest it banks a share of that surplus
+        (lifting the tribe's famine floor). At or above the threshold it is
+        a WARRIOR — standing on a FOREIGN tribe's ground it raids that bank
+        even when it is not hungry (lifting the tribe's mean). Both acts
+        land in the same tick's honest net reward (step 8b). The posture is
+        a heritable strategy trait, not an in-life reflex: like the
+        reproduction gate it is shaped by selection (the genome's dedicated
+        RNG stream), and the survival of the baby's own tribe is its payoff
+        — geometric-mean group selection rewards tribes that field both
+        postures.
+
+        Args:
+            None.
+
+        Returns:
+            Gate value in [0, 1]; the simulation loop interprets values
+            below ``role_gate_threshold`` as Builder and values at or above
+            it as Warrior.
+        """
+        if self.perceptron_role is None:
+            self._last_role_input = None
+            self._last_role_out = None
+            return 0.0
+        body = np.array([
+            self.energy / max(self.params.start_energy, 1.0),
+            self.position[0] / max(self.params.grid_size[0], 1.0),
+            self.position[1] / max(self.params.grid_size[1], 1.0),
+        ], dtype=np.float32)[:self.params.body_input_dim]
+        out = self.perceptron_role.forward(body)
+        gate = float(out[0])
+        self._last_role_input = body
+        self._last_role_out = gate
+        return gate
+
+    def spawn_child(self, position: np.ndarray) -> "SimBaby":
+        """
+        Create an asexual offspring of this living lineage.
+
+        The child copies its parent's behavior perceptron weights (all
+        channels the parent carries — the four behavior brains plus any
+        opt-in gates) and consolidates the parent's best episodes as its
+        memotype, exactly as ``Genome.from_baby`` would at a generation
+        boundary. The child joins the parent's tribe and is born carrying
+        ``birth_cost`` of energy (the simulation loop deducts that amount
+        from the parent and the tribe's nest as a conservation-safe
+        transfer).
+
+        Args:
+            position: the offspring's spawn point.
+
+        Returns:
+            A new SimBaby with the parent's weights, memory, and tribe.
+        """
+        child = SimBaby(
+            position=position,
+            initial_energy=self.params.birth_cost,
+            params=self.params,
+            group_id=self.group_id,
+        )
+        names = ("cells", "body", "entity", "move", "message", "teach",
+                 "predation", "territory", "reproduce", "role")
+        for name in names:
+            src = getattr(self, f"perceptron_{name}", None)
+            dst = getattr(child, f"perceptron_{name}", None)
+            if src is None or dst is None:
+                continue
+            dst.W[:] = src.W.copy()
+            dst.b[:] = src.b.copy()
+            if src.H is not None:
+                dst.H = np.array(src.H, dtype=np.float32).copy()
+                dst.bh = np.array(src.bh, dtype=np.float32).copy()
+        cap = max(1, int(self.params.memory_inherit))
+        for e in self.memory.recall(cap, by_reward=True):
+            child.memory.record(e.features, e.action, e.reward, e.tick)
+        return child
+
     def defend(self, other: SimBaby, anchor: np.ndarray) -> float:
         """
         Execute an eviction: shove a trespasser away and take a toll.
@@ -2018,6 +2225,10 @@ class SimBaby:
             if self.perceptron_predation is not None else None,
             "perceptron_territory": self.perceptron_territory.to_dict()
             if self.perceptron_territory is not None else None,
+            "perceptron_reproduce": self.perceptron_reproduce.to_dict()
+            if self.perceptron_reproduce is not None else None,
+            "perceptron_role": self.perceptron_role.to_dict()
+            if self.perceptron_role is not None else None,
             "memory": self.memory.to_dict(),
             "total_ticks": int(self._total_ticks),
             "group_id": int(self.group_id),
@@ -2083,6 +2294,16 @@ class SimBaby:
             baby.perceptron_territory = Perceptron.from_dict(terr_data)
         else:
             baby.perceptron_territory = None
+        repro_data = data.get("perceptron_reproduce")
+        if repro_data and repro_data.get("W"):
+            baby.perceptron_reproduce = Perceptron.from_dict(repro_data)
+        else:
+            baby.perceptron_reproduce = None
+        role_data = data.get("perceptron_role")
+        if role_data and role_data.get("W"):
+            baby.perceptron_role = Perceptron.from_dict(role_data)
+        else:
+            baby.perceptron_role = None
         baby._inbox = {}
         baby._last_message_input = None
         baby._last_message_out = None
@@ -2092,6 +2313,10 @@ class SimBaby:
         baby._last_predation_out = None
         baby._last_defend_input = None
         baby._last_defend_out = None
+        baby._last_reproduce_input = None
+        baby._last_reproduce_out = None
+        baby._last_role_input = None
+        baby._last_role_out = None
         baby._last_perception = None
         baby._last_action = None
         baby._last_features = None
@@ -2132,6 +2357,8 @@ class SimScene:
             else (WorldMemory() if self.params.memory_enabled else None)
         )
         self.memory_seeds_given = 0
+        # In-world life cycle (Stage 10) — births granted inside the tick loop.
+        self.births = 0
 
     def add_baby(self, baby: SimBaby):
         """
@@ -2472,6 +2699,157 @@ class SimScene:
         best.stored_energy -= steal
         baby.entity.energy += steal
         return float(steal)
+
+    def deposit_nest(self, baby: SimBaby) -> float:
+        """
+        Builder act: bank genuine surplus into the tribe's nearest nest.
+
+        A Builder carries a role posture (see ``decide_role``). While it
+        stands within ``nest_use_radius`` of its OWN tribe's nearest nest
+        and holds energy above its start, it deliberately banks
+        ``role_deposit_fraction`` of that surplus into the bank — a
+        deliberate transfer that replaces the noisy cell-write deposits and
+        lifts the tribe's famine floor. The transfer is conservation-safe:
+        it is a pure movement of energy from the baby into the nest, never
+        creation. The banking is capped so a Builder never banks more than
+        the surplus available (it keeps its start energy as a working
+        buffer). Because the deposit lands in the same tick's honest net
+        reward, the posture is selected for only where banking pays.
+
+        Args:
+            baby: the Builder depositing its surplus.
+
+        Returns:
+            Energy transferred from the baby into the nest bank.
+
+        Side effects:
+            - reduces the baby's energy
+            - raises the nest's stored_energy
+        """
+        if not self.params.specialization_enabled:
+            return 0.0
+        surplus = baby.energy - self.params.start_energy
+        if surplus <= 0.0:
+            return 0.0
+        nest = self.nearest_nest(baby.position, self.params.nest_use_radius,
+                                 group_id=baby.group_id)
+        if nest is None:
+            return 0.0
+        amount = min(surplus, surplus * self.params.role_deposit_fraction)
+        if amount <= 0.0:
+            return 0.0
+        baby.entity.energy -= amount
+        nest.stored_energy += amount
+        return float(amount)
+
+    def role_raid(self, baby: SimBaby) -> float:
+        """
+        Warrior act: raid a foreign tribe's nest even when not hungry.
+
+        A Warrior carries a role posture (see ``decide_role``). Standing
+        within ``territory_radius`` of a FOREIGN tribe's nearest nest it
+        raids that bank at ``role_raid_fraction`` of the owner's draw rate,
+        capped by the bank — the warrior acts even above start energy, so a
+        defended bank's value is what the defender keeps by evicting the
+        raider. The raid is a transfer, never creation: the rival tribe's
+        shared bank is moved into the raider and, as with any same-tick
+        energy movement, lands in the raider's honest net reward. A warrior
+        that finds no foreign nest (or no bank) takes nothing.
+
+        Args:
+            baby: the Warrior raiding the foreign bank.
+
+        Returns:
+            Energy stolen from the foreign nest into the baby.
+
+        Side effects:
+            - reduces the foreign nest's stored_energy
+            - raises the baby's energy
+        """
+        if not self.params.specialization_enabled:
+            return 0.0
+        best = None
+        best_d = float("inf")
+        for n in self.nests:
+            if not n.alive or n.owner_group_id == baby.group_id:
+                continue
+            d = n.distance_to_point(baby.position)
+            if d <= self.params.territory_radius and d < best_d:
+                best, best_d = n, d
+        if best is None:
+            return 0.0
+        cap = self.params.nest_draw_rate * self.params.role_raid_fraction
+        steal = min(cap, best.stored_energy)
+        if steal <= 0.0:
+            return 0.0
+        best.stored_energy -= steal
+        baby.entity.energy += steal
+        return float(steal)
+
+    def birth(self, parent: SimBaby) -> tuple[int | None, float]:
+        """
+        Birth an offspring near a parent — a transfer, never creation.
+
+        The offspring's starting energy is ``birth_cost``: up to
+        ``birth_nest_fraction`` of it is drawn from the tribe's nearest
+        nest bank (the tribe funds the child's start), the remainder comes
+        from the parent's own surplus. Total world energy is conserved —
+        the child's energy is exactly what the parent and nest lose. If the
+        parent cannot fund its share the birth aborts and the nest draw is
+        refunded (breeding requires genuine surplus). The child is placed
+        within ``birth_range`` of the parent (torus-wrapped), inherits the
+        parent's learned behavior and tribe via :meth:`SimBaby.spawn_child`,
+        and is seeded from the world reservoir like any newborn. The
+        world's ``max_entities`` cap bounds population even where energy is
+        plentiful.
+
+        Args:
+            parent: the breeding baby (its energy is reduced in place).
+
+        Returns:
+            ``(child_id, energy_moved)`` or ``(None, 0.0)`` when no birth
+            happened.
+
+        Side effects:
+            - reduces the parent's energy and the tribe nest's bank
+            - appends a new baby and entity to the scene
+        """
+        if not self.params.lifecycle_enabled:
+            return None, 0.0
+        if len(self.alive_babies) >= self.params.max_entities:
+            return None, 0.0
+        nest_share = 0.0
+        nest = None
+        if self.params.structure_enabled:
+            nest = self.nearest_nest(parent.position,
+                                     self.params.nest_use_radius,
+                                     group_id=parent.group_id)
+            if nest is not None:
+                nest_share = min(
+                    self.params.birth_cost * self.params.birth_nest_fraction,
+                    nest.stored_energy,
+                )
+                nest.stored_energy -= nest_share
+        parent_share = self.params.birth_cost - nest_share
+        if parent_share > parent.energy:
+            if nest is not None and nest_share > 0.0:
+                nest.stored_energy += nest_share
+            return None, 0.0
+        parent.entity.energy -= parent_share
+        gx, gy, gz = self.params.grid_size
+        dx = float(np.random.uniform(-self.params.birth_range,
+                                     self.params.birth_range))
+        dz = float(np.random.uniform(-self.params.birth_range,
+                                     self.params.birth_range))
+        child_pos = np.array([
+            (parent.position[0] + dx) % gx,
+            float(parent.position[1]),
+            (parent.position[2] + dz) % gz,
+        ], dtype=np.float64)
+        child = parent.spawn_child(child_pos)
+        self.add_baby(child)
+        self.births += 1
+        return child.entity.id, float(self.params.birth_cost)
 
     def info(self) -> dict:
         return {
@@ -2837,6 +3215,34 @@ class Simulation:
                             defended = True
                             baby.entity.energy -= self.scene.params.defend_cost
 
+            # 6c. Reproduction — breed an offspring when the gate clears.
+            #     A baby must clear its reproduce gate AND stand above
+            #     ``reproduce_energy_threshold`` (genuine surplus). The
+            #     offspring's start energy is ``birth_cost`` — up to
+            #     ``birth_nest_fraction`` of it drawn from the tribe's nest
+            #     bank, the rest from the parent (a transfer, never
+            #     creation, so the world conserves energy). The outlay lands
+            #     in the parent's same-tick honest net reward, so the gate
+            #     is selected for only when breeding is affordable. The
+            #     child does not act until the next tick (the alive snapshot
+            #     was taken before the loop), and it is removed with any
+            #     other dead baby at the end of the step. Starvation already
+            #     removes babies every tick, so births and deaths now happen
+            #     INSIDE the tick loop and a scene's population can
+            #     self-sustain without the engine re-seeding it.
+            reproduced = False
+            birth_energy = 0.0
+            child_id = None
+            if self.scene.params.lifecycle_enabled:
+                baby._last_reproduce_input = None
+                baby._last_reproduce_out = None
+                if (baby.energy > self.scene.params.reproduce_energy_threshold
+                        and len(self.scene.alive_babies)
+                        < self.scene.params.max_entities):
+                    if baby.decide_reproduce() > 0.0:
+                        child_id, birth_energy = self.scene.birth(baby)
+                        reproduced = child_id is not None
+
             # 7. Absorb energy from nearby organic material
             absorbed = baby.absorb_energy(self.scene.world)
             baby.entity.energy += absorbed
@@ -2851,6 +3257,27 @@ class Simulation:
             if self.scene.params.structure_enabled:
                 drawn = self.scene.draw_nest(baby)
                 raided = self.scene.raid_nest(baby)
+
+            # 7c. Division of labor — the role act. When specialization is
+            #     on, the baby's role posture decides what it does this tick:
+            #     a Builder standing near its own tribe's nest banks a share
+            #     of its surplus (lifting the tribe's famine floor), a
+            #     Warrior standing on a foreign tribe's ground raids that
+            #     bank even when it is not hungry (lifting the tribe's
+            #     mean). Both acts are deliberate transfers that land in the
+            #     same tick's honest net reward (step 8b), so the posture —
+            #     a heritable strategy trait shaped by the genome's dedicated
+            #     RNG stream — is selected for only where it pays.
+            role_deposited = 0.0
+            role_raided = 0.0
+            if self.scene.params.specialization_enabled:
+                baby._last_role_input = None
+                baby._last_role_out = None
+                posture = baby.decide_role()
+                if posture < self.scene.params.role_gate_threshold:
+                    role_deposited = self.scene.deposit_nest(baby)
+                else:
+                    role_raided = self.scene.role_raid(baby)
 
             # 8. Passive drain
             baby.entity.energy -= self.scene.params.passive_drain
@@ -2895,11 +3322,16 @@ class Simulation:
                 "defend_amplitude": defend_amplitude,
                 "defend_energy": defend_energy,
                 "defended_id": defended_id,
+                "reproduced": reproduced,
+                "birth_energy": birth_energy,
+                "child_id": child_id,
                 "absorbed": absorbed,
                 "nested": nested,
                 "seeded": seeded,
                 "drawn": drawn,
                 "raided": raided,
+                "role_deposited": role_deposited,
+                "role_raided": role_raided,
                 "social_act": social_act,
                 "social_energy": social_energy,
                 "total_ms": elapsed,
@@ -2916,6 +3348,9 @@ class Simulation:
                     f"social={social_act}({social_energy:+.1f})"
                     f" prey={prey_id if predation_energy > 0.0 else '-'}"
                     f" defend={defended_id if defend_energy > 0.0 else '-'}"
+                    f" child={child_id if reproduced else '-'}"
+                    f" role_dep={role_deposited:.1f}"
+                    f" role_raid={role_raided:.1f}"
                 )
 
         # 4. Remove dead babies from entities. Before a baby leaves the world
@@ -2959,7 +3394,6 @@ class Simulation:
             "total_ticks": self.scene.tick,
             "total_baby_ticks": len(self._tick_log),
             "alive_at_end": len(alive) > 0,
-            "deaths": len(dead),
             "avg_energy": float(np.mean([r["energy"] for r in self._tick_log])) if self._tick_log else 0,
             "total_cells_written": sum(r["cells_written"] for r in self._tick_log),
             "total_energy_absorbed": sum(r["absorbed"] for r in self._tick_log),
@@ -2981,4 +3415,17 @@ class Simulation:
             "raids": sum(1 for r in self._tick_log if r.get("raided", 0.0) > 0.0),
             "raid_energy_moved": sum(r.get("raided", 0.0)
                                      for r in self._tick_log),
+            "births": sum(1 for r in self._tick_log if r.get("reproduced", False)),
+            "birth_energy_moved": sum(r.get("birth_energy", 0.0)
+                                      for r in self._tick_log),
+            "role_deposits": sum(1 for r in self._tick_log
+                                 if r.get("role_deposited", 0.0) > 0.0),
+            "role_deposit_energy": sum(r.get("role_deposited", 0.0)
+                                       for r in self._tick_log),
+            "role_raids": sum(1 for r in self._tick_log
+                              if r.get("role_raided", 0.0) > 0.0),
+            "role_raid_energy": sum(r.get("role_raided", 0.0)
+                                    for r in self._tick_log),
+            "deaths": len(dead),
+            "alive_count": len([b for b in self.scene.babies if b.alive]),
         }

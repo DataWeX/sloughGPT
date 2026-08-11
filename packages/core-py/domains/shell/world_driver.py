@@ -25,12 +25,15 @@ import numpy as np
 
 from .evolution import (
     EvolutionEngine,
+    benchmark_civilization,
     benchmark_culture,
     benchmark_emergence,
     benchmark_memory,
     benchmark_predation,
     benchmark_social,
+    benchmark_specialization,
     benchmark_territoriality,
+    benchmark_lifecycle,
 )
 from .simulation import (
     NUM_MATERIALS,
@@ -298,6 +301,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--territory", action="store_true",
                         help="run the territoriality benchmark "
                              "(territoriality on vs off, Stage 9)")
+    parser.add_argument("--lifecycle", action="store_true",
+                        help="run the lifecycle benchmark "
+                             "(lifecycle on vs off, Stage 10)")
+    parser.add_argument("--specialize", action="store_true",
+                        help="run the division-of-labor benchmark "
+                             "(specialization on vs off, Stage 11)")
+    parser.add_argument("--civilization", action="store_true",
+                        help="run the integrated civilization benchmark "
+                             "(every opt-in channel on at once, Stage 12)")
     parser.add_argument("--social-pools", type=int, default=3,
                         help="organic food pools for --social")
     parser.add_argument("--social-ticks-per-gen", type=int, default=24,
@@ -320,7 +332,9 @@ def main(argv: list[str] | None = None) -> int:
     params = WorldParams(
         grid_size=args.grid if args.grid is not None else (
             (16, 8, 16) if (args.social or args.culture or args.memory
-                            or args.predation or args.territory)
+                            or args.predation or args.territory
+                            or args.lifecycle or args.specialize
+                            or args.civilization)
             else (64, 32, 64)
         ),
         generate_world=args.world,
@@ -334,7 +348,8 @@ def main(argv: list[str] | None = None) -> int:
 
     generations = args.generations if args.generations is not None else (
         12 if (args.social or args.culture or args.memory or args.predation
-               or args.territory) else 5
+               or args.territory or args.lifecycle or args.specialize
+               or args.civilization) else 5
     )
 
     if args.culture:
@@ -454,6 +469,110 @@ def main(argv: list[str] | None = None) -> int:
               f"raid_energy_moved={result['raid_energy_moved']:.4f}")
         print(f"territoriality_emerged="
               f"{'yes' if result['territoriality_emerged'] else 'no'}")
+        return 0
+
+    if args.lifecycle:
+        result = benchmark_lifecycle(
+            params,
+            population_size=args.population,
+            generations=generations,
+            ticks_per_generation=args.social_ticks_per_gen,
+            organic_pools=args.social_pools,
+            group_count=args.group_count,
+            group_weight=args.group_weight,
+            hidden_units=args.hidden_units,
+            seed=args.seed,
+        )
+        ctrl = result["control"]
+        life = result["lifecycle"]
+        print("generation control_avg lifecycle_avg control_best "
+              "lifecycle_best births births_energy deaths alive")
+        for ch, lh in zip(ctrl["history"], life["history"]):
+            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
+                  f"{lh['avg_fitness']:<14.4f} {ch['best_fitness']:<13.4f} "
+                  f"{lh['best_fitness']:<16.4f} {lh['births']:<7d} "
+                  f"{lh['birth_energy_moved']:<13.4f} {lh['deaths']:<7d} "
+                  f"{lh['alive_count']}")
+        print(f"control_last_avg={result['control_last_avg']:.4f} "
+              f"lifecycle_last_avg={result['lifecycle_last_avg']:.4f}")
+        print(f"births={result['births']} "
+              f"birth_energy_moved={result['birth_energy_moved']:.4f}")
+        print(f"deaths={result['deaths']} "
+              f"alive_count={result['alive_count']} "
+              f"population={result['population_size']}")
+        print(f"lifecycle_emerged="
+              f"{'yes' if result['lifecycle_emerged'] else 'no'}")
+        return 0
+
+    if args.specialize:
+        result = benchmark_specialization(
+            params,
+            population_size=args.population,
+            generations=generations,
+            ticks_per_generation=args.social_ticks_per_gen,
+            organic_pools=args.social_pools,
+            group_count=args.group_count,
+            group_weight=args.group_weight,
+            hidden_units=args.hidden_units,
+            seed=args.seed,
+        )
+        ctrl = result["control"]
+        spec = result["specialization"]
+        print("generation control_avg specialization_avg control_best "
+              "specialization_best deposits raid_rate raid_energy")
+        for ch, sh in zip(ctrl["history"], spec["history"]):
+            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
+                  f"{sh['avg_fitness']:<19.4f} {ch['best_fitness']:<13.4f} "
+                  f"{sh['best_fitness']:<20.4f} {sh['role_deposits']:<9d} "
+                  f"{sh['role_raid_rate']:<9.4f} "
+                  f"{sh['role_raid_energy']:.4f}")
+        print(f"control_last_avg={result['control_final_avg_fitness']:.4f} "
+              f"specialization_last_avg="
+              f"{result['specialization_final_avg_fitness']:.4f}")
+        print(f"deposit_rate={result['specialization_role_deposit_rate']:.4f} "
+              f"raid_rate={result['specialization_role_raid_rate']:.4f}")
+        print(f"specialization_emerged="
+              f"{'yes' if result['specialization_emerged'] else 'no'}")
+        return 0
+
+    if args.civilization:
+        result = benchmark_civilization(
+            params,
+            population_size=args.population,
+            generations=generations,
+            ticks_per_generation=args.social_ticks_per_gen,
+            organic_pools=args.social_pools,
+            group_count=args.group_count,
+            group_weight=args.group_weight,
+            hidden_units=args.hidden_units,
+            seed=args.seed,
+        )
+        civ = result["civilization"]
+        print("generation control_avg civ_avg control_best civ_best "
+              "births alive lessons predations defenses raids")
+        for ch, vh in zip(result["control"]["history"], civ["history"]):
+            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
+                  f"{vh['avg_fitness']:<7.4f} {ch['best_fitness']:<13.4f} "
+                  f"{vh['best_fitness']:<8.4f} {vh['births']:<7d} "
+                  f"{vh['alive_count']:<6d} {vh['lessons']:<8d} "
+                  f"{vh['predations']:<9d} {vh['defenses']:<8d} "
+                  f"{vh['raids']}")
+        print(f"control_last_avg={result['control_last_avg']:.4f} "
+              f"civilization_last_avg={result['civilization_last_avg']:.4f}")
+        print(f"conservation_monotonic="
+              f"{'yes' if result['conservation_monotonic'] else 'no'} "
+              f"violations={len(result['conservation_violations'])} "
+              f"start={result['conservation_start_total']:.2f} "
+              f"end={result['conservation_end_total']:.2f}")
+        print(f"brains_identical="
+              f"{'yes' if result['brains_identical'] else 'no'}")
+        print(f"channels_live="
+              f"{','.join(k for k, v in result['channels_live'].items() if v)}")
+        print(f"births={result['births']} "
+              f"alive={result['alive_count']} "
+              f"population={result['population_size']}")
+        print(f"civilization_emerged="
+              f"{'yes' if result['civilization_emerged'] else 'no'}")
         return 0
 
     if args.social:

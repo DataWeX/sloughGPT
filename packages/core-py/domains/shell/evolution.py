@@ -102,6 +102,41 @@ def _predation_rng(group_id: int = 0) -> np.random.Generator:
 # a controlled territoriality benchmark).
 _TERRITORY_RNG_SEED = 0x1E07
 
+_REPRODUCE_RNG_SEED = 0x1E08
+
+
+def _reproduce_rng(group_id: int = 0) -> np.random.Generator:
+    """Seeded Generator for the reproduction brain, independent of the shared one.
+
+    Args:
+        group_id: tribe id, so the initial reproduce gate varies across
+            tribes.
+
+    Returns:
+        np.random.Generator whose draws never touch the shared RNG streams.
+    """
+    return np.random.default_rng(_REPRODUCE_RNG_SEED + int(group_id))
+
+
+# Stage 11: the role (Builder/Warrior) brain draws from its own dedicated
+# stream so the shared stream — and therefore the four behavior brains'
+# draws — stay bit-identical whether or not specialization is enabled
+# (locked proofs and a controlled division-of-labor benchmark).
+_ROLE_RNG_SEED = 0x1E09
+
+
+def _role_rng(group_id: int = 0) -> np.random.Generator:
+    """Seeded Generator for the role brain, independent of the shared one.
+
+    Args:
+        group_id: tribe id, so the initial role posture varies across
+            tribes.
+
+    Returns:
+        np.random.Generator whose draws never touch the shared RNG streams.
+    """
+    return np.random.default_rng(_ROLE_RNG_SEED + int(group_id))
+
 
 def _territory_rng(group_id: int = 0) -> np.random.Generator:
     """Seeded Generator for the territory brain, independent of the shared one.
@@ -177,6 +212,12 @@ class Genome:
         if (hasattr(baby, "perceptron_territory")
                 and baby.perceptron_territory is not None):
             names = names + ("territory",)
+        if (hasattr(baby, "perceptron_reproduce")
+                and baby.perceptron_reproduce is not None):
+            names = names + ("reproduce",)
+        if (hasattr(baby, "perceptron_role")
+                and baby.perceptron_role is not None):
+            names = names + ("role",)
         for name in names:
             p = getattr(baby, f"perceptron_{name}")
             tensors[f"{name}.W"] = p.W.copy()
@@ -256,6 +297,25 @@ class Genome:
             terr = _territory_rng(group_id)
             tensors["territory.W"] = (terr.standard_normal((params.entity_input_dim, 1)) * 0.1).astype(np.float32)
             tensors["territory.b"] = np.zeros(1, dtype=np.float32)
+        if params.lifecycle_enabled:
+            # Reproduction brain: one gate over the parent's own body state,
+            # drawn from the DEDICATED reproduce stream so the shared stream
+            # — and therefore the four behavior brains' draws — is unchanged
+            # whether or not lifecycle is enabled (locked proofs and a
+            # perfectly controlled lifecycle benchmark).
+            repro = _reproduce_rng(group_id)
+            tensors["reproduce.W"] = (repro.standard_normal((params.body_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["reproduce.b"] = np.zeros(1, dtype=np.float32)
+        if params.specialization_enabled:
+            # Role brain: one gate over the baby's own body state — its
+            # posture — drawn from the DEDICATED role stream so the shared
+            # stream — and therefore the four behavior brains' draws — is
+            # unchanged whether or not specialization is enabled (locked
+            # proofs and a perfectly controlled division-of-labor
+            # benchmark).
+            role = _role_rng(group_id)
+            tensors["role.W"] = (role.standard_normal((params.body_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["role.b"] = np.zeros(1, dtype=np.float32)
         return cls(tensors, group_id=group_id)
 
     def apply_to(self, baby: SimBaby) -> None:
@@ -304,6 +364,18 @@ class Genome:
             p = baby.perceptron_territory
             p.W[:] = self.tensors["territory.W"]
             p.b[:] = self.tensors["territory.b"]
+        if (hasattr(baby, "perceptron_reproduce")
+                and baby.perceptron_reproduce is not None
+                and "reproduce.W" in self.tensors):
+            p = baby.perceptron_reproduce
+            p.W[:] = self.tensors["reproduce.W"]
+            p.b[:] = self.tensors["reproduce.b"]
+        if (hasattr(baby, "perceptron_role")
+                and baby.perceptron_role is not None
+                and "role.W" in self.tensors):
+            p = baby.perceptron_role
+            p.W[:] = self.tensors["role.W"]
+            p.b[:] = self.tensors["role.b"]
         for m in self.memories:
             baby.memory.record(
                 features=np.asarray(m["features"], dtype=np.float32),
@@ -337,6 +409,10 @@ class Genome:
                 mask_rng = _predation_rng(self.group_id)
             elif k.startswith("territory."):
                 mask_rng = _territory_rng(self.group_id)
+            elif k.startswith("reproduce."):
+                mask_rng = _reproduce_rng(self.group_id)
+            elif k.startswith("role."):
+                mask_rng = _role_rng(self.group_id)
             else:
                 mask_rng = rng
             mask = mask_rng.random(v.shape) < 0.5
@@ -364,6 +440,10 @@ class Genome:
                 draw_rng = _predation_rng(self.group_id)
             elif k.startswith("territory."):
                 draw_rng = _territory_rng(self.group_id)
+            elif k.startswith("reproduce."):
+                draw_rng = _reproduce_rng(self.group_id)
+            elif k.startswith("role."):
+                draw_rng = _role_rng(self.group_id)
             else:
                 draw_rng = rng
             mask = draw_rng.random(v.shape) < rate
@@ -607,6 +687,8 @@ class EvolutionEngine:
         social["teach_rate"] = social["lessons"] / total_baby_ticks
         social["predation_rate"] = social["predations"] / total_baby_ticks
         social["defend_rate"] = social["defenses"] / total_baby_ticks
+        social["role_deposit_rate"] = social["role_deposits"] / total_baby_ticks
+        social["role_raid_rate"] = social["role_raids"] / total_baby_ticks
         social["mean_home_displacement"] = self._home_displacement(babies, genomes)
         return babies, [self._fitness(b) for b in babies], social
 
@@ -792,6 +874,16 @@ class EvolutionEngine:
                 "raids": social["raids"],
                 "raid_energy_moved": social["raid_energy_moved"],
                 "nests_built": social["nests_built"],
+                "births": social["births"],
+                "birth_energy_moved": social["birth_energy_moved"],
+                "role_deposits": social["role_deposits"],
+                "role_deposit_rate": social["role_deposit_rate"],
+                "role_deposit_energy": social["role_deposit_energy"],
+                "role_raids": social["role_raids"],
+                "role_raid_rate": social["role_raid_rate"],
+                "role_raid_energy": social["role_raid_energy"],
+                "deaths": social["deaths"],
+                "alive_count": social["alive_count"],
                 "memory_size": len(self.world_memory)
                 if self.world_memory is not None else 0,
                 "memory_seeds": seeds,
@@ -866,6 +958,12 @@ class EvolutionEngine:
                 "raids": social["raids"],
                 "raid_energy_moved": social["raid_energy_moved"],
                 "nests_built": social["nests_built"],
+                "role_deposits": social["role_deposits"],
+                "role_deposit_rate": social["role_deposit_rate"],
+                "role_deposit_energy": social["role_deposit_energy"],
+                "role_raids": social["role_raids"],
+                "role_raid_rate": social["role_raid_rate"],
+                "role_raid_energy": social["role_raid_energy"],
                 "memory_size": 0,
                 "memory_seeds": 0,
             })
@@ -1027,6 +1125,100 @@ def benchmark_social(params: WorldParams | None = None, *,
         "individual_contest_rate": float(ind_contest),
         "group_contest_rate": float(grp_contest),
         "cooperation_emerged": bool(grp_rate > ind_rate),
+    }
+
+
+def benchmark_specialization(params: WorldParams | None = None, *,
+                             population_size: int = 8,
+                             generations: int = 12,
+                             ticks_per_generation: int = 24,
+                             organic_pools: int = 3,
+                             group_count: int = 2,
+                             group_weight: float = 0.5,
+                             hidden_units: int = 0,
+                             seed: int = 1) -> dict:
+    """
+    Deterministic division-of-labor proof (Stage 11): two role channels.
+
+    Both arms evolve on the SAME grouped, structured world: the same
+    generated terrain, the same per-group food pools, the same per-tribe
+    spawn territories, nests that cell-writes bank into
+    (``structure_enabled``), and territoriality — so banks exist and can be
+    fed or drained in both arms. In-life delta learning is disabled in both
+    arms — selection is the only teacher. The only difference is the role
+    channel:
+      - ``control``: specialization disabled. Nests are fed only by the
+        noisy cell-write deposits; a baby draws only when starving, and
+        raids only when hungry on foreign ground.
+      - ``specialization``: specialization enabled. Each baby carries a
+        heritable role brain (drawn from the DEDICATED role stream, so the
+        four behavior brains are bit-identical between arms) whose gate is a
+        posture: below ``role_gate_threshold`` the baby is a BUILDER that
+        deliberately banks surplus into its tribe's nearest nest; at or
+        above it the baby is a WARRIOR that raids a foreign tribe's bank
+        even when not hungry. Selection is trait-group
+        (``group_weight > 0``): tribes compete by the geometric mean of
+        member energy, so complementary postures — one lifting the tribe's
+        famine floor, one lifting its mean — are rewarded as a package.
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``,
+            ``world_seed=seed``, ``structure_enabled=True``,
+            ``territoriality_enabled=True`` and disables learning.
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation.
+        organic_pools: food pools distributed across the group territories.
+        group_count: number of tribes (territories).
+        group_weight: tribe-mean share of selection fitness.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``specialization`` runs, each arm's
+        last-generation ``role_deposit_rate``/``role_raid_rate`` and final
+        ``avg_fitness``, and the ``specialization_emerged`` verdict: the
+        specialization arm actually fielded BOTH postures (positive deposit
+        AND raid rates) while matching the control arm's final mean fitness.
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    base = replace(base, generate_world=True, world_seed=seed,
+                   learning_enabled=False, brain_hidden_units=int(hidden_units),
+                   structure_enabled=True, territoriality_enabled=True,
+                   write_energy_scale=10.0)
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, group_count=group_count,
+                  group_weight=group_weight, seed=seed)
+    control = EvolutionEngine(params=base, **shared).run()
+    spec = EvolutionEngine(
+        params=replace(base, specialization_enabled=True), **shared,
+    ).run()
+
+    def last(arm: dict, key: str) -> float:
+        return float(arm["history"][-1].get(key, 0.0))
+
+    c_dep = last(control, "role_deposit_rate")
+    c_raid = last(control, "role_raid_rate")
+    s_dep = last(spec, "role_deposit_rate")
+    s_raid = last(spec, "role_raid_rate")
+    c_avg = last(control, "avg_fitness")
+    s_avg = last(spec, "avg_fitness")
+    return {
+        "control": control,
+        "specialization": spec,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "control_role_deposit_rate": c_dep,
+        "control_role_raid_rate": c_raid,
+        "specialization_role_deposit_rate": s_dep,
+        "specialization_role_raid_rate": s_raid,
+        "control_final_avg_fitness": c_avg,
+        "specialization_final_avg_fitness": s_avg,
+        "specialization_emerged": bool(
+            s_dep > 0.0 and s_raid > 0.0 and s_avg >= c_avg
+        ),
     }
 
 
@@ -1361,4 +1553,304 @@ def benchmark_territoriality(params: WorldParams | None = None, *,
         "raid_energy_moved": float(
             territory["history"][-1]["raid_energy_moved"]),
         "territoriality_emerged": bool(terr_avg > ctrl_avg),
+    }
+
+
+def benchmark_lifecycle(params: WorldParams | None = None, *,
+                        population_size: int = 8,
+                        generations: int = 12,
+                        ticks_per_generation: int = 24,
+                        organic_pools: int = 3,
+                        group_count: int = 2,
+                        group_weight: float = 0.5,
+                        hidden_units: int = 0,
+                        seed: int = 1) -> dict:
+    """
+    Deterministic life-cycle proof (Stage 10): births and deaths in-tick.
+
+    Both arms evolve on the SAME grouped world — the same generated terrain,
+    the same per-group food pools, the same per-tribe spawn territories, and
+    the same initial core genomes. Durable nests are enabled in BOTH arms
+    (the tribe's nest bank is the pool a birth can draw from, so the same
+    structures exist either way) and in-life learning is enabled in both. The
+    reproduce brain's weights are drawn last from a dedicated stream, so the
+    four behavior brains are bit-identical between arms; the only difference
+    is the interaction channel:
+      - ``control``: lifecycle disabled. The engine re-seeds the full
+        population every generation (itself replaced by selection), so
+        population size is constant by construction and nothing breeds inside
+        a tick.
+      - ``lifecycle``: the in-world life cycle. A baby whose reproduce gate
+        clears while it stands above ``reproduce_energy_threshold`` spawns an
+        offspring near itself; the child's ``birth_cost`` is transferred from
+        the tribe's nearest nest bank and the parent (never created), so the
+        world conserves energy while its population self-sustains within the
+        ``max_entities`` cap. Starvation still removes babies every tick, so
+        deaths happen in the same loop.
+
+    Lifecycle is never hardcoded: the reproduce perceptron must learn to open
+    its gate only when breeding is affordable (the honest same-tick net reward
+    lands the birth outlay on the parent), and the world's conserved energy is
+    the ultimate carrying capacity — a birth is a transfer, not creation.
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``,
+            ``world_seed=seed``, ``structure_enabled=True``,
+            ``learning_enabled=True`` and a generous ``max_entities``.
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation.
+        organic_pools: food pools distributed across the group territories.
+        group_count: number of tribes (territories).
+        group_weight: tribe-mean share of group-arm selection fitness.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``lifecycle`` runs, their last-generation
+        ``avg_fitness``, the lifecycle arm's ``births``, total
+        ``birth_energy_moved``, ``deaths``, final ``alive_count`` and
+        ``population_size``, and the ``lifecycle_emerged`` verdict (the
+        lifecycle arm bred inside its own ticks — births outnumber zero —
+        i.e. the channel demonstrably fired).
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    base = replace(base, generate_world=True, world_seed=seed,
+                   learning_enabled=True, brain_hidden_units=int(hidden_units),
+                   teaching_enabled=False, memory_enabled=False,
+                   structure_enabled=True, write_energy_scale=10.0,
+                   lifecycle_enabled=False,
+                   max_entities=max(int(population_size) * 4, 16))
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, group_count=group_count,
+                  group_weight=group_weight, seed=seed)
+    control = EvolutionEngine(params=base, **shared).run()
+    lifecycle = EvolutionEngine(
+        params=replace(base, lifecycle_enabled=True), **shared).run()
+
+    ctrl_avg = control["history"][-1]["avg_fitness"]
+    life_avg = lifecycle["history"][-1]["avg_fitness"]
+    last = lifecycle["history"][-1]
+    births = int(last["births"])
+    return {
+        "control": control,
+        "lifecycle": lifecycle,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "control_last_avg": float(ctrl_avg),
+        "lifecycle_last_avg": float(life_avg),
+        "births": births,
+        "birth_energy_moved": float(last["birth_energy_moved"]),
+        "deaths": int(last["deaths"]),
+        "alive_count": int(last["alive_count"]),
+        "population_size": population_size,
+        "lifecycle_emerged": bool(births > 0),
+    }
+
+
+def _conservation_sweep(params: WorldParams, genomes: list[Genome],
+                        ticks: int) -> dict:
+    """
+    Live physics tripwire: grid + entity + nest energy must never increase.
+
+    Builds one fully-loaded generation (every opt-in channel on) and steps
+    the real tick loop one tick at a time, recomputing the world total from
+    the LIVE scene after each tick — the sum of all grid cell energy, every
+    baby's energy, and every nest bank. Each channel is individually
+    transfer-safe; an increase here flags a channel that created energy when
+    combined with the others. The food pools use the exact same deterministic
+    placement the engine uses, so the sweep is reproducible on ``world_seed``.
+
+    Args:
+        params: world rules (the caller passes the ALL-ON ruleset).
+        genomes: the generation's genomes, applied to the spawned babies.
+        ticks: simulation ticks to sweep.
+
+    Returns:
+        Dict with ``monotonic`` (bool), ``violations`` (list of
+        ``(tick, prev_total, new_total)`` tuples), and ``start_total`` /
+        ``end_total`` floats.
+    """
+    if params.world_seed is not None:
+        np.random.seed(int(params.world_seed))
+    scene = SimScene(params=params)
+    food_rng = np.random.default_rng(int(params.world_seed))
+    engine = EvolutionEngine(params=params, population_size=len(genomes),
+                             generations=1, ticks_per_generation=ticks,
+                             seed=int(params.world_seed))
+    engine._place_food(scene, food_rng)
+    for g in genomes:
+        b = SimBaby(position=None, initial_energy=params.start_energy,
+                    params=params, group_id=g.group_id)
+        g.apply_to(b)
+        scene.add_baby(b)
+    sim = Simulation(scene, max_ticks=ticks)
+
+    def total() -> float:
+        return (float(np.sum(scene.world.energy))
+                + float(sum(x.energy for x in scene.babies))
+                + float(sum(n.stored_energy for n in scene.nests)))
+
+    start_total = total()
+    prev = start_total
+    violations: list[tuple[int, float, float]] = []
+    for t in range(1, ticks + 1):
+        sim.step()
+        cur = total()
+        if cur > prev + 1e-6:
+            violations.append((t, prev, cur))
+        prev = cur
+    return {
+        "monotonic": len(violations) == 0,
+        "violations": violations,
+        "start_total": float(start_total),
+        "end_total": float(prev),
+    }
+
+
+def benchmark_civilization(params: WorldParams | None = None, *,
+                           population_size: int = 8,
+                           generations: int = 12,
+                           ticks_per_generation: int = 24,
+                           organic_pools: int = 3,
+                           group_count: int = 2,
+                           group_weight: float = 0.5,
+                           hidden_units: int = 0,
+                           seed: int = 1) -> dict:
+    """
+    Integrated world proof (Stage 12): every channel in one living world.
+
+    Each opt-in channel — structures, teaching, memory, messages, predation,
+    territoriality, lifecycle, specialization — is proven in its own
+    benchmark. This benchmark turns them ALL on at once in a single evolution
+    run and checks four invariants that only hold when the channels are
+    genuinely composable:
+
+      1. CONSERVATION under full load: over a live, fully-loaded generation
+         the world total (grid + entity + nest energy) never increases. Each
+         channel is individually transfer-safe; together they must still
+         never create energy. ``conservation_monotonic``.
+      2. RNG ISOLATION under total load: the four behavior brains (cells,
+         body, entity, move) drawn with the same seed are bit-identical
+         whether every dedicated-stream channel is off or ALL on. The locked
+         selection proofs keep their exact genome layout and energy flow no
+         matter how many channels coexist. ``brains_identical``.
+      3. CHANNEL LIVENESS: every opt-in channel demonstrably fires somewhere
+         in the run — lessons (teaching), predations, defenses AND raids
+         (territoriality), nests_built (structures), births (lifecycle),
+         role deposits/raids (specialization), and a growing world reservoir
+         (memory). ``channels_live``.
+      4. SUSTAINABILITY: births > 0 with survivors at the final generation —
+         the world grows its own population while predation and contest are
+         taking lives. ``civilization_emerged``.
+
+    Two arms evolve on the SAME generated world with the same initial core
+    genome draws:
+      - ``control``: the bare world — every opt-in channel off, learning off.
+        This is the classic emergence baseline; it produces zero channel
+        activity by construction (the negative control).
+      - ``civilization``: ALL opt-in channels on, in-life learning on, and a
+        generous ``max_entities`` so births have room to land.
+
+    Nothing is hardcoded: the channel brains are still evolved material, and
+    the conservation sweep is the honest physics tripwire over the live tick
+    loop.
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``
+            and ``world_seed=seed`` on both arms and every opt-in channel plus
+            ``learning_enabled=True`` on the civilization arm.
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation.
+        organic_pools: food pools distributed across the group territories.
+        group_count: number of tribes (territories).
+        group_weight: tribe-mean share of group-arm selection fitness.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``civilization`` runs, their last-generation
+        ``avg_fitness``, the conservation verdict (``conservation_monotonic``,
+        ``conservation_violations``, ``conservation_start_total``,
+        ``conservation_end_total``), the RNG-isolation verdict
+        (``brains_identical``), per-channel liveness (``channels_live`` and
+        ``channels_live_all``), ``births``, final ``alive_count``, and the
+        ``civilization_emerged`` verdict.
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    bare = replace(base, generate_world=True, world_seed=seed,
+                   learning_enabled=False, brain_hidden_units=int(hidden_units),
+                   message_enabled=False, structure_enabled=False,
+                   teaching_enabled=False, memory_enabled=False,
+                   predation_enabled=False, territoriality_enabled=False,
+                   lifecycle_enabled=False, specialization_enabled=False)
+    civil = replace(base, generate_world=True, world_seed=seed,
+                    learning_enabled=True, brain_hidden_units=int(hidden_units),
+                    message_enabled=True, structure_enabled=True,
+                    teaching_enabled=True, memory_enabled=True,
+                    predation_enabled=True, territoriality_enabled=True,
+                    lifecycle_enabled=True, specialization_enabled=True,
+                    write_energy_scale=10.0,
+                    max_entities=max(int(population_size) * 4, 16))
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, group_count=group_count,
+                  group_weight=group_weight, seed=seed)
+    control = EvolutionEngine(params=bare, **shared).run()
+    civilization = EvolutionEngine(params=civil, **shared).run()
+
+    # RNG isolation: same-seed genome draws, bare vs ALL-ON. The dedicated
+    # channel streams must not perturb the four behavior brains even when
+    # every channel is enabled at once.
+    g_off = Genome.random(bare, np.random.default_rng(seed), group_id=0)
+    g_on = Genome.random(civil, np.random.default_rng(seed), group_id=0)
+    brains_identical = all(
+        np.allclose(g_off.tensors[f"{name}.{suf}"],
+                    g_on.tensors[f"{name}.{suf}"])
+        for name in ("cells", "body", "entity", "move")
+        for suf in ("W", "b")
+    )
+
+    # Conservation sweep: one fully-loaded generation, live tick loop.
+    genomes = [Genome.random(civil, np.random.default_rng(seed),
+                             group_id=i % group_count)
+               for i in range(population_size)]
+    sweep = _conservation_sweep(civil, genomes, ticks_per_generation)
+
+    # Channel liveness across the whole civilization run.
+    fired = {
+        k: any(h.get(k, 0) > 0 for h in civilization["history"])
+        for k in ("lessons", "predations", "defenses", "raids",
+                  "nests_built", "births", "role_deposits", "role_raids")
+    }
+    fired["memory"] = any(h.get("memory_size", 0) > 0
+                          for h in civilization["history"])
+
+    last = civilization["history"][-1]
+    births = int(last["births"])
+    all_live = all(fired.values())
+    emerged = bool(sweep["monotonic"] and brains_identical and all_live
+                   and births > 0)
+    return {
+        "control": control,
+        "civilization": civilization,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "control_last_avg": float(control["history"][-1]["avg_fitness"]),
+        "civilization_last_avg": float(last["avg_fitness"]),
+        "conservation_monotonic": bool(sweep["monotonic"]),
+        "conservation_violations": list(sweep["violations"]),
+        "conservation_start_total": float(sweep["start_total"]),
+        "conservation_end_total": float(sweep["end_total"]),
+        "brains_identical": bool(brains_identical),
+        "channels_live": dict(fired),
+        "channels_live_all": bool(all_live),
+        "births": births,
+        "alive_count": int(last["alive_count"]),
+        "population_size": population_size,
+        "civilization_emerged": bool(emerged),
     }

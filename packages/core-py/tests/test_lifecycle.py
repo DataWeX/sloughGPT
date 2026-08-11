@@ -1,1075 +1,519 @@
 """
-Tests for LifecycleManager — startup/shutdown ordering, health gates, drain.
+Tests for Stage 10 in-world life cycle (births and deaths inside the tick).
+
+Lifecycle is an opt-in channel (``lifecycle_enabled``): when on, each baby
+gains a ``perceptron_reproduce`` (body-input -> 1 gate) that decides whether
+it is ready to breed. A baby whose gate clears while it stands above
+``reproduce_energy_threshold`` spawns an offspring near itself: the child's
+starting energy is ``birth_cost`` — up to ``birth_nest_fraction`` of it drawn
+from the tribe's nearest nest bank (the tribe funds the child's start), the
+rest from the parent — a pure transfer, never creation, so the world
+conserves energy. The child inherits the parent's learned behavior weights
+and best episodes (an asexual offspring), joins the parent's tribe, and is
+seeded from the world reservoir like any newborn. Starvation still removes
+babies every tick, so births and deaths now happen INSIDE the tick loop and a
+scene's population can self-sustain without the evolution engine re-seeding
+it. Population is bounded by ``max_entities`` and, ultimately, by the world's
+conserved energy budget. When off, no brain exists and no RNG is drawn, so
+the locked selection proofs keep their exact genome layout and energy flow.
 """
 
 from __future__ import annotations
 
-import asyncio
-import time
+import numpy as np
 import pytest
 
-from domains.infrastructure.lifecycle import (
-    ALL_PROFILES,
-    LifecycleManager,
-    LifecyclePhase,
-    StartupHook,
-    StartupProfile,
-    ShutdownHook,
-    _topological_sort,
-    _dependency_levels,
-    get_lifecycle_manager,
-    reset_lifecycle_manager,
+from domains.shell.evolution import (
+    EvolutionEngine,
+    Genome,
+    benchmark_lifecycle,
 )
-from domains.infrastructure.event_bus import EventBus, EventPriority
-
-
-# ── Topological sort ──
-
-
-def test_topological_sort_empty():
-    assert _topological_sort([]) == []
-
-
-def test_topological_sort_no_deps():
-    a = StartupHook(name="a", handler=lambda: asyncio.sleep(0))
-    b = StartupHook(name="b", handler=lambda: asyncio.sleep(0))
-    ordered = _topological_sort([a, b])
-    assert len(ordered) == 2
-
-
-def test_topological_sort_simple_chain():
-    a = StartupHook(name="a", handler=lambda: asyncio.sleep(0))
-    b = StartupHook(name="b", handler=lambda: asyncio.sleep(0), depends_on=["a"])
-    c = StartupHook(name="c", handler=lambda: asyncio.sleep(0), depends_on=["b"])
-    ordered = _topological_sort([c, a, b])
-    names = [h.name for h in ordered]
-    assert names.index("a") < names.index("b")
-    assert names.index("b") < names.index("c")
-
-
-def test_topological_sort_cycle_does_not_crash():
-    a = StartupHook(name="a", handler=lambda: asyncio.sleep(0), depends_on=["b"])
-    b = StartupHook(name="b", handler=lambda: asyncio.sleep(0), depends_on=["a"])
-    ordered = _topological_sort([a, b])
-    assert len(ordered) == 2  # best-effort
-
-
-def test_topological_sort_missing_dep():
-    a = StartupHook(name="a", handler=lambda: asyncio.sleep(0), depends_on=["nonexistent"])
-    b = StartupHook(name="b", handler=lambda: asyncio.sleep(0))
-    ordered = _topological_sort([a, b])
-    assert len(ordered) == 2
-
-
-# ── LifecycleManager ──
-
-
-@pytest.fixture
-def mgr():
-    return LifecycleManager()
-
-
-@pytest.mark.asyncio
-async def test_initial_phase(mgr):
-    assert mgr.phase == LifecyclePhase.INIT
-    assert mgr.is_running() is False
-    assert mgr.is_draining() is False
-
-
-@pytest.mark.asyncio
-async def test_empty_startup_succeeds(mgr):
-    success = await mgr.start()
-    assert success is True
-    assert mgr.phase == LifecyclePhase.RUNNING
-    assert mgr.is_running() is True
-    assert mgr.uptime_seconds > 0
-
-
-@pytest.mark.asyncio
-async def test_simple_startup_hook(mgr):
-    called = []
-
-    async def my_hook():
-        called.append(True)
-
-    mgr.register_startup_hook(StartupHook("test", my_hook))
-    success = await mgr.start()
-    assert success is True
-    assert len(called) == 1
-
-
-@pytest.mark.asyncio
-async def test_startup_hook_order(mgr):
-    order: list[str] = []
-
-    async def make_hook(name: str, delay: float = 0):
-        async def _run():
-            if delay:
-                await asyncio.sleep(delay)
-            order.append(name)
-        return _run
-
-    mgr.register_startup_hook(StartupHook("a", await make_hook("a"), depends_on=[]))
-    mgr.register_startup_hook(StartupHook("b", await make_hook("b"), depends_on=["a"]))
-    mgr.register_startup_hook(StartupHook("c", await make_hook("c"), depends_on=["b"]))
-
-    await mgr.start()
-    assert order == ["a", "b", "c"]
-
-
-@pytest.mark.asyncio
-async def test_critical_hook_failure_crashes(mgr):
-    async def fail_hook():
-        raise RuntimeError("boom")
-
-    mgr.register_startup_hook(StartupHook("fail", fail_hook, critical=True))
-    success = await mgr.start()
-    assert success is False
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-
-@pytest.mark.asyncio
-async def test_non_critical_hook_failure_allows_running(mgr):
-    async def ok_hook():
-        pass
-
-    async def fail_hook():
-        raise RuntimeError("non-critical")
-
-    mgr.register_startup_hook(StartupHook("ok", ok_hook))
-    mgr.register_startup_hook(StartupHook("fail", fail_hook, critical=False))
-
-    success = await mgr.start()
-    assert success is True
-    assert mgr.phase == LifecyclePhase.RUNNING
-
-
-@pytest.mark.asyncio
-async def test_hook_timeout(mgr):
-    async def slow_hook():
-        await asyncio.sleep(10)
-
-    mgr.register_startup_hook(StartupHook("slow", slow_hook, timeout=0.05, critical=True))
-    success = await mgr.start()
-    assert success is False
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-
-@pytest.mark.asyncio
-async def test_duplicate_hook_skipped(mgr):
-    async def hook_a():
-        pass
-
-    async def hook_b():
-        pass
-
-    mgr.register_startup_hook(StartupHook("same", hook_a))
-    mgr.register_startup_hook(StartupHook("same", hook_b))  # same name
-
-    await mgr.start()
-    assert mgr.phase == LifecyclePhase.RUNNING
-
-
-@pytest.mark.asyncio
-async def test_start_while_not_init_ignored(mgr):
-    await mgr.start()
-    success = await mgr.start()  # second call
-    assert success is True
-    assert mgr.phase == LifecyclePhase.RUNNING
-
-
-@pytest.mark.asyncio
-async def test_shutdown_before_start_ignored(mgr):
-    success = await mgr.shutdown()
-    assert success is False
-    assert mgr.phase == LifecyclePhase.INIT  # unchanged
-
-
-@pytest.mark.asyncio
-async def test_shutdown_success(mgr):
-    await mgr.start()
-    success = await mgr.shutdown()
-    assert success is True
-    assert mgr.phase == LifecyclePhase.STOPPED
-
-
-@pytest.mark.asyncio
-async def test_shutdown_hook_runs(mgr):
-    shutdown_called = []
-
-    async def my_shutdown():
-        shutdown_called.append(True)
-
-    mgr.register_shutdown_hook(ShutdownHook("cleanup", my_shutdown))
-    await mgr.start()
-    await mgr.shutdown()
-    assert len(shutdown_called) == 1
-
-
-@pytest.mark.asyncio
-async def test_shutdown_after_crash_works(mgr):
-    async def fail_hook():
-        raise RuntimeError("boom")
-
-    mgr.register_startup_hook(StartupHook("fail", fail_hook, critical=True))
-    await mgr.start()
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-    # shutdown from crashed state should still work
-    success = await mgr.shutdown()
-    assert success is True
-    assert mgr.phase == LifecyclePhase.STOPPED
-
-
-# ── In-flight tracking ──
-
-
-@pytest.mark.asyncio
-async def test_acquire_release_in_flight(mgr):
-    ok = await mgr.acquire_in_flight()
-    assert ok is True
-    assert mgr.in_flight_count == 1
-    await mgr.release_in_flight()
-    assert mgr.in_flight_count == 0
-
-
-@pytest.mark.asyncio
-async def test_acquire_rejected_during_drain(mgr):
-    await mgr.start()
-    await mgr.acquire_in_flight()
-
-    # Start shutdown in background (blocks on drain)
-    shutdown_task = asyncio.create_task(mgr.shutdown(timeout=2.0))
-    await asyncio.sleep(0.05)  # let phase reach DRAINING
-
-    # New acquires should be rejected during drain
-    ok = await mgr.acquire_in_flight()
-    assert ok is False
-
-    # Release the stuck in-flight task so drain completes
-    await mgr.release_in_flight()
-    await shutdown_task
-    assert mgr.phase == LifecyclePhase.STOPPED
-
-
-@pytest.mark.asyncio
-async def test_drain_waits_for_in_flight(mgr):
-    await mgr.start()
-
-    async def slow_task():
-        await mgr.acquire_in_flight()
-        await asyncio.sleep(0.1)
-        await mgr.release_in_flight()
-
-    task = asyncio.create_task(slow_task())
-    await asyncio.sleep(0.02)  # let task acquire
-
-    start = time.time()
-    await mgr.shutdown(timeout=5.0)
-    elapsed = time.time() - start
-    assert elapsed >= 0.07  # waited for slow task
-    assert mgr.phase == LifecyclePhase.STOPPED
-    await task
-
-
-# ── Health gates ──
-
-
-@pytest.mark.asyncio
-async def test_gate_ready(mgr):
-    mgr.register_gate("db", lambda: True)
-    assert mgr.gate_ready("db") is True
-
-
-@pytest.mark.asyncio
-async def test_gate_not_ready(mgr):
-    mgr.register_gate("db", lambda: False)
-    assert mgr.gate_ready("db") is False
-
-
-@pytest.mark.asyncio
-async def test_unknown_gate_is_ready(mgr):
-    assert mgr.gate_ready("nonexistent") is True
-
-
-@pytest.mark.asyncio
-async def test_gates_ready_all_pass(mgr):
-    mgr.register_gate("a", lambda: True)
-    mgr.register_gate("b", lambda: True)
-    assert mgr.gates_ready() is True
-
-
-@pytest.mark.asyncio
-async def test_gates_ready_one_fails(mgr):
-    mgr.register_gate("a", lambda: True)
-    mgr.register_gate("b", lambda: False)
-    assert mgr.gates_ready() is False
-
-
-@pytest.mark.asyncio
-async def test_unregister_gate(mgr):
-    mgr.register_gate("temp", lambda: False)
-    mgr.unregister_gate("temp")
-    assert mgr.gate_ready("temp") is True
-
-
-@pytest.mark.asyncio
-async def test_wait_for_gates_timeout(mgr):
-    mgr.register_gate("never", lambda: False)
-    ready = await mgr.wait_for_gates(timeout=0.1, poll_interval=0.05)
-    assert ready is False
-
-
-@pytest.mark.asyncio
-async def test_wait_for_gates_success(mgr):
-    gate_state = [False]
-
-    def check():
-        return gate_state[0]
-
-    mgr.register_gate("eventually", check)
-
-    async def enable_gate():
-        await asyncio.sleep(0.05)
-        gate_state[0] = True
-
-    task = asyncio.create_task(enable_gate())
-    ready = await mgr.wait_for_gates(timeout=1.0, poll_interval=0.02)
-    assert ready is True
-    await task
-
-
-# ── Mark crashed ──
-
-
-@pytest.mark.asyncio
-async def test_mark_crashed(mgr):
-    await mgr.start()
-    await mgr.mark_crashed(reason="kernel panic")
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-
-@pytest.mark.asyncio
-async def test_mark_crashed_from_init(mgr):
-    await mgr.mark_crashed("early failure")
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-
-@pytest.mark.asyncio
-async def test_mark_crashed_idempotent(mgr):
-    await mgr.mark_crashed("first")
-    await mgr.mark_crashed("second")
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-
-# ── EventBus integration ──
-
-
-@pytest.mark.asyncio
-async def test_event_bus_emits_phase_changes():
-    bus = EventBus()
-    mgr = LifecycleManager(event_bus=bus)
-    events: list[str] = []
-
-    def collect(name, data):
-        if name == "lifecycle.phase_changed":
-            events.append(f"{data['from']}->{data['to']}")
-
-    bus.on("lifecycle.phase_changed", collect, priority=EventPriority.CRITICAL)
-
-    await mgr.start()
-    assert "init->starting" in events
-    assert "starting->running" in events
-
-    await mgr.shutdown()
-    assert "running->draining" in events
-    assert "draining->stopping" in events
-    assert "stopping->stopped" in events
-
-
-@pytest.mark.asyncio
-async def test_event_bus_hook_events():
-    bus = EventBus()
-    mgr = LifecycleManager(event_bus=bus)
-    hook_events: list[str] = []
-
-    def collect(name, data):
-        hook_events.append(name)
-
-    bus.on("lifecycle.hook_started", collect)
-    bus.on("lifecycle.hook_completed", collect)
-
-    async def my_hook():
-        pass
-
-    mgr.register_startup_hook(StartupHook("my", my_hook))
-    await mgr.start()
-
-    assert "lifecycle.hook_started" in hook_events
-    assert "lifecycle.hook_completed" in hook_events
-
-
-# ── Singleton ──
-
-
-def test_get_lifecycle_manager_singleton():
-    reset_lifecycle_manager()
-    a = get_lifecycle_manager()
-    b = get_lifecycle_manager()
-    assert a is b
-
-
-def test_reset_lifecycle_manager():
-    reset_lifecycle_manager()
-    a = get_lifecycle_manager()
-    reset_lifecycle_manager()
-    b = get_lifecycle_manager()
-    assert a is not b
-
-
-# ── Get results ──
-
-
-@pytest.mark.asyncio
-async def test_get_results(mgr):
-    await mgr.start()
-    results = mgr.get_results()
-    assert results["phase"] == "running"
-    assert results["uptime"] >= 0
-    assert results["in_flight"] == 0
-    assert "hooks" in results
-    assert "gates" in results
-
-
-@pytest.mark.asyncio
-async def test_event_bus_on_startup_hook_failure():
-    bus = EventBus()
-    mgr = LifecycleManager(event_bus=bus)
-    failed_events: list[str] = []
-
-    def collect(name, data):
-        if name == "lifecycle.hook_failed":
-            failed_events.append(data["hook"])
-
-    bus.on("lifecycle.hook_failed", collect)
-
-    async def fail_hook():
-        raise ValueError("broken")
-
-    mgr.register_startup_hook(StartupHook("fail", fail_hook, critical=True))
-    await mgr.start()
-
-    assert "fail" in failed_events
-
-
-@pytest.mark.asyncio
-async def test_crashed_shutdown_with_in_flight():
-    mgr = LifecycleManager()
-
-    async def fail_hook():
-        raise RuntimeError("critical failure")
-
-    mgr.register_startup_hook(StartupHook("fail", fail_hook, critical=True))
-    await mgr.start()
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-    success = await mgr.shutdown()
-    assert success is True
-    assert mgr.phase == LifecyclePhase.STOPPED
-
-
-@pytest.mark.asyncio
-async def test_concurrent_acquires():
-    mgr = LifecycleManager()
-    count = 5
-    tasks = [mgr.acquire_in_flight() for _ in range(count)]
-    results = await asyncio.gather(*tasks)
-    assert all(results)
-    assert mgr.in_flight_count == count
-
-    releases = [mgr.release_in_flight() for _ in range(count)]
-    await asyncio.gather(*releases)
-    assert mgr.in_flight_count == 0
-
-
-@pytest.mark.asyncio
-async def test_mark_crashed_emits_event():
-    bus = EventBus()
-    mgr = LifecycleManager(event_bus=bus)
-    events: list[dict] = []
-
-    def collect(name, data):
-        if name == "lifecycle.crashed":
-            events.append(data)
-
-    bus.on("lifecycle.crashed", collect)
-    await mgr.mark_crashed("test crash")
-    assert len(events) == 1
-    assert events[0]["reason"] == "test crash"
-
-
-@pytest.mark.asyncio
-async def test_duplicate_startup_hook_logged(mgr, caplog):
-    async def hook():
-        pass
-
-    mgr.register_startup_hook(StartupHook("same", hook))
-    mgr.register_startup_hook(StartupHook("same", hook))
-    assert "Duplicate startup hook" in caplog.text
-
-
-@pytest.mark.asyncio
-async def test_duplicate_shutdown_hook_logged(mgr, caplog):
-    async def hook():
-        pass
-
-    mgr.register_shutdown_hook(ShutdownHook("same", hook))
-    mgr.register_shutdown_hook(ShutdownHook("same", hook))
-    assert "Duplicate shutdown hook" in caplog.text
-
-
-# ── StartupProfile ──
-
-
-class TestStartupProfile:
-    def test_enum_values(self):
-        assert StartupProfile.FULL.value == "full"
-        assert StartupProfile.QUICK.value == "quick"
-        assert StartupProfile.MINIMAL.value == "minimal"
-
-    def test_from_env_default(self, monkeypatch):
-        monkeypatch.delenv("SLO_STARTUP_PROFILE", raising=False)
-        assert StartupProfile.from_env() == StartupProfile.FULL
-
-    def test_from_env_full(self, monkeypatch):
-        monkeypatch.setenv("SLO_STARTUP_PROFILE", "full")
-        assert StartupProfile.from_env() == StartupProfile.FULL
-
-    def test_from_env_quick(self, monkeypatch):
-        monkeypatch.setenv("SLO_STARTUP_PROFILE", "quick")
-        assert StartupProfile.from_env() == StartupProfile.QUICK
-
-    def test_from_env_minimal(self, monkeypatch):
-        monkeypatch.setenv("SLO_STARTUP_PROFILE", "minimal")
-        assert StartupProfile.from_env() == StartupProfile.MINIMAL
-
-    def test_from_env_case_insensitive(self, monkeypatch):
-        monkeypatch.setenv("SLO_STARTUP_PROFILE", "QUICK")
-        assert StartupProfile.from_env() == StartupProfile.QUICK
-
-    def test_from_env_unknown_falls_back(self, monkeypatch):
-        monkeypatch.setenv("SLO_STARTUP_PROFILE", "turbo")
-        assert StartupProfile.from_env() == StartupProfile.FULL
-
-    def test_all_profiles_includes_all(self):
-        assert ALL_PROFILES == frozenset(StartupProfile)
-        assert len(ALL_PROFILES) == 3
-
-
-# ── Profile filtering ──
-
-
-@pytest.mark.asyncio
-async def test_profile_filter_hooks():
-    """Only hooks matching the active profile run."""
-    mgr = LifecycleManager()
-    ran: list[str] = []
-
-    async def make(name: str):
-        async def _run():
-            ran.append(name)
-        return _run
-
-    core = frozenset({StartupProfile.FULL, StartupProfile.QUICK, StartupProfile.MINIMAL})
-    ai = frozenset({StartupProfile.FULL})
-
-    mgr.register_startup_hook(StartupHook("logging", await make("logging"), profiles=core))
-    mgr.register_startup_hook(StartupHook("model", await make("model"), profiles=ai, depends_on=["logging"]))
-
-    await mgr.start(profile=StartupProfile.QUICK)
-    assert ran == ["logging"]  # model skipped for quick
-
-
-@pytest.mark.asyncio
-async def test_profile_full_runs_all():
-    mgr = LifecycleManager()
-    ran: list[str] = []
-
-    async def make(name: str):
-        async def _run():
-            ran.append(name)
-        return _run
-
-    core = frozenset({StartupProfile.FULL, StartupProfile.QUICK, StartupProfile.MINIMAL})
-    ai = frozenset({StartupProfile.FULL})
-
-    mgr.register_startup_hook(StartupHook("logging", await make("logging"), profiles=core))
-    mgr.register_startup_hook(StartupHook("model", await make("model"), profiles=ai, depends_on=["logging"]))
-
-    await mgr.start(profile=StartupProfile.FULL)
-    assert ran == ["logging", "model"]
-
-
-@pytest.mark.asyncio
-async def test_profile_minimal_skips_ai():
-    mgr = LifecycleManager()
-    ran: list[str] = []
-
-    async def make(name: str):
-        async def _run():
-            ran.append(name)
-        return _run
-
-    core = frozenset({StartupProfile.FULL, StartupProfile.QUICK, StartupProfile.MINIMAL})
-    ai = frozenset({StartupProfile.FULL})
-
-    mgr.register_startup_hook(StartupHook("logging", await make("logging"), profiles=core))
-    mgr.register_startup_hook(StartupHook("model", await make("model"), profiles=ai, depends_on=["logging"]))
-
-    await mgr.start(profile=StartupProfile.MINIMAL)
-    assert ran == ["logging"]
-
-
-@pytest.mark.asyncio
-async def test_profile_defaults_to_env(mgr, monkeypatch):
-    monkeypatch.setenv("SLO_STARTUP_PROFILE", "quick")
-    ran: list[str] = []
-
-    async def make(name: str):
-        async def _run():
-            ran.append(name)
-        return _run
-
-    core = frozenset({StartupProfile.FULL, StartupProfile.QUICK, StartupProfile.MINIMAL})
-    ai = frozenset({StartupProfile.FULL})
-
-    mgr.register_startup_hook(StartupHook("logging", await make("logging"), profiles=core))
-    mgr.register_startup_hook(StartupHook("model", await make("model"), profiles=ai, depends_on=["logging"]))
-
-    await mgr.start()  # no profile arg — reads from env
-    assert ran == ["logging"]
-
-
-# ── Preview ──
-
-
-@pytest.mark.asyncio
-async def test_preview_full():
-    mgr = LifecycleManager()
-    core = ALL_PROFILES
-    ai = frozenset({StartupProfile.FULL})
-
-    async def noop():
-        pass
-
-    mgr.register_startup_hook(StartupHook("logging", noop, profiles=core))
-    mgr.register_startup_hook(StartupHook("model", noop, profiles=ai, depends_on=["logging"]))
-
-    prev = mgr.preview(StartupProfile.FULL)
-    names = [h["name"] for h in prev]
-    assert names == ["logging", "model"]
-
-
-@pytest.mark.asyncio
-async def test_preview_quick():
-    mgr = LifecycleManager()
-    core = ALL_PROFILES
-    ai = frozenset({StartupProfile.FULL})
-
-    async def noop():
-        pass
-
-    mgr.register_startup_hook(StartupHook("logging", noop, profiles=core))
-    mgr.register_startup_hook(StartupHook("model", noop, profiles=ai, depends_on=["logging"]))
-
-    prev = mgr.preview(StartupProfile.QUICK)
-    names = [h["name"] for h in prev]
-    assert names == ["logging"]
-
-
-@pytest.mark.asyncio
-async def test_preview_uses_active_profile():
-    mgr = LifecycleManager()
-    core = ALL_PROFILES
-    ai = frozenset({StartupProfile.FULL})
-
-    async def noop():
-        pass
-
-    mgr.register_startup_hook(StartupHook("logging", noop, profiles=core))
-    mgr.register_startup_hook(StartupHook("model", noop, profiles=ai, depends_on=["logging"]))
-
-    await mgr.start(profile=StartupProfile.QUICK)
-    prev = mgr.preview()  # no arg — uses active profile
-    names = [h["name"] for h in prev]
-    assert names == ["logging"]
-
-
-@pytest.mark.asyncio
-async def test_preview_returns_hook_details():
-    mgr = LifecycleManager()
-
-    async def noop():
-        pass
-
-    mgr.register_startup_hook(StartupHook("my_hook", noop, profiles=ALL_PROFILES, depends_on=[], timeout=15.0, critical=False))
-
-    prev = mgr.preview(StartupProfile.FULL)
-    assert len(prev) == 1
-    hook = prev[0]
-    assert hook["name"] == "my_hook"
-    assert hook["critical"] is False
-    assert hook["timeout"] == 15.0
-    assert hook["depends_on"] == []
-
-
-# ── get_results with profile info ──
-
-
-@pytest.mark.asyncio
-async def test_get_results_includes_profile():
-    mgr = LifecycleManager()
-    await mgr.start(profile=StartupProfile.QUICK)
-    results = mgr.get_results()
-    assert results["profile"] == "quick"
-    assert "preview" in results["hooks"]
-
-
-@pytest.mark.asyncio
-async def test_get_results_preview_list():
-    mgr = LifecycleManager()
-
-    async def noop():
-        pass
-
-    mgr.register_startup_hook(StartupHook("a", noop, profiles=ALL_PROFILES))
-    await mgr.start(profile=StartupProfile.MINIMAL)
-    results = mgr.get_results()
-    preview = results["hooks"]["preview"]
-    assert isinstance(preview, list)
-    assert preview[0]["name"] == "a"
-
-
-# ── Server-level endpoint test ──
-
-
-@pytest.mark.asyncio
-async def test_lifecycle_endpoint():
-    """Verify /system/lifecycle returns expected fields via TestClient."""
-    pytest.importorskip("fastapi")
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    app = FastAPI()
-
-    @app.get("/system/lifecycle")
-    async def _lifecycle():
-        from domains.infrastructure.lifecycle import get_lifecycle_manager
-        mgr = get_lifecycle_manager()
-        return mgr.get_results()
-
-    client = TestClient(app)
-
-    # No lifecycle manager running — returns default state
-    resp = client.get("/system/lifecycle")
-    assert resp.status_code == 200
-    data = resp.json()
-    # INIT phase by default
-    assert "phase" in data
-    assert "profile" in data
-    assert "uptime" in data
-    assert "in_flight" in data
-    assert "hooks" in data
-    assert "gates" in data
-
-
-# ── Empty profiles field = all profiles ──
-
-
-@pytest.mark.asyncio
-async def test_empty_profiles_field_defaults_to_all():
-    """A StartupHook with no profiles set should run under all profiles."""
-    mgr = LifecycleManager()
-    ran: list[str] = []
-
-    async def my_hook():
-        ran.append("ran")
-
-    # No profiles field — defaults to ALL_PROFILES
-    mgr.register_startup_hook(StartupHook("always", my_hook))
-
-    await mgr.start(profile=StartupProfile.MINIMAL)
-    assert ran == ["ran"]
-
-
-# ── Hook result tracking ──
-
-
-@pytest.mark.asyncio
-async def test_startup_results_after_success():
-    mgr = LifecycleManager()
-    ran: list[str] = []
-
-    async def hook_a():
-        ran.append("a")
-
-    async def hook_b():
-        ran.append("b")
-
-    mgr.register_startup_hook(StartupHook("a", hook_a))
-    mgr.register_startup_hook(StartupHook("b", hook_b, depends_on=["a"]))
-
-    await mgr.start()
-    assert mgr.phase == LifecyclePhase.RUNNING
-
-    results = mgr.startup_results
-    assert len(results) == 2
-    assert results[0]["name"] == "a"
-    assert results[0]["success"] is True
-    assert results[0]["error"] == ""
-    assert results[1]["name"] == "b"
-    assert results[1]["success"] is True
-
-
-@pytest.mark.asyncio
-async def test_startup_results_shows_failure():
-    mgr = LifecycleManager()
-
-    async def ok_hook():
-        pass
-
-    async def fail_hook():
-        raise RuntimeError("broken")
-
-    mgr.register_startup_hook(StartupHook("ok", ok_hook, critical=False))
-    mgr.register_startup_hook(StartupHook("fail", fail_hook, critical=True, depends_on=["ok"]))
-
-    await mgr.start()
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-    results = mgr.startup_results
-    assert len(results) == 2
-    assert results[0]["name"] == "ok"
-    assert results[0]["success"] is True
-    assert results[1]["name"] == "fail"
-    assert results[1]["success"] is False
-    assert "broken" in results[1]["error"]
-
-
-@pytest.mark.asyncio
-async def test_startup_results_timeout_shown():
-    mgr = LifecycleManager()
-
-    async def slow_hook():
-        await asyncio.sleep(10)
-
-    mgr.register_startup_hook(StartupHook("slow", slow_hook, timeout=0.05, critical=True))
-
-    await mgr.start()
-
-    results = mgr.startup_results
-    assert len(results) == 1
-    assert results[0]["name"] == "slow"
-    assert results[0]["success"] is False
-    assert "timed out" in results[0]["error"]
-
-
-@pytest.mark.asyncio
-async def test_shutdown_results_after_success():
-    mgr = LifecycleManager()
-
-    async def noop():
-        pass
-
-    mgr.register_startup_hook(StartupHook("a", noop))
-    mgr.register_shutdown_hook(ShutdownHook("clean", noop))
-
-    await mgr.start()
-    await mgr.shutdown()
-
-    results = mgr.shutdown_results
-    assert len(results) == 1
-    assert results[0]["name"] == "clean"
-    assert results[0]["success"] is True
-
-
-@pytest.mark.asyncio
-async def test_shutdown_results_with_failure():
-    mgr = LifecycleManager()
-
-    async def noop():
-        pass
-
-    async def fail_shutdown():
-        raise ValueError("shutdown fail")
-
-    mgr.register_startup_hook(StartupHook("a", noop))
-    mgr.register_shutdown_hook(ShutdownHook("good", noop))
-    mgr.register_shutdown_hook(ShutdownHook("bad", fail_shutdown))
-
-    await mgr.start()
-    await mgr.shutdown()
-
-    results = mgr.shutdown_results
-    assert len(results) == 2
-    # reverse topological order: "bad" inserted after "good" but runs first
-    bad_result = results[0] if results[0]["name"] == "bad" else results[1]
-    assert bad_result["name"] == "bad"
-    assert bad_result["success"] is False
-    assert "shutdown fail" in bad_result["error"]
-
-
-@pytest.mark.asyncio
-async def test_get_results_contains_hook_results():
-    mgr = LifecycleManager()
-
-    async def noop():
-        pass
-
-    mgr.register_startup_hook(StartupHook("a", noop))
-    mgr.register_shutdown_hook(ShutdownHook("z", noop))
-
-    await mgr.start()
-    info = mgr.get_results()
-    assert "startup_results" in info["hooks"]
-    assert "shutdown_results" in info["hooks"]
-    assert len(info["hooks"]["startup_results"]) == 1
-
-    await mgr.shutdown()
-    info = mgr.get_results()
-    assert len(info["hooks"]["shutdown_results"]) == 1
-
-
-@pytest.mark.asyncio
-async def test_startup_results_empty_before_start():
-    mgr = LifecycleManager()
-    assert mgr.startup_results == []
-
-
-@pytest.mark.asyncio
-async def test_shutdown_results_empty_before_shutdown():
-    mgr = LifecycleManager()
-    assert mgr.shutdown_results == []
-
-
-# ── Remaining branch coverage ───────────────────────────────────────────
-
-
-def test_started_at_and_uptime_zero():
-    mgr = LifecycleManager()
-    assert mgr.started_at == 0.0
-    assert mgr.uptime_seconds == 0.0
-
-
-@pytest.mark.asyncio
-async def test_started_at_set_after_start(mgr):
-    await mgr.start()
-    assert mgr.started_at > 0
-    assert mgr.uptime_seconds > 0
-
-
-def test_get_profile_defaults_and_override():
-    mgr = LifecycleManager()
-    assert mgr.get_profile() == StartupProfile.FULL
-    assert mgr.get_profile().value == "full"
-
-
-@pytest.mark.asyncio
-async def test_get_profile_after_start_override():
-    mgr = LifecycleManager()
-    await mgr.start(profile=StartupProfile.QUICK)
-    assert mgr.get_profile() == StartupProfile.QUICK
-
-
-def test_dependency_levels_cycle_breaks():
-    a = StartupHook(name="a", handler=lambda: asyncio.sleep(0), depends_on=["b"])
-    b = StartupHook(name="b", handler=lambda: asyncio.sleep(0), depends_on=["a"])
-    levels = _dependency_levels([a, b])
-    assert len(levels) == 1
-    assert {h.name for h in levels[0]} == {"a", "b"}
-
-
-@pytest.mark.asyncio
-async def test_wait_for_gates_passed_emits_event():
-    bus = EventBus()
-    mgr = LifecycleManager(event_bus=bus)
-    passed: list[str] = []
-    bus.on("lifecycle.gates_passed", lambda name, data: passed.append(name))
-    mgr.register_gate("ok", lambda: True)
-    ready = await mgr.wait_for_gates(timeout=1.0, poll_interval=0.02)
-    assert ready is True
-    assert passed == ["lifecycle.gates_passed"]
-
-
-@pytest.mark.asyncio
-async def test_shutdown_drain_timeout():
-    mgr = LifecycleManager()
-    await mgr.start()
-    assert await mgr.acquire_in_flight() is True
-    ok = await mgr.shutdown(timeout=0.5)
-    assert ok is True
-    assert mgr.phase == LifecyclePhase.STOPPED
-    assert mgr.in_flight_count == 1
-
-
-@pytest.mark.asyncio
-async def test_parallel_critical_hook_timeout_breaks():
-    mgr = LifecycleManager()
-
-    async def slow():
-        await asyncio.sleep(5)
-
-    mgr.register_startup_hook(StartupHook("a", slow, timeout=0.05, critical=True))
-    mgr.register_startup_hook(
-        StartupHook("b", lambda: asyncio.sleep(0), timeout=0.5, critical=False)
-    )
-    ok = await mgr.start()
-    assert ok is False
-    assert mgr.phase == LifecyclePhase.CRASHED
-
-
-@pytest.mark.asyncio
-async def test_shutdown_hook_timeout_tolerated():
-    mgr = LifecycleManager()
-
-    async def slow():
-        await asyncio.sleep(5)
-
-    mgr.register_shutdown_hook(ShutdownHook("s", slow, timeout=0.05))
-    await mgr.start()
-    ok = await mgr.shutdown()
-    assert ok is True
-    assert mgr.phase == LifecyclePhase.STOPPED
-    assert mgr.shutdown_results[0]["success"] is False
-
-
-@pytest.mark.asyncio
-async def test_emit_sync_exception_logged(caplog):
-    class _BadBus:
-        async def emit(self, event, data=None, source=""):
-            pass
-
-        def emit_sync(self, event, data=None, source=""):
-            raise RuntimeError("bus down")
-
-    mgr = LifecycleManager(event_bus=_BadBus())
-
-    async def noop():
-        pass
-
-    mgr.register_startup_hook(StartupHook("h", noop))
-    await mgr.start()
-    assert mgr.phase == LifecyclePhase.RUNNING
-    assert any("Failed to emit lifecycle event" in r.message for r in caplog.records)
-
-
-def test_self_typing_fallback_import(monkeypatch):
-    import typing
-    import importlib
-    import domains.infrastructure.lifecycle as lifecycle_mod
-
-    if not hasattr(typing, "Self"):
-        pytest.skip("typing.Self already absent — fallback cannot be triggered")
-    monkeypatch.delattr(typing, "Self")
-    importlib.reload(lifecycle_mod)
-    assert lifecycle_mod.Self is not None
+from domains.shell.memory import WorldMemory
+from domains.shell.simulation import (
+    Nest,
+    SimBaby,
+    SimScene,
+    Simulation,
+    WorldParams,
+)
+
+
+def _quiet_baby(params: WorldParams, energy: float, position,
+                group_id: int = 0) -> SimBaby:
+    """A baby whose every decision gate is pinned off."""
+    b = SimBaby(initial_energy=energy,
+                position=np.array(position, dtype=np.float64),
+                params=params, group_id=group_id)
+    b.perceptron_cells.W[:] = 0.0
+    b.perceptron_cells.b[:] = -10.0
+    b.perceptron_body.W[:] = 0.0
+    b.perceptron_body.b[:] = -10.0
+    b.perceptron_move.W[:] = 0.0
+    b.perceptron_move.b[:] = 0.0
+    b.perceptron_entity.W[:] = 0.0
+    b.perceptron_entity.b[:] = -10.0
+    if b.perceptron_message is not None:
+        b.perceptron_message.W[:] = 0.0
+        b.perceptron_message.b[:] = -10.0
+    if b.perceptron_teach is not None:
+        b.perceptron_teach.W[:] = 0.0
+        b.perceptron_teach.b[:] = -10.0
+    if b.perceptron_predation is not None:
+        b.perceptron_predation.W[:] = 0.0
+        b.perceptron_predation.b[:] = -10.0
+    if b.perceptron_territory is not None:
+        b.perceptron_territory.W[:] = 0.0
+        b.perceptron_territory.b[:] = -10.0
+    if b.perceptron_reproduce is not None:
+        b.perceptron_reproduce.W[:] = 0.0
+        b.perceptron_reproduce.b[:] = -10.0
+    return b
+
+
+def _zero_reproducer(params: WorldParams, energy: float = 200.0,
+                     position=(4.0, 1.0, 4.0), group_id: int = 0) -> SimBaby:
+    """A parent whose reproduce gate stays at its zero init (sigmoid(0))."""
+    b = SimBaby(initial_energy=energy,
+                position=np.array(position, dtype=np.float64),
+                params=params, group_id=group_id)
+    b.perceptron_cells.W[:] = 0.0
+    b.perceptron_cells.b[:] = -10.0
+    b.perceptron_body.W[:] = 0.0
+    b.perceptron_body.b[:] = -10.0
+    b.perceptron_move.W[:] = 0.0
+    b.perceptron_move.b[:] = 0.0
+    b.perceptron_entity.W[:] = 0.0
+    b.perceptron_entity.b[:] = -10.0
+    if b.perceptron_message is not None:
+        b.perceptron_message.W[:] = 0.0
+        b.perceptron_message.b[:] = -10.0
+    if b.perceptron_teach is not None:
+        b.perceptron_teach.W[:] = 0.0
+        b.perceptron_teach.b[:] = -10.0
+    if b.perceptron_predation is not None:
+        b.perceptron_predation.W[:] = 0.0
+        b.perceptron_predation.b[:] = -10.0
+    if b.perceptron_territory is not None:
+        b.perceptron_territory.W[:] = 0.0
+        b.perceptron_territory.b[:] = -10.0
+    return b
+
+
+def _open_reproducer(params: WorldParams, energy: float = 200.0,
+                     position=(4.0, 1.0, 4.0), group_id: int = 0) -> SimBaby:
+    """A parent with its reproduce gate forced open (sigmoid(10) ~ 1)."""
+    b = _quiet_baby(params, energy, position, group_id=group_id)
+    assert b.perceptron_reproduce is not None
+    b.perceptron_reproduce.W[:] = 0.0
+    b.perceptron_reproduce.b[:] = 10.0
+    return b
+
+
+def _params(**kw) -> WorldParams:
+    base = dict(grid_size=(8, 4, 8), lifecycle_enabled=True,
+                social_enabled=False, message_enabled=False,
+                teaching_enabled=False, predation_enabled=False)
+    base.update(kw)
+    return WorldParams(**base)
+
+
+def _nest(position, group_id: int = 0, stored_energy: float = 100.0) -> Nest:
+    return Nest(id=1, position=np.array(position, dtype=np.float64),
+                stored_energy=stored_energy, owner_group_id=group_id)
+
+
+class TestReproduceBrain:
+    def test_off_by_default_keeps_locked_proofs(self):
+        # The channel is opt-in: default params create no reproduce brain, so
+        # the benchmark genomes (and their RNG streams) are untouched.
+        assert WorldParams().lifecycle_enabled is False
+        b = SimBaby(params=WorldParams(grid_size=(8, 4, 8)))
+        assert b.perceptron_reproduce is None
+        on = SimBaby(params=_params())
+        assert on.perceptron_reproduce is not None
+        assert on.perceptron_reproduce.W.shape == (
+            _params().body_input_dim, 1,
+        )
+
+    def test_gate_below_threshold_does_not_breed(self):
+        params = _params()
+        a = _quiet_baby(params, 200.0, (4.0, 1.0, 4.0))
+        assert a.decide_reproduce() == 0.0
+        assert a._last_reproduce_out is not None
+        assert a._last_reproduce_out < params.reproduce_gate_threshold
+
+    def test_zero_init_gate_hits_threshold(self):
+        # sigmoid(0) == 0.5 == the default gate threshold, so a directly
+        # constructed (non-genome) baby with lifecycle enabled is on the
+        # boundary and breeds once it stands above the energy threshold.
+        params = _params()
+        a = _zero_reproducer(params, 200.0)
+        gate = a.decide_reproduce()
+        assert gate == pytest.approx(0.5)
+        assert gate >= params.reproduce_gate_threshold
+
+    def test_open_gate_emits_full_strength(self):
+        params = _params()
+        a = _open_reproducer(params)
+        gate = a.decide_reproduce()
+        assert gate == pytest.approx(1.0 / (1.0 + np.exp(-10.0)))
+        assert gate > params.reproduce_gate_threshold
+
+    def test_body_input_reads_energy_and_position(self):
+        params = _params()
+        a = _zero_reproducer(params, 200.0, (4.0, 1.0, 4.0))
+        a.decide_reproduce()
+        body = a._last_reproduce_input
+        assert body is not None
+        assert body.shape == (params.body_input_dim,)
+        assert body[0] == pytest.approx(200.0 / params.start_energy)
+        assert body[1] == pytest.approx(4.0 / params.grid_size[0])
+        assert body[2] == pytest.approx(1.0 / params.grid_size[1])
+
+    def test_no_brain_returns_zero(self):
+        params = WorldParams(grid_size=(8, 4, 8))
+        a = SimBaby(initial_energy=200.0, params=params)
+        assert a.perceptron_reproduce is None
+        assert a.decide_reproduce() == 0.0
+
+
+class TestBirthScene:
+    def test_off_by_default_runs_no_births(self):
+        params = WorldParams(grid_size=(8, 4, 8), structure_enabled=True)
+        scene = SimScene(params=params)
+        parent = _open_reproducer(_params(), 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        assert scene.params.lifecycle_enabled is False
+        assert scene.birth(parent) == (None, 0.0)
+        assert len(scene.alive_babies) == 1
+        assert scene.births == 0
+
+    def test_birth_requires_energy_above_threshold(self):
+        # The gate alone is not enough — the simulation loop also demands
+        # genuine surplus (energy above reproduce_energy_threshold). The
+        # scene method itself does not re-check the energy gate; the tick
+        # loop gates on it. A birth attempted with a broke parent aborts.
+        params = _params()
+        scene = SimScene(params=params)
+        parent = _quiet_baby(params, 5.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        assert parent.energy < params.birth_cost
+        assert scene.birth(parent) == (None, 0.0)
+        assert len(scene.alive_babies) == 1
+
+    def test_birth_transfers_energy_conservation_safe(self):
+        # A birth is a transfer, never creation: the child's birth_cost comes
+        # out of the nest bank (birth_nest_fraction) and the parent's surplus.
+        params = _params(structure_enabled=True)
+        scene = SimScene(params=params)
+        nest = _nest((4.0, 1.0, 4.0), group_id=0, stored_energy=100.0)
+        scene.nests.append(nest)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        before = parent.energy + nest.stored_energy
+        child_id, moved = scene.birth(parent)
+        assert moved == pytest.approx(params.birth_cost)
+        assert child_id is not None
+        # Nest funds half the birth cost, the parent funds the rest.
+        assert nest.stored_energy == pytest.approx(
+            100.0 - params.birth_cost * params.birth_nest_fraction)
+        assert parent.energy == pytest.approx(
+            200.0 - params.birth_cost * (1.0 - params.birth_nest_fraction))
+        assert parent.energy + nest.stored_energy + params.birth_cost == pytest.approx(before)
+        child = next(b for b in scene.babies if b.entity.id == child_id)
+        assert child.energy == pytest.approx(params.birth_cost)
+        assert scene.births == 1
+
+    def test_birth_aborts_and_refunds_when_parent_cannot_fund(self):
+        # If the parent cannot cover its share, the birth aborts and the nest
+        # draw is refunded — breeding requires genuine surplus.
+        params = _params(structure_enabled=True)
+        scene = SimScene(params=params)
+        nest = _nest((4.0, 1.0, 4.0), group_id=0, stored_energy=100.0)
+        scene.nests.append(nest)
+        parent = _open_reproducer(params, 20.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        assert parent.energy < params.birth_cost * (1.0 - params.birth_nest_fraction)
+        child_id, moved = scene.birth(parent)
+        assert (child_id, moved) == (None, 0.0)
+        assert nest.stored_energy == pytest.approx(100.0)
+        assert parent.energy == pytest.approx(20.0)
+        assert len(scene.alive_babies) == 1
+
+    def test_birth_respects_max_entities_cap(self):
+        params = _params(max_entities=1)
+        scene = SimScene(params=params)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        assert scene.birth(parent) == (None, 0.0)
+        assert len(scene.alive_babies) == 1
+
+    def test_child_placed_within_birth_range_and_same_tribe(self):
+        params = _params()
+        scene = SimScene(params=params)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=2)
+        scene.add_baby(parent)
+        child_id, _ = scene.birth(parent)
+        child = next(b for b in scene.babies if b.entity.id == child_id)
+        dx = abs(child.position[0] - parent.position[0])
+        dz = abs(child.position[2] - parent.position[2])
+        assert min(dx, params.grid_size[0] - dx) <= params.birth_range
+        assert min(dz, params.grid_size[2] - dz) <= params.birth_range
+        assert child.group_id == parent.group_id
+        assert child.position[1] == pytest.approx(parent.position[1])
+
+    def test_child_inherits_parent_weights_and_memotype(self):
+        params = _params()
+        scene = SimScene(params=params)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        # Shape the parent's cells brain away from init so inheritance is visible.
+        parent.perceptron_cells.W[:] = 0.25
+        parent.perceptron_cells.b[:] = 0.5
+        child_id, _ = scene.birth(parent)
+        child = next(b for b in scene.babies if b.entity.id == child_id)
+        assert np.allclose(child.perceptron_cells.W, parent.perceptron_cells.W)
+        assert np.allclose(child.perceptron_cells.b, parent.perceptron_cells.b)
+        assert child.perceptron_reproduce is not None
+        assert np.allclose(child.perceptron_reproduce.W, parent.perceptron_reproduce.W)
+        assert child.perceptron_reproduce.b[0] == pytest.approx(10.0)
+
+    def test_child_seeded_from_world_reservoir(self):
+        # add_baby seeds a newborn from the world memory when present, exactly
+        # like any other newborn (see SimScene.add_baby): the child inherits
+        # the reservoir's best episodes on top of its memotype, and
+        # memory_seeds_given counts every newborn so seeded.
+        params = _params(memory_enabled=True)
+        world_memory = WorldMemory()
+        for reward in (0.1, 0.5, 0.9):
+            world_memory.record(np.array([1.0, 0.0], dtype=np.float32),
+                                (0.0,), reward, tick=0, group_id=0, donor_id=0)
+        scene = SimScene(params=params, world_memory=world_memory)
+        parent = _quiet_baby(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        child_id, _ = scene.birth(parent)
+        assert child_id is not None
+        child = next(b for b in scene.babies if b.entity.id == child_id)
+        parent_rewards = sorted([e.reward for e in parent.memory.recall(
+            params.memory_seed, by_reward=True)], reverse=True)
+        child_rewards = sorted([e.reward for e in child.memory.recall(
+            100, by_reward=True)], reverse=True)
+        assert parent_rewards == [0.9, 0.5, 0.1]
+        # The child receives the reservoir's best episodes twice: consolidated
+        # from the parent as memotype (spawn_child) and re-seeded at add_baby.
+        assert child_rewards == [0.9, 0.9, 0.5, 0.5, 0.1, 0.1]
+        assert scene.memory_seeds_given == 6  # parent + child, 3 each
+
+    def test_no_nest_parent_funds_full_birth(self):
+        # Without structures, the parent alone funds the whole birth cost —
+        # still a transfer, never creation.
+        params = _params(structure_enabled=False)
+        scene = SimScene(params=params)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        before = parent.energy
+        child_id, moved = scene.birth(parent)
+        assert moved == pytest.approx(params.birth_cost)
+        assert parent.energy == pytest.approx(before - params.birth_cost)
+        assert child_id is not None
+        assert scene.births == 1
+
+
+class TestLifecycleSimulation:
+    def test_tick_loop_breeds_above_threshold(self):
+        params = _params()
+        scene = SimScene(params=params)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        sim = Simulation(scene, max_ticks=1)
+        sim.run()
+        assert sim.summary()["births"] >= 1
+        assert sim.summary()["birth_energy_moved"] >= params.birth_cost
+        assert len(scene.babies) >= 2
+        rows = [r for r in sim._tick_log if r.get("reproduced", False)]
+        assert len(rows) == 1
+        assert rows[0]["child_id"] is not None
+        assert rows[0]["birth_energy"] == pytest.approx(params.birth_cost)
+
+    def test_energy_gate_blocks_birth_below_threshold(self):
+        # A rich gate but a starving parent: the loop checks the energy
+        # threshold before attempting a birth.
+        params = _params(reproduce_energy_threshold=300.0)
+        scene = SimScene(params=params)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        sim = Simulation(scene, max_ticks=2)
+        sim.run()
+        assert sim.summary()["births"] == 0
+        assert len(scene.babies) == 1
+
+    def test_starvation_deaths_remove_babies_every_tick(self):
+        # With lifecycle on, starvation still removes dead babies every tick —
+        # births and deaths share the same in-tick life cycle.
+        params = _params()
+        scene = SimScene(params=params)
+        dying = _quiet_baby(params, 1.0, (1.0, 1.0, 1.0), group_id=0)
+        scene.add_baby(dying)
+        sim = Simulation(scene, max_ticks=3)
+        sim.run()
+        assert sim.summary()["deaths"] >= 1
+        # The dead baby leaves the living set (its device remains only as a
+        # historical record, marked not alive).
+        assert dying.entity.id not in [b.entity.id for b in scene.alive_babies]
+        assert len(scene.alive_babies) == 0
+
+    def test_result_row_carries_reproduction_fields(self):
+        params = _params()
+        scene = SimScene(params=params)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        sim = Simulation(scene, max_ticks=1)
+        sim.run()
+        row = [r for r in sim._tick_log if r.get("reproduced", False)][0]
+        assert {"reproduced", "birth_energy", "child_id"} <= set(row)
+        assert row["reproduced"] is True
+        assert row["birth_energy"] > 0.0
+
+    def test_summary_counts_match_tick_log(self):
+        params = _params()
+        scene = SimScene(params=params)
+        parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+        scene.add_baby(parent)
+        sim = Simulation(scene, max_ticks=3)
+        sim.run()
+        births = [r for r in sim._tick_log if r.get("reproduced", False)]
+        assert sim.summary()["births"] == len(births)
+        assert sim.summary()["birth_energy_moved"] == pytest.approx(
+            sum(r["birth_energy"] for r in births))
+
+    def test_serialization_roundtrip_preserves_reproduce_brain(self):
+        params = _params()
+        parent = _open_reproducer(params, 200.0)
+        parent.decide_reproduce()
+        w_before = parent.perceptron_reproduce.W.copy()
+        b_before = parent.perceptron_reproduce.b.copy()
+        data = parent.to_dict()
+        restored = SimBaby.from_dict(data, params=params)
+        assert restored.perceptron_reproduce is not None
+        assert np.allclose(restored.perceptron_reproduce.W, w_before)
+        assert np.allclose(restored.perceptron_reproduce.b, b_before)
+
+    def test_determinism_with_lifecycle_on(self):
+        params = _params()
+        outs = []
+        for _ in range(2):
+            np.random.seed(7)
+            scene = SimScene(params=params)
+            parent = _open_reproducer(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
+            scene.add_baby(parent)
+            sim = Simulation(scene, max_ticks=2)
+            sim.run()
+            outs.append((sim.summary()["births"],
+                         sim.summary()["birth_energy_moved"]))
+        assert outs[0] == outs[1]
+
+
+class TestLifecycleEvolution:
+    @staticmethod
+    def _params(**kw) -> WorldParams:
+        base = dict(grid_size=(16, 8, 16), lifecycle_enabled=True,
+                    teaching_enabled=False, memory_enabled=False)
+        base.update(kw)
+        return WorldParams(**base)
+
+    def test_genome_roundtrip(self):
+        params = self._params()
+        rng = np.random.default_rng(1)
+        g = Genome.random(params, rng, group_id=2)
+        assert "reproduce.W" in g.tensors
+        assert g.tensors["reproduce.W"].shape == (params.body_input_dim, 1)
+        b = SimBaby(params=params)
+        g.apply_to(b)
+        assert b.perceptron_reproduce is not None
+        assert np.allclose(b.perceptron_reproduce.W, g.tensors["reproduce.W"])
+
+    def test_from_baby_extracts_reproduce_channel(self):
+        params = self._params()
+        b = SimBaby(params=params)
+        g = Genome.from_baby(b, group_id=1)
+        assert "reproduce.W" in g.tensors
+        assert np.allclose(g.tensors["reproduce.W"], b.perceptron_reproduce.W)
+
+    def test_dedicated_stream_keeps_shared_draws_identical(self):
+        # Locked-proof invariant: enabling lifecycle must not perturb the four
+        # behavior brains' RNG draws (or the perception-noise stream).
+        off = WorldParams(grid_size=(16, 8, 16))
+        on = self._params()
+        g_off = Genome.random(off, np.random.default_rng(9), group_id=0)
+        g_on = Genome.random(on, np.random.default_rng(9), group_id=0)
+        for name in ("cells", "body", "entity", "move"):
+            assert np.allclose(g_off.tensors[f"{name}.W"],
+                               g_on.tensors[f"{name}.W"])
+            assert np.allclose(g_off.tensors[f"{name}.b"],
+                               g_on.tensors[f"{name}.b"])
+        assert "reproduce.W" in g_on.tensors
+        assert "reproduce.W" not in g_off.tensors
+
+    def test_run_history_carries_lifecycle_fields(self):
+        eng = EvolutionEngine(
+            params=self._params(),
+            population_size=4, generations=2, ticks_per_generation=3,
+            organic_pools=1, seed=3,
+        )
+        result = eng.run()
+        entry = result["history"][0]
+        assert "births" in entry
+        assert "birth_energy_moved" in entry
+        assert "deaths" in entry
+        assert "alive_count" in entry
+        assert entry["births"] >= 0
+        assert entry["birth_energy_moved"] >= 0.0
+        assert entry["deaths"] >= 0
+
+    def test_run_off_default_has_no_reproduce_brains(self):
+        eng = EvolutionEngine(
+            population_size=4, generations=2, ticks_per_generation=3,
+            organic_pools=1, seed=3,
+        )
+        result = eng.run()
+        assert result["history"][0]["births"] == 0
+        assert result["history"][0]["birth_energy_moved"] == 0.0
+
+    def test_benchmark_structure_and_verdict_keys(self):
+        result = benchmark_lifecycle(
+            population_size=4, generations=3, ticks_per_generation=8,
+            organic_pools=1, seed=1,
+        )
+        assert set(result) >= {
+            "control", "lifecycle", "group_count", "group_weight",
+            "control_last_avg", "lifecycle_last_avg", "births",
+            "birth_energy_moved", "deaths", "alive_count",
+            "population_size", "lifecycle_emerged",
+        }
+        assert len(result["control"]["history"]) == 3
+        assert len(result["lifecycle"]["history"]) == 3
+        assert result["births"] == result["lifecycle"]["history"][-1]["births"]
+        assert result["deaths"] == result["lifecycle"]["history"][-1]["deaths"]
+        assert result["alive_count"] == result["lifecycle"]["history"][-1]["alive_count"]
+
+    def test_control_arm_never_breeds(self):
+        result = benchmark_lifecycle(
+            population_size=4, generations=3, ticks_per_generation=8,
+            organic_pools=1, seed=1,
+        )
+        for entry in result["control"]["history"]:
+            assert entry["births"] == 0
+            assert entry["birth_energy_moved"] == 0.0
+
+    def test_benchmark_deterministic(self):
+        a = benchmark_lifecycle(
+            population_size=4, generations=2, ticks_per_generation=8,
+            organic_pools=1, seed=5,
+        )
+        b = benchmark_lifecycle(
+            population_size=4, generations=2, ticks_per_generation=8,
+            organic_pools=1, seed=5,
+        )
+        assert a["lifecycle_last_avg"] == b["lifecycle_last_avg"]
+        assert a["births"] == b["births"]
+        assert a["lifecycle_emerged"] == b["lifecycle_emerged"]

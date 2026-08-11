@@ -24,6 +24,40 @@
   ],
   "cards": [
     {
+      "id": "20260811_045828_chatpage-refactor-controller-extraction-composed-sections",
+      "title": "ChatPage refactor \u2014 controller extraction + composed sections",
+      "description": "Split the 715-line ChatPage.tsx into: useChatPageController.ts (519 lines, all orchestration) + ChatPageSections.tsx (5 composed subcomponents: sidebar, toolbar, settings, chat area, dialogs) + a 54-line render-only ChatPage. Added showToast to the controller return. Zero behavior change. Verified: tsc exit 0; ChatPage.test.tsx 19/19 + route page test 2/2; full chat suite 66 files / 793 tests pass. Full web suite: 330/330 files green (the one earlier failure, app/(app)/adapters/page.test.tsx, was a KpiGrid mock gap in the background agent's AdapterHealthCard change \u2014 since fixed by the agent, verified 17/17 in isolation). Not committed (held for explicit approval). Backup at ChatPage.tsx.bak.json.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "chat",
+        "refactor"
+      ],
+      "created_at": "2026-08-11T04:58:28.329360+00:00",
+      "updated_at": "2026-08-11T04:58:28.329360+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260811_043414_stage-11-division-of-labor-builderwarrior-roles-complete",
+      "title": "Stage 11 division of labor \u2014 Builder/Warrior roles complete",
+      "description": "Stage 11 (division of labor) verified complete and documented.\n\nIMPLEMENTATION (already present in evolution.py, 1649 lines): heritable role posture via perceptron_role (body-input -> 1 gate), gate < role_gate_threshold (0.5) = Builder, >= = Warrior. Builder banks role_deposit_fraction (0.1) of surplus above start_energy into own nest within nest_use_radius when standing on it; Warrior raids foreign nest within territory_radius at min(role_raid_fraction (0.5) x nest_draw_rate, bank) even when not hungry. Both pure transfers (conservation invariant holds), both land in same tick's honest net reward. Role brain zero-built when channel off; weights draw from dedicated _ROLE_RNG_SEED=0x1E09 stream so the four behavior brains stay bit-identical (locked proofs intact).\n\nKEY BUG FOUND & FIXED: benchmark_specialization (evolution.py line 1131) did NOT set write_energy_scale, so writes never carried nest_seed_energy=3.0, no nests seeded, role acts could never fire. Fixed via replace(base, ..., write_energy_scale=10.0) mirroring benchmark_territoriality/lifecycle. Verified: deposits fire, raids fire every gen, 8 nests.\n\nCLI --specialize verified live (--social-pools 2, seed 7): raids every gen, specialization beats control by gen 8 (40.92 vs 9.85). Note: CLI flag is --social-pools (no --organic-pools).\n\nTESTS: test_specialization 28 pass, test_lifecycle 58 (combined), test_evolution 109 (incl. locked proofs + six role keys in test_run_structure), test_simulation + test_world_driver 141, shell REPL/runtime/state/VFS/pane suites pass.\n\nDOCS: Stage 11 section added to docs/WORLD_REALM.md after Stage 10.\n\nPre-existing env issues (unrelated): fastapi not installed -> 32 router tests + test_auto_train_helpers fail at collection; full suite > 30 min (heavy VM tests). Run targeted suites only.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "world-realm",
+        "stage11",
+        "specialization"
+      ],
+      "created_at": "2026-08-11T04:34:14.899631+00:00",
+      "updated_at": "2026-08-11T04:34:14.899631+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260811_013401_multi-agent-orchestration-polish-roadmap-5-closed",
       "title": "Multi-agent orchestration polish \u2014 roadmap #5 closed",
       "description": "Roadmap #5 (multi-agent orchestration polish: agent creation/editing UI + runs dashboard) verified fully delivered and marked Done. Scope already present: agents/page.tsx has agent CRUD (create/edit/delete + zod validation), orchestration card (goal/context, per-agent picks via agent_ids, live PLAN->EXECUTE->COMPOSE->COMPLETE SSE timeline), and runs dashboard (list/timeline views, status + agent filters, expandable per-task detail, result + logs). Backend routers/agents.py has CRUD + POST /orchestrate (SSE, asyncio.gather level execution) + GET /runs + GET /runs/{id}; persistence via domains/agents/run_history.py (file-backed data/agent_runs/). Verified: 26 frontend agents tests + 179 backend/core agent tests pass, tsc clean. Only dead surface found: agentsController.getRun() unused in UI (dashboard expands inline).",
