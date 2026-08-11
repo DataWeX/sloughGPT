@@ -462,6 +462,10 @@ class InferenceRouter:
             _max_token_wait_s = 120.0
             _heartbeat_interval_s = 10.0
             _last_heartbeat = time.time()
+            _batch: list[str] = []
+            _batch_start = time.time()
+            _BATCH_MAX = 5
+            _BATCH_INTERVAL_S = 0.005
             try:
                 async for token in provider.chat_stream(
                     provider_messages,
@@ -478,7 +482,11 @@ class InferenceRouter:
                         _token_gen_start = time.time()
                         token_count += 1
                         collected.append(token)
-                        yield sse_token("generate", token)
+                        _batch.append(token)
+                        if len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
+                            yield sse_token("generate", "".join(_batch))
+                            _batch = []
+                            _batch_start = time.time()
                     else:
                         now = time.time()
                         if now - _last_heartbeat >= _heartbeat_interval_s:
@@ -489,6 +497,9 @@ class InferenceRouter:
                         logger.warning("Generate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
                         yield sse_error("generate", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
                         return
+                if _batch:
+                    yield sse_token("generate", "".join(_batch))
+                    _batch = []
             except Exception as e:
                 from domains.infrastructure.errors import classify_exception, emit_error_event
                 err = classify_exception(e)
@@ -809,6 +820,10 @@ class InferenceRouter:
                     _max_token_wait_s = 120.0
                     _heartbeat_interval_s = 10.0
                     _last_heartbeat = time.time()
+                    _batch: list[str] = []
+                    _batch_start = time.time()
+                    _BATCH_MAX = 5
+                    _BATCH_INTERVAL_S = 0.005
                     try:
                         try:
                             async for token in provider.chat_stream(
@@ -828,7 +843,11 @@ class InferenceRouter:
                                 if token:
                                     _token_gen_start = time.time()
                                     full_response_parts.append(token)
-                                    yield sse_token("chat", token)
+                                    _batch.append(token)
+                                    if len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
+                                        yield sse_token("chat", "".join(_batch))
+                                        _batch = []
+                                        _batch_start = time.time()
                                 else:
                                     now = time.time()
                                     if now - _last_heartbeat >= _heartbeat_interval_s:
@@ -840,6 +859,9 @@ class InferenceRouter:
                                     cancel_event.set()
                                     yield sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
                                     return
+                            if _batch:
+                                yield sse_token("chat", "".join(_batch))
+                                _batch = []
                             yield sse_token("chat", "", done=True)
                         except GeneratorExit:
                             cancel_event.set()

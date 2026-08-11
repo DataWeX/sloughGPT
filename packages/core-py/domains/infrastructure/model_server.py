@@ -843,6 +843,7 @@ class LocalBackend(GenerateBackend):
         repetition_penalty: float,
         cancel_event=None,
         session_id: Optional[str] = None,
+        _pre_tokenized: Optional[dict] = None,
         **kwargs: Any,
     ) -> GeneratorType[str, None, dict]:
         """Stream via TextIteratorStreamer in background thread.
@@ -851,11 +852,19 @@ class LocalBackend(GenerateBackend):
 
         This is a **sync** generator — ``ModelServer.generate_stream()``
         wraps it in ``run_in_executor`` so it doesn't block the event loop.
+
+        Args:
+            _pre_tokenized: Optional pre-tokenized input from ModelServer's
+                async thread pool. If provided, skips the synchronous
+                tokenization step (saves 5-20ms on CPU).
         """
         from transformers import TextIteratorStreamer, StoppingCriteria
         import queue
 
-        inputs = _tokenize_cached(self._tokenizer, prompt, self._tokenize_cache)
+        if _pre_tokenized is not None:
+            inputs = _pre_tokenized
+        else:
+            inputs = _tokenize_cached(self._tokenizer, prompt, self._tokenize_cache)
         input_ids = inputs["input_ids"].to(self._device)
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
@@ -919,7 +928,9 @@ class LocalBackend(GenerateBackend):
             try:
                 text = streamer.text_queue.get(timeout=0.02)
             except queue.Empty:
-                time.sleep(0.01)
+                # Yield control briefly; the caller (ModelServer) bridges
+                # this sync generator to async via call_soon_threadsafe.
+                time.sleep(0.005)
                 continue
             if text == streamer.stop_signal:
                 break
@@ -1645,8 +1656,20 @@ class ModelServer:
 
         # Select backend (guard if alive, else local)
         backend = self._select_backend()
+        is_local = isinstance(backend, LocalBackend)
         logger.debug("generate_stream[%s]: backend=%s session_id=%s",
                      self.model_id, type(backend).__name__, session_id)
+
+        # Pre-tokenize in a thread pool to avoid blocking the event loop
+        # during the tokenization step (5-20ms on CPU).
+        _pre_tokenized = None
+        if is_local and self._tokenizer is not None:
+            try:
+                _pre_tokenized = await asyncio.to_thread(
+                    _tokenize_cached, self._tokenizer, prompt, self._tokenize_cache
+                )
+            except Exception:
+                _pre_tokenized = None
 
         start = time.time()
         token_count = 0
@@ -1655,15 +1678,12 @@ class ModelServer:
         try:
             # Run the backend's sync generator in a thread so we don't block
             # the event loop during generation.
-
-            # We can't directly await a generator, so we run the
-            # first-token generation in a thread and then iterate
-            # the sync generator's queue from the async context.
             #
             # Strategy: start a thread that pumps the sync generator
-            # into a queue; the async generator reads from the queue.
-            import queue as _queue
-            q: _queue.Queue = _queue.Queue()
+            # into an asyncio.Queue via loop.call_soon_threadsafe;
+            # the async generator awaits items with zero polling overhead.
+            loop = asyncio.get_running_loop()
+            q: asyncio.Queue = asyncio.Queue()
             _sentinel = object()
 
             is_local = isinstance(backend, LocalBackend)
@@ -1676,23 +1696,20 @@ class ModelServer:
                         top_p, top_k, repetition_penalty,
                         cancel_event=cancel_event,
                         session_id=session_id if is_local else None,
+                        _pre_tokenized=_pre_tokenized,
                         **kwargs,
                     ):
-                        q.put(token)
+                        loop.call_soon_threadsafe(q.put_nowait, token)
                 except Exception as e:
-                    q.put(e)
+                    loop.call_soon_threadsafe(q.put_nowait, e)
                 finally:
-                    q.put(_sentinel)
+                    loop.call_soon_threadsafe(q.put_nowait, _sentinel)
 
             pump_thread = Thread(target=_pump, daemon=True)
             pump_thread.start()
 
             while True:
-                try:
-                    item = q.get(timeout=0.02)
-                except _queue.Empty:
-                    await asyncio.sleep(0)
-                    continue
+                item = await q.get()
                 if item is _sentinel:
                     break
                 if isinstance(item, Exception):
