@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """
-SloughGPT Training Pipeline
+SloughGPT Training Pipeline (SloNet-native, torch-free)
 
-Unified training with:
+Trains :class:`domains.models.SloughGPTModel` on pure NumPy via SloNet. There is
+no PyTorch dependency anywhere in the training path: the optimizer is
+``SloAdam``, scheduling is ``domains.training.lr_schedulers``, and checkpoints
+are ``.soul`` (self-contained weights + vocab + training state) with a ``.npz``
+fallback. PyTorch is only ever used elsewhere to *load* HuggingFace models.
+
+Features:
 - Gradient accumulation
-- Automatic checkpointing
-- LoRA support
+- EMA-smoothed loss reporting (honest curve, tracks raw loss both ways)
+- Automatic ``.soul`` checkpointing with rotation
+- LoRA fine-tuning (optional, flag-gated)
 - Learning rate scheduling
+- Resume from ``.soul`` / ``.npz``
+- Cancel / pause events + progress callback (API / CLI integration)
 
-Full ``step_*.npz`` checkpoints embed ``stoi`` / ``itos`` / ``chars`` for fair
-``cli.py eval`` / ``lm_eval_char`` (see ``docs/policies/CONTRIBUTING.md``,
-*Checkpoint vocabulary*).
+Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 """
 
 import math
@@ -32,11 +39,7 @@ try:
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domains.training.trainer_protocol import TrainResult
-from domains.training.checkpoint_utils import (
-    extract_state_dict,
-    normalize_raw_checkpoint,
-    torch_load_checkpoint,
-)
+from domains.training.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domains.training.slonet import load_checkpoint_npz, save_checkpoint_npz
 from domains.training.lora import apply_lora_to_model, LoRAConfig
 
@@ -75,10 +78,7 @@ class TextDataset:
 
 
 def prepare_data(data_path, block_size=128):
-    """Prepare training data from text file or multiple datasets with ratios."""
-    import os
-    from pathlib import Path
-
+    """Prepare training data from a text file or multiple datasets with ratios."""
     if isinstance(data_path, list) and data_path and isinstance(data_path[0], tuple):
         datasets_with_ratios = data_path
         all_texts = []
@@ -160,18 +160,10 @@ class TrainerConfig:
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
 
-    # Mixed precision
-    use_mixed_precision: bool = True
-    mixed_precision_dtype: str = "bf16"  # "fp16" or "bf16"
-
-    # Distributed
-    use_distributed: bool = False
-    use_fsdp: bool = False  # Fully Sharded Data Parallel
-    backend: str = "nccl"
-    world_size: int = 1
-    rank: int = 0
-    local_rank: int = 0
-    sharding_strategy: str = "FULL_SHARD"  # FULL_SHARD, SHARD_GRAD_OP, NO_SHARD
+    # Scheduler
+    scheduler_type: str = "cosine"
+    warmup_steps: int = 100
+    min_lr: float = 1e-5
 
     # Checkpointing - uses .soul format
     checkpoint_dir: str = "models/auto-training"
@@ -179,30 +171,20 @@ class TrainerConfig:
     save_best_only: bool = False
     max_checkpoints: int = 5
 
-    # Scheduler
-    scheduler_type: str = "cosine"
-    warmup_steps: int = 100
-    min_lr: float = 1e-5
-
     # LoRA
     use_lora: bool = False
     lora_rank: int = 8
     lora_alpha: int = 16
 
-    # Logging
+    # Logging / eval
     log_interval: int = 10
     eval_interval: int = 100
 
-    # Early stopping
-    early_stopping_patience: int = 0  # 0 = disabled; stop if no improvement for N evals
+    # Early stopping (0 = disabled; stop if no improvement for N evals)
+    early_stopping_patience: int = 0
 
-    # Device
-    device: str = "auto"
-
-    # Performance optimizations
-    use_compile: bool = False
-    compile_mode: str = "reduce-overhead"
-    use_channels_last: bool = True
+    # Device — SloNet training is pure numpy and always runs on the CPU.
+    device: str = "cpu"
 
     def __post_init__(self):
         if self.device == "auto":
@@ -216,12 +198,11 @@ class TrainerConfig:
 
 def _make_json_safe(obj):
     """Recursively convert numpy arrays to JSON-safe types."""
-    import numpy as _np
-    if isinstance(obj, _np.ndarray):
+    if isinstance(obj, np.ndarray):
         return obj.tolist()
-    if isinstance(obj, _np.integer):
+    if isinstance(obj, np.integer):
         return int(obj)
-    if isinstance(obj, _np.floating):
+    if isinstance(obj, np.floating):
         return float(obj)
     if isinstance(obj, dict):
         return {k: _make_json_safe(v) for k, v in obj.items()}
@@ -306,11 +287,10 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
         Dict with keys: step, epoch, accumulation_step, optimizer (optional),
         scheduler (optional).
     """
-    import numpy as _np
 
     def _to_numpy(obj):
         if isinstance(obj, list):
-            return _np.array(obj, dtype=_np.float64)
+            return np.array(obj, dtype=np.float64)
         return obj
 
     raw = metadata.get("training_state", {})
@@ -342,7 +322,11 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
 
 
 class CheckpointManager:
-    """Manages model checkpointing with automatic cleanup."""
+    """Manages .soul checkpointing with automatic cleanup.
+
+    Checkpoints embed ``stoi`` / ``itos`` / ``chars`` so char-LM eval scores
+    against the training charset (see ``docs/policies/CONTRIBUTING.md``).
+    """
 
     def __init__(
         self,
@@ -372,14 +356,22 @@ class CheckpointManager:
         itos: Optional[Dict[int, str]] = None,
         chars: Optional[List[str]] = None,
     ) -> Optional[str]:
-        """Save a checkpoint.
+        """Save a checkpoint as ``.soul`` (with a ``.npz`` fallback if export fails).
 
-        When ``stoi`` / ``itos`` are provided, they are stored so
-        :func:`domains.training.lm_eval_char.evaluate_sloughgpt_char_lm` and
-        ``cli.py eval`` can score text with the **training** charset (not a
-        vocab rebuilt from the eval file). Optional ``chars`` is stored when
-        passed; else it is derived from ``itos``. See
-        ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
+        Args:
+            model: SloNet model to persist.
+            optimizer: SloAdam / SloSGD (or None) — state embedded in metadata.
+            scheduler: SloLRScheduler (or None).
+            step: Current global step.
+            metrics: Loss dict; ``eval_loss`` preferred, else ``loss``.
+            config: TrainerConfig (for metadata).
+            epoch: Current epoch.
+            is_final: If True, bypasses ``save_best_only`` gating.
+            stoi/itos/chars: Vocab maps; when provided they are embedded so
+                char-LM eval uses the **training** charset.
+
+        Returns:
+            Path string of the saved checkpoint, or None if skipped by best-only.
         """
         metric_value = metrics.get("eval_loss", metrics.get("loss", float("inf")))
 
@@ -489,7 +481,7 @@ class CheckpointManager:
 
     @staticmethod
     def load_from_path(path: str, map_location: str = "cpu") -> Optional[Dict[str, Any]]:
-        """Load a training checkpoint from an explicit path (.soul, .npz, or legacy .pt)."""
+        """Load a training checkpoint from an explicit path (.soul or .npz)."""
         p = Path(path).expanduser()
         if not p.is_file():
             logger.warning("Checkpoint file not found: %s", p,
@@ -499,7 +491,9 @@ class CheckpointManager:
             return _load_soul_checkpoint(str(p))
         if p.suffix == ".npz":
             return load_checkpoint_npz(str(p))
-        return torch_load_checkpoint(str(p), map_location=map_location)
+        logger.warning("Unsupported checkpoint format: %s (use .soul or .npz)", p,
+            extra={"tag": "TRAIN"},)
+        return None
 
     def _cleanup_old_checkpoints(self):
         """Remove old checkpoints keeping only the most recent ones."""
@@ -515,11 +509,10 @@ class CheckpointManager:
                 path.unlink()
 
     def load_latest(self) -> Optional[Dict[str, Any]]:
-        """Load the latest checkpoint (.soul, .npz, or legacy .pt)."""
+        """Load the most recently modified .soul or .npz checkpoint."""
         candidates = (
             list(self.checkpoint_dir.glob("*.soul"))
             + list(self.checkpoint_dir.glob("*.npz"))
-            + list(self.checkpoint_dir.glob("step_*.pt"))
         )
         if not candidates:
             return None
@@ -544,13 +537,13 @@ class CheckpointManager:
 
 class SloughGPTTrainer:
     """
-    Unified trainer for SloughGPTModel.
+    Unified trainer for SloughGPTModel (pure NumPy / SloNet, no PyTorch).
 
     Satisfies :class:`domains.training.trainer_protocol.TrainerProtocol` structurally (``train()``).
 
     Features:
     - Gradient accumulation
-    - Automatic checkpointing (``step_*.npz`` includes ``stoi``/``itos``/``chars`` for eval)
+    - Automatic checkpointing (``.soul`` includes ``stoi``/``itos``/``chars`` for eval)
     - LoRA fine-tuning
     - Learning rate scheduling
 
@@ -585,8 +578,6 @@ class SloughGPTTrainer:
         max_steps: Optional[int] = None,
         gradient_accumulation_steps: int = 1,
         max_grad_norm: float = 1.0,
-        use_mixed_precision: bool = True,
-        mixed_precision_dtype: str = "bf16",
         checkpoint_dir: str = "checkpoints",
         checkpoint_interval: int = 500,
         save_best_only: bool = False,
@@ -621,8 +612,6 @@ class SloughGPTTrainer:
                 learning_rate=lr,
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 max_grad_norm=max_grad_norm,
-                use_mixed_precision=use_mixed_precision,
-                mixed_precision_dtype=mixed_precision_dtype,
                 checkpoint_dir=checkpoint_dir,
                 checkpoint_interval=checkpoint_interval,
                 save_best_only=save_best_only,
@@ -652,13 +641,8 @@ class SloughGPTTrainer:
         self._best_model_path = None  # path to best checkpoint
         self._early_stopped = False  # True if early stopping triggered
 
-        # Setup device
         self.device = self._setup_device()
         self.config.device = self.device
-
-        # Distributed state (DDP not supported on the numpy path)
-        self.ddp_model: Optional[Any] = None
-        self.accumulation_step = 0
 
         logger.info("Using device: %s", self.device,
             extra={"tag": "TRAIN"},)
@@ -699,20 +683,17 @@ class SloughGPTTrainer:
         # Training state
         self.global_step = 0
         self.current_epoch = 0
+        self.accumulation_step = 0
 
         logger.info("Train: %d, Val: %d", len(self.train_data), len(self.val_data),
             extra={"tag": "TRAIN"},)
 
     def _setup_device(self) -> str:
-        """Setup training device.
-
-        SloNet training is pure numpy and always runs on the CPU, regardless
-        of the configured device string.
-        """
+        """SloNet training is pure numpy and always runs on the CPU."""
         return "cpu"
 
     def _create_model(self):
-        """Create and setup the model."""
+        """Create and setup the model (optionally wrapped with LoRA)."""
         logger.info("=== Creating Model ===",
             extra={"tag": "TRAIN"},)
         self.model = SloughGPTModel(
@@ -744,23 +725,8 @@ class SloughGPTTrainer:
             logger.info("LoRA params: %d (%.1f%%)", lora_params, 100 * lora_params / total,
                 extra={"tag": "TRAIN"},)
 
-        # DDP/FSDP not available on the numpy path
-        if self.config.use_distributed:
-            self._setup_distributed()
-
-    def _setup_distributed(self):
-        """Distributed training (DDP/FSDP) is not supported on the numpy path."""
-        logger.warning(
-            "Distributed training (DDP/FSDP) requires PyTorch and is disabled "
-            "on the pure numpy SloNet path; training single-process on CPU.",
-            extra={"tag": "TRAIN"},
-        )
-        self.config.use_distributed = False
-        self.config.use_fsdp = False
-        self.ddp_model = None
-
     def _create_optimizer(self):
-        """Create optimizer with weight decay."""
+        """Create SloAdam optimizer with weight decay."""
         from domains.training.slonet import SloAdam
 
         return SloAdam(
@@ -790,8 +756,8 @@ class SloughGPTTrainer:
 
     @property
     def training_model(self):
-        """Get the model for training (DDP not supported on the numpy path)."""
-        return self.ddp_model if self.ddp_model is not None else self.model
+        """Get the model for training (single-process CPU; always the raw model)."""
+        return self.model
 
     def get_batch(self, split: str = "train") -> tuple:
         """Get a batch of data as numpy arrays.
@@ -821,13 +787,14 @@ class SloughGPTTrainer:
         (loss * scale_factor).backward()
         self.accumulation_step += 1
         raw_loss = loss.item() / scale_factor
-        # EMA smoothing: reported loss always trends downward
+        # EMA smoothing: true exponential moving average that may rise with
+        # batch noise, so the reported curve tracks the raw loss honestly
+        # instead of freezing at a one-way floor.
         if self._ema_loss is None:
             ema = raw_loss
         else:
             ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * self._ema_loss
-        if self._ema_loss is None or ema < self._ema_loss:
-            self._ema_loss = ema
+        self._ema_loss = ema
         self._last_train_loss = raw_loss
         metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
 
@@ -858,8 +825,8 @@ class SloughGPTTrainer:
     def evaluate(self, num_batches: int = 10) -> Dict[str, float]:
         """Evaluate the model on the validation split.
 
-        Uses 10 batches (was 50) — sufficient for loss estimation
-        while reducing per-eval cost from ~50 forward passes to ~10.
+        Uses 10 batches — sufficient for loss estimation while keeping the
+        per-eval cost low.
         """
         model = self.training_model
         model.eval()
@@ -945,18 +912,16 @@ class SloughGPTTrainer:
 
         Args:
             resume: If True, load checkpoint from ``resume_path`` or latest in ``checkpoint_dir``.
-            resume_path: Optional checkpoint path (.soul, .npz, or legacy .pt). Accepts full
+            resume_path: Optional checkpoint path (.soul or .npz). Accepts full
                 ``CheckpointManager`` bundles (model + optimizer + scheduler + step/epoch) and
-                **weights-only** bundles (``model_state_dict``, legacy ``model``, or flat
-                tensors) as normalized by
-                :func:`domains.training.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
-                and scheduler load are best-effort so checkpoints from ``train_sloughgpt.py``
-                or exports can still seed weights when training state does not match this
-                trainer's optimizer/scheduler.
-            on_progress: Optional callback (main process only) invoked on a throttled schedule
-                with a dict containing at least: ``global_step``, ``epoch`` (1-based),
-                ``epochs``, ``steps_per_epoch``, ``progress_percent`` (0--99 while running),
+                **weights-only** bundles (``model_state_dict`` or flat tensors) as normalized
+                by :func:`domains.training.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
+                and scheduler load are best-effort.
+            on_progress: Optional callback invoked on a throttled schedule with a dict
+                containing at least: ``global_step``, ``epoch`` (1-based), ``epochs``,
+                ``steps_per_epoch``, ``progress_percent`` (0--99 while running),
                 ``train_loss`` (last batch), optional ``eval_loss``, ``learning_rate``.
+            cancel_event: Optional threading.Event — if set, training stops cooperatively.
             pause_event: Optional threading.Event — if set, training loop sleeps until cleared.
         """
         if resume:
@@ -968,19 +933,16 @@ class SloughGPTTrainer:
             if checkpoint:
                 self._restore_from_checkpoint_bundle(checkpoint)
 
-        is_main = not self.config.use_distributed or self.config.rank == 0
-
-        if is_main:
-            logger.info(f"Training config: {self.config}",
-                extra={"tag": "TRAIN"},)
-            logger.info(f"Total parameters: {sum(p.numel() for p in self.model.parameters()):,}",
-                extra={"tag": "TRAIN"},)
-            if self._experiment_tracker is not None:
-                n_params = sum(p.numel() for p in self.model.parameters())
-                self._experiment_tracker.log_metrics(
-                    {"meta/total_parameters": float(n_params)},
-                    step=0,
-                )
+        logger.info(f"Training config: {self.config}",
+            extra={"tag": "TRAIN"},)
+        logger.info(f"Total parameters: {sum(p.numel() for p in self.model.parameters()):,}",
+            extra={"tag": "TRAIN"},)
+        if self._experiment_tracker is not None:
+            n_params = sum(p.numel() for p in self.model.parameters())
+            self._experiment_tracker.log_metrics(
+                {"meta/total_parameters": float(n_params)},
+                step=0,
+            )
 
         def _emit_progress(
             *,
@@ -990,7 +952,7 @@ class SloughGPTTrainer:
             done: bool = False,
             done_reason: Optional[str] = None,
         ) -> None:
-            if not is_main or on_progress is None:  # pragma: no cover (is_main always True, call sites guard on_progress)
+            if on_progress is None:
                 return
             denom = self._progress_denominator(steps_per_epoch)
             pct = 100 if done else min(99, int(100 * self.global_step / denom))
@@ -1023,9 +985,8 @@ class SloughGPTTrainer:
                     extra={"tag": "TRAIN"},)
                 break
 
-            if is_main:
-                logger.info(f"\nEpoch {epoch + 1}/{self.config.epochs}",
-                    extra={"tag": "TRAIN"},)
+            logger.info(f"\nEpoch {epoch + 1}/{self.config.epochs}",
+                extra={"tag": "TRAIN"},)
 
             model = self.training_model
             model.train()
@@ -1035,7 +996,7 @@ class SloughGPTTrainer:
                 len(self.train_data) // self.config.block_size // self.config.batch_size
             )
 
-            if is_main and on_progress and steps_per_epoch > 0:
+            if on_progress and steps_per_epoch > 0:
                 _emit_progress(steps_per_epoch=steps_per_epoch, train_loss=None)
 
             for step in range(steps_per_epoch):
@@ -1059,7 +1020,7 @@ class SloughGPTTrainer:
                 train_loss += metrics["loss"]
                 self.global_step += 1
 
-                if is_main and self.global_step % self.config.log_interval == 0:
+                if self.global_step % self.config.log_interval == 0:
                     lr = (
                         self.scheduler.get_last_lr()[0]
                         if self.scheduler
@@ -1078,7 +1039,7 @@ class SloughGPTTrainer:
                             step=int(self.global_step),
                         )
 
-                if is_main and on_progress:
+                if on_progress:
                     # Emit progress: every step for first 20 steps (smooth start),
                     # then every 5 steps (smooth chart without flooding SSE)
                     emit_interval = 1 if self.global_step <= 20 else 5
@@ -1090,52 +1051,51 @@ class SloughGPTTrainer:
                 # Evaluation
                 if self.global_step % self.config.eval_interval == 0:
                     eval_metrics = self.evaluate()
-                    if is_main:
+                    logger.info(
+                        f"Eval | Loss: {eval_metrics['eval_loss']:.4f} | "
+                        f"PPL: {eval_metrics['eval_ppl']:.2f}",
+                        extra={"tag": "TRAIN"},
+                    )
+                    if self._experiment_tracker is not None:
+                        self._experiment_tracker.log_metrics(
+                            {
+                                "eval/loss": float(eval_metrics["eval_loss"]),
+                                "eval/perplexity": float(eval_metrics["eval_ppl"]),
+                            },
+                            step=int(self.global_step),
+                        )
+
+                    if eval_metrics["eval_loss"] < self._best_val_loss:
+                        self._best_val_loss = eval_metrics["eval_loss"]
+                        self._patience_counter = 0
+                        self.save_checkpoint(eval_metrics)
+                        self._best_model_path = self._last_checkpoint_path
+                    else:
+                        self._patience_counter += 1
+
+                    # Early stopping
+                    if (
+                        self.config.early_stopping_patience > 0
+                        and self._patience_counter >= self.config.early_stopping_patience
+                    ):
                         logger.info(
-                            f"Eval | Loss: {eval_metrics['eval_loss']:.4f} | "
-                            f"PPL: {eval_metrics['eval_ppl']:.2f}",
+                            "Early stopping: no improvement for %d evals",
+                            self._patience_counter,
                             extra={"tag": "TRAIN"},
                         )
-                        if self._experiment_tracker is not None:
-                            self._experiment_tracker.log_metrics(
-                                {
-                                    "eval/loss": float(eval_metrics["eval_loss"]),
-                                    "eval/perplexity": float(eval_metrics["eval_ppl"]),
-                                },
-                                step=int(self.global_step),
+                        self._early_stopped = True
+                        self._is_training = False
+                        if on_progress:
+                            _emit_progress(
+                                steps_per_epoch=steps_per_epoch,
+                                train_loss=float(metrics["loss"]),
+                                eval_loss=float(eval_metrics["eval_loss"]),
+                                done=True,
+                                done_reason=f"early_stopping:{self._patience_counter}",
                             )
+                        break
 
-                        if eval_metrics["eval_loss"] < self._best_val_loss:
-                            self._best_val_loss = eval_metrics["eval_loss"]
-                            self._patience_counter = 0
-                            self.save_checkpoint(eval_metrics)
-                            self._best_model_path = self._last_checkpoint_path
-                        else:
-                            self._patience_counter += 1
-
-                        # Early stopping
-                        if (
-                            self.config.early_stopping_patience > 0
-                            and self._patience_counter >= self.config.early_stopping_patience
-                        ):
-                            logger.info(
-                                "Early stopping: no improvement for %d evals",
-                                self._patience_counter,
-                                extra={"tag": "TRAIN"},
-                            )
-                            self._early_stopped = True
-                            self._is_training = False
-                            if on_progress:
-                                _emit_progress(
-                                    steps_per_epoch=steps_per_epoch,
-                                    train_loss=float(metrics["loss"]),
-                                    eval_loss=float(eval_metrics["eval_loss"]),
-                                    done=True,
-                                    done_reason=f"early_stopping:{self._patience_counter}",
-                                )
-                            break
-
-                    if is_main and on_progress:
+                    if on_progress:
                         _emit_progress(
                             steps_per_epoch=steps_per_epoch,
                             train_loss=float(metrics["loss"]),
@@ -1149,7 +1109,7 @@ class SloughGPTTrainer:
             if self.config.max_steps and self.global_step >= self.config.max_steps:
                 break
 
-        if is_main and not self._early_stopped:
+        if not self._early_stopped:
             self.save_checkpoint({"loss": 0.0}, is_final=True)
             if self._experiment_tracker is not None:
                 self._experiment_tracker.log_metrics(
@@ -1225,7 +1185,12 @@ class SloughGPTTrainer:
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
 
     def save(self, path: str, format: str = "sou", stoi=None, itos=None, chars=None, training_duration=None):
-        """Save model in specified format."""
+        """Save model in .soul format (the only SloNet checkpoint format)."""
+        if format != "sou":
+            logger.warning(
+                "Unsupported format %r — SloNet checkpoints are .soul; saving .soul",
+                format, extra={"tag": "TRAIN"},
+            )
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
         metadata = {
@@ -1246,59 +1211,48 @@ class SloughGPTTrainer:
         if training_duration is not None:
             metadata["training_duration_s"] = training_duration
 
-        if format == "sou":
-            from domains.inference import create_soul_profile, save_soul
+        from domains.inference import create_soul_profile, save_soul
 
-            soul = create_soul_profile(
-                name=self.soul_name,
-                base_model="sloughgpt",
-                training_dataset=self.data_path,
-                epochs_trained=self.config.epochs,
-                final_val_loss=self._best_val_loss,
-                lineage="sloughgpt",
-                tags=["sloughgpt", "trained", "soul"],
-            )
-            # Bake vocab into soul metadata so checkpoint is self-contained
-            _stoi = stoi or self.stoi
-            _itos = itos or self.itos
-            if _stoi is not None:
-                soul.metadata["stoi"] = _stoi
-            if _itos is not None:
-                soul.metadata["itos"] = _itos
-            if chars is not None:
-                soul.metadata["chars"] = chars
-            elif _itos is not None:
-                try:
-                    soul.metadata["chars"] = [_itos[i] for i in range(len(_stoi))]
-                except (KeyError, TypeError):
-                    pass
-            soul.metadata["vocab_size"] = self.vocab_size
-            soul.metadata["config"] = metadata["config"]
-            if training_duration is not None:
-                soul.metadata["training_duration_s"] = training_duration
+        soul = create_soul_profile(
+            name=self.soul_name,
+            base_model="sloughgpt",
+            training_dataset=self.data_path,
+            epochs_trained=self.config.epochs,
+            final_val_loss=self._best_val_loss,
+            lineage="sloughgpt",
+            tags=["sloughgpt", "trained", "soul"],
+        )
+        # Bake vocab into soul metadata so checkpoint is self-contained
+        _stoi = stoi or self.stoi
+        _itos = itos or self.itos
+        if _stoi is not None:
+            soul.metadata["stoi"] = _stoi
+        if _itos is not None:
+            soul.metadata["itos"] = _itos
+        if chars is not None:
+            soul.metadata["chars"] = chars
+        elif _itos is not None:
+            try:
+                soul.metadata["chars"] = [_itos[i] for i in range(len(_stoi))]
+            except (KeyError, TypeError):
+                pass
+        soul.metadata["vocab_size"] = self.vocab_size
+        soul.metadata["config"] = metadata["config"]
+        if training_duration is not None:
+            soul.metadata["training_duration_s"] = training_duration
 
-            # Embed training state so .soul is fully self-contained
-            soul.metadata["training_state"] = _build_training_state_metadata(
-                optimizer=getattr(self, "optimizer", None),
-                scheduler=getattr(self, "scheduler", None),
-                step=getattr(self, "global_step", getattr(self, "_step", 0)),
-                epoch=getattr(self, "current_epoch", getattr(self, "_epoch", 0)),
-                accumulation_step=getattr(self, "accumulation_step", 0),
-                params=list(self.model.parameters()) if hasattr(self.model, "parameters") else None,
-            )
+        # Embed training state so .soul is fully self-contained
+        soul.metadata["training_state"] = _build_training_state_metadata(
+            optimizer=getattr(self, "optimizer", None),
+            scheduler=getattr(self, "scheduler", None),
+            step=getattr(self, "global_step", getattr(self, "_step", 0)),
+            epoch=getattr(self, "current_epoch", getattr(self, "_epoch", 0)),
+            accumulation_step=getattr(self, "accumulation_step", 0),
+            params=list(self.model.parameters()) if hasattr(self.model, "parameters") else None,
+        )
 
-            output_path = path + ".soul"
-            save_soul(self.model, output_path, soul_profile=soul)
-        elif format == "safetensors":
-            from domains.training.export import export_to_safetensors
-
-            output_path = path + ".safetensors"
-            export_to_safetensors(self.model, output_path, metadata)
-        else:
-            from domains.training.export import export_to_safetensors
-
-            output_path = path + ".safetensors"
-            export_to_safetensors(self.model, output_path, metadata)
+        output_path = path + ".soul"
+        save_soul(self.model, output_path, soul_profile=soul)
 
         logger.info("Model saved to %s (%s)", output_path, format,
             extra={"tag": "TRAIN"},)
@@ -1351,7 +1305,7 @@ def main():
         "--resume",
         type=str,
         default=None,
-        help="Resume from this checkpoint (.soul, .npz, or legacy .pt)",
+        help="Resume from this checkpoint (.soul or .npz)",
     )
     parser.add_argument(
         "--resume-latest",

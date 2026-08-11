@@ -1,6 +1,6 @@
 """Resolve training corpus paths from legacy folders or v1 dataset manifests.
 
-This module does not write checkpoints. Trainer ``step_*.pt`` char vocab on disk is
+This module does not write checkpoints. Trainer ``step_*.soul`` char vocab on disk is
 documented under *Checkpoint vocabulary* in ``docs/policies/CONTRIBUTING.md``.
 """
 

@@ -50,7 +50,6 @@ def tiny_config(tmp_path, **overrides):
         epochs=1,
         max_steps=None,
         gradient_accumulation_steps=1,
-        use_mixed_precision=False,
         checkpoint_dir=str(tmp_path / "ckpts"),
         log_interval=1,
         eval_interval=1000,
@@ -555,13 +554,12 @@ class TestCheckpointManager:
         bundle = m.load_from_path(path)
         assert bundle["step"] == 7
 
-    def test_load_from_path_pt(self, tmp_path, monkeypatch):
+    def test_load_from_path_pt_rejected(self, tmp_path, caplog):
         m = _manager(tmp_path)
-        fake = {"model_state_dict": {"a": 1}}
-        monkeypatch.setattr(tp, "torch_load_checkpoint", lambda p, map_location: fake)
         p = tmp_path / "legacy.pt"
         p.write_bytes(b"x")
-        assert m.load_from_path(str(p)) == fake
+        assert m.load_from_path(str(p)) is None
+        assert any("Unsupported checkpoint format" in r.message for r in caplog.records)
 
     def test_cleanup_within_limit(self, tmp_path):
         m = _manager(tmp_path)
@@ -645,14 +643,14 @@ class TestTrainerInit:
 
     def test_legacy_vocab_size(self, data_path, tmp_path):
         t = SloughGPTTrainer(data_path, n_embed=16, n_layer=1, n_head=2, block_size=8,
-                             vocab_size=48, use_mixed_precision=False, max_steps=1,
+                             vocab_size=48, max_steps=1,
                              checkpoint_dir=str(tmp_path / "ck"))
         assert t.vocab_size == 48
         assert t.config.vocab_size == 48
 
     def test_legacy_no_vocab_uses_data(self, data_path, tmp_path):
         t = SloughGPTTrainer(data_path, n_embed=16, n_layer=1, n_head=2, block_size=8,
-                             use_mixed_precision=False, max_steps=1,
+                             max_steps=1,
                              checkpoint_dir=str(tmp_path / "ck"))
         assert t.vocab_size == len(set(DATA_TEXT))
 
@@ -671,12 +669,14 @@ class TestTrainerInit:
         t = make_trainer(data_path, tiny_config(tmp_path, use_lora=True, lora_rank=4, lora_alpha=8))
         assert all("lora_" not in n for n, _ in t.model.named_parameters())
 
-    def test_distributed_disables(self, data_path, tmp_path, caplog):
-        t = make_trainer(data_path, tiny_config(tmp_path, use_distributed=True, use_fsdp=True))
-        assert t.config.use_distributed is False
-        assert t.config.use_fsdp is False
-        assert t.ddp_model is None
-        assert any("Distributed training" in r.message for r in caplog.records)
+    def test_torch_free_cpu_only(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        assert t.device == "cpu"
+        assert t.config.device == "cpu"
+        assert not hasattr(t, "ddp_model")
+        assert not hasattr(t.config, "use_distributed")
+        assert not hasattr(t.config, "use_fsdp")
+        assert not hasattr(t.config, "use_mixed_precision")
 
     def test_data_split(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
@@ -719,9 +719,8 @@ class TestTrainerHelpers:
 
     def test_training_model_returns_ddp(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
-        fake = object()
-        t.ddp_model = fake
-        assert t.training_model is fake
+        assert t.training_model is t.model
+        assert not hasattr(t, "ddp_model")
 
     def test_get_batch_train_shape(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
@@ -780,6 +779,23 @@ class TestTrainStep:
         t.train_step()
         lr_after = t.scheduler.get_last_lr()[0]
         assert lr_after != lr_before
+
+    def test_ema_tracks_raw_loss_both_ways(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        m = t.train_step()
+        assert m["loss"] == m["raw_loss"]
+        assert t._ema_loss == m["raw_loss"]
+        # Force a raw loss far above the EMA floor and confirm the reported
+        # loss rises with it instead of freezing at a one-way minimum.
+        t._ema_loss = 0.5
+        m2 = t.train_step()
+        assert m2["raw_loss"] > 0.5
+        assert m2["loss"] > 0.5
+        assert math.isclose(
+            m2["loss"],
+            t._ema_alpha * m2["raw_loss"] + (1 - t._ema_alpha) * 0.5,
+            rel_tol=1e-6,
+        )
 
     def test_evaluate(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
@@ -1095,29 +1111,20 @@ class TestSave:
         assert ts["epoch"] == 1
         assert "optimizer" in ts
 
-    def test_save_safetensors(self, data_path, tmp_path, monkeypatch):
+    def test_save_non_sou_format_saves_soul(self, data_path, tmp_path, caplog):
         t = make_trainer(data_path, tiny_config(tmp_path))
-        calls = {}
-        import domains.training.export as texport
-
-        def fake_export(model, path, metadata):
-            calls["path"] = path
-            calls["meta"] = metadata
-
-        monkeypatch.setattr(texport, "export_to_safetensors", fake_export)
         out = str(tmp_path / "model_st")
         t.save(out, format="safetensors")
-        assert calls["path"] == out + ".safetensors"
-        assert calls["meta"]["vocab_size"] == t.vocab_size
+        assert os.path.exists(out + ".soul")
+        assert os.path.exists(out + ".soul.meta.json")
+        assert any("Unsupported format" in r.message for r in caplog.records)
 
-    def test_save_unknown_format_uses_safetensors(self, data_path, tmp_path, monkeypatch):
+    def test_save_unknown_format_uses_soul(self, data_path, tmp_path, caplog):
         t = make_trainer(data_path, tiny_config(tmp_path))
-        calls = {}
-        import domains.training.export as texport
-
-        monkeypatch.setattr(texport, "export_to_safetensors", lambda model, path, metadata: calls.update(path=path))
-        t.save(str(tmp_path / "m"), format="pt")
-        assert calls["path"] == str(tmp_path / "m") + ".safetensors"
+        out = str(tmp_path / "m")
+        t.save(out, format="pt")
+        assert os.path.exists(out + ".soul")
+        assert any("Unsupported format" in r.message for r in caplog.records)
 
 
 class TestGenerate:

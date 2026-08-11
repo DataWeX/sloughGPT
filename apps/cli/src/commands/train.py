@@ -122,8 +122,6 @@ def cmd_train(args):
             max_steps=config.training.max_steps,
             gradient_accumulation_steps=config.training.gradient_accumulation_steps,
             max_grad_norm=config.training.gradient_clip,
-            use_mixed_precision=config.training.use_mixed_precision,
-            mixed_precision_dtype=config.training.mixed_precision_dtype,
             checkpoint_dir=config.checkpoint.trainer_dir,
             checkpoint_interval=config.checkpoint.trainer_interval,
             save_best_only=config.checkpoint.save_best_only,
@@ -222,8 +220,6 @@ def cmd_train(args):
         "weight_decay": float(config.training.weight_decay),
         "gradient_accumulation_steps": int(config.training.gradient_accumulation_steps),
         "max_grad_norm": float(config.training.gradient_clip),
-        "use_mixed_precision": bool(config.training.use_mixed_precision),
-        "mixed_precision_dtype": str(config.training.mixed_precision_dtype),
         "warmup_steps": int(config.training.warmup_steps),
         "min_lr": float(config.training.min_lr),
         "scheduler": str(config.training.scheduler),
@@ -264,11 +260,8 @@ def cmd_train(args):
 
 def cmd_quick(args):
     """Quick smoke test: train a toy model and generate."""
-    import torch
-
     sys.path.insert(0, ".")
 
-    from domains.models import SloughGPTModel
     from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
     from domains.training.performance import get_optimal_device
 
@@ -277,18 +270,12 @@ def cmd_quick(args):
     device = get_optimal_device()
     printer.key_value("Device", str(device))
 
-    use_optimize = not getattr(args, "no_optimize", False)
     config = TrainerConfig(
         batch_size=args.batch,
         learning_rate=args.lr,
-        use_mixed_precision=use_optimize and device != "cpu",
-        use_compile=use_optimize and hasattr(torch, "compile"),
         max_steps=args.steps if args.steps else 100,
         warmup_steps=max(10, args.steps // 10) if args.steps else 10,
     )
-
-    printer.status("Mixed Precision", "Yes" if config.use_mixed_precision else "No", "ok" if config.use_mixed_precision else "warn")
-    printer.status("torch.compile", "Yes" if config.use_compile else "No", "ok" if config.use_compile else "info")
 
     if args.datasets:
         datasets = [d.strip() for d in args.datasets.split(",") if d.strip()]
@@ -361,25 +348,8 @@ def cmd_quick(args):
 
     printer.blank()
     printer.step("Generating...")
-    model = trainer.model
-    model.eval()
-    input_ids = torch.tensor([[trainer.stoi.get(c, 0) for c in args.prompt]]).to(device)
+    text = trainer.generate(args.prompt, max_tokens=args.max_tokens, temperature=args.temperature)
 
-    with torch.no_grad():
-        output = model(input_ids)
-        logits = output[0] if isinstance(output, tuple) else output
-        next_token = logits[-1].argmax().item()
-        generated = [next_token]
-
-        for _ in range(args.max_tokens - 1):
-            output = model(torch.tensor([[next_token]]).to(device))
-            logits = output[0] if isinstance(output, tuple) else logits
-            next_token = logits[-1].argmax().item()
-            if next_token == 0:
-                break
-            generated.append(next_token)
-
-    text = "".join([trainer.itos.get(i, "") for i in generated])
     printer.blank()
     printer.key_value("Prompt", args.prompt)
     printer.key_value("Generated", f"{args.prompt}{text[:100]}...")
@@ -390,14 +360,29 @@ def cmd_quick(args):
 
 
 def cmd_eval(args):
-    """Evaluate char-level model perplexity."""
-    import torch
-
+    """Evaluate char-level model perplexity (.sou via SloNet, .pt via torch)."""
     printer.header("Model Evaluation")
     printer.key_value("Checkpoint", args.checkpoint)
 
+    checkpoint_path = str(args.checkpoint)
+    is_soul = checkpoint_path.endswith(".sou") or checkpoint_path.endswith(".soul")
+    data_path = getattr(args, "data", None) or "datasets/shakespeare/input.txt"
+
     try:
-        checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+        if is_soul:
+            from domains.training.lm_eval_char import evaluate_soul_char_lm
+
+            if not Path(data_path).is_file():
+                printer.warning(f"Data file not found: {data_path}")
+                return
+            printer.info(f"Evaluating on: {data_path}")
+            metrics = evaluate_soul_char_lm(checkpoint_path, data_path)
+            _print_char_lm_metrics(printer, metrics)
+            return
+
+        import torch
+
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
         if "training_info" in checkpoint:
             info = checkpoint["training_info"]
@@ -421,7 +406,6 @@ def cmd_eval(args):
         elif "model_state_dict" in checkpoint and isinstance(checkpoint["model_state_dict"], dict):
             _param_stats(checkpoint["model_state_dict"])
 
-        data_path = getattr(args, "data", None) or "datasets/shakespeare/input.txt"
         if Path(data_path).is_file():
             from domains.training.lm_eval_char import evaluate_sloughgpt_char_lm
 
@@ -431,20 +415,12 @@ def cmd_eval(args):
             printer.info(f"Evaluating on: {data_path}")
 
             metrics = evaluate_sloughgpt_char_lm(
-                args.checkpoint,
+                checkpoint_path,
                 data_path,
                 device=dev,
                 strict_load=strict,
             )
-            printer.blank()
-            printer.key_value("Mean Loss", f"{metrics['mean_loss']:.4f}")
-            ppl = metrics["perplexity"]
-            ppl_s = f"{ppl:.4f}" if ppl != float("inf") else "inf"
-            printer.key_value("Perplexity", ppl_s)
-            printer.key_value("Tokens Scored", format_number(metrics["num_token_positions"]))
-
-            for w in metrics.get("warnings") or []:
-                printer.warning(w)
+            _print_char_lm_metrics(printer, metrics)
         else:
             printer.warning(f"Data file not found: {data_path}")
 
@@ -462,6 +438,18 @@ def cmd_eval(args):
     except Exception as e:
         printer.error(f"Evaluation failed: {e}")
         sys.exit(1)
+
+
+def _print_char_lm_metrics(printer, metrics: dict) -> None:
+    """Render char-LM eval metrics through the CLI printer."""
+    printer.blank()
+    printer.key_value("Mean Loss", f"{metrics['mean_loss']:.4f}")
+    ppl = metrics["perplexity"]
+    ppl_s = f"{ppl:.4f}" if ppl != float("inf") else "inf"
+    printer.key_value("Perplexity", ppl_s)
+    printer.key_value("Tokens Scored", format_number(metrics["num_token_positions"]))
+    for w in metrics.get("warnings") or []:
+        printer.warning(w)
 
 
 # ── Sub-commands merged into `train` ──────────────────────────────
@@ -1009,7 +997,7 @@ def register(subparsers):
     quick_parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     quick_parser.add_argument("--max-tokens", type=int, default=100, help="Generated tokens")
     quick_parser.add_argument("--temperature", type=float, default=0.8, help="Temperature")
-    quick_parser.add_argument("--output", default="models/quick.pt", help="Output path")
+    quick_parser.add_argument("--output", default="models/quick.soul", help="Output path")
     quick_parser.add_argument("--no-optimize", action="store_true", help="Disable optimizations")
     quick_parser.add_argument("--soul-name", default="SloughGPT-Quick", help="Slo name")
     quick_parser.set_defaults(func=cmd_quick)
@@ -1019,7 +1007,7 @@ def register(subparsers):
         "eval",
         help="Evaluate model perplexity",
     )
-    eval_parser.add_argument("--checkpoint", default="models/sloughgpt.pt", help="Checkpoint path")
+    eval_parser.add_argument("--checkpoint", default="models/sloughgpt.soul", help="Checkpoint path")
     eval_parser.add_argument("--data", default="datasets/shakespeare/input.txt", help="Eval text")
     eval_parser.add_argument("--device", default="cpu", help="Device for scoring")
     eval_parser.add_argument("--no-strict", action="store_true", help="Allow partial load")

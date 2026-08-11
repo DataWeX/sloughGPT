@@ -1,6 +1,6 @@
 """FastAPI routes for char-level training and job orchestration.
 
-Trainer ``step_*.pt`` charset maps: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
+Trainer ``step_*.soul`` charset maps: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 """
 
 from __future__ import annotations
@@ -116,8 +116,6 @@ def _sloughgpt_trainer_kwds(req_snapshot: dict[str, Any]) -> dict[str, Any]:
             if req_snapshot.get("max_grad_norm") is not None
             else 1.0
         ),
-        "use_mixed_precision": bool(req_snapshot.get("use_mixed_precision", True)),
-        "mixed_precision_dtype": str(req_snapshot.get("mixed_precision_dtype") or "bf16"),
         "checkpoint_dir": str(req_snapshot.get("checkpoint_dir") or "checkpoints"),
         "checkpoint_interval": int(req_snapshot.get("checkpoint_interval") or 500),
         "save_best_only": bool(req_snapshot.get("save_best_only", False)),
@@ -149,7 +147,7 @@ def _sloughgpt_trainer_kwds(req_snapshot: dict[str, Any]) -> dict[str, Any]:
 async def train(request: TrainRequest):
     """Start a training job (background thread).
 
-    ``SloughGPTTrainer`` writes periodic ``step_*.pt`` under ``checkpoint_dir`` with
+    ``SloughGPTTrainer`` writes periodic ``step_*.soul`` under ``checkpoint_dir`` with
     ``stoi`` / ``itos`` / ``chars`` for char-LM eval; see
     ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
@@ -175,9 +173,9 @@ async def train(request: TrainRequest):
             )
             trainer.train()
             safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
-            trainer.save(f"models/{safe_stem}_trained.pt")
+            trainer.save(f"models/{safe_stem}_trained.soul")
             training_jobs[job_id]["status"] = "completed"
-            training_jobs[job_id]["checkpoint"] = f"models/{safe_stem}_trained.pt"
+            training_jobs[job_id]["checkpoint"] = f"models/{safe_stem}_trained.soul"
         except Exception as e:
             logger.exception("Background /train failed: %s", e, extra={"tag": "TRAIN"})
             training_jobs[job_id]["status"] = "failed"
@@ -213,8 +211,8 @@ async def train(request: TrainRequest):
 async def train_resolve(body: TrainResolveRequest) -> dict[str, Any]:
     """Resolve ``data_path`` and checkpoint stem (dry run; no training).
 
-    Does not write ``.pt`` artifacts. After ``POST /train`` or ``POST /training/start``,
-    native ``step_*.pt`` includes char vocab; see ``docs/policies/CONTRIBUTING.md``
+    Does not write checkpoint artifacts. After ``POST /train`` or ``POST /training/start``,
+    native ``step_*.soul`` includes char vocab; see ``docs/policies/CONTRIBUTING.md``
     (*Checkpoint vocabulary*).
     """
     from domains.training.dataset_manifest import ManifestError
@@ -459,7 +457,7 @@ async def export_feedback_pairs(request: Request):
 async def start_training(request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     """Start a tracked training job (web UI).
 
-    ``step_*.pt`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
+    ``step_*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
     from domains.training.dataset_manifest import ManifestError
@@ -583,13 +581,13 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 training_jobs[jid]["progress"] = 0
                 get_training_controller().complete()
                 return
-            trainer.save(f"models/{safe_stem}_trained.pt")
+            trainer.save(f"models/{safe_stem}_trained.soul")
             training_jobs[jid]["status"] = "completed"
             training_jobs[jid]["progress"] = 100
             training_jobs[jid]["current_epoch"] = int(req_snapshot.get("epochs") or 3)
             bel = result.get("best_eval_loss")
             training_jobs[jid]["loss"] = bel if bel is not None and bel < float("inf") else None
-            training_jobs[jid]["checkpoint"] = f"models/{safe_stem}_trained.pt"
+            training_jobs[jid]["checkpoint"] = f"models/{safe_stem}_trained.soul"
             get_training_controller().complete()
 
             # Trigger webhook notification (fire and forget)
@@ -1557,7 +1555,6 @@ async def train_from_feedback():
                     lora_alpha=16,
                     checkpoint_dir="models",
                     checkpoint_interval=100,
-                    use_mixed_precision=True,
                 )
 
                 def on_progress(info: dict) -> None:
@@ -1575,11 +1572,11 @@ async def train_from_feedback():
 
                 result = trainer.train(on_progress=on_progress)
                 safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
-                trainer.save(f"models/{safe_stem}.pt")
+                trainer.save(f"models/{safe_stem}.soul")
 
                 training_jobs[jid]["status"] = "completed"
                 training_jobs[jid]["progress"] = 100
-                training_jobs[jid]["checkpoint"] = f"models/{safe_stem}.pt"
+                training_jobs[jid]["checkpoint"] = f"models/{safe_stem}.soul"
                 training_jobs[jid]["samples_used"] = count
                 get_training_controller().complete()
 
@@ -2004,9 +2001,9 @@ async def list_builds():
 
     builds = []
 
-    # 1. Auto-train checkpoints (.soul / .pt)
+    # 1. Auto-train checkpoints (.soul / .npz)
     seen = set()
-    for ext in ("*.soul", "*.pt"):
+    for ext in ("*.soul", "*.npz"):
         for f in sorted(_checkpoints_dir.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
             if f.name in seen:
                 continue
@@ -2249,9 +2246,9 @@ async def recover_job(job_id: str):
         # Try to find any checkpoint in the checkpoint dir
         checkpoint_dir_path = Path(checkpoint_dir)
         if checkpoint_dir_path.exists():
-            checkpoints = list(checkpoint_dir_path.glob("step_*.pt")) + list(
-                checkpoint_dir_path.glob("*.pt")
-            )
+            checkpoints = list(checkpoint_dir_path.glob("step_*.soul")) + list(
+                checkpoint_dir_path.glob("*.soul")
+            ) + list(checkpoint_dir_path.glob("*.npz"))
             if checkpoints:
                 latest = max(checkpoints, key=lambda p: p.stat().st_mtime)
                 checkpoint_path = str(latest)
@@ -2333,7 +2330,7 @@ async def recover_job(job_id: str):
             training_jobs[jid]["status"] = "completed"
             training_jobs[jid]["progress"] = 100
             store.mark_completed(
-                jid, checkpoint_for_recovery or trainer_config["checkpoint_dir"] + "/final.pt"
+                jid, checkpoint_for_recovery or trainer_config["checkpoint_dir"] + "/final.soul"
             )
             store.update(job_id, status="recovered")
             controller.complete()
