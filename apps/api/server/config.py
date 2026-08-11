@@ -78,7 +78,7 @@ class ServerConfig:
     health_monitor_interval: int = 300
 
     native_soul_path: str = ""  # path to .soul file for native-trained model
-    enable_process_guard: bool = False
+    enable_process_guard: bool = True  # production default: guard _load_hf_model() in a subprocess
     lazy_guard_autoload: bool = True  # defer parent weight load when a ProcessGuard + .slnc are available
     process_guard_memory_limit_mb: float = 0.0  # 0 = auto-size from model file
     enable_web: bool = False
@@ -107,7 +107,7 @@ class ServerConfig:
             request_timeout_seconds=float(os.getenv("SLO_REQUEST_TIMEOUT", "120.0")),
             enable_watchdog=os.getenv("SLO_WATCHDOG", "true").lower() == "true",
             native_soul_path=os.getenv("SLO_NATIVE_SOUL_PATH", "").strip(),
-            enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "false").lower() in ("1", "true", "yes"),
+            enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower() in ("1", "true", "yes"),
             lazy_guard_autoload=os.getenv("SLO_LAZY_GUARD_AUTOLOAD", "true").lower() in ("1", "true", "yes"),
             process_guard_memory_limit_mb=float(os.getenv("SLO_PROCESS_GUARD_MEMORY_LIMIT_MB", "0")),
             enable_workflow=os.getenv("SLO_AUTO_WORKFLOW", "true").lower() == "true",
@@ -123,8 +123,10 @@ class ServerConfig:
 gen_config = GenerationConfig.from_env()
 
 # ── Runtime ProcessGuard toggle ──────────────────────────────────────
-# Defaults to the env var value but can be changed via POST /models/process-guard.
-_runtime_process_guard_enabled: bool = os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower() in ("1", "true", "yes")
+# Initialised from ServerConfig (SLO_ENABLE_PROCESS_GUARD, default true —
+# ProcessGuard is the production default). Can be changed at runtime via
+# POST /models/process-guard; persists until restart.
+_runtime_process_guard_enabled: bool = ServerConfig.from_env().enable_process_guard
 
 
 def get_process_guard_enabled() -> bool:
