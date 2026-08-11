@@ -63,6 +63,29 @@ class TestRateLimiter:
         rl._history["k"] = [time.time() - 61]
         assert rl.is_allowed("k") is True
 
+    def test_high_limit(self):
+        rl = _RateLimiter(requests_per_minute=1000)
+        for _ in range(999):
+            assert rl.is_allowed("k") is True
+        assert rl.is_allowed("k") is True
+        assert rl.is_allowed("k") is False
+
+    def test_limit_one(self):
+        rl = _RateLimiter(requests_per_minute=1)
+        assert rl.is_allowed("k") is True
+        assert rl.is_allowed("k") is False
+
+    def test_wait_time_zero_for_new_key(self):
+        rl = _RateLimiter(requests_per_minute=5)
+        assert rl.get_wait_time("brand_new") == 0.0
+
+    def test_many_independent_keys(self):
+        rl = _RateLimiter(requests_per_minute=1)
+        for i in range(50):
+            assert rl.is_allowed(f"key_{i}") is True
+        for i in range(50):
+            assert rl.is_allowed(f"key_{i}") is False
+
 
 class TestRatelimitEndpoints:
     def test_status(self):
@@ -80,3 +103,17 @@ class TestRatelimitEndpoints:
         resp = client.get("/rate-limit/check")
         assert resp.status_code == 200
         assert resp.json()["data"]["allowed"] is True
+
+    def test_status_has_burst_size(self):
+        rr = RatelimitRouter()
+        client = TestClient(_app(rr))
+        resp = client.get("/rate-limit/status")
+        data = resp.json()["data"]
+        assert "burst_size" in data
+
+    def test_check_has_key(self):
+        rr = RatelimitRouter()
+        client = TestClient(_app(rr))
+        resp = client.get("/rate-limit/check")
+        data = resp.json()["data"]
+        assert "key" in data or "allowed" in data

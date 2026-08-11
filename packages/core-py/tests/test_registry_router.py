@@ -54,6 +54,29 @@ class TestListModels:
         assert data["count"] == 2
         assert len(data["models"]) == 2
 
+    @patch("routers.registry.RegistryRouter._get_registry")
+    def test_list_models_empty(self, mock_get):
+        reg = _mock_registry()
+        reg.list_models.return_value = []
+        reg.health_summary.return_value = {"total_models": 0, "loaded_models": 0, "failed_models": 0}
+        mock_get.return_value = reg
+        rr = RegistryRouter()
+        client = TestClient(_app(rr))
+        resp = client.get("/registry/models")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 0
+
+    @patch("routers.registry.RegistryRouter._get_registry")
+    def test_list_models_has_model_ids(self, mock_get):
+        mock_get.return_value = _mock_registry()
+        rr = RegistryRouter()
+        client = TestClient(_app(rr))
+        resp = client.get("/registry/models")
+        models = resp.json()["data"]["models"]
+        ids = [m["model_id"] for m in models]
+        assert "gpt2" in ids
+        assert "qwen" in ids
+
 
 class TestGetModel:
     @patch("routers.registry.RegistryRouter._get_registry")
@@ -72,6 +95,14 @@ class TestGetModel:
         client = TestClient(_app(rr))
         resp = client.get("/registry/models/nonexistent")
         assert resp.status_code == 404
+
+    @patch("routers.registry.RegistryRouter._get_registry")
+    def test_model_has_status(self, mock_get):
+        mock_get.return_value = _mock_registry()
+        rr = RegistryRouter()
+        client = TestClient(_app(rr))
+        resp = client.get("/registry/models/gpt2")
+        assert resp.json()["data"]["status"] == "loaded"
 
 
 class TestBestAndStats:
@@ -94,3 +125,23 @@ class TestBestAndStats:
         data = resp.json()["data"]
         assert data["total_models"] == 2
         assert data["loaded_models"] == 1
+
+    @patch("routers.registry.RegistryRouter._get_registry")
+    def test_stats_zero_models(self, mock_get):
+        mock_get.return_value = _mock_registry(total_models=0, loaded_models=0, failed_models=0)
+        rr = RegistryRouter()
+        client = TestClient(_app(rr))
+        resp = client.get("/registry/stats")
+        data = resp.json()["data"]
+        assert data["total_models"] == 0
+        assert data["loaded_models"] == 0
+
+    @patch("routers.registry.RegistryRouter._get_registry")
+    def test_best_includes_health(self, mock_get):
+        mock_get.return_value = _mock_registry()
+        rr = RegistryRouter()
+        client = TestClient(_app(rr))
+        resp = client.get("/registry/best")
+        data = resp.json()["data"]
+        assert "total_models" in data
+        assert "loaded_models" in data

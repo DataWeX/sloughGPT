@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { UserAdapterInfo } from '@/lib/user-adapters-controller'
 
 interface AdapterHealthCardProps {
@@ -35,24 +35,12 @@ export function AdapterHealthCard({ adapters }: AdapterHealthCardProps) {
         <CardTitle className="text-base">Adapter Health</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Adapters</div>
-            <div className="text-sm font-mono font-medium">{adapters.length}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Total Feedback</div>
-            <div className="text-sm font-mono font-medium">{totalFeedback}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Avg Feedback</div>
-            <div className="text-sm font-mono font-medium">{avgFeedback}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Avg Age</div>
-            <div className="text-sm font-mono font-medium">{avgAge != null ? `${avgAge}d` : '—'}</div>
-          </div>
-        </div>
+        <KpiGrid columns={4} className="mb-3">
+          <StatCard label="Adapters" value={adapters.length} />
+          <StatCard label="Total Feedback" value={totalFeedback} />
+          <StatCard label="Avg Feedback" value={avgFeedback} />
+          <StatCard label="Avg Age" value={avgAge != null ? `${avgAge}d` : '—'} />
+        </KpiGrid>
 
         {sortedRanks.length > 0 && (
           <div className="mb-3">

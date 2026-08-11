@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sloughgpt"
+version = "0.3.0"
+description = "SloughGPT - Self-hosted LLM infrastructure platform"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["domains*"]
+exclude = ["tests*", "scripts*", "benchmark*"]

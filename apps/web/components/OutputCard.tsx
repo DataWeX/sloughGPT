@@ -56,7 +56,7 @@ const LogLine = React.memo(function LogLine({ line }: { line: OutputLine }) {
 
   return (
     <div className="flex font-mono text-[11px] leading-5 py-[1px]">
-      <span className="shrink-0 w-[70px] text-muted-foreground/50 tabular-nums">{ts}</span>
+      <span className="shrink-0 w-[58px] sm:w-[70px] text-muted-foreground/50 tabular-nums">{ts}</span>
       <span className="shrink-0 w-[32px] text-center font-semibold" style={{ color: lvlColor }}>{lvl}</span>
       {line.tag ? (
         <span className="shrink-0 w-[56px] text-center font-medium" style={{ color: tagColor }}>[{line.tag}]</span>
@@ -64,9 +64,9 @@ const LogLine = React.memo(function LogLine({ line }: { line: OutputLine }) {
         <span className="shrink-0 w-[56px]" />
       )}
       {line.source ? (
-        <span className="shrink-0 text-muted-foreground/30 truncate max-w-[160px] pr-2">{line.source}</span>
+        <span className="shrink-0 text-muted-foreground/30 truncate max-w-[96px] sm:max-w-[160px] pr-2">{line.source}</span>
       ) : (
-        <span className="shrink-0 w-[160px]" />
+        <span className="shrink-0 w-[96px] sm:w-[160px]" />
       )}
       <span className={`flex-1 min-w-0 break-all ${line.level === 'error' || line.level === 'critical' ? 'text-destructive' : line.level === 'warning' ? 'text-warning' : ''}`}>
         {line.text}

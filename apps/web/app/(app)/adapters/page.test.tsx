@@ -15,6 +15,8 @@ vi.mock('@sloughgpt/strui', () => {
       <button onClick={onClick} className={className} disabled={disabled} data-variant={variant}>{children}</button>
     ),
     IconRefresh: iconMock('refresh'), IconTrash: iconMock('trash'),
+    StatCard: ({ label, value }: any) => <div data-testid="stat-card"><span>{label}</span>: <span>{String(value)}</span></div>,
+    KpiGrid: ({ children }: any) => <div data-testid="kpi-grid">{children}</div>,
   }
 })
 

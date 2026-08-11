@@ -1,6 +1,6 @@
 'use client'
 
-import { Button } from '@sloughgpt/strui'
+import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, Textarea } from '@sloughgpt/strui'
 import type { TestModelResult } from '@/hooks/useTestDialog'
 
 interface TestModelDialogProps {
@@ -24,21 +24,18 @@ export function TestModelDialog({
   onGenerate,
   onClear,
 }: TestModelDialogProps) {
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-background rounded-lg border border-border shadow-xl w-full max-w-lg mx-4 p-5 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Test the model</h3>
-          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm" aria-label="Close">&times;</button>
-        </div>
-        <textarea
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-base">Test the model</DialogTitle>
+        </DialogHeader>
+        <Textarea
           value={prompt}
           onChange={e => onPromptChange(e.target.value)}
           placeholder="Type a prompt to test the trained model..."
           rows={3}
-          className="w-full rounded-md border border-border/60 bg-background p-2 text-xs font-mono text-foreground resize-none"
+          className="text-xs font-mono resize-none"
         />
         <div className="flex gap-2">
           <Button size="sm" onClick={onGenerate} disabled={loading || !prompt.trim()}>
@@ -73,7 +70,7 @@ export function TestModelDialog({
             )}
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

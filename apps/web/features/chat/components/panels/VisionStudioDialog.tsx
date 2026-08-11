@@ -305,7 +305,7 @@ export function VisionStudioDialog({
                     <div className="text-sm leading-relaxed">{analyzeResult.caption}</div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div className="p-2 rounded bg-muted/30 border border-border/40 text-center">
                       <div className="text-lg font-semibold">{analyzeResult.confidence.toFixed(2)}</div>
                       <div className="text-[10px] text-muted-foreground">Confidence</div>
@@ -494,7 +494,7 @@ export function VisionStudioDialog({
 
               {trainingReport && (
                 <>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                     <div className="p-2 rounded bg-muted/30 border border-border/40 text-center">
                       <div className="text-lg font-semibold">{trainingReport.images_learned}</div>
                       <div className="text-[10px] text-muted-foreground">Images learned</div>

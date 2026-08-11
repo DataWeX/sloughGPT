@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 
 interface KnowledgeFact {
   content: string
@@ -44,24 +44,12 @@ export function LearningInsightsCard({ facts }: LearningInsightsCardProps) {
         <CardTitle className="text-base">Learning Insights</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Facts</div>
-            <div className="text-sm font-mono font-medium">{facts.length}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Avg Importance</div>
-            <div className="text-sm font-mono font-medium">{avgImportance}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">High Priority</div>
-            <div className="text-sm font-mono font-medium text-success">{highImportance}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Avg Length</div>
-            <div className="text-sm font-mono font-medium">{avgContentLen}ch</div>
-          </div>
-        </div>
+        <KpiGrid columns={4} className="mb-3">
+          <StatCard label="Facts" value={facts.length} />
+          <StatCard label="Avg Importance" value={avgImportance} />
+          <StatCard label="High Priority" value={<span className="text-success">{highImportance}</span>} />
+          <StatCard label="Avg Length" value={`${avgContentLen}ch`} />
+        </KpiGrid>
 
         <div className="grid grid-cols-2 gap-3">
           <div>

@@ -27,12 +27,12 @@ function loadPresets(): VoicePreset[] {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed) && parsed.length > 0) return parsed
     }
-  } catch {}
+  } catch { /* corrupted — fall back */ }
   return DEFAULT_PRESETS
 }
 
 function savePresets(presets: VoicePreset[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(presets)) } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(presets)) } catch { /* quota exceeded */ }
 }
 
 interface VoicePresetCardProps {
@@ -195,7 +195,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                       </span>
                     )}
                   </div>
-                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <Button size="sm" variant="ghost" onClick={() => { setEditing(p.name); setEditRate(p.rate); setEditPitch(p.pitch) }}>
                       Edit
                     </Button>

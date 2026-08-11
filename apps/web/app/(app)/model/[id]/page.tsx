@@ -211,7 +211,7 @@ export default function ModelDetailPage() {
             {/* Status card */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-base">Status</CardTitle>
                     <Badge
@@ -220,7 +220,7 @@ export default function ModelDetailPage() {
                       size="sm"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {isLoaded ? (
                       <>
                         <Button size="sm" className="h-8 text-xs" onClick={() => router.push('/chat')}>

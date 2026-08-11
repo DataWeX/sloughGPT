@@ -169,7 +169,9 @@ export default function KnowledgePage() {
       addToast('Deleted', 'info', undefined, () => {
         setItems(prev => [deleted, ...prev])
         setStats(prev => prev ? { ...prev, total_items: prev.total_items + 1 } : prev)
-        knowledgeController.add(deleted.content, deleted.topic, false).catch(() => {})
+        knowledgeController.add(deleted.content, deleted.topic, false).catch(() => {
+          addToast('Failed to restore item', 'error')
+        })
       })
     } catch {
       setItems(prev => [deleted, ...prev])
@@ -762,14 +764,14 @@ export default function KnowledgePage() {
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => { setEditingId(item.id); setEditContent(item.content); setEditTopic(item.topic || '') }}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary p-1 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-primary p-1 transition-opacity"
                           aria-label="Edit knowledge"
                         >
                           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                         </button>
                         <button
                           onClick={() => setPendingDelete(item)}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive p-1 transition-opacity"
                           aria-label="Delete knowledge"
                         >
                           <IconTrash className="h-4 w-4" />

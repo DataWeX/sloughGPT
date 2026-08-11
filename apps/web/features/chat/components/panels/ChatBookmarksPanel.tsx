@@ -70,7 +70,7 @@ export function ChatBookmarksPanel({ bookmarks, onRemove, onClear, onJumpToMessa
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => onRemove(bm.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 -mr-1"
+                  className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0 -mr-1"
                   aria-label="Remove bookmark"
                 >
                   <IconX className="h-3 w-3" />

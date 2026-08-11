@@ -217,7 +217,7 @@ export function KnowledgeTab({
                       </span>
                     )}
                   </div>
-                  <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button
                       onClick={() => { setEditingId(item.id); setEditText(item.content) }}
                       className="text-muted-foreground hover:text-foreground p-0.5"

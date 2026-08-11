@@ -50,7 +50,7 @@ export default function VoicePage() {
       if (data.audio && data.backend === 'hf-model') {
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
         audioRef.current = audio
-        audio.play().catch(() => {})
+        audio.play().catch(() => {}) // autoplay policy — expected
       } else if (data.backend === 'browser-fallback') {
         if ('speechSynthesis' in window) {
           const utterance = new SpeechSynthesisUtterance(ttsText)
@@ -101,28 +101,12 @@ export default function VoicePage() {
           <CardContent>
             {status ? (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="rounded-md bg-muted/30 p-2 text-center">
-                    <div className="text-xs text-muted-foreground">Server</div>
-                    <div className={`text-xs font-medium ${status.server_tts ? 'text-success' : 'text-muted-foreground'}`}>
-                      {status.server_tts ? 'Online' : 'Offline'}
-                    </div>
-                  </div>
-                  <div className="rounded-md bg-muted/30 p-2 text-center">
-                    <div className="text-xs text-muted-foreground">Model</div>
-                    <div className="text-xs font-medium truncate">{status.model ?? '—'}</div>
-                  </div>
-                  <div className="rounded-md bg-muted/30 p-2 text-center">
-                    <div className="text-xs text-muted-foreground">Fallback</div>
-                    <div className="text-xs font-medium text-muted-foreground">Browser</div>
-                  </div>
-                  <div className="rounded-md bg-muted/30 p-2 text-center">
-                    <div className="text-xs text-muted-foreground">Status</div>
-                    <div className={`text-xs font-medium ${status.error ? 'text-destructive' : 'text-success'}`}>
-                      {status.error ? 'Error' : 'Ready'}
-                    </div>
-                  </div>
-                </div>
+                <KpiGrid columns={4}>
+                  <StatCard label="Server" value={<span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>{status.server_tts ? 'Online' : 'Offline'}</span>} />
+                  <StatCard label="Model" value={status.model ?? '—'} />
+                  <StatCard label="Fallback" value="Browser" />
+                  <StatCard label="Status" value={<span className={status.error ? 'text-destructive' : 'text-success'}>{status.error ? 'Error' : 'Ready'}</span>} />
+                </KpiGrid>
                 {status.error && (
                   <div className="text-xs text-destructive bg-destructive/5 rounded-md p-2">{status.error}</div>
                 )}

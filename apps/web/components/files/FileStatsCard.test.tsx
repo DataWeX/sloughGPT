@@ -38,9 +38,7 @@ describe('FileStatsCard', () => {
       makeFile({ id: '2', ingested: false }),
     ]} />)
     expect(screen.getAllByText('Indexed').length).toBeGreaterThanOrEqual(1)
-    const mono = container.querySelectorAll('.font-mono')
-    const found = Array.from(mono).some(el => el.textContent?.includes('1') && el.textContent?.includes('/2'))
-    expect(found).toBe(true)
+    expect(container.textContent).toContain('1/2')
   })
 
   it('shows file type groups', () => {

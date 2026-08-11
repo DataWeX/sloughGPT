@@ -213,7 +213,7 @@ export default function FeedbackPage() {
                           {conv.message_count} messages · {conv.created_at ? new Date(conv.created_at).toLocaleDateString() : '—'}
                         </div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <Button size="sm" variant="ghost" onClick={() => handleTogglePin(conv)}>
                           {conv.pinned ? 'Unpin' : 'Pin'}
                         </Button>

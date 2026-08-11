@@ -618,7 +618,7 @@ function ConvRow({
         <div className="flex items-center gap-1">
           <button
             onClick={onPin}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             aria-label={c.pinned ? 'Unpin' : 'Pin'}
           >
             <IconPin className={cn("h-2.5 w-2.5", c.pinned ? "text-primary" : "text-muted-foreground/40")} />
@@ -627,7 +627,7 @@ function ConvRow({
             onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e) }}
             className={cn(
               "h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
-              c.unread ? "opacity-100 text-primary" : "opacity-0 group-hover:opacity-100 text-muted-foreground/40"
+              c.unread ? "opacity-100 text-primary" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground/40"
             )}
             aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
           >
@@ -639,7 +639,7 @@ function ConvRow({
           </button>
           <button
             onClick={onStar}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             aria-label={c.starred ? 'Unstar' : 'Star'}
           >
             <IconStar className={cn("h-2.5 w-2.5", c.starred ? "text-warning" : "text-muted-foreground/40")} filled={c.starred} />
@@ -686,7 +686,7 @@ function ConvRow({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-0.5 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-0.5 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
         {onExport && !editing && (
           <>
             <button

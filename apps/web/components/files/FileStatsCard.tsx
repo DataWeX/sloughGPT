@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { FileEntry } from '@/lib/files-controller'
 
 interface FileStatsCardProps {
@@ -55,22 +55,11 @@ export function FileStatsCard({ files }: FileStatsCardProps) {
         <CardTitle className="text-base">File Overview</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-3 mb-3">
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Total</div>
-            <div className="text-sm font-mono font-medium">{files.length}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Size</div>
-            <div className="text-sm font-mono font-medium">{formatSize(totalSize)}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Indexed</div>
-            <div className="text-sm font-mono font-medium">
-              {indexed}<span className="text-muted-foreground">/{files.length}</span>
-            </div>
-          </div>
-        </div>
+        <KpiGrid columns={3} className="mb-3">
+          <StatCard label="Total" value={files.length} />
+          <StatCard label="Size" value={formatSize(totalSize)} />
+          <StatCard label="Indexed" value={<>{indexed}<span className="text-muted-foreground">/{files.length}</span></>} />
+        </KpiGrid>
         <div className="space-y-1.5">
           {sorted.map(([group, { count, size }]) => (
             <div key={group} className="flex items-center justify-between text-[11px] py-0.5">

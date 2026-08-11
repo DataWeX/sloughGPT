@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { WorkflowStatus } from '@/lib/workflow-controller'
 
 interface WorkflowHealthCardProps {
@@ -50,20 +50,11 @@ export function WorkflowHealthCard({ status }: WorkflowHealthCardProps) {
         <CardTitle className="text-base">Workflow Health</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Status</div>
-            <div className={`text-sm font-mono font-medium ${healthColor}`}>{healthStatus}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Feedback</div>
-            <div className="text-sm font-mono font-medium">{stats.feedback_recorded ?? 0}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Fb/Trained</div>
-            <div className="text-sm font-mono font-medium">{fbPerAdapter}</div>
-          </div>
-        </div>
+        <KpiGrid columns={3} className="mb-3">
+          <StatCard label="Status" value={<span className={healthColor}>{healthStatus}</span>} />
+          <StatCard label="Feedback" value={stats.feedback_recorded ?? 0} />
+          <StatCard label="Fb/Trained" value={fbPerAdapter} />
+        </KpiGrid>
 
         <div className="space-y-1.5">
           <div className="text-[10px] text-muted-foreground mb-1">Last Operations</div>

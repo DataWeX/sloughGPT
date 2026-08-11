@@ -1,6 +1,6 @@
 """Tests for the security API router (routers/security.py).
 
-Covers: get_audit_logs (memory + file history), get_keys.
+Covers: get_audit_logs (memory + file history), get_keys, edge cases.
 """
 from __future__ import annotations
 
@@ -64,6 +64,41 @@ class TestAuditLogs:
         assert resp.status_code == 200
         mock_audit.file_query.assert_called_once()
 
+    def test_empty_logs(self):
+        sr = SecurityRouter()
+        mock_audit = MagicMock()
+        mock_audit.logs = []
+        with patch("infrastructure.auth.get_audit_logger", return_value=mock_audit):
+            client = TestClient(_app(sr))
+            resp = client.get("/security/audit")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 0
+
+    def test_filter_no_match(self):
+        sr = SecurityRouter()
+        mock_audit = MagicMock()
+        mock_audit.logs = [
+            {"event_type": "login", "ts": 1},
+        ]
+        with patch("infrastructure.auth.get_audit_logger", return_value=mock_audit):
+            client = TestClient(_app(sr))
+            resp = client.get("/security/audit?event_type=nonexistent")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 0
+
+    def test_logs_returned_in_response(self):
+        sr = SecurityRouter()
+        mock_audit = MagicMock()
+        mock_audit.logs = [
+            {"event_type": "login", "ts": 100, "user": "alice"},
+            {"event_type": "logout", "ts": 200, "user": "bob"},
+        ]
+        with patch("infrastructure.auth.get_audit_logger", return_value=mock_audit):
+            client = TestClient(_app(sr))
+            resp = client.get("/security/audit")
+        data = resp.json()["data"]
+        assert len(data.get("logs", data.get("entries", []))) == 2
+
 
 class TestKeys:
     def test_keys_configured(self):
@@ -87,3 +122,23 @@ class TestKeys:
             resp = client.get("/security/keys")
         assert resp.status_code == 200
         assert resp.json()["data"]["configured"] is False
+
+    def test_single_key(self):
+        sr = SecurityRouter()
+        mock_sec = MagicMock()
+        mock_sec.valid_api_keys = ["only-one-key"]
+        with patch("settings.get_security_settings", return_value=mock_sec):
+            client = TestClient(_app(sr))
+            resp = client.get("/security/keys")
+        data = resp.json()["data"]
+        assert data["count"] == 1
+        assert data["configured"] is True
+
+    def test_many_keys(self):
+        sr = SecurityRouter()
+        mock_sec = MagicMock()
+        mock_sec.valid_api_keys = [f"key_{i}" for i in range(50)]
+        with patch("settings.get_security_settings", return_value=mock_sec):
+            client = TestClient(_app(sr))
+            resp = client.get("/security/keys")
+        assert resp.json()["data"]["count"] == 50

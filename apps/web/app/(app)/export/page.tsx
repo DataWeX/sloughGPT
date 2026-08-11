@@ -207,7 +207,7 @@ export default function ExportPage() {
             <p className="text-sm text-muted-foreground">
               Download your training pairs as JSON for use in other tools.
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
                 variant="outline"

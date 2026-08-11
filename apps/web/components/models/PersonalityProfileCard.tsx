@@ -132,7 +132,7 @@ export default function PersonalityProfileCard({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button type="button" className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10" onClick={() => handleLoadSnapshot(s.name)}>Load</button>
                     <button type="button" className="text-[10px] text-destructive hover:text-destructive/80 px-1.5 py-0.5 rounded hover:bg-destructive/10" onClick={() => handleDeleteSnapshot(s.name)}>Delete</button>
                   </div>

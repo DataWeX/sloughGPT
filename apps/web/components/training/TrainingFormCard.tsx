@@ -312,7 +312,7 @@ export function TrainingFormCard({
                 <div className="font-medium text-muted-foreground mb-2">
                   Dataset preview
                 </div>
-                <div className="grid grid-cols-3 gap-2 mb-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
                   <div>
                     <span className="text-muted-foreground/60">Samples:</span>{' '}
                     <span className="font-mono">{(datasets.datasetPreview.total_samples ?? 0).toLocaleString()}</span>
@@ -402,7 +402,7 @@ export function TrainingFormCard({
                     <button type="button" onClick={() => applyPreset(p)} className="text-[11px] font-medium text-primary hover:underline">
                       {p.name}
                     </button>
-                    <button type="button" onClick={() => deletePreset(p.id)} className="text-[10px] text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                    <button type="button" onClick={() => deletePreset(p.id)} className="text-[10px] text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">×</button>
                   </div>
                 ))}
               </div>

@@ -1,34 +1,59 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react'
+
+const { mockDetailedHealth } = vi.hoisted(() => ({
+  mockDetailedHealth: {
+    model_loaded: true, model_name: 'gpt2', cpu_percent: 45.2, memory_percent: 62.1,
+    uptime: 3600, total_requests: 100, error_count: 2, active_connections: 1,
+    model_status: 'ready', gpu_available: false, disk_usage_percent: 55,
+    inference_count: 50, soul: 'default', num_parameters: 124000000,
+    is_inferencing: false, model_loading: false,
+    memory: { total_mb: 16384, used_mb: 8192, available_mb: 8192 },
+    training_pool: { active: 0, max: 2, tracked: 0 },
+    kv_sessions: { enabled: true, cross_turn_enabled: true, active_sessions: 3, total_entries: 120, total_hit_bytes: 4096 },
+  },
+}))
 
 vi.mock('@/lib/system-controller', () => ({
   systemController: {
-    getDetailedHealth: vi.fn().mockResolvedValue(null),
-    getMetrics: vi.fn().mockResolvedValue(null),
-    getDisk: vi.fn().mockResolvedValue(null),
-    getInfo: vi.fn().mockResolvedValue(null),
-    getExecutorStatus: vi.fn().mockResolvedValue(null),
+    getDetailedHealth: vi.fn().mockResolvedValue(mockDetailedHealth),
+    getMetrics: vi.fn().mockResolvedValue({ cpu: 45, memory: 62, requests: 100, errors: 2 }),
+    getDisk: vi.fn().mockResolvedValue({ total_gb: 500, used_gb: 275, free_gb: 225 }),
+    getInfo: vi.fn().mockResolvedValue({ hostname: 'test', platform: 'linux', python: '3.9' }),
+    getExecutorStatus: vi.fn().mockResolvedValue({ initialized: true, active: 0, max: 2, tracked: 0, jobs: [] }),
     getInferencePoolStatus: vi.fn().mockResolvedValue(null),
     getProcessGuardStatus: vi.fn().mockResolvedValue(null),
   },
 }))
 
 vi.mock('@/lib/benchmark-controller', () => ({
-  benchmarkController: { getMetrics: vi.fn().mockResolvedValue(null) },
+  benchmarkController: {
+    quality: vi.fn().mockResolvedValue(null),
+    stats: vi.fn().mockResolvedValue(null),
+  },
 }))
 
 vi.mock('@/lib/knowledge-controller', () => ({
-  knowledgeController: { getStats: vi.fn().mockResolvedValue(null), list: vi.fn().mockResolvedValue([]) },
+  knowledgeController: {
+    stats: vi.fn().mockResolvedValue(null),
+    getAdapterStatus: vi.fn().mockResolvedValue(null),
+    list: vi.fn().mockResolvedValue([]),
+  },
 }))
 
 vi.mock('@/lib/controllers', () => ({
-  multimodalController: { getCapabilities: vi.fn().mockResolvedValue(null) },
+  multimodalController: {
+    getDPOStatus: vi.fn().mockResolvedValue(null),
+    getStatus: vi.fn().mockResolvedValue(null),
+    getCapabilities: vi.fn().mockResolvedValue(null),
+  },
 }))
 
 vi.mock('@/lib/training-controller', () => ({
   trainingController: {
-    getTrainingJobs: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue([]),
     getRecoveryStats: vi.fn().mockResolvedValue(null),
+    getAutoTrainStatus: vi.fn().mockResolvedValue(null),
     getStatus: vi.fn().mockResolvedValue(null),
   },
 }))
@@ -79,11 +104,16 @@ vi.mock('@/components/ActivityTicker', () => ({
   ErrorList: () => <div data-testid="error-list" />,
 }))
 vi.mock('@/components/OutputCard', () => ({ OutputCard: () => <div data-testid="output-card" /> }))
+vi.mock('@/components/monitoring/SystemChart', () => ({ SystemChart: () => <div data-testid="system-chart" /> }))
+vi.mock('@/components/monitoring/TrendChart', () => ({ TrendChart: () => <div data-testid="trend-chart" /> }))
+vi.mock('@/components/monitoring/WorkflowCard', () => ({ WorkflowCard: () => <div data-testid="workflow-card" /> }))
+vi.mock('@/hooks/useLiveStatus', () => ({
+  useLiveStatus: () => ({ health: null, connectionStatus: 'disconnected' }),
+}))
 
 import MonitoringPage from './page'
 
-describe('MonitoringPage', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+describe('MonitoringPage — initial load flow', () => {
   afterEach(() => { cleanup() })
 
   it('renders without crashing', async () => {
@@ -94,7 +124,201 @@ describe('MonitoringPage', () => {
 
   it('renders page header', async () => {
     render(<MonitoringPage />)
-    expect(screen.getAllByText(/system health|monitoring/i).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/system health/i).length).toBeGreaterThanOrEqual(1)
+    await act(async () => {})
+  })
+
+  it('shows System Health title', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/system health/i).length).toBeGreaterThanOrEqual(1)
+    })
+  })
+})
+
+describe('MonitoringPage — auto-refresh flow', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(() => { cleanup() })
+
+  it('auto-refresh toggle present', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/auto/i).length).toBeGreaterThanOrEqual(1)
+    })
+    await act(async () => {})
+  })
+})
+
+describe('MonitoringPage — refresh flow', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(() => { cleanup() })
+
+  it('refresh button calls fetchAll', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/refresh/i).length).toBeGreaterThanOrEqual(1)
+    })
+    const refreshBtn = screen.getAllByText(/refresh/i)[0]
+    await act(async () => { fireEvent.click(refreshBtn) })
+    expect(systemController.getDetailedHealth).toHaveBeenCalled()
+    await act(async () => {})
+  })
+})
+
+describe('MonitoringPage — essential cards always visible', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(() => { cleanup() })
+
+  it('renders status card', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('status-card')).toBeTruthy()
+    })
+    await act(async () => {})
+  })
+
+  it('renders resource card', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-card')).toBeTruthy()
+    })
+    await act(async () => {})
+  })
+
+  it('renders alert panel', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('alert-panel')).toBeTruthy()
+    })
+    await act(async () => {})
+  })
+
+  it('renders server errors card', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('server-errors-card')).toBeTruthy()
+    })
+    await act(async () => {})
+  })
+
+  it('renders trend chart', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('trend-chart')).toBeTruthy()
+    })
+    await act(async () => {})
+  })
+})
+
+describe('MonitoringPage — collapsed sections exist', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(() => { cleanup() })
+
+  it('has Diagnostics section header', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/diagnostics/i).length).toBeGreaterThanOrEqual(1)
+    })
+    await act(async () => {})
+  })
+
+  it('has Training & Quality section header', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/training/i).length).toBeGreaterThanOrEqual(1)
+    })
+    await act(async () => {})
+  })
+
+  it('has System Info section header', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/system info/i).length).toBeGreaterThanOrEqual(1)
+    })
+    await act(async () => {})
+  })
+
+  it('has Server Output section header', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/server output/i).length).toBeGreaterThanOrEqual(1)
+    })
+    await act(async () => {})
+  })
+})
+
+describe('MonitoringPage — error handling flow', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(() => { cleanup() })
+
+  it('handles health fetch failure gracefully', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    vi.mocked(systemController.getDetailedHealth).mockRejectedValue(new Error('Network error'))
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/system health/i).length).toBeGreaterThanOrEqual(1)
+    })
+    await act(async () => {})
+  })
+
+  it('handles metrics fetch failure gracefully', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    vi.mocked(systemController.getMetrics).mockRejectedValue(new Error('Metrics error'))
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/system health/i).length).toBeGreaterThanOrEqual(1)
+    })
+    await act(async () => {})
+  })
+})
+
+describe('MonitoringPage — data loading flow', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(() => { cleanup() })
+
+  it('calls systemController on mount', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(systemController.getDetailedHealth).toHaveBeenCalled()
+    })
+    await act(async () => {})
+  })
+
+  it('calls getMetrics on mount', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(systemController.getMetrics).toHaveBeenCalled()
+    })
+    await act(async () => {})
+  })
+
+  it('calls getDisk on mount', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(systemController.getDisk).toHaveBeenCalled()
+    })
+    await act(async () => {})
+  })
+
+  it('calls getInfo on mount', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(systemController.getInfo).toHaveBeenCalled()
+    })
+    await act(async () => {})
+  })
+
+  it('loads training jobs', async () => {
+    const { trainingController } = await import('@/lib/training-controller')
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(trainingController.list).toHaveBeenCalled()
+    })
     await act(async () => {})
   })
 })

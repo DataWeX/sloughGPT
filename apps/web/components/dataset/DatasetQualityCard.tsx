@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -112,20 +112,11 @@ export function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="text-center p-2 rounded-md bg-muted/30">
-              <p className="text-lg font-mono font-medium">{metrics.totalLines.toLocaleString()}</p>
-              <p className="text-[10px] text-muted-foreground">Total lines</p>
-            </div>
-            <div className="text-center p-2 rounded-md bg-muted/30">
-              <p className="text-lg font-mono font-medium">{metrics.avgLineLength.toFixed(0)}</p>
-              <p className="text-[10px] text-muted-foreground">Avg chars</p>
-            </div>
-            <div className="text-center p-2 rounded-md bg-muted/30">
-              <p className="text-lg font-mono font-medium">{metrics.medianLineLength}</p>
-              <p className="text-[10px] text-muted-foreground">Median chars</p>
-            </div>
-          </div>
+          <KpiGrid columns={3}>
+            <StatCard label="Total lines" value={metrics.totalLines.toLocaleString()} />
+            <StatCard label="Avg chars" value={metrics.avgLineLength.toFixed(0)} />
+            <StatCard label="Median chars" value={metrics.medianLineLength} />
+          </KpiGrid>
 
           <div className="space-y-1.5">
             {metrics.emptyLines > 0 && (

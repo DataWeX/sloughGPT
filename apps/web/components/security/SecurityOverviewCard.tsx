@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 
 interface AuditLog {
   event_type: string
@@ -68,26 +68,12 @@ export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: Se
         <CardTitle className="text-base">Security Overview</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">API Keys</div>
-            <div className={`text-sm font-mono font-medium ${apiKeyConfigured ? 'text-success' : 'text-warning'}`}>
-              {apiKeyConfigured ? apiKeyCount : 'None'}
-            </div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Events</div>
-            <div className="text-sm font-mono font-medium">{logs.length}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">IPs</div>
-            <div className="text-sm font-mono font-medium">{ips.size}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Users</div>
-            <div className="text-sm font-mono font-medium">{users.size}</div>
-          </div>
-        </div>
+        <KpiGrid columns={4} className="mb-3">
+          <StatCard label="API Keys" value={<span className={apiKeyConfigured ? 'text-success' : 'text-warning'}>{apiKeyConfigured ? apiKeyCount : 'None'}</span>} />
+          <StatCard label="Events" value={logs.length} />
+          <StatCard label="IPs" value={ips.size} />
+          <StatCard label="Users" value={users.size} />
+        </KpiGrid>
 
         {Object.keys(categories).length > 0 && (
           <div className="mb-3">

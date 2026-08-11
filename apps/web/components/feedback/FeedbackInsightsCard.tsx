@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { FeedbackStats } from '@/lib/feedback-controller'
 
 interface FeedbackInsightsCardProps {
@@ -29,24 +29,12 @@ export function FeedbackInsightsCard({ stats }: FeedbackInsightsCardProps) {
         <CardTitle className="text-base">Feedback Insights</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Sentiment</div>
-            <div className={`text-sm font-mono font-medium ${qualityColor}`}>{sentimentScore}%</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Quality</div>
-            <div className={`text-sm font-mono font-medium ${qualityColor}`}>{qualityLabel}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Fb/Conv</div>
-            <div className="text-sm font-mono font-medium">{feedbackPerConv}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Activity</div>
-            <div className={`text-sm font-mono font-medium ${activityColor}`}>{activityLevel}</div>
-          </div>
-        </div>
+        <KpiGrid columns={4} className="mb-3">
+          <StatCard label="Sentiment" value={<span className={qualityColor}>{sentimentScore}%</span>} />
+          <StatCard label="Quality" value={<span className={qualityColor}>{qualityLabel}</span>} />
+          <StatCard label="Fb/Conv" value={feedbackPerConv} />
+          <StatCard label="Activity" value={<span className={activityColor}>{activityLevel}</span>} />
+        </KpiGrid>
 
         <div className="space-y-1.5 text-[11px]">
           <div className="flex items-center justify-between">

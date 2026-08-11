@@ -28,6 +28,7 @@ export default function BenchmarkPage() {
   const [stats, setStats] = useState<{ total: number; avg_tokens: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const [pplxText, setPplxText] = useState('')
   const [pplxResult, setPplxResult] = useState<{ perplexity: number; loss: number; tokens: number } | null>(null)
@@ -43,6 +44,7 @@ export default function BenchmarkPage() {
       setMetrics(m as Record<string, unknown> | null)
       setQuality(q)
       setStats(s)
+      if (!m && !q && !s) setLoadError('Could not load benchmark data. Is the server running?')
     }).finally(() => setLoading(false))
   }, [])
 
@@ -99,6 +101,22 @@ export default function BenchmarkPage() {
         <AppRouteHeader left={<AppRouteHeaderLead title="Benchmark" subtitle="Model evaluation metrics" />} />
         <div className="space-y-4">
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="sl-page mx-auto max-w-4xl">
+        <AppRouteHeader left={<AppRouteHeaderLead title="Benchmark" subtitle="Model evaluation metrics" />} />
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="py-8 text-center space-y-3">
+              <p className="text-sm text-destructive">{loadError}</p>
+              <Button size="sm" onClick={() => window.location.reload()}>Retry</Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )

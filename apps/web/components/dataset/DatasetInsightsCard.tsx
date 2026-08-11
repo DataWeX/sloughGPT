@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { DatasetPreview } from '@/lib/dataset-controller'
 
 interface DatasetInsightsCardProps {
@@ -64,22 +64,11 @@ export function DatasetInsightsCard({ preview, loading }: DatasetInsightsCardPro
         <CardTitle className="text-base">Insights</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Avg Words</div>
-            <div className="text-sm font-mono font-medium">{insights.avgWords}</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Avg Length</div>
-            <div className="text-sm font-mono font-medium">{insights.avgLen} chars</div>
-          </div>
-          <div className="rounded-md bg-muted/30 p-2 text-center">
-            <div className="text-[10px] text-muted-foreground">Diversity</div>
-            <div className={`text-sm font-mono font-medium ${insights.diversityScore > 80 ? 'text-success' : insights.diversityScore > 50 ? 'text-warning' : 'text-destructive'}`}>
-              {insights.diversityScore}%
-            </div>
-          </div>
-        </div>
+        <KpiGrid columns={3} className="mb-3">
+          <StatCard label="Avg Words" value={insights.avgWords} />
+          <StatCard label="Avg Length" value={`${insights.avgLen} chars`} />
+          <StatCard label="Diversity" value={<span className={insights.diversityScore > 80 ? 'text-success' : insights.diversityScore > 50 ? 'text-warning' : 'text-destructive'}>{insights.diversityScore}%</span>} />
+        </KpiGrid>
 
         {insights.langEntries.length > 0 && (
           <div className="mb-3">

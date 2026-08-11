@@ -218,7 +218,7 @@ export default function TrainingJobDetailPage() {
             {/* Status + actions */}
             <Card>
               <CardContent className="pt-4">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
                     <Badge variant={badge?.variant ?? 'outline'}>{badge?.label}</Badge>
                     {job.status === 'running' && (
@@ -228,7 +228,7 @@ export default function TrainingJobDetailPage() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex flex-wrap items-center gap-1">
                     {job.status === 'running' && (
                       <Button size="sm" variant="outline" className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={async () => {
                         try {

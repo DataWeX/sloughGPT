@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
 import { Button, Switch } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -155,7 +155,6 @@ export default function SystemHealthPage() {
     const mem = liveHealth.memory_percent ?? 0
     const now = new Date().toLocaleTimeString()
     setLastUpdated(now)
-    // Alert only on the rising edge (under -> over threshold), never every SSE tick
     const cpuOver = cpu > cpuThreshold
     if (cpuOver && !prevCpuOverRef.current) {
       const alert = { time: now, type: 'CPU', value: cpu }
@@ -289,7 +288,7 @@ export default function SystemHealthPage() {
           </div>
         )}
 
-        {/* Row 1: Status + Resources + Latency — 3-col grid */}
+        {/* Row 1: Status + Resources + Alerts — essential overview */}
         {loaded && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <StatusCard
@@ -307,49 +306,6 @@ export default function SystemHealthPage() {
               memThreshold={memThreshold}
               loaded={loaded}
             />
-            <KnowledgeCard
-              knowledgeStats={knowledgeStats}
-              adapterStatus={adapterStatus}
-              loaded={loaded}
-            />
-          </div>
-        )}
-
-        {/* Row 1a: Diagnostics — live health checks from SSE */}
-        <DiagnosticsCard liveHealth={liveHealth} />
-
-        {/* Row 1a2: Traffic — live request/token throughput from SSE */}
-        <TrafficCard liveHealth={liveHealth} />
-
-        {/* Row 1a3: Model activity — per-model inference stats from SSE */}
-        <ModelMetricsCard liveHealth={liveHealth} />
-
-        {/* Row 1a4: Endpoint latency — per-path avg/p95 from SSE */}
-        <PathLatenciesCard liveHealth={liveHealth} />
-
-        {/* Row 1a5: Server errors — real server-side error history from SSE */}
-        <ServerErrorsCard liveHealth={liveHealth} />
-
-        {/* Row 1a6: Model events — lifecycle loads/unloads/swaps from SSE */}
-        <ModelEventsCard liveHealth={liveHealth} />
-
-        {/* Row 1a7: Rate violations — endpoints over their per-second limit from SSE */}
-        <RateViolationsCard liveHealth={liveHealth} />
-
-        {/* Row 1a8: Health & memory trend — server-side history charted from SSE */}
-        <Card className="p-4">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Health &amp; memory trend</span>
-          <CardContent className="p-0">
-            <div className="h-40">
-              <TrendChart liveHealth={liveHealth} />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Row 1b: Latency + Alerts + Knowledge (when data available) */}
-        {loaded && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <LatencyCard chartHistory={chartHistory} />
             <AlertPanel
               cpuThreshold={cpuThreshold}
               memThreshold={memThreshold}
@@ -357,77 +313,119 @@ export default function SystemHealthPage() {
               onMemThresholdChange={setMemThreshold}
               alerts={alerts}
             />
-            <ProcessCard detailed={detailed} />
           </div>
         )}
 
-        {/* Row 2: Auto-Trainer + Quality + Feedback — 3-col grid */}
+        {/* Row 2: Server errors — always visible */}
+        {loaded && <ServerErrorsCard liveHealth={liveHealth} />}
+
+        {/* Row 3: Health & memory trend — always visible */}
         {loaded && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {autoTrainStatus && <AutoTrainCard status={autoTrainStatus} />}
-            <WorkflowCard onRefresh={fetchAll} />
-            {benchQuality && <QualityCard quality={benchQuality} stats={benchStats} />}
-            <FeedbackCard
-              dpoStatus={dpoStatus}
-              visualStatus={visualStatus}
-              dpoRunning={dpoRunning}
-              onDpoRunningChange={setDpoRunning}
-              onRefresh={fetchAll}
-            />
-          </div>
-        )}
-
-        {/* Row 3: Training History + Executor Pool — 2-col grid */}
-        {loaded && (trainingJobs.length > 0 || (executorStatus && executorStatus.initialized)) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <TrainingHistory jobs={trainingJobs} />
-            {executorStatus && <ExecutorPool status={executorStatus} onRefresh={fetchAll} />}
-          </div>
-        )}
-
-        {/* Row 4: Chart */}
-        {chartHistory.length > 1 && (
           <Card className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time (last {MAX_HISTORY}s)</span>
-              <button onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
-                Export
-              </button>
-            </div>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Health &amp; memory trend</span>
             <CardContent className="p-0">
-              <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
-                <SystemChart data={chartHistory} />
+              <div className="h-40">
+                <TrendChart liveHealth={liveHealth} />
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Row 5: GPU + Disk + Server */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <GpuCard gpu={detailed?.gpu as GPUInfo | undefined} />
-          <DiskCard disk={disk ?? undefined} />
-          <ServerInfoCard info={info ?? undefined} />
-        </div>
-
-        {/* Row 5b: KV cache sessions */}
-        {detailed?.kv_sessions?.enabled && (
-          <KvCacheCard kvSessions={detailed.kv_sessions} />
+        {/* Collapsible: Diagnostics (SSE-driven real-time data) */}
+        {loaded && (
+          <FoldSection heading="Diagnostics">
+            <div className="space-y-3">
+              <DiagnosticsCard liveHealth={liveHealth} />
+              <TrafficCard liveHealth={liveHealth} />
+              <ModelMetricsCard liveHealth={liveHealth} />
+              <PathLatenciesCard liveHealth={liveHealth} />
+              <ModelEventsCard liveHealth={liveHealth} />
+              <RateViolationsCard liveHealth={liveHealth} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <LatencyCard chartHistory={chartHistory} />
+                <ProcessCard detailed={detailed} />
+              </div>
+            </div>
+          </FoldSection>
         )}
 
-        {/* Row 6: Server Output + Activity */}
-        <OutputCard compact />
+        {/* Collapsible: Training & Quality */}
+        {loaded && (
+          <FoldSection heading="Training &amp; Quality">
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {autoTrainStatus && <AutoTrainCard status={autoTrainStatus} />}
+                <WorkflowCard onRefresh={fetchAll} />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {benchQuality && <QualityCard quality={benchQuality} stats={benchStats} />}
+                <FeedbackCard
+                  dpoStatus={dpoStatus}
+                  visualStatus={visualStatus}
+                  dpoRunning={dpoRunning}
+                  onDpoRunningChange={setDpoRunning}
+                  onRefresh={fetchAll}
+                />
+              </div>
+              {(trainingJobs.length > 0 || (executorStatus && executorStatus.initialized)) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <TrainingHistory jobs={trainingJobs} />
+                  {executorStatus && <ExecutorPool status={executorStatus} onRefresh={fetchAll} />}
+                </div>
+              )}
+            </div>
+          </FoldSection>
+        )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="md:col-span-2">
-            <ActivityTicker />
-          </div>
-          <Card className="p-4">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Errors</span>
-            <CardContent className="p-0 max-h-[200px] overflow-y-auto">
-              <ErrorList />
-            </CardContent>
-          </Card>
-        </div>
+        {/* Collapsible: System Info */}
+        {loaded && (
+          <FoldSection heading="System Info" open={false}>
+            <div className="space-y-3">
+              <KnowledgeCard knowledgeStats={knowledgeStats} adapterStatus={adapterStatus} loaded={loaded} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <GpuCard gpu={detailed?.gpu as GPUInfo | undefined} />
+                <DiskCard disk={disk ?? undefined} />
+                <ServerInfoCard info={info ?? undefined} />
+              </div>
+              {detailed?.kv_sessions?.enabled && <KvCacheCard kvSessions={detailed.kv_sessions} />}
+              {chartHistory.length > 1 && (
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time chart</span>
+                    <button onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
+                      Export
+                    </button>
+                  </div>
+                  <CardContent className="p-0">
+                    <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
+                      <SystemChart data={chartHistory} />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </FoldSection>
+        )}
+
+        {/* Collapsible: Server Output & Activity */}
+        {loaded && (
+          <FoldSection heading="Server Output" open={false}>
+            <div className="space-y-3">
+              <OutputCard compact />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <ActivityTicker />
+                </div>
+                <Card className="p-4">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Errors</span>
+                  <CardContent className="p-0 max-h-[200px] overflow-y-auto">
+                    <ErrorList />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </FoldSection>
+        )}
 
         {error && (
           <Card className="p-4 border-destructive/50">

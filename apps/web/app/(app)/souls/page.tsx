@@ -349,7 +349,7 @@ export default function SoulsPage() {
                           <span className="text-xs text-muted-foreground ml-2">{new Date(snap.saved_at).toLocaleDateString()}</span>
                         )}
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <Button size="sm" variant="ghost" onClick={() => handleLoadSnapshot(snap.name)}>Load</Button>
                         <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeleteSnapshot(snap.name)}>Delete</Button>
                       </div>

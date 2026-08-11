@@ -62,7 +62,7 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
   if (!open) return null
 
   return (
-    <div className="fixed bottom-12 right-4 w-[520px] max-h-[400px] z-50 bg-background border rounded-lg shadow-lg flex flex-col">
+    <div className="fixed bottom-12 right-4 w-[calc(100vw-2rem)] max-w-[520px] max-h-[400px] z-50 bg-background border rounded-lg shadow-lg flex flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <div className="flex items-center gap-2">
           <span className={`inline-block w-2 h-2 rounded-full ${streaming && !paused ? 'bg-success animate-pulse' : paused ? 'bg-warning' : 'bg-muted-foreground/50'}`} />

@@ -41,4 +41,31 @@ describe('CapabilitiesCard', () => {
     expect(screen.getByText('Images learned')).toBeDefined()
     expect(screen.getByText('0')).toBeDefined()
   })
+
+  it('shows vision model label', () => {
+    render(<CapabilitiesCard caps={caps} />)
+    expect(screen.getByText('Vision model')).toBeDefined()
+  })
+
+  it('shows background job status', () => {
+    render(<CapabilitiesCard caps={{ ...caps, background_job_running: true }} />)
+    expect(screen.getByText('Status')).toBeDefined()
+  })
+
+  it('handles all capabilities disabled', () => {
+    const disabled = { ...caps, speech_to_text: false, image_caption: false, trained: false }
+    render(<CapabilitiesCard caps={disabled} />)
+    expect(screen.getByText('Speech-to-text')).toBeDefined()
+    expect(screen.getByText('Image captioning')).toBeDefined()
+  })
+
+  it('handles zero images learned', () => {
+    render(<CapabilitiesCard caps={{ ...caps, images_learned: 0 }} />)
+    expect(screen.getByText('0')).toBeDefined()
+  })
+
+  it('handles large replay buffer', () => {
+    render(<CapabilitiesCard caps={{ ...caps, replay_buffer_size: 10000 }} />)
+    expect(screen.getByText('10000 items')).toBeDefined()
+  })
 })

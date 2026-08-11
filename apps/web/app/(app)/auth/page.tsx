@@ -91,7 +91,7 @@ export default function AuthPage() {
                 <CardTitle className="text-base">Current User</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="rounded-md bg-muted/30 p-3 text-center">
                     <div className="text-xs text-muted-foreground">Username</div>
                     <div className="text-sm font-mono font-medium">{currentUser.username}</div>

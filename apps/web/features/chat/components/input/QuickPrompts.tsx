@@ -162,7 +162,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{p.description}</div>
                       </button>
-                      <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5" onClick={() => { setEditingId(p.id); setEditName(p.name); setEditDesc(p.description); setEditPrompt(p.prompt) }}>Edit</Button>
                         {p.category === 'custom' && (
                           <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5 text-error hover:text-error" onClick={() => handleDelete(p.id)}>Delete</Button>

@@ -218,6 +218,33 @@ pays. Demonstrated end-to-end (all four invariants green, `emerged=yes`) at
 `python3 -m domains.shell.world_driver --civilization --generations 6
 --population 8 --social-pools 3 --seed 7`. CLI: `--civilization`.
 
+**Stage 13 — THE DIURNAL ENERGY CYCLE (the world's first external source).**
+Until now the world was a closed system: every tick drained energy and
+nothing outside ever added any. Stage 13 breaks that with a genuine BOUNDARY
+source — the sun. `solar_enabled` gives the world a day/night cycle: the
+scene tracks a tick phase over `solar_day_ticks`, a half-wave sinusoid turns
+it into a daylight intensity between `solar_min_intensity` (night) and
+`solar_max_intensity` (noon), and at each tick `SimScene.apply_solar`
+deposits `solar_deposit_rate * intensity` energy onto the TOPMOST exposed
+surface cell of every column — the ground the sky can see. Nothing inside
+the world creates energy; the sun is the only generator, and it enters only
+at the boundary. The physics tripwire absorbs the break: `_conservation_sweep`
+now subtracts each tick's boundary deposit (`scene.solar_energy_deposited`)
+before the comparison, so the invariant becomes "internal channels never
+create energy" — exact even with the sky on, and strictly monotonic with it
+off. The sun is also PERCEIVABLE: `WorldGrid.light` carries the tick's
+intensity, and a baby with `cells_input_dim >= 6` reads it as the extra
+cells feature at index 5 — a learnable day/night signal. `benchmark_solar`
+runs two arms on the same generated world (solar off vs on, one full day per
+generation) and verifies the four invariants: conservation exact under the
+boundary source, the closed-world tripwire still strictly monotonic with the
+sun off, RNG isolation (the four behavior brains bit-identical on/off), and
+daylight liveness — the solar arm's average fitness beats the heat-dying
+closed control. Defaults off, so the locked selection proofs keep their exact
+genome layout and energy flow. Demonstrated end-to-end
+(`solar_conservation_exact=yes`, `closed_monotonic=yes`,
+`brains_identical=yes`, `solar_emerged=yes`) via `benchmark_solar(seed=7)`.
+
 **The critical transition was Stage 4 → Stage 5.**
 We no longer run HuggingFace models for cognition inside the world.
 Stage 5 trains neural nets *inside* the world —
@@ -584,7 +611,9 @@ This is simulation, not a game.
 | 18 Tests | `test_signal_communication.py` | Signal emission (write/place/air/OOB), perception (nearby signal array, empty read, feature zero/positive, learnable signal row, untouched row without signal), propagation (wave carries to neighbors, reaches distance over ticks), end-to-end loop (B perceives A's broadcast, snapshot survival, full tick loop) — all pass |
 | 26 Tests | `test_environment.py` | Material behaviors (organic ignition above `ignition_temp`, full-pipeline combustion, rot metabolism, ember radiation + energy conservation + burnout to stone, living growth + determinism + poverty rest, water signal dampening + cooling, metal conduction faster than baseline + conservation, ambient temperature relaxation), terrain generation (floor/food/water/ember present, deterministic on seed, seed-sensitive, global-RNG neutral), scene integration (opt-in generation, default empty, surface spawn, persistence round-trip, resume-matches-continuous with terrain, babies survive longer with food) — all pass |
 | 17 Tests | `test_civilization.py` | Stage 12 integrated proof: conservation sweep under full load (monotonic world total over the live tick loop, end total never exceeds start, sweep determinism, violation reporting when a step injects energy), RNG isolation under total load (the four behavior brains bit-identical all-on vs off across seeds 1/3/7, channel brains present when on, absent when off), benchmark structure (verdict keys, determinism, control arm zero channel activity, full history), seed-independent invariants (conservation monotonic and brains-identical across seeds 1/3/7), and the demonstration seed 7 (every channel fires, births > 0 with survivors, `civilization_emerged` matches the derived conjunction) — all pass |
+| 12 Tests | `test_realm_view.py` | Live-view construction (solar-lit generated world with `cells_input_dim` 6, all babies spawned alive on the surface, seeded determinism), frame rendering (sun glyph present at noon and absent before the first tick, material glyphs + legend, every alive baby overlaid as a `B`, grayscale heat backgrounds written), and the live loop (`live_view` returns the full stats dict, emits one cleared frame per tick, seeded runs bit-identical, birth/death counters tracked in an engine-driven scene) — all pass |
 | World Driver | `world_driver.py` | Headless observability harness: `WorldDriver` builds a world (empty or deterministic terrain), runs N ticks via the real simulation loop, and reports per-tick energy economy, material populations, and a conservation invariant (grid+entity energy must never increase — a physics regression tripwire). `run_evolution()` delegates to `EvolutionEngine` for genetic sweeps; `--emergence` runs the emergence benchmark; `--social` runs the trait-group-vs-individual cooperation benchmark; `--messages` switches on the directed inter-agent message channel; `--structures` switches on durable nest building; `--culture` runs the teaching-vs-vertical-only cultural transmission benchmark; `--memory` runs the world-reservoir-vs-memotype-only long-term memory benchmark; `--predation` runs the predator-prey-on-vs-off benchmark (Stage 8); `--territory` runs the territoriality-on-vs-off defense+raid benchmark (Stage 9, reports `defenses`, `defend_rate`, `defend_energy_moved`, `raids`, `raid_energy_moved`); `--lifecycle` runs the in-world birth/death-on-vs-off benchmark (Stage 10, reports `births`, `birth_energy_moved`, `deaths`, `alive_count`, `lifecycle_emerged`); `--civilization` runs the integrated Stage 12 proof (all channels on at once, reports `conservation_monotonic`, `conservation_violations`, `conservation_start_total`/`conservation_end_total`, `brains_identical`, `channels_live`, `births`, `alive_count`, `civilization_emerged`). CLI: `python3 -m domains.shell.world_driver --grid 64,32,64 --seed 42 --ticks 50 --every 5` (or `--evolution --generations N --population N --ticks-per-gen N`, or `--emergence`, or `--social`, or `--messages`, or `--structures`, or `--culture`, or `--memory`, or `--predation`, or `--territory`, or `--lifecycle`, or `--civilization`). Pure observability — adds no physics, mutates nothing beyond the live scene |
+| Live Realm View | `realm_view.py`, `realm_live.py` | The observation surface — Stage 13's counterpart to the benchmarks. `render_frame` draws the day's skyline (sun position tracks `world.light`, `day D/N light X.XX noon N%`), every material cell with a per-cell grayscale energy heat, and ALL alive babies overlaid as `B` on the z-slice holding the most babies (glyphs ANSI-green when energized, yellow mid, red low). `live_view` drives the REAL `Simulation.step` loop one tick at a time, clearing/redrawing per tick, and returns `{ticks, energy_total, solar_in, alive, population, births, deaths}`. `make_live_scene` generates the world, seeds food pools, and spawns `Genome.random` babies on the surface. CLI: `python3 -m domains.shell.realm_live --ticks 240 --day 24 --fps 8 --seed 7` (also `--grid X,Y,Z --population --pools --rate`). Pure observability — adds no physics, mutates nothing beyond the live scene; stepping is re-seeded from `world_seed` so every run is reproducible |
 | 22 Tests | `test_world_driver.py` | Material naming (derived from constants, never hardcoded), grid parsing, empty-vs-terrain populations, snapshot shape (incl. `nests` + `nest_energy` keys), per-tick cadence, energy-ledger consistency (incl. nest energy in the total), conservation monotonicity + violation detection, seed determinism, mean baby energy, evolution summary shape, emergence CLI path, CLI output paths — all pass |
 
 ### Built but Incomplete

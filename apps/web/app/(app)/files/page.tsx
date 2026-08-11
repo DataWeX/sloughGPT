@@ -217,7 +217,7 @@ export default function FilesPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         {!f.ingested && (
                           <Button size="sm" variant="ghost" onClick={() => handleIngest(f.id)} disabled={ingesting === f.id}>
                             {ingesting === f.id ? 'Indexing...' : 'Index'}
