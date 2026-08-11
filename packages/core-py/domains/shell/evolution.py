@@ -887,6 +887,10 @@ class EvolutionEngine:
                 "memory_size": len(self.world_memory)
                 if self.world_memory is not None else 0,
                 "memory_seeds": seeds,
+                "solar_energy_deposited": float(
+                    social.get("solar_energy_deposited", 0.0)),
+                "sunshine": float(social.get("sunshine", 0.0)),
+                "light_final": float(social.get("light_final", 0.0)),
             }
             if self.group_count > 1:
                 entry["group_means"] = self._group_means(babies, genomes)
@@ -1663,6 +1667,12 @@ def _conservation_sweep(params: WorldParams, genomes: list[Genome],
     combined with the others. The food pools use the exact same deterministic
     placement the engine uses, so the sweep is reproducible on ``world_seed``.
 
+    When ``params.solar_enabled`` the sky is a legit BOUNDARY source: each
+    tick's deposit (tracked by ``scene.solar_energy_deposited``) is subtracted
+    before the comparison, so the invariant becomes "internal channels never
+    create energy" — the exact Stage 13 claim. With the sun off the deposit is
+    always zero and the sweep is the strict closed-world tripwire.
+
     Args:
         params: world rules (the caller passes the ALL-ON ruleset).
         genomes: the generation's genomes, applied to the spawned babies.
@@ -1670,8 +1680,9 @@ def _conservation_sweep(params: WorldParams, genomes: list[Genome],
 
     Returns:
         Dict with ``monotonic`` (bool), ``violations`` (list of
-        ``(tick, prev_total, new_total)`` tuples), and ``start_total`` /
-        ``end_total`` floats.
+        ``(tick, prev_total, new_total)`` tuples), ``start_total`` /
+        ``end_total`` floats, and ``boundary_deposit_total`` (energy the sky
+        added over the sweep).
     """
     if params.world_seed is not None:
         np.random.seed(int(params.world_seed))
@@ -1695,11 +1706,14 @@ def _conservation_sweep(params: WorldParams, genomes: list[Genome],
 
     start_total = total()
     prev = start_total
+    prev_solar = scene.solar_energy_deposited
     violations: list[tuple[int, float, float]] = []
     for t in range(1, ticks + 1):
         sim.step()
         cur = total()
-        if cur > prev + 1e-6:
+        boundary = scene.solar_energy_deposited - prev_solar
+        prev_solar = scene.solar_energy_deposited
+        if cur > prev + boundary + 1e-6:
             violations.append((t, prev, cur))
         prev = cur
     return {
@@ -1707,6 +1721,7 @@ def _conservation_sweep(params: WorldParams, genomes: list[Genome],
         "violations": violations,
         "start_total": float(start_total),
         "end_total": float(prev),
+        "boundary_deposit_total": float(scene.solar_energy_deposited),
     }
 
 
@@ -1853,4 +1868,149 @@ def benchmark_civilization(params: WorldParams | None = None, *,
         "alive_count": int(last["alive_count"]),
         "population_size": population_size,
         "civilization_emerged": bool(emerged),
+    }
+
+
+def benchmark_solar(params: WorldParams | None = None, *,
+                    population_size: int = 8,
+                    generations: int = 12,
+                    ticks_per_generation: int = 48,
+                    organic_pools: int = 3,
+                    solar_deposit_rate: float = 0.1,
+                    hidden_units: int = 0,
+                    seed: int = 7) -> dict:
+    """
+    Diurnal energy cycle proof (Stage 13): the world's first external source.
+
+    The sun is the boundary source that breaks the world's closed system —
+    and Stage 13's whole claim is that the conservation invariant survives
+    the break. Two arms evolve on the SAME generated world with the same
+    initial core genome draws, in-life learning on in both, every other
+    opt-in channel off:
+
+      - ``control``: solar off. The world is a closed system and every tick
+        drains energy — the classic heat-death that the earlier stages
+        accepted as the cost of honest physics.
+      - ``solar``: the sun rises and sets once per generation
+        (``solar_day_ticks == ticks_per_generation``). At day the sky
+        deposits energy onto the topmost exposed surface cell of every
+        column, scaled by a half-wave diurnal curve; at night it deposits
+        nothing. The surface is fed, diffusion carries the gift down, and
+        the population does not starve.
+
+    Four invariants must hold:
+
+      1. CONSERVATION under a boundary source: over a live solar generation
+         the world total never increases beyond the tick's sky deposit.
+         ``solar_conservation_exact`` — the sweep subtracts
+         ``scene.solar_energy_deposited`` per tick, so any internal channel
+         that created energy still trips the wire.
+      2. CLOSED-WORLD TRIPWIRE: the same sweep on the solar-OFF ruleset is
+         strictly monotonic — the sun is the only way energy can appear.
+         ``closed_monotonic``.
+      3. RNG ISOLATION: same-seed genome draws produce bit-identical four
+         behavior brains whether the sky is on or off (dims match, so the
+         dedicated solar stream never perturbs the core draw).
+         ``brains_identical``.
+      4. DAYLIGHT LIVENESS: the solar arm's history shows sunshine and a
+         positive boundary deposit, and the sun keeps the world alive:
+         ``solar_last_avg > control_last_avg`` (``solar_emerged``).
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``,
+            ``world_seed=seed``, ``learning_enabled=True`` and every opt-in
+            channel off (structures, teaching, memory, messages, predation,
+            territoriality, lifecycle, specialization).
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation AND the length
+            of one full day/night cycle in the solar arm.
+        organic_pools: food pools distributed across the world.
+        solar_deposit_rate: energy per lit surface cell per tick at noon.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``solar`` runs, their last-generation
+        ``avg_fitness``, the conservation verdicts (``solar_conservation_exact``,
+        ``closed_monotonic``, violations and totals), the RNG-isolation
+        verdict ``brains_identical``, daylight stats (``deposited``,
+        ``sunshine``, ``light_final``), and the ``solar_emerged`` verdict.
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    closed = replace(base, generate_world=True, world_seed=seed,
+                     learning_enabled=True, brain_hidden_units=int(hidden_units),
+                     message_enabled=False, structure_enabled=False,
+                     teaching_enabled=False, memory_enabled=False,
+                     predation_enabled=False, territoriality_enabled=False,
+                     lifecycle_enabled=False, specialization_enabled=False,
+                     solar_enabled=False)
+    solar = replace(base, generate_world=True, world_seed=seed,
+                    learning_enabled=True, brain_hidden_units=int(hidden_units),
+                    message_enabled=False, structure_enabled=False,
+                    teaching_enabled=False, memory_enabled=False,
+                    predation_enabled=False, territoriality_enabled=False,
+                    lifecycle_enabled=False, specialization_enabled=False,
+                    solar_enabled=True,
+                    solar_day_ticks=int(ticks_per_generation),
+                    solar_phase=0, solar_min_intensity=0.0,
+                    solar_max_intensity=1.0, solar_deposit_rate=float(solar_deposit_rate))
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, seed=seed)
+    control = EvolutionEngine(params=closed, **shared).run()
+    day = EvolutionEngine(params=solar, **shared).run()
+
+    ctrl_avg = control["history"][-1]["avg_fitness"]
+    solar_avg = day["history"][-1]["avg_fitness"]
+
+    # RNG isolation: same-seed genome draws, sky on vs off (same dims).
+    g_off = Genome.random(closed, np.random.default_rng(seed), group_id=0)
+    g_on = Genome.random(solar, np.random.default_rng(seed), group_id=0)
+    brains_identical = all(
+        np.allclose(g_off.tensors[f"{name}.{suf}"],
+                    g_on.tensors[f"{name}.{suf}"])
+        for name in ("cells", "body", "entity", "move")
+        for suf in ("W", "b")
+    )
+
+    # Conservation under the boundary source: solar-aware sweep.
+    genomes = [Genome.random(solar, np.random.default_rng(seed), group_id=0)
+               for _ in range(population_size)]
+    solar_sweep = _conservation_sweep(solar, genomes, ticks_per_generation)
+    # Closed-world tripwire: strict monotonic with the sky off.
+    closed_genomes = [Genome.random(closed, np.random.default_rng(seed), group_id=0)
+                      for _ in range(population_size)]
+    closed_sweep = _conservation_sweep(closed, closed_genomes,
+                                       ticks_per_generation)
+
+    last = day["history"][-1]
+    deposited = float(last["solar_energy_deposited"])
+    sunshine = float(last["sunshine"])
+    light_final = float(last["light_final"])
+
+    emerged = bool(solar_sweep["monotonic"] and closed_sweep["monotonic"]
+                   and brains_identical and deposited > 0.0
+                   and sunshine > 0.0 and solar_avg > ctrl_avg)
+    return {
+        "control": control,
+        "solar": day,
+        "control_last_avg": float(ctrl_avg),
+        "solar_last_avg": float(solar_avg),
+        "solar_conservation_exact": bool(solar_sweep["monotonic"]),
+        "solar_violations": list(solar_sweep["violations"]),
+        "solar_start_total": float(solar_sweep["start_total"]),
+        "solar_end_total": float(solar_sweep["end_total"]),
+        "solar_boundary_deposit": float(solar_sweep["boundary_deposit_total"]),
+        "closed_monotonic": bool(closed_sweep["monotonic"]),
+        "closed_violations": list(closed_sweep["violations"]),
+        "closed_start_total": float(closed_sweep["start_total"]),
+        "closed_end_total": float(closed_sweep["end_total"]),
+        "brains_identical": bool(brains_identical),
+        "deposited": deposited,
+        "sunshine": sunshine,
+        "light_final": light_final,
+        "population_size": population_size,
+        "solar_emerged": bool(emerged),
     }

@@ -261,9 +261,19 @@ class WorldParams:
     water_cool_rate: float = 0.05         # water cells relax toward ambient per tick
 
     # Perception input dimensions (for perceptrons)
-    cells_input_dim: int = 5  # material, energy, temperature, occupancy, signal
+    cells_input_dim: int = 5  # material, energy, temperature, occupancy, signal (+ daylight at index 5 when >= 6)
     body_input_dim: int = 3   # energy, position x, position y
     entity_input_dim: int = 5  # type, energy, distance, angle, kin signal (+ directed-message amplitude at index 5 when >= 6)
+
+    # Solar energy cycle (Stage 13) — energy enters the world ONLY from the
+    # boundary (the sky), along a diurnal curve. When off the world stays a
+    # closed system, so the locked selection proofs remain bit-identical.
+    solar_enabled: bool = False
+    solar_day_ticks: int = 24          # full day/night cycle length in ticks
+    solar_phase: int = 0               # tick offset (0 = sunrise)
+    solar_min_intensity: float = 0.0   # night light level (0 = dark)
+    solar_max_intensity: float = 1.0   # noon light level
+    solar_deposit_rate: float = 0.4    # energy per lit surface cell per tick at full sun
 
     # Episodic memory (ring buffer)
     memory_capacity: int = 64   # episodes remembered before the oldest is evicted
@@ -307,6 +317,7 @@ class WorldGrid:
         self.energy = np.zeros(self.total, dtype=np.float32)
         self.temperature = np.full(self.total, 20.0, dtype=np.float32)
         self.signal = np.zeros(self.total, dtype=np.float32)
+        self.light = 0.0  # global daylight intensity this tick (0 = night)
 
     def idx(self, x: int, y: int, z: int) -> int:
         """Convert 3D coordinates to flat index. Wraps at boundaries."""
@@ -1283,6 +1294,11 @@ class SimBaby:
 
         cells = world.get_nearby_cells(gx, gy, gz, self.params.see_radius)
 
+        # Stage 13: when the sun is on, the world carries a global daylight
+        # level that dim-6+ brains can read as the extra cells feature.
+        if self.params.solar_enabled:
+            cells["light"] = np.array([world.light], dtype=np.float32)
+
         # Add noise proportional to distance
         if cells["count"] > 0:
             noise_scale = cells["distance"] / (self.params.see_radius + 1e-8)
@@ -1382,6 +1398,7 @@ class SimBaby:
             float(np.mean(cells["temperature"])) / 100.0,
             min(float(n) / 16.0, 1.0),
             min(float(np.mean(cells["signal"])), 1.0),  # broadcast strength in radius
+            min(float(np.mean(cells.get("light", [0.0]))), 1.0),  # daylight
         ], dtype=np.float32), 0.0, 1.0)[:self.params.cells_input_dim]
 
     def react(self, perception: Perception, energy_delta: float) -> BabyAction:
@@ -2359,6 +2376,12 @@ class SimScene:
         self.memory_seeds_given = 0
         # In-world life cycle (Stage 10) — births granted inside the tick loop.
         self.births = 0
+        # Solar boundary source (Stage 13) — cumulative energy the sky has
+        # deposited onto the surface, and how many ticks were lit. The
+        # conservation tripwire subtracts the boundary deposit so the internal
+        # channels must still never create energy.
+        self.solar_energy_deposited = 0.0
+        self.solar_lit_ticks = 0
 
     def add_baby(self, baby: SimBaby):
         """
@@ -2451,6 +2474,50 @@ class SimScene:
         """Run cell update function on the world grid."""
         fn = self._cell_update_fn or cell_update_default
         fn(self.world, self.params)
+
+    def apply_solar(self):
+        """
+        Deposit energy from the sky along the diurnal curve (Stage 13).
+
+        The sun is a boundary source: it adds energy ONLY onto the topmost
+        non-air cell of each column — the ground the sky can see — scaled by
+        the current daylight intensity. A half-wave sinusoid over
+        ``solar_day_ticks`` gives full darkness at night, sunrise/noon/sunset
+        through the day, and wraps at the horizon. Nothing inside the world
+        creates energy: grid, babies, and nests still only move it around, so
+        the internal conservation invariant holds exactly once each tick's
+        boundary deposit is accounted for (the ``_conservation_sweep``
+        subtracts it).
+
+        Side effects:
+            - raises ``world.light`` to the tick's daylight intensity (0..1)
+            - adds energy to the exposed surface cells, raising
+              ``solar_energy_deposited`` and ``solar_lit_ticks``
+        """
+        p = self.params
+        day = max(int(p.solar_day_ticks), 1)
+        phase = (self._tick + int(p.solar_phase)) % day
+        angle = 2.0 * np.pi * phase / day
+        intensity = (p.solar_min_intensity
+                     + (p.solar_max_intensity - p.solar_min_intensity)
+                     * max(0.0, float(np.sin(angle))))
+        self.world.light = float(intensity)
+        if intensity <= 0.0:
+            return
+
+        nx, ny, nz = self.world.nx, self.world.ny, self.world.nz
+        exposed = self.world.material.reshape(nx, ny, nz) != MATERIAL_AIR
+        has_ground = exposed.any(axis=1)
+        top_y = ny - 1 - np.argmax(exposed[:, ::-1], axis=1)
+        X, Z = np.meshgrid(np.arange(nx), np.arange(nz), indexing="ij")
+        cols = has_ground
+        idx = X[cols] * (ny * nz) + top_y[cols] * nz + Z[cols]
+        if idx.size == 0:
+            return
+        deposit = intensity * float(p.solar_deposit_rate)
+        self.world.energy[idx] += np.float32(deposit)
+        self.solar_energy_deposited += float(idx.size) * deposit
+        self.solar_lit_ticks += 1
 
     def get_baby(self, baby_id: int) -> SimBaby | None:
         for d in self._devices:
@@ -2992,6 +3059,11 @@ class Simulation:
         # World compute first
         self.scene.update_cells()
 
+        # Solar boundary source — the sky deposits energy onto the surface
+        # after diffusion, so it never competes with a cell's internal math.
+        if self.scene.params.solar_enabled:
+            self.scene.apply_solar()
+
         alive = list(self.scene.alive_babies)
 
         for baby in alive:
@@ -3428,4 +3500,8 @@ class Simulation:
                                     for r in self._tick_log),
             "deaths": len(dead),
             "alive_count": len([b for b in self.scene.babies if b.alive]),
+            "solar_energy_deposited": float(self.scene.solar_energy_deposited),
+            "sunshine": float(self.scene.solar_lit_ticks)
+            / max(float(self.scene.tick), 1.0),
+            "light_final": float(self.scene.world.light),
         }

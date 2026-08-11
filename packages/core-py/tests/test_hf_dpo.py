@@ -5,11 +5,15 @@ Tests for HFDPOTrainer — Direct Preference Optimization for HF models.
 import json
 import os
 import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-torch = pytest.importorskip("torch")
+try:
+    import torch
+except ImportError:
+    raise unittest.SkipTest("torch is not installed; HF DPO tests are optional")
 
 
 @pytest.fixture

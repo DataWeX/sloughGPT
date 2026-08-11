@@ -196,6 +196,7 @@ class TestEvolutionEngine:
             "births", "birth_energy_moved", "deaths", "alive_count",
             "role_deposits", "role_deposit_rate", "role_deposit_energy",
             "role_raids", "role_raid_rate", "role_raid_energy",
+            "solar_energy_deposited", "sunshine", "light_final",
         }
 
     def test_run_history_fitness_monotone_in_hypothesis(self):

@@ -178,6 +178,46 @@ compares tribes by the geometric mean of member energy, so complementary
 postures — one lifting the tribe's famine floor, one lifting its mean — are
 rewarded as a package. CLI: `--specialize`.
 
+**Stage 12 — THE FULL PROGRAM (all channels, one living world).**
+The integration proof. Every opt-in channel — structures, teaching, memory,
+messages, predation, territoriality, lifecycle, specialization — is proven in
+its own benchmark; Stage 12 turns them ALL on at once in a single evolution
+run and verifies four invariants that only hold when the channels are
+genuinely composable. `benchmark_civilization` runs two arms on the SAME
+generated world with the same initial core genome draws: `control` (bare
+world, every channel off — the classic emergence baseline, zero channel
+activity by construction) vs `civilization` (all channels on, in-life
+learning on). The four invariants:
+
+  1. CONSERVATION under full load — over a live, fully-loaded generation the
+     world total (grid + entity + nest energy) never increases. Each channel
+     is individually transfer-safe; together they must still never create
+     energy. `_conservation_sweep` is the honest physics tripwire: it builds
+     the fully-loaded scene and steps the real tick loop one tick at a time,
+     recomputing the world total from the LIVE scene after every tick.
+     `conservation_monotonic`.
+  2. RNG ISOLATION under total load — the four behavior brains (cells, body,
+     entity, move) drawn with the same seed are bit-identical whether every
+     dedicated-stream channel is off or ALL on, so the locked selection
+     proofs keep their exact genome layout and energy flow no matter how many
+     channels coexist. `brains_identical`.
+  3. CHANNEL LIVENESS — every opt-in channel demonstrably fires somewhere in
+     the run: lessons (teaching), predations, defenses AND raids
+     (territoriality), nests_built (structures), births (lifecycle), role
+     deposits/raids (specialization), and a growing world reservoir
+     (memory). `channels_live`.
+  4. SUSTAINABILITY — births > 0 with survivors at the final generation: the
+     world grows its own population while predation and contest are taking
+     lives. `civilization_emerged`.
+
+Nothing is hardcoded: the channel brains are still evolved material, and the
+conservation sweep is the honest physics tripwire over the live tick loop.
+Cooperation staying at zero while predation is on is a genuine emergent
+result, not a bug — the contest channel is simply out-selected when hunting
+pays. Demonstrated end-to-end (all four invariants green, `emerged=yes`) at
+`python3 -m domains.shell.world_driver --civilization --generations 6
+--population 8 --social-pools 3 --seed 7`. CLI: `--civilization`.
+
 **The critical transition was Stage 4 → Stage 5.**
 We no longer run HuggingFace models for cognition inside the world.
 Stage 5 trains neural nets *inside* the world —
@@ -543,7 +583,8 @@ This is simulation, not a game.
 | 22 Tests | `test_scene_persistence.py` | WorldGrid/Entity/Perceptron/Memory/Baby/Scene round-trips (lossless, dtype-stable), JSON dump/load, size-mismatch rejection, entity identity after restore, non-baby entity survival, no RNG consumed by restore, resume-matches-continuous-run determinism, id continuity on post-restore spawns, multi-cycle stability — all pass |
 | 18 Tests | `test_signal_communication.py` | Signal emission (write/place/air/OOB), perception (nearby signal array, empty read, feature zero/positive, learnable signal row, untouched row without signal), propagation (wave carries to neighbors, reaches distance over ticks), end-to-end loop (B perceives A's broadcast, snapshot survival, full tick loop) — all pass |
 | 26 Tests | `test_environment.py` | Material behaviors (organic ignition above `ignition_temp`, full-pipeline combustion, rot metabolism, ember radiation + energy conservation + burnout to stone, living growth + determinism + poverty rest, water signal dampening + cooling, metal conduction faster than baseline + conservation, ambient temperature relaxation), terrain generation (floor/food/water/ember present, deterministic on seed, seed-sensitive, global-RNG neutral), scene integration (opt-in generation, default empty, surface spawn, persistence round-trip, resume-matches-continuous with terrain, babies survive longer with food) — all pass |
-| World Driver | `world_driver.py` | Headless observability harness: `WorldDriver` builds a world (empty or deterministic terrain), runs N ticks via the real simulation loop, and reports per-tick energy economy, material populations, and a conservation invariant (grid+entity energy must never increase — a physics regression tripwire). `run_evolution()` delegates to `EvolutionEngine` for genetic sweeps; `--emergence` runs the emergence benchmark; `--social` runs the trait-group-vs-individual cooperation benchmark; `--messages` switches on the directed inter-agent message channel; `--structures` switches on durable nest building; `--culture` runs the teaching-vs-vertical-only cultural transmission benchmark; `--memory` runs the world-reservoir-vs-memotype-only long-term memory benchmark; `--predation` runs the predator-prey-on-vs-off benchmark (Stage 8); `--territory` runs the territoriality-on-vs-off defense+raid benchmark (Stage 9, reports `defenses`, `defend_rate`, `defend_energy_moved`, `raids`, `raid_energy_moved`); `--lifecycle` runs the in-world birth/death-on-vs-off benchmark (Stage 10, reports `births`, `birth_energy_moved`, `deaths`, `alive_count`, `lifecycle_emerged`). CLI: `python3 -m domains.shell.world_driver --grid 64,32,64 --seed 42 --ticks 50 --every 5` (or `--evolution --generations N --population N --ticks-per-gen N`, or `--emergence`, or `--social`, or `--messages`, or `--structures`, or `--culture`, or `--memory`, or `--predation`, or `--territory`, or `--lifecycle`). Pure observability — adds no physics, mutates nothing beyond the live scene |
+| 17 Tests | `test_civilization.py` | Stage 12 integrated proof: conservation sweep under full load (monotonic world total over the live tick loop, end total never exceeds start, sweep determinism, violation reporting when a step injects energy), RNG isolation under total load (the four behavior brains bit-identical all-on vs off across seeds 1/3/7, channel brains present when on, absent when off), benchmark structure (verdict keys, determinism, control arm zero channel activity, full history), seed-independent invariants (conservation monotonic and brains-identical across seeds 1/3/7), and the demonstration seed 7 (every channel fires, births > 0 with survivors, `civilization_emerged` matches the derived conjunction) — all pass |
+| World Driver | `world_driver.py` | Headless observability harness: `WorldDriver` builds a world (empty or deterministic terrain), runs N ticks via the real simulation loop, and reports per-tick energy economy, material populations, and a conservation invariant (grid+entity energy must never increase — a physics regression tripwire). `run_evolution()` delegates to `EvolutionEngine` for genetic sweeps; `--emergence` runs the emergence benchmark; `--social` runs the trait-group-vs-individual cooperation benchmark; `--messages` switches on the directed inter-agent message channel; `--structures` switches on durable nest building; `--culture` runs the teaching-vs-vertical-only cultural transmission benchmark; `--memory` runs the world-reservoir-vs-memotype-only long-term memory benchmark; `--predation` runs the predator-prey-on-vs-off benchmark (Stage 8); `--territory` runs the territoriality-on-vs-off defense+raid benchmark (Stage 9, reports `defenses`, `defend_rate`, `defend_energy_moved`, `raids`, `raid_energy_moved`); `--lifecycle` runs the in-world birth/death-on-vs-off benchmark (Stage 10, reports `births`, `birth_energy_moved`, `deaths`, `alive_count`, `lifecycle_emerged`); `--civilization` runs the integrated Stage 12 proof (all channels on at once, reports `conservation_monotonic`, `conservation_violations`, `conservation_start_total`/`conservation_end_total`, `brains_identical`, `channels_live`, `births`, `alive_count`, `civilization_emerged`). CLI: `python3 -m domains.shell.world_driver --grid 64,32,64 --seed 42 --ticks 50 --every 5` (or `--evolution --generations N --population N --ticks-per-gen N`, or `--emergence`, or `--social`, or `--messages`, or `--structures`, or `--culture`, or `--memory`, or `--predation`, or `--territory`, or `--lifecycle`, or `--civilization`). Pure observability — adds no physics, mutates nothing beyond the live scene |
 | 22 Tests | `test_world_driver.py` | Material naming (derived from constants, never hardcoded), grid parsing, empty-vs-terrain populations, snapshot shape (incl. `nests` + `nest_energy` keys), per-tick cadence, energy-ledger consistency (incl. nest energy in the total), conservation monotonicity + violation detection, seed determinism, mean baby energy, evolution summary shape, emergence CLI path, CLI output paths — all pass |
 
 ### Built but Incomplete
