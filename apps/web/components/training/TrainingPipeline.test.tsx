@@ -221,13 +221,27 @@ describe('TrainingPipeline', () => {
     expect(screen.getByText('2. Configure training')).toBeTruthy()
   })
 
-  it('shows method toggles', async () => {
+  it('shows mode toggles (Text / Vision)', async () => {
+    render(<TrainingPipeline form={makeForm()} datasets={makeDatasets({ selectedDataset: 'ds-1' })} session={makeSession()} checkpoints={makeCheckpoints()} onTest={vi.fn()} />)
+    await act(async () => { screen.getByText('Next: Configure').closest('button')!.click() })
+    expect(screen.getByText('Text')).toBeTruthy()
+    expect(screen.getByText('Vision')).toBeTruthy()
+  })
+
+  it('shows text sub-methods in Text mode', async () => {
     render(<TrainingPipeline form={makeForm()} datasets={makeDatasets({ selectedDataset: 'ds-1' })} session={makeSession()} checkpoints={makeCheckpoints()} onTest={vi.fn()} />)
     await act(async () => { screen.getByText('Next: Configure').closest('button')!.click() })
     expect(screen.getByText('Train from scratch')).toBeTruthy()
     expect(screen.getByText('Continue training')).toBeTruthy()
     expect(screen.getByText('Native SloNet')).toBeTruthy()
-    expect(screen.getByText('Vision model')).toBeTruthy()
+  })
+
+  it('hides sub-methods in Vision mode', async () => {
+    render(<TrainingPipeline form={makeForm({ method: 'vlm' })} datasets={makeDatasets({ selectedDataset: 'ds-1' })} session={makeSession()} checkpoints={makeCheckpoints()} onTest={vi.fn()} />)
+    await act(async () => { screen.getByText('Next: Configure').closest('button')!.click() })
+    expect(screen.queryByText('Train from scratch')).toBeFalsy()
+    expect(screen.queryByText('Continue training')).toBeFalsy()
+    expect(screen.queryByText('Native SloNet')).toBeFalsy()
   })
 
   it('shows data source toggles for non-VLM methods', async () => {
