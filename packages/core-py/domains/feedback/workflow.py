@@ -734,7 +734,7 @@ class FeedbackWorkflowManager:
         when no new feedback events are happening.
         """
         net = getattr(self, '_model', None)
-        tok = getattr(self._lora_updater, '_tokenizer', None)
+        tok = getattr(self, '_tokenizer', None)
         if net is None or tok is None:
             return
 

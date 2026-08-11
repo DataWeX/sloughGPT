@@ -58,6 +58,13 @@ class FeedbackController:
             from routers.auto_train import state as at_state
             if self._workflow and at_state.student_net is not None:
                 self._workflow.set_model(at_state.student_net, at_state.student_tokenizer)
+                return
+            if self._workflow:
+                import state as server_state
+                model = getattr(server_state, "model", None)
+                tokenizer = getattr(server_state, "tokenizer", None)
+                if model is not None and tokenizer is not None:
+                    self._workflow.set_model(model, tokenizer)
         except Exception as e:
             logger.debug("Failed to wire auto-train model to workflow: %s", e)
 

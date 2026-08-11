@@ -188,3 +188,75 @@ class TestSingleton:
     def test_singleton_type(self):
         mgr = get_feedback_workflow()
         assert isinstance(mgr, FeedbackWorkflowManager)
+
+
+class TestBackgroundTraining:
+    @pytest.fixture()
+    def manager(self):
+        mock_db = MagicMock()
+        mock_db.get_stats.return_value = {}
+        mock_meta = MagicMock()
+        mock_meta.record_feedback.return_value = "fb_123"
+        mock_meta.get_stats.return_value = {}
+        mock_lora = MagicMock()
+        mock_lora.get_stats.return_value = {}
+        mock_updater = MagicMock()
+        mock_updater.get_stats.return_value = {}
+        return FeedbackWorkflowManager(
+            config=WorkflowConfig(),
+            feedback_db=mock_db,
+            meta_manager=mock_meta,
+            lora_store=mock_lora,
+            lora_updater=mock_updater,
+        )
+
+    def test_background_training_uses_workflow_tokenizer(self, manager):
+        """The tokenizer read in _run_background_training must come from
+        set_model() (self._tokenizer), not from lora_updater._tokenizer which
+        never exists on OnlineLoRAUpdater."""
+        model = object()
+        tokenizer = MagicMock()
+        manager.set_model(model, tokenizer)
+        with patch(
+            "domains.feedback.training.FeedbackTrainer",
+            autospec=True,
+        ) as mock_trainer_cls:
+            mock_trainer = mock_trainer_cls.return_value
+            mock_trainer.prepare_sft_data.return_value = []
+            manager._run_background_training()
+            mock_trainer.prepare_sft_data.assert_called_once_with(min_quality=0.4)
+
+    def test_background_training_skips_without_model(self, manager):
+        manager.set_model(None, None)
+        with patch(
+            "domains.feedback.training.FeedbackTrainer",
+            autospec=True,
+        ) as mock_trainer_cls:
+            manager._run_background_training()
+            mock_trainer_cls.assert_not_called()
+
+    def test_background_training_skips_without_tokenizer(self, manager):
+        """Regression: previously tokenizer was read from lora_updater._tokenizer
+        (always None), so background training never ran even when a model was set."""
+        manager.set_model(object(), None)
+        with patch(
+            "domains.feedback.training.FeedbackTrainer",
+            autospec=True,
+        ) as mock_trainer_cls:
+            manager._run_background_training()
+            mock_trainer_cls.assert_not_called()
+
+    def test_background_training_requires_two_recent_items(self, manager):
+        manager.set_model(object(), MagicMock())
+        with patch(
+            "domains.feedback.training.FeedbackTrainer",
+            autospec=True,
+        ) as mock_trainer_cls:
+            mock_trainer = mock_trainer_cls.return_value
+            mock_trainer.prepare_sft_data.return_value = [
+                {"timestamp": 1, "prompt": "p", "response": "r"},
+            ]
+            manager._stats["last_background_training_time"] = 0
+            manager._run_background_training()
+            assert manager._stats.get("last_background_training_time", 0) == 0
+            mock_trainer.prepare_sft_data.assert_called_once()

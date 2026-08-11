@@ -282,6 +282,18 @@ def _start_feedback_workflow() -> None:
         if not workflow._running:
             workflow.start()
             logger.info("Feedback workflow started automatically", extra={"tag": "START"})
+
+        # Wire the active server model so background training has a model to
+        # incrementally fine-tune on feedback (falls back to auto-train student
+        # if present). No-op if no model is loaded yet.
+        try:
+            import state as server_state
+            model = getattr(server_state, "model", None)
+            tokenizer = getattr(server_state, "tokenizer", None)
+            if model is not None and tokenizer is not None:
+                workflow.set_model(model, tokenizer)
+        except Exception as e:
+            logger.debug("Feedback workflow model wiring skipped: %s", e)
     except Exception as e:
         logger.warning("Failed to start feedback workflow", extra={"context": {"error": str(e)}, "tag": "START"})
 

@@ -15,7 +15,7 @@
 3. ~~**Fix pre-existing test failures** — 14 flaky frontend tests (DOM timing, async renders, StrictMode double-mount).~~ **Done** — suite at 324 files / 3048 tests; only `ModelDetailPage.test.tsx` excluded (worker-harness hang).
 
 ## Medium-term goals
-4. **Incremental training from feedback** — Wire OnlineLoRAUpdater + PerUserLORAStore into a continuous background loop (currently only fires on explicit aggregation).
+4. ~~**Incremental training from feedback** — Wire OnlineLoRAUpdater + PerUserLORAStore into a continuous background loop (currently only fires on explicit aggregation).~~ **Done** — `_run_background_training` now reads the tokenizer from the workflow's `set_model()` state (was reading a nonexistent `lora_updater._tokenizer`, so the loop always no-opped); the active server model is wired into the workflow at startup (`main.py:_start_feedback_workflow`) and on feedback (`FeedbackController._wire_model` falls back to `server_state.model` when no auto-train student is set).
 5. **Multi-agent orchestration polish** — Async executor works, needs UI for agent creation/editing and dashboard for runs.
 6. ~~**Dataset management UI** — Import/export/versioning/search frontend.~~ **Done** — list page (search/sort/preview/compare/export/delete/version badges), detail page (rename/stats/quality/insights/preview/snapshots/JSONL+CSV export/convert-to-chat-format), import modals (local/GitHub/HF/URL/ISBN/Kaggle/CSV), chat→dataset export. Backend convert + versioning covered by tests.
 
