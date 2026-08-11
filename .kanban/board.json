@@ -24,6 +24,23 @@
   ],
   "cards": [
     {
+      "id": "20260811_013401_multi-agent-orchestration-polish-roadmap-5-closed",
+      "title": "Multi-agent orchestration polish \u2014 roadmap #5 closed",
+      "description": "Roadmap #5 (multi-agent orchestration polish: agent creation/editing UI + runs dashboard) verified fully delivered and marked Done. Scope already present: agents/page.tsx has agent CRUD (create/edit/delete + zod validation), orchestration card (goal/context, per-agent picks via agent_ids, live PLAN->EXECUTE->COMPOSE->COMPLETE SSE timeline), and runs dashboard (list/timeline views, status + agent filters, expandable per-task detail, result + logs). Backend routers/agents.py has CRUD + POST /orchestrate (SSE, asyncio.gather level execution) + GET /runs + GET /runs/{id}; persistence via domains/agents/run_history.py (file-backed data/agent_runs/). Verified: 26 frontend agents tests + 179 backend/core agent tests pass, tsc clean. Only dead surface found: agentsController.getRun() unused in UI (dashboard expands inline).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "agents",
+        "orchestration"
+      ],
+      "created_at": "2026-08-11T01:34:01.709505+00:00",
+      "updated_at": "2026-08-11T01:34:01.709505+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260811_012132_incremental-feedback-training-loop",
       "title": "Incremental feedback training loop",
       "description": "Wired OnlineLoRAUpdater/PerUserLORAStore into a continuous background loop.\n\nRoot cause of the loop never running: _run_background_training read the tokenizer from lora_updater._tokenizer (an attribute OnlineLoRAUpdater does not have) -> tok always None -> early return. Fixed to read self._tokenizer (set via set_model()).\n\nWiring gaps closed:\n- controllers/feedback.py _wire_model() now falls back to server_state.model/tokenizer when no auto-train student_net is set (student_net is never populated in production, so set_model was previously never called).\n- main.py _start_feedback_workflow() wires the active server model into the workflow at startup.\n\nTests: 4 new core-py workflow tests (background training uses workflow tokenizer, skips without model/tokenizer, needs 2 recent items) + 4 new server tests (test_feedback_controller_wiring.py). Verified: test_workflow 23 pass, test_online_lora + test_feedback_router pass, server feedback router 16 pass.",
