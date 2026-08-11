@@ -199,4 +199,69 @@ describe('ComparePage — insights card', () => {
       expect(screen.queryByTestId('insights-card')).toBeNull()
     })
   })
+
+  it('shows empty state instruction text', async () => {
+    render(<ComparePage />)
+    await waitFor(() => {
+      expect(screen.getByText(/no benchmark results/i)).toBeTruthy()
+    })
+  })
+
+  it('shows loading state while fetching models', async () => {
+    mockList.mockReturnValue(new Promise(() => {}))
+    render(<ComparePage />)
+    expect(screen.getByText('Model Comparison')).toBeTruthy()
+  })
+
+  it('shows error toast when model list fails', async () => {
+    mockList.mockRejectedValue(new Error('network'))
+    render(<ComparePage />)
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalled()
+    })
+  })
+
+  it('does not render comparison table when no results', async () => {
+    render(<ComparePage />)
+    await waitFor(() => {
+      expect(screen.getByText(/no benchmark results/i)).toBeTruthy()
+    })
+    expect(screen.queryByTestId('comparison-table')).toBeNull()
+  })
+
+  it('does not render summary card when no results', async () => {
+    render(<ComparePage />)
+    await waitFor(() => {
+      expect(screen.getByText(/no benchmark results/i)).toBeTruthy()
+    })
+    expect(screen.queryByTestId('summary-card')).toBeNull()
+  })
+
+  it('renders models card with model list', async () => {
+    render(<ComparePage />)
+    await waitFor(() => {
+      const card = screen.getByTestId('models-card')
+      expect(card).toBeTruthy()
+      expect(screen.getByText('gpt2')).toBeTruthy()
+    })
+  })
+
+  it('clicking model selects it', async () => {
+    render(<ComparePage />)
+    await waitFor(() => { expect(screen.getByText('gpt2')).toBeTruthy() })
+    const modelBtn = screen.getByText('gpt2')
+    await act(async () => { fireEvent.click(modelBtn) })
+    expect(screen.getByTestId('models-card')).toBeTruthy()
+  })
+
+  it('does not show export button when no results', async () => {
+    render(<ComparePage />)
+    await waitFor(() => {
+      expect(screen.getByText(/no benchmark results/i)).toBeTruthy()
+    })
+    const exportBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.toLowerCase().includes('export')
+    )
+    expect(exportBtn).toBeUndefined()
+  })
 })

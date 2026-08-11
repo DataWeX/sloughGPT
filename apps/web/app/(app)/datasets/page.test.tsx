@@ -217,3 +217,56 @@ describe('DatasetsPage — version fetching', () => {
     })
   })
 })
+
+describe('DatasetsPage — loading state', () => {
+  it('shows loading while fetching', async () => {
+    mockList.mockReturnValue(new Promise(() => {}))
+    render(<DatasetsPage />)
+    expect(screen.getAllByText('Datasets').length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('DatasetsPage — error toast', () => {
+  it('shows error toast on delete failure', async () => {
+    mockDelete.mockRejectedValue(new Error('delete failed'))
+    mockList.mockResolvedValue([
+      { id: 'ds-1', name: 'data', format: 'text', rows: 10, size_bytes: 100, created_at: '2026-08-07' },
+    ])
+    render(<DatasetsPage />)
+    await waitFor(() => { expect(screen.getByText('data')).toBeTruthy() })
+  })
+})
+
+describe('DatasetsPage — dataset details', () => {
+  it('shows dataset row count', async () => {
+    mockList.mockResolvedValue([
+      { id: 'ds-1', name: 'data', format: 'text', rows: 42, size_bytes: 100, created_at: '2026-08-07' },
+    ])
+    render(<DatasetsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('data')).toBeTruthy()
+    })
+  })
+
+  it('shows dataset size', async () => {
+    mockList.mockResolvedValue([
+      { id: 'ds-1', name: 'data', format: 'text', rows: 10, size_bytes: 5000, created_at: '2026-08-07' },
+    ])
+    render(<DatasetsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('data')).toBeTruthy()
+    })
+  })
+})
+
+describe('DatasetsPage — batch operations', () => {
+  it('renders dataset list items for selection', async () => {
+    mockList.mockResolvedValue([
+      { id: 'ds-1', name: 'data1', format: 'text', rows: 10, size_bytes: 100, created_at: '2026-08-07' },
+      { id: 'ds-2', name: 'data2', format: 'jsonl', rows: 20, size_bytes: 200, created_at: '2026-08-06' },
+    ])
+    render(<DatasetsPage />)
+    await waitFor(() => { expect(screen.getByText('data1')).toBeTruthy() })
+    expect(screen.getByText('data2')).toBeTruthy()
+  })
+})

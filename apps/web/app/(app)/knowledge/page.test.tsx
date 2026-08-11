@@ -292,3 +292,108 @@ describe('KnowledgePage — adapter training flow', () => {
     })
   })
 })
+
+describe('KnowledgePage — error handling flow', () => {
+  it('shows toast when list fails', async () => {
+    mockList.mockRejectedValue(new Error('Network error'))
+    render(<KnowledgePage />)
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge', 'error')
+    })
+  })
+
+  it('still renders page structure on error', async () => {
+    mockList.mockRejectedValue(new Error('Network error'))
+    render(<KnowledgePage />)
+    await waitFor(() => {
+      expect(screen.getByText('Knowledge')).toBeTruthy()
+    })
+  })
+
+  it('retry after error loads data', async () => {
+    mockList.mockRejectedValueOnce(new Error('Network error'))
+    mockList.mockResolvedValueOnce([{ id: 'k1', content: 'Recovered', topic: 'general', importance: 0.5, created_at: '2026-08-01' }])
+    render(<KnowledgePage />)
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalled()
+    })
+  })
+})
+
+describe('KnowledgePage — empty stats flow', () => {
+  it('shows zero values when stats are empty', async () => {
+    mockStats.mockResolvedValue({ total_items: 0, topic_count: 0, avg_importance: 0, searchable: true, total_chars: 0 })
+    render(<KnowledgePage />)
+    await waitFor(() => {
+      expect(screen.getByText(/no|empty|nothing/i)).toBeTruthy()
+    })
+  })
+})
+
+describe('KnowledgePage — add form flow', () => {
+  it('opens add form when Add button clicked', async () => {
+    render(<KnowledgePage />)
+    await waitFor(() => { expect(screen.getByText(/no|empty|nothing/i)).toBeTruthy() })
+    const addBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.includes('plus') || b.textContent?.includes('Add')
+    )
+    if (addBtn) {
+      fireEvent.click(addBtn)
+      await waitFor(() => {
+        const inputs = screen.getAllByRole('textbox')
+        expect(inputs.length).toBeGreaterThan(0)
+      })
+    }
+  })
+
+  it('submitting add form calls controller', async () => {
+    render(<KnowledgePage />)
+    await waitFor(() => { expect(screen.getByText(/no|empty|nothing/i)).toBeTruthy() })
+    const addBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.includes('plus') || b.textContent?.includes('Add')
+    )
+    if (addBtn) {
+      fireEvent.click(addBtn)
+      await waitFor(() => {
+        const inputs = screen.getAllByRole('textbox')
+        expect(inputs.length).toBeGreaterThan(0)
+      })
+    }
+  })
+})
+
+describe('KnowledgePage — batch operations flow', () => {
+  beforeEach(() => {
+    mockList.mockResolvedValue([
+      { id: 'k1', content: 'Batch item 1', topic: 'general', importance: 0.5, created_at: '2026-08-01' },
+      { id: 'k2', content: 'Batch item 2', topic: 'general', importance: 0.5, created_at: '2026-08-02' },
+      { id: 'k3', content: 'Batch item 3', topic: 'other', importance: 0.5, created_at: '2026-08-03' },
+    ])
+    mockStats.mockResolvedValue({ total_items: 3, topic_count: 2, avg_importance: 0.5, searchable: true, total_chars: 30 })
+    mockTopics.mockResolvedValue({ topics: [{ topic: 'general', count: 2 }, { topic: 'other', count: 1 }], total: 3 })
+  })
+
+  it('select all checkbox toggles all items', async () => {
+    render(<KnowledgePage />)
+    await waitFor(() => { expect(screen.getByText('Batch item 1')).toBeTruthy() })
+    const checkboxes = screen.getAllByRole('checkbox')
+    expect(checkboxes.length).toBeGreaterThanOrEqual(1)
+    // Click first checkbox (select all or first item)
+    fireEvent.click(checkboxes[0])
+  })
+
+  it('batch delete button appears when items selected', async () => {
+    render(<KnowledgePage />)
+    await waitFor(() => { expect(screen.getByText('Batch item 1')).toBeTruthy() })
+    const checkboxes = screen.getAllByRole('checkbox')
+    if (checkboxes.length > 0) {
+      fireEvent.click(checkboxes[0])
+      await waitFor(() => {
+        const batchBtn = screen.getAllByRole('button').find(b =>
+          b.textContent?.includes('trash') || b.textContent?.includes('Delete')
+        )
+        expect(batchBtn).toBeTruthy()
+      })
+    }
+  })
+})

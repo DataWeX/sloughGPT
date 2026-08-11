@@ -2014,3 +2014,157 @@ def benchmark_solar(params: WorldParams | None = None, *,
         "population_size": population_size,
         "solar_emerged": bool(emerged),
     }
+
+
+def benchmark_seasons(params: WorldParams | None = None, *,
+                      population_size: int = 6,
+                      generations: int = 3,
+                      ticks_per_generation: int = 24,
+                      organic_pools: int = 2,
+                      solar_deposit_rate: float = 0.1,
+                      seasonality: float = 1.0,
+                      seasons_per_year: int = 4,
+                      hidden_units: int = 0,
+                      seed: int = 7) -> dict:
+    """
+    Seasonal year envelope proof (Stage 14): the diurnal cycle rides a year.
+
+    The Stage 13 sun follows a fixed half-wave diurnal curve every day. Stage
+    14 wraps that curve inside a slower cosine year — ``solar_season_ticks``
+    ticks long — so a summer noon outshines a winter noon while the sky still
+    deposits ONLY onto exposed surface cells. Two arms evolve on the SAME
+    generated world with the same initial core genome draws, in-life learning
+    on in both, every other opt-in channel off:
+
+      - ``control``: the sun runs the plain Stage 13 diurnal cycle
+        (``solar_season_ticks == 0``) — the exact pre-season world.
+      - ``seasonal``: the same sun rides the year envelope
+        (``solar_season_ticks == seasons_per_year * ticks_per_generation``).
+
+    The invariants must hold:
+
+      1. CONSERVATION under the seasonal boundary: over a live seasonal
+         generation the world total never increases beyond the tick's sky
+         deposit. ``seasonal_conservation_exact`` — the sweep subtracts
+         ``scene.solar_energy_deposited`` per tick.
+      2. CLOSED-WORLD TRIPWIRE: the same sweep on a solar-OFF ruleset is
+         strictly monotonic. ``closed_monotonic``.
+      3. RNG ISOLATION: same-seed genome draws are bit-identical whether the
+         year is on or off — the envelope consumes no RNG.
+         ``brains_identical``.
+      4. SEASON LIVENESS: a summer noon is brighter than a winter noon
+         (``summer_noon > winter_noon``), the seasonal arm sees sunshine and a
+         positive boundary deposit, and conservation survived the boundary.
+
+    Args:
+        params: base world rules; the benchmark forces ``generate_world=True``,
+            ``world_seed=seed``, ``learning_enabled=True`` and every opt-in
+            channel off.
+        population_size: genomes per generation.
+        generations: evolution cycles.
+        ticks_per_generation: simulation ticks per generation AND one full
+            day/night cycle length in both arms.
+        organic_pools: food pools distributed across the world.
+        solar_deposit_rate: energy per lit surface cell per tick at noon.
+        seasonality: 0 = flat diurnal mean, 1 = full seasonal swing.
+        seasons_per_year: how many diurnal cycles fit in one year.
+        hidden_units: hidden projection width for the babies' brains.
+        seed: world + RNG seed (identical for both arms).
+
+    Returns:
+        Dict with ``control`` and ``seasonal`` runs, their last-generation
+        ``avg_fitness``, the conservation verdicts
+        (``seasonal_conservation_exact``, ``closed_monotonic``, violations and
+        totals), the RNG-isolation verdict ``brains_identical``, the noon
+        comparison (``summer_noon``, ``winter_noon``), daylight stats
+        (``deposited``, ``sunshine``) and the ``seasons_emerged`` verdict.
+    """
+    base = params or WorldParams(grid_size=(16, 8, 16))
+    closed = replace(base, generate_world=True, world_seed=seed,
+                     learning_enabled=True, brain_hidden_units=int(hidden_units),
+                     message_enabled=False, structure_enabled=False,
+                     teaching_enabled=False, memory_enabled=False,
+                     predation_enabled=False, territoriality_enabled=False,
+                     lifecycle_enabled=False, specialization_enabled=False,
+                     solar_enabled=False)
+    day_ticks = max(int(ticks_per_generation), 1)
+    control = replace(closed, solar_enabled=True,
+                      solar_day_ticks=day_ticks,
+                      solar_phase=0, solar_min_intensity=0.0,
+                      solar_max_intensity=1.0,
+                      solar_deposit_rate=float(solar_deposit_rate),
+                      solar_season_ticks=0, solar_seasonality=1.0)
+    season_ticks = max(int(seasons_per_year), 1) * day_ticks
+    seasonal = replace(control, solar_season_ticks=season_ticks,
+                       solar_seasonality=float(seasonality))
+
+    shared = dict(population_size=population_size, generations=generations,
+                  ticks_per_generation=ticks_per_generation,
+                  organic_pools=organic_pools, seed=seed)
+    ctrl_run = EvolutionEngine(params=control, **shared).run()
+    seasonal_run = EvolutionEngine(params=seasonal, **shared).run()
+
+    ctrl_avg = ctrl_run["history"][-1]["avg_fitness"]
+    seasonal_avg = seasonal_run["history"][-1]["avg_fitness"]
+
+    # RNG isolation: same-seed genome draws, year on vs off (same dims).
+    g_off = Genome.random(control, np.random.default_rng(seed), group_id=0)
+    g_on = Genome.random(seasonal, np.random.default_rng(seed), group_id=0)
+    brains_identical = all(
+        np.allclose(g_off.tensors[f"{name}.{suf}"],
+                    g_on.tensors[f"{name}.{suf}"])
+        for name in ("cells", "body", "entity", "move")
+        for suf in ("W", "b")
+    )
+
+    # Conservation under the seasonal boundary: solar-aware sweep.
+    genomes = [Genome.random(seasonal, np.random.default_rng(seed), group_id=0)
+               for _ in range(population_size)]
+    seasonal_sweep = _conservation_sweep(seasonal, genomes, day_ticks)
+    # Closed-world tripwire: strict monotonic with the sky off.
+    closed_genomes = [Genome.random(closed, np.random.default_rng(seed), group_id=0)
+                      for _ in range(population_size)]
+    closed_sweep = _conservation_sweep(closed, closed_genomes, day_ticks)
+
+    def _noon(params: WorldParams, tick: int) -> float:
+        scene = SimScene(params=params)
+        scene._tick = tick
+        scene.apply_solar()
+        return float(scene.world.light)
+
+    noon = max(day_ticks // 4, 1)
+    summer_noon = _noon(seasonal, noon)
+    winter_noon = _noon(seasonal, season_ticks // 2 + noon)
+
+    last = seasonal_run["history"][-1]
+    deposited = float(last["solar_energy_deposited"])
+    sunshine = float(last["sunshine"])
+
+    emerged = bool(seasonal_sweep["monotonic"] and closed_sweep["monotonic"]
+                   and brains_identical and deposited > 0.0
+                   and sunshine > 0.0 and summer_noon > winter_noon)
+    return {
+        "control": ctrl_run,
+        "seasonal": seasonal_run,
+        "control_last_avg": float(ctrl_avg),
+        "seasonal_last_avg": float(seasonal_avg),
+        "seasonal_conservation_exact": bool(seasonal_sweep["monotonic"]),
+        "seasonal_violations": list(seasonal_sweep["violations"]),
+        "seasonal_start_total": float(seasonal_sweep["start_total"]),
+        "seasonal_end_total": float(seasonal_sweep["end_total"]),
+        "seasonal_boundary_deposit": float(seasonal_sweep["boundary_deposit_total"]),
+        "closed_monotonic": bool(closed_sweep["monotonic"]),
+        "closed_violations": list(closed_sweep["violations"]),
+        "closed_start_total": float(closed_sweep["start_total"]),
+        "closed_end_total": float(closed_sweep["end_total"]),
+        "brains_identical": bool(brains_identical),
+        "summer_noon": summer_noon,
+        "winter_noon": winter_noon,
+        "deposited": deposited,
+        "sunshine": sunshine,
+        "population_size": population_size,
+        "generations": generations,
+        "seasons_per_year": int(seasons_per_year),
+        "seasonality": float(seasonality),
+        "seasons_emerged": emerged,
+    }

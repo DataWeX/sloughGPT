@@ -20,8 +20,8 @@ vi.mock('@sloughgpt/strui', () => {
     Button: ({ children, onClick, disabled }: any) => (
       <button onClick={onClick} disabled={disabled}>{children}</button>
     ),
-    Input: ({ value, onChange, placeholder }: any) => (
-      <input value={value} onChange={onChange} placeholder={placeholder} />
+    Input: ({ value, onChange, placeholder, onKeyDown }: any) => (
+      <input value={value} onChange={onChange} placeholder={placeholder} onKeyDown={onKeyDown} />
     ),
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
@@ -89,38 +89,53 @@ describe('CompanionPage — initial load flow', () => {
     })
   })
 
-  it('shows loading state', () => {
+  it('shows loading skeleton placeholders', () => {
     mockGetInfo.mockReturnValue(new Promise(() => {}))
+    mockListPresets.mockReturnValue(new Promise(() => {}))
+    mockGetPrompt.mockReturnValue(new Promise(() => {}))
     render(<CompanionPage />)
     expect(screen.getByText('Companion')).toBeTruthy()
+    expect(screen.getByTestId('stat-Active Preset')).toBeTruthy()
+    expect(screen.getByTestId('stat-Warmth')).toBeTruthy()
+    expect(screen.getByTestId('stat-Curiosity')).toBeTruthy()
+    expect(screen.getByTestId('stat-Creativity')).toBeTruthy()
   })
 })
 
 describe('CompanionPage — traits display flow', () => {
-  it('displays trait values after loading', async () => {
+  it('displays all five trait labels after loading', async () => {
     render(<CompanionPage />)
     await waitFor(() => {
-      expect(screen.getByText('Warmth')).toBeTruthy()
-      expect(screen.getByText('Curiosity')).toBeTruthy()
-      expect(screen.getByText('Creativity')).toBeTruthy()
+      expect(screen.getAllByText('Warmth').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Curiosity').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Creativity').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Confidence').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Humor').length).toBeGreaterThanOrEqual(1)
     })
   })
 
-  it('allows editing trait values', async () => {
+  it('displays trait values as numeric text', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => {
+      expect(screen.getByText('0.70')).toBeTruthy()
+      expect(screen.getByText('0.80')).toBeTruthy()
+      expect(screen.getByText('0.50')).toBeTruthy()
+    })
+  })
+
+  it('allows editing trait values via sliders', async () => {
     render(<CompanionPage />)
     await waitFor(() => { expect(screen.getAllByText('Warmth').length).toBeGreaterThanOrEqual(1) })
 
     const sliders = screen.getAllByRole('slider')
-    if (sliders.length > 0) {
-      fireEvent.change(sliders[0], { target: { value: '0.9' } })
-      // No crash = success
-      expect(screen.getAllByText('Warmth').length).toBeGreaterThanOrEqual(1)
-    }
+    expect(sliders.length).toBeGreaterThanOrEqual(1)
+    fireEvent.change(sliders[0], { target: { value: '0.9' } })
+    expect(screen.getAllByText('Warmth').length).toBeGreaterThanOrEqual(1)
   })
 })
 
 describe('CompanionPage — presets flow', () => {
-  it('displays preset options', async () => {
+  it('displays preset buttons with names', async () => {
     render(<CompanionPage />)
     await waitFor(() => {
       expect(screen.getAllByText('Warm').length).toBeGreaterThanOrEqual(1)
@@ -128,20 +143,44 @@ describe('CompanionPage — presets flow', () => {
     })
   })
 
-  it('selecting a preset applies its traits', async () => {
+  it('preset buttons have titles showing descriptions', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => {
+      const warmBtn = screen.getAllByRole('button').find(b => b.textContent === 'Warm')
+      expect(warmBtn).toBeDefined()
+      expect(warmBtn?.getAttribute('title')).toBe('A warm companion')
+    })
+  })
+
+  it('selecting a preset calls setPreset with correct id', async () => {
     render(<CompanionPage />)
     await waitFor(() => { expect(screen.getAllByText('Warm').length).toBeGreaterThanOrEqual(1) })
 
-    // Find the preset button (not the trait label)
     const presetBtns = screen.getAllByRole('button').filter(b =>
       b.textContent === 'Warm' || b.textContent === 'Curious'
     )
-    if (presetBtns.length > 0) {
-      await act(async () => { fireEvent.click(presetBtns[0]) })
-      await waitFor(() => {
-        expect(mockSetPreset).toHaveBeenCalled()
-      })
-    }
+    await act(async () => { fireEvent.click(presetBtns[0]) })
+    await waitFor(() => {
+      expect(mockSetPreset).toHaveBeenCalledWith('warm')
+    })
+  })
+
+  it('shows empty preset list gracefully', async () => {
+    mockListPresets.mockResolvedValue({ presets: [] })
+    render(<CompanionPage />)
+    await waitFor(() => {
+      expect(mockListPresets).toHaveBeenCalled()
+    })
+    expect(screen.getByText('Companion')).toBeTruthy()
+  })
+
+  it('displays Active Preset stat card', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => {
+      const stat = screen.getByTestId('stat-Active Preset')
+      expect(stat).toBeTruthy()
+      expect(stat.textContent).toContain('Warm')
+    })
   })
 })
 
@@ -153,12 +192,29 @@ describe('CompanionPage — save flow', () => {
     const saveBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.toLowerCase().includes('save')
     )
-    if (saveBtn) {
-      await act(async () => { fireEvent.click(saveBtn) })
-      await waitFor(() => {
-        expect(mockSetPersonality).toHaveBeenCalled()
-      })
-    }
+    expect(saveBtn).toBeDefined()
+    await act(async () => { fireEvent.click(saveBtn!) })
+    await waitFor(() => {
+      expect(mockSetPersonality).toHaveBeenCalled()
+    })
+  })
+
+  it('save button text changes to "Saving..." while saving', async () => {
+    let resolveSave: (v: any) => void
+    mockSetPersonality.mockReturnValue(new Promise(r => { resolveSave = r }))
+
+    render(<CompanionPage />)
+    await waitFor(() => { expect(screen.getByText('Warmth')).toBeTruthy() })
+
+    const saveBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.toLowerCase().includes('save')
+    )
+    await act(async () => { fireEvent.click(saveBtn!) })
+
+    expect(screen.getByText('Saving...')).toBeTruthy()
+    expect(saveBtn!).toHaveAttribute('disabled')
+
+    await act(async () => { resolveSave!({ traits: { warmth: 0.7 } }) })
   })
 })
 
@@ -168,18 +224,54 @@ describe('CompanionPage — chat flow', () => {
     await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
 
     const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
-    if (chatInput) {
-      fireEvent.change(chatInput, { target: { value: 'Hello companion' } })
-      const sendBtn = screen.getAllByRole('button').find(b =>
-        b.textContent?.toLowerCase().includes('send')
-      )
-      if (sendBtn) {
-        await act(async () => { fireEvent.click(sendBtn) })
-        await waitFor(() => {
-          expect(mockChat).toHaveBeenCalled()
-        })
-      }
-    }
+    fireEvent.change(chatInput, { target: { value: 'Hello companion' } })
+    const sendBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.toLowerCase().includes('send')
+    )
+    await act(async () => { fireEvent.click(sendBtn!) })
+    await waitFor(() => {
+      expect(mockChat).toHaveBeenCalledWith('Hello companion')
+    })
+  })
+
+  it('chat response is displayed after send', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+
+    const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
+    fireEvent.change(chatInput, { target: { value: 'Hi' } })
+    const sendBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.toLowerCase().includes('send')
+    )
+    await act(async () => { fireEvent.click(sendBtn!) })
+    await waitFor(() => {
+      expect(screen.getByText('Hello there!')).toBeTruthy()
+    })
+  })
+
+  it('Enter key in chat input triggers send', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+
+    const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
+    fireEvent.change(chatInput, { target: { value: 'Hello' } })
+    await act(async () => {
+      fireEvent.keyDown(chatInput, { key: 'Enter' })
+    })
+    await waitFor(() => {
+      expect(mockChat).toHaveBeenCalled()
+    })
+  })
+
+  it('send button is disabled when input is empty', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+
+    const sendBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.toLowerCase().includes('send')
+    )
+    expect(sendBtn).toBeDefined()
+    expect(sendBtn).toHaveAttribute('disabled')
   })
 })
 
@@ -198,16 +290,105 @@ describe('CompanionPage — insights card', () => {
     await waitFor(() => {
       const insights = screen.getByTestId('companion-insights')
       expect(insights).toBeTruthy()
+      expect(insights.textContent).toBe('has-traits')
+    })
+  })
+})
+
+describe('CompanionPage — reset flow', () => {
+  it('reset button calls controller.reset', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => { expect(screen.getByText('Warmth')).toBeTruthy() })
+
+    const resetBtn = screen.getByTestId('icon-refresh').closest('button')
+    expect(resetBtn).toBeDefined()
+    await act(async () => { fireEvent.click(resetBtn!) })
+    await waitFor(() => {
+      expect(mockReset).toHaveBeenCalled()
     })
   })
 })
 
 describe('CompanionPage — error handling', () => {
-  it('handles load failure gracefully', async () => {
+  it('shows error message when load fails', async () => {
     mockGetInfo.mockRejectedValue(new Error('network'))
+    mockListPresets.mockRejectedValue(new Error('network'))
+    mockGetPrompt.mockRejectedValue(new Error('network'))
     render(<CompanionPage />)
     await waitFor(() => {
-      expect(screen.getByText('Companion')).toBeTruthy()
+      expect(screen.getByText('Failed to load companion data')).toBeTruthy()
     })
+  })
+
+  it('error state shows retry button', async () => {
+    mockGetInfo.mockRejectedValue(new Error('network'))
+    mockListPresets.mockRejectedValue(new Error('network'))
+    mockGetPrompt.mockRejectedValue(new Error('network'))
+    render(<CompanionPage />)
+    await waitFor(() => {
+      const retryBtn = screen.getAllByRole('button').find(b =>
+        b.textContent?.toLowerCase().includes('retry')
+      )
+      expect(retryBtn).toBeDefined()
+    })
+  })
+
+  it('save failure shows error toast', async () => {
+    mockSetPersonality.mockRejectedValue(new Error('fail'))
+    render(<CompanionPage />)
+    await waitFor(() => { expect(screen.getByText('Warmth')).toBeTruthy() })
+
+    const saveBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.toLowerCase().includes('save')
+    )
+    await act(async () => { fireEvent.click(saveBtn!) })
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Failed to save personality', 'error')
+    })
+  })
+
+  it('preset failure shows error toast', async () => {
+    mockSetPreset.mockRejectedValue(new Error('fail'))
+    render(<CompanionPage />)
+    await waitFor(() => { expect(screen.getAllByText('Warm').length).toBeGreaterThanOrEqual(1) })
+
+    const presetBtn = screen.getAllByRole('button').find(b => b.textContent === 'Warm')
+    await act(async () => { fireEvent.click(presetBtn!) })
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Failed to apply preset', 'error')
+    })
+  })
+})
+
+describe('CompanionPage — personality traits section', () => {
+  it('shows Personality Traits card title', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => {
+      expect(screen.getByText('Personality Traits')).toBeTruthy()
+    })
+  })
+
+  it('shows Save Personality button', async () => {
+    render(<CompanionPage />)
+    await waitFor(() => {
+      expect(screen.getByText('Save Personality')).toBeTruthy()
+    })
+  })
+
+  it('renders SVG radar chart', async () => {
+    const { container } = render(<CompanionPage />)
+    await waitFor(() => {
+      expect(screen.getByText('Warmth')).toBeTruthy()
+    })
+    const svg = container.querySelector('svg')
+    expect(svg).toBeTruthy()
+    expect(svg?.getAttribute('viewBox')).toBe('0 0 200 200')
+  })
+
+  it('trait card is hidden when traits are null', async () => {
+    mockGetInfo.mockResolvedValue({ traits: null })
+    render(<CompanionPage />)
+    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+    expect(screen.queryByText('Personality Traits')).toBeNull()
   })
 })

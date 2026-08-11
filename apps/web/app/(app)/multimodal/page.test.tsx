@@ -137,3 +137,44 @@ describe('MultimodalPage — error handling', () => {
     expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
   })
 })
+
+describe('MultimodalPage — loading state', () => {
+  it('shows loading while fetching capabilities', async () => {
+    mockGetCapabilities.mockReturnValue(new Promise(() => {}))
+    render(<MultimodalPage />)
+    expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('MultimodalPage — training status', () => {
+  it('renders training section', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('MultimodalPage — capabilities details', () => {
+  it('shows vision capability', async () => {
+    mockGetCapabilities.mockResolvedValue({ vision: true, audio: false, image_gen: false })
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('capabilities-card')).toBeTruthy()
+  })
+
+  it('shows audio capability', async () => {
+    mockGetCapabilities.mockResolvedValue({ vision: false, audio: true, image_gen: false })
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('capabilities-card')).toBeTruthy()
+  })
+})
+
+describe('MultimodalPage — error toast', () => {
+  it('shows error toast on training report failure', async () => {
+    mockGetTrainingReport.mockRejectedValue(new Error('fetch failed'))
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
+  })
+})

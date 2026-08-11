@@ -125,4 +125,76 @@ describe('ModelsPage', () => {
     expect(document.body).toBeTruthy()
     await act(async () => {})
   })
+
+  it('shows page header', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByText('Models & Personalities').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows connecting subtitle when health is null', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByText('Connecting...').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders model catalog card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('model-catalog').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders model cache card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('model-cache').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders model status card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('model-status').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders personalities card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('personalities').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders personality profile card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('personality-profile').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders finetuned models card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('finetuned-models').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders quantization card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('quantization').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders composable layers card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('composable-layers').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders model playground card', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('model-playground').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders refresh button', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByText('Refresh').length).toBeGreaterThanOrEqual(1)
+  })
 })

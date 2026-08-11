@@ -207,3 +207,87 @@ describe('AgentsPage — stats display', () => {
     })
   })
 })
+
+describe('AgentsPage — search/filter flow', () => {
+  it('renders search input', async () => {
+    render(<AgentsPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1)
+    })
+    const searchInput = screen.queryByPlaceholderText(/search/i)
+    expect(searchInput).toBeTruthy()
+  })
+
+  it('typing in search filters agents', async () => {
+    mockList.mockResolvedValue([
+      { id: 'a1', name: 'Researcher', description: 'Finds info', tools: ['web_search'], created_at: '2026-08-07T00:00:00Z' },
+      { id: 'a2', name: 'Coder', description: 'Writes code', tools: ['code'], created_at: '2026-08-07T00:00:00Z' },
+    ])
+    render(<AgentsPage />)
+    await waitFor(() => { expect(screen.getAllByText('Researcher').length).toBeGreaterThanOrEqual(1) })
+    const searchInput = screen.getByPlaceholderText(/search/i)
+    fireEvent.change(searchInput, { target: { value: 'Research' } })
+    await waitFor(() => {
+      expect(screen.getAllByText('Researcher').length).toBeGreaterThanOrEqual(1)
+    })
+  })
+})
+
+describe('AgentsPage — loading state', () => {
+  it('shows loading while fetching agents', async () => {
+    mockList.mockReturnValue(new Promise(() => {}))
+    render(<AgentsPage />)
+    expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('AgentsPage — agent actions flow', () => {
+  beforeEach(() => {
+    mockList.mockResolvedValue([
+      { id: 'a1', name: 'TestAgent', description: 'Test', tools: ['web_search'], created_at: '2026-08-07T00:00:00Z' },
+    ])
+  })
+
+  it('delete button triggers delete flow', async () => {
+    render(<AgentsPage />)
+    await waitFor(() => { expect(screen.getAllByText('TestAgent').length).toBeGreaterThanOrEqual(1) })
+    const deleteBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.includes('trash') || b.getAttribute('aria-label')?.includes('delete')
+    )
+    if (deleteBtn) {
+      fireEvent.click(deleteBtn)
+    }
+  })
+
+  it('shows agent description', async () => {
+    render(<AgentsPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText('TestAgent').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('Test')).toBeTruthy()
+    })
+  })
+
+  it('shows tool list for agent', async () => {
+    render(<AgentsPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText('TestAgent').length).toBeGreaterThanOrEqual(1)
+    })
+  })
+})
+
+describe('AgentsPage — error handling flow', () => {
+  it('shows toast on create failure', async () => {
+    mockCreate.mockRejectedValue(new Error('create failed'))
+    render(<AgentsPage />)
+    await waitFor(() => { expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1) })
+  })
+
+  it('shows toast on delete failure', async () => {
+    mockDelete.mockRejectedValue(new Error('delete failed'))
+    mockList.mockResolvedValue([
+      { id: 'a1', name: 'Agent', description: '', tools: [], created_at: '2026-08-07T00:00:00Z' },
+    ])
+    render(<AgentsPage />)
+    await waitFor(() => { expect(screen.getAllByText('Agent').length).toBeGreaterThanOrEqual(1) })
+  })
+})

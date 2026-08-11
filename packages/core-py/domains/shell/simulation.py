@@ -275,6 +275,14 @@ class WorldParams:
     solar_max_intensity: float = 1.0   # noon light level
     solar_deposit_rate: float = 0.4    # energy per lit surface cell per tick at full sun
 
+    # Seasonal year envelope (Stage 14) — the diurnal curve rides inside a
+    # slower cosine year. When off (``solar_season_ticks == 0``) the world is
+    # exactly the Stage 13 diurnal world, so the locked selection proofs stay
+    # bit-identical. The envelope is a pure deterministic function of tick —
+    # it consumes no RNG.
+    solar_season_ticks: int = 0        # full year length in ticks (0 = no seasons)
+    solar_seasonality: float = 1.0     # 0 = flat (always the diurnal mean), 1 = full swing
+
     # Episodic memory (ring buffer)
     memory_capacity: int = 64   # episodes remembered before the oldest is evicted
     memory_lookback: int = 5    # recent episodes averaged as the learning baseline
@@ -2382,6 +2390,10 @@ class SimScene:
         # channels must still never create energy.
         self.solar_energy_deposited = 0.0
         self.solar_lit_ticks = 0
+        # Stage 14: the current year-envelope state (pure function of tick).
+        self.solar_season_index = 0   # which quadrant of the year this tick is in
+        self.solar_season_factor = 1.0  # multiplicative daylight envelope (0..1)
+        self.solar_year = 0           # how many full years have elapsed
 
     def add_baby(self, baby: SimBaby):
         """
@@ -2477,20 +2489,31 @@ class SimScene:
 
     def apply_solar(self):
         """
-        Deposit energy from the sky along the diurnal curve (Stage 13).
+        Deposit energy from the sky along the diurnal curve (Stage 13) inside
+        a slower seasonal year envelope (Stage 14).
 
         The sun is a boundary source: it adds energy ONLY onto the topmost
         non-air cell of each column — the ground the sky can see — scaled by
         the current daylight intensity. A half-wave sinusoid over
         ``solar_day_ticks`` gives full darkness at night, sunrise/noon/sunset
-        through the day, and wraps at the horizon. Nothing inside the world
+        through the day, and wraps at the horizon. When ``solar_season_ticks``
+        is non-zero the daily peak rides a cosine ``solar_seasonality`` year,
+        so midsummer noon outshines midwinter noon. Nothing inside the world
         creates energy: grid, babies, and nests still only move it around, so
         the internal conservation invariant holds exactly once each tick's
         boundary deposit is accounted for (the ``_conservation_sweep``
         subtracts it).
 
+        The year envelope is a pure, deterministic function of tick — it
+        consumes no RNG, so the same-seed locked selection proofs are
+        bit-identical whether or not seasons are on.
+
         Side effects:
             - raises ``world.light`` to the tick's daylight intensity (0..1)
+              modulated by the seasonal envelope
+            - records ``solar_season_index`` (0..3 year quadrant),
+              ``solar_season_factor`` (0..1 daylight envelope) and
+              ``solar_year`` (tick // season_ticks) on the scene
             - adds energy to the exposed surface cells, raising
               ``solar_energy_deposited`` and ``solar_lit_ticks``
         """
@@ -2501,7 +2524,26 @@ class SimScene:
         intensity = (p.solar_min_intensity
                      + (p.solar_max_intensity - p.solar_min_intensity)
                      * max(0.0, float(np.sin(angle))))
-        self.world.light = float(intensity)
+
+        season_ticks = int(p.solar_season_ticks)
+        if season_ticks <= 0:
+            season_factor = 1.0
+            season_index = 0
+            year = 0
+        else:
+            season_ticks = max(season_ticks, 1)
+            season_index = (self._tick % season_ticks) // max(day, 1)
+            season_factor = (
+                (1.0 - float(p.solar_seasonality))
+                + float(p.solar_seasonality)
+                * (0.5 + 0.5 * np.cos(2.0 * np.pi * self._tick / season_ticks))
+            )
+            year = self._tick // season_ticks
+        self.solar_season_index = season_index
+        self.solar_season_factor = float(season_factor)
+        self.solar_year = year
+
+        self.world.light = float(intensity) * float(season_factor)
         if intensity <= 0.0:
             return
 
@@ -2514,7 +2556,7 @@ class SimScene:
         idx = X[cols] * (ny * nz) + top_y[cols] * nz + Z[cols]
         if idx.size == 0:
             return
-        deposit = intensity * float(p.solar_deposit_rate)
+        deposit = intensity * float(p.solar_deposit_rate) * float(season_factor)
         self.world.energy[idx] += np.float32(deposit)
         self.solar_energy_deposited += float(idx.size) * deposit
         self.solar_lit_ticks += 1
