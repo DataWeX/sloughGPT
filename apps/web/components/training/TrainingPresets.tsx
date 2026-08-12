@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { BUILT_IN_PRESETS, type TrainingPreset } from '@/hooks/useTrainingForm'
+import { downloadJson } from '@/lib/download-utils'
 
 export function TrainingPresets({
   onApply,
@@ -19,6 +20,7 @@ export function TrainingPresets({
 }) {
   const [saving, setSaving] = useState(false)
   const [presetName, setPresetName] = useState('')
+  const importRef = useRef<HTMLInputElement>(null)
 
   const allPresets = [...BUILT_IN_PRESETS, ...customPresets]
 
@@ -31,14 +33,46 @@ export function TrainingPresets({
     setSaving(false)
   }
 
+  const handleExport = () => {
+    if (customPresets.length === 0) return
+    downloadJson(customPresets, 'training-presets.json')
+  }
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string)
+        if (!Array.isArray(data)) return
+        for (const p of data) {
+          if (p.name && p.method && typeof p.epochs === 'number') {
+            onSave({ ...p, description: p.description || 'Imported preset' })
+          }
+        }
+      } catch { /* ignore malformed files */ }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Presets</span>
-        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setSaving(!saving)}>
-          {saving ? 'Cancel' : 'Save current'}
-        </Button>
+        <div className="flex items-center gap-1">
+          {customPresets.length > 0 && (
+            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={handleExport}>Export</Button>
+          )}
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => importRef.current?.click()}>Import</Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setSaving(!saving)}>
+            {saving ? 'Cancel' : 'Save current'}
+          </Button>
+        </div>
       </div>
+
+      <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
 
       {saving && (
         <div className="flex items-center gap-1.5">

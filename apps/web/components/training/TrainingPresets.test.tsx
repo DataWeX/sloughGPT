@@ -11,6 +11,8 @@ vi.mock('@sloughgpt/strui', () => ({
   ),
 }))
 
+vi.mock('@/lib/download-utils', () => ({ downloadJson: vi.fn() }))
+
 afterEach(() => { cleanup() })
 
 describe('TrainingPresets', () => {
@@ -116,5 +118,29 @@ describe('TrainingPresets', () => {
     fireEvent.change(input, { target: { value: 'Quick save' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onSave).toHaveBeenCalled()
+  })
+
+  it('shows Export button when custom presets exist', () => {
+    const custom = [{ name: 'My preset', description: 'Custom', method: 'distill' as const, epochs: 5, lr: 0.001, batchSize: 16 }]
+    render(<TrainingPresets {...defaultProps} customPresets={custom} />)
+    expect(screen.getByText('Export')).toBeTruthy()
+  })
+
+  it('hides Export button when no custom presets', () => {
+    render(<TrainingPresets {...defaultProps} />)
+    expect(screen.queryByText('Export')).toBeFalsy()
+  })
+
+  it('calls downloadJson when Export is clicked', async () => {
+    const { downloadJson } = await import('@/lib/download-utils')
+    const custom = [{ name: 'My preset', description: 'Custom', method: 'distill' as const, epochs: 5, lr: 0.001, batchSize: 16 }]
+    render(<TrainingPresets {...defaultProps} customPresets={custom} />)
+    fireEvent.click(screen.getByText('Export'))
+    expect(downloadJson).toHaveBeenCalledWith(custom, 'training-presets.json')
+  })
+
+  it('shows Import button', () => {
+    render(<TrainingPresets {...defaultProps} />)
+    expect(screen.getByText('Import')).toBeTruthy()
   })
 })
