@@ -46,6 +46,7 @@ class ProgressBar:
         self._update_interval = 0.1
         self._last_rendered = ""
         self._last_pct = -1
+        self._last_desc = ""
         self._is_tty = _is_terminal()
 
     def update(self, n: int = 1):

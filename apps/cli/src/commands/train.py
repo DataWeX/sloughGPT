@@ -332,19 +332,15 @@ def cmd_quick(args):
     printer.info(f"Model: {trainer.model.num_parameters():,} params")
     printer.blank()
 
-    pbar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
+    from utils.training_progress import TrainingProgressBar
 
-    def _on_progress(info):
-        pct = info.get("progress_percent", 0)
-        step = info.get("global_step", 0)
-        epoch = info.get("epoch", 0)
-        epochs = info.get("epochs", 0)
-        loss = info.get("train_loss", 0)
-        pbar.desc = f"step {step} epoch {epoch}/{epochs} loss={loss:.4f}"
-        pbar.set_progress(pct)
+    pbar = TrainingProgressBar(
+        desc="Training",
+        total_steps=args.steps if args.steps else 100,
+    )
 
     printer.step("Training...")
-    trainer.train(on_progress=_on_progress)
+    trainer.train(on_progress=pbar.update)
     pbar.finish()
 
     printer.blank()
@@ -456,17 +452,15 @@ def cmd_train_native(args):
         resume_path = args.resume
         printer.step(f"Resuming from: {resume_path}")
 
-    pbar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
+    from utils.training_progress import TrainingProgressBar
+
+    pbar = TrainingProgressBar(
+        desc="Training",
+        total_steps=config.max_steps,
+    )
 
     def _on_progress(info):
-        pct = info.get("progress_percent", 0)
-        step = info.get("global_step", 0)
-        epoch = info.get("epoch", 0)
-        epochs = info.get("epochs", 0)
-        loss = info.get("train_loss", 0)
-        lr = info.get("learning_rate", 0)
-        pbar.desc = f"step {step} epoch {epoch}/{epochs} loss={loss:.4f} lr={lr:.2e}"
-        pbar.set_progress(pct)
+        pbar.update(info)
 
     start_time = time.time()
     trainer.train(
