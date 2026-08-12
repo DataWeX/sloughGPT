@@ -1,6 +1,7 @@
 """
 Train commands - Training, evaluation, and quick smoke tests.
 """
+import os
 import sys
 import time
 from pathlib import Path
@@ -357,6 +358,135 @@ def cmd_quick(args):
     output_base = args.output.replace(".pt", "").replace(".safetensors", "").replace(".soul", "")
     trainer.save(output_base, format="sou")
     printer.success(f"Saved: {output_base}.soul")
+
+
+def cmd_train_native(args):
+    """Train a SloNet model from scratch (pure numpy, torch-free).
+
+    Drives ``SloughGPTTrainer`` directly with a ``TrainerConfig`` — no
+    ``config_loader`` indirection. Checkpoints are auto-saved as ``.soul``
+    into ``--checkpoint-dir`` at ``--checkpoint-interval`` steps.
+
+    Args:
+        args: Namespace with native flags (dataset, steps, embed, layers,
+            heads, block, batch, epochs, lr, weight_decay, scheduler, warmup,
+            min_lr, grad_norm, checkpoint_dir, checkpoint_interval,
+            max_checkpoints, eval_interval, log_interval, soul_name,
+            save_stem, resume, resume_latest, save_format, dropout).
+
+    Returns:
+        None. Prints progress and the final checkpoint path.
+
+    Side effects:
+        - Creates ``--checkpoint-dir`` and writes ``.soul`` checkpoints.
+        - Optionally loads a resume checkpoint when ``--resume``/``--resume-latest``.
+    """
+    sys.path.insert(0, ".")
+
+    from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+    from domains.training.performance import get_optimal_device
+
+    checkpoint_dir = getattr(args, "checkpoint_dir", None) or "models/slonet-native"
+    save_format = getattr(args, "save_format", "sou")
+    if save_format not in ("sou", "npz"):
+        printer.warning(f"Unsupported save_format {save_format!r} — using .soul")
+        save_format = "sou"
+
+    device = getattr(args, "device", None) or "cpu"
+    if device in ("auto", None):
+        device = str(get_optimal_device())
+
+    config = TrainerConfig(
+        vocab_size=0,
+        n_embed=getattr(args, "embed", 64),
+        n_layer=getattr(args, "layers", 2),
+        n_head=getattr(args, "heads", 4),
+        block_size=getattr(args, "block", 128),
+        dropout=getattr(args, "dropout", 0.1),
+        batch_size=getattr(args, "batch", 16),
+        epochs=getattr(args, "epochs", 1),
+        max_steps=getattr(args, "steps", None),
+        learning_rate=getattr(args, "lr", 3e-3),
+        weight_decay=getattr(args, "weight_decay", 0.01),
+        max_grad_norm=getattr(args, "grad_norm", 1.0),
+        scheduler_type=getattr(args, "scheduler", "cosine"),
+        warmup_steps=getattr(args, "warmup", 100),
+        min_lr=getattr(args, "min_lr", 1e-5),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_interval=getattr(args, "checkpoint_interval", 500),
+        save_best_only=getattr(args, "save_best_only", False),
+        max_checkpoints=getattr(args, "max_checkpoints", 3),
+        log_interval=getattr(args, "log_interval", 50),
+        eval_interval=getattr(args, "eval_interval", 250),
+        device=device,
+    )
+
+    dataset = getattr(args, "dataset", None)
+    if not dataset:
+        printer.error("--dataset (corpus file or name) is required")
+        sys.exit(2)
+
+    soul_name = getattr(args, "soul_name", "sloughgpt-native")
+
+    printer.header("SloNet Native Training")
+    printer.key_value("Dataset", str(dataset))
+    printer.key_value("Device", str(device))
+    printer.key_value("Steps", str(config.max_steps or "epoch-budget"))
+    printer.key_value("Arch", f"e{config.n_embed} l{config.n_layer} h{config.n_head} b{config.block_size}")
+    printer.key_value("Batch", str(config.batch_size))
+    printer.key_value("Learning Rate", str(config.learning_rate))
+    printer.key_value("Checkpoint Dir", str(checkpoint_dir))
+    printer.blank()
+
+    trainer = SloughGPTTrainer(
+        data_path=dataset,
+        config=config,
+        soul_name=soul_name,
+    )
+    printer.info(f"Model: {trainer.training_model.num_parameters():,} params")
+    printer.blank()
+
+    resume_path = None
+    if getattr(args, "resume", None) and getattr(args, "resume_latest", False):
+        printer.error("Use either --resume PATH or --resume-latest, not both")
+        sys.exit(2)
+    if getattr(args, "resume_latest", False):
+        printer.step(f"Resuming from latest under {checkpoint_dir}")
+    elif getattr(args, "resume", None):
+        resume_path = args.resume
+        printer.step(f"Resuming from: {resume_path}")
+
+    pbar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
+
+    def _on_progress(info):
+        pct = info.get("progress_percent", 0)
+        step = info.get("global_step", 0)
+        epoch = info.get("epoch", 0)
+        epochs = info.get("epochs", 0)
+        loss = info.get("train_loss", 0)
+        lr = info.get("learning_rate", 0)
+        pbar.desc = f"step {step} epoch {epoch}/{epochs} loss={loss:.4f} lr={lr:.2e}"
+        pbar.set_progress(pct)
+
+    start_time = time.time()
+    trainer.train(
+        resume=bool(getattr(args, "resume", None) or getattr(args, "resume_latest", False)),
+        resume_path=resume_path,
+        on_progress=_on_progress,
+    )
+    elapsed = time.time() - start_time
+    pbar.finish()
+    printer.blank()
+    printer.success(f"Training complete ({format_time(elapsed)})")
+
+    save_stem = getattr(args, "save_stem", None)
+    if save_stem:
+        save_base = f"{checkpoint_dir}/{save_stem}"
+    else:
+        save_base = f"{checkpoint_dir}/{soul_name}"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    trainer.save(save_base, format=save_format)
+    printer.success(f"Saved: {save_base}.soul")
 
 
 def cmd_eval(args):

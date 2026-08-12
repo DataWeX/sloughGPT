@@ -619,6 +619,42 @@ def train_start(ctx, dataset, epochs, batch_size, lr, api, resume, resume_latest
     cmd_train(_ns(**kwargs))
 
 
+@train.command("native", help="Train a SloNet model from scratch (torch-free, .soul checkpoints)")
+@click.option("--dataset", default="datasets/tinyshakespeare/input.txt", help="Corpus file or dataset name")
+@click.option("--steps", default=None, type=int, help="Max training steps (default: epoch budget)")
+@click.option("--embed", default=64, type=int, help="Embedding dimension")
+@click.option("--layers", default=2, type=int, help="Transformer layers")
+@click.option("--heads", default=4, type=int, help="Attention heads")
+@click.option("--block", default=128, type=int, help="Context block size")
+@click.option("--batch", default=16, type=int, help="Batch size")
+@click.option("--epochs", default=1, type=int, help="Training epochs")
+@click.option("--lr", default=3e-3, type=float, help="Learning rate")
+@click.option("--weight-decay", default=0.01, type=float, help="Weight decay")
+@click.option("--scheduler", default="cosine", help="LR scheduler (cosine/linear/constant)")
+@click.option("--warmup", default=100, type=int, help="Warmup steps")
+@click.option("--min-lr", default=1e-5, type=float, help="Minimum learning rate")
+@click.option("--grad-norm", default=1.0, type=float, help="Max gradient norm (0 disables clipping)")
+@click.option("--dropout", default=0.1, type=float, help="Dropout")
+@click.option("--checkpoint-dir", default="models/slonet-native", help="Checkpoint directory")
+@click.option("--checkpoint-interval", default=500, type=int, help="Checkpoint interval (steps)")
+@click.option("--max-checkpoints", default=3, type=int, help="Max checkpoints to keep")
+@click.option("--save-best-only", is_flag=True, help="Only keep best-eval checkpoints")
+@click.option("--eval-interval", default=250, type=int, help="Eval interval (steps)")
+@click.option("--log-interval", default=50, type=int, help="Progress log interval (steps)")
+@click.option("--soul-name", default="sloughgpt-native", help="Soul name for the checkpoint")
+@click.option("--save-stem", default=None, help="Output filename stem (default: soul name)")
+@click.option("--save-format", default="sou", type=click.Choice(["sou", "npz"]), help="Final export format")
+@click.option("--resume", default=None, help="Resume from a .soul/.npz checkpoint path")
+@click.option("--resume-latest", is_flag=True, help="Resume from latest checkpoint in --checkpoint-dir")
+@click.option("--device", default="cpu", help="Device (cpu/auto)")
+@click.pass_context
+def train_native(ctx, **kwargs):
+    from commands.train import cmd_train_native
+    kwargs["host"] = ctx.obj["host"]
+    kwargs["port"] = ctx.obj["port"]
+    cmd_train_native(_ns(**kwargs))
+
+
 @train.command("quick", help="Smoke test: train briefly and generate")
 @click.option("--dataset", "-d", default="datasets/shakespeare/input.txt", help="Corpus file")
 @click.option("--prompt", default="The king", help="Generation prompt")

@@ -70,6 +70,28 @@
 | Feedback export | `./sloughgpt feedback-export -o data.jsonl` | ✅ Done |
 | Auto-train | `./sloughgpt autotrain start stop status` | ✅ Done |
 | Model presets | `./sloughgpt train --preset small medium large` | ✅ Done |
+| Native SloNet training | `sloughgpt train native --dataset <file> --steps N` | ✅ Done |
+
+## Native SloNet Training (torch-free)
+
+The `train native` command trains a SloNet model from scratch on pure numpy — no
+PyTorch, no HuggingFace weights. Checkpoints are saved as `.soul` and load via
+`SloNetChatProvider.from_soul()`.
+
+```bash
+PYTHONPATH=apps/cli/src python3 -m cli train native \
+  --dataset datasets/tinyshakespeare/input.txt \
+  --steps 2500 --embed 64 --layers 2 --heads 4 --block 128 \
+  --batch 16 --lr 3e-3 --checkpoint-dir models/slonet-native \
+  --checkpoint-interval 500 --eval-interval 250 \
+  --soul-name sloughgpt-native
+```
+
+Key flags: `--steps`, `--embed/--layers/--heads/--block` (arch), `--batch`,
+`--lr`, `--weight-decay`, `--scheduler`, `--warmup`, `--min-lr`, `--grad-norm`,
+`--checkpoint-dir`, `--checkpoint-interval`, `--max-checkpoints`,
+`--eval-interval`, `--log-interval`, `--soul-name`, `--save-stem`,
+`--save-format` (`sou`/`npz`), `--resume PATH`, `--resume-latest`.
 
 ## Quick Train Workflow
 

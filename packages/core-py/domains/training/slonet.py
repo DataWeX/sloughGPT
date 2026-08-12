@@ -342,6 +342,10 @@ class Tensor:
             g = node.grad.data if node.grad is not None else np.ones_like(node.data)
             node.grad = Tensor(g)
             if node._backward_fn: node._backward_fn(g)
+            # Release forward-DAG references after the reverse pass. Persistent
+            # leaves (model parameters) otherwise pin every step's computation
+            # graph through their _consumers lists, leaking one graph per step.
+            node._consumers.clear()
 
     def forward_grad(self, tangents: dict = None) -> dict:
         """Forward-mode automatic differentiation.
