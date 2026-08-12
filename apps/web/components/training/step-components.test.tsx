@@ -151,10 +151,20 @@ describe('DataStep', () => {
     expect(screen.getByTestId('dataset-selector')).toBeTruthy()
   })
 
-  it('disables Next when no dataset and inputMode is dataset', () => {
+  it('enables Next when no dataset so user can reach paste-text step', () => {
     render(<DataStep form={makeForm()} datasets={makeDatasets()} onNext={vi.fn()} onBack={vi.fn()} />)
     const nextBtn = screen.getByText('Next: Configure')
-    expect(nextBtn.closest('button')!.disabled).toBe(true)
+    expect(nextBtn.closest('button')!.disabled).toBe(false)
+  })
+
+  it('shows helper text when no dataset selected', () => {
+    render(<DataStep form={makeForm()} datasets={makeDatasets()} onNext={vi.fn()} onBack={vi.fn()} />)
+    expect(screen.getByText(/Select a dataset or switch to paste text/)).toBeTruthy()
+  })
+
+  it('hides helper text when data is ready', () => {
+    render(<DataStep form={makeForm()} datasets={makeDatasets({ selectedDataset: 'ds-1' })} onNext={vi.fn()} onBack={vi.fn()} />)
+    expect(screen.queryByText(/Select a dataset or switch to paste text/)).toBeNull()
   })
 
   it('enables Next when dataset is selected', () => {

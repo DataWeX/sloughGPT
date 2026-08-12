@@ -232,10 +232,10 @@ describe('TrainingPipeline', () => {
     expect(screen.getByTestId('dataset-selector')).toBeTruthy()
   })
 
-  it('disables Next when no dataset selected and inputMode is dataset', () => {
+  it('enables Next when no dataset selected so user can reach paste-text step', () => {
     render(<TrainingPipeline form={makeForm()} datasets={makeDatasets()} session={makeSession()} checkpoints={makeCheckpoints()} onTest={vi.fn()} />)
     const nextBtn = screen.getByText('Next: Configure')
-    expect(nextBtn.closest('button')!.disabled).toBe(true)
+    expect(nextBtn.closest('button')!.disabled).toBe(false)
   })
 
   it('enables Next when a dataset is selected', () => {

@@ -62,10 +62,10 @@ export function DataStep({ form, datasets, onNext }: StepProps) {
         )}
 
         <div className="flex items-center gap-2 pt-2">
-          <Button size="sm" disabled={!canAdvance} onClick={onNext}>
+          <Button size="sm" onClick={onNext}>
             Next: Configure
           </Button>
-          {!datasets.selectedDataset && form.inputMode !== 'text' && (
+          {!canAdvance && (
             <span className="text-[11px] text-muted-foreground">Select a dataset or switch to paste text in the next step</span>
           )}
         </div>

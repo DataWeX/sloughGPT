@@ -58,14 +58,14 @@ describe('useTrainingForm', () => {
       const { result } = renderHook(() =>
         useTrainingForm(makeDatasets('ds1'), makeSession('TRAINING'), makeCheckpoints(), addToast)
       )
-      expect(result.current.canStart).toBe(true) // true = blocked
+      expect(result.current.canStart).toBe(false)
     })
 
     it('is false when no dataset selected in dataset mode', () => {
       const { result } = renderHook(() =>
         useTrainingForm(makeDatasets(null), makeSession(), makeCheckpoints(), addToast)
       )
-      expect(result.current.canStart).toBe(true)
+      expect(result.current.canStart).toBe(false)
     })
 
     it('is false when no text in text mode', () => {
@@ -73,7 +73,7 @@ describe('useTrainingForm', () => {
         useTrainingForm(makeDatasets(null), makeSession(), makeCheckpoints(), addToast)
       )
       act(() => result.current.setInputMode('text'))
-      expect(result.current.canStart).toBe(true)
+      expect(result.current.canStart).toBe(false)
     })
 
     it('is false when finetune selected but no model', async () => {
@@ -83,7 +83,7 @@ describe('useTrainingForm', () => {
       )
       act(() => result.current.setMethod('finetune'))
       // selectedModel defaults to '' when no models available
-      expect(result.current.canStart).toBe(true)
+      expect(result.current.canStart).toBe(false)
     })
 
     it('is false when VLM selected but no dataset', () => {
@@ -91,14 +91,14 @@ describe('useTrainingForm', () => {
         useTrainingForm(makeDatasets(null), makeSession(), makeCheckpoints(), addToast)
       )
       act(() => result.current.setMethod('vlm'))
-      expect(result.current.canStart).toBe(true)
+      expect(result.current.canStart).toBe(false)
     })
 
     it('is true when dataset selected in distill mode', () => {
       const { result } = renderHook(() =>
         useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast)
       )
-      expect(result.current.canStart).toBe(false) // false = can start
+      expect(result.current.canStart).toBe(true)
     })
 
     it('is true when text provided in text mode', () => {
@@ -107,15 +107,15 @@ describe('useTrainingForm', () => {
       )
       act(() => result.current.setInputMode('text'))
       act(() => result.current.setTextInput('hello world'))
-      expect(result.current.canStart).toBe(false)
+      expect(result.current.canStart).toBe(true)
     })
 
-    it('is true when VLM with dataset and model', () => {
+    it('is true when VLM with dataset', () => {
       const { result } = renderHook(() =>
         useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast)
       )
       act(() => result.current.setMethod('vlm'))
-      expect(result.current.canStart).toBe(false)
+      expect(result.current.canStart).toBe(true)
     })
 
   })

@@ -200,11 +200,11 @@ export function useTrainingForm(
     if (preset.nativeBlockSize !== undefined) setNativeBlockSize(preset.nativeBlockSize)
   }, [])
 
-  const canStart = session.trainingRunning ||
-    (inputMode === 'dataset' && !datasets.selectedDataset) ||
-    (inputMode === 'text' && !textInput.trim()) ||
-    (method === 'finetune' && !selectedModel) ||
-    (method === 'vlm' && !datasets.selectedDataset)
+  const canStart = !session.trainingRunning &&
+    (inputMode !== 'dataset' || !!datasets.selectedDataset) &&
+    (inputMode !== 'text' || !!textInput.trim()) &&
+    (method !== 'finetune' || !!selectedModel) &&
+    (method !== 'vlm' || !!datasets.selectedDataset)
 
   const startTraining = useCallback(async (checkpointName?: string) => {
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
