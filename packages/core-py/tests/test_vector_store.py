@@ -479,6 +479,39 @@ class TestSimpleEmbed:
         assert abs(norm - 1.0) < 1e-6
 
 
+class TestSimpleEmbedQualityGate:
+    """simple_embed adopts only quality-gate-accepted SloNet embedders."""
+
+    @pytest.fixture(autouse=True)
+    def reset_slo_state(self):
+        vs._slo_embedder = None
+        vs._slo_embedder_rejected = False
+        yield
+        vs._slo_embedder = None
+        vs._slo_embedder_rejected = False
+
+    def test_rejected_embedder_falls_back_to_ngram(self):
+        fake = MagicMock()
+        fake.acceptable.return_value = False
+        fake.quality = {"probes": 24, "degenerate_fraction": 0.0, "mean_cosine": 0.98}
+        with patch.object(SloTextEmbedder, "load", return_value=fake):
+            vec = simple_embed("hello world")
+        expected = vs._ngram_embed("hello world", 384).tolist()
+        assert np.allclose(vec, expected, atol=1e-6), "rejected embedder must not be used"
+        assert vs._slo_embedder is None
+        assert vs._slo_embedder_rejected is True
+
+    def test_accepted_embedder_is_adopted(self):
+        fake = MagicMock()
+        fake.acceptable.return_value = True
+        fake.embed.return_value = [1.0, 0.0, 0.0, 0.0]
+        with patch.object(SloTextEmbedder, "load", return_value=fake):
+            vec = simple_embed("hello world")
+        assert vec[:4] == [1.0, 0.0, 0.0, 0.0], "accepted embedder output must be returned"
+        assert all(v == 0.0 for v in vec[4:])
+        assert vs._slo_embedder is fake
+
+
 # =========================================================================
 # sanitize_input tests
 # =========================================================================
@@ -629,7 +662,7 @@ class TestSimpleEmbedSentenceTransformers:
         monkeypatch.setattr(vs, "_embed_model", None)
         monkeypatch.setattr(vs, "_EMBED_LOAD_FAILED", False)
         monkeypatch.setattr(vs, "_slo_embedder", None)
-        monkeypatch.setattr(vs, "_slo_embedder_untrained", True)
+        monkeypatch.setattr(vs, "_slo_embedder_rejected", True)
 
     def test_encode_equal_dim(self, st_env, monkeypatch):
         monkeypatch.setattr(vs, "_embed_model", FakeEncode([1.0, 0.0, 0.0]))
@@ -674,6 +707,11 @@ _SLONET_PAIR_SPECIALS = {
 
 def _trained_candidate(general):
     class TrainedCandidate:
+        quality = {"probes": 24, "degenerate_fraction": 0.0, "mean_cosine": 0.5}
+
+        def acceptable(self):
+            return True
+
         def embed(self, text):
             if text in _SLONET_PAIR_SPECIALS:
                 return np.array(_SLONET_PAIR_SPECIALS[text], dtype=np.float64)
@@ -688,17 +726,22 @@ class TestSimpleEmbedSloNet:
         monkeypatch.setattr(vs, "_embed_model", None)
         monkeypatch.setattr(vs, "_EMBED_LOAD_FAILED", True)
         monkeypatch.setattr(vs, "_slo_embedder", None)
-        monkeypatch.setattr(vs, "_slo_embedder_untrained", False)
+        monkeypatch.setattr(vs, "_slo_embedder_rejected", False)
 
     def test_untrained_candidate_skipped(self, slonet_env, monkeypatch):
         class UntrainedCandidate:
+            quality = {"probes": 24, "degenerate_fraction": 0.0, "mean_cosine": 0.98}
+
+            def acceptable(self):
+                return False
+
             def embed(self, text):
                 return np.array([1.0, 0.0, 0.0])
 
         monkeypatch.setattr(SloTextEmbedder, "load", lambda: UntrainedCandidate())
         vec = simple_embed("hello world", dimension=32)
         assert len(vec) == 32
-        assert vs._slo_embedder_untrained is True
+        assert vs._slo_embedder_rejected is True
         assert vs._slo_embedder is None
 
     def test_trained_candidate_loaded(self, slonet_env, monkeypatch):

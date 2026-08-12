@@ -218,7 +218,7 @@ class TestConfigPersistence:
 class TestDefaults:
     def test_default_registration_count(self, fresh_registry):
         _register_defaults()
-        assert len(FeatureFlags._flags) == 24
+        assert len(FeatureFlags._flags) == 26
 
     def test_slonet_provider_enabled(self, fresh_registry):
         _register_defaults()
@@ -235,6 +235,6 @@ class TestDefaults:
     def test_defaults_survive_rerun(self, default_registry):
         _register_defaults()
         _register_defaults()
-        assert len(FeatureFlags._flags) == 24
+        assert len(FeatureFlags._flags) == 26
         assert FeatureFlags.is_enabled("soul_format") is True
         assert FeatureFlags.is_enabled("feature_flags") is True

@@ -34,4 +34,19 @@ describe('modelController.load', () => {
 
     await expect(modelController.load('huge')).rejects.toThrow('CUDA OOM')
   })
+
+  it('passes custom device', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', model: 'gpt2' })
+    await modelController.load('gpt2', 'cpu')
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/models/load',
+      { model_id: 'gpt2', device: 'cpu' },
+    )
+  })
+
+  it('returns loaded status', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', model: 'gpt2', model_type: 'gpt2' })
+    const result = await modelController.load('gpt2')
+    expect(result.status).toBe('loaded')
+  })
 })

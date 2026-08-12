@@ -841,6 +841,77 @@ def train_distill(ctx, text_source, file, epochs, lr, batch_size, n_embed, n_lay
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# token-tree — train, encode, decode, and query a tree tokenizer
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group("token-tree", help="Train, encode, decode, and query a tree tokenizer")
+@click.pass_context
+def token_tree(ctx):
+    pass
+
+
+@token_tree.command("train", help="Train a tree tokenizer from a corpus and save it")
+@click.option("--corpus", "-c", default="datasets/tinyshakespeare/input.txt", help="Corpus file or dataset name")
+@click.option("--vocab-size", "-v", default=512, type=int, help="Target vocabulary size")
+@click.option("--embed-dim", "-e", default=64, type=int, help="Embedding dimension (0 disables embeddings)")
+@click.option("--min-freq", default=2, type=int, help="Minimum pair frequency to merge")
+@click.option("--output", "-o", default="models/slonet-native/token_tree", help="Save base path")
+@click.pass_context
+def token_tree_train(ctx, **kwargs):
+    from commands.token_tree import cmd_token_tree_train
+    cmd_token_tree_train(_ns(**kwargs))
+
+
+@token_tree.command("encode", help="Encode text into token ids (reads stdin when no --text)")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.option("--text", default=None, help="Text to encode")
+@click.pass_context
+def token_tree_encode(ctx, **kwargs):
+    from commands.token_tree import cmd_token_tree_encode
+    cmd_token_tree_encode(_ns(**kwargs))
+
+
+@token_tree.command("decode", help="Decode comma-separated token ids back to text")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.argument("ids")
+@click.pass_context
+def token_tree_decode(ctx, ids, **kwargs):
+    from commands.token_tree import cmd_token_tree_decode
+    kwargs["ids"] = ids
+    cmd_token_tree_decode(_ns(**kwargs))
+
+
+@token_tree.command("stats", help="Show training statistics for a saved tree")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.pass_context
+def token_tree_stats(ctx, **kwargs):
+    from commands.token_tree import cmd_token_tree_stats
+    cmd_token_tree_stats(_ns(**kwargs))
+
+
+@token_tree.command("similar", help="Find nearest-neighbor tokens via generated embeddings")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.option("--top-k", "-k", default=5, type=int, help="Number of results")
+@click.argument("token")
+@click.pass_context
+def token_tree_similar(ctx, token, **kwargs):
+    from commands.token_tree import cmd_token_tree_similar
+    kwargs["token"] = token
+    cmd_token_tree_similar(_ns(**kwargs))
+
+
+@token_tree.command("lineage", help="Render a token's merge lineage down to its leaves")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.argument("token")
+@click.pass_context
+def token_tree_lineage(ctx, token, **kwargs):
+    from commands.token_tree import cmd_token_tree_lineage
+    kwargs["token"] = token
+    cmd_token_tree_lineage(_ns(**kwargs))
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # checkpoint — list, load, delete training checkpoints
 # ═══════════════════════════════════════════════════════════════════════
 

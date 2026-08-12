@@ -24,6 +24,56 @@
   ],
   "cards": [
     {
+      "id": "20260812_042301_practicalize-four-train-cli-commands",
+      "title": "Practicalize four train CLI commands",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "cli",
+        "training"
+      ],
+      "created_at": "2026-08-12T04:23:01.478398+00:00",
+      "updated_at": "2026-08-12T04:23:01.478398+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260812_042301_tokentree-real-data-demo-str-input-bug-fix",
+      "title": "TokenTree real-data demo + str-input bug fix",
+      "description": "Built scripts/token_tree_demo.py proving TokenTree on tinyshakespeare (1.1MB): 1024 tokens, 980 merges, 2.29x embedding compression via pugqeep cluster points, tree-walk encoding with subword tokens, save/load round-trip.\n\nFixed: train() treated a raw str as a sequence of chars (each char became its own doc -> only 38 merges). Now wraps str as one document. Cast cluster centroids to float32 (compress_cluster leaves float64 -> compression ratio went from 0.57x to 2.29x). 3 regression tests in TestStringInput; test_token_tree 35->38 passing.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "TokenTree",
+        "pugqeep"
+      ],
+      "created_at": "2026-08-12T04:23:01.469183+00:00",
+      "updated_at": "2026-08-12T04:23:01.469183+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260812_042301_embedding-learning-fix-semantic-queries-cli-tests",
+      "title": "Embedding learning fix + semantic queries + CLI tests",
+      "description": "Fixed _learn_embeddings: skipped co-occurrence signal for single-token words (jumped from leaf parent to merged token, whose embedding tensor had no gradients -> left-over raw vectors ~= random). Now jumps to each parent token, attributing all non-self rows. TokenTree.embedding() now derives from the matrix (its generation no longer needs all leaf ancestors), vocab-size-independent, no repeated L2 norm.\n\nNew query API: TokenTree.similar(token_id, top_k) returns ranked (token_id, cosine) pairs from the embedding matrix; embedding_matrix() returns (vocab_size, embed_dim) float32; embedding_points() exposes raw point cluster data for optional manual matrix builds.\n\nTest updates: 44 token_tree tests pass (2 semantic tests hardened for cluster-reconstruction norm shrink and tiny-corpus token presence). Demo now shows nearest neighbors: 'to'->[to,out,and,in], 'the'->[the,our,of,this], 'and'->[not,but,are,go] on tinyshakespeare @ embed_dim 64.\n\nNew CLI test file apps/cli/tests/test_token_tree_commands.py (13 tests): corpus/token resolution helpers, train->load->encode/decode round-trip, stdin encode, similar, lineage, load-tree exit(2). Full CLI suite 59 passed; core-py token_tree+pugqeep all pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "TokenTree",
+        "cli"
+      ],
+      "created_at": "2026-08-12T04:23:01.460057+00:00",
+      "updated_at": "2026-08-12T04:23:01.460057+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260812_013610_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
       "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
       "description": "",

@@ -61,4 +61,12 @@ describe('reportError', () => {
     expect(spy).toHaveBeenCalledTimes(1)
     spy.mockRestore()
   })
+
+  it('handles fetch failure gracefully', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('network'))
+    reportError('fail')
+    vi.advanceTimersByTime(5000)
+    // Should not throw
+    expect(true).toBe(true)
+  })
 })

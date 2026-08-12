@@ -181,6 +181,50 @@ class TestTokenPoints:
         assert tree.embedding(0) is None
 
 
+class TestSemanticQuery:
+    def test_embedding_matrix_shape_and_normalized(self):
+        tree = make_tree(vocab_size=200, embed_dim=16)
+        mat = tree.embedding_matrix()
+        assert mat is not None
+        assert mat.shape == (tree.vocab_size, 16)
+        assert mat.dtype == np.float32
+        assert np.all(np.isfinite(mat))
+        norms = np.linalg.norm(mat, axis=1)
+        # cluster reconstruction shrinks norms slightly; never exceeds 1
+        assert np.all(norms <= 1.0 + 1e-3)
+        assert np.any(norms > 0.5)
+
+    def test_embedding_matrix_disabled(self):
+        tree = TokenTree()
+        assert tree.embedding_matrix() is None
+
+    def test_similar_returns_ranked_pairs(self):
+        tree = make_tree(vocab_size=300, embed_dim=16)
+        tid = tree.stoi["the" + WORD_SUFFIX]
+        results = tree.similar(tid, top_k=4)
+        assert len(results) == 4
+        scores = [s for _, s in results]
+        assert scores == sorted(scores, reverse=True)
+        assert all(other != tid for other, _ in results)
+
+    def test_similar_finds_cooccurring_neighbor(self):
+        tree = make_tree(vocab_size=300, embed_dim=16)
+        mat = tree.embedding_matrix()
+        word_tokens = [
+            tid for tid, tok in enumerate(tree.vocab)
+            if tok.endswith(WORD_SUFFIX) and len(tok) > 3
+        ]
+        live = [tid for tid in word_tokens if np.linalg.norm(mat[tid]) > 0.5]
+        assert live, "expected word tokens with non-degenerate embeddings"
+        best = max(live, key=lambda tid: np.linalg.norm(mat[tid]))
+        results = tree.similar(best, top_k=1)
+        assert results and results[0][1] > 0.3
+
+    def test_similar_untrained_returns_empty(self):
+        assert TokenTree().similar(0, top_k=3) == []
+
+
+
 class TestPersistence:
     def test_save_load_round_trip(self, tmp_path: Path):
         tree = make_tree(vocab_size=300)

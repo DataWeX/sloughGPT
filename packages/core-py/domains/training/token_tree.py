@@ -257,7 +257,7 @@ class TokenTree:
                         i += 1
                 word_splits[word] = new_split
 
-        self._learn_embeddings(word_freqs, embed_dim)
+        self._learn_embeddings(corpus, embed_dim)
         self._trained = True
         return self
 
@@ -398,27 +398,26 @@ class TokenTree:
     # Token points — embeddings are generated, not stored
     # ------------------------------------------------------------------
 
-    def _learn_embeddings(self, word_freqs: Counter, embed_dim: int) -> None:
+    def _learn_embeddings(self, corpus: List[str], embed_dim: int) -> None:
         """Learn co-occurrence embeddings and store them as cluster Points.
 
         Builds a token-by-token co-occurrence matrix by encoding the
         training corpus, applies PPMI weighting, projects to embed_dim via
         truncated SVD, then cluster-compresses each row into a pugqeep Point.
+
+        Args:
+            corpus: normalized training documents (encoded end-to-end so
+                tokens observe real cross-word context windows).
+            embed_dim: target embedding dimensionality.
         """
         vocab_n = len(self.vocab)
         if embed_dim <= 0 or vocab_n <= 4:
             return
 
-        texts_for_context = []
-        for word, freq in word_freqs.items():
-            if word == WORD_SUFFIX:
-                continue
-            texts_for_context.extend([word[:-len(WORD_SUFFIX)]] * min(freq, 5))
-
         window = 2
         cooc = np.zeros((vocab_n, vocab_n), dtype=np.float64)
-        for t in texts_for_context:
-            ids = self.encode(t)
+        for doc in corpus:
+            ids = self.encode(doc)
             if not ids:
                 continue
             for pos, tid in enumerate(ids):
@@ -491,6 +490,55 @@ class TokenTree:
         raw = stats.get("total_raw_bytes", 0)
         comp = stats.get("total_compressed_bytes", 0)
         return raw / max(comp, 1)
+
+    def embedding_matrix(self) -> Optional[np.ndarray]:
+        """Generate the full embedding matrix from the token Points.
+
+        Each row is produced by ``Point.generate`` (embeddings are not
+        stored as values), matching the way ModelTree generates weights.
+
+        Returns:
+            float32 ``(vocab_size, embed_dim)`` matrix with L2-normalized
+            rows, or None when embeddings are disabled.
+        """
+        if self._embed_dim <= 0:
+            return None
+        rows: List[np.ndarray] = []
+        for tid in range(len(self.vocab)):
+            v = self.embedding(tid)
+            rows.append(
+                v if v is not None
+                else np.zeros(self._embed_dim, dtype=np.float32)
+            )
+        return np.stack(rows)
+
+    def similar(self, token_id: int, top_k: int = 5) -> List[Tuple[int, float]]:
+        """Query the Point-generated embeddings for nearest-neighbor tokens.
+
+        Ranks every token by cosine similarity between its generated
+        embedding and the query token's — a semantic query over the same
+        pugqeep substrate that generates weights.
+
+        Args:
+            token_id: vocabulary id to query around.
+            top_k: number of results to return (query token excluded).
+
+        Returns:
+            list of ``(token_id, cosine_similarity)`` sorted descending.
+            Empty when embeddings are disabled.
+        """
+        mat = self.embedding_matrix()
+        if mat is None:
+            return []
+        scores = mat @ mat[token_id]
+        results: List[Tuple[int, float]] = []
+        for other in np.argsort(-scores):
+            if int(other) == token_id:
+                continue
+            results.append((int(other), float(scores[other])))
+            if len(results) >= top_k:
+                break
+        return results
 
     def _compressor(self) -> PointCompressor:
         if not hasattr(self, "_compressor_inst"):

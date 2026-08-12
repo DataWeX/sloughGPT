@@ -77,6 +77,17 @@ def main() -> int:
         print(f"  token 't' embedding: shape={emb.shape} dtype={emb.dtype} "
               f"norm={float(emb @ emb) ** 0.5:.3f}")
 
+    print("\n-- semantic query (nearest neighbors by generated embedding) --")
+    if tree.embedding_points():
+        for probe in ("to", "the", "and"):
+            token_id = tree.stoi.get(probe + "</w>")
+            if token_id is None:
+                continue
+            neigh = tree.similar(token_id, top_k=4)
+            labels = [tree.itos[t].replace("</w>", "") for t, _ in neigh]
+            scores = [f"{s:.2f}" for _, s in neigh]
+            print(f"  {probe!r} -> {list(zip(labels, scores))}")
+
     print("\n-- parallel batch encode --")
     batch = [texts[i:i + 120] for i in range(0, min(len(texts), 120000), 120)]
     t0 = time.perf_counter()

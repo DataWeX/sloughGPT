@@ -576,7 +576,7 @@ def _ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
 
 
 _slo_embedder = None
-_slo_embedder_untrained = False
+_slo_embedder_rejected = False
 
 
 def simple_embed(text: str, dimension: int = 384) -> List[float]:
@@ -613,8 +613,8 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
             logging.getLogger(__name__).warning("sentence-transformers encode failed, trying SloNet embedder")
 
     # 2. Try SloNet-trained embedder (no downloads, trained on your corpus)
-    global _slo_embedder, _slo_embedder_untrained
-    if _slo_embedder is None and not _slo_embedder_untrained:
+    global _slo_embedder, _slo_embedder_rejected
+    if _slo_embedder is None and not _slo_embedder_rejected:
         try:
             from domains.inference.slo_embedder import SloTextEmbedder
             candidate = SloTextEmbedder.load()
@@ -623,7 +623,7 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
                     "SloNet embedder rejected by quality gate (%s), using n-gram fallback",
                     candidate.quality,
                 )
-                _slo_embedder_untrained = True
+                _slo_embedder_rejected = True
             elif candidate is not None:
                 _slo_embedder = candidate
         except Exception:

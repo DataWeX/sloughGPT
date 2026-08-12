@@ -1515,9 +1515,10 @@ def cmd_train_embed(args):
         _embedder_retrieval_check(embedder, texts)
         quality = getattr(embedder, "quality", None) or {}
         if quality:
+            acceptable = getattr(embedder, "acceptable", lambda: False)()
             verdict = (
                 "accepted for vector search"
-                if embedder.acceptable()
+                if acceptable
                 else "REJECTED — vector search will use the n-gram fallback"
             )
             printer.key_value("Quality gate", verdict)

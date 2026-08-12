@@ -230,6 +230,102 @@ def test_embedder_different_texts_different_vectors():
 
 
 # ---------------------------------------------------------------------------
+# Quality gate
+# ---------------------------------------------------------------------------
+
+def test_quality_metadata_saved_and_rejects_collapsed():
+    """A small trained model collapses toward uniform embeddings (see xfail
+    above); the quality gate must record real corpus metrics and reject it."""
+    from domains.inference.slo_embedder import SloTextEmbedder, train_embedder
+    rng_state = np.random.get_state()
+    np.random.seed(0)  # collapse degree varies with init; seed for determinism
+    try:
+        texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(30)]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "qual-embed.sou")
+            train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
+                            n_heads=4, n_layers=2, epochs=2, save_path=path)
+            embedder = SloTextEmbedder.load(path)
+            assert embedder is not None
+            assert embedder.quality, "quality metadata must be recorded at train time"
+            for key in ("probes", "degenerate_fraction", "mean_cosine", "nn_agreement"):
+                assert key in embedder.quality, f"missing quality metric {key}"
+            assert embedder.quality["probes"] >= 2
+            assert 0.0 <= embedder.quality["degenerate_fraction"] <= 1.0
+            assert 0.0 <= embedder.quality["mean_cosine"] <= 1.0
+            assert 0.0 <= embedder.quality["nn_agreement"] <= 1.0
+            # The collapse is real: mean cosine ~0.93 (n-gram reference is ~0.66)
+            assert embedder.quality["mean_cosine"] > 0.90
+            assert not embedder.acceptable()
+    finally:
+        np.random.set_state(rng_state)
+
+
+def test_quality_gate_accepts_healthy_space():
+    """A non-degenerate, spread embedding space passes the gate."""
+    from domains.inference.slo_embedder import SloTextEmbedder
+    quality = {
+        "probes": 24,
+        "degenerate_fraction": 0.0,
+        "mean_cosine": 0.50,
+        "nn_agreement": 0.60,
+    }
+    embedder = SloTextEmbedder(None, {}, quality=quality)
+    assert embedder.acceptable()
+
+
+def test_quality_gate_rejects_degenerate_pairs():
+    from domains.inference.slo_embedder import SloTextEmbedder
+    quality = {"probes": 24, "degenerate_fraction": 0.80, "mean_cosine": 0.60, "nn_agreement": 0.0}
+    assert not SloTextEmbedder(None, {}, quality=quality).acceptable()
+
+
+def test_quality_gate_rejects_collapsed_vectors():
+    from domains.inference.slo_embedder import SloTextEmbedder
+    quality = {"probes": 24, "degenerate_fraction": 0.0, "mean_cosine": 0.98, "nn_agreement": 0.0}
+    assert not SloTextEmbedder(None, {}, quality=quality).acceptable()
+
+
+def test_quality_gate_requires_metadata():
+    """Legacy checkpoints (no quality metadata) are unverifiable → rejected."""
+    from domains.inference.slo_embedder import SloTextEmbedder
+    embedder = SloTextEmbedder(None, {}, quality={})
+    assert not embedder.acceptable()
+
+
+def test_quality_gate_too_few_probes():
+    from domains.inference.slo_embedder import SloTextEmbedder
+    quality = {"probes": 1, "degenerate_fraction": 0.0, "mean_cosine": 0.5, "nn_agreement": 0.0}
+    assert not SloTextEmbedder(None, {}, quality=quality).acceptable()
+
+
+def test_compute_quality_returns_valid_metrics():
+    """_compute_quality runs the real encoder on corpus probes."""
+    from domains.inference.slo_embedder import _compute_quality, _build_encoder, _build_vocab
+    texts = [f"sample text {i} with distinct keywords" for i in range(12)]
+    vocab, _ = _build_vocab(texts, vocab_size=64)
+    encoder = _build_encoder(64, 16, 24, 2, 1)
+    quality = _compute_quality(texts, encoder, vocab, 24)
+    assert quality["probes"] >= 2
+    assert 0.0 <= quality["degenerate_fraction"] <= 1.0
+    assert -1.0 <= quality["mean_cosine"] <= 1.0
+    assert 0.0 <= quality["nn_agreement"] <= 1.0
+
+
+def test_quality_metadata_survives_roundtrip():
+    """Quality stored in the .sou meta must survive load."""
+    from domains.inference.slo_embedder import SloTextEmbedder, train_embedder
+    texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(20)]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "rt-embed.sou")
+        train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
+                        n_heads=4, n_layers=2, epochs=1, save_path=path)
+        loaded = SloTextEmbedder.load(path)
+        assert loaded is not None and loaded.quality
+        assert loaded.quality == loaded.quality
+
+
+# ---------------------------------------------------------------------------
 # Integration: simple_embed fallback
 # ---------------------------------------------------------------------------
 

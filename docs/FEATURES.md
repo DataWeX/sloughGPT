@@ -127,6 +127,27 @@ python3 apps/cli/cli.py train --datasets shakespeare,code --epochs 3
 python3 apps/cli/cli.py train --datasets shakespeare,code --ratios 0.7,0.3 --epochs 3
 ```
 
+## Embedder Quality Gate
+
+`sloughgpt train embed` records a quality gate in the checkpoint metadata,
+computed from the real training corpus (no hardcoded pairs). Three metrics are
+stored for a deterministic sample of probe texts:
+
+| Metric | Meaning |
+|--------|---------|
+| `degenerate_fraction` | fraction of probe pairs whose cosine is ~1.0 (identical) |
+| `mean_cosine` | mean off-diagonal probe cosine — collapse detector |
+| `nn_agreement` | mean top-3 neighbour overlap with the n-gram reference (diagnostic) |
+
+At load time `simple_embed` adopts the trained embedder for vector search only
+if `acceptable()` passes: at least 2 probes, `degenerate_fraction < 0.25` and
+`mean_cosine < 0.90`. A checkpoint that collapses toward uniform embeddings
+(common for small corpora — mean cosine ≈ 0.93+ vs ≈ 0.66 for the n-gram
+reference) is rejected and vector search falls back to the zero-download n-gram
+TF-IDF embedder. Checkpoints trained before the gate existed carry no quality
+metadata and are also rejected — retrain to record it. The CLI prints the
+verdict and the three metrics after training.
+
 ## Data Types
 
 | Type | Format | Location |
