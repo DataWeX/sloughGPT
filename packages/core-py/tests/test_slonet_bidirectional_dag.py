@@ -255,6 +255,30 @@ class TestConsumersGraph:
             y = a + b
         assert y._consumers == []
 
+    def test_backward_clears_consumers(self):
+        """backward() must release forward-DAG references from persistent leaves."""
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        b = Tensor([3.0, 4.0], requires_grad=True)
+        s = a * b
+        y = (s + a).sum()
+        assert a._consumers and b._consumers
+        y.backward()
+        assert a._consumers == []
+        assert b._consumers == []
+        assert s._consumers == []
+
+    def test_backward_then_forward_grad_still_works(self):
+        """forward_grad reads _children/_forward_fn, not _consumers, so clearing
+        consumers in backward() must not break a later forward-mode pass."""
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        b = Tensor([3.0, 4.0], requires_grad=True)
+        s = a * b
+        y = s.sum()
+        y.backward()
+        t = y.forward_grad({a.id: np.array([1.0, 1.0])})
+        assert np.allclose(t[s.id], np.array([3.0, 4.0]))
+        assert np.allclose(t[y.id], np.array(7.0))
+
 
 
 
