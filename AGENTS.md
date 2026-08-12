@@ -517,6 +517,16 @@ trainer.train()
 "
 ```
 
+Fastest path — CLI (no PYTHONPATH juggling):
+```bash
+sloughgpt train native \
+  --data datasets/api_conversations/input.txt \
+  --soul-name sloughgpt-native \
+  --epochs 10 --lr 1e-3 --max-steps 2500
+```
+
+**Memory discipline:** `Tensor.backward()` clears `node._consumers` after the reverse pass. Do not re-add persistent references from leaves to the forward DAG, or every step's computation graph gets pinned by the (persistent) model parameters (~94MB/step leak). Regression tests: `TestConsumersGraph::test_backward_clears_consumers` + `test_backward_then_forward_grad_still_works` in `packages/core-py/tests/test_slonet_bidirectional_dag.py`.
+
 #### Loading trained model
 ```python
 from domains.inference.slonet_provider import SloNetChatProvider
