@@ -1513,6 +1513,20 @@ def cmd_train_embed(args):
         printer.warning("Trained embedder could not be reloaded — verify --output path.")
     else:
         _embedder_retrieval_check(embedder, texts)
+        quality = getattr(embedder, "quality", None) or {}
+        if quality:
+            verdict = (
+                "accepted for vector search"
+                if embedder.acceptable()
+                else "REJECTED — vector search will use the n-gram fallback"
+            )
+            printer.key_value("Quality gate", verdict)
+            printer.key_value(
+                "Probe pairs",
+                f"degenerate={quality.get('degenerate_fraction', 1.0):.2%} "
+                f"mean_cos={quality.get('mean_cosine', 1.0):.2f} "
+                f"nn_agreement={quality.get('nn_agreement', 0.0):.2f}",
+            )
 
 
 def cmd_distill(args):
