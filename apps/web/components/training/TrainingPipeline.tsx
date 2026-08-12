@@ -246,6 +246,19 @@ export function TrainingPipeline({
               customPresets={form.customPresets}
               onSave={form.saveCustomPreset}
               onDelete={form.deleteCustomPreset}
+              getCurrentState={() => ({
+                name: '',
+                description: '',
+                method: form.method as 'distill' | 'finetune' | 'native' | 'vlm',
+                epochs: form.trainingEpochs,
+                lr: form.trainingLR,
+                batchSize: form.trainingBatchSize,
+                useLoRA: form.useLoRA,
+                nativeEmbed: form.nativeEmbed,
+                nativeLayers: form.nativeLayers,
+                nativeHeads: form.nativeHeads,
+                nativeBlockSize: form.nativeBlockSize,
+              })}
             />
 
             {form.method !== 'vlm' ? (

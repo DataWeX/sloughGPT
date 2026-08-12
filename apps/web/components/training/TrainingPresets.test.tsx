@@ -79,14 +79,26 @@ describe('TrainingPresets', () => {
     expect(screen.queryByPlaceholderText('Preset name...')).toBeFalsy()
   })
 
-  it('calls onSave when name is entered and Save is clicked', () => {
+  it('calls onSave with current form state when getCurrentState is provided', () => {
     const onSave = vi.fn()
-    render(<TrainingPresets {...defaultProps} onSave={onSave} />)
+    const getCurrentState = vi.fn().mockReturnValue({ name: '', description: '', method: 'finetune', epochs: 10, lr: 0.002, batchSize: 16 })
+    render(<TrainingPresets {...defaultProps} onSave={onSave} getCurrentState={getCurrentState} />)
     fireEvent.click(screen.getByText('Save current'))
     const input = screen.getByPlaceholderText('Preset name...')
     fireEvent.change(input, { target: { value: 'My config' } })
     fireEvent.click(screen.getByText('Save'))
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: 'My config' }))
+    expect(getCurrentState).toHaveBeenCalled()
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: 'My config', method: 'finetune', epochs: 10 }))
+  })
+
+  it('falls back to defaults when getCurrentState is not provided', () => {
+    const onSave = vi.fn()
+    render(<TrainingPresets {...defaultProps} onSave={onSave} />)
+    fireEvent.click(screen.getByText('Save current'))
+    const input = screen.getByPlaceholderText('Preset name...')
+    fireEvent.change(input, { target: { value: 'Fallback' } })
+    fireEvent.click(screen.getByText('Save'))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: 'Fallback', method: 'distill', epochs: 5 }))
   })
 
   it('disables Save button when name is empty', () => {

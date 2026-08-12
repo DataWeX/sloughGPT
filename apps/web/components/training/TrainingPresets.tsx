@@ -9,11 +9,13 @@ export function TrainingPresets({
   customPresets,
   onSave,
   onDelete,
+  getCurrentState,
 }: {
   onApply: (preset: TrainingPreset) => void
   customPresets: TrainingPreset[]
   onSave: (preset: TrainingPreset) => void
   onDelete: (name: string) => void
+  getCurrentState?: () => TrainingPreset
 }) {
   const [saving, setSaving] = useState(false)
   const [presetName, setPresetName] = useState('')
@@ -23,7 +25,8 @@ export function TrainingPresets({
   const handleSave = () => {
     const name = presetName.trim()
     if (!name) return
-    onSave({ name, description: 'Custom preset', method: 'distill', epochs: 5, lr: 1e-3, batchSize: 32 })
+    const base = getCurrentState?.() ?? { method: 'distill' as const, epochs: 5, lr: 1e-3, batchSize: 32 }
+    onSave({ ...base, name, description: 'Custom preset' })
     setPresetName('')
     setSaving(false)
   }
