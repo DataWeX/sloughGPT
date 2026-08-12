@@ -25,28 +25,42 @@ const STEPS = [
 
 type StepId = typeof STEPS[number]['id']
 
-function StepIndicator({ current, completed }: { current: StepId; completed: Set<StepId> }) {
-  const idx = STEPS.findIndex(s => s.id === current)
+function StepIndicator({ current, completed, onStepClick }: { current: StepId; completed: Set<StepId>; onStepClick: (id: StepId) => void }) {
   return (
     <div className="flex items-center gap-1" role="navigation" aria-label="Training steps">
       {STEPS.map((step, i) => {
         const isDone = completed.has(step.id)
         const isCurrent = step.id === current
+        const clickable = isDone && !isCurrent
+        const content = (
+          <>
+            <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium transition-colors ${
+              isCurrent ? 'bg-primary text-primary-foreground' :
+              isDone ? 'bg-primary/15 text-primary' :
+              'bg-muted text-muted-foreground'
+            }`}>
+              {isDone ? '✓' : i + 1}
+            </div>
+            <span className={`text-xs ${isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
+              {step.label}
+            </span>
+          </>
+        )
         return (
           <div key={step.id} className="flex items-center gap-1">
             {i > 0 && <div className={`w-6 h-px ${isDone || isCurrent ? 'bg-primary' : 'bg-border'}`} />}
-            <div className="flex items-center gap-1.5">
-              <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium transition-colors ${
-                isCurrent ? 'bg-primary text-primary-foreground' :
-                isDone ? 'bg-primary/15 text-primary' :
-                'bg-muted text-muted-foreground'
-              }`}>
-                {isDone ? '✓' : i + 1}
-              </div>
-              <span className={`text-xs ${isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
-                {step.label}
-              </span>
-            </div>
+            {clickable ? (
+              <button
+                type="button"
+                onClick={() => onStepClick(step.id)}
+                className="flex items-center gap-1.5 rounded-md transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label={`Go to ${step.label} step`}
+              >
+                {content}
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5">{content}</div>
+            )}
           </div>
         )
       })}
@@ -153,12 +167,12 @@ export function TrainingPipeline({
 
   return (
     <div className="space-y-4">
-      <StepIndicator current={step} completed={completedSteps} />
+      <StepIndicator current={step} completed={completedSteps} onStepClick={setStep} />
 
       {step === 'data' && <DataStep {...stepProps} />}
       {step === 'configure' && <ConfigureStep {...stepProps} />}
       {step === 'train' && <TrainStep {...stepProps} />}
-      {step === 'results' && <ResultsStep checkpoints={checkpoints} goToTrain={goToTrain} />}
+      {step === 'results' && <ResultsStep checkpoints={checkpoints} goToTrain={goToTrain} onTest={onTest} />}
     </div>
   )
 }

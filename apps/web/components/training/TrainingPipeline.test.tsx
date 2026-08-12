@@ -492,4 +492,19 @@ describe('TrainingPipeline', () => {
     render(<TrainingPipeline form={form} datasets={makeDatasets()} session={makeSession()} checkpoints={makeCheckpoints()} onTest={vi.fn()} />)
     expect(screen.getByText('Training in progress')).toBeTruthy()
   })
+
+  it('jumps back to a completed step when clicked in the indicator', async () => {
+    render(<TrainingPipeline form={makeForm({ canStart: true })} datasets={makeDatasets({ selectedDataset: 'ds-1' })} session={makeSession()} checkpoints={makeCheckpoints()} onTest={vi.fn()} />)
+    await act(async () => { screen.getByText('Next: Configure').closest('button')!.click() })
+    await act(async () => { screen.getByText('Next: Train').closest('button')!.click() })
+    expect(screen.getByText('3. Train')).toBeTruthy()
+    await act(async () => { screen.getByLabelText('Go to Configure step').click() })
+    expect(screen.getByText('2. Configure training')).toBeTruthy()
+  })
+
+  it('does not render a Go button for the current step', () => {
+    render(<TrainingPipeline form={makeForm({ canStart: true })} datasets={makeDatasets({ selectedDataset: 'ds-1' })} session={makeSession()} checkpoints={makeCheckpoints()} onTest={vi.fn()} />)
+    expect(screen.queryByLabelText('Go to Data step')).toBeFalsy()
+    expect(screen.getByText('1. Pick your data')).toBeTruthy()
+  })
 })

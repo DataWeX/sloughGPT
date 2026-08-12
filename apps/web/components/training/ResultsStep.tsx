@@ -6,9 +6,10 @@ import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoint
 interface ResultsStepProps {
   checkpoints: UseTrainingCheckpointsReturn
   goToTrain: () => void
+  onTest: () => void
 }
 
-export function ResultsStep({ checkpoints, goToTrain }: ResultsStepProps) {
+export function ResultsStep({ checkpoints, goToTrain, onTest }: ResultsStepProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -46,6 +47,9 @@ export function ResultsStep({ checkpoints, goToTrain }: ResultsStepProps) {
         )}
 
         <div className="flex items-center gap-2 pt-2">
+          {checkpoints.checkpoints.length > 0 && (
+            <Button size="sm" variant="outline" onClick={onTest}>Test model</Button>
+          )}
           <Button size="sm" variant="ghost" onClick={goToTrain}>Train more</Button>
         </div>
       </CardContent>
