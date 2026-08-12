@@ -24,6 +24,40 @@
   ],
   "cards": [
     {
+      "id": "20260812_013610_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
+      "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
+      "description": "",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "world-realm",
+        "stage13",
+        "done"
+      ],
+      "created_at": "2026-08-12T01:36:10.800345+00:00",
+      "updated_at": "2026-08-12T01:36:10.800345+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260812_013610_slonet-native-training-memory-leak-fix-train-native-cli",
+      "title": "SloNet native training: memory-leak fix + train native CLI",
+      "description": "  ## Goal\n  Torch-free SloNet training must run from the CLI (core -> CLI -> API build order). Fix the per-step memory leak that blocks long training, surface native training as a first-class CLI command, verify regression, commit+push.\n  \n  ## Root cause\n  backward() never cleared node._consumers. Persistent model parameters pinned every step's computation graph (~94MB/step leak). 250 steps went 11GB+ before the fix.\n  \n  ## Fix\n  - slonet.py: Tensor.backward() clears node._consumers after the reverse pass.\n  - Memory verified bounded: sawtooth RSS 0.8-2.1GB across 2450-step run with periodic drops to baseline after checkpoint saves; no monotonic growth.\n  - Regression tests added: test_backward_clears_consumers + test_backward_then_forward_grad_still_works (33 DAG tests pass).\n  \n  ## CLI\n  - cli.py: 'train native' click command; commands/train.py cmd_train_native() (config-driven, auto-saves .soul + final sloughgpt-native.soul).\n  - 5 new CLI tests in apps/cli/tests/test_train_commands.py; 182 total regression green.\n  - CLI smoke run --steps 25 produced + loaded a .soul end-to-end.\n  \n  ## Verification\n  - Real 2450-step run (PID 225601, epochs=5) at ~1.5-2.5 it/s, final_loss trend 4.76 -> 2.7, eval_loss periodic.\n  - run_real_train.py TrainResult JSON serialization fixed (_jsonable); epochs=5.\n  - API training router already a thin wrapper (start_training drives SloughGPTTrainer, saves .soul) - no changes needed.\n  \n  ## Commits\n  - b7007f4 fix(training): eliminate per-step memory leak; add 'train native' CLI\n  - 5739d89 test(slonet): consumer-graph release regression tests\n  - 509ec172 docs(agents): 'train native' CLI + memory discipline",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "cli",
+        "core"
+      ],
+      "created_at": "2026-08-12T01:36:10.791730+00:00",
+      "updated_at": "2026-08-12T01:36:10.791730+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260811_071852_responsive-ui-sweep-hard-overflow-touch-action-fixes",
       "title": "Responsive UI sweep \u2014 hard-overflow + touch-action fixes",
       "description": "Full-suite green (330 files / 3468 tests). Fixes: P1 hard overflows \u2014 OutputPanel fixed 520px panel -> calc(100vw-2rem)+max-w, training/job/[id] + export button rows now flex-wrap. P2 hover-only actions got focus-within fallback across 15 sites (feedback, files, souls, knowledge x2, VoicePresetCard, ConversationSidebar x4, SystemPromptDialog, QuickPrompts, MessageActions, PersonalityProfileCard, ChatBookmarksPanel, KnowledgeTab, ConversationViewer, TrainingFormCard, LossChart) so touch/keyboard users can reach them. P3 cramped layouts \u2014 DatasetQualityCard grid-cols-1 sm:grid-cols-3, VisionStudioDialog grids to sm: responsive, OutputCard log-row columns compress below sm, model/[id] status header wraps. tsc exit 0.",
