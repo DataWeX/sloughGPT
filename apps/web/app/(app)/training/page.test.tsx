@@ -3,7 +3,6 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import React from 'react'
 import { act } from 'react'
 
-// ── strui mock ──
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
@@ -12,18 +11,10 @@ vi.mock('@sloughgpt/strui', () => {
     CardTitle: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
-    Tabs: ({ tabs, value, onChange }: any) => (
-      <div data-testid="tabs" data-value={value}>
-        {tabs.map((t: any) => (
-          <button key={t.value} data-tab={t.value} onClick={() => onChange(t.value)}>{t.label}{t.count != null ? ` (${t.count})` : ''}</button>
-        ))}
-      </div>
-    ),
     FoldSection: ({ heading, children }: any) => <details open><summary>{heading}</summary><div>{children}</div></details>,
   }
 })
 
-// ── state holders (mutable per-test, read by the mocked hooks) ──
 const mockSearchParams = vi.hoisted(() => ({ dataset: null as string | null }))
 const mockSession = vi.hoisted(() => ({ trainingRunning: false }))
 const mockDatasets = vi.hoisted(() => ({
@@ -43,24 +34,9 @@ const mockTest = vi.hoisted(() => ({
   setTestDialogOpen: vi.fn(), setTestPrompt: vi.fn(), handleTestModel: vi.fn(), clearTest: vi.fn(),
 }))
 
-// ── controller mocks ──
 const { mockExportMetrics, mockModelStatus, mockPreview, mockAddToast } = vi.hoisted(() => ({
   mockExportMetrics: vi.fn(), mockModelStatus: vi.fn(), mockPreview: vi.fn(), mockAddToast: vi.fn(),
 }))
-
-// ── child component stubs (all null) ──
-const stub = vi.hoisted(() => {
-  const n = () => () => null
-  return {
-    JobHistoryCard: n(), CheckpointsCard: n(), FineTunedModelsCard: n(),
-    TrainFromSessionsCard: n(), TrainingDataCard: n(), EvalReportCard: n(), SelfTrainCard: n(),
-    DatasetPreviewCard: n(), CheckpointCompareCard: n(), BestCheckpointCard: n(), TrainingSummaryCard: n(),
-    CheckpointLossChart: n(), CheckpointNotes: n(), TrainingHealthCard: n(), CheckpointFilterBar: n(),
-    TrainingRunCard: n(), TrainingProgress: n(), TrainingTimeline: n(), TrainingQuickActions: n(),
-    TrainingCompareCard: n(), TrainingDashboard: n(), TrainingOnboarding: n(), TrainingTips: n(),
-    TrainingActivity: n(), OutputCard: n(), TestModelDialog: n(),
-  }
-})
 
 vi.mock('next/navigation', () => ({ useSearchParams: () => ({ get: (k: string) => (mockSearchParams as Record<string, string | null>)[k] ?? null }) }))
 vi.mock('@/lib/controllers', () => ({
@@ -80,40 +56,10 @@ vi.mock('@/hooks/useTrainingCheckpoints', () => ({ useTrainingCheckpoints: () =>
 vi.mock('@/hooks/useTestDialog', () => ({ useTestDialog: () => mockTest }))
 vi.mock('@/hooks/useTrainingForm', () => ({ useTrainingForm: () => mockForm }))
 vi.mock('@/hooks/useLiveStatus', () => ({ useApiReady: () => true }))
-vi.mock('@/components/training/useCheckpointFilter', () => ({
-  useCheckpointFilter: (cps: any[]) => ({ filtered: cps, typeFilter: 'all', setTypeFilter: vi.fn(), lossMax: '', setLossMax: vi.fn(), types: [] }),
-}))
-vi.mock('@/components/training/TrainingSearch', () => ({
-  useTrainingSearch: (cps: any[]) => ({ filtered: cps, query: '', setQuery: vi.fn() }),
-  TrainingSearchBar: () => null,
-}))
-
-vi.mock('@/components/training/JobHistoryCard', () => ({ JobHistoryCard: stub.JobHistoryCard }))
-vi.mock('@/components/training/CheckpointsCard', () => ({ CheckpointsCard: stub.CheckpointsCard }))
-vi.mock('@/components/training/FineTunedModelsCard', () => ({ FineTunedModelsCard: stub.FineTunedModelsCard }))
-vi.mock('@/components/training/TrainFromSessionsCard', () => ({ TrainFromSessionsCard: stub.TrainFromSessionsCard }))
-vi.mock('@/components/training/TrainingDataCard', () => ({ TrainingDataCard: stub.TrainingDataCard }))
-vi.mock('@/components/training/EvalReportCard', () => ({ EvalReportCard: stub.EvalReportCard }))
-vi.mock('@/components/training/SelfTrainCard', () => ({ SelfTrainCard: stub.SelfTrainCard }))
-vi.mock('@/components/training/DatasetPreviewCard', () => ({ DatasetPreviewCard: stub.DatasetPreviewCard }))
-vi.mock('@/components/training/CheckpointCompareCard', () => ({ CheckpointCompareCard: stub.CheckpointCompareCard }))
-vi.mock('@/components/training/BestCheckpointCard', () => ({ BestCheckpointCard: stub.BestCheckpointCard }))
-vi.mock('@/components/training/TrainingSummaryCard', () => ({ TrainingSummaryCard: stub.TrainingSummaryCard }))
-vi.mock('@/components/training/CheckpointLossChart', () => ({ CheckpointLossChart: stub.CheckpointLossChart }))
-vi.mock('@/components/training/CheckpointNotes', () => ({ CheckpointNotes: stub.CheckpointNotes }))
-vi.mock('@/components/training/TrainingHealthCard', () => ({ TrainingHealthCard: stub.TrainingHealthCard }))
-vi.mock('@/components/training/CheckpointFilterBar', () => ({ CheckpointFilterBar: stub.CheckpointFilterBar }))
-vi.mock('@/components/training/TrainingRunCard', () => ({ TrainingRunCard: stub.TrainingRunCard }))
-vi.mock('@/components/training/TrainingProgress', () => ({ TrainingProgress: stub.TrainingProgress }))
-vi.mock('@/components/training/TrainingTimeline', () => ({ TrainingTimeline: stub.TrainingTimeline }))
-vi.mock('@/components/training/TrainingQuickActions', () => ({ TrainingQuickActions: stub.TrainingQuickActions }))
-vi.mock('@/components/training/TrainingCompareCard', () => ({ TrainingCompareCard: stub.TrainingCompareCard }))
-vi.mock('@/components/training/TrainingDashboard', () => ({ TrainingDashboard: stub.TrainingDashboard }))
-vi.mock('@/components/training/TrainingOnboarding', () => ({ TrainingOnboarding: stub.TrainingOnboarding }))
-vi.mock('@/components/training/TrainingTips', () => ({ TrainingTips: stub.TrainingTips }))
-vi.mock('@/components/training/TrainingActivity', () => ({ TrainingActivity: stub.TrainingActivity }))
-vi.mock('@/components/OutputCard', () => ({ OutputCard: stub.OutputCard }))
-vi.mock('@/components/training/TestModelDialog', () => ({ TestModelDialog: stub.TestModelDialog }))
+vi.mock('@/components/training/TrainingSummaryCard', () => ({ TrainingSummaryCard: () => null }))
+vi.mock('@/components/training/TrainingHealthCard', () => ({ TrainingHealthCard: () => null }))
+vi.mock('@/components/OutputCard', () => ({ OutputCard: () => null }))
+vi.mock('@/components/training/TestModelDialog', () => ({ TestModelDialog: () => null }))
 vi.mock('@/components/training/TrainingPipeline', () => ({
   TrainingPipeline: ({ form, datasets, session, checkpoints, onTest }: any) => (
     <div data-testid="training-pipeline">
