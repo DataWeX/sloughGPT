@@ -55,4 +55,15 @@ describe('persisted settings migration', () => {
     expect(injectedKnowledge).toHaveLength(1)
     expect(injectedKnowledge[0].content).toBe('old fact')
   })
+
+  it('has correct default streaming value', () => {
+    const { settings } = useAppStore.getState()
+    expect(typeof settings.streaming).toBe('boolean')
+  })
+
+  it('has correct default top-p value', () => {
+    const { settings } = useAppStore.getState()
+    expect(settings.defaultTopP).toBeGreaterThan(0)
+    expect(settings.defaultTopP).toBeLessThanOrEqual(1)
+  })
 })

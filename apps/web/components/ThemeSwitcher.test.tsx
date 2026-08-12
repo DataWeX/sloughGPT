@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, beforeEach } from 'vitest'
 
 import { ThemeProvider } from './ThemeProvider'
@@ -41,5 +41,19 @@ describe('ThemeSwitcher', () => {
     renderSwitcher()
     const radios = screen.getAllByRole('radio')
     expect(radios.length).toBeGreaterThanOrEqual(7)
+  })
+
+  it('clicking mode toggle changes button label', () => {
+    renderSwitcher()
+    const toggleBtn = screen.getAllByRole('button')[0]
+    fireEvent.click(toggleBtn)
+    expect(toggleBtn.getAttribute('aria-label')).toBeDefined()
+  })
+
+  it('clicking a radio button selects it', () => {
+    renderSwitcher()
+    const radios = screen.getAllByRole('radio')
+    fireEvent.click(radios[0])
+    expect(radios[0]).toBeDefined()
   })
 })

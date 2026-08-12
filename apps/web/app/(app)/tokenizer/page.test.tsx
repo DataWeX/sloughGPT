@@ -19,8 +19,8 @@ vi.mock('@sloughgpt/strui', () => {
     Button: ({ children, onClick, disabled, variant, className, 'aria-label': ariaLabel }: any) => (
       <button onClick={onClick} disabled={disabled} className={className} data-variant={variant} aria-label={ariaLabel}>{children}</button>
     ),
-    Input: ({ value, onChange, type, placeholder, className, min, max }: any) => (
-      <input value={value} onChange={onChange} type={type} placeholder={placeholder} className={className} min={min} max={max} />
+    Input: ({ value, onChange, type, placeholder, className, min, max, 'aria-label': ariaLabel }: any) => (
+      <input value={value} onChange={onChange} type={type} placeholder={placeholder} className={className} min={min} max={max} aria-label={ariaLabel} />
     ),
     Textarea: ({ value, onChange, placeholder, rows }: any) => (
       <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows} />
@@ -33,6 +33,12 @@ vi.mock('@sloughgpt/strui', () => {
     ),
     KpiGrid: ({ children }: any) => <div data-testid="kpi-grid">{children}</div>,
     IconRefresh: iconMock('refresh'),
+    IconSearch: iconMock('search'),
+    IconChevronRight: iconMock('chevron-right'),
+    IconChevronLeft: iconMock('chevron-left'),
+    IconActivity: iconMock('activity'),
+    Chip: ({ label }: any) => <span>{label}</span>,
+    Skeleton: () => <div data-testid="skeleton" />,
   }
 })
 
@@ -226,7 +232,7 @@ describe('TokenizerPage', () => {
     await renderLoaded()
     await act(async () => { screen.getByText('Train').click() })
     expect(screen.getByText('Train Tokenizer')).toBeTruthy()
-    const input = screen.getByDisplayValue('512')
+    const input = screen.getByRole('spinbutton', { name: 'Vocab size' })
     await act(async () => { fireEvent.change(input, { target: { value: '768' } }) })
     await act(async () => { screen.getByText('Train on Shakespeare').click() })
     await waitFor(() => { expect(mockTrain).toHaveBeenCalledWith({ vocab_size: 768 }) })

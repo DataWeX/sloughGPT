@@ -62,10 +62,12 @@ def _load_tree(tree_path: str) -> TokenTree:
 def _resolve_token(tree: TokenTree, token: str) -> int:
     """Resolve a token id or literal token string to a vocabulary id.
 
+    Delegates to ``TokenTree.resolve_token`` (core) and converts the
+    resulting ``KeyError`` into a CLI error exit.
+
     Args:
         tree: the token tree.
-        token: an integer id, or a literal vocabulary token (special tokens
-            and "</w>" are kept whole when they appear as written).
+        token: an integer id, or a literal vocabulary token.
 
     Returns:
         vocabulary id.
@@ -74,23 +76,10 @@ def _resolve_token(tree: TokenTree, token: str) -> int:
         - Prints an error and exits(2) on unresolvable input.
     """
     try:
-        return int(token)
-    except ValueError:
-        pass
-    if token.startswith("<") or token.endswith("</w>"):
-        candidates = [token]
-    else:
-        candidates = [
-            token + "</w>",
-            " " + token + "</w>",
-            token,
-            " " + token,
-        ]
-    for candidate in candidates:
-        if candidate in tree.stoi:
-            return tree.stoi[candidate]
-    printer.error(f"Token not in vocabulary: {token!r}")
-    sys.exit(2)
+        return tree.resolve_token(token)
+    except KeyError:
+        printer.error(f"Token not in vocabulary: {token!r}")
+        sys.exit(2)
 
 
 def _print_stats(tree: TokenTree) -> None:
@@ -226,3 +215,38 @@ def cmd_token_tree_lineage(args) -> None:
     printer.header(f"Merge lineage of {tree.itos.get(token_id, '?')!r}")
     printer.info(tree.show_tree(token_id))
     printer.key_value("Leaves", " ".join(tree.decompose(token_id)))
+
+
+def cmd_token_tree_vocab(args) -> None:
+    """List a paged slice of the vocabulary with flags and frequencies.
+
+    Entries are printed in id order (special tokens, base characters, then
+    merge tokens) so a fixed page size walks the whole vocabulary.
+
+    Args:
+        args: SimpleNamespace with ``tree``, ``offset``, ``limit``.
+
+    Side effects:
+        - Prints a vocab table with ``special``/``merged`` markers.
+    """
+    tree = _load_tree(args.tree)
+    out = tree.vocab_entries(offset=args.offset, limit=args.limit)
+    lo = args.offset + 1
+    hi = min(args.offset + len(out["entries"]), out["total"])
+    printer.header(f"Vocabulary ({out['total']} tokens)")
+    rows = []
+    for e in out["entries"]:
+        flags = []
+        if e["is_special"]:
+            flags.append("special")
+        if e["is_merged"]:
+            flags.append("merged")
+        rows.append([
+            str(e["id"]),
+            e["token"].replace("</w>", "") or e["token"],
+            str(e["freq"]),
+            "+".join(flags) if flags else "",
+        ])
+    printer.table(["id", "token", "freq", "flags"], rows)
+    if out["entries"]:
+        printer.info(f"Showing {lo}–{hi} of {out['total']}")

@@ -80,4 +80,45 @@ describe('VoiceInput', () => {
       expect(btn).toBeDisabled()
     })
   })
+
+  it('shows recording state when listening', async () => {
+    let onstart: (() => void) | null = null
+    mockSpeechRecognition.mockImplementation(() => ({
+      continuous: false,
+      interimResults: false,
+      lang: '',
+      start: vi.fn(),
+      stop: vi.fn(),
+      abort: vi.fn(),
+      set onstart(fn) { onstart = fn },
+      get onstart() { return onstart },
+      onend: null,
+      onerror: null,
+      onresult: null,
+    }))
+    render(<VoiceInput onTranscript={() => {}} />)
+    fireEvent.click(screen.getByLabelText('Start voice input'))
+    expect(onstart).not.toBeNull()
+  })
+
+  it('handles error from speech recognition', async () => {
+    let onerror: ((e: any) => void) | null = null
+    mockSpeechRecognition.mockImplementation(() => ({
+      continuous: false,
+      interimResults: false,
+      lang: '',
+      start: vi.fn(),
+      stop: vi.fn(),
+      abort: vi.fn(),
+      onstart: null,
+      onend: null,
+      set onerror(fn) { onerror = fn },
+      get onerror() { return onerror },
+      onresult: null,
+    }))
+    render(<VoiceInput onTranscript={() => {}} />)
+    fireEvent.click(screen.getByLabelText('Start voice input'))
+    expect(onerror).not.toBeNull()
+    onerror!({ error: 'not-allowed' } as any)
+  })
 })

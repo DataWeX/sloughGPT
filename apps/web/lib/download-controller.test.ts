@@ -36,6 +36,12 @@ describe('startDownload', () => {
     await startDownload('gpt2', 500000000)
     expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download', { model_id: 'gpt2', total_bytes_hint: 500000000 })
   })
+
+  it('returns started status', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'started' })
+    const result = await startDownload('gpt2')
+    expect(result.status).toBe('started')
+  })
 })
 
 describe('getDownloadStatus', () => {
@@ -60,5 +66,11 @@ describe('getDownloadStatus', () => {
     apiClient.apiGet.mockResolvedValue({ model_id: 'org/model', status: 'complete' })
     await getDownloadStatus('org/model')
     expect(apiClient.apiGet).toHaveBeenCalledWith('/models/download/org%2Fmodel')
+  })
+
+  it('returns complete status', async () => {
+    apiClient.apiGet.mockResolvedValue({ model_id: 'gpt2', status: 'complete', percentage: 100 })
+    const result = await getDownloadStatus('gpt2')
+    expect(result.status).toBe('complete')
   })
 })

@@ -45,4 +45,13 @@ describe('useAuthStore', () => {
     expect(state.user).toBeNull()
     expect(state.token).toBe('abc123')
   })
+
+  it('login then logout then login works', () => {
+    useAuthStore.getState().login({ id: '1', username: 'alice', email: 'a@b.com' }, 'abc123')
+    useAuthStore.getState().logout()
+    useAuthStore.getState().login({ id: '2', username: 'bob', email: 'b@c.com' }, 'xyz789')
+    const state = useAuthStore.getState()
+    expect(state.user?.username).toBe('bob')
+    expect(state.token).toBe('xyz789')
+  })
 })

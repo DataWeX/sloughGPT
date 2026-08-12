@@ -24,4 +24,9 @@ describe('routeMatchesPath', () => {
     expect(routeMatchesPath('/training/job/xyz', '/training')).toBe(true)
     expect(routeMatchesPath('/models/detail/gpt2', '/models')).toBe(true)
   })
+
+  it('does not match partial segment names', () => {
+    expect(routeMatchesPath('/chatt', '/chat')).toBe(false)
+    expect(routeMatchesPath('/model', '/models')).toBe(false)
+  })
 })

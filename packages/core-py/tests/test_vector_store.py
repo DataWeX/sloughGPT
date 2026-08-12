@@ -512,6 +512,46 @@ class TestSimpleEmbedQualityGate:
         assert vs._slo_embedder is fake
 
 
+class TestSimpleEmbedRealDeployment:
+    """End-to-end deployment: a real trained + debiased embedder is loaded,
+    passes the gate, and its vectors drive simple_embed instead of n-gram."""
+
+    @pytest.fixture(autouse=True)
+    def reset_slo_state(self):
+        vs._slo_embedder = None
+        vs._slo_embedder_rejected = False
+        yield
+        vs._slo_embedder = None
+        vs._slo_embedder_rejected = False
+
+    def test_real_trained_embedder_is_adopted_and_used(self):
+        from domains.inference.slo_embedder import train_embedder
+        rng_state = np.random.get_state()
+        np.random.seed(0)  # collapse degree varies with init; seed for determinism
+        try:
+            texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(30)]
+            with tempfile.TemporaryDirectory() as tmpdir:
+                path = os.path.join(tmpdir, "deploy-embed.sou")
+                train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
+                                n_heads=4, n_layers=2, epochs=2, save_path=path)
+                real = SloTextEmbedder.load(path)
+                assert real is not None and real.acceptable(), "trained model must pass the gate"
+                with patch.object(SloTextEmbedder, "load", return_value=real):
+                    with patch.object(vs, "_load_embed_model", return_value=None):
+                        vec = simple_embed("neural network training")
+                expected = real.embed("neural network training")
+                assert len(expected) == 64
+                assert len(vec) == 384, "simple_embed must pad to the store dimension"
+                assert np.allclose(vec[:64], expected, atol=1e-6), "trained vector must be returned verbatim"
+                assert all(v == 0.0 for v in vec[64:])
+                ngram = vs._ngram_embed("neural network training", 384)
+                assert not np.allclose(vec[:64], ngram[:64], atol=1e-3), "must differ from n-gram fallback"
+                assert vs._slo_embedder is real
+                assert vs._slo_embedder_rejected is False
+        finally:
+            np.random.set_state(rng_state)
+
+
 # =========================================================================
 # sanitize_input tests
 # =========================================================================

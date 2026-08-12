@@ -26,4 +26,10 @@ describe('sessionStore', () => {
     sessionStore.reset()
     expect(sessionStore.isApproved('model-x')).toBe(false)
   })
+
+  it('setApproved is idempotent', () => {
+    sessionStore.setApproved('a')
+    sessionStore.setApproved('a')
+    expect(sessionStore.isApproved('a')).toBe(true)
+  })
 })

@@ -132,6 +132,31 @@ class TestCmdTrainAndQuery:
         out = capsys.readouterr().out
         assert "brown" in out
 
+    def test_vocab_lists_special_and_merged_flags(self, corpus_file, tree_args, capsys):
+        from commands.token_tree import cmd_token_tree_train, cmd_token_tree_vocab
+        cmd_token_tree_train(tree_args)
+        args = MagicMock()
+        args.tree = tree_args.output
+        args.offset = 0
+        args.limit = 500
+        cmd_token_tree_vocab(args)
+        out = capsys.readouterr().out
+        assert "Vocabulary" in out
+        assert "special" in out
+        assert "merged" in out
+        assert "Showing 1–" in out
+
+    def test_vocab_respects_paging(self, corpus_file, tree_args, capsys):
+        from commands.token_tree import cmd_token_tree_train, cmd_token_tree_vocab
+        cmd_token_tree_train(tree_args)
+        args = MagicMock()
+        args.tree = tree_args.output
+        args.offset = 0
+        args.limit = 5
+        cmd_token_tree_vocab(args)
+        out = capsys.readouterr().out
+        assert "Showing 1–5 of" in out
+
 
 class TestLoadTree:
     def test_missing_tree_exits(self, tmp_path, monkeypatch):

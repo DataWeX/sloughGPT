@@ -50,5 +50,11 @@ describe('loraEvalController', () => {
       await loraEvalController.getHistory()
       expect(mockGet).toHaveBeenCalledWith('/lora-eval/history?limit=10')
     })
+
+    it('encodes special chars in path', async () => {
+      mockGet.mockResolvedValue({ results: [] })
+      await loraEvalController.runEval('path with spaces/file.npz')
+      expect(mockGet).toHaveBeenCalledWith('/lora-eval/run?adapter_path=path%20with%20spaces%2Ffile.npz')
+    })
   })
 })

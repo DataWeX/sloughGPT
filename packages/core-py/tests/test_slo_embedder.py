@@ -214,7 +214,6 @@ def test_embedder_deterministic():
         assert cos_sim > 0.98, f"Cosine similarity too low: {cos_sim}"
 
 
-@pytest.mark.xfail(reason="Small model collapses to uniform embeddings — needs larger training set")
 def test_embedder_different_texts_different_vectors():
     from domains.inference.slo_embedder import SloTextEmbedder, train_embedder
     texts = [f"unique topic {i} with different words" for i in range(30)]
@@ -225,7 +224,8 @@ def test_embedder_different_texts_different_vectors():
         embedder = SloTextEmbedder.load(path)
         v1 = embedder.embed("neural network training")
         v2 = embedder.embed("cooking recipes for dinner")
-        # Vectors should differ (not identical)
+        # Vectors should differ (not identical) — mean-subtraction debiasing
+        # recovers the discriminative residuals from the collapsed raw space
         assert v1 != v2
 
 
@@ -233,9 +233,11 @@ def test_embedder_different_texts_different_vectors():
 # Quality gate
 # ---------------------------------------------------------------------------
 
-def test_quality_metadata_saved_and_rejects_collapsed():
-    """A small trained model collapses toward uniform embeddings (see xfail
-    above); the quality gate must record real corpus metrics and reject it."""
+def test_quality_metadata_saved_and_accepted():
+    """A small trained model collapses toward uniform embeddings, but the
+    mean-subtraction debias at save/inference time re-centers the space
+    (mean cosine ~0.0). The quality gate measures the deployed, debiased
+    space and must accept it."""
     from domains.inference.slo_embedder import SloTextEmbedder, train_embedder
     rng_state = np.random.get_state()
     np.random.seed(0)  # collapse degree varies with init; seed for determinism
@@ -252,11 +254,52 @@ def test_quality_metadata_saved_and_rejects_collapsed():
                 assert key in embedder.quality, f"missing quality metric {key}"
             assert embedder.quality["probes"] >= 2
             assert 0.0 <= embedder.quality["degenerate_fraction"] <= 1.0
-            assert 0.0 <= embedder.quality["mean_cosine"] <= 1.0
             assert 0.0 <= embedder.quality["nn_agreement"] <= 1.0
-            # The collapse is real: mean cosine ~0.93 (n-gram reference is ~0.66)
-            assert embedder.quality["mean_cosine"] > 0.90
-            assert not embedder.acceptable()
+            # The debiased space is well-spread: mean cosine far below the
+            # 0.90 collapse threshold (raw space was ~0.93)
+            assert embedder.quality["mean_cosine"] < 0.50
+            assert embedder.acceptable()
+            # Corpus mean is stored and loaded for inference-time debiasing
+            assert embedder.embed_mean is not None
+            assert len(embedder.embed_mean) == 64
+            # Retrieval benchmark vs the n-gram reference is recorded
+            retrieval = embedder.quality.get("retrieval") or {}
+            for key in ("queries", "trained_mrr", "ngram_mrr", "trained_hit", "ngram_hit", "better"):
+                assert key in retrieval, f"missing retrieval metric {key}"
+            assert retrieval["queries"] >= 2
+            assert 0.0 <= retrieval["trained_mrr"] <= 1.0
+            assert 0.0 <= retrieval["ngram_mrr"] <= 1.0
+            assert retrieval["better"] in ("trained", "n_gram")
+    finally:
+        np.random.set_state(rng_state)
+
+
+def test_embed_mean_debiases_collapsed_space():
+    """Mean subtraction must recover discrimination from a collapsed space:
+    raw encoder embeddings sit at ~0.93 cosine while the debiased embed()
+    outputs sit near 0 and discriminate different texts."""
+    from domains.inference.slo_embedder import (
+        SloTextEmbedder, train_embedder, _compute_quality,
+    )
+    rng_state = np.random.get_state()
+    np.random.seed(0)
+    try:
+        texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(30)]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "debias-embed.sou")
+            train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
+                            n_heads=4, n_layers=2, epochs=2, save_path=path)
+            embedder = SloTextEmbedder.load(path)
+            # Raw space (no debias) is collapsed
+            raw_q = _compute_quality(texts, embedder.encoder, embedder.vocab,
+                                     embedder.max_seq_len, embedder.encode_fn)
+            assert raw_q["mean_cosine"] > 0.90, f"expected collapsed raw space, got {raw_q['mean_cosine']}"
+            # Debiased space (what inference uses) is spread
+            deb_q = _compute_quality(texts, embedder.encoder, embedder.vocab,
+                                     embedder.max_seq_len, embedder.encode_fn,
+                                     embed_mean=embedder.embed_mean)
+            assert deb_q["mean_cosine"] < 0.50, f"expected spread debiased space, got {deb_q['mean_cosine']}"
+            assert embedder.acceptable()
     finally:
         np.random.set_state(rng_state)
 
@@ -312,6 +355,50 @@ def test_compute_quality_returns_valid_metrics():
     assert 0.0 <= quality["nn_agreement"] <= 1.0
 
 
+def test_perturb_text_drops_words_deterministically():
+    """Word-drop perturbation must shorten the text, stay deterministic and
+    leave very short texts untouched."""
+    from domains.inference.slo_embedder import _perturb_text
+    text = "the quick brown fox jumps over the lazy dog"
+    a = _perturb_text(text)
+    b = _perturb_text(text)
+    assert a == b, "perturbation must be deterministic"
+    assert len(a.split()) < len(text.split()), "words must be dropped"
+    assert set(a.split()) <= set(text.split()), "no new words introduced"
+    short = "a b c"
+    assert _perturb_text(short) == short, "too-short texts stay unchanged"
+
+
+def test_retrieval_benchmark_scores_both_embedders():
+    """_retrieval_benchmark must return valid MRR/hit metrics for both the
+    trained and n-gram embedders on identical queries."""
+    from domains.inference.slo_embedder import _retrieval_benchmark
+
+    def trained_fn(t):
+        return np.array([float(ord(c)) for c in t[:8]] + [0.0] * 8)
+
+    def ngram_fn(t):
+        return np.array([float(len(c)) for c in t.split()] + [0.0] * 8)
+
+    texts = [f"document {i} about topic {i % 5}" for i in range(40)]
+    res = _retrieval_benchmark(texts, trained_fn, ngram_fn, top_k=3, max_queries=16)
+    assert res["queries"] == 16
+    assert 0.0 <= res["trained_mrr"] <= 1.0
+    assert 0.0 <= res["ngram_mrr"] <= 1.0
+    assert 0.0 <= res["trained_hit"] <= 1.0
+    assert 0.0 <= res["ngram_hit"] <= 1.0
+    assert res["top_k"] == 3
+    assert res["better"] in ("trained", "n_gram")
+
+
+def test_retrieval_benchmark_short_corpus():
+    """A corpus too small for the benchmark returns a zeroed dict, not a crash."""
+    from domains.inference.slo_embedder import _retrieval_benchmark
+    res = _retrieval_benchmark(["only one text"], lambda t: np.zeros(8), lambda t: np.zeros(8))
+    assert res["queries"] == 0
+    assert res["better"] == "n_gram"
+
+
 def test_quality_metadata_survives_roundtrip():
     """Quality stored in the .sou meta must survive load."""
     from domains.inference.slo_embedder import SloTextEmbedder, train_embedder
@@ -322,7 +409,12 @@ def test_quality_metadata_survives_roundtrip():
                         n_heads=4, n_layers=2, epochs=1, save_path=path)
         loaded = SloTextEmbedder.load(path)
         assert loaded is not None and loaded.quality
-        assert loaded.quality == loaded.quality
+        assert loaded.quality["probes"] >= 2
+        assert set(loaded.quality) == {
+            "probes", "degenerate_fraction", "mean_cosine", "nn_agreement",
+            "retrieval",
+        }
+        assert "trained_mrr" in loaded.quality["retrieval"]
 
 
 # ---------------------------------------------------------------------------

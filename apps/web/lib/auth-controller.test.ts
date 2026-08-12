@@ -56,4 +56,16 @@ describe('authController', () => {
     })
     expect(result).toEqual(mockResponse)
   })
+
+  it('getMe returns user data', async () => {
+    vi.mocked(apiGet).mockResolvedValue({ id: '1', username: 'alice', email: 'a@b.com' })
+    const result = await authController.getMe('token')
+    expect(result.username).toBe('alice')
+  })
+
+  it('login returns token', async () => {
+    vi.mocked(apiPost).mockResolvedValue({ token: 'xyz', user: { id: '1', username: 'u', email: 'e' } })
+    const result = await authController.login('u', 'p')
+    expect(result.token).toBe('xyz')
+  })
 })

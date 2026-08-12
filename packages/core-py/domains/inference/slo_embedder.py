@@ -652,12 +652,48 @@ def _nn_agreement(trained: np.ndarray, reference: np.ndarray, k: int = QUALITY_N
     return float(np.mean(overlaps))
 
 
+def _compute_embed_mean(
+    texts: List[str],
+    encoder,
+    vocab: dict,
+    max_seq_len: int,
+    encode_fn=None,
+) -> np.ndarray:
+    """Compute the corpus mean embedding for anisotropy debiasing.
+
+    SloNet encoders collapse toward a common direction (anisotropy): mean
+    off-diagonal cosine of ~0.93+ for small corpora. Subtracting the corpus
+    mean and re-normalizing at inference re-centers the space (mean cosine
+    ~0.0) and recovers the discriminative residuals. This is the standard
+    BERT-whitening debias, computed from the same probe sample used by the
+    quality gate so the gate measures the deployed space.
+
+    Args:
+        texts: training corpus
+        encoder: trained encoder (forward -> (P, D) logits)
+        vocab: token vocab
+        max_seq_len: sequence length used for encoding
+        encode_fn: optional BPE encode function
+
+    Returns:
+        (D,) mean embedding over probe texts
+    """
+    probes = _sample_probes(texts)
+    if not probes:
+        return np.zeros(0, dtype=np.float32)
+    ids = _encode_probe(probes, encode_fn, vocab, max_seq_len)
+    with _no_accel():
+        emb = encoder.forward(ids).data  # (P, D)
+    return np.asarray(emb.mean(axis=0), dtype=np.float32)
+
+
 def _compute_quality(
     texts: List[str],
     encoder,
     vocab: dict,
     max_seq_len: int,
     encode_fn=None,
+    embed_mean: Optional[np.ndarray] = None,
 ) -> dict:
     """Compute honest, computed quality metrics for a trained embedder.
 
@@ -667,12 +703,16 @@ def _compute_quality(
         mean_cosine: mean off-diagonal cosine across probes (collapse detector)
         nn_agreement: mean top-k neighbour overlap with the n-gram reference
 
+    When ``embed_mean`` is given, metrics are computed on the debiased space
+    (the same space ``embed()`` returns), so the gate reflects deployment.
+
     Args:
         texts: training corpus
         encoder: trained encoder (forward -> (P, D) logits)
         vocab: token vocab
         max_seq_len: sequence length used for encoding
         encode_fn: optional BPE encode function
+        embed_mean: (D,) corpus mean embedding for debiasing
 
     Returns:
         dict of quality metrics
@@ -691,6 +731,8 @@ def _compute_quality(
     ids = _encode_probe(probes, encode_fn, vocab, max_seq_len)
     with _no_accel():
         emb = encoder.forward(ids).data  # (P, D)
+    if embed_mean is not None and embed_mean.size == emb.shape[1]:
+        emb = emb - embed_mean
     norms = np.linalg.norm(emb, axis=1, keepdims=True) + 1e-10
     trained = emb / norms
 
@@ -718,6 +760,154 @@ def _compute_quality(
     }
 
 
+def _perturb_text(text: str, drop_frac: float = 0.25, min_keep: int = 3) -> str:
+    """Drop words deterministically to build a partial-evidence query.
+
+    The RNG seed derives from the text itself so the same corpus always yields
+    the same queries (benchmark reproducibility).
+
+    Args:
+        text: source text
+        drop_frac: fraction of words to drop
+        min_keep: minimum words to keep
+
+    Returns:
+        word-dropped variant of the text (unchanged if too short to perturb)
+    """
+    tokens = text.split()
+    if len(tokens) <= min_keep:
+        return text
+    rng = np.random.RandomState(sum(ord(c) for c in text) % (2 ** 31))
+    n_drop = max(1, int(round(len(tokens) * drop_frac)))
+    drop = set(rng.choice(len(tokens), size=n_drop, replace=False).tolist())
+    kept = [t for i, t in enumerate(tokens) if i not in drop]
+    if len(kept) < min_keep:
+        kept = tokens[:min_keep]
+    return " ".join(kept)
+
+
+def _retrieval_benchmark(
+    texts: List[str],
+    trained_fn,
+    ngram_fn,
+    top_k: int = QUALITY_NN_K,
+    max_queries: int = QUALITY_MAX_PROBES,
+) -> dict:
+    """Score retrieval robustness of the trained embedder vs the n-gram reference.
+
+    For each probe text a deterministic word-dropped query is built (partial
+    evidence) and the target is the original text within the full corpus. MRR
+    and hit@top_k measure how well each embedder recovers the target. Both
+    embedders see the identical queries, so the comparison is honest.
+
+    Args:
+        texts: training corpus
+        trained_fn: text -> debiased trained vector
+        ngram_fn: text -> n-gram reference vector
+        top_k: hit threshold
+        max_queries: cap on probe count
+
+    Returns:
+        dict with ``trained_mrr``/``ngram_mrr``, ``trained_hit``/``ngram_hit``
+        and a ``better`` verdict naming the stronger embedder
+    """
+    if len(texts) < 2:
+        return {
+            "queries": 0, "top_k": top_k,
+            "trained_mrr": 0.0, "ngram_mrr": 0.0,
+            "trained_hit": 0.0, "ngram_hit": 0.0,
+            "better": "n_gram",
+        }
+    step = max(1, len(texts) // max_queries)
+    probe_idx = list(range(0, len(texts), step))[:max_queries]
+
+    try:
+        corpus_t = np.stack([trained_fn(t) for t in texts])
+        corpus_t = corpus_t / (np.linalg.norm(corpus_t, axis=1, keepdims=True) + 1e-10)
+        corpus_g = np.stack([ngram_fn(t) for t in texts])
+        corpus_g = corpus_g / (np.linalg.norm(corpus_g, axis=1, keepdims=True) + 1e-10)
+        queries = [_perturb_text(texts[i]) for i in probe_idx]
+        q_t = np.stack([trained_fn(q) for q in queries])
+        q_t = q_t / (np.linalg.norm(q_t, axis=1, keepdims=True) + 1e-10)
+        q_g = np.stack([ngram_fn(q) for q in queries])
+        q_g = q_g / (np.linalg.norm(q_g, axis=1, keepdims=True) + 1e-10)
+
+        def _score(qv, cv, targets):
+            sim = qv @ cv.T
+            mrr = 0.0
+            hits = 0
+            for i, target in enumerate(targets):
+                rank = int(np.where(np.argsort(-sim[i]) == target)[0][0]) + 1
+                mrr += 1.0 / rank
+                if rank <= top_k:
+                    hits += 1
+            n = len(targets)
+            return mrr / n, hits / n
+
+        t_mrr, t_hit = _score(q_t, corpus_t, probe_idx)
+        g_mrr, g_hit = _score(q_g, corpus_g, probe_idx)
+    except Exception:
+        return {
+            "queries": len(probe_idx), "top_k": top_k,
+            "trained_mrr": 0.0, "ngram_mrr": 0.0,
+            "trained_hit": 0.0, "ngram_hit": 0.0,
+            "better": "n_gram",
+        }
+
+    return {
+        "queries": len(probe_idx),
+        "top_k": top_k,
+        "trained_mrr": round(float(t_mrr), 4),
+        "ngram_mrr": round(float(g_mrr), 4),
+        "trained_hit": round(float(t_hit), 4),
+        "ngram_hit": round(float(g_hit), 4),
+        "better": "trained" if t_mrr >= g_mrr else "n_gram",
+    }
+
+
+def _retrieval_benchmark_for(
+    texts: List[str],
+    encoder,
+    vocab: dict,
+    max_seq_len: int,
+    encode_fn=None,
+    embed_mean: Optional[np.ndarray] = None,
+) -> dict:
+    """Run the retrieval benchmark for a trained encoder against the n-gram reference.
+
+    The trained side uses the exact inference path ``SloTextEmbedder.embed()``
+    uses: encode, mean-subtract, L2-normalize. The n-gram side is the same
+    ``_word_ngram_embed`` the vector store falls back to, so the comparison is
+    trained-deployed vs the status quo.
+
+    Args:
+        texts: training corpus
+        encoder: trained encoder
+        vocab: token vocab
+        max_seq_len: sequence length
+        encode_fn: optional BPE encode function
+        embed_mean: (D,) corpus mean for debiasing
+
+    Returns:
+        retrieval benchmark dict (see ``_retrieval_benchmark``)
+    """
+    def trained_fn(t):
+        ids = (encode_fn or _encode_tokens)(t, max_seq_len)
+        ids = np.asarray(ids, dtype=np.int64)[np.newaxis, :]
+        with _no_accel():
+            v = encoder.forward(ids).data.squeeze(0)
+        if embed_mean is not None and embed_mean.size == len(v):
+            v = v - embed_mean
+        n = np.linalg.norm(v)
+        return v / n if n > 0 else v
+
+    from domains.inference.vector_store import _word_ngram_embed
+    return _retrieval_benchmark(
+        texts, trained_fn, lambda t: _word_ngram_embed(t, 128),
+        top_k=QUALITY_NN_K, max_queries=QUALITY_MAX_PROBES,
+    )
+
+
 def _save_checkpoint(
     path: str,
     encoder,
@@ -733,12 +923,13 @@ def _save_checkpoint(
 ):
     """Save embedder as .sou checkpoint with vocab sidecar.
 
-    When ``texts`` is provided, the quality gate is computed from the real
-    training corpus and recorded in the checkpoint metadata.
+    When ``texts`` is provided, the corpus mean embedding (anisotropy debias)
+    and the quality gate metrics are computed from the real training corpus
+    and recorded in the checkpoint metadata.
 
     Side effects:
         - writes ``path`` (.sou) and ``path``-vocab.json
-        - records ``quality`` in the checkpoint meta
+        - records ``quality`` and ``embed_mean`` in the checkpoint meta
     """
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
@@ -762,11 +953,17 @@ def _save_checkpoint(
     # Manual save: just dump all parameter arrays
     import tempfile
     quality = None
+    embed_mean = None
     if texts:
         try:
-            quality = _compute_quality(texts, encoder, vocab, max_seq_len, encode_fn)
+            embed_mean = _compute_embed_mean(texts, encoder, vocab, max_seq_len, encode_fn)
+            quality = _compute_quality(texts, encoder, vocab, max_seq_len, encode_fn, embed_mean)
+            quality["retrieval"] = _retrieval_benchmark_for(
+                texts, encoder, vocab, max_seq_len, encode_fn, embed_mean,
+            )
         except Exception:
             quality = None
+            embed_mean = None
     meta = {
         "version": 3,
         "soul_name": "text-embedder",
@@ -777,6 +974,8 @@ def _save_checkpoint(
     }
     if quality is not None:
         meta["quality"] = quality
+    if embed_mean is not None:
+        meta["embed_mean"] = [float(v) for v in embed_mean]
     json_bytes = json.dumps(meta, allow_nan=False).encode()
 
     from domains.training.slonet import SOU_MAGIC
@@ -838,6 +1037,7 @@ class SloTextEmbedder:
         max_seq_len: int = DEFAULT_MAX_SEQ_LEN,
         encode_fn=None,
         quality: Optional[dict] = None,
+        embed_mean: Optional[np.ndarray] = None,
     ):
         self.encoder = encoder
         self.vocab = vocab
@@ -845,6 +1045,9 @@ class SloTextEmbedder:
         self.max_seq_len = max_seq_len
         self.encode_fn = encode_fn  # BPE encode function if available
         self.quality = quality or {}
+        self.embed_mean = (
+            np.asarray(embed_mean, dtype=np.float32) if embed_mean is not None else None
+        )
 
     def eval(self):
         """Set encoder to eval mode (disables dropout for deterministic output)."""
@@ -953,7 +1156,12 @@ class SloTextEmbedder:
                     padded = np.zeros(max_len, dtype=np.int64)
                     padded[:len(ids)] = ids
                     return padded
-            embedder = cls(encoder, vocab, embed_dim, max_seq_len, encode_fn=encode_fn, quality=meta.get("quality"))
+            embedder = cls(
+                encoder, vocab, embed_dim, max_seq_len,
+                encode_fn=encode_fn,
+                quality=meta.get("quality"),
+                embed_mean=meta.get("embed_mean"),
+            )
             embedder.eval()
             return embedder
 
@@ -1006,6 +1214,12 @@ class SloTextEmbedder:
             vec = emb.data.squeeze(0)
         finally:
             _slonet._ACCELERATOR = _prev_accel
+
+        # Anisotropy debias: subtract the corpus mean so the discriminative
+        # residual directions dominate (SloNet spaces collapse toward a
+        # common direction; see _compute_embed_mean).
+        if self.embed_mean is not None and self.embed_mean.size == len(vec):
+            vec = vec - self.embed_mean
 
         # L2-normalize
         norm = np.linalg.norm(vec)

@@ -913,6 +913,16 @@ def token_tree_lineage(ctx, token, **kwargs):
     cmd_token_tree_lineage(_ns(**kwargs))
 
 
+@token_tree.command("vocab", help="List a paged slice of the vocabulary with flags")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.option("--offset", default=0, type=int, help="Number of leading entries to skip")
+@click.option("--limit", "-n", default=50, type=int, help="Maximum entries to print (0 = no limit)")
+@click.pass_context
+def token_tree_vocab(ctx, **kwargs):
+    from commands.token_tree import cmd_token_tree_vocab
+    cmd_token_tree_vocab(_ns(**kwargs))
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # checkpoint — list, load, delete training checkpoints
 # ═══════════════════════════════════════════════════════════════════════

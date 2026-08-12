@@ -70,3 +70,23 @@ describe('benchmarkController.stats', () => {
     expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/stats')
   })
 })
+
+describe('benchmarkController.run with dataset', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('passes dataset param when provided', async () => {
+    apiClient.apiPost.mockResolvedValue({ model: 'gpt2', perplexity: 10 })
+    await benchmarkController.run({ model: 'gpt2', dataset: 'shakespeare' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/benchmark/run', { model: 'gpt2', dataset: 'shakespeare' })
+  })
+})
+
+describe('benchmarkController.history with custom limit', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('passes custom limit', async () => {
+    apiClient.apiGet.mockResolvedValue({ results: [] })
+    await benchmarkController.history(25)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/metrics?limit=25')
+  })
+})

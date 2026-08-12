@@ -93,4 +93,30 @@ describe('streamChatResponse', () => {
     await streamChatResponse(mockParams)
     expect(mockParams.onToolCall).not.toHaveBeenCalled()
   })
+
+  it('dispatches knowledge event', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"source":"rag","fact_count":3},"message":""}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onKnowledge).toHaveBeenCalledWith('rag', 3)
+  })
+
+  it('calls onComplete on stream finish', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":""},"message":""}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onComplete).toHaveBeenCalled()
+  })
+
+  it('calls onError on non-ok response', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: () => Promise.resolve('Service unavailable'),
+    } as unknown as Response)
+    await streamChatResponse(mockParams)
+    expect(mockParams.onError).toHaveBeenCalledWith(503, 'Service unavailable')
+  })
 })

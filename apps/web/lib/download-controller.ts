@@ -17,8 +17,8 @@ export interface DownloadProgress {
   cached?: boolean
 }
 
-export async function startDownload(modelId: string, totalBytesHint = 0) {
-  return apiPost('/models/download', { model_id: modelId, total_bytes_hint: totalBytesHint })
+export async function startDownload(modelId: string, totalBytesHint = 0): Promise<DownloadProgress> {
+  return apiPost<DownloadProgress>('/models/download', { model_id: modelId, total_bytes_hint: totalBytesHint })
 }
 
 export async function getDownloadStatus(modelId: string): Promise<DownloadProgress> {

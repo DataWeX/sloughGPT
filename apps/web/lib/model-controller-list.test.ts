@@ -62,4 +62,12 @@ describe('modelController.list', () => {
     const rows = await modelController.list()
     expect(rows).toEqual([])
   })
+
+  it('maps parameters field', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      models: [{ id: 'p1', name: 'ParamModel', parameters: 1000000000 }],
+    })
+    const rows = await modelController.list()
+    expect(rows[0].parameters).toBe(1000000000)
+  })
 })

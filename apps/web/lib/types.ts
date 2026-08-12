@@ -66,6 +66,7 @@ export interface ModelInfo {
   size_mb?: number
   size_gb?: number
   params?: string
+  parameters?: number
   cached?: boolean
   loaded?: boolean
   thumbnail?: string

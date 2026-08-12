@@ -21,4 +21,8 @@ describe('catalogIdMatchesRuntime', () => {
     expect(catalogIdMatchesRuntime('gpt2', 'gpt2-xl')).toBe(false)
     expect(catalogIdMatchesRuntime('a', 'b')).toBe(false)
   })
+
+  it('handles single segment ids', () => {
+    expect(catalogIdMatchesRuntime('model', 'model')).toBe(true)
+  })
 })

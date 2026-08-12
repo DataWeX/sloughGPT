@@ -160,14 +160,23 @@ stored for a deterministic sample of probe texts:
 | `mean_cosine` | mean off-diagonal probe cosine — collapse detector |
 | `nn_agreement` | mean top-3 neighbour overlap with the n-gram reference (diagnostic) |
 
+### Anisotropy debiasing
+
+SloNet encoders collapse toward a common direction (raw mean cosine ≈ 0.93+ for
+small corpora). At save time the corpus mean embedding is computed from the
+probe texts and stored in the checkpoint (`embed_mean`). At inference every
+embedding is mean-subtracted and re-normalized — the standard BERT-whitening
+debias — which re-centers the space (mean cosine ≈ 0.0) and recovers the
+discriminative residuals. The quality metrics are computed on this deployed,
+debiased space.
+
 At load time `simple_embed` adopts the trained embedder for vector search only
 if `acceptable()` passes: at least 2 probes, `degenerate_fraction < 0.25` and
-`mean_cosine < 0.90`. A checkpoint that collapses toward uniform embeddings
-(common for small corpora — mean cosine ≈ 0.93+ vs ≈ 0.66 for the n-gram
-reference) is rejected and vector search falls back to the zero-download n-gram
-TF-IDF embedder. Checkpoints trained before the gate existed carry no quality
-metadata and are also rejected — retrain to record it. The CLI prints the
-verdict and the three metrics after training.
+`mean_cosine < 0.90`. A checkpoint that collapses even after debiasing is
+rejected and vector search falls back to the zero-download n-gram TF-IDF
+embedder. Checkpoints trained before the gate existed carry no quality metadata
+and are also rejected — retrain to record it. The CLI prints the verdict and the
+three metrics after training.
 
 ## Data Types
 

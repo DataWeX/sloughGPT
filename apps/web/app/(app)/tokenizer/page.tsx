@@ -6,6 +6,16 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { tokenizerController, type TokenizerStats, type SampleWord } from '@/lib/tokenizer-controller'
 import { TokenizerEfficiencyCard } from '@/components/tokenizer/TokenizerEfficiencyCard'
+import { TokenTreeQueryCard } from '@/components/tokenizer/TokenTreeQueryCard'
+import { TokenTreeTrainCard } from '@/components/tokenizer/TokenTreeTrainCard'
+import { TokenTreeCodecCard } from '@/components/tokenizer/TokenTreeCodecCard'
+import { TokenTreeMergesCard } from '@/components/tokenizer/TokenTreeMergesCard'
+import { TokenTreeVocabCard } from '@/components/tokenizer/TokenTreeVocabCard'
+import { TokenTreePersistenceCard } from '@/components/tokenizer/TokenTreePersistenceCard'
+import { TokenTreeEmbeddingsCard } from '@/components/tokenizer/TokenTreeEmbeddingsCard'
+import { TokenTreePathCard } from '@/components/tokenizer/TokenTreePathCard'
+import { TokenTreeLineageCard } from '@/components/tokenizer/TokenTreeLineageCard'
+import { TokenTreePlaygroundCard } from '@/components/tokenizer/TokenTreePlaygroundCard'
 import { useToastStore } from '@/lib/toast-store'
 
 type Tab = 'playground' | 'vocab' | 'samples' | 'train'
@@ -28,6 +38,7 @@ export default function TokenizerPage() {
   const [trainVocab, setTrainVocab] = useState(512)
   const [training, setTraining] = useState(false)
   const [trainResult, setTrainResult] = useState<string | null>(null)
+  const [treeVersion, setTreeVersion] = useState(0)
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
@@ -233,6 +244,7 @@ export default function TokenizerPage() {
                 <label className="text-xs text-muted-foreground">Vocab size:</label>
                 <Input
                   type="number"
+                  aria-label="Vocab size"
                   value={trainVocab}
                   onChange={e => setTrainVocab(parseInt(e.target.value) || 512)}
                   className="w-24"
@@ -249,6 +261,17 @@ export default function TokenizerPage() {
             </CardContent>
           </Card>
         )}
+
+        <TokenTreeQueryCard key={treeVersion} />
+        <TokenTreeMergesCard refreshKey={treeVersion} />
+        <TokenTreeVocabCard refreshKey={treeVersion} />
+        <TokenTreeTrainCard onTrained={() => setTreeVersion(v => v + 1)} />
+        <TokenTreePersistenceCard refreshKey={treeVersion} onLoaded={() => setTreeVersion(v => v + 1)} />
+        <TokenTreeEmbeddingsCard />
+        <TokenTreeCodecCard />
+        <TokenTreePathCard />
+        <TokenTreeLineageCard />
+        <TokenTreePlaygroundCard />
       </div>
     </div>
   )

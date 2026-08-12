@@ -56,6 +56,7 @@ def get_all_routers() -> List[APIRouter]:
     from . import tokenizer
     from . import learner
     from . import self_train
+    from . import token_tree
     from . import errors as error_logger
     from . import mobile
     from . import images
@@ -74,6 +75,7 @@ def get_all_routers() -> List[APIRouter]:
         session.router, meta_weights.router, lora_eval.router,
         companion.router, multimodal.router, tokenizer.router,
         learner.router, self_train.router,
+        token_tree.router,
         error_logger.router,
         mobile.router,
         images.router,
