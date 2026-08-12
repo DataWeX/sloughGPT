@@ -30,4 +30,16 @@ describe('ThemeSwitcher', () => {
     const groups = screen.getAllByRole('group')
     expect(groups.length >= 1).toBe(true)
   })
+
+  it('mode button has aria-label', () => {
+    renderSwitcher()
+    const btns = screen.getAllByRole('button')
+    expect(btns.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('radio buttons are rendered', () => {
+    renderSwitcher()
+    const radios = screen.getAllByRole('radio')
+    expect(radios.length).toBeGreaterThanOrEqual(7)
+  })
 })

@@ -1183,6 +1183,60 @@ class SloughGPTTrainer:
                   stoi=self.stoi, itos=self.itos, chars=chars_list,
                   training_duration=training_duration)
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
+        self._prune_stale_checkpoints(keep_final=is_final)
+
+    def _prune_stale_checkpoints(self, keep_final: bool = False) -> None:
+        """Delete stale ``.soul`` checkpoints so the directory never accumulates files.
+
+        During training only the ``max_checkpoints`` newest files are kept, so a
+        crashed run can still be resumed (``--resume-latest`` scans by mtime). On
+        the final save all older checkpoints are removed, leaving a single model
+        file.
+
+        Args:
+            keep_final: If True, keep only the newest checkpoint (the just-written
+                final one); otherwise keep the ``max_checkpoints`` newest files.
+
+        Side effects:
+            - unlinks stale ``.soul`` files under ``config.checkpoint_dir``
+            - rewires ``_best_model_path`` so it never points at a deleted file
+              (on final saves it points at the final checkpoint; otherwise it is
+              reset to None when the best checkpoint was pruned by the window)
+        """
+        checkpoint_dir = Path(self.config.checkpoint_dir)
+        if not checkpoint_dir.is_dir():
+            return
+        try:
+            files = sorted(
+                checkpoint_dir.glob("*.soul"),
+                key=lambda p: (p.stat().st_mtime, p.name),
+                reverse=True,
+            )
+        except OSError:
+            return
+
+        keep_count = 1 if keep_final else max(
+            1, int(getattr(self.config, "max_checkpoints", 5))
+        )
+        keep = {str(p) for p in files[:keep_count]}
+        for stale in files[keep_count:]:
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+            meta = Path(str(stale) + ".meta.json")
+            try:
+                if meta.exists():
+                    meta.unlink()
+            except OSError:
+                pass
+
+        if keep_final and self._last_checkpoint_path:
+            # The just-written final checkpoint is the newest file (kept above);
+            # rewire the best reference in case it pointed at a pruned checkpoint.
+            self._best_model_path = self._last_checkpoint_path
+        elif self._best_model_path and self._best_model_path not in keep:
+            self._best_model_path = None
 
     def save(self, path: str, format: str = "sou", stoi=None, itos=None, chars=None, training_duration=None):
         """Save model in .soul format (the only SloNet checkpoint format)."""

@@ -93,11 +93,21 @@ Key flags: `--steps`, `--embed/--layers/--heads/--block` (arch), `--batch`,
 `--eval-interval`, `--log-interval`, `--soul-name`, `--save-stem`,
 `--save-format` (`sou`/`npz`), `--resume PATH`, `--resume-latest`.
 
+### Checkpoint retention
+
+Checkpoints never accumulate. During training only the `--max-checkpoints`
+newest `.soul` files are kept (so a crashed run can resume via
+`--resume-latest`); on completion the trainer writes the final checkpoint and
+the CLI removes all intermediate files, leaving **one** model file
+(`<checkpoint-dir>/<soul-name>.soul` plus its `.meta.json` sidecar).
+
 ### Live progress bar
 
-`train native` (and `train`) render a live `TrainingProgressBar`
-(`apps/cli/src/utils/training_progress.py`) fed directly by the trainer's
-`on_progress` callback. It shows step/total, epoch, train loss with a recent
+`train native`, `train`, `train embed`, and `distill` render a live
+`TrainingProgressBar` (`apps/cli/src/utils/training_progress.py`). `train
+native` and `train` feed it the trainer's `on_progress` dicts directly;
+`train embed` and `distill` adapt their epoch/step callbacks into the same
+dict shape. It shows step/total, epoch, train loss with a recent
 loss sparkline, eval loss (best-tracked), learning rate, throughput (it/s),
 ETA, and elapsed time. On a TTY it updates one line in place; piped/redirected
 output prints one complete line per update (log-friendly). Total steps are

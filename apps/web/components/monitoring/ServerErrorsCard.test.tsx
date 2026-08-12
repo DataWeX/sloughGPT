@@ -63,4 +63,28 @@ describe('ServerErrorsCard', () => {
     expect(screen.getByText('just now')).toBeDefined()
     vi.useRealTimers()
   })
+
+  it('renders multiple errors', () => {
+    render(<ServerErrorsCard liveHealth={base} />)
+    expect(screen.getByText(/POST \/inference\/generate/)).toBeDefined()
+    expect(screen.getByText(/POST \/chat/)).toBeDefined()
+  })
+
+  it('renders error status codes', () => {
+    render(<ServerErrorsCard liveHealth={base} />)
+    expect(screen.getByText('500')).toBeDefined()
+    expect(screen.getByText('422')).toBeDefined()
+  })
+
+  it('renders error messages', () => {
+    render(<ServerErrorsCard liveHealth={base} />)
+    expect(screen.getByText('generation timed out')).toBeDefined()
+    expect(screen.getByText('bad payload')).toBeDefined()
+  })
+
+  it('renders error types', () => {
+    render(<ServerErrorsCard liveHealth={base} />)
+    expect(screen.getByText(/TimeoutError/)).toBeDefined()
+    expect(screen.getByText(/ValidationError/)).toBeDefined()
+  })
 })

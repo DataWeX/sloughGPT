@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import React from 'react'
 import NotFound from './not-found'
 
 vi.mock('next/link', () => ({
@@ -31,5 +32,23 @@ describe('NotFound', () => {
   it('links Chat to /chat', () => {
     render(<NotFound />)
     expect(screen.getByRole('link', { name: 'Chat' })).toHaveAttribute('href', '/chat')
+  })
+
+  it('renders exactly two navigation links', () => {
+    render(<NotFound />)
+    const links = screen.getAllByRole('link')
+    expect(links).toHaveLength(2)
+  })
+
+  it('Home link comes before Chat link', () => {
+    render(<NotFound />)
+    const links = screen.getAllByRole('link')
+    expect(links[0]).toHaveTextContent('Home')
+    expect(links[1]).toHaveTextContent('Chat')
+  })
+
+  it('renders the page body', () => {
+    const { container } = render(<NotFound />)
+    expect(container.firstElementChild).toBeTruthy()
   })
 })

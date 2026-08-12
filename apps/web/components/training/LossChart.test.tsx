@@ -53,4 +53,31 @@ describe('LossChart', () => {
     render(<LossChart data={manyTrain} live={true} windowSize={40} />)
     expect(screen.getByTestId('line-chart')).toBeDefined()
   })
+
+  it('renders axes and grid', () => {
+    render(<LossChart data={[train(1, 2.0)]} />)
+    expect(screen.getByTestId('x-axis')).toBeDefined()
+    expect(screen.getByTestId('y-axis')).toBeDefined()
+    expect(screen.getByTestId('cartesian-grid')).toBeDefined()
+  })
+
+  it('renders tooltip', () => {
+    render(<LossChart data={[train(1, 2.0)]} />)
+    expect(screen.getByTestId('tooltip')).toBeDefined()
+  })
+
+  it('renders lines for data', () => {
+    render(<LossChart data={[train(1, 2.0)]} />)
+    expect(screen.getAllByTestId('line').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders eval data lines', () => {
+    render(<LossChart data={[train(1, 2.0), evalP(1, 3.0)]} />)
+    expect(screen.getAllByTestId('line').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders responsive container', () => {
+    render(<LossChart data={[train(1, 2.0)]} />)
+    expect(screen.getByTestId('responsive-container')).toBeDefined()
+  })
 })

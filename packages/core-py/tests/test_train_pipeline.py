@@ -1089,6 +1089,72 @@ class TestSaveCheckpoint:
         assert t._last_checkpoint_path is not None
         assert os.path.exists(t._last_checkpoint_path)
 
+    def _monotonic_time(self, monkeypatch, base):
+        ticks = iter(range(base, base + 20))
+
+        def fake_time():
+            return next(ticks)
+
+        monkeypatch.setattr("domains.training.train_pipeline.time.time", fake_time)
+
+    def test_rolling_save_keeps_max_checkpoints(self, data_path, tmp_path, monkeypatch):
+        t = make_trainer(data_path, tiny_config(tmp_path, max_checkpoints=3))
+        self._monotonic_time(monkeypatch, 1_700_000_000)
+        for i in range(7):
+            t.save_checkpoint({"eval_loss": 1.0 + i})
+        souls = sorted(p.name for p in (tmp_path / "ckpts").glob("*.soul"))
+        assert len(souls) == 3
+        assert souls[0].startswith(f"{tmp_path.name}_1700000004")
+        assert souls[-1].startswith(f"{tmp_path.name}_1700000006")
+        metas = list((tmp_path / "ckpts").glob("*.soul.meta.json"))
+        assert len(metas) == 3
+
+    def test_final_save_keeps_single_file(self, data_path, tmp_path, monkeypatch):
+        t = make_trainer(data_path, tiny_config(tmp_path, max_checkpoints=3))
+        self._monotonic_time(monkeypatch, 1_700_000_000)
+        for i in range(3):
+            t.save_checkpoint({"eval_loss": 1.0 + i})
+        assert len(list((tmp_path / "ckpts").glob("*.soul"))) == 3
+        t.save_checkpoint({"eval_loss": 0.1}, is_final=True)
+        souls = list((tmp_path / "ckpts").glob("*.soul"))
+        assert len(souls) == 1
+        assert souls[0].name.startswith(f"{tmp_path.name}_1700000003")
+        assert os.path.exists(t._last_checkpoint_path)
+        assert t._best_model_path == t._last_checkpoint_path
+        metas = list((tmp_path / "ckpts").glob("*.soul.meta.json"))
+        assert len(metas) == 1
+
+    def test_final_save_rewires_best_model_path(self, data_path, tmp_path, monkeypatch):
+        t = make_trainer(data_path, tiny_config(tmp_path, max_checkpoints=5))
+        self._monotonic_time(monkeypatch, 1_700_000_000)
+        t.save_checkpoint({"eval_loss": 1.0})
+        best = t._last_checkpoint_path
+        t._best_model_path = best
+        t.save_checkpoint({"eval_loss": 2.0})
+        t.save_checkpoint({"eval_loss": 3.0})
+        assert os.path.exists(best)
+        t.save_checkpoint({"eval_loss": 0.1}, is_final=True)
+        assert not os.path.exists(best)
+        assert os.path.exists(t._best_model_path)
+        assert t._best_model_path == t._last_checkpoint_path
+
+    def test_rolling_prune_resets_best_path_when_pruned(self, data_path, tmp_path, monkeypatch):
+        t = make_trainer(data_path, tiny_config(tmp_path, max_checkpoints=2))
+        self._monotonic_time(monkeypatch, 1_700_000_000)
+        t.save_checkpoint({"eval_loss": 1.0})
+        best = t._last_checkpoint_path
+        t._best_model_path = best
+        t.save_checkpoint({"eval_loss": 2.0})
+        t.save_checkpoint({"eval_loss": 3.0})
+        assert not os.path.exists(best)
+        assert t._best_model_path is None
+
+    def test_prune_missing_dir_is_noop(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.config.checkpoint_dir = str(tmp_path / "nope")
+        t._prune_stale_checkpoints()
+        assert not (tmp_path / "nope").exists()
+
 
 class TestSave:
     def test_save_sou(self, data_path, tmp_path):

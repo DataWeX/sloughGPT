@@ -73,4 +73,20 @@ describe('ErrorLifecycle', () => {
     const errorCalls = spy.mock.calls.filter(c => c[0] === 'error')
     expect(errorCalls.length).toBe(2)
   })
+
+  it('captures unhandled rejection events', () => {
+    const spy = vi.spyOn(window, 'addEventListener')
+    render(<ErrorLifecycle />)
+    const rejectionCalls = spy.mock.calls.filter(c => c[0] === 'unhandledrejection')
+    expect(rejectionCalls.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('installs listeners in capture and bubble phases', () => {
+    const spy = vi.spyOn(window, 'addEventListener')
+    render(<ErrorLifecycle />)
+    const errorCalls = spy.mock.calls.filter(c => c[0] === 'error')
+    expect(errorCalls.length).toBe(2)
+    expect(errorCalls[0][2]).toBe(true)
+    expect(errorCalls[1][2]).toBeUndefined()
+  })
 })

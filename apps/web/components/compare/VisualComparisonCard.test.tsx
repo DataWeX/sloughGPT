@@ -65,4 +65,14 @@ describe('VisualComparisonCard', () => {
     render(<VisualComparisonCard chartData={data} />)
     expect(screen.getAllByTestId('bar-chart').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('renders responsive container', () => {
+    render(
+      <VisualComparisonCard chartData={[
+        { name: 'A', throughput: 10, latency: 50, memory: 100 },
+        { name: 'B', throughput: 20, latency: 30, memory: 80 },
+      ]} />,
+    )
+    expect(screen.getAllByTestId('responsive-container').length).toBeGreaterThanOrEqual(1)
+  })
 })

@@ -58,4 +58,30 @@ describe('ModelMetricsCard', () => {
     render(<ModelMetricsCard liveHealth={base} />)
     expect(screen.getByText(/9.0K tokens/)).toBeDefined()
   })
+
+  it('shows tokens per second for each model', () => {
+    render(<ModelMetricsCard liveHealth={base} />)
+    expect(screen.getByText('9.5 tok/s')).toBeDefined()
+    expect(screen.getByText('4.2 tok/s')).toBeDefined()
+  })
+
+  it('shows request count for each model', () => {
+    render(<ModelMetricsCard liveHealth={base} />)
+    expect(screen.getByText(/12 requests/)).toBeDefined()
+    expect(screen.getByText(/3 requests/)).toBeDefined()
+  })
+
+  it('renders per-model stats sections', () => {
+    render(<ModelMetricsCard liveHealth={base} />)
+    expect(screen.getByText('gpt2')).toBeDefined()
+    expect(screen.getByText('qwen-0.5b')).toBeDefined()
+    expect(screen.getByText('9.5 tok/s')).toBeDefined()
+    expect(screen.getByText('4.2 tok/s')).toBeDefined()
+  })
+
+  it('renders multiple models', () => {
+    render(<ModelMetricsCard liveHealth={base} />)
+    expect(screen.getByText('gpt2')).toBeDefined()
+    expect(screen.getByText('qwen-0.5b')).toBeDefined()
+  })
 })

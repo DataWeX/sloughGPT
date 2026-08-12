@@ -79,4 +79,15 @@ describe('TrendChart', () => {
     render(<TrendChart liveHealth={{ ...base, health_history: [] }} />)
     expect(screen.getAllByTestId('composed-chart').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('renders chart with both health and memory data', () => {
+    render(<TrendChart liveHealth={base} />)
+    expect(screen.getAllByTestId('composed-chart').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByTestId('responsive-container').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders empty state text', () => {
+    render(<TrendChart liveHealth={null} />)
+    expect(screen.getByText(/No trend data yet/)).toBeDefined()
+  })
 })

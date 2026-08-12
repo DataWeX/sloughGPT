@@ -35,4 +35,12 @@ describe('SummaryCard', () => {
     render(<SummaryCard completedResults={[['unknown', result(15)], ['gpt2', result(10)]]} models={[{ id: 'unknown', name: '' }, { id: 'gpt2', name: 'GPT-2' }]} />)
     expect(screen.getByText('unknown')).toBeDefined()
   })
+
+  it('renders results for two models', () => {
+    render(<SummaryCard completedResults={[['gpt2', result(10)], ['qwen', result(20)]]} models={models} />)
+    expect(screen.getByText('GPT-2')).toBeDefined()
+    expect(screen.getByText('Qwen')).toBeDefined()
+    expect(screen.getByText('10.0 tok/s')).toBeDefined()
+    expect(screen.getByText('20.0 tok/s')).toBeDefined()
+  })
 })

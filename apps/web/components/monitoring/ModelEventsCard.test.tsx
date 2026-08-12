@@ -65,4 +65,22 @@ describe('ModelEventsCard', () => {
     expect(screen.getAllByText('just now').length).toBeGreaterThanOrEqual(1)
     vi.useRealTimers()
   })
+
+  it('renders multiple events', () => {
+    render(<ModelEventsCard liveHealth={base} />)
+    expect(screen.getAllByText('gpt2').length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('renders event details', () => {
+    render(<ModelEventsCard liveHealth={base} />)
+    expect(screen.getByText('loaded from cache')).toBeDefined()
+    expect(screen.getByText('generation failed')).toBeDefined()
+  })
+
+  it('renders event types as badges', () => {
+    render(<ModelEventsCard liveHealth={base} />)
+    expect(screen.getByText('load')).toBeDefined()
+    expect(screen.getByText('error')).toBeDefined()
+    expect(screen.getByText('unload')).toBeDefined()
+  })
 })

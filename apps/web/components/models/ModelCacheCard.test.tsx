@@ -34,4 +34,20 @@ describe('ModelCacheCard', () => {
     render(<ModelCacheCard {...base} health={null} />)
     expect(screen.getByText('None')).toBeDefined()
   })
+
+  it('renders model count and total size', () => {
+    render(<ModelCacheCard {...base} />)
+    expect(screen.getByText('4')).toBeDefined()
+    expect(screen.getByText('3.5 GB')).toBeDefined()
+  })
+
+  it('renders current model type', () => {
+    render(<ModelCacheCard {...base} />)
+    expect(screen.getByText('GPT 2')).toBeDefined()
+  })
+
+  it('renders card structure', () => {
+    const { container } = render(<ModelCacheCard {...base} />)
+    expect(container.querySelector('.rounded-lg')).toBeTruthy()
+  })
 })

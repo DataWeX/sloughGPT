@@ -80,4 +80,22 @@ describe('TrainingSummaryCard', () => {
     )
     expect(screen.getAllByText('1h 2m').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('shows total checkpoints count', () => {
+    render(
+      <TrainingSummaryCard
+        checkpoints={[mkCp({ loss: 1.0 }), mkCp({ loss: 2.0 }), mkCp({ loss: 3.0 })]}
+      />
+    )
+    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows loss spread with 2+ checkpoints', () => {
+    render(
+      <TrainingSummaryCard
+        checkpoints={[mkCp({ loss: 1.0 }), mkCp({ loss: 3.0 })]}
+      />
+    )
+    expect(screen.getAllByText('Loss spread').length).toBeGreaterThanOrEqual(1)
+  })
 })

@@ -64,4 +64,16 @@ describe('RateViolationsCard', () => {
     expect(screen.getAllByText('just now').length).toBeGreaterThanOrEqual(1)
     vi.useRealTimers()
   })
+
+  it('renders multiple violations', () => {
+    render(<RateViolationsCard liveHealth={base} />)
+    expect(screen.getByText(/\/inference\/generate/)).toBeDefined()
+    expect(screen.getByText(/\/chat\/stream/)).toBeDefined()
+  })
+
+  it('renders count/limit ratios', () => {
+    render(<RateViolationsCard liveHealth={base} />)
+    expect(screen.getByText('32/10/s')).toBeDefined()
+    expect(screen.getByText('11/5/s')).toBeDefined()
+  })
 })

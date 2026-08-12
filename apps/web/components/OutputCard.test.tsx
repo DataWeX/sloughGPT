@@ -63,4 +63,17 @@ describe('OutputCard', () => {
     render(<OutputCard />)
     expect(screen.getByText('Output will appear here during server activity')).toBeInTheDocument()
   })
+
+  it('renders source labels', async () => {
+    const { OutputCard } = await import('@/components/OutputCard')
+    render(<OutputCard />)
+    expect(screen.getByText('server')).toBeInTheDocument()
+    expect(screen.getByText('inference')).toBeInTheDocument()
+  })
+
+  it('has scrollable container', async () => {
+    const { OutputCard } = await import('@/components/OutputCard')
+    const { container } = render(<OutputCard />)
+    expect(container.querySelector('[class*="overflow"]')).toBeDefined()
+  })
 })

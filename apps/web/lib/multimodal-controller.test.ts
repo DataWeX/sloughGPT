@@ -34,6 +34,14 @@ describe('multimodalController.getCapabilities', () => {
     expect(caps.learning_method).toBe('contrastive + self-training')
     expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
+
+  it('maps engine fields', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
+    const caps = await multimodalController.getCapabilities()
+    expect(caps.image_caption).toBe(true)
+    expect(caps.speech_model).toBe('whisper')
+    expect(caps.vision_model).toBe('soulnet')
+  })
 })
 
 describe('multimodalController.getLearningProgress', () => {
@@ -46,6 +54,13 @@ describe('multimodalController.getLearningProgress', () => {
     expect(prog.vocab_size).toBe(256)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
+
+  it('maps accuracy fields', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
+    const prog = await multimodalController.getLearningProgress()
+    expect(prog.trained).toBe(true)
+    expect(prog.replay_buffer_size).toBe(200)
+  })
 })
 
 describe('multimodalController.getTrainingReport', () => {
@@ -57,6 +72,12 @@ describe('multimodalController.getTrainingReport', () => {
     expect(report.caption_history).toHaveLength(2)
     expect(report.unique_captions).toBe(2)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
+  })
+
+  it('maps diversity ratio', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
+    const report = await multimodalController.getTrainingReport()
+    expect(report.diversity_ratio).toBe(1.0)
   })
 })
 
@@ -98,5 +119,11 @@ describe('multimodalController.trainBatchFromDir', () => {
     expect(result.status).toBe('started')
     expect(result.total_images).toBe(42)
     expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/train-batch', expect.any(FormData), { raw: true })
+  })
+
+  it('returns error status on failure', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'error', message: 'no images found' })
+    const result = await multimodalController.trainBatchFromDir('/empty')
+    expect(result.status).toBe('error')
   })
 })

@@ -38,4 +38,16 @@ describe('generateController.generate', () => {
 
     await expect(generateController.generate({ prompt: 'x' })).rejects.toThrow('503')
   })
+
+  it('sends prompt to /inference/generate', async () => {
+    apiClient.apiPost.mockResolvedValue({ text: 'ok', model: 'test', tokens_generated: 1 })
+    await generateController.generate({ prompt: 'test prompt' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/inference/generate', { prompt: 'test prompt' })
+  })
+
+  it('returns empty text without throwing', async () => {
+    apiClient.apiPost.mockResolvedValue({ text: '', model: 'm', tokens_generated: 0 })
+    const result = await generateController.generate({ prompt: 'hi' })
+    expect(result.text).toBe('')
+  })
 })

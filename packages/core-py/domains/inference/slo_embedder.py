@@ -55,6 +55,13 @@ DEFAULT_EPOCHS = 15
 CONTRASTIVE_TEMPERATURE = 0.07
 LSE_THRESHOLD = 15.0
 
+# Quality gate thresholds (recorded at train time, enforced at load time)
+QUALITY_MAX_PROBES = 24          # probe texts sampled from the training corpus
+QUALITY_COS_EPS = 0.9999         # off-diagonal cosine above this = "degenerate" pair
+QUALITY_DEGENERATE_MAX = 0.25    # max fraction of probe pairs allowed to be degenerate
+QUALITY_MEAN_COSINE_MAX = 0.90   # max mean off-diagonal probe cosine (collapse detector)
+QUALITY_NN_K = 3                 # nearest-neighbour count for n-gram agreement diagnostic
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -571,7 +578,7 @@ def train_embedder(
 
     # 4. Save checkpoint
     out_path = save_path or str(_EMBEDDER_PATH)
-    _save_checkpoint(out_path, encoder, vocab, itos, embed_dim, max_seq_len, n_heads, n_layers, bpe=bpe)
+    _save_checkpoint(out_path, encoder, vocab, itos, embed_dim, max_seq_len, n_heads, n_layers, bpe=bpe, texts=texts, encode_fn=encode_fn)
     logger.info("Saved embedder to %s", out_path, extra={"tag": "INFRA"})
 
     return {
@@ -591,6 +598,126 @@ def train_embedder(
 # Save / Load
 # ---------------------------------------------------------------------------
 
+def _sample_probes(texts: List[str], max_probes: int = QUALITY_MAX_PROBES) -> List[str]:
+    """Sample a deterministic subset of texts to act as quality probe vectors.
+
+    Args:
+        texts: full training corpus
+        max_probes: maximum number of probes to sample
+
+    Returns:
+        list of probe texts (length 0 if the corpus is empty)
+    """
+    if not texts:
+        return []
+    step = max(1, len(texts) // max_probes)
+    probes = [texts[i] for i in range(0, len(texts), step)]
+    return probes[:max_probes]
+
+
+def _encode_probe(texts: List[str], encode_fn, vocab: dict, max_seq_len: int) -> np.ndarray:
+    """Tokenize probe texts into a stacked (P, max_seq_len) id matrix."""
+    if encode_fn is not None:
+        return np.stack([encode_fn(t, max_seq_len) for t in texts])
+    return np.stack([_encode_tokens(t, vocab, max_seq_len) for t in texts])
+
+
+def _nn_agreement(trained: np.ndarray, reference: np.ndarray, k: int = QUALITY_NN_K) -> float:
+    """Mean top-k neighbour overlap between two embedding spaces.
+
+    For each probe, the top-k nearest neighbours (excluding the probe itself)
+    are compared between the trained space and the n-gram reference space.
+    Agreement is the mean overlap across probes — a collapse embedder scores
+    ~0, a structure-preserving embedder scores >0.
+
+    Args:
+        trained: (P, D) L2-normalized trained embeddings
+        reference: (P, D) L2-normalized n-gram reference embeddings
+        k: number of neighbours to compare
+
+    Returns:
+        mean Jaccard overlap in [0, 1]
+    """
+    P = trained.shape[0]
+    if P < 2:
+        return 0.0
+    k = max(1, min(k, P - 1))
+    t_sim = trained @ trained.T
+    r_sim = reference @ reference.T
+    overlaps = []
+    for i in range(P):
+        t_idx = set(np.argsort(-t_sim[i])[:k + 1][1:])
+        r_idx = set(np.argsort(-r_sim[i])[:k + 1][1:])
+        overlaps.append(len(t_idx & r_idx) / k)
+    return float(np.mean(overlaps))
+
+
+def _compute_quality(
+    texts: List[str],
+    encoder,
+    vocab: dict,
+    max_seq_len: int,
+    encode_fn=None,
+) -> dict:
+    """Compute honest, computed quality metrics for a trained embedder.
+
+    Metrics (all computed from the real training corpus, no hardcoded pairs):
+        probes: number of probe texts sampled
+        degenerate_fraction: fraction of probe pairs whose cosine is ~1.0
+        mean_cosine: mean off-diagonal cosine across probes (collapse detector)
+        nn_agreement: mean top-k neighbour overlap with the n-gram reference
+
+    Args:
+        texts: training corpus
+        encoder: trained encoder (forward -> (P, D) logits)
+        vocab: token vocab
+        max_seq_len: sequence length used for encoding
+        encode_fn: optional BPE encode function
+
+    Returns:
+        dict of quality metrics
+    """
+    probes = _sample_probes(texts)
+    P = len(probes)
+    if P < 2:
+        return {
+            "probes": P,
+            "degenerate_fraction": 1.0,
+            "mean_cosine": 1.0,
+            "nn_agreement": 0.0,
+            "note": "too few texts for a quality gate",
+        }
+
+    ids = _encode_probe(probes, encode_fn, vocab, max_seq_len)
+    with _no_accel():
+        emb = encoder.forward(ids).data  # (P, D)
+    norms = np.linalg.norm(emb, axis=1, keepdims=True) + 1e-10
+    trained = emb / norms
+
+    sim = trained @ trained.T
+    iu = np.triu_indices(P, k=1)
+    off_diag = sim[iu]
+    degenerate_fraction = float((off_diag >= QUALITY_COS_EPS).mean())
+    mean_cosine = float(off_diag.mean())
+
+    # Reference: word n-gram TF-IDF (zero downloads, always available).
+    try:
+        from domains.inference.vector_store import _word_ngram_embed
+        ref = np.stack([_word_ngram_embed(t, 128) for t in probes])
+        rn = np.linalg.norm(ref, axis=1, keepdims=True) + 1e-10
+        reference = ref / rn
+        nn_agreement = _nn_agreement(trained, reference)
+    except Exception:
+        nn_agreement = 0.0
+
+    return {
+        "probes": P,
+        "degenerate_fraction": degenerate_fraction,
+        "mean_cosine": mean_cosine,
+        "nn_agreement": nn_agreement,
+    }
+
+
 def _save_checkpoint(
     path: str,
     encoder,
@@ -601,8 +728,18 @@ def _save_checkpoint(
     n_heads: int,
     n_layers: int,
     bpe=None,
+    texts: Optional[List[str]] = None,
+    encode_fn=None,
 ):
-    """Save embedder as .sou checkpoint with vocab sidecar."""
+    """Save embedder as .sou checkpoint with vocab sidecar.
+
+    When ``texts`` is provided, the quality gate is computed from the real
+    training corpus and recorded in the checkpoint metadata.
+
+    Side effects:
+        - writes ``path`` (.sou) and ``path``-vocab.json
+        - records ``quality`` in the checkpoint meta
+    """
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
     # Save vocab as JSON sidecar
@@ -624,6 +761,12 @@ def _save_checkpoint(
 
     # Manual save: just dump all parameter arrays
     import tempfile
+    quality = None
+    if texts:
+        try:
+            quality = _compute_quality(texts, encoder, vocab, max_seq_len, encode_fn)
+        except Exception:
+            quality = None
     meta = {
         "version": 3,
         "soul_name": "text-embedder",
@@ -632,6 +775,8 @@ def _save_checkpoint(
         "metadata": {"embed_dim": embed_dim, "max_seq_len": max_seq_len},
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+    if quality is not None:
+        meta["quality"] = quality
     json_bytes = json.dumps(meta, allow_nan=False).encode()
 
     from domains.training.slonet import SOU_MAGIC
@@ -692,12 +837,14 @@ class SloTextEmbedder:
         embed_dim: int = DEFAULT_EMBED_DIM,
         max_seq_len: int = DEFAULT_MAX_SEQ_LEN,
         encode_fn=None,
+        quality: Optional[dict] = None,
     ):
         self.encoder = encoder
         self.vocab = vocab
         self.embed_dim = embed_dim
         self.max_seq_len = max_seq_len
         self.encode_fn = encode_fn  # BPE encode function if available
+        self.quality = quality or {}
 
     def eval(self):
         """Set encoder to eval mode (disables dropout for deterministic output)."""
@@ -806,13 +953,35 @@ class SloTextEmbedder:
                     padded = np.zeros(max_len, dtype=np.int64)
                     padded[:len(ids)] = ids
                     return padded
-            embedder = cls(encoder, vocab, embed_dim, max_seq_len, encode_fn=encode_fn)
+            embedder = cls(encoder, vocab, embed_dim, max_seq_len, encode_fn=encode_fn, quality=meta.get("quality"))
             embedder.eval()
             return embedder
 
         except Exception as e:
             logger.warning("Failed to load SloTextEmbedder: %s", e, extra={"tag": "INFRA"})
             return None
+
+    def acceptable(self) -> bool:
+        """Whether this embedder passes the quality gate for vector search.
+
+        A checkpoint without quality metadata (trained before the gate
+        existed) is unverifiable and therefore rejected — retraining records
+        the metadata.
+
+        Returns:
+            True when the trained corpus shows a non-degenerate, structured
+            embedding space; False otherwise.
+        """
+        q = self.quality
+        if not q:
+            return False
+        if q.get("probes", 0) < 2:
+            return False
+        if q.get("degenerate_fraction", 1.0) >= QUALITY_DEGENERATE_MAX:
+            return False
+        if q.get("mean_cosine", 1.0) >= QUALITY_MEAN_COSINE_MAX:
+            return False
+        return True
 
     def embed(self, text: str) -> List[float]:
         """Encode text to an L2-normalized vector.

@@ -59,4 +59,17 @@ describe('ComparisonTableCard', () => {
     const rows = container.querySelectorAll('tbody tr')
     expect(rows.length).toBe(3)
   })
+
+  it('shows table with rows', () => {
+    const results: [string, any][] = [['gpt2', result(10, 200)]]
+    const { container } = render(<ComparisonTableCard completedResults={results} models={models} bestMetrics={{}} />)
+    expect(container.querySelector('tbody')).toBeDefined()
+    expect(container.querySelectorAll('tbody tr').length).toBe(1)
+  })
+
+  it('handles empty bestMetrics', () => {
+    const results: [string, any][] = [['gpt2', result(10, 200)]]
+    const { container } = render(<ComparisonTableCard completedResults={results} models={models} bestMetrics={{}} />)
+    expect(container.querySelectorAll('tbody tr').length).toBe(1)
+  })
 })

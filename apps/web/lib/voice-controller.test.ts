@@ -31,4 +31,16 @@ describe('voiceController', () => {
     expect(result).toEqual({ audio: 'base64data', duration_ms: 100, backend: 'hf-model', sample_rate: 22050 })
     expect(apiPost).toHaveBeenCalledWith('/voice/tts', { text: 'hello' })
   })
+
+  it('tts sends correct text', async () => {
+    apiPost.mockResolvedValue({ audio: 'data', duration_ms: 50 })
+    await voiceController.tts('test message')
+    expect(apiPost).toHaveBeenCalledWith('/voice/tts', { text: 'test message' })
+  })
+
+  it('getStatus calls apiGet', async () => {
+    apiGet.mockResolvedValue({ server_tts: true, model: 'bark', error: null })
+    await voiceController.getStatus()
+    expect(apiGet).toHaveBeenCalledWith('/voice/status')
+  })
 })

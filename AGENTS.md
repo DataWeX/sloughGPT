@@ -520,10 +520,21 @@ trainer.train()
 Fastest path — CLI (no PYTHONPATH juggling):
 ```bash
 sloughgpt train native \
-  --data datasets/api_conversations/input.txt \
+  --dataset api_conversations \
   --soul-name sloughgpt-native \
   --epochs 10 --lr 1e-3 --max-steps 2500
 ```
+
+`--dataset` accepts a bare dataset name (resolved against `datasets/<name>/input.txt`)
+or an explicit file path; a missing value prints the available datasets. After training
+the CLI prints the `TrainResult` (steps, epochs, best/final loss), an optional generated
+sample when `--prompt` is given, and "Next steps" for loading the model in chat
+(`SLO_NATIVE_SOUL_PATH=<path> python3 apps/api/server/main.py`; the default
+`models/slonet-native/` dir is auto-discovered on server start).
+
+`sloughgpt train distill --file <corpus>` prints perplexity + BLEU-vs-teacher and
+the checkpoint "Next steps". It aborts early (with the download command) when the
+GPT-2 teacher is not in the HuggingFace cache — no silent ~500MB download.
 
 **Memory discipline:** `Tensor.backward()` clears `node._consumers` after the reverse pass. Do not re-add persistent references from leaves to the forward DAG, or every step's computation graph gets pinned by the (persistent) model parameters (~94MB/step leak). Regression tests: `TestConsumersGraph::test_backward_clears_consumers` + `test_backward_then_forward_grad_still_works` in `packages/core-py/tests/test_slonet_bidirectional_dag.py`.
 

@@ -197,4 +197,12 @@ describe('ModelsPage', () => {
     await act(async () => {})
     expect(screen.getAllByText('Refresh').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('renders all main sections', async () => {
+    render(<ModelsPage />)
+    await act(async () => {})
+    expect(screen.getAllByTestId('model-catalog').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByTestId('model-cache').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByTestId('model-status').length).toBeGreaterThanOrEqual(1)
+  })
 })

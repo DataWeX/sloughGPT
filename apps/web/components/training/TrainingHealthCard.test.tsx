@@ -70,4 +70,43 @@ describe('TrainingHealthCard', () => {
     )
     expect(screen.getAllByText(/Best loss: 1\.0000/).length).toBeGreaterThanOrEqual(1)
   })
+
+  it('shows best loss from many checkpoints', () => {
+    render(
+      <TrainingHealthCard
+        checkpoints={[
+          mkCp({ name: 'a', loss: 5.0 }),
+          mkCp({ name: 'b', loss: 3.0 }),
+          mkCp({ name: 'c', loss: 1.0 }),
+        ]}
+      />
+    )
+    expect(screen.getAllByText(/Best loss: 1\.0000/).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows checkpoint count', () => {
+    render(
+      <TrainingHealthCard
+        checkpoints={[mkCp({ loss: 1.0 }), mkCp({ loss: 2.0 })]}
+      />
+    )
+    expect(screen.getAllByText(/2 checkpoints/).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('handles two checkpoints with same loss as stagnant', () => {
+    render(
+      <TrainingHealthCard
+        checkpoints={[mkCp({ loss: 2.0 }), mkCp({ loss: 2.0 })]}
+      />
+    )
+    expect(screen.getAllByText('Stagnant').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows no-data for checkpoints without loss', () => {
+    render(
+      <TrainingHealthCard checkpoints={[mkCp({}), mkCp({ name: 'b' })]} />
+    )
+    expect(screen.getAllByText('No data').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/Need at least 2/).length).toBeGreaterThanOrEqual(1)
+  })
 })

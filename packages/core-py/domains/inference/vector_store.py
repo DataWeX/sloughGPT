@@ -618,21 +618,14 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
         try:
             from domains.inference.slo_embedder import SloTextEmbedder
             candidate = SloTextEmbedder.load()
-            if candidate is not None:
-                _tests = [
-                    ("the quick brown fox", "a slow red elephant"),
-                    ("python programming", "machine learning"),
-                    ("hello world", "goodbye moon"),
-                ]
-                _same_count = sum(
-                    1 for _ta, _tb in _tests
-                    if np.allclose(candidate.embed(_ta), candidate.embed(_tb))
+            if candidate is not None and not candidate.acceptable():
+                logger.info(
+                    "SloNet embedder rejected by quality gate (%s), using n-gram fallback",
+                    candidate.quality,
                 )
-                if _same_count >= 1:
-                    logger.info("SloNet embedder is untrained (%d/%d identical pairs), skipping", _same_count, len(_tests))
-                    _slo_embedder_untrained = True
-                else:
-                    _slo_embedder = candidate
+                _slo_embedder_untrained = True
+            elif candidate is not None:
+                _slo_embedder = candidate
         except Exception:
             pass
     if _slo_embedder is not None:

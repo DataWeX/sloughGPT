@@ -59,4 +59,18 @@ describe('PathLatenciesCard', () => {
     expect(screen.getByText('×18')).toBeDefined()
     expect(screen.getByText('×7')).toBeDefined()
   })
+
+  it('renders multiple endpoints', () => {
+    render(<PathLatenciesCard liveHealth={base} />)
+    expect(screen.getByText('/inference/generate')).toBeDefined()
+    expect(screen.getByText('/chat/stream')).toBeDefined()
+  })
+
+  it('renders avg and p95 for each path', () => {
+    render(<PathLatenciesCard liveHealth={base} />)
+    expect(screen.getByText('avg 320.5ms')).toBeDefined()
+    expect(screen.getByText('p95 610.2ms')).toBeDefined()
+    expect(screen.getByText('avg 150.0ms')).toBeDefined()
+    expect(screen.getByText('p95 210.4ms')).toBeDefined()
+  })
 })

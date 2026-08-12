@@ -4,8 +4,10 @@ Train commands - Training, evaluation, and quick smoke tests.
 import os
 import sys
 import time
+import math
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import numpy as np
 
@@ -19,6 +21,180 @@ def _softmax_np(x: np.ndarray) -> np.ndarray:
     x = x - x.max(axis=-1, keepdims=True)
     e = np.exp(x)
     return e / e.sum(axis=-1, keepdims=True)
+
+
+def _resolve_corpus_file(path_or_name: str) -> Path:
+    """Resolve a ``--dataset`` value (file path or dataset name) to an existing file.
+
+    Args:
+        path_or_name: explicit corpus path, or a bare name resolved against
+            ``datasets/<name>/input.txt`` relative to the repo root.
+
+    Returns:
+        Resolved :class:`Path` to a readable corpus file.
+
+    Side effects:
+        - Prints the available datasets and exits(2) when nothing resolves.
+    """
+    p = Path(path_or_name)
+    if p.is_file():
+        return p
+    name = path_or_name.strip("/")
+    for candidate in (Path("datasets") / name / "input.txt", Path(name)):
+        if candidate.is_file():
+            return candidate
+    available = sorted(d.name for d in Path("datasets").glob("*") if d.is_dir())
+    hint = f" Available datasets: {', '.join(available)}." if available else ""
+    printer.error(f"Dataset not found: {path_or_name}.{hint}")
+    sys.exit(2)
+
+
+def _print_train_result(result, model_path: str) -> None:
+    """Print a ``TrainResult`` summary block (steps, epochs, losses, model path).
+
+    Args:
+        result: a ``TrainResult`` (supports attribute and dict-like access).
+        model_path: path of the saved model to display.
+
+    Returns:
+        None.
+    """
+    def _loss(v):
+        """Return a 4-decimal string for a finite number-like loss, else None."""
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(f):
+            return None
+        return f"{f:.4f}"
+
+    printer.header("Results")
+    printer.key_value("Steps", str(getattr(result, "global_step", "?")))
+    printer.key_value("Epochs", str(getattr(result, "epochs_completed", "?")))
+    best = _loss(getattr(result, "best_eval_loss", None))
+    final = _loss(getattr(result, "final_loss", None))
+    if best is not None:
+        printer.key_value("Best eval loss", best)
+    if final is not None:
+        printer.key_value("Final loss", final)
+    printer.key_value("Model", str(model_path))
+
+
+def _print_native_next_steps(checkpoint_dir: str, saved: str) -> None:
+    """Print how to use a freshly trained native checkpoint in chat.
+
+    Args:
+        checkpoint_dir: directory the checkpoint was saved into.
+        saved: full path of the saved ``.soul`` file.
+
+    Returns:
+        None.
+    """
+    printer.blank()
+    printer.header("Next steps")
+    printer.info("Load this model in chat by pointing the server at it and restarting:")
+    printer.info(f"  SLO_NATIVE_SOUL_PATH={saved} python3 apps/api/server/main.py")
+    if Path(checkpoint_dir).resolve() == Path("models/slonet-native").resolve():
+        printer.info("(Default dir — the server also auto-discovers .soul models under models/slonet-native/.)")
+
+
+def _gpt2_teacher_cached() -> bool:
+    """Whether the GPT-2 teacher weights + tokenizer are present in the HF cache.
+
+    Returns:
+        True when the ``models--gpt2`` cache dir contains ``*.safetensors`` and
+        ``tokenizer.json``; False otherwise.
+    """
+    hf_path = Path.home() / ".cache/huggingface/hub/models--gpt2"
+    snaps_dir = hf_path / "snapshots"
+    if not snaps_dir.is_dir():
+        return False
+    snaps = sorted(snaps_dir.glob("*"))
+    if not snaps:
+        return False
+    snap = snaps[0]
+    return bool(snap.glob("*.safetensors")) and (snap / "tokenizer.json").exists()
+
+
+def _split_corpus_text(text: str, min_len: int = 40) -> List[str]:
+    """Split a corpus string into samples suitable for contrastive training.
+
+    Contrastive learning needs multiple texts, but a corpus file is one blob.
+    Splits on paragraph breaks first, then falls back to overlapping windows
+    and finally fixed-size word chunks so a single file yields several samples.
+
+    Args:
+        text: raw corpus text.
+        min_len: minimum character length to keep a sample.
+
+    Returns:
+        List of non-empty text chunks.
+    """
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if len(p.strip()) >= min_len]
+    if len(paras) >= 2:
+        return paras
+    if len(paras) == 1 and len(paras[0]) >= 2 * min_len:
+        win = 2 * min_len
+        step = max(1, len(paras[0]) // 8)
+        return [paras[0][i:i + win] for i in range(0, len(paras[0]) - win + 1, step)][:50]
+    words = text.split()
+    chunk = 200
+    return [
+        " ".join(words[i:i + chunk])
+        for i in range(0, len(words), chunk)
+        if len(" ".join(words[i:i + chunk])) >= min_len
+    ]
+
+
+def _embedder_retrieval_check(embedder, texts, query=None, top_k=3) -> None:
+    """Run a computed retrieval sanity check against a trained embedder.
+
+    Embeds real corpus texts plus a query, ranks texts by cosine similarity
+    (embeddings are L2-normalized, so dot product equals cosine), and reports
+    the top matches — verifying the saved embedder loads, encodes, and
+    retrieves end-to-end. When ``query`` is None the first corpus text is
+    used and self-retrieval rank #1 is expected.
+
+    Args:
+        embedder: a trained ``SloTextEmbedder``.
+        texts: corpus strings used to train (retrieved against).
+        query: optional held-out query string; defaults to ``texts[0]``.
+        top_k: number of matches to list.
+
+    Returns:
+        None.
+    """
+    sample = [t for t in texts if isinstance(t, str) and t.strip()][:20]
+    if len(sample) < 2:
+        printer.warning("Retrieval check skipped: need at least 2 corpus texts")
+        return
+    try:
+        vecs = np.asarray(embedder.embed_batch(sample))
+        query = query or sample[0]
+        qvec = np.asarray(embedder.embed(query))
+    except Exception as e:
+        printer.warning(f"Retrieval check failed: {e}")
+        return
+
+    sims = vecs @ qvec
+    order = np.argsort(-sims)
+
+    printer.blank()
+    printer.header("Retrieval check")
+    printer.key_value("Query", query[:70] + ("..." if len(query) > 70 else ""))
+    for rank in range(min(top_k, len(sample))):
+        idx = int(order[rank])
+        snippet = sample[idx][:70] + ("..." if len(sample[idx]) > 70 else "")
+        printer.key_value(f"Match {rank + 1}", f"{sims[idx]:.3f}  {snippet}")
+
+    if query == sample[0]:
+        self_rank = int(np.where(order == 0)[0][0])
+        margin = float(sims[order[0]] - sims[order[1]]) if len(order) >= 2 else 0.0
+        if self_rank == 0 and margin > 0.0:
+            printer.success(f"Self-retrieval OK (rank #1, margin {margin:.3f})")
+        else:
+            printer.warning(f"Self-retrieval rank #{self_rank + 1} (margin {margin:.3f}) — embeddings may be weak")
 
 
 def cmd_train(args):
@@ -155,29 +331,26 @@ def cmd_train(args):
             printer.step(f"Resuming from: {args.resume}")
             resume_path = args.resume
 
-        pbar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
+        from utils.training_progress import TrainingProgressBar
 
-        def _on_progress(info):
-            pct = info.get("progress_percent", 0)
-            step = info.get("global_step", 0)
-            epoch = info.get("epoch", 0)
-            epochs = info.get("epochs", 0)
-            loss = info.get("train_loss", 0)
-            lr = info.get("learning_rate", 0)
-            pbar.desc = f"step {step} epoch {epoch}/{epochs} loss={loss:.4f} lr={lr:.2e}"
-            pbar.set_progress(pct)
+        pbar = TrainingProgressBar(
+            desc="Training",
+            total_steps=config.training.max_steps or None,
+        )
 
         start_time = time.time()
-        trainer.train(
+        result = trainer.train(
             resume=bool(args.resume or getattr(args, "resume_latest", False)),
             resume_path=resume_path,
-            on_progress=_on_progress,
+            on_progress=pbar.update,
         )
         elapsed = time.time() - start_time
 
         pbar.finish()
         printer.blank()
         printer.success(f"Training complete ({format_time(elapsed)})")
+        if result is not None:
+            _print_train_result(result, f"{save_path}.{save_formats[0]}")
 
         # Save
         printer.step("Saving...")
@@ -417,10 +590,11 @@ def cmd_train_native(args):
         device=device,
     )
 
-    dataset = getattr(args, "dataset", None)
-    if not dataset:
+    dataset_arg = getattr(args, "dataset", None)
+    if not dataset_arg:
         printer.error("--dataset (corpus file or name) is required")
         sys.exit(2)
+    dataset = str(_resolve_corpus_file(dataset_arg))
 
     soul_name = getattr(args, "soul_name", "sloughgpt-native")
 
@@ -459,14 +633,11 @@ def cmd_train_native(args):
         total_steps=config.max_steps,
     )
 
-    def _on_progress(info):
-        pbar.update(info)
-
     start_time = time.time()
-    trainer.train(
+    result = trainer.train(
         resume=bool(getattr(args, "resume", None) or getattr(args, "resume_latest", False)),
         resume_path=resume_path,
-        on_progress=_on_progress,
+        on_progress=pbar.update,
     )
     elapsed = time.time() - start_time
     pbar.finish()
@@ -480,7 +651,32 @@ def cmd_train_native(args):
         save_base = f"{checkpoint_dir}/{soul_name}"
     os.makedirs(checkpoint_dir, exist_ok=True)
     trainer.save(save_base, format=save_format)
-    printer.success(f"Saved: {save_base}.soul")
+    saved = f"{save_base}.soul"
+    # Prune the trainer's auto-named checkpoints so a completed run leaves
+    # exactly one final model file.
+    for p in Path(checkpoint_dir).glob("*.soul"):
+        if str(p) == saved:
+            continue
+        p.unlink(missing_ok=True)
+        meta = Path(str(p) + ".meta.json")
+        meta.unlink(missing_ok=True)
+    printer.success(f"Saved: {saved}")
+
+    if result is not None:
+        _print_train_result(result, saved)
+
+    prompt = getattr(args, "prompt", None)
+    if prompt:
+        printer.blank()
+        printer.header("Sample generation")
+        printer.key_value("Prompt", prompt)
+        try:
+            text = trainer.generate(prompt, max_tokens=150, temperature=0.8)
+            printer.key_value("Generated", f"{prompt}{text[:200]}...")
+        except Exception as e:  # pragma: no cover — best-effort sample
+            printer.warning(f"Sample generation failed: {e}")
+
+    _print_native_next_steps(checkpoint_dir, saved)
 
 
 def cmd_eval(args):
@@ -1185,7 +1381,7 @@ def cmd_train_embed(args):
     if corpus:
         p = Path(corpus)
         if p.is_file():
-            texts.append(p.read_text(errors="ignore"))
+            texts.extend(_split_corpus_text(p.read_text(errors="ignore")))
         elif p.is_dir():
             for ext in ("*.txt", "*.md", "*.json"):
                 for fp in p.rglob(ext):
@@ -1259,7 +1455,7 @@ def cmd_train_embed(args):
     printer.key_value("Embed dim", str(getattr(args, "embed_dim", 384)))
     printer.blank()
 
-    # ── Test mode: just embed a query ─────────────────────────────────
+    # ── Test mode: retrieve against the collected corpus ─────────────
     test_query = getattr(args, "test", None)
     if test_query:
         from domains.inference.slo_embedder import SloTextEmbedder
@@ -1269,20 +1465,24 @@ def cmd_train_embed(args):
             return
         vec = embedder.embed(test_query)
         printer.success(f"Embedding for '{test_query}': dim={len(vec)}, norm={sum(x*x for x in vec)**0.5:.4f}")
-        printer.info(f"First 8 values: {vec[:8]}")
+        _embedder_retrieval_check(embedder, texts, query=test_query)
         return
 
     # ── Train ─────────────────────────────────────────────────────────
     from domains.inference.slo_embedder import train_embedder
 
     total_epochs = getattr(args, "epochs", 20)
-    pbar = ProgressBar(total=total_epochs, desc="Training embedder", width=36, show_eta=True, show_speed=False)
+    from utils.training_progress import TrainingProgressBar
+    pbar = TrainingProgressBar(desc="Training embedder", total_steps=total_epochs)
 
     def progress(epoch, loss, total):
-        pbar.desc = f"epoch {epoch}/{total} loss={loss:.4f}"
-        pbar.set_progress(epoch)
-        if epoch == total:
-            pbar.finish()
+        pbar.update({
+            "global_step": epoch,
+            "progress_percent": int(epoch * 100 / total) if total else 100,
+            "epoch": epoch,
+            "epochs": total,
+            "train_loss": loss,
+        })
 
     result = train_embedder(
         texts=texts,
@@ -1294,6 +1494,7 @@ def cmd_train_embed(args):
         save_path=getattr(args, "output", None),
         progress_callback=progress,
     )
+    pbar.finish()
 
     printer.blank()
     printer.success("Embedder trained")
@@ -1304,6 +1505,14 @@ def cmd_train_embed(args):
     printer.blank()
     printer.info("The embedder is now used automatically by KnowledgeMemory and vector search.")
     printer.info("No sentence-transformers download needed.")
+
+    # ── Retrieval sanity check: prove the saved artifact works ───────
+    from domains.inference.slo_embedder import SloTextEmbedder
+    embedder = SloTextEmbedder.load(result["save_path"])
+    if embedder is None:
+        printer.warning("Trained embedder could not be reloaded — verify --output path.")
+    else:
+        _embedder_retrieval_check(embedder, texts)
 
 
 def cmd_distill(args):
@@ -1417,6 +1626,13 @@ def cmd_distill(args):
         return
 
     # ── Local mode ────────────────────────────────────────────────────
+    if not _gpt2_teacher_cached():
+        printer.warning("GPT-2 teacher weights are not in the local HuggingFace cache.")
+        printer.warning("The first run downloads ~500MB from HuggingFace Hub.")
+        printer.error("Aborting — download the teacher first, then retry:")
+        printer.info("  huggingface-cli download gpt2 --include '*.safetensors' --include tokenizer.json")
+        return
+
     from domains.training.distill_gpt2 import DistillConfig, distill_gpt2_to_slo
 
     resume_path = getattr(args, "resume", None)
@@ -1441,11 +1657,17 @@ def cmd_distill(args):
     # Progress bar — compute total steps from config
     samples_per_epoch = len(text) // config.block_size
     total_steps = config.epochs * (samples_per_epoch // config.batch_size)
-    pbar = ProgressBar(total=total_steps, desc="Distilling", width=36, show_eta=True, show_speed=True)
+    from utils.training_progress import TrainingProgressBar
+    pbar = TrainingProgressBar(desc="Distilling", total_steps=total_steps)
 
     def on_step(step, loss, epoch):
-        pbar.desc = f"epoch {epoch+1}/{config.epochs} loss={loss:.4f}"
-        pbar.set_progress(step)
+        pbar.update({
+            "global_step": step,
+            "progress_percent": int(step * 100 / total_steps) if total_steps else 100,
+            "epoch": epoch + 1,
+            "epochs": config.epochs,
+            "train_loss": loss,
+        })
 
     cancel_event = threading.Event()
 
@@ -1475,6 +1697,19 @@ def cmd_distill(args):
         printer.key_value("Epochs", metadata.get("epochs", "?"))
         printer.key_value("Steps", metadata.get("steps", "?"))
         printer.key_value("Student params", f"{sum(p.data.size for p in student.parameters()):,}")
+        ppl = metadata.get("perplexity")
+        bleu = metadata.get("bleu_vs_teacher")
+        if ppl is not None:
+            printer.key_value("Perplexity", f"{float(ppl):.2f}")
+        if bleu is not None:
+            printer.key_value("BLEU vs teacher", f"{float(bleu):.1f}%")
+
+        printer.blank()
+        printer.header("Next steps")
+        ckpt = metadata.get("checkpoint", "")
+        printer.info("Load this model in chat by pointing the server at it and restarting:")
+        printer.info(f"  SLO_NATIVE_SOUL_PATH={ckpt} python3 apps/api/server/main.py")
+        printer.info("The checkpoint also appears in the training-page checkpoint catalog.")
 
     except Exception as e:
         printer.blank()
