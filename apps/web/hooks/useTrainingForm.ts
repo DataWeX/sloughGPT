@@ -33,10 +33,6 @@ export const BUILT_IN_PRESETS: TrainingPreset[] = [
   { name: 'Native large', description: 'Best quality from scratch (~1M)', method: 'native', epochs: 300, lr: 1e-4, batchSize: 8, nativeEmbed: 256, nativeLayers: 4, nativeHeads: 8, nativeBlockSize: 256 },
 ]
 
-// Backward compat alias
-export type NativePreset = TrainingPreset
-export const NATIVE_PRESETS = BUILT_IN_PRESETS.filter(p => p.method === 'native')
-
 export interface TrainingFormState {
   method: Method
   inputMode: InputMode

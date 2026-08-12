@@ -52,7 +52,7 @@ const { mockExportMetrics, mockModelStatus, mockPreview, mockAddToast } = vi.hoi
 const stub = vi.hoisted(() => {
   const n = () => () => null
   return {
-    JobHistoryCard: n(), CheckpointsCard: n(), FineTunedModelsCard: n(), TrainingFormCard: n(),
+    JobHistoryCard: n(), CheckpointsCard: n(), FineTunedModelsCard: n(),
     TrainFromSessionsCard: n(), TrainingDataCard: n(), EvalReportCard: n(), SelfTrainCard: n(),
     DatasetPreviewCard: n(), CheckpointCompareCard: n(), BestCheckpointCard: n(), TrainingSummaryCard: n(),
     CheckpointLossChart: n(), CheckpointNotes: n(), TrainingHealthCard: n(), CheckpointFilterBar: n(),
@@ -91,7 +91,6 @@ vi.mock('@/components/training/TrainingSearch', () => ({
 vi.mock('@/components/training/JobHistoryCard', () => ({ JobHistoryCard: stub.JobHistoryCard }))
 vi.mock('@/components/training/CheckpointsCard', () => ({ CheckpointsCard: stub.CheckpointsCard }))
 vi.mock('@/components/training/FineTunedModelsCard', () => ({ FineTunedModelsCard: stub.FineTunedModelsCard }))
-vi.mock('@/components/training/TrainingFormCard', () => ({ TrainingFormCard: stub.TrainingFormCard }))
 vi.mock('@/components/training/TrainFromSessionsCard', () => ({ TrainFromSessionsCard: stub.TrainFromSessionsCard }))
 vi.mock('@/components/training/TrainingDataCard', () => ({ TrainingDataCard: stub.TrainingDataCard }))
 vi.mock('@/components/training/EvalReportCard', () => ({ EvalReportCard: stub.EvalReportCard }))
