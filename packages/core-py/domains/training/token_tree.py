@@ -394,6 +394,41 @@ class TokenTree:
                 pieces.append(token.replace(WORD_SUFFIX, ""))
         return "".join(pieces)
 
+    def resolve_token(self, token: str) -> int:
+        """Resolve a token id or literal token string to a vocabulary id.
+
+        Numeric strings are treated as ids. Literal strings are matched with
+        the special tokens and "</w>"-suffixed forms kept whole as written;
+        otherwise a plain word tries ``word</w>``, `` word</w>``, ``word``,
+        and `` word`` in that order.
+
+        Args:
+            token: integer id or literal vocabulary token.
+
+        Returns:
+            vocabulary id.
+
+        Raises:
+            KeyError: when nothing in the vocabulary matches.
+        """
+        try:
+            return int(token)
+        except ValueError:
+            pass
+        if token.startswith("<") or token.endswith(WORD_SUFFIX):
+            candidates = [token]
+        else:
+            candidates = [
+                token + WORD_SUFFIX,
+                " " + token + WORD_SUFFIX,
+                token,
+                " " + token,
+            ]
+        for candidate in candidates:
+            if candidate in self.stoi:
+                return self.stoi[candidate]
+        raise KeyError(token)
+
     # ------------------------------------------------------------------
     # Token points — embeddings are generated, not stored
     # ------------------------------------------------------------------
@@ -572,6 +607,56 @@ class TokenTree:
     # Persistence — PointLibrary + metadata sidecar
     # ------------------------------------------------------------------
 
+    def to_dict(self) -> dict:
+        """Serialize the token tree to a JSON-safe dict.
+
+        Embeds vocabulary, merges, lineage, frequencies, and the encoding
+        trie (everything needed to reconstruct the tree without re-training).
+
+        Returns:
+            a dict suitable for ``json.dumps`` or a ``.soul`` metadata field.
+        """
+        return {
+            "version": 1,
+            "pretokenizer": self._pretokenizer,
+            "word_suffix": self._word_suffix,
+            "embed_dim": self._embed_dim,
+            "vocab": self.vocab,
+            "merges": [list(m) for m in self.merges],
+            "lineage": {str(k): list(v) for k, v in self._lineage.items()},
+            "freqs": {str(k): int(v) for k, v in self._freqs.items()},
+            "trie": _node_to_dict(self.root),
+            "trained": self._trained,
+        }
+
+    @classmethod
+    def from_dict(cls, meta: dict) -> "TokenTree":
+        """Reconstruct a token tree from :meth:`to_dict` output.
+
+        Args:
+            meta: dict produced by :meth:`to_dict` (also readable from a
+                ``.meta.json`` sidecar).
+
+        Returns:
+            a fully reconstructed TokenTree (embedding Points excluded —
+            encode/decode only need the trie, vocabulary, and merges).
+        """
+        tree = cls(pretokenizer=meta.get("pretokenizer", "gpt2"))
+        tree._word_suffix = meta.get("word_suffix", WORD_SUFFIX)
+        tree._embed_dim = meta.get("embed_dim", 0)
+        tree.vocab = list(meta.get("vocab", []))
+        tree.stoi = {t: i for i, t in enumerate(tree.vocab)}
+        tree.itos = {i: t for i, t in enumerate(tree.vocab)}
+        tree.merges = [tuple(m) for m in meta.get("merges", [])]
+        tree._lineage = {
+            int(k): (int(v[0]), int(v[1]))
+            for k, v in meta.get("lineage", {}).items()
+        }
+        tree._freqs = Counter({int(k): int(v) for k, v in meta.get("freqs", {}).items()})
+        tree.root = _node_from_dict(meta.get("trie", {}))
+        tree._trained = bool(meta.get("trained", False))
+        return tree
+
     def save(self, path: str) -> Tuple[Path, Path]:
         """Persist the token tree.
 
@@ -589,19 +674,8 @@ class TokenTree:
         """
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        meta = {
-            "version": 1,
-            "pretokenizer": self._pretokenizer,
-            "word_suffix": self._word_suffix,
-            "embed_dim": self._embed_dim,
-            "vocab": self.vocab,
-            "merges": [list(m) for m in self.merges],
-            "lineage": {str(k): list(v) for k, v in self._lineage.items()},
-            "freqs": {str(k): int(v) for k, v in self._freqs.items()},
-            "trie": _node_to_dict(self.root),
-            "trained": self._trained,
-            "saved_at": time.time(),
-        }
+        meta = self.to_dict()
+        meta["saved_at"] = time.time()
         meta_path = Path(str(p) + ".meta.json")
         meta_path.write_text(json.dumps(meta, indent=2))
         points_path = self._library.save(Path(str(p) + ".points.json"))
@@ -626,23 +700,10 @@ class TokenTree:
             raise FileNotFoundError(f"Token tree metadata not found: {meta_path}")
         meta = json.loads(meta_path.read_text())
 
-        tree = cls(pretokenizer=meta.get("pretokenizer", "gpt2"))
-        tree._word_suffix = meta.get("word_suffix", WORD_SUFFIX)
-        tree._embed_dim = meta.get("embed_dim", 0)
-        tree.vocab = list(meta.get("vocab", []))
-        tree.stoi = {t: i for i, t in enumerate(tree.vocab)}
-        tree.itos = {i: t for i, t in enumerate(tree.vocab)}
-        tree.merges = [tuple(m) for m in meta.get("merges", [])]
-        tree._lineage = {
-            int(k): (int(v[0]), int(v[1]))
-            for k, v in meta.get("lineage", {}).items()
-        }
-        tree._freqs = Counter({int(k): int(v) for k, v in meta.get("freqs", {}).items()})
-        tree.root = _node_from_dict(meta.get("trie", {}))
+        tree = cls.from_dict(meta)
         points_path = Path(str(p) + ".points.json")
         if points_path.exists():
             tree._library = PointLibrary.load(points_path)
-        tree._trained = bool(meta.get("trained", False))
         return tree
 
     # ------------------------------------------------------------------
@@ -662,6 +723,38 @@ class TokenTree:
             "library": self._library.stats(),
         }
 
+    def vocab_entries(self, offset: int = 0, limit: int = 50) -> dict:
+        """Return a paged slice of the vocabulary.
+
+        Entries are in vocabulary id order (special tokens, then base
+        characters, then merge tokens in merge order). Each entry reports the
+        corpus frequency and whether the token is a special marker or a merge
+        product, so the UI can badge the vocabulary without extra calls.
+
+        Args:
+            offset: number of leading entries to skip.
+            limit: maximum number of entries to return (0 or negative means
+                "no limit").
+
+        Returns:
+            ``{"total": int, "entries": [{"id", "token", "freq", "is_special",
+            "is_merged"}]}``.
+        """
+        total = len(self.vocab)
+        lo = max(0, offset)
+        hi = total if limit <= 0 else min(total, offset + max(0, limit))
+        entries = []
+        for tid in range(lo, hi):
+            token = self.vocab[tid]
+            entries.append({
+                "id": tid,
+                "token": token,
+                "freq": self._freqs.get(tid, 0),
+                "is_special": token in SPECIAL_TOKENS,
+                "is_merged": tid in self._lineage,
+            })
+        return {"total": total, "entries": entries}
+
     def show_merges(self, top_n: int = 20) -> None:
         """Print the most frequent merge rules (parent pair -> merged token)."""
         ranked = sorted(
@@ -671,6 +764,74 @@ class TokenTree:
         )
         for _, (left, right), cnt in ranked[:top_n]:
             print(f"  {left!r} + {right!r} -> {left + right!r}  (count={cnt})")
+
+    def _ranked_merges(self) -> List[dict]:
+        """Return all merge rules sorted by corpus frequency descending.
+
+        Returns:
+            list of ``{"rank", "left", "right", "token", "count"}`` dicts
+            with rank = global frequency rank (1 = most frequent). Empty
+            when the tree is untrained.
+        """
+        if not self._trained:
+            return []
+        ranked = sorted(
+            (
+                (m, self._freqs.get(self.stoi.get(m[0] + m[1]), 0))
+                for m in self.merges
+            ),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        return [
+            {
+                "rank": i + 1,
+                "left": left,
+                "right": right,
+                "token": left + right,
+                "count": count,
+            }
+            for i, ((left, right), count) in enumerate(ranked)
+        ]
+
+    def top_merges(self, top_n: int = 20) -> List[dict]:
+        """Return the most frequent merge rules as data.
+
+        Args:
+            top_n: maximum number of rules to return.
+
+        Returns:
+            list of ``{"rank", "left", "right", "token", "count"}`` dicts
+            sorted by corpus frequency descending. Empty when untrained.
+        """
+        return self._ranked_merges()[:top_n]
+
+    def search_merges(self, query: str, limit: int = 20) -> List[dict]:
+        """Return merge rules whose left, right, or merged token match a query.
+
+        Matching is case-insensitive substring search over the rule parts.
+        Results keep their global frequency rank so a search hit still shows
+        where the rule sits in the full ranking.
+
+        Args:
+            query: substring to match against left/right/merged token.
+            limit: maximum number of matching rules to return.
+
+        Returns:
+            list of ``{"rank", "left", "right", "token", "count"}`` dicts,
+            frequency-ranked. Empty when untrained or nothing matches.
+        """
+        if not query or not self._trained:
+            return []
+        q = query.lower()
+        matches = [
+            m
+            for m in self._ranked_merges()
+            if q in m["left"].lower()
+            or q in m["right"].lower()
+            or q in m["token"].lower()
+        ]
+        return matches[:limit]
 
     def show_tree(self, token_id: int) -> str:
         """Render a token's merge lineage as an ASCII tree."""

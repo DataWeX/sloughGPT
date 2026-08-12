@@ -77,8 +77,21 @@ class TextDataset:
         return x, y
 
 
-def prepare_data(data_path, block_size=128):
-    """Prepare training data from a text file or multiple datasets with ratios."""
+def prepare_data(data_path, block_size=128, tokenizer=None):
+    """Prepare training data from a text file or multiple datasets with ratios.
+
+    Args:
+        data_path: path to a text file, a dataset name (resolved against
+            ``datasets/<name>/input.txt``), a list of dataset names, or a list
+            of ``(name, ratio)`` tuples.
+        block_size: context window (used for logging only).
+        tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
+            TokenTree). When provided, the corpus is tokenized with it and the
+            returned vocabulary is the tokenizer's, not the raw char set.
+
+    Returns:
+        (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
+    """
     if isinstance(data_path, list) and data_path and isinstance(data_path[0], tuple):
         datasets_with_ratios = data_path
         all_texts = []
@@ -123,6 +136,15 @@ def prepare_data(data_path, block_size=128):
             path = Path("datasets") / data_path / "input.txt"
         with open(path, "r", encoding="utf-8") as f:
             text = f.read()
+
+    if tokenizer is not None:
+        data = np.asarray(tokenizer.encode(text), dtype=np.int64)
+        vocab_size = tokenizer.vocab_size
+        stoi = dict(tokenizer.stoi)
+        itos = dict(tokenizer.itos)
+        logger.info("Data: %d tokens, vocab %d (tokenized)", len(data), vocab_size,
+            extra={"tag": "TRAIN"},)
+        return data, vocab_size, stoi, itos
 
     chars = sorted(set(text))
     stoi = {c: i for i, c in enumerate(chars)}
@@ -594,6 +616,7 @@ class SloughGPTTrainer:
         log_interval: int = 10,
         eval_interval: int = 100,
         experiment_tracker: Optional["ExperimentTracker"] = None,
+        tokenizer: Optional[Any] = None,
     ):
         # Handle both TrainerConfig and legacy parameters
         if config is not None:
@@ -630,6 +653,7 @@ class SloughGPTTrainer:
 
         self.data_path = data_path
         self.soul_name = soul_name or "sloughgpt"
+        self.tokenizer = tokenizer
         self._experiment_tracker = experiment_tracker
         self._best_val_loss = float("inf")
         self._train_loss_at_best = 0.0
@@ -650,7 +674,7 @@ class SloughGPTTrainer:
         # Prepare data — prefer corpus-derived vocab unless caller sets ``vocab_size`` (legacy path)
         # or supplies a full ``TrainerConfig`` (advanced; caller must match data).
         self.data, data_vocab_size, self.stoi, self.itos = prepare_data(
-            data_path, self.config.block_size
+            data_path, self.config.block_size, tokenizer=tokenizer
         )
         if config is not None and self.config.vocab_size > 0:
             self.vocab_size = self.config.vocab_size
@@ -1295,6 +1319,15 @@ class SloughGPTTrainer:
         if training_duration is not None:
             soul.metadata["training_duration_s"] = training_duration
 
+        # Embed the tokenizer (e.g. a trained TokenTree) so the .soul is fully
+        # self-contained and inference can reproduce BPE-level encoding.
+        tokenizer = getattr(self, "tokenizer", None)
+        if tokenizer is not None and hasattr(tokenizer, "to_dict"):
+            soul.metadata["tokenizer"] = {
+                "type": "token_tree",
+                "tree": tokenizer.to_dict(),
+            }
+
         # Embed training state so .soul is fully self-contained
         soul.metadata["training_state"] = _build_training_state_metadata(
             optimizer=getattr(self, "optimizer", None),
@@ -1314,6 +1347,15 @@ class SloughGPTTrainer:
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
         self.model.eval()
+        if self.tokenizer is not None:
+            ids = self.tokenizer.encode(prompt)
+            out = self.model.generate(
+                np.array([ids], dtype=np.int64),
+                max_new_tokens=max_tokens,
+                temperature=temperature,
+            )
+            out = np.asarray(out)
+            return self.tokenizer.decode(out[0].tolist())
         idx = np.array([[self.stoi.get(c, 0) for c in prompt]], dtype=np.int64)
         out = self.model.generate(idx, max_new_tokens=max_tokens, temperature=temperature)
         out = np.asarray(out)

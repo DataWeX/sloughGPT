@@ -154,6 +154,134 @@ class TestMergeLineage:
             assert (l, r) == (tree.stoi[left], tree.stoi[right])
 
 
+class TestTopMerges:
+    def test_returns_ranked_rules(self):
+        tree = make_tree(vocab_size=200)
+        rules = tree.top_merges(top_n=10)
+        assert len(rules) == 10
+        assert rules[0]["rank"] == 1
+        counts = [r["count"] for r in rules]
+        assert counts == sorted(counts, reverse=True)
+        for r in rules:
+            assert r["token"] == r["left"] + r["right"]
+            assert r["count"] > 0
+
+    def test_respects_top_n(self):
+        tree = make_tree(vocab_size=200)
+        assert len(tree.top_merges(top_n=3)) == 3
+        assert len(tree.top_merges(top_n=1000)) <= len(tree.merges)
+
+    def test_untrained_returns_empty(self):
+        tree = TokenTree()
+        assert tree.top_merges() == []
+
+
+class TestSearchMerges:
+    def test_matches_left_right_and_merged_token(self):
+        tree = make_tree(vocab_size=200)
+        rules = tree.search_merges("th", limit=50)
+        assert rules
+        for r in rules:
+            assert (
+                "th" in r["left"].lower()
+                or "th" in r["right"].lower()
+                or "th" in r["token"].lower()
+            )
+
+    def test_case_insensitive(self):
+        tree = make_tree(vocab_size=200)
+        upper = tree.search_merges("THE", limit=50)
+        lower = tree.search_merges("the", limit=50)
+        assert {r["token"] for r in upper} == {r["token"] for r in lower}
+        assert upper
+
+    def test_keeps_global_frequency_rank(self):
+        tree = make_tree(vocab_size=200)
+        top = {r["token"]: r["rank"] for r in tree.top_merges(top_n=1000)}
+        hits = tree.search_merges("th", limit=50)
+        for r in hits:
+            assert r["rank"] == top[r["token"]]
+
+    def test_results_sorted_by_count_descending(self):
+        tree = make_tree(vocab_size=200)
+        counts = [r["count"] for r in tree.search_merges("e", limit=50)]
+        assert counts == sorted(counts, reverse=True)
+
+    def test_respects_limit(self):
+        tree = make_tree(vocab_size=200)
+        all_matches = tree.search_merges("e", limit=1000)
+        limited = tree.search_merges("e", limit=3)
+        assert len(limited) == min(3, len(all_matches))
+        assert len(limited) <= 3
+
+    def test_no_match_returns_empty(self):
+        tree = make_tree(vocab_size=200)
+        assert tree.search_merges("zzz-no-such-part", limit=50) == []
+
+    def test_untrained_returns_empty(self):
+        tree = TokenTree()
+        assert tree.search_merges("the") == []
+
+    def test_empty_query_returns_empty(self):
+        tree = make_tree(vocab_size=200)
+        assert tree.search_merges("") == []
+
+
+class TestVocabEntries:
+    def test_returns_total_and_entries_in_id_order(self):
+        tree = make_tree(vocab_size=200)
+        out = tree.vocab_entries(offset=0, limit=500)
+        assert out["total"] == len(tree.vocab)
+        ids = [e["id"] for e in out["entries"]]
+        assert ids == sorted(ids)
+        assert ids == list(range(len(out["entries"])))
+
+    def test_paging_slices_vocabulary(self):
+        tree = make_tree(vocab_size=200)
+        full = tree.vocab_entries(offset=0, limit=0)["entries"]
+        first = tree.vocab_entries(offset=0, limit=10)["entries"]
+        second = tree.vocab_entries(offset=10, limit=10)["entries"]
+        assert len(first) == 10
+        assert [e["id"] for e in first] == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        assert [e["id"] for e in second] == [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        assert first + second == full[:20]
+
+    def test_offset_beyond_end_returns_empty(self):
+        tree = make_tree(vocab_size=64)
+        out = tree.vocab_entries(offset=10_000, limit=50)
+        assert out["total"] == len(tree.vocab)
+        assert out["entries"] == []
+
+    def test_special_tokens_flagged_first(self):
+        tree = make_tree(vocab_size=200)
+        entries = tree.vocab_entries(offset=0, limit=10)["entries"]
+        specials = [e for e in entries if e["is_special"]]
+        assert len(specials) == len(SPECIAL_TOKENS)
+        for e in specials:
+            assert e["freq"] == 0
+
+    def test_base_and_merged_flags(self):
+        tree = make_tree(vocab_size=200)
+        out = tree.vocab_entries(offset=0, limit=0)
+        by_id = {e["id"]: e for e in out["entries"]}
+        merged_ids = set(tree._lineage)
+        for tid, e in by_id.items():
+            assert e["is_merged"] == (tid in merged_ids)
+            assert e["token"] == tree.vocab[tid]
+
+    def test_no_limit_returns_everything(self):
+        tree = make_tree(vocab_size=64)
+        out = tree.vocab_entries(offset=0, limit=0)
+        assert out["total"] == len(tree.vocab)
+        assert len(out["entries"]) == out["total"]
+
+    def test_untrained_returns_empty(self):
+        tree = TokenTree()
+        out = tree.vocab_entries(offset=0, limit=50)
+        assert out["total"] == 0
+        assert out["entries"] == []
+
+
 class TestTokenPoints:
     def test_embedding_generated_from_point(self):
         tree = make_tree(vocab_size=200, embed_dim=16)
@@ -267,6 +395,47 @@ class TestPersistence:
             TokenTree.load(str(tmp_path / "nope"))
 
 
+class TestDictSerialization:
+    def test_to_dict_round_trip(self):
+        tree = make_tree(vocab_size=300, embed_dim=16)
+        data = tree.to_dict()
+        assert data["version"] == 1
+        assert data["vocab"] == tree.vocab
+        assert data["merges"] == [list(m) for m in tree.merges]
+        assert data["trained"] is True
+
+        rebuilt = TokenTree.from_dict(data)
+        assert rebuilt.vocab == tree.vocab
+        assert rebuilt.stoi == tree.stoi
+        assert rebuilt.merges == tree.merges
+        assert rebuilt.is_trained
+        for text in ["the quick brown fox", "hello world", "quickest browner"]:
+            assert rebuilt.decode(rebuilt.encode(text)) == text
+
+    def test_to_dict_is_json_safe(self):
+        tree = make_tree(vocab_size=300, embed_dim=16)
+        payload = json.dumps(tree.to_dict())
+        rebuilt = TokenTree.from_dict(json.loads(payload))
+        for text in ["the lazy dog", "brown browner"]:
+            assert rebuilt.decode(rebuilt.encode(text)) == text
+
+    def test_from_dict_untrained(self):
+        data = TokenTree().to_dict()
+        rebuilt = TokenTree.from_dict(data)
+        assert rebuilt.is_trained is False
+        assert rebuilt.vocab_size == 0
+        # Unknown characters map to the UNK id on an empty tree
+        assert all(tid == rebuilt.unk_id for tid in rebuilt.encode("hello"))
+
+    def test_to_dict_matches_save_meta(self, tmp_path: Path):
+        tree = make_tree(vocab_size=300, embed_dim=16)
+        base = str(tmp_path / "dictmeta")
+        tree.save(base)
+        saved = json.loads(Path(base + ".meta.json").read_text())
+        assert saved["vocab"] == tree.to_dict()["vocab"]
+        assert saved["trie"] == tree.to_dict()["trie"]
+
+
 class TestIntrospection:
     def test_stats(self):
         tree = make_tree(vocab_size=200)
@@ -349,4 +518,28 @@ class TestStringInput:
         tree = TokenTree().train([CORPUS[0], CORPUS[1]], vocab_size=64)
         for text in CORPUS[:2]:
             assert tree.decode(tree.encode(text)) == text
+
+
+class TestResolveToken:
+    """resolve_token() must unify id/literal resolution for CLI + API."""
+
+    def test_numeric_id(self):
+        tree = make_tree(vocab_size=64)
+        assert tree.resolve_token("7") == 7
+
+    def test_word_resolves_to_suffixed_form(self):
+        tree = make_tree(vocab_size=64)
+        tid = tree.stoi.get("quick" + WORD_SUFFIX)
+        if tid is not None:
+            assert tree.resolve_token("quick") == tid
+
+    def test_special_token_kept_whole(self):
+        tree = make_tree(vocab_size=64)
+        assert tree.resolve_token("<PAD>") == tree.stoi.get("<PAD>")
+
+    def test_unknown_raises_key_error(self):
+        tree = make_tree(vocab_size=64)
+        with pytest.raises(KeyError):
+            tree.resolve_token("zzz-no-such-token")
+
 

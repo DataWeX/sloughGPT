@@ -1212,6 +1212,85 @@ class TestGenerate:
 
 
 # =============================================================================
+# SloughGPTTrainer — TokenTree tokenizer integration
+# =============================================================================
+
+
+class TestTokenizerTraining:
+    def test_prepare_data_with_tokenizer(self, tmp_path):
+        from domains.training.token_tree import TokenTree
+        p = tmp_path / "c.txt"
+        p.write_text(DATA_TEXT, encoding="utf-8")
+        tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
+        data, vocab_size, stoi, itos = prepare_data(str(p), tokenizer=tree)
+        assert vocab_size == tree.vocab_size
+        assert stoi == tree.stoi
+        assert itos == tree.itos
+        assert data.dtype == np.int64
+        assert data.shape[0] < len(DATA_TEXT)  # BPE compresses below char count
+
+    def test_trainer_uses_tokenizer_vocab(self, data_path, tmp_path):
+        from domains.training.token_tree import TokenTree
+        tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
+        cfg = tiny_config(tmp_path)
+        t = SloughGPTTrainer(data_path, config=cfg, tokenizer=tree)
+        assert t.vocab_size == tree.vocab_size
+        assert t.stoi == tree.stoi
+        assert t.itos == tree.itos
+        assert t.tokenizer is tree
+        assert len(t.data) < len(DATA_TEXT)
+
+    def test_generate_round_trip_through_tokenizer(self, data_path, tmp_path):
+        from domains.training.token_tree import TokenTree
+        tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
+        t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
+        np.random.seed(0)
+        text = t.generate("the quick", max_tokens=4, temperature=0.8)
+        assert isinstance(text, str)
+        # Every generated token decodes through the tree without gaps
+        assert len(text) > 0
+
+    def test_save_embeds_tokenizer(self, data_path, tmp_path):
+        from domains.training.token_tree import TokenTree
+        from domains.inference.slo_format import load_soul
+        tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
+        t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
+        out = str(tmp_path / "tok")
+        t.save(out, format="sou")
+        profile, _ = load_soul(out + ".soul")
+        meta = profile.metadata["tokenizer"]
+        assert meta["type"] == "token_tree"
+        assert meta["tree"]["vocab"] == tree.vocab
+        assert profile.metadata["vocab_size"] == tree.vocab_size
+
+    def test_save_without_tokenizer_no_key(self, data_path, tmp_path):
+        from domains.inference.slo_format import load_soul
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "plain")
+        t.save(out, format="sou")
+        profile, _ = load_soul(out + ".soul")
+        assert "tokenizer" not in profile.metadata
+
+    def test_from_soul_round_trip_tree_tokenizer(self, data_path, tmp_path):
+        from domains.inference.slonet_provider import SloNetChatProvider
+        from domains.training.token_tree import TokenTree
+        tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
+        t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
+        out = str(tmp_path / "tok")
+        t.save(out, format="sou")
+
+        provider = SloNetChatProvider.from_soul(out + ".soul", model_id="tree-model")
+        assert provider._tokenizer is not None
+        assert provider._tokenizer.vocab_size == tree.vocab_size
+        # BPE-level encoding round-trips through the reconstructed tree
+        prompt = "the quick brown fox"
+        ids = provider._tokenizer.encode(prompt)
+        assert isinstance(ids, list) and all(isinstance(i, int) for i in ids)
+        assert provider._tokenizer.decode(ids) == prompt
+        assert len(ids) < len(prompt)
+
+
+# =============================================================================
 # main()
 # =============================================================================
 

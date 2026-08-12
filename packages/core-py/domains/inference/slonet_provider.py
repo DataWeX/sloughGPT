@@ -85,6 +85,42 @@ class _CharTokenizer:
         return "\n".join(parts)
 
 
+class _TreeTokenizer:
+    """SloBPE-compatible tokenizer wrapper for TokenTree-trained models.
+
+    Wraps a reconstructed TokenTree into the encode/decode interface that
+    SloNetChatProvider expects from a HuggingFace tokenizer, so BPE-level
+    checkpoints round-trip through .soul metadata.
+    """
+
+    def __init__(self, tree: Any):
+        self._tree = tree
+        self.eos_token_id = int(tree.eos_id)
+        self.pad_token_id = int(tree.pad_id)
+
+    @property
+    def vocab_size(self) -> int:
+        return self._tree.vocab_size
+
+    def encode(self, text: str) -> List[int]:
+        """Encode text to BPE token IDs via the token tree."""
+        return self._tree.encode(text)
+
+    def decode(self, token_ids) -> str:
+        """Decode token IDs back to text."""
+        return self._tree.decode(token_ids)
+
+    def apply_chat_template(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """Format messages as a simple chat string for tree-tokenized models."""
+        parts = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            parts.append(f"{role}: {content}")
+        parts.append("assistant:")
+        return "\n".join(parts)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Universal HF → SloTransformer converter
 # ══════════════════════════════════════════════════════════════════════════════
@@ -861,13 +897,24 @@ class SloNetChatProvider:
             pass
 
         # Load tokenizer from soul metadata if available
-        stoi = soul.metadata.get("stoi")
-        itos = soul.metadata.get("itos")
-        if stoi and itos:
-            # Char-level model — create a simple tokenizer from vocab
-            instance._tokenizer = _CharTokenizer(stoi, itos)
+        tokenizer_meta = soul.metadata.get("tokenizer")
+        if (
+            isinstance(tokenizer_meta, dict)
+            and tokenizer_meta.get("type") == "token_tree"
+            and isinstance(tokenizer_meta.get("tree"), dict)
+        ):
+            from domains.training.token_tree import TokenTree
+            instance._tokenizer = _TreeTokenizer(
+                TokenTree.from_dict(tokenizer_meta["tree"])
+            )
         else:
-            instance._tokenizer = None
+            stoi = soul.metadata.get("stoi")
+            itos = soul.metadata.get("itos")
+            if stoi and itos:
+                # Char-level model — create a simple tokenizer from vocab
+                instance._tokenizer = _CharTokenizer(stoi, itos)
+            else:
+                instance._tokenizer = None
 
         logger.info(
             "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d",

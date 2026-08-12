@@ -647,6 +647,8 @@ def train_start(ctx, dataset, epochs, batch_size, lr, api, resume, resume_latest
 @click.option("--resume", default=None, help="Resume from a .soul/.npz checkpoint path")
 @click.option("--resume-latest", is_flag=True, help="Resume from latest checkpoint in --checkpoint-dir")
 @click.option("--device", default="cpu", help="Device (cpu/auto)")
+@click.option("--tokenizer", default="char", type=click.Choice(["char", "token-tree"]), help="Tokenization strategy for the corpus")
+@click.option("--token-vocab-size", default=512, type=int, help="Token tree vocabulary size (token-tree tokenizer)")
 @click.option("--prompt", default=None, help="Generate a sample from this prompt after training")
 @click.pass_context
 def train_native(ctx, **kwargs):

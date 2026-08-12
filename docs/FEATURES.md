@@ -71,6 +71,7 @@
 | Auto-train | `./sloughgpt autotrain start stop status` | ✅ Done |
 | Model presets | `./sloughgpt train --preset small medium large` | ✅ Done |
 | Native SloNet training | `sloughgpt train native --dataset <file> --steps N` | ✅ Done |
+| Token-tree tokenizer | `sloughgpt train native --tokenizer token-tree --token-vocab-size N` | ✅ Done |
 
 ## Native SloNet Training (torch-free)
 
@@ -92,6 +93,26 @@ Key flags: `--steps`, `--embed/--layers/--heads/--block` (arch), `--batch`,
 `--checkpoint-dir`, `--checkpoint-interval`, `--max-checkpoints`,
 `--eval-interval`, `--log-interval`, `--soul-name`, `--save-stem`,
 `--save-format` (`sou`/`npz`), `--resume PATH`, `--resume-latest`.
+
+### Token-tree tokenizer
+
+By default `train native` trains on raw characters (one id per char). Pass
+`--tokenizer token-tree` to first learn a BPE token tree over the corpus
+(`--token-vocab-size`, default 512) and train the model on the subword tokens
+instead:
+
+```bash
+PYTHONPATH=apps/cli/src python3 -m cli train native \
+  --dataset datasets/tinyshakespeare/input.txt \
+  --tokenizer token-tree --token-vocab-size 512 \
+  --embed 64 --layers 2 --heads 4 --block 128 --batch 16 --lr 3e-3 \
+  --soul-name sloughgpt-bpe
+```
+
+The trained tree is embedded in the `.soul` metadata (`tokenizer.token_tree`
+via `TokenTree.to_dict()`), so `SloNetChatProvider.from_soul()` reconstructs a
+`_TreeTokenizer` and reproduces the exact same BPE encoding at inference time —
+no external tokenizer file needed.
 
 ### Checkpoint retention
 

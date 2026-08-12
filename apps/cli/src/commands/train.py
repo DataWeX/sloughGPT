@@ -608,10 +608,30 @@ def cmd_train_native(args):
     printer.key_value("Checkpoint Dir", str(checkpoint_dir))
     printer.blank()
 
+    tokenizer = None
+    tokenizer_kind = getattr(args, "tokenizer", "char") or "char"
+    if tokenizer_kind == "token-tree":
+        from domains.training.token_tree import TokenTree
+
+        corpus_text = Path(dataset).read_text(encoding="utf-8")
+        token_vocab_size = getattr(args, "token_vocab_size", 512) or 512
+        printer.step(f"Training token tree (vocab={token_vocab_size})...")
+        tokenizer = TokenTree().train(
+            corpus_text,
+            vocab_size=token_vocab_size,
+            embed_dim=0,
+            verbose=False,
+        )
+        printer.key_value("Tokenizer", f"token-tree ({tokenizer.vocab_size} tokens, {len(tokenizer.merges)} merges)")
+        printer.blank()
+    else:
+        printer.key_value("Tokenizer", "char-level")
+
     trainer = SloughGPTTrainer(
         data_path=dataset,
         config=config,
         soul_name=soul_name,
+        tokenizer=tokenizer,
     )
     printer.info(f"Model: {trainer.training_model.num_parameters():,} params")
     printer.blank()
@@ -1528,6 +1548,18 @@ def cmd_train_embed(args):
                 f"mean_cos={quality.get('mean_cosine', 1.0):.2f} "
                 f"nn_agreement={quality.get('nn_agreement', 0.0):.2f}",
             )
+            retrieval = quality.get("retrieval") or {}
+            if retrieval:
+                better = retrieval.get("better", "n_gram")
+                printer.key_value(
+                    "Retrieval vs n-gram",
+                    f"trained MRR={retrieval.get('trained_mrr', 0.0):.2f} "
+                    f"vs n-gram MRR={retrieval.get('ngram_mrr', 0.0):.2f} "
+                    f"(hit@{retrieval.get('top_k', 3)} "
+                    f"trained={retrieval.get('trained_hit', 0.0):.2f} / "
+                    f"n-gram={retrieval.get('ngram_hit', 0.0):.2f})",
+                )
+                printer.key_value("Retrieval verdict", f"{better} embedder wins")
 
 
 def cmd_distill(args):

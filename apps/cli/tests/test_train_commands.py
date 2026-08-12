@@ -98,6 +98,8 @@ class TestCmdTrainNative:
             resume=None,
             resume_latest=False,
             device="cpu",
+            tokenizer="char",
+            token_vocab_size=512,
             host="localhost",
             port=8000,
         )
@@ -167,6 +169,44 @@ class TestCmdTrainNative:
             cmd_train_native(args)
         remaining = sorted(p.name for p in ckpt_dir.iterdir())
         assert remaining == ["test-native.soul", "test-native.soul.meta.json"]
+
+    def test_default_tokenizer_passes_none(self, tmp_path):
+        from commands.train import cmd_train_native
+        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+            instance = mock_trainer.return_value
+            instance.training_model.num_parameters.return_value = 1000
+            cmd_train_native(self._args())
+            assert mock_trainer.call_args.kwargs.get("tokenizer") is None
+
+    def test_token_tree_tokenizer_trains_and_passes_tree(self, tmp_path):
+        from commands.train import cmd_train_native
+        from domains.training.token_tree import TokenTree
+        corpus = tmp_path / "corpus.txt"
+        corpus.write_text(
+            "the quick brown fox jumps over the lazy dog. " * 40,
+            encoding="utf-8",
+        )
+        args = self._args(dataset=str(corpus), tokenizer="token-tree", token_vocab_size=64)
+        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+            instance = mock_trainer.return_value
+            instance.training_model.num_parameters.return_value = 1000
+            cmd_train_native(args)
+        tree = mock_trainer.call_args.kwargs.get("tokenizer")
+        assert isinstance(tree, TokenTree)
+        assert tree.is_trained
+        assert tree.vocab_size <= 64
+        assert instance.save.called
+
+    def test_token_tree_unknown_option_is_none(self, tmp_path):
+        from commands.train import cmd_train_native
+        args = self._args(tokenizer="token-tree")
+        # When the tokenizer kind is not recognized the CLI falls back to char.
+        args.tokenizer = "bogus"
+        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+            instance = mock_trainer.return_value
+            instance.training_model.num_parameters.return_value = 1000
+            cmd_train_native(args)
+        assert mock_trainer.call_args.kwargs.get("tokenizer") is None
 
 
 class _FakeEmbedder:

@@ -532,6 +532,15 @@ sample when `--prompt` is given, and "Next steps" for loading the model in chat
 (`SLO_NATIVE_SOUL_PATH=<path> python3 apps/api/server/main.py`; the default
 `models/slonet-native/` dir is auto-discovered on server start).
 
+`--tokenizer token-tree` trains a TokenTree BPE over the corpus
+(`--token-vocab-size`, default 512) and trains the model on subword tokens
+instead of raw characters. The tree is embedded in the `.soul` metadata
+(`TokenTree.to_dict()`), and `SloNetChatProvider.from_soul()` reconstructs a
+`_TreeTokenizer` so BPE encoding is reproduced exactly at inference time — no
+external tokenizer file. `SloughGPTTrainer`/`prepare_data` accept a `tokenizer`
+param (SloBPE-compatible: `encode`/`decode`/`stoi`/`itos`/`vocab_size`);
+`save()` embeds `metadata["tokenizer"] = {"type": "token_tree", "tree": ...}`.
+
 `sloughgpt train distill --file <corpus>` prints perplexity + BLEU-vs-teacher and
 the checkpoint "Next steps". It aborts early (with the download command) when the
 GPT-2 teacher is not in the HuggingFace cache — no silent ~500MB download.
