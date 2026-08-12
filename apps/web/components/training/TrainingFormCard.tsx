@@ -525,9 +525,9 @@ export function TrainingFormCard({
                           type="button"
                           onClick={() => form.applyPreset(p)}
                           className="px-2 py-0.5 rounded text-[10px] font-medium border border-border/60 bg-background hover:bg-primary/10 hover:text-primary transition-colors"
-                          title={`${p.description} (${p.params})`}
+                          title={p.description}
                         >
-                          {p.name} {p.params}
+                          {p.name}
                         </button>
                       ))}
                     </div>
