@@ -1,47 +1,46 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { NATIVE_PRESETS } from './useTrainingForm'
+import { BUILT_IN_PRESETS } from './useTrainingForm'
 
-describe('NATIVE_PRESETS', () => {
-  it('has 4 presets', () => {
-    expect(NATIVE_PRESETS).toHaveLength(4)
+describe('BUILT_IN_PRESETS', () => {
+  it('has 5 presets', () => {
+    expect(BUILT_IN_PRESETS).toHaveLength(5)
   })
 
   it('each preset has required fields', () => {
-    NATIVE_PRESETS.forEach(p => {
+    BUILT_IN_PRESETS.forEach(p => {
       expect(p.name).toBeTruthy()
       expect(p.description).toBeTruthy()
-      expect(p.params).toBeTruthy()
-      expect(p.embed).toBeGreaterThanOrEqual(16)
-      expect(p.layers).toBeGreaterThanOrEqual(1)
-      expect(p.heads).toBeGreaterThanOrEqual(1)
-      expect(p.blockSize).toBeGreaterThanOrEqual(8)
+      expect(p.method).toBeTruthy()
       expect(p.epochs).toBeGreaterThanOrEqual(1)
       expect(p.lr).toBeGreaterThan(0)
       expect(p.batchSize).toBeGreaterThanOrEqual(1)
     })
   })
 
-  it('presets are ordered from small to large', () => {
-    const sizes = NATIVE_PRESETS.map(p => p.embed * p.layers)
-    for (let i = 1; i < sizes.length; i++) {
-      expect(sizes[i]).toBeGreaterThan(sizes[i - 1])
-    }
+  it('native presets have architecture params', () => {
+    const native = BUILT_IN_PRESETS.filter(p => p.method === 'native')
+    expect(native.length).toBeGreaterThanOrEqual(1)
+    native.forEach(p => {
+      expect(p.nativeEmbed).toBeGreaterThanOrEqual(16)
+      expect(p.nativeLayers).toBeGreaterThanOrEqual(1)
+      expect(p.nativeHeads).toBeGreaterThanOrEqual(1)
+      expect(p.nativeBlockSize).toBeGreaterThanOrEqual(8)
+    })
   })
 
-  it('Tiny preset uses fast-training defaults', () => {
-    const tiny = NATIVE_PRESETS[0]
-    expect(tiny.name).toBe('Tiny')
-    expect(tiny.embed).toBe(64)
-    expect(tiny.layers).toBe(2)
-    expect(tiny.epochs).toBe(50)
+  it('Quick test preset uses fast-training defaults', () => {
+    const quick = BUILT_IN_PRESETS[0]
+    expect(quick.name).toBe('Quick test')
+    expect(quick.method).toBe('distill')
+    expect(quick.epochs).toBe(3)
   })
 
-  it('Large preset uses best-quality defaults', () => {
-    const large = NATIVE_PRESETS[3]
-    expect(large.name).toBe('Large')
-    expect(large.embed).toBe(256)
-    expect(large.layers).toBe(4)
+  it('Native large preset uses best-quality defaults', () => {
+    const large = BUILT_IN_PRESETS.find(p => p.name === 'Native large')!
+    expect(large.method).toBe('native')
+    expect(large.nativeEmbed).toBe(256)
+    expect(large.nativeLayers).toBe(4)
     expect(large.epochs).toBe(300)
     expect(large.lr).toBe(1e-4)
   })

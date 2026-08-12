@@ -12,6 +12,7 @@ import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 import { ToggleGroup, ToggleGroupItem } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { TrainingPresets } from '@/components/training/TrainingPresets'
 
 const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
 
@@ -239,6 +240,13 @@ export function TrainingPipeline({
             <div className="text-xs text-muted-foreground/70">
               {form.method === 'vlm' ? 'Teach the AI to understand images and text' : 'Train a model on text data'}
             </div>
+
+            <TrainingPresets
+              onApply={form.applyPreset}
+              customPresets={form.customPresets}
+              onSave={form.saveCustomPreset}
+              onDelete={form.deleteCustomPreset}
+            />
 
             {form.method !== 'vlm' ? (
               <>

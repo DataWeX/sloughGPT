@@ -59,6 +59,10 @@ vi.mock('@/components/training/TrainingStatus', () => ({
   ),
 }))
 
+vi.mock('@/components/training/TrainingPresets', () => ({
+  TrainingPresets: () => <div data-testid="training-presets" />,
+}))
+
 function makeForm(overrides: Record<string, any> = {}) {
   return {
     method: 'distill' as const,

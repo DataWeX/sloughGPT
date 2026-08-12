@@ -11,25 +11,31 @@ import { chatDB } from '@/lib/db'
 export type Method = 'distill' | 'finetune' | 'vlm' | 'native'
 export type InputMode = 'dataset' | 'text'
 
-export interface NativePreset {
+export interface TrainingPreset {
   name: string
   description: string
-  params: string
-  embed: number
-  layers: number
-  heads: number
-  blockSize: number
+  method: 'distill' | 'finetune' | 'native' | 'vlm'
   epochs: number
   lr: number
   batchSize: number
+  useLoRA?: boolean
+  nativeEmbed?: number
+  nativeLayers?: number
+  nativeHeads?: number
+  nativeBlockSize?: number
 }
 
-export const NATIVE_PRESETS: NativePreset[] = [
-  { name: 'Tiny', description: 'Fast experiments, ~50K params', params: '~50K', embed: 64, layers: 2, heads: 4, blockSize: 64, epochs: 50, lr: 1e-3, batchSize: 32 },
-  { name: 'Small', description: 'Quick training, ~150K params', params: '~150K', embed: 128, layers: 2, heads: 4, blockSize: 128, epochs: 100, lr: 3e-4, batchSize: 16 },
-  { name: 'Medium', description: 'Balanced quality, ~400K params', params: '~400K', embed: 128, layers: 4, heads: 4, blockSize: 128, epochs: 200, lr: 3e-4, batchSize: 16 },
-  { name: 'Large', description: 'Best quality, ~1M params', params: '~1M', embed: 256, layers: 4, heads: 8, blockSize: 256, epochs: 300, lr: 1e-4, batchSize: 8 },
+export const BUILT_IN_PRESETS: TrainingPreset[] = [
+  { name: 'Quick test', description: 'Fast iteration, minimal training', method: 'distill', epochs: 3, lr: 1e-3, batchSize: 32 },
+  { name: 'Personality', description: 'Train character traits from conversations', method: 'distill', epochs: 20, lr: 5e-4, batchSize: 16 },
+  { name: 'Fine-tune LoRA', description: 'Adapt an existing model with LoRA', method: 'finetune', epochs: 10, lr: 2e-4, batchSize: 8, useLoRA: true },
+  { name: 'Native small', description: 'Tiny transformer from scratch (~150K)', method: 'native', epochs: 100, lr: 3e-4, batchSize: 16, nativeEmbed: 128, nativeLayers: 2, nativeHeads: 4, nativeBlockSize: 128 },
+  { name: 'Native large', description: 'Best quality from scratch (~1M)', method: 'native', epochs: 300, lr: 1e-4, batchSize: 8, nativeEmbed: 256, nativeLayers: 4, nativeHeads: 8, nativeBlockSize: 256 },
 ]
+
+// Backward compat alias
+export type NativePreset = TrainingPreset
+export const NATIVE_PRESETS = BUILT_IN_PRESETS.filter(p => p.method === 'native')
 
 export interface TrainingFormState {
   method: Method
@@ -72,7 +78,10 @@ export interface TrainingFormState {
   setNativeHeads: (n: number) => void
   setNativeBlockSize: (n: number) => void
   setLoadingFinetunedModel: (v: boolean) => void
-  applyPreset: (preset: NativePreset) => void
+  applyPreset: (preset: TrainingPreset) => void
+  customPresets: TrainingPreset[]
+  saveCustomPreset: (preset: TrainingPreset) => void
+  deleteCustomPreset: (name: string) => void
   canStart: boolean
   startTraining: (checkpointName?: string) => void
 }
@@ -137,6 +146,26 @@ export function useTrainingForm(
 
   const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
 
+  const [customPresets, setCustomPresets] = useState<TrainingPreset[]>(() => {
+    try { return JSON.parse(localStorage.getItem('sloughgpt-training-presets') || '[]') } catch { return [] }
+  })
+
+  const saveCustomPreset = useCallback((preset: TrainingPreset) => {
+    setCustomPresets(prev => {
+      const next = [...prev.filter(p => p.name !== preset.name), preset]
+      localStorage.setItem('sloughgpt-training-presets', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const deleteCustomPreset = useCallback((name: string) => {
+    setCustomPresets(prev => {
+      const next = prev.filter(p => p.name !== name)
+      localStorage.setItem('sloughgpt-training-presets', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
   const [optimisticJobs, setOptimisticJobs] = useState<TrainingJob[]>([])
   const allJobs = [...optimisticJobs, ...checkpoints.jobs]
 
@@ -163,14 +192,16 @@ export function useTrainingForm(
     }).catch(() => addToast('Could not load model list — training may be limited', 'info'))
   }, [addToast])
 
-  const applyPreset = useCallback((preset: NativePreset) => {
-    setNativeEmbed(preset.embed)
-    setNativeLayers(preset.layers)
-    setNativeHeads(preset.heads)
-    setNativeBlockSize(preset.blockSize)
+  const applyPreset = useCallback((preset: TrainingPreset) => {
+    setMethod(preset.method)
     setTrainingEpochs(preset.epochs)
     setTrainingLR(preset.lr)
     setTrainingBatchSize(preset.batchSize)
+    if (preset.useLoRA !== undefined) setUseLoRA(preset.useLoRA)
+    if (preset.nativeEmbed !== undefined) setNativeEmbed(preset.nativeEmbed)
+    if (preset.nativeLayers !== undefined) setNativeLayers(preset.nativeLayers)
+    if (preset.nativeHeads !== undefined) setNativeHeads(preset.nativeHeads)
+    if (preset.nativeBlockSize !== undefined) setNativeBlockSize(preset.nativeBlockSize)
   }, [])
 
   const canStart = session.trainingRunning ||
@@ -260,6 +291,7 @@ export function useTrainingForm(
     setNativeEmbed, setNativeLayers, setNativeHeads, setNativeBlockSize,
     setLoadingFinetunedModel,
     applyPreset,
+    customPresets, saveCustomPreset, deleteCustomPreset,
     canStart, startTraining,
   }
 }
