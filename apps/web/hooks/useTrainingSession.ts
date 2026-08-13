@@ -79,11 +79,13 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
 export function useTrainingSession(): UseTrainingSessionReturn {
   const ftPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const visualPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const turboPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     return () => {
       if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
       if (visualPollRef.current) { clearInterval(visualPollRef.current); visualPollRef.current = null }
+      if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
     }
   }, [])
 
@@ -319,6 +321,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     config: { epochs: number; lr: number; embed: number; heads: number; layers: number },
     addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
   ) => {
+    if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
     setTurboPhase('training'); setTurboResult(null); setTurboError(null)
     trainingJobsController.startTurboTrain({
       dataset_id: datasetId,
@@ -330,10 +333,38 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     }).then(result => {
       if (result.status === 'error') {
         setTurboError(result.message || 'Training failed'); setTurboPhase('error')
-      } else {
-        setTurboResult(result); setTurboPhase('complete')
-        addToast('Turbo training complete!', 'success')
+        return
       }
+      addToast('Turbo training queued', 'info')
+      const pollId = setInterval(async () => {
+        try {
+          const status = await trainingJobsController.getTurboStatus()
+          if (status.status === 'running' || status.status === 'idle') {
+            if (status.progress != null) setProgress(status.progress)
+            if (status.loss != null) setLoss(status.loss)
+            if (status.global_step != null) setGlobalStep(status.global_step)
+            if (status.total_steps != null) setTotalSteps(status.total_steps)
+            if (status.steps_per_sec != null) setStepsPerSec(status.steps_per_sec)
+            if (status.eta_s != null) setEta(status.eta_s)
+            if (status.elapsed_s != null) setElapsedSeconds(status.elapsed_s)
+            return
+          }
+          clearInterval(pollId); turboPollRef.current = null
+          if (status.status === 'complete') {
+            setProgress(100)
+            setTurboResult((status.result as { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null) ?? { status: 'complete' })
+            setTurboPhase('complete')
+            addToast('Turbo training complete!', 'success')
+          } else {
+            setTurboError(status.error || 'Turbo training failed'); setTurboPhase('error')
+            addToast(status.error || 'Turbo training failed', 'error')
+          }
+        } catch {
+          clearInterval(pollId); turboPollRef.current = null
+          setTurboError('Failed to check turbo training status'); setTurboPhase('error')
+        }
+      }, 3000)
+      turboPollRef.current = pollId
     }).catch((e: unknown) => {
       setTurboError(extractErrorMessage(e, 'Training request failed')); setTurboPhase('error')
     })

@@ -3,13 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const {
   mockStartAutoTrain, mockStopAutoTrain, mockCreate, mockStartVisualTrain,
-  mockStartTurboTrain, mockListJobs,
+  mockStartTurboTrain, mockGetTurboStatus, mockListJobs,
 } = vi.hoisted(() => ({
   mockStartAutoTrain: vi.fn(),
   mockStopAutoTrain: vi.fn(() => Promise.resolve()),
   mockCreate: vi.fn(),
   mockStartVisualTrain: vi.fn(),
   mockStartTurboTrain: vi.fn(),
+  mockGetTurboStatus: vi.fn(),
   mockListJobs: vi.fn(),
 }))
 
@@ -20,6 +21,7 @@ vi.mock('@/lib/controllers', () => ({
     create: mockCreate,
     startVisualTrain: mockStartVisualTrain,
     startTurboTrain: mockStartTurboTrain,
+    getTurboStatus: mockGetTurboStatus,
     list: mockListJobs,
     pauseTraining: vi.fn(),
     resumeTraining: vi.fn(),
@@ -169,13 +171,57 @@ describe('useTrainingSession', () => {
     vi.useRealTimers()
   })
 
-  it('startTurboTrain succeeds', async () => {
-    mockStartTurboTrain.mockResolvedValue({ status: 'ok', final_loss: 0.5, total_steps: 100 })
+  it('startTurboTrain polls for completion with live telemetry', async () => {
+    vi.useFakeTimers()
+    mockStartTurboTrain.mockResolvedValue({ status: 'started', job_id: 't-1', message: 'Queued' })
+    mockGetTurboStatus
+      .mockResolvedValueOnce({
+        status: 'running', job_id: 't-1', progress: 40, global_step: 40, total_steps: 100,
+        steps_per_sec: 4.25, eta_s: 14, elapsed_s: 9, loss: 0.5,
+      })
+      .mockResolvedValue({
+        status: 'complete', job_id: 't-1',
+        result: { status: 'ok', final_loss: 0.32, total_steps: 100, model_path: '/models/turbo/final.soul' },
+      })
+
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startTurboTrain('ds-1', { epochs: 5, lr: 1e-3, embed: 128, heads: 4, layers: 2 }, mockAddToast) })
+
+    expect(result.current.turboPhase).toBe('training')
+    expect(mockAddToast).toHaveBeenCalledWith('Turbo training queued', 'info')
+
+    await act(async () => { vi.advanceTimersByTime(3000) })
+    expect(result.current.turboPhase).toBe('training')
+    expect(result.current.progress).toBe(40)
+    expect(result.current.globalStep).toBe(40)
+    expect(result.current.totalSteps).toBe(100)
+    expect(result.current.stepsPerSec).toBe(4.25)
+    expect(result.current.eta).toBe(14)
+    expect(result.current.elapsedSeconds).toBe(9)
+    expect(result.current.loss).toBe(0.5)
+
+    await act(async () => { vi.advanceTimersByTime(3000) })
     expect(result.current.turboPhase).toBe('complete')
-    expect(result.current.turboResult?.final_loss).toBe(0.5)
+    expect(result.current.turboResult?.final_loss).toBe(0.32)
     expect(result.current.turboResult?.total_steps).toBe(100)
+    expect(result.current.progress).toBe(100)
+    expect(mockAddToast).toHaveBeenCalledWith('Turbo training complete!', 'success')
+    vi.useRealTimers()
+  })
+
+  it('startTurboTrain polls to error', async () => {
+    vi.useFakeTimers()
+    mockStartTurboTrain.mockResolvedValue({ status: 'started', job_id: 't-2' })
+    mockGetTurboStatus.mockResolvedValue({ status: 'error', job_id: 't-2', error: 'GPU out of memory' })
+
+    const { result } = renderHook(() => useTrainingSession())
+    await act(async () => { result.current.startTurboTrain('ds-1', { epochs: 5, lr: 1e-3, embed: 128, heads: 4, layers: 2 }, mockAddToast) })
+    await act(async () => { vi.advanceTimersByTime(3000) })
+
+    expect(result.current.turboPhase).toBe('error')
+    expect(result.current.turboError).toBe('GPU out of memory')
+    expect(mockAddToast).toHaveBeenCalledWith('GPU out of memory', 'error')
+    vi.useRealTimers()
   })
 
   it('startTurboTrain handles api error', async () => {
