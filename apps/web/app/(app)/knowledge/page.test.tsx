@@ -95,8 +95,15 @@ import KnowledgePage from './page'
 
 afterEach(() => cleanup())
 
+function expectEmptyStateVisible() {
+  // Specific to the empty-state copy (not the broad /no/ regex, which also
+  // matches labels like "Knowledge" / "Not trained").
+  const emptyStates = screen.getAllByText(/No knowledge stored|No results found/)
+  expect(emptyStates.length).toBeGreaterThan(0)
+}
+
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   mockList.mockResolvedValue([])
   mockStats.mockResolvedValue({ total_items: 0, topic_count: 0, avg_importance: 0, searchable: true, total_chars: 0 })
   mockTopics.mockResolvedValue({ topics: [], total: 0 })
@@ -118,7 +125,7 @@ describe('KnowledgePage — loading flow', () => {
   it('renders empty state when no items', async () => {
     render(<KnowledgePage />)
     await waitFor(() => {
-      expect(screen.getByText(/no|empty|nothing/i)).toBeTruthy()
+      expectEmptyStateVisible()
     })
   })
 })
@@ -164,7 +171,7 @@ describe('KnowledgePage — data display flow', () => {
 describe('KnowledgePage — add item flow', () => {
   it('renders add button on page', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText(/no|empty|nothing/i)).toBeTruthy() })
+    await waitFor(() => { expectEmptyStateVisible() })
 
     // The Add button should be rendered (IconPlus mock renders "plus" + "Add" text)
     const buttons = screen.getAllByRole('button')
@@ -321,7 +328,7 @@ describe('KnowledgePage — error handling flow', () => {
     mockList.mockRejectedValue(new Error('Network error'))
     render(<KnowledgePage />)
     await waitFor(() => {
-      expect(screen.getByText('Knowledge')).toBeTruthy()
+      expect(screen.getAllByText('Knowledge').length).toBeGreaterThanOrEqual(1)
     })
   })
 
@@ -340,7 +347,7 @@ describe('KnowledgePage — empty stats flow', () => {
     mockStats.mockResolvedValue({ total_items: 0, topic_count: 0, avg_importance: 0, searchable: true, total_chars: 0 })
     render(<KnowledgePage />)
     await waitFor(() => {
-      expect(screen.getByText(/no|empty|nothing/i)).toBeTruthy()
+      expectEmptyStateVisible()
     })
   })
 })
@@ -348,7 +355,7 @@ describe('KnowledgePage — empty stats flow', () => {
 describe('KnowledgePage — add form flow', () => {
   it('opens add form when Add button clicked', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText(/no|empty|nothing/i)).toBeTruthy() })
+    await waitFor(() => { expectEmptyStateVisible() })
     const addBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.includes('plus') || b.textContent?.includes('Add')
     )
@@ -363,7 +370,7 @@ describe('KnowledgePage — add form flow', () => {
 
   it('submitting add form calls controller', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText(/no|empty|nothing/i)).toBeTruthy() })
+    await waitFor(() => { expectEmptyStateVisible() })
     const addBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.includes('plus') || b.textContent?.includes('Add')
     )
