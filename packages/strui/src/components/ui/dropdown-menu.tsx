@@ -264,14 +264,16 @@ DropdownMenuContent.displayName = 'DropdownMenuContent'
 
 /* ── Item ───────────────────────────────────────────────────────── */
 
-interface DropdownMenuItemProps extends HTMLAttributes<HTMLDivElement> {
+interface DropdownMenuItemProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onSelect'> {
   destructive?: boolean
   inset?: boolean
   disabled?: boolean
+  /** Fired on click (in addition to onClick). Mirrors Radix onSelect. */
+  onSelect?: (event: React.MouseEvent<HTMLDivElement>) => void
 }
 
 const DropdownMenuItem = forwardRef<HTMLDivElement, DropdownMenuItemProps>(
-  ({ className, destructive, inset, disabled, onClick, ...props }, ref) => {
+  ({ className, destructive, inset, disabled, onClick, onSelect, ...props }, ref) => {
     const { registerItem, unregisterItem, onOpenChange } = useDropdownMenuContext()
     const itemRef = useRef<HTMLDivElement>(null)
 
@@ -294,6 +296,7 @@ const DropdownMenuItem = forwardRef<HTMLDivElement, DropdownMenuItemProps>(
         onClick={(e) => {
           if (disabled) return
           onClick?.(e)
+          onSelect?.(e)
           onOpenChange(false)
         }}
         className={cn(
@@ -396,7 +399,7 @@ interface DropdownMenuRadioItemProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const DropdownMenuRadioItem = forwardRef<HTMLDivElement, DropdownMenuRadioItemProps>(
-  ({ className, value: itemValue, disabled, onClick, ...props }, ref) => {
+  ({ className, children, value: itemValue, disabled, onClick, ...props }, ref) => {
     const groupCtx = useContext(DropdownMenuRadioGroupContext)
     const { registerItem, unregisterItem, onOpenChange } = useDropdownMenuContext()
     const itemRef = useRef<HTMLDivElement>(null)
@@ -432,6 +435,7 @@ const DropdownMenuRadioItem = forwardRef<HTMLDivElement, DropdownMenuRadioItemPr
         )}
         {...props}
       >
+        {children}
         {isSelected && (
           <span className="ml-auto">
             <svg className="h-3 w-3 text-primary" fill="currentColor" viewBox="0 0 24 24">

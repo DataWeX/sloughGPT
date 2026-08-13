@@ -121,12 +121,16 @@ function AlertDialogPortal({ children }: { children: ReactNode }) {
 /* ── Overlay ────────────────────────────────────────────────────── */
 
 const AlertDialogOverlay = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => {
-    const { open } = useAlertDialogContext()
+  ({ className, onClick, ...props }, ref) => {
+    const { open, onOpenChange } = useAlertDialogContext()
     return (
       <div
         ref={ref}
         aria-hidden="true"
+        onClick={(e) => {
+          onClick?.(e)
+          onOpenChange(false)
+        }}
         className={cn(
           'fixed inset-0 z-50 bg-foreground/20 backdrop-blur-sm transition-opacity duration-200',
           open ? 'opacity-100' : 'opacity-0 pointer-events-none',

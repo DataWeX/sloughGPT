@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  cloneElement,
   createContext,
   forwardRef,
   useCallback,
@@ -11,6 +12,8 @@ import {
   useRef,
   useState,
   type HTMLAttributes,
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement,
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -68,19 +71,37 @@ function Dialog({ open: controlledOpen, defaultOpen = false, onOpenChange, child
 /* ── Trigger ────────────────────────────────────────────────────── */
 
 const DialogTrigger = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonElement> & { asChild?: boolean }>(
-  ({ onClick, ...props }, ref) => {
+  ({ onClick, asChild, children, ...props }, ref) => {
     const { onOpenChange } = useDialogContext()
-    return (
-      <button
-        ref={ref}
-        type="button"
-        aria-haspopup="dialog"
-        onClick={(e) => {
+
+    const triggerProps = {
+      ref,
+      type: 'button' as const,
+      'aria-haspopup': 'dialog' as const,
+      onClick: (e: ReactMouseEvent<HTMLButtonElement>) => {
+        onClick?.(e)
+        onOpenChange(true)
+      },
+    }
+
+    if (asChild && children && typeof children === 'object' && 'props' in children) {
+      const child = children as ReactElement
+      return cloneElement(child, {
+        ...triggerProps,
+        ...child.props,
+        ref,
+        onClick: (e: ReactMouseEvent<HTMLButtonElement>) => {
+          child.props.onClick?.(e)
           onClick?.(e)
           onOpenChange(true)
-        }}
-        {...props}
-      />
+        },
+      })
+    }
+
+    return (
+      <button {...triggerProps} {...props}>
+        {children}
+      </button>
     )
   },
 )
@@ -98,12 +119,16 @@ function DialogPortal({ children }: { children: ReactNode }) {
 /* ── Overlay ────────────────────────────────────────────────────── */
 
 const DialogOverlay = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => {
-    const { open } = useDialogContext()
+  ({ className, onClick, ...props }, ref) => {
+    const { open, onOpenChange } = useDialogContext()
     return (
       <div
         ref={ref}
         aria-hidden="true"
+        onClick={(e) => {
+          onClick?.(e)
+          onOpenChange(false)
+        }}
         className={cn(
           'fixed inset-0 z-50 bg-foreground/20 backdrop-blur-sm transition-opacity duration-200',
           open ? 'opacity-100' : 'opacity-0 pointer-events-none',

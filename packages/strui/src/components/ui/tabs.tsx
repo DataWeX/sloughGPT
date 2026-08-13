@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useId,
   useRef,
   useState,
   type HTMLAttributes,
@@ -20,6 +21,7 @@ import { cn } from '../../lib/cn'
 interface TabsContextValue {
   value: string
   onValueChange: (value: string) => void
+  idPrefix: string
 }
 
 const TabsContext = createContext<TabsContextValue | null>(null)
@@ -57,6 +59,7 @@ function Tabs({
   const [internalValue, setInternalValue] = useState(defaultValue)
   const isControlled = controlledValue !== undefined
   const value = isControlled ? controlledValue : internalValue
+  const idPrefix = useId()
 
   const handleChange = useCallback(
     (v: string) => {
@@ -66,7 +69,7 @@ function Tabs({
     [isControlled, handler],
   )
 
-  const ctx = { value, onValueChange: handleChange }
+  const ctx = { value, onValueChange: handleChange, idPrefix }
 
   if (tabDefs) {
     return (
@@ -100,17 +103,51 @@ function Tabs({
 /* ── List ───────────────────────────────────────────────────── */
 
 const TabsList = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      role="tablist"
-      className={cn(
-        'inline-flex h-10 items-center justify-start gap-0.5 rounded-lg border border-border bg-muted/50 p-1 text-muted-foreground',
-        className,
-      )}
-      {...props}
-    />
-  ),
+  ({ className, onKeyDown, ...props }, ref) => {
+    const { value, onValueChange } = useTabsContext()
+    const listRef = useRef<HTMLDivElement | null>(null)
+
+    const mergedRef = (node: HTMLDivElement | null) => {
+      listRef.current = node
+      if (typeof ref === 'function') ref(node)
+      else if (ref) ref.current = node
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      onKeyDown?.(e)
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return
+      const list = listRef.current
+      if (!list) return
+      const tabs = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]'))
+      const enabled = tabs.filter((t) => t.getAttribute('data-disabled') !== 'true' && !t.hasAttribute('disabled'))
+      if (enabled.length === 0) return
+      const currentIndex = enabled.findIndex((t) => t.dataset.value === value)
+      const baseIndex = currentIndex >= 0 ? currentIndex : 0
+      let nextIndex = baseIndex
+      if (e.key === 'ArrowRight') nextIndex = (baseIndex + 1) % enabled.length
+      else if (e.key === 'ArrowLeft') nextIndex = (baseIndex - 1 + enabled.length) % enabled.length
+      else if (e.key === 'Home') nextIndex = 0
+      else if (e.key === 'End') nextIndex = enabled.length - 1
+      e.preventDefault()
+      const next = enabled[nextIndex]
+      const nextValue = next.dataset.value
+      if (nextValue !== undefined && nextValue !== value) onValueChange(nextValue)
+      next.focus()
+    }
+
+    return (
+      <div
+        ref={mergedRef}
+        role="tablist"
+        onKeyDown={handleKeyDown}
+        className={cn(
+          'inline-flex h-10 items-center justify-start gap-0.5 rounded-lg border border-border bg-muted/50 p-1 text-muted-foreground',
+          className,
+        )}
+        {...props}
+      />
+    )
+  },
 )
 TabsList.displayName = 'TabsList'
 
@@ -123,16 +160,21 @@ interface TabsTriggerProps extends HTMLAttributes<HTMLButtonElement> {
 
 const TabsTrigger = forwardRef<HTMLButtonElement, TabsTriggerProps>(
   ({ className, value: triggerValue, disabled, ...props }, ref) => {
-    const { value, onValueChange } = useTabsContext()
+    const { value, onValueChange, idPrefix } = useTabsContext()
     const isActive = value === triggerValue
+    const tabId = `${idPrefix}-tab-${triggerValue}`
+    const panelId = `${idPrefix}-panel-${triggerValue}`
 
     return (
       <button
         ref={ref}
         type="button"
         role="tab"
+        id={tabId}
         aria-selected={isActive}
+        aria-controls={panelId}
         aria-disabled={disabled}
+        data-value={triggerValue}
         data-state={isActive ? 'active' : 'inactive'}
         disabled={disabled}
         onClick={() => !disabled && onValueChange(triggerValue)}
@@ -162,8 +204,10 @@ interface TabsContentProps extends HTMLAttributes<HTMLDivElement> {
 
 const TabsContent = forwardRef<HTMLDivElement, TabsContentProps>(
   ({ className, value: contentValue, forceMount = false, ...props }, ref) => {
-    const { value } = useTabsContext()
+    const { value, idPrefix } = useTabsContext()
     const isActive = value === contentValue
+    const tabId = `${idPrefix}-tab-${contentValue}`
+    const panelId = `${idPrefix}-panel-${contentValue}`
 
     if (!forceMount && !isActive) return null
 
@@ -171,6 +215,8 @@ const TabsContent = forwardRef<HTMLDivElement, TabsContentProps>(
       <div
         ref={ref}
         role="tabpanel"
+        id={panelId}
+        aria-labelledby={tabId}
         tabIndex={0}
         hidden={forceMount ? !isActive : undefined}
         className={cn(

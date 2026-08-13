@@ -88,7 +88,7 @@ interface TooltipTriggerProps extends HTMLAttributes<HTMLElement> {
 }
 
 export const TooltipTrigger = forwardRef<HTMLButtonElement, TooltipTriggerProps>(
-  ({ children, onMouseEnter, onMouseLeave, onFocus, onBlur, ...props }, ref) => {
+  ({ children, asChild: _asChild, onMouseEnter, onMouseLeave, onFocus, onBlur, ...props }, ref) => {
     const { onOpenChange, triggerRef, contentId, delay } = useTooltipContext()
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -197,7 +197,7 @@ export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
       top = Math.max(8, Math.min(top, window.innerHeight + scrollY - content.height - 8))
 
       setPos({ top, left })
-    }, [open, side, sideOffset, triggerRef])
+    }, [open, mounted, side, sideOffset, triggerRef])
 
     if (!mounted || !open) return null
 

@@ -67,7 +67,8 @@ export function ModelStatusPill({
         'inline-flex items-center rounded-full font-medium transition-all',
         sizeStyles[size],
         textColor,
-        onClick && 'cursor-pointer hover:opacity-80'
+        onClick && 'cursor-pointer hover:opacity-80',
+        className,
       )}
     >
       <span className={cn('rounded-full', dotColor, size === 'sm' ? 'w-1.5 h-1.5' : size === 'md' ? 'w-2 h-2' : 'w-2.5 h-2.5', (status === 'loaded' || status === 'loading') && 'animate-pulse')} />
