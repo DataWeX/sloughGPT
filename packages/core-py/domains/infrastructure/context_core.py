@@ -62,6 +62,8 @@ class ContextCore:
 You have access to conversation history and retrieved context.
 Be concise, accurate, and helpful."""
 
+    _AUTO_MEMORY_TOP_K = 5
+
     def __init__(
         self,
         max_tokens: int = 2048,
@@ -287,17 +289,18 @@ Be concise, accurate, and helpful."""
             return ""
 
         if self._vector_store is None:
-            # Query KnowledgeMemory (vector store) for relevant facts
+            # Query KnowledgeMemory through the relevance-gated augmenter — the
+            # same score floor + topical-overlap filter the chat loop applies —
+            # so the RAG layer never injects spurious matches into the frame.
             import asyncio
             try:
-                from domains.learner.knowledge import get_knowledge_memory
-                def _query_kmem():
-                    kmem = get_knowledge_memory()
-                    return kmem.search(query, top_k=self.rag_top_k)
-                results = await asyncio.to_thread(_query_kmem)
-                if results:
-                    parts = [f"[Knowledge: {r['topic']}] {r['content'][:self.rag_max_chars]}" for r in results]
-                    return "\n".join(parts)
+                from domains.learner.knowledge_augmenter import enrich_with_knowledge
+                def _query_aug():
+                    result = enrich_with_knowledge(query, auto_search=False, max_facts=self.rag_top_k)
+                    return result.get("facts", [])
+                facts = await asyncio.to_thread(_query_aug)
+                if facts:
+                    return "\n".join(f"[Knowledge] {f}" for f in facts)
             except Exception:
                 pass
             # Auto-ingest if empty, then fallback to semantic memory
@@ -337,6 +340,43 @@ Be concise, accurate, and helpful."""
                 return "\n".join(parts)
             return ""
 
+    async def get_auto_memory_context(self, query: str = "", limit: int = 5) -> str:
+        """
+        Retrieve personal facts from the auto-memory layer.
+
+        Surfaces facts learned from past conversations (``MemoryService``.
+        ``retrieve``) as ``[Memory] <fact>`` lines. Unlike the RAG layer, the
+        auto-memory read path has no topical-overlap gate, so personal
+        statements ("the user prefers Zed") reach context even when they do
+        not overlap the query topically.
+
+        Args:
+            query: the lookup text (typically the user message).
+            limit: maximum number of facts to surface.
+
+        Returns:
+            Multi-line string of ``[Memory] ...`` facts; "" when the memory
+            service is disabled, empty, or errors (fail closed).
+
+        Side effects:
+            - none; read-only.
+        """
+        if not query:
+            return ""
+        try:
+            import asyncio
+            from domains.memory.memory_service import get_memory_service
+
+            def _retrieve() -> List[Dict[str, Any]]:
+                return get_memory_service().retrieve(query, limit)
+
+            facts = await asyncio.to_thread(_retrieve)
+            lines = [f"[Memory] {f.get('content')}" for f in facts if f.get("content")]
+            return "\n".join(lines)
+        except Exception as e:
+            logger.debug("Auto-memory retrieve failed: %s", e)
+            return ""
+
     async def build_context_frame(
         self,
         include_rag: bool = True,
@@ -371,12 +411,20 @@ Be concise, accurate, and helpful."""
         # Layer 2: Memory
         if include_memory and self.memory_enabled:
             memory_content = self.get_episodic_context(query)
+            auto_memory = await self.get_auto_memory_context(
+                query, limit=self._AUTO_MEMORY_TOP_K
+            )
+            if auto_memory:
+                memory_content = (
+                    f"{memory_content}\n{auto_memory}".strip()
+                    if memory_content else auto_memory
+                )
             if memory_content:
                 layer = ContextLayer(
                     layer_type="memory",
                     content=memory_content,
                     tokens=self._estimate_tokens(memory_content),
-                    source="episodic_store",
+                    source="episodic_store+auto_memory" if auto_memory else "episodic_store",
                     timestamp=datetime.now().isoformat(),
                     priority=0.8,
                 )

@@ -25,4 +25,18 @@ describe('catalogIdMatchesRuntime', () => {
   it('handles single segment ids', () => {
     expect(catalogIdMatchesRuntime('model', 'model')).toBe(true)
   })
+
+  it('handles empty strings', () => {
+    expect(catalogIdMatchesRuntime('', 'gpt2')).toBe(false)
+    expect(catalogIdMatchesRuntime('gpt2', '')).toBe(false)
+  })
+
+  it('matches case-insensitively', () => {
+    expect(catalogIdMatchesRuntime('GPT2', 'gpt2')).toBe(true)
+    expect(catalogIdMatchesRuntime('hf/GPT2', 'gpt2')).toBe(true)
+  })
+
+  it('handles whitespace in ids', () => {
+    expect(catalogIdMatchesRuntime(' gpt2 ', 'gpt2')).toBe(true)
+  })
 })

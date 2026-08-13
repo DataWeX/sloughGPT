@@ -1,101 +1,105 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { TrainingSummaryCard } from './TrainingSummaryCard'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
+import React from 'react'
 import type { Checkpoint } from '@/lib/souls-controller'
 
-function mkCp(overrides: Partial<Checkpoint> = {}): Checkpoint {
-  return { name: 'test', soul: 'test', ...overrides }
-}
+vi.mock('@sloughgpt/strui', () => ({
+  Card: ({ children }: any) => <div>{children}</div>,
+  CardHeader: ({ children }: any) => <div>{children}</div>,
+  CardTitle: ({ children }: any) => <div>{children}</div>,
+  CardContent: ({ children }: any) => <div>{children}</div>,
+}))
+
+import { TrainingSummaryCard } from './TrainingSummaryCard'
+
+const cp = (overrides: Partial<Checkpoint>) => ({ name: 'cp', soul: 'assistant', ...overrides })
 
 describe('TrainingSummaryCard', () => {
-  it('returns null for empty checkpoints', () => {
+  afterEach(cleanup)
+
+  it('returns null when no checkpoints', () => {
     const { container } = render(<TrainingSummaryCard checkpoints={[]} />)
     expect(container.innerHTML).toBe('')
   })
 
-  it('shows total checkpoints even without loss', () => {
-    render(<TrainingSummaryCard checkpoints={[mkCp()]} />)
-    expect(screen.getAllByText('Total checkpoints').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(1)
+  it('shows total checkpoints count', () => {
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', loss: 0.5, model_type: 'gpt2' }),
+      cp({ name: 'cp2', loss: 0.3, model_type: 'gpt2' }),
+    ]} />)
+    expect(screen.getByText('Total checkpoints')).toBeDefined()
+    expect(screen.getByText('2')).toBeDefined()
   })
 
-  it('shows best and avg loss', () => {
-    render(
-      <TrainingSummaryCard
-        checkpoints={[mkCp({ loss: 1.0 }), mkCp({ loss: 3.0 })]}
-      />
-    )
-    expect(screen.getAllByText('Best loss').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('1.0000').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Avg loss').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('2.0000').length).toBeGreaterThanOrEqual(1)
+  it('shows best loss', () => {
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', loss: 0.5 }),
+      cp({ name: 'cp2', loss: 0.3 }),
+    ]} />)
+    expect(screen.getByText('Best loss')).toBeDefined()
+    expect(screen.getByText('0.3000')).toBeDefined()
   })
 
-  it('shows loss spread when 2+ checkpoints with loss', () => {
-    render(
-      <TrainingSummaryCard
-        checkpoints={[mkCp({ loss: 1.0 }), mkCp({ loss: 3.0 })]}
-      />
-    )
-    expect(screen.getAllByText('Loss spread').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('2.0000').length).toBeGreaterThanOrEqual(1)
+  it('shows avg loss', () => {
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', loss: 0.6 }),
+      cp({ name: 'cp2', loss: 0.4 }),
+    ]} />)
+    expect(screen.getByText('Avg loss')).toBeDefined()
+    expect(screen.getByText('0.5000')).toBeDefined()
+  })
+
+  it('shows loss spread when multiple checkpoints', () => {
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', loss: 0.2 }),
+      cp({ name: 'cp2', loss: 0.8 }),
+    ]} />)
+    expect(screen.getByText('Loss spread')).toBeDefined()
+    expect(screen.getByText('0.6000')).toBeDefined()
   })
 
   it('shows total training time', () => {
-    render(
-      <TrainingSummaryCard
-        checkpoints={[mkCp({ loss: 1.0, training_duration_s: 120 }), mkCp({ loss: 2.0, training_duration_s: 60 })]}
-      />
-    )
-    expect(screen.getAllByText('Total training time').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('3m 0s').length).toBeGreaterThanOrEqual(1)
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', training_duration_s: 120 }),
+      cp({ name: 'cp2', training_duration_s: 60 }),
+    ]} />)
+    expect(screen.getByText('Total training time')).toBeDefined()
+    expect(screen.getByText('3m 0s')).toBeDefined()
   })
 
   it('shows fastest run', () => {
-    render(
-      <TrainingSummaryCard
-        checkpoints={[mkCp({ loss: 1.0, training_duration_s: 120 }), mkCp({ loss: 2.0, training_duration_s: 60 })]}
-      />
-    )
-    expect(screen.getAllByText('Fastest run').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('1m 0s').length).toBeGreaterThanOrEqual(1)
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', training_duration_s: 120 }),
+      cp({ name: 'cp2', training_duration_s: 30 }),
+    ]} />)
+    expect(screen.getByText('Fastest run')).toBeDefined()
+    expect(screen.getByText('30s')).toBeDefined()
   })
 
   it('shows max vocab size', () => {
-    render(
-      <TrainingSummaryCard
-        checkpoints={[mkCp({ loss: 1.0, vocab_size: 100 }), mkCp({ loss: 2.0, vocab_size: 200 })]}
-      />
-    )
-    expect(screen.getAllByText('Max vocab size').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('200').length).toBeGreaterThanOrEqual(1)
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', vocab_size: 256 }),
+      cp({ name: 'cp2', vocab_size: 512 }),
+    ]} />)
+    expect(screen.getByText('Max vocab size')).toBeDefined()
+    expect(screen.getByText('512')).toBeDefined()
   })
 
-  it('formats hours correctly', () => {
-    render(
-      <TrainingSummaryCard
-        checkpoints={[mkCp({ loss: 1.0, training_duration_s: 3720 })]}
-      />
-    )
-    expect(screen.getAllByText('1h 2m').length).toBeGreaterThanOrEqual(1)
+  it('shows top model type when multiple types', () => {
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', model_type: 'gpt2' }),
+      cp({ name: 'cp2', model_type: 'gpt2' }),
+      cp({ name: 'cp3', model_type: 'qwen' }),
+    ]} />)
+    expect(screen.getByText('Top model type')).toBeDefined()
+    expect(screen.getByText('gpt2 (2)')).toBeDefined()
   })
 
-  it('shows total checkpoints count', () => {
-    render(
-      <TrainingSummaryCard
-        checkpoints={[mkCp({ loss: 1.0 }), mkCp({ loss: 2.0 }), mkCp({ loss: 3.0 })]}
-      />
-    )
-    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('shows loss spread with 2+ checkpoints', () => {
-    render(
-      <TrainingSummaryCard
-        checkpoints={[mkCp({ loss: 1.0 }), mkCp({ loss: 3.0 })]}
-      />
-    )
-    expect(screen.getAllByText('Loss spread').length).toBeGreaterThanOrEqual(1)
+  it('formats duration in hours', () => {
+    render(<TrainingSummaryCard checkpoints={[
+      cp({ name: 'cp1', training_duration_s: 3660 }),
+    ]} />)
+    expect(screen.getAllByText('1h 1m').length).toBeGreaterThanOrEqual(1)
   })
 })

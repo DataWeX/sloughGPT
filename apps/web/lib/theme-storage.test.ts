@@ -28,4 +28,14 @@ describe('isStoredThemeId', () => {
   it('returns false for undefined', () => {
     expect(isStoredThemeId(undefined as unknown as string | null)).toBe(false)
   })
+
+  it('returns true for every valid theme id', () => {
+    for (const id of THEME_IDS) {
+      expect(isStoredThemeId(id)).toBe(true)
+    }
+  })
+
+  it('has exactly 7 themes', () => {
+    expect(THEME_IDS).toHaveLength(7)
+  })
 })

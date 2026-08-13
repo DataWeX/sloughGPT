@@ -50,3 +50,71 @@ class TestStatus:
         resp = client.get("/live")
         assert resp.status_code == 200
         assert resp.json()["data"]["alive"] is True
+
+
+class TestStatusDetail:
+    def test_status_uptime_positive(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/status")
+        data = resp.json()["data"]
+        assert data["uptime_seconds"] >= 0
+
+    def test_status_has_timestamp(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/status")
+        data = resp.json()["data"]
+        assert isinstance(data["timestamp"], (int, float))
+
+    def test_status_timestamp_reasonable(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/status")
+        ts = resp.json()["data"]["timestamp"]
+        assert ts > 1_000_000_000  # after year 2001
+
+    def test_status_has_version(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/status")
+        data = resp.json()["data"]
+        assert "version" in data or "version" in str(data)
+
+    def test_ready_returns_bool(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/ready")
+        ready = resp.json()["data"]["ready"]
+        assert isinstance(ready, bool)
+
+    def test_live_returns_bool(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/live")
+        alive = resp.json()["data"]["alive"]
+        assert isinstance(alive, bool)
+
+    def test_status_response_has_data_key(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/status")
+        assert "data" in resp.json()
+
+    def test_ready_response_has_data_key(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/ready")
+        assert "data" in resp.json()
+
+    def test_live_response_has_data_key(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/live")
+        assert "data" in resp.json()
+
+    def test_status_method_not_allowed(self):
+        sr = StatusRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/status")
+        assert resp.status_code == 405

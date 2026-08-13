@@ -173,3 +173,59 @@ def test_delete_finetuned_rejects_path_traversal():
     # the router's guard (400). The guarantee: nothing outside the base is removed.
     assert resp.status_code in (400, 404)
     assert (sibling / "pwned.txt").exists()
+
+
+# ── GET /training/jobs — internal fields never leak into responses ─────────
+
+
+@pytest.fixture(autouse=True)
+def _clean_training_jobs():
+    """Reset the in-memory job registry between tests."""
+    import training.jobs as tj
+    tj.training_jobs.clear()
+    yield
+    tj.training_jobs.clear()
+
+
+def test_list_jobs_serializes_with_internal_fields():
+    """A job carrying a threading.Event cancel handle must serialize cleanly."""
+    import threading
+    import training.jobs as tj
+
+    tj.training_jobs["job_1"] = {
+        "status": "running",
+        "model": "gpt2",
+        "dataset": "shakespeare",
+        "progress": 50,
+        "_cancel_event": threading.Event(),
+    }
+
+    resp = client.get("/training/jobs")
+    assert resp.status_code == 200
+    jobs = resp.json()
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job["status"] == "running"
+    assert job["status_message"].startswith("Training gpt2 on shakespeare, 50% done")
+    assert "_cancel_event" not in job
+    assert all(not k.startswith("_") for k in job)
+
+
+def test_get_single_job_serializes_with_internal_fields():
+    """GET /training/jobs/{id} must also strip internal (underscore) fields."""
+    import threading
+    import training.jobs as tj
+
+    tj.training_jobs["job_2"] = {
+        "status": "completed",
+        "model": "gpt2",
+        "dataset": "shakespeare",
+        "checkpoint": "models/gpt2_shakespeare_trained.soul",
+        "_cancel_event": threading.Event(),
+    }
+
+    resp = client.get("/training/jobs/job_2")
+    assert resp.status_code == 200
+    job = resp.json()
+    assert job["status"] == "completed"
+    assert "_cancel_event" not in job

@@ -59,11 +59,26 @@ vi.mock('@sloughgpt/strui', () => {
     Chip: ({ children, onClick, variant }: any) => <button onClick={onClick} data-variant={variant}>{children}</button>,
     IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'),
     IconSearch: iconMock('search'), IconCheck: iconMock('check'), IconX: iconMock('x'),
+    IconBrain: iconMock('brain'),
+    IconFilter: iconMock('filter'), IconFolder: iconMock('folder'), IconSettings: iconMock('settings'),
+    IconClock: iconMock('clock'), IconDownload: iconMock('download'), IconUpload: iconMock('upload'),
+    IconChevronDown: iconMock('chevron-down'),
+    FoldSection: ({ heading, children }: any) => <details><summary>{heading}</summary>{children}</details>,
     AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: passthrough, AlertDialogHeader: passthrough, AlertDialogTitle: passthrough,
     AlertDialogDescription: passthrough, AlertDialogFooter: passthrough,
     AlertDialogCancel: ({ onClick, ...p }: any) => <button onClick={onClick} {...p}>Cancel</button>,
     AlertDialogAction: ({ onClick, ...p }: any) => <button onClick={onClick} {...p}>Confirm</button>,
+    Dialog: ({ open, children }: any) => open ? <div data-testid="dialog">{children}</div> : null,
+    DialogContent: passthrough, DialogHeader: passthrough, DialogTitle: passthrough,
+    DialogDescription: passthrough, DialogFooter: passthrough,
+    Switch: ({ checked, onCheckedChange, disabled, 'aria-label': ariaLabel }: any) => (
+      <button role="switch" aria-checked={!!checked} disabled={disabled} aria-label={ariaLabel} onClick={() => onCheckedChange?.(!checked)} />
+    ),
+    DropdownMenu: passthrough,
+    DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
+    DropdownMenuContent: ({ children }: any) => <>{children}</>,
+    DropdownMenuItem: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
   }
 })
 
@@ -208,7 +223,7 @@ describe('KnowledgePage — search flow', () => {
     render(<KnowledgePage />)
     await waitFor(() => { expect(screen.getByText('Python is great')).toBeTruthy() })
 
-    const searchInput = screen.getByPlaceholderText(/search/i)
+    const searchInput = screen.getByPlaceholderText('Search knowledge...')
     fireEvent.change(searchInput, { target: { value: 'python' } })
 
     await waitFor(() => {

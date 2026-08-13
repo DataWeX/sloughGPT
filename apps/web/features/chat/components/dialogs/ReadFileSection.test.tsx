@@ -56,4 +56,16 @@ describe('ReadFileSection', () => {
     fireEvent.change(input)
     expect(onFileSelected).toHaveBeenCalledOnce()
   })
+
+  it('shows page count only when pages > 1', () => {
+    const data = { text: 'hello', filename: 'doc.pdf', pages: 5 }
+    const { container } = render(<ReadFileSection {...defaultProps} readFileData={data} />)
+    expect(container.textContent).toContain('5 pages')
+  })
+
+  it('renders file name in filename display', () => {
+    const data = { text: 'content', filename: 'report.csv', pages: 3 }
+    render(<ReadFileSection {...defaultProps} readFileData={data} />)
+    expect(screen.getByText('report.csv')).toBeTruthy()
+  })
 })

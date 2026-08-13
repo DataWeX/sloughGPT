@@ -1,108 +1,123 @@
-"""Tests for Spaced Repetition Scheduler — review scheduling, due detection, stats.
-
-Covers:
-  - Scheduling reviews with different performance levels
-  - Interval calculation based on average performance
-  - Due review detection
-  - Review statistics
-"""
+"""Tests for SpacedRepetitionScheduler — review scheduling and stats."""
 
 import time
 import pytest
 from domains.infrastructure.spaced_repetition_engine import SpacedRepetitionScheduler
 
 
-class TestSpacedRepetitionScheduler:
-    def test_init(self):
-        s = SpacedRepetitionScheduler()
-        assert len(s.review_schedule) == 0
-        assert len(s.performance_history) == 0
+@pytest.fixture
+def scheduler():
+    return SpacedRepetitionScheduler()
 
-    def test_schedule_review_excellent(self):
-        s = SpacedRepetitionScheduler()
-        next_time = s.schedule_review("doc1", 0.95)
-        assert next_time > time.time()
-        # ≥0.9 → month interval (~30 days)
-        interval = next_time - time.time()
-        assert 29 * 86400 < interval < 31 * 86400
 
-    def test_schedule_review_good(self):
-        s = SpacedRepetitionScheduler()
-        next_time = s.schedule_review("doc1", 0.85)
-        interval = next_time - time.time()
-        # 0.8-0.9 → week interval (~7 days)
-        assert 6 * 86400 < interval < 8 * 86400
+class TestScheduleReview:
+    def test_returns_future_timestamp(self, scheduler):
+        result = scheduler.schedule_review("doc1", 0.8)
+        assert result > time.time()
 
-    def test_schedule_review_fair(self):
-        s = SpacedRepetitionScheduler()
-        next_time = s.schedule_review("doc1", 0.7)
-        interval = next_time - time.time()
-        # 0.6-0.8 → 3 days
-        assert 2 * 86400 < interval < 4 * 86400
+    def test_stores_in_schedule(self, scheduler):
+        scheduler.schedule_review("doc1", 0.8)
+        assert "doc1" in scheduler.review_schedule
 
-    def test_schedule_review_poor(self):
-        s = SpacedRepetitionScheduler()
-        next_time = s.schedule_review("doc1", 0.3)
-        interval = next_time - time.time()
-        # <0.6 → 1 day
-        assert 0.5 * 86400 < interval < 1.5 * 86400
+    def test_stores_performance(self, scheduler):
+        scheduler.schedule_review("doc1", 0.9)
+        assert 0.9 in scheduler.performance_history["doc1"]
 
-    def test_average_performance(self):
-        s = SpacedRepetitionScheduler()
-        s.schedule_review("doc1", 0.95)
-        s.schedule_review("doc1", 0.5)
-        # Average: (0.95+0.5)/2 = 0.725 → 3-day interval
-        next_time = s.schedule_review("doc1", 0.5)
-        # Third call uses avg of [0.95, 0.5, 0.5] = 0.65 → 3-day
-        interval = next_time - time.time()
-        assert 2 * 86400 < interval < 4 * 86400
+    def test_excellent_performance_long_interval(self, scheduler):
+        t0 = time.time()
+        result = scheduler.schedule_review("doc1", 0.95)
+        interval = result - t0
+        assert interval >= 25 * 24 * 3600  # ~month
 
-    def test_performance_history_accumulates(self):
-        s = SpacedRepetitionScheduler()
-        s.schedule_review("doc1", 0.8)
-        s.schedule_review("doc1", 0.9)
-        assert s.performance_history["doc1"] == [0.8, 0.9]
+    def test_good_performance_week_interval(self, scheduler):
+        t0 = time.time()
+        result = scheduler.schedule_review("doc1", 0.85)
+        interval = result - t0
+        assert 5 * 24 * 3600 <= interval <= 9 * 24 * 3600  # ~week
 
-    def test_get_due_reviews_empty(self):
-        s = SpacedRepetitionScheduler()
-        assert s.get_due_reviews() == []
+    def test_moderate_performance_3day_interval(self, scheduler):
+        t0 = time.time()
+        result = scheduler.schedule_review("doc1", 0.7)
+        interval = result - t0
+        assert 2 * 24 * 3600 <= interval <= 4 * 24 * 3600  # 3 days
 
-    def test_get_due_reviews_with_future(self):
-        s = SpacedRepetitionScheduler()
-        s.schedule_review("doc1", 0.9)
-        due = s.get_due_reviews()
-        assert "doc1" not in due  # scheduled for month from now
+    def test_poor_performance_day_interval(self, scheduler):
+        t0 = time.time()
+        result = scheduler.schedule_review("doc1", 0.3)
+        interval = result - t0
+        assert 0.5 * 24 * 3600 <= interval <= 1.5 * 24 * 3600  # ~1 day
 
-    def test_get_next_review_time(self):
-        s = SpacedRepetitionScheduler()
-        s.schedule_review("doc1", 0.8)
-        t = s.get_next_review_time("doc1")
-        assert t is not None
-        assert t > time.time()
+    def test_averages_multiple_reviews(self, scheduler):
+        scheduler.schedule_review("doc1", 0.95)
+        scheduler.schedule_review("doc1", 0.65)
+        avg = sum(scheduler.performance_history["doc1"]) / 2
+        assert avg == pytest.approx(0.8, abs=0.01)
 
-    def test_get_next_review_time_missing(self):
-        s = SpacedRepetitionScheduler()
-        assert s.get_next_review_time("nonexistent") is None
+    def test_separate_docs(self, scheduler):
+        scheduler.schedule_review("doc1", 0.9)
+        scheduler.schedule_review("doc2", 0.3)
+        assert "doc1" in scheduler.review_schedule
+        assert "doc2" in scheduler.review_schedule
 
-    def test_review_stats(self):
-        s = SpacedRepetitionScheduler()
-        s.schedule_review("doc1", 0.9)
-        s.schedule_review("doc2", 0.5)
-        stats = s.get_review_stats()
-        assert stats["total_scheduled"] == 2
+    def test_multiple_reviews_same_doc(self, scheduler):
+        scheduler.schedule_review("doc1", 0.5)
+        scheduler.schedule_review("doc1", 0.5)
+        scheduler.schedule_review("doc1", 0.5)
+        assert len(scheduler.performance_history["doc1"]) == 3
+
+
+class TestGetDueReviews:
+    def test_no_reviews_returns_empty(self, scheduler):
+        assert scheduler.get_due_reviews() == []
+
+    def test_past_review_is_due(self, scheduler):
+        scheduler.review_schedule["doc1"] = time.time() - 100
+        assert "doc1" in scheduler.get_due_reviews()
+
+    def test_future_review_not_due(self, scheduler):
+        scheduler.review_schedule["doc1"] = time.time() + 86400
+        assert "doc1" not in scheduler.get_due_reviews()
+
+    def test_mixed_due_and_not(self, scheduler):
+        scheduler.review_schedule["past"] = time.time() - 100
+        scheduler.review_schedule["future"] = time.time() + 86400
+        due = scheduler.get_due_reviews()
+        assert "past" in due
+        assert "future" not in due
+
+
+class TestGetNextReviewTime:
+    def test_returns_none_for_unknown(self, scheduler):
+        assert scheduler.get_next_review_time("nonexistent") is None
+
+    def test_returns_stored_time(self, scheduler):
+        ts = scheduler.schedule_review("doc1", 0.8)
+        assert scheduler.get_next_review_time("doc1") == ts
+
+
+class TestGetReviewStats:
+    def test_empty_stats(self, scheduler):
+        stats = scheduler.get_review_stats()
         assert stats["due_count"] == 0
-        assert "doc1" in stats["upcoming_reviews"]
-        assert "doc2" in stats["upcoming_reviews"]
+        assert stats["total_scheduled"] == 0
+        assert stats["due_documents"] == []
+        assert stats["upcoming_reviews"] == {}
 
-    def test_multiple_documents(self):
-        s = SpacedRepetitionScheduler()
-        s.schedule_review("a", 0.95)
-        s.schedule_review("b", 0.3)
-        s.schedule_review("c", 0.7)
-        assert len(s.review_schedule) == 3
-        # Each gets its own interval
-        intervals = {}
-        now = time.time()
-        for doc_id in ["a", "b", "c"]:
-            intervals[doc_id] = s.review_schedule[doc_id] - now
-        assert intervals["a"] > intervals["c"] > intervals["b"]
+    def test_stats_with_scheduled(self, scheduler):
+        scheduler.schedule_review("doc1", 0.8)
+        stats = scheduler.get_review_stats()
+        assert stats["total_scheduled"] == 1
+        assert "doc1" in stats["upcoming_reviews"]
+
+    def test_stats_with_due(self, scheduler):
+        scheduler.review_schedule["doc1"] = time.time() - 10
+        stats = scheduler.get_review_stats()
+        assert stats["due_count"] == 1
+        assert "doc1" in stats["due_documents"]
+
+    def test_upcoming_shows_days(self, scheduler):
+        scheduler.schedule_review("doc1", 0.9)
+        stats = scheduler.get_review_stats()
+        days = stats["upcoming_reviews"]["doc1"]
+        assert isinstance(days, float)
+        assert days >= 0

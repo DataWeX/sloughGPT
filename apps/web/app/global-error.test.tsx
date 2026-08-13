@@ -45,4 +45,11 @@ describe('GlobalError', () => {
     render(<GlobalError error={new Error('')} reset={vi.fn()} />)
     expect(screen.getByTestId('handler')).toHaveTextContent('|function|Error')
   })
+
+  it('handles custom error name', () => {
+    const err = new Error('custom')
+    err.name = 'CustomError'
+    render(<GlobalError error={err} reset={vi.fn()} />)
+    expect(screen.getByTestId('handler')).toHaveTextContent('custom|function|CustomError')
+  })
 })

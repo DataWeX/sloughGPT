@@ -177,7 +177,7 @@ class CLILogger(Logger):
         """Print a section divider."""
         width = _console.width
         with self._lock:
-            _cli_print()
+            _cli_print("")
             _cli_print(f"[bold]{title}[/]")
             _cli_print(f"[dim]{'-' * width}[/]")
 

@@ -521,6 +521,18 @@ class StartupOrchestrator:
             logger.info("Training handlers registered with task queue", extra={"tag": "START"})
         except Exception as e:
             logger.warning("Training handler registration failed: %s", e, extra={"tag": "START"})
+        try:
+            from domains.memory import register_memory_handlers
+            register_memory_handlers()
+            logger.info("Memory handlers registered with task queue", extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("Memory handler registration failed: %s", e, extra={"tag": "START"})
+        try:
+            from domains.memory.maintenance import start_memory_maintenance
+            start_memory_maintenance()
+            logger.info("Memory maintenance scheduler started", extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("Memory maintenance scheduler start failed: %s", e, extra={"tag": "START"})
 
     async def _phase_config(self):
         """Validate and warm the config system + init ResourceManager."""
@@ -554,6 +566,11 @@ class StartupOrchestrator:
     async def _shutdown_task_queue(self):
         """Gracefully stop the background task queue."""
         if self._task_queue is not None:
+            try:
+                from domains.memory.maintenance import stop_memory_maintenance
+                await stop_memory_maintenance()
+            except Exception as e:
+                logger.warning("Memory maintenance shutdown: %s", e, extra={"tag": "START"})
             try:
                 await self._task_queue.stop()
                 logger.info("Task queue stopped", extra={"tag": "START"})

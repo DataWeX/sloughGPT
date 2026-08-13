@@ -18,6 +18,8 @@ This router just exposes manager methods as HTTP endpoints:
 - ``POST /token-tree/path`` — trace the encoder's greedy trie walk step by step.
 - ``POST /token-tree/decode`` — decode ids to text.
 - ``POST /token-tree/lineage`` — merge lineage down to character leaves.
+- ``GET  /token-tree/matrix`` — embedding-matrix overview summary.
+- ``POST /token-tree/compare`` — diff two saved trees (overlap + examples).
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -60,6 +62,12 @@ class TreeNameRequest(BaseModel):
     name: str = Field(min_length=1, max_length=64)
 
 
+class CompareTreesRequest(BaseModel):
+    a: str = Field(min_length=1, max_length=64)
+    b: str = Field(min_length=1, max_length=64)
+    top_k: int = Field(default=10, ge=1, le=100)
+
+
 class TokenTreeRouter:
     """Registers the /token-tree endpoints against TokenTreeManager."""
 
@@ -83,6 +91,8 @@ class TokenTreeRouter:
         self.router.add_api_route("/path", self.path, methods=["POST"])
         self.router.add_api_route("/decode", self.decode, methods=["POST"])
         self.router.add_api_route("/lineage", self.lineage, methods=["POST"])
+        self.router.add_api_route("/matrix", self.matrix, methods=["GET"])
+        self.router.add_api_route("/compare", self.compare, methods=["POST"])
 
     def get_stats(self):
         """Return summary statistics of the current token tree."""
@@ -319,6 +329,47 @@ class TokenTreeRouter:
             data = get_token_tree_manager().lineage(req.token)
         except KeyError as e:
             raise HTTPException(status_code=404, detail=f"Token not in vocabulary: {e}")
+        return success_response(data=data)
+
+    def matrix(
+        self,
+        top_k: int = Query(default=8, ge=1, le=64),
+    ):
+        """Return an embedding-matrix overview for the current tree.
+
+        Args:
+            top_k: how many most- and least-energetic tokens to include.
+
+        Returns:
+            StandardResponse with ``{matrix, norm_min, norm_mean, norm_max,
+            dead_tokens, live_tokens, most_energetic, least_energetic}``.
+            ``matrix`` is ``[rows, cols]`` or None when embeddings are disabled.
+        """
+        return success_response(data=get_token_tree_manager().matrix_summary(
+            top_k=top_k,
+        ))
+
+    def compare(self, req: CompareTreesRequest):
+        """Diff two saved trees without changing the current tree.
+
+        Args:
+            req: ``{a, b, top_k}`` — names of the two saved trees.
+
+        Returns:
+            StandardResponse with ``{a, b, shared_tokens, only_a_tokens,
+            only_b_tokens, shared_merges, only_a_merges, only_b_merges,
+            shared_examples, only_a_examples, only_b_examples}``.
+
+        Raises:
+            HTTPException 404: when either saved tree is missing.
+            HTTPException 400: when comparing a tree with itself.
+        """
+        try:
+            data = get_token_tree_manager().compare(req.a, req.b, top_n=req.top_k)
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         return success_response(data=data)
 
 

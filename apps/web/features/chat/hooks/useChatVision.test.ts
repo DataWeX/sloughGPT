@@ -58,4 +58,35 @@ describe('useChatVision', () => {
     mockGetTrainingReport.mockRejectedValue(new Error('fail'))
     expect(() => renderHook(() => useChatVision())).not.toThrow()
   })
+
+  it('returns setters for direct state manipulation', () => {
+    mockGetCapabilities.mockResolvedValue({ model_loaded: false, learning: false, trained_steps: 0 })
+    mockGetTrainingReport.mockResolvedValue({ caption_history: [], vocab_size: undefined })
+    const { result } = renderHook(() => useChatVision())
+    expect(typeof result.current.setVisionCaps).toBe('function')
+    expect(typeof result.current.setVisionCaptionHistory).toBe('function')
+    expect(typeof result.current.setVisionVocabSize).toBe('function')
+  })
+
+  it('handles missing caption_history gracefully', async () => {
+    mockGetCapabilities.mockResolvedValue({ model_loaded: true, learning: false, trained_steps: 1 })
+    mockGetTrainingReport.mockResolvedValue({ vocab_size: 25 })
+    const { result } = renderHook(() => useChatVision())
+    await vi.waitFor(() => {
+      expect(result.current.visionCaptionHistory).toEqual([])
+      expect(result.current.visionVocabSize).toBe(25)
+    })
+  })
+
+  it('responds to refresh-vision custom event', async () => {
+    mockGetCapabilities.mockResolvedValue({ model_loaded: false, learning: false, trained_steps: 0 })
+    mockGetTrainingReport.mockResolvedValue({ caption_history: [], vocab_size: undefined })
+    renderHook(() => useChatVision())
+    mockGetCapabilities.mockResolvedValue({ model_loaded: true, learning: true, trained_steps: 20 })
+    mockGetTrainingReport.mockResolvedValue({ caption_history: ['event_cap'], vocab_size: 80 })
+    window.dispatchEvent(new Event('refresh-vision'))
+    await vi.waitFor(() => {
+      expect(mockGetCapabilities).toHaveBeenCalled()
+    })
+  })
 })

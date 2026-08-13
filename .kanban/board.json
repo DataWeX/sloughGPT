@@ -24,6 +24,666 @@
   ],
   "cards": [
     {
+      "id": "20260813_130054_memorytab-store-fact-importance-badge",
+      "title": "MemoryTab store-fact + importance badge",
+      "description": "Added manual Store fact to the chat sidebar MemoryTab (mirrors MemoryCard handleAdd): '+ Store' toggle in the search row, inline form (content textarea + optional topic + Save, disabled until content). On success the stored fact is highlighted via the existing pendingFactRef highlight path (matches memory-event behavior). Inline error text for duplicate/memory-off ('Already remembered (or memory is disabled)') and failure ('Failed to store fact') since the chat page mounts no toast store. Added importance badge (importance X.X) to item metadata row, matching MemoryCard. 4 new tests (store+highlight, duplicate inline error, Save disabled state, importance badge). tsc 0; MemoryTab 39/39; panels 117/117.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T13:00:54.964588+00:00",
+      "updated_at": "2026-08-13T13:00:54.964588+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_130054_memorytab-topic-filter-chips",
+      "title": "MemoryTab topic filter chips",
+      "description": "Added topic filter chips to the chat sidebar MemoryTab (mirrors MemoryCard): horizontal scrollable 'All' + topic chip row (aria-label 'Filter by topic'), derived from items via useMemo. topicFiltered combines search results + active topic; Show-all cap and count now apply per topic. Empty state: 'No memory in the X topic.' when a filtered topic has no items. 4 new tests (chip filter + All restore, chip re-click toggle, topic empty state via search exclusion, per-topic 8 cap + Show all 12). Updated pre-existing assertion (getByText->getAllByText for 'preferences') since chips and item badges now share topic text. tsc 0; MemoryTab 43/43; panels 121/121.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T13:00:54.952279+00:00",
+      "updated_at": "2026-08-13T13:00:54.952279+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_130054_memorytab-sort-toggle",
+      "title": "MemoryTab sort toggle",
+      "description": "Added newest/oldest sort toggle to the chat sidebar MemoryTab (mirrors MemoryCard): IconClock + 'Newest'/'Oldest' ghost button in the search row, aria-label 'Toggle memory sort order'. browseList useMemo sorts items by timestamp (newest default); topicFiltered now derives from browseList so sort applies to the browse list while search results stay relevance-ordered (toggle disabled during search, matching MemoryCard). 3 new tests (oldest-first ordering via listitem order, sort-state label, disabled while searching). tsc 0; MemoryTab 46/46; panels 124/124.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T13:00:54.939079+00:00",
+      "updated_at": "2026-08-13T13:00:54.939079+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_130054_memorytab-per-item-edit",
+      "title": "MemoryTab per-item edit",
+      "description": "Added inline per-item edit to the chat sidebar MemoryTab (mirrors MemoryCard). Edit button (IconEdit, aria-label 'Edit memory item') appears on hover next to delete in each list row; opening it renders an inline form (textarea 'Edit memory fact text', topic input, importance range slider 0-1 step 0.1 with live value) that pre-fills current values. Save calls memoryController.update(id, content, topic, importance); on updated>0 it patches items + searchResults optimistically, closes the form, and refetches; duplicate -> 'That fact already exists in memory'; other no-update -> 'Memory item not found'; throw -> 'Failed to update memory item'. Store and edit forms close each other. 5 new tests (prefill, edit+refresh, duplicate inline error, cancel, failed update). tsc 0; MemoryTab 51/51; panels 129/129.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T13:00:54.926706+00:00",
+      "updated_at": "2026-08-13T13:00:54.926706+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_130054_memorytab-search-score-display",
+      "title": "MemoryTab search score display",
+      "description": "Mirrored MemoryCard's search score display: when searchResults !== null, each result row shows its relevance score as {item.score.toFixed(2)} (text-[10px] font-mono) in the actions column. Hidden in browse mode and cleared when search clears. 2 new tests. tsc 0; MemoryTab 53/53; panels 131/131. MemoryTab now mirrors all core MemoryCard capabilities: search, metadata, show-all, click-to-copy, store, topic filter, sort, edit, score.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T13:00:54.912856+00:00",
+      "updated_at": "2026-08-13T13:00:54.912856+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_130054_memorytab-consolidate",
+      "title": "MemoryTab consolidate",
+      "description": "Added one-click Consolidate to the chat sidebar MemoryTab (mirrors MemoryCard): compact text button in the header next to the fact count, shown only when memory is enabled and facts exist, title 'Merge near-duplicate facts'. Calls memoryController.consolidate(); result shows as a transient inline line below the header (3.5s auto-clear, tab's no-toast pattern): 'Consolidated N duplicate fact(s), kept M' or 'No near-duplicate facts found'; failures show 'Failed to consolidate memory'. Button disables with 'Consolidating\u2026' while pending; refreshes list after. 5 new tests. tsc 0; MemoryTab 58/58; panels 136/136.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T13:00:54.898021+00:00",
+      "updated_at": "2026-08-13T13:00:54.898021+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_130054_memorycard-sort-by-importance-batch-select-delete",
+      "title": "MemoryCard sort-by-importance + batch select & delete",
+      "description": "Continued MemoryCard feature build.\n1) Sort dropdown: replaced Newest/Oldest toggle with a DropdownMenu (trigger keeps aria-label 'Toggle memory sort order', IconClock + label + IconChevronDown). sortOrder widened to 'newest'|'oldest'|'importance'; browseList comparator adds (b.importance ?? 0) - (a.importance ?? 0) desc, missing importance sorts last. Disabled-when-searching + title retained.\n2) Batch select & delete: per-row checkboxes (aria-label 'Select memory fact <content>'), selected rows get bg-primary/[0.06] border-primary/30; 'Select all (N)' label above list; action bar with Export (N) / Delete (N) / Cancel when selection active. handleBatchDelete loops memoryController.delete per id (survives per-item failures), toasts count, clears selection + searchResults, refetches. handleExportSelected mirrors handleExportMemory shape (content/topic/source). Batch delete uses a dedicated AlertDialog.\nTDZ fix: toggleSelectAll moved below displayedItems declaration. Fixed knowledge/page.test.tsx strui mock to add DropdownMenu family (KnowledgePage renders MemoryCard). Full suite green: 326 files / 3854 tests. tsc + eslint clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memorycard",
+        "ux",
+        "feature"
+      ],
+      "created_at": "2026-08-13T13:00:54.885941+00:00",
+      "updated_at": "2026-08-13T13:00:54.885941+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_094027_memorytab-show-all-expansion",
+      "title": "MemoryTab Show all expansion",
+      "description": "Expanded-list toggle on the chat-sidebar MemoryTab: 'Show all N' / 'Show fewer' appears when items exceed the 8-item cap; searching collapses the expanded list and clears the toggle so clearing search returns to the compact view. 2 new tests (31 total in file). tsc 0 errors; panels suite 109/109 pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memory",
+        "chat",
+        "ux"
+      ],
+      "created_at": "2026-08-13T09:40:27.642643+00:00",
+      "updated_at": "2026-08-13T09:40:27.642643+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_094027_memorytab-click-to-copy",
+      "title": "MemoryTab click-to-copy",
+      "description": "MemoryTab facts now copy to clipboard on click/keyboard (title='Click to copy', cursor-pointer, role=button+tabIndex+Enter/Space). Transient 'Copied' indicator (1500ms, text-success) replaces global toast since chat page mounts no toast store toaster. Failure path logs via logger.debug. 4 new tests (click, keyboard, auto-clear with fake timers, clipboard-unavailable). tsc 0; MemoryTab 35/35; panels 113/113.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T09:40:27.630476+00:00",
+      "updated_at": "2026-08-13T09:40:27.630476+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_094027_memory-fact-importance-editing-end-to-end",
+      "title": "Memory fact importance editing (end-to-end)",
+      "description": "Added importance editing for memory facts across the full stack. Core: update_fact gains importance param (clamped to [0,1], None keeps existing); re-embed stays unconditional (QueryResult has no vector). Provider protocol + KnowledgeMemoryProvider + MemoryService thread importance through. Router: UpdateRequest.importance Field(ge=0, le=1) validated at boundary; PATCH passes it. Controller: update(id, content, topic?, importance?) sends importance only when finite. UI: MemoryCard edit panel adds 0-1 range slider + row badge (importance 0.X); startEdit seeds slider from item. Tests: +4 core, +3 router (incl. 422 out-of-range), +2 controller, +1 component. Gates: core 43 passed, router 34 passed, vitest 77 passed, tsc 0 errors, eslint clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "api",
+        "frontend"
+      ],
+      "created_at": "2026-08-13T09:40:27.613862+00:00",
+      "updated_at": "2026-08-13T09:40:27.613862+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_092853_memorytab-search-in-chat-sidebar",
+      "title": "MemoryTab search in chat sidebar",
+      "description": "Added debounced semantic search to the chat-sidebar MemoryTab: compact search box (hidden when memory off), server-side /memory/search, search results replace the 8-item list, no-match state with Clear search recovery, delete filters search results, active search re-runs on memory-events refresh. 6 new tests (27 total in file). tsc 0 errors; panels suite 105/105 pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memory",
+        "chat",
+        "feature"
+      ],
+      "created_at": "2026-08-13T09:28:53.504328+00:00",
+      "updated_at": "2026-08-13T09:28:53.504328+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_092853_memorytab-item-metadata-source-badge-relative-time",
+      "title": "MemoryTab item metadata (source badge + relative time)",
+      "description": "Rich-card metadata row on chat-sidebar MemoryTab items: source badge (mirrors knowledge-page MemoryCard), relative time via reused lib/format-bytes formatRelativeTime (title shows exact datetime), hidden when timestamp is 0. 2 new tests (29 total in file). tsc 0 errors; panels suite 107/107 pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memory",
+        "chat",
+        "ux"
+      ],
+      "created_at": "2026-08-13T09:28:53.494799+00:00",
+      "updated_at": "2026-08-13T09:28:53.494799+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_092853_edit-memory-facts-end-to-end",
+      "title": "Edit memory facts end-to-end",
+      "description": "Edit memory facts end-to-end: KnowledgeMemory.update_fact (same-id upsert, embedding recompute, dedup guard) + MemoryService.update + PATCH /memory/{item_id} ({updated, duplicate}) + memoryController.update + MemoryCard edit UI (per-row edit, Save/Cancel, duplicate toast). Core 39 tests, router 31, vitest 90, tsc/eslint clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memorycard",
+        "edit"
+      ],
+      "created_at": "2026-08-13T09:28:53.486119+00:00",
+      "updated_at": "2026-08-13T09:28:53.486119+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_091454_memory-feature-multi-fact-per-turn",
+      "title": "Memory feature: multi-fact per turn",
+      "description": "Increment: a chat turn can store several facts (remember_facts_async returns List[str]) but only the first reached the toast, the memory event, and the panel highlight. Surfaced all of them.\n\n- inference.py: MEMORY SSE event now emits data={'stored': True, 'fact': _memory_fact, 'facts': _memory_facts} (fact kept for backcompat).\n- stream-chat-response.ts: parses the facts array (string-only filter), onMemory type gains facts?: string[].\n- memory-events.ts: MemoryEventInfo gains facts?: string[].\n- useChatMessages.ts: toast prefers facts list; shows 'Remembered: <first> +N more' when a turn stored multiple facts.\n- MemoryTab.tsx: highlight prefers info.facts[0] ?? info.fact.\n- Tests +5 frontend (facts passthrough, non-string filter, +N more toast, facts-array highlight, memory-events facts passthrough), backend source-contract test updated to the new event shape.\n- Verify: tsc 0 errors, 61/61 affected frontend tests pass, 50/50 test_memory_service.py pass, py_compile clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memory",
+        "backend",
+        "feature"
+      ],
+      "created_at": "2026-08-13T09:14:54.706977+00:00",
+      "updated_at": "2026-08-13T09:14:54.706977+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_091454_memorycard-sort-toggle-click-to-copy",
+      "title": "MemoryCard sort toggle + click-to-copy",
+      "description": "MemoryCard: Newest/Oldest sort toggle (default newest-first, client-side timestamp sort; disabled during search since relevance order wins) + click-to-copy on fact rows via navigator.clipboard with toast feedback. 2 new tests: sort order flip, clipboard copy. Verified: 42/42 MemoryCard tests, tsc exit 0, eslint exit 0.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memorycard",
+        "ux"
+      ],
+      "created_at": "2026-08-13T09:14:54.678348+00:00",
+      "updated_at": "2026-08-13T09:14:54.678348+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_090848_memory-feature-live-fact-highlight-in-memorytab",
+      "title": "Memory feature: live fact highlight in MemoryTab",
+      "description": "Increment: MemoryTab now highlights the newly stored fact when a MEMORY event arrives.\n\n- MemoryTab.tsx: pendingFactRef captures the fact from the memory event; fetchData consumes it after refetch, matches item by exact content, sets highlightedId, auto-clears after 4s (HIGHLIGHT_MS) via highlightTimerRef with unmount cleanup. List li gets border-primary/60 + bg-primary/10 when item.id === highlightedId.\n- MemoryTab.test.tsx: +3 tests (highlight matching fact, no highlight on no-match, auto-clear via fake timers). 20/20 pass.\n- npx tsc --noEmit -> 0 errors.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memory",
+        "feature"
+      ],
+      "created_at": "2026-08-13T09:08:48.455603+00:00",
+      "updated_at": "2026-08-13T09:08:48.455603+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_090848_memorycard-ux-polish-relative-time-show-all-touch-delete-cle",
+      "title": "MemoryCard UX polish (relative time, show-all, touch delete, clear-search)",
+      "description": "MemoryCard: formatRelativeTime helper (Just now/Nm/Nh/Nd ago, date fallback) replaces bare toLocaleDateString with full-date title; show-all toggle with 'Showing N of M' footer for capped 10-item list; delete button now touch-visible (opacity-60 lg:opacity-0 lg:group-hover:opacity-100); Clear search recovery CTA in search-empty state. 3 new tests (show-all expand/collapse, clear-search reset, relative timestamp). Verified: 56 tests (2 files) pass, tsc exit 0, eslint exit 0.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "memorycard",
+        "ux"
+      ],
+      "created_at": "2026-08-13T09:08:48.422629+00:00",
+      "updated_at": "2026-08-13T09:08:48.422629+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_090051_memory-toast-shows-remembered-fact",
+      "title": "Memory toast shows remembered fact",
+      "description": "MEMORY SSE event now carries the newly stored fact text. Core: KnowledgeMemory.ingest_from_chat() returns list[str] (auto_ingest_from_chat wraps it, unchanged contract); MemoryProvider.store_turn_facts(); MemoryService.remember_facts()/remember_facts_async(). Router emits data={stored:true, fact}; parser passes fact through onMemory; toast shows 'Remembered: <fact>' (truncated at 140 chars) with generic fallback. Tests: +4 knowledge, +4 provider, +8 service, +1 wiring, +2 parser, +1 pub/sub, +3 hook. 191 py + 54 web pass, tsc 0.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T09:00:51.302503+00:00",
+      "updated_at": "2026-08-13T09:00:51.302503+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_090051_topic-filter-on-memory-list",
+      "title": "Topic filter on memory list",
+      "description": "Topic filter on the Knowledge memory list (frontend-only, derived from loaded items \u2014 no new endpoint).\n\nMemoryCard: activeTopic state + useMemo topics list (dedup + case-insensitive sort, capped at 8 chips with '+N more' overflow). Chip row below the search bar: 'All' + one chip per distinct item.topic; active chip highlights bg-primary/15 text-primary; clicking a chip toggles it, clicking again or 'All' clears. filter applies to both the flat list and live search results (filteredByTopic = (searchResults ?? items) filtered by activeTopic). Empty state is topic-aware: 'No memory in the <topic> topic.' takes precedence over the search-empty message.\n\nTests: +4 (chips derived from items incl. second topic fixture, filter narrows the list, topic-aware empty message when search+filter yields none, All resets). 37/37 MemoryCard, 47/47 knowledge suite, tsc + eslint clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "ui",
+        "knowledge"
+      ],
+      "created_at": "2026-08-13T09:00:51.279039+00:00",
+      "updated_at": "2026-08-13T09:00:51.279039+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_085532_chat-memory-feedback-sse-event",
+      "title": "Chat memory-feedback SSE event",
+      "description": "Backend: moved remember_async out of post-gen gather, emits MEMORY SSE event (phase=MEMORY, data.stored=true) after the complete token in routers/inference.py. Frontend: stream-chat-response.ts now reads post-complete events (completed guard prevents double onComplete), adds onMemory callback; useChatMessages shows 'New fact saved to memory' success toast and stops loading at complete. Tests: 3 new parser tests, 11/11 pass; 15/15 hook tests; 41/41 memory service (incl. TestChatWiring contract); py_compile OK.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "memory",
+        "chat",
+        "backend"
+      ],
+      "created_at": "2026-08-13T08:55:32.159347+00:00",
+      "updated_at": "2026-08-13T08:55:32.159347+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_085532_memorytab-live-refresh-via-memory-events-pubsub",
+      "title": "MemoryTab live refresh via memory-events pub/sub",
+      "description": "Created lib/memory-events.ts pub/sub. useChatMessages onMemory now publishes the event; MemoryTab subscribes and refetches when stored=true, so the panel count/list updates live without manual refresh. Tests: 5 lib tests, 2 new MemoryTab tests (17 total), all 48 targeted tests pass; tsc clean on changed files.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T08:55:32.148801+00:00",
+      "updated_at": "2026-08-13T08:55:32.148801+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_085532_configurable-archive-retention",
+      "title": "Configurable archive retention",
+      "description": "Configurable archive retention (config-driven prune), layered core -> service -> API -> UI.\n\nCore: MemoryConfig.set_archive_retention_days(days) thread-safe (clamps >= 0) + snapshot() returning all 8 runtime settings. Service: set_archive_retention() + config_snapshot() passthroughs.\nAPI: ConfigRequest widened to optional enabled + archive_retention_days; POST /memory/config applies only provided fields and returns full snapshot; new GET /memory/config returns snapshot (enabled, min_chars, max_facts, store_path, sync_remember, consolidation_threshold, maintenance_interval_minutes, archive_retention_days). set_config return shape changed from {enabled} to full snapshot (backward-compatible: enabled key preserved).\nFrontend: memory-controller getConfig() GET + updateConfig(partial) POST; MemoryConfigResult expanded to full snapshot. MemoryCard: 'Archive retention' row in Maintenance (number input 0-3650 + Save, fetches current value on mount, validates empty input, clamps), and Prune old now passes the configured retentionDays to archivePrune.\nTests: +6 core (set_archive_retention/clamp/zero/singleton/snapshot + mutation), +3 router (GET snapshot, POST retention, clamp), +5 controller (getConfig, updateConfig), +4 MemoryCard (loads value, saves, prune uses window, rejects empty). 33/33 MemoryCard, 70 knowledge+controller suite, 79 core memory tests, 45 maintenance+task_memory, 14 router all pass; tsc + eslint clean. docs/routers.md updated.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "provenance",
+        "maintenance"
+      ],
+      "created_at": "2026-08-13T08:55:32.136380+00:00",
+      "updated_at": "2026-08-13T08:55:32.136380+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_053906_chat-context-inspector-tab",
+      "title": "Chat Context Inspector tab",
+      "description": "Added ContextTab to ChatToolPanel (after Memory): steering modes + trait weights bars via soulsController, workspace memory counts + system prompt toggle via chatController.inspectContext() (new method GET /context/inspect). Additive section, all fetches fail-soft. 7 new ContextTab tests + 2 controller tests. 861 chat tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "context",
+        "chat"
+      ],
+      "created_at": "2026-08-13T05:39:06.862482+00:00",
+      "updated_at": "2026-08-13T05:39:06.862482+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_053906_memorytab-master-remember-switch",
+      "title": "MemoryTab master Remember switch",
+      "description": "Added the auto-memory master switch inline to the chat tool panel MemoryTab, closing the gap where the off-state told users to navigate to the Knowledge page to re-enable it.\n\n- apps/web/features/chat/components/panels/MemoryTab.tsx: Remember Switch in the header row (matches MemoryCard pattern, size=sm) calling memoryController.setEnabled(); off-state hint now references the inline switch; docstring updated\n- apps/web/features/chat/components/panels/MemoryTab.test.tsx: strui mock gains Switch (role=switch), controller mock gains setEnabled; 3 new tests (switch reflects enabled state, toggle off calls setEnabled(false), toggle on from disabled state calls setEnabled(true))\n\nVerification: MemoryTab 15/15 pass; features/chat/components/panels 93/93 pass. tsc errors unchanged (pre-existing, unrelated files only).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T05:39:06.852323+00:00",
+      "updated_at": "2026-08-13T05:39:06.852323+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_053906_context-inspector-inputs-knowledge-feedback",
+      "title": "Context Inspector inputs (knowledge + feedback)",
+      "description": "Completed Context Inspector feature set advertised in whats-new: added Inputs block (injected knowledge count via chatDB + feedback up/down via feedbackController.getFeedbackStats) to ContextTab. Knowledge DB failure now returns null (distinct from empty). 3 new ContextTab tests; 845 chat tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "context",
+        "chat"
+      ],
+      "created_at": "2026-08-13T05:39:06.841936+00:00",
+      "updated_at": "2026-08-13T05:39:06.841936+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_045928_frontend-token-tree-compare-card",
+      "title": "Frontend token-tree compare card",
+      "description": "Completed the compare feature end-to-end in the frontend (API + CLI were already wired).\n\nController (apps/web/lib/token-tree-controller.ts): added compare(a, b, top_k=10) hitting POST /token-tree/compare; added CompareResult + CompareSide types matching the API response ({a, b, shared_tokens, only_a/only_b_tokens, shared_merges, only_a/only_b_merges, shared/only_*_examples}). Removed duplicate MatrixEnergyToken interface. Exported CompareResult, CompareSide, SavedTree, MatrixSummary, VocabPage from controllers.ts barrel. 2 new tests (17 total).\n\nCard (apps/web/components/tokenizer/TokenTreeCompareCard.tsx): two strui Selects for tree A/B from listSaved(), Compare button disabled until two distinct trees picked, result panel with per-side vocab chips, shared/only-A/only-B token counts, merge rule chips, and top-frequency example token lists. Empty state when <2 trees, retry state on fetch failure, error toast on compare failure, refreshKey refetch. Wired into tokenizer page after TokenTreeLineageCard.\n\nTests: 8 new card tests + 2 controller tests; tokenizer suite 142 tests pass; tsc exit 0.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "tokenizer",
+        "compare"
+      ],
+      "created_at": "2026-08-13T04:59:28.460696+00:00",
+      "updated_at": "2026-08-13T04:59:28.460696+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_045928_memory-enable-toggle-config-endpoint-ui",
+      "title": "Memory enable toggle (config endpoint + UI)",
+      "description": "Added POST /memory/config; MemoryConfig.set_enabled()/MemoryService.set_enabled(); memoryController.setEnabled(); MemoryCard Remember switch; docs/routers.md updated. 11 router + 4 service + 5 controller + 5 card + page-mock fixes; all pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "memory-config",
+        "toggle"
+      ],
+      "created_at": "2026-08-13T04:59:28.452534+00:00",
+      "updated_at": "2026-08-13T04:59:28.452534+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_045928_chat-tool-panel-memory-tab",
+      "title": "Chat tool panel Memory tab",
+      "description": "Added MemoryTab to ChatToolPanel (between Knowledge and Quick Prompts): shows auto-memory facts with count, per-item delete, confirmed clear-all, refresh, empty/off states. 12 new tests. features/chat suite 832 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "memory",
+        "chat"
+      ],
+      "created_at": "2026-08-13T04:59:28.444045+00:00",
+      "updated_at": "2026-08-13T04:59:28.444045+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_045928_cli-memory-enable-disable-commands",
+      "title": "CLI memory enable-disable commands",
+      "description": "Added sloughgpt memory enable/disable subcommands to close the CLI gap for the memory master switch (previously only settable via API /memory/config and the UI toggle).\n\n- apps/cli/src/commands/memory.py: cmd_memory_enable(args) calls MemoryService.set_enabled(enabled), prints confirmation\n- apps/cli/src/cli.py: memory enable / memory disable click commands wired after stats; comment header updated\n- apps/cli/tests/test_memory_commands.py: TestEnable class (2 tests: enable sets True, disable sets False, both assert set_enabled called and status text)\n- docs/integration/CLI_README.md: memory command table + example updated with enable/disable\n\nVerification: CLI suite 113 passed (was 111); py_compile clean; live check shows 'Memory disabled' / 'Memory enabled' state reflected in memory stats. No API change needed - CLI calls service directly like other memory commands.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "cli",
+        "memory"
+      ],
+      "created_at": "2026-08-13T04:59:28.412928+00:00",
+      "updated_at": "2026-08-13T04:59:28.412928+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_045928_memory-archive-browser-ui",
+      "title": "Memory archive browser UI",
+      "description": "MemoryCard: added 'View records' button in the Maintenance section opening a Provenance archive browser dialog (backed by existing /memory/archive). Lists last 20 records with per-task-type badges (remember/store/consolidate/other), human-readable summaries, timestamps, live archiveStats line, skeleton loading, EmptyCard empty state, and an in-dialog Refresh button. Summary helpers are algorithmic (no hardcoded type table). Tests: +3 (open/list with per-type summaries, empty state, refresh). 23/23 MemoryCard tests pass; tsc clean for the memory files.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "knowledge",
+        "memory",
+        "frontend"
+      ],
+      "created_at": "2026-08-13T04:59:28.404175+00:00",
+      "updated_at": "2026-08-13T04:59:28.404175+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_043058_memory-feature-frontend-knowledge-page-card",
+      "title": "Memory feature frontend (Knowledge page card)",
+      "description": "Increment 2: per-item memory deletion. Backend: added DELETE /memory/{item_id} to routers/memory.py (thin wrapper over existing MemoryService.delete). Frontend: memory-controller.delete() + MemoryDeleteResult, MemoryCard gains a per-row trash button (hover-reveal, group pattern) and a confirm AlertDialog, filtering the active search results before refetch. Tests: 4 new router tests (17 total), 2 new controller tests (13 total), 1 new MemoryCard test (14 total), knowledge page suite green. tsc clean; all memory service core tests pass (exit 0).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "memory",
+        "knowledge"
+      ],
+      "created_at": "2026-08-13T04:30:58.550117+00:00",
+      "updated_at": "2026-08-13T04:30:58.550117+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_043058_token-tree-cli-saved-tree-lifecycle",
+      "title": "Token-tree CLI saved-tree lifecycle",
+      "description": "Closed the CLI gap: manager/API had saved-tree lifecycle (save/load/list_saved/delete_saved) and top_merges/search_merges but the CLI exposed neither.\n\nCore (packages/core-py/domains/training/token_tree_manager.py): added public adopt(tree) so the CLI can hand a tree trained externally (via --tree path) to the manager before saving. Tests: TestAdopt (2).\n\nCLI (apps/cli/src/commands/token_tree.py): added cmd_token_tree_merges (top_merges/search_merges, --top-n/--query), cmd_token_tree_saved, cmd_token_tree_save (--name/--tree), cmd_token_tree_load, cmd_token_tree_delete. All exit(2) on missing/invalid, matching existing command conventions. click wiring in apps/cli/src/cli.py. Tests: TestCmdMerges (3) + TestCmdSavedTrees (9).\n\nDocs: docs/integration/CLI_README.md token-tree table now lists merges/compare/saved/save/load/delete.\n\nVerification: 131 tests pass across CLI (40) + server router (42) + manager (49).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "token-tree",
+        "cli",
+        "core"
+      ],
+      "created_at": "2026-08-13T04:30:58.541709+00:00",
+      "updated_at": "2026-08-13T04:30:58.541709+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_043058_memory-maintenance-auto-archive-prune-default-threshold-080",
+      "title": "Memory maintenance: auto archive prune + default threshold 0.80",
+      "description": "Memory lifecycle completion: (1) maintenance_tick now auto-prunes the facts.jsonl provenance archive (default 30d via SLO_MEMORY_ARCHIVE_RETENTION_DAYS) before enqueueing consolidation; (2) default consolidation threshold corrected 0.85->0.80 (measured: identical 1.0, near-verbatim 0.845, paraphrase 0.586) so the default merges near-duplicate facts; (3) fixed KnowledgeMemory.clear_all persistence bug \u2014 _save_entries skipped writing empty stores, so a cleared store reloaded stale facts after restart; now persists [] when the file exists. Real data store was polluted by live CLI checks (2 test facts, gitignored) and has been cleaned + backed up to /tmp/opencode. 194 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "maintenance",
+        "cli"
+      ],
+      "created_at": "2026-08-13T04:30:58.533029+00:00",
+      "updated_at": "2026-08-13T04:30:58.533029+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_005824_token-tree-compare-wiring-fix",
+      "title": "Token tree compare wiring fix",
+      "description": "Wired token-tree compare through all three layers and fixed a kwarg mismatch.\n\nCLI (apps/cli/src/commands/token_tree.py): cmd_token_tree_compare prints per-side stats, vocab/merge overlap, top shared/exclusive token tables. Tests: TestCmdCompare (3) in apps/cli/tests/test_token_tree_commands.py.\n\nAPI (apps/api/server/routers/token_tree.py): CompareTreesRequest {a,b,top_k}, POST /token-tree/compare -> success_response with overlap dict; 404 missing, 400 self-compare. Tests: compare mock + TestCompare (7) in tests/server/test_token_tree_router.py.\n\nBug fixed: manager compare(name_a, name_b, top_n=10) was called with top_k= from the API router and the CLI click wrapper \u2014 would crash in production (TypeError). Both callers now pass top_n=. CLI click wrapper at cli.py:962, router at token_tree.py compare handler. Tests set args.top_n.\n\nVerification: 47 manager tests, 69 CLI+API tests all pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "token-tree",
+        "cli",
+        "api"
+      ],
+      "created_at": "2026-08-13T00:58:24.668255+00:00",
+      "updated_at": "2026-08-13T00:58:24.668255+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_005824_memory-archive-management-cli-inspect-retention-prune",
+      "title": "Memory archive management: CLI inspect + retention prune",
+      "description": "Session 9. Archive management for the task-backed provenance store (facts.jsonl).\n\nCORE (task_memory.py): _read_archive() (skips corrupt/non-JSON lines), list_archive(limit) newest-first, archive_stats() (path/records/bytes/task_types/oldest_ts/newest_ts), prune_archive(retain_days) fail-closed atomic tmp+replace, records without ts treated oldest. Default retention now MemoryConfig.archive_retention_days.\n\nCONFIG: SLO_MEMORY_ARCHIVE_RETENTION_DAYS env (default 30) added to MemoryConfig; prune_archive() defaults to it.\n\nCLI: 'memory archive' command (--limit/-n, --prune-days) + module docstring/group help updated. Exports list_archive/archive_stats/prune_archive in domains/memory/__init__.py.\n\nTESTS: TestArchive x9 in test_task_memory.py (newest-first, empty, stats, prune old/keep recent, keep-all-within-window, zero-window, no-file, corrupt-line); TestArchive x4 in test_memory_commands.py (stats+records, empty, prune confirmed/declined). Fixed a NameError from a bad edit that dropped 'stats = archive_stats()'.\n\nDOCS: docs/ENVIRONMENT.md SLO_MEMORY_ARCHIVE_RETENTION_DAYS section; docs/integration/CLI_README.md added consolidate + archive rows.\n\nVERIFIED: 153 tests pass (task_memory+cli memory+memory_service+maintenance+consolidation+startup_routers); py_compile clean; pycache cleared. Live CLI 'memory archive' shows real store. E2E smoke in tmp store: store task -> 1 archive record -> stats -> prune(0) removes 1.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "task-queue",
+        "cli"
+      ],
+      "created_at": "2026-08-13T00:58:24.660365+00:00",
+      "updated_at": "2026-08-13T00:58:24.660365+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_002637_memory-consolidation-triggers-cli-auto-maintenance",
+      "title": "Memory consolidation triggers: CLI + auto-maintenance",
+      "description": "Session 8. Wired the built-but-orphaned memory.consolidate task into the running system with two triggers.\n\nCLI: added 'sloughgpt memory consolidate [--threshold F]' (commands/memory.py + cli.py). Runs the same plan_consolidation planner as the task handler: groups facts by topic, deletes shorter near-duplicates (n-gram cosine >= threshold, default MemoryConfig.consolidation_threshold 0.85), reports removed/kept. Verified live: exits 0, prints threshold + kept count against the real store.\n\nAutomatic maintenance: new domains/memory/maintenance.py - maintenance_tick() enqueues one memory.consolidate task via submit_memory_consolidate; run_memory_maintenance() is the asyncio loop (sleep interval then tick); start/stop_memory_maintenance() manage the background task idempotently. Wired into apps/api/server/infrastructure/startup.py: started in _phase_task_queue (after register_memory_handlers), stopped in _shutdown_task_queue (before queue stop). MemoryConfig grew maintenance_interval_minutes (env SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES, default 60; 0 disables). Docs: ENVIRONMENT.md + memory_config.py table row.\n\nTests: packages/core-py/tests/test_memory_maintenance.py (10: tick enqueues, noop when disabled/interval-zero, error swallowed, loop start/stop ticks periodically, config wiring). CLI TestConsolidate x3 (merge at 0.80, no-merge at default 0.85, empty store). Fixed 2 stale startup phase tests (test_startup_routers.py) - _phase_task_queue now also registers memory handlers + starts scheduler; patched the new calls, assert both run even when queue init fails.\n\nVerification: 122 memory-surface tests pass, 49 startup tests pass, 93 CLI tests pass, py_compile clean, pycache cleared.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "memory",
+        "cli",
+        "infrastructure"
+      ],
+      "created_at": "2026-08-13T00:26:37.543335+00:00",
+      "updated_at": "2026-08-13T00:26:37.543335+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260812_134933_token-tree-semantic-query-ui-tokenizer-page",
+      "title": "Token tree semantic query UI (tokenizer page)",
+      "description": "Added tokenTreeController (lib) + TokenTreeQueryCard (semantic neighbor query, real merge lineage fetch) wired into /tokenizer page; 10 component tests + 9 controller tests.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "token-tree",
+        "controllers"
+      ],
+      "created_at": "2026-08-12T13:49:33.646685+00:00",
+      "updated_at": "2026-08-12T13:49:33.646685+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260812_134933_tokentree-feature-cards-merge-rules-explorer",
+      "title": "TokenTree feature cards + Merge Rules Explorer",
+      "description": "TokenTree explorer cards on /tokenizer: TrainCard, CodecCard, MergesCard (ranked BPE rules with lineage expand), VocabCard (paged vocabulary with special/merged badges + lineage expand), PersistenceCard (save/load/delete named trees persisted to data/token_trees/), EmbeddingsCard (token embedding explorer: dim, L2 norm, largest-magnitude dims, points, compression ratio), PathCard (Token Path Explorer: step-by-step greedy longest-prefix trie walk showing remaining suffix, matched token, id, chars consumed). Backend: top_merges(), search_merges(), vocab_entries(), save/load/list_saved/delete_saved, embedding_info(), path() core+manager; GET /token-tree/merges + /token-tree/vocab + /token-tree/saved, POST /token-tree/save|load|embedding|path, DELETE /token-tree/saved/{name} router endpoints; getMerges()/getVocab()/listSaved()/saveTree()/loadTree()/deleteSavedTree()/getEmbedding()/path() controller. CLI: token-tree vocab + embedding + path subcommands (embedding: dim/L2-norm/top dims/points/compression; path: remaining/token/id/consumed steps + ids + round-trip; reads stdin without --text) verified live on token_tree_demo. Core: TokenTree.trace_path() extracted from manager path() (core logic first); manager path() now delegates. Persistence manager round-trip verified live (save->retrain->load->encode identical; names sanitized against path traversal). Embedding endpoint verified live (200 with dim/norm/top, 404 unknown token, 422 embed_dim=0). Path endpoint verified live (200, ids match encode). Tests: 190 pytest (core+manager+router+CLI+server router) + 112 vitest (tokenizer cards+page+controller) pass. tsc: 0 errors from this feature; pre-existing unrelated errors remain in components/training test files (DatasetSelector, TrainingPipeline, TrainingSummaryCard test fixtures missing required Checkpoint soul field).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "tokenizer",
+        "frontend",
+        "backend"
+      ],
+      "created_at": "2026-08-12T13:49:33.629391+00:00",
+      "updated_at": "2026-08-13T00:00:44.959593+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260812_134933_auto-memory-layer-memoryservice-chat-loop-wiring",
+      "title": "Auto-memory layer (MemoryService) + chat-loop wiring",
+      "description": "Goal: auto-memory (self-indexing RAG) so KnowledgeMemory actually learns from conversations.\n\nBuilt modular domain (packages/core-py/domains/memory/):\n- memory_config.py: MemoryConfig, env-driven (SLO_MEMORY_ENABLED/MIN_CHARS/MAX_FACTS/STORE_PATH/SYNC), thread-safe singleton.\n- memory_provider.py: MemoryProvider Protocol (store_turn/store/retrieve/stats) + KnowledgeMemoryProvider wrapping auto_ingest_from_chat / add_fact / search / stats. Store injectable for tests.\n- memory_service.py: MemoryService facade (remember/retrieve/store/stats), fail-closed. get_memory_service() singleton. Producer-agnostic so the future task layer (option 3) can call the same API.\n\nWired remember() into chat post-gen in apps/api/server/routers/inference.py (asyncio.to_thread, guarded try/except, same pattern as learner ingest) - this closes the gap where KnowledgeMemory.auto_ingest_from_chat was never called by the chat loop.\n\nTests: packages/core-py/tests/test_memory_service.py (20 tests) - remember gating (empty/short/disabled), fact extraction + retrieval round-trip, store/dedup, stats, provider-level, singleton, and a source-contract test that the router wiring stays present. All 20 pass + test_knowledge_memory.py + test_knowledge_augmenter.py still pass.\n\nDocs: added Memory section to docs/ENVIRONMENT.md.\n\nVerification notes: fastapi not installed in this env, so test_inference_router.py cannot run locally; wiring verified via py_compile + the source-contract test instead.\n\nKnown gap (pre-existing, documented): chat_stream context-frame gate uses kmem.stats().get('total_items', 0) but stats() returns total_facts - frame/RAG layer stays skipped in chat; enrichment path is unaffected.\n\nSession 2 (CLI + API + docs):\n\n- Core: MemoryProvider protocol + KnowledgeMemoryProvider + MemoryService extended with list_all(limit) and clear() (fail-closed when disabled). test_memory_service.py now 28 tests.\n- CLI: new apps/cli/src/commands/memory.py; memory group registered in apps/cli/src/cli.py (stats/list/search/store/remember/clear). Verified live via python3 cli.py memory --help and an isolated smoke run (real data/knowledge store untouched - one smoke fact added then removed, store restored to 149 facts). apps/cli/tests/test_memory_commands.py: 14 tests.\n- API: new apps/api/server/routers/memory.py (MemoryRouter, prefix /memory: GET stats / list?limit= / search?q=&limit=, POST store / remember / clear) registered in routers/__init__.py (get_all_routers() now 39). POST bodies use pydantic StoreRequest/RememberRequest (missing field -> 422); search q Optional with explicit 400; list limit clamp 1..1000, search 1..100. tests/server/test_memory_router.py: 13 tests.\n- Docs: Memory Router section added to docs/routers.md; memory CLI group documented in docs/integration/CLI_README.md (stale planned-shell doc - added a labelled current-CLI section).\n- Verification: py_compile clean on all touched files; 28+14+13 memory tests pass; pycache cleared. Pre-existing uncommitted worktree (chat-loop wiring in inference.py, context_core RAG, token-tree CLI, training frontend test refactors) remains uncommitted.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "core",
+        "memory",
+        "auto-memory"
+      ],
+      "created_at": "2026-08-12T13:49:33.616029+00:00",
+      "updated_at": "2026-08-12T13:49:33.616029+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260812_042301_practicalize-four-train-cli-commands",
       "title": "Practicalize four train CLI commands",
       "description": "",

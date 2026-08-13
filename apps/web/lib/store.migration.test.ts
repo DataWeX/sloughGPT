@@ -66,4 +66,15 @@ describe('persisted settings migration', () => {
     expect(settings.defaultTopP).toBeGreaterThan(0)
     expect(settings.defaultTopP).toBeLessThanOrEqual(1)
   })
+
+  it('has correct default top-k value', () => {
+    const { settings } = useAppStore.getState()
+    expect(settings.defaultTopK).toBeGreaterThanOrEqual(1)
+    expect(settings.defaultTopK).toBeLessThanOrEqual(100)
+  })
+
+  it('has correct default collapsible message length', () => {
+    const { settings } = useAppStore.getState()
+    expect(settings.collapsibleMessageLength).toBe(500)
+  })
 })

@@ -87,4 +87,35 @@ describe('TokenTreeEmbeddingsCard', () => {
       expect(screen.getByText(/Token not in the vocabulary, or embeddings are disabled/)).toBeDefined(),
     )
   })
+
+  it('shows top dimension values with sign', async () => {
+    mocks.mockGetEmbedding.mockResolvedValue(EMBED)
+    render(<TokenTreeEmbeddingsCard />)
+    fireEvent.click(screen.getByRole('button', { name: /^Inspect$/ }))
+    await waitFor(() => expect(screen.getByText('+0.9000')).toBeDefined())
+    expect(screen.getByText('-0.8000')).toBeDefined()
+  })
+
+  it('shows inspecting... text while loading', async () => {
+    let resolvePromise: any
+    mocks.mockGetEmbedding.mockImplementation(() => new Promise(r => { resolvePromise = r }))
+    render(<TokenTreeEmbeddingsCard />)
+    fireEvent.click(screen.getByRole('button', { name: /^Inspect$/ }))
+    expect(screen.getByText('Inspecting...')).toBeDefined()
+    resolvePromise(EMBED)
+    await waitFor(() => expect(screen.getByText('Inspect')).toBeDefined())
+  })
+
+  it('allows changing the token value', async () => {
+    mocks.mockGetEmbedding.mockResolvedValue(EMBED)
+    render(<TokenTreeEmbeddingsCard />)
+    const input = screen.getByLabelText('Token to inspect')
+    fireEvent.change(input, { target: { value: 'hello' } })
+    expect((input as HTMLInputElement).value).toBe('hello')
+  })
+
+  it('renders CardTitle', () => {
+    render(<TokenTreeEmbeddingsCard />)
+    expect(screen.getByText('Token Embedding Explorer')).toBeDefined()
+  })
 })

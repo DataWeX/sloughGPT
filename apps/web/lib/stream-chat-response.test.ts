@@ -16,6 +16,7 @@ describe('streamChatResponse', () => {
     onToolCall: vi.fn(),
     onThinking: vi.fn(),
     onKnowledge: vi.fn(),
+    onMemory: vi.fn(),
   }
 
   beforeEach(() => {
@@ -108,6 +109,59 @@ describe('streamChatResponse', () => {
     ])
     await streamChatResponse(mockParams)
     expect(mockParams.onComplete).toHaveBeenCalled()
+  })
+
+  it('dispatches memory event after complete', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":""},"message":""}',
+      'data: {"stream":"chat","phase":"MEMORY","status":"success","data":{"stored":true,"fact":"The capital of France is Paris."},"message":"New fact remembered"}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onComplete).toHaveBeenCalledTimes(1)
+    expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: true, fact: 'The capital of France is Paris.' })
+  })
+
+  it('dispatches memory event without fact when payload omits it', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"MEMORY","status":"success","data":{"stored":true},"message":"New fact remembered"}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: true, fact: undefined })
+  })
+
+  it('dispatches memory skipped event', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"MEMORY","status":"success","data":{"stored":false},"message":""}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: false, fact: undefined })
+  })
+
+  it('dispatches all stored facts when the payload carries a facts array', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"MEMORY","status":"success","data":{"stored":true,"fact":"A.","facts":["A.","B.","C."]},"message":"New fact remembered"}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: true, fact: 'A.', facts: ['A.', 'B.', 'C.'] })
+  })
+
+  it('drops non-string entries from the facts array', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"MEMORY","status":"success","data":{"stored":true,"fact":"A.","facts":["A.",7,null,"B."]},"message":"New fact remembered"}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: true, fact: 'A.', facts: ['A.', 'B.'] })
+  })
+
+  it('does not call onComplete twice when post-complete events follow', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":""},"message":""}',
+      'data: {"stream":"chat","phase":"MEMORY","status":"success","data":{"stored":true,"fact":"Gradient descent is an optimizer."},"message":"New fact remembered"}',
+      'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"tail"},"message":""}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onComplete).toHaveBeenCalledTimes(1)
+    expect(mockParams.onMemory).toHaveBeenCalledTimes(1)
   })
 
   it('calls onError on non-ok response', async () => {

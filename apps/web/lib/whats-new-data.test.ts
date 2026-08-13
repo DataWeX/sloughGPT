@@ -40,4 +40,17 @@ describe('whatsNewItems', () => {
       }
     }
   })
+
+  it('dates are valid ISO date strings', () => {
+    for (const item of whatsNewItems) {
+      const d = new Date(item.date)
+      expect(d.getTime()).not.toBeNaN()
+    }
+  })
+
+  it('titles are non-empty strings', () => {
+    for (const item of whatsNewItems) {
+      expect(item.title.trim().length).toBeGreaterThan(0)
+    }
+  })
 })

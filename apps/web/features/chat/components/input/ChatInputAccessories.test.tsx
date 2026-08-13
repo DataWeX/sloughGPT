@@ -51,4 +51,20 @@ describe('ChatInputAccessories', () => {
       }
     })
   })
+
+  it('renders without voice input when callbacks missing', () => {
+    const { container } = render(<ChatInputAccessories onImage={vi.fn()} onTranscript={undefined} disabled={false} />)
+    const btns = container.querySelectorAll('button')
+    const hasVoice = Array.from(btns).some(b =>
+      b.getAttribute('title') === 'Start voice input' || b.getAttribute('title') === 'Stop listening'
+    )
+    expect(hasVoice).toBe(false)
+  })
+
+  it('renders all accessory buttons in non-disabled state', () => {
+    const { container } = render(<ChatInputAccessories {...base} />)
+    const btns = container.querySelectorAll('button')
+    const enabled = Array.from(btns).filter(b => !b.disabled)
+    expect(enabled.length).toBeGreaterThanOrEqual(2)
+  })
 })

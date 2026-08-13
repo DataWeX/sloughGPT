@@ -49,4 +49,8 @@ describe('NavIcons barrel', () => {
   it('IconClose is an alias of IconX', () => {
     expect(NavIcons.IconClose).toBe(NavIcons.IconX)
   })
+
+  it('exports exactly 28 icons', () => {
+    expect(EXPECTED_EXPORTS).toHaveLength(28)
+  })
 })

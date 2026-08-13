@@ -114,6 +114,43 @@ class TestEncoding:
         assert tree.encode_batch([]) == []
 
 
+class TestTracePath:
+    """trace_path() must replay the encode walk with per-step detail."""
+
+    def test_ids_match_encode(self):
+        tree = make_tree(vocab_size=300)
+        for text in ["the quick brown fox", "hello world", "quickest browner"]:
+            steps = tree.trace_path(text)
+            assert [s["id"] for s in steps] == tree.encode(text)
+
+    def test_steps_record_remaining_token_and_consumed(self):
+        tree = make_tree(vocab_size=300)
+        steps = tree.trace_path("the quick")
+        assert steps
+        for s in steps:
+            assert set(s) == {"remaining", "id", "consumed"}
+            assert isinstance(s["consumed"], int) and s["consumed"] > 0
+            assert s["remaining"][: s["consumed"]] == tree.itos[s["id"]]
+
+    def test_word_boundaries_walked_left_to_right(self):
+        tree = make_tree(vocab_size=300)
+        # gpt2-style pretokenization pads the first word without a leading
+        # space and subsequent words with one; the walk must consume each
+        # word + the WORD_SUFFIX exactly once, restarting at each boundary.
+        steps = tree.trace_path("the quick")
+        padded = sum(len(w) for w in tree._pretokenize("the quick", lowercase=True)) + (
+            2 * len(WORD_SUFFIX)
+        )
+        assert sum(s["consumed"] for s in steps) == padded
+        assert steps[0]["remaining"] == "the" + WORD_SUFFIX
+        assert steps[1]["remaining"] == " quick" + WORD_SUFFIX
+
+    def test_untrained_encodes_to_unk(self):
+        tree = TokenTree()
+        steps = tree.trace_path("hi")
+        assert steps and all(s["id"] == tree.unk_id for s in steps)
+
+
 class TestDecoding:
     def test_word_boundaries_preserved(self):
         tree = make_tree(vocab_size=300)
@@ -351,6 +388,43 @@ class TestSemanticQuery:
     def test_similar_untrained_returns_empty(self):
         assert TokenTree().similar(0, top_k=3) == []
 
+
+class TestEmbeddingMatrixStats:
+    def test_shape_and_norm_stats(self):
+        tree = make_tree(vocab_size=200, embed_dim=16)
+        stats = tree.embedding_matrix_stats(top_n=4)
+        assert stats["matrix"] == [tree.vocab_size, 16]
+        assert 0.0 <= stats["norm_min"] <= stats["norm_mean"] <= stats["norm_max"] <= 1.0
+        assert stats["dead_tokens"] + stats["live_tokens"] == tree.vocab_size
+
+    def test_energy_lists_are_triples_sorted_by_norm(self):
+        tree = make_tree(vocab_size=200, embed_dim=16)
+        stats = tree.embedding_matrix_stats(top_n=5)
+        most = stats["most_energetic"]
+        least = stats["least_energetic"]
+        assert len(most) == len(least) == 5
+        for entry in most + least:
+            assert len(entry) == 3
+            assert isinstance(entry[1], int)
+            assert entry[0] == tree.itos[entry[1]]
+        most_norms = [e[2] for e in most]
+        least_norms = [e[2] for e in least]
+        assert most_norms == sorted(most_norms, reverse=True)
+        assert least_norms == sorted(least_norms)
+
+    def test_live_rows_all_positive_norm(self):
+        tree = make_tree(vocab_size=200, embed_dim=16)
+        stats = tree.embedding_matrix_stats(top_n=4)
+        for entry in stats["most_energetic"] + stats["least_energetic"]:
+            assert entry[2] > 0.0
+
+    def test_disabled_embeddings_return_zeros(self):
+        stats = TokenTree().embedding_matrix_stats(top_n=8)
+        assert stats["matrix"] is None
+        assert stats["dead_tokens"] == 0
+        assert stats["live_tokens"] == 0
+        assert stats["most_energetic"] == []
+        assert stats["least_energetic"] == []
 
 
 class TestPersistence:

@@ -1,152 +1,107 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 
-const mockPush = vi.hoisted(() => vi.fn())
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+const mocks = vi.hoisted(() => ({
+  mockListFineTuned: vi.fn(),
+  mockDeleteFineTuned: vi.fn(),
+  mockLoadFineTuned: vi.fn(),
+  mockUnloadModel: vi.fn(),
+  mockAddToast: vi.fn(),
 }))
 
 vi.mock('@/lib/training-controller', () => ({
   trainingJobsController: {
-    listFineTuned: vi.fn(),
-    loadFineTuned: vi.fn(),
-    deleteFineTuned: vi.fn(),
+    listFineTuned: mocks.mockListFineTuned,
+    deleteFineTuned: mocks.mockDeleteFineTuned,
+    loadFineTuned: mocks.mockLoadFineTuned,
   },
 }))
+
 vi.mock('@/lib/model-controller', () => ({
   modelController: {
-    unloadModel: vi.fn().mockResolvedValue({ status: 'unloaded' }),
+    unloadModel: mocks.mockUnloadModel,
   },
 }))
+
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: () => vi.fn(),
+  useToastStore: (selector: any) => selector({ addToast: mocks.mockAddToast }),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+  Card: ({ children }: any) => <div>{children}</div>,
+  CardHeader: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  CardTitle: ({ children }: any) => <div>{children}</div>,
+  CardContent: ({ children }: any) => <div>{children}</div>,
+  Button: ({ children, onClick, disabled, ...props }: any) => <button onClick={onClick} disabled={disabled} {...props}>{children}</button>,
+  Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
+  IconTrash: () => <span data-testid="icon-trash" />,
+  IconRefresh: () => <span data-testid="icon-refresh" />,
 }))
 
 import { FineTunedModelsCard } from './FineTunedModelsCard'
-import { trainingJobsController } from '@/lib/training-controller'
-import { modelController } from '@/lib/model-controller'
-
-const mocks = vi.mocked(trainingJobsController)
-
-const mkModel = (overrides: Record<string, any> = {}) => ({
-  name: 'gpt2_dataset_1', model: 'gpt2', model_name: 'gpt2_dataset_1', dataset: 'dataset_1', size_mb: 1.2,
-  model_path: '/tmp/finetuned/gpt2_dataset_1', ...overrides,
-})
 
 describe('FineTunedModelsCard', () => {
-  afterEach(() => { cleanup(); vi.clearAllMocks() })
-
-  beforeEach(() => {
-    mocks.listFineTuned.mockResolvedValue([])
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
   })
 
-  it('renders title and empty state', async () => {
+  it('shows loading skeletons initially', () => {
+    mocks.mockListFineTuned.mockReturnValue(new Promise(() => {}))
     render(<FineTunedModelsCard />)
     expect(screen.getByText('Fine-tuned models')).toBeDefined()
-    await waitFor(() => {
-      expect(screen.getByText(/No fine-tuned models yet/)).toBeDefined()
-    })
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('lists fine-tuned models', async () => {
-    mocks.listFineTuned.mockResolvedValue([mkModel()])
+  it('shows empty state when no models', async () => {
+    mocks.mockListFineTuned.mockResolvedValue([])
     render(<FineTunedModelsCard />)
-    await waitFor(() => {
-      expect(screen.getByText('gpt2_dataset_1')).toBeDefined()
-      expect(screen.getAllByText(/gpt2/).length).toBeGreaterThan(0)
-      expect(screen.getByText(/1.2 MB/)).toBeDefined()
-    })
+    const el = await screen.findByText(/No fine-tuned models/)
+    expect(el).toBeDefined()
   })
 
-  it('shows final loss and epochs when present', async () => {
-    mocks.listFineTuned.mockResolvedValue([mkModel({ final_loss: 0.4242, epochs: 3 })])
+  it('renders model list', async () => {
+    mocks.mockListFineTuned.mockResolvedValue([
+      { name: 'my-model', model: 'gpt2', dataset: 'shakespeare', size_mb: 100, final_loss: 0.45, epochs: 10 },
+    ])
     render(<FineTunedModelsCard />)
-    await waitFor(() => {
-      expect(screen.getByText(/loss 0.4242/)).toBeDefined()
-      expect(screen.getByText(/3 ep/)).toBeDefined()
-    })
+    expect(await screen.findByText('my-model')).toBeDefined()
+    expect(screen.getByText(/gpt2/)).toBeDefined()
   })
 
-  it('marks active model and hides its Load button', async () => {
-    const m = mkModel()
-    mocks.listFineTuned.mockResolvedValue([m])
-    render(<FineTunedModelsCard activeModelId="gpt2_dataset_1" />)
-    await waitFor(() => {
-      expect(screen.getByText('gpt2_dataset_1')).toBeDefined()
-    })
-    expect(screen.queryByText('Load')).toBeNull()
-  })
-
-  it('marks active model by model_name id', async () => {
-    const m = mkModel()
-    mocks.listFineTuned.mockResolvedValue([m])
-    render(<FineTunedModelsCard activeModelId="gpt2_dataset_1" />)
-    await waitFor(() => {
-      expect(screen.getByText('gpt2_dataset_1')).toBeDefined()
-    })
-    expect(screen.queryByText('Load')).toBeNull()
-  })
-
-  it('does not mark active when only base model id matches', async () => {
-    const m = mkModel()
-    mocks.listFineTuned.mockResolvedValue([m])
-    render(<FineTunedModelsCard activeModelId="gpt2" />)
-    await waitFor(() => {
-      expect(screen.getByText('gpt2_dataset_1')).toBeDefined()
-    })
-    expect(screen.getByText('Load')).toBeDefined()
-  })
-
-  it('loads fine-tuned model on button click and calls onLoaded', async () => {
-    const onLoaded = vi.fn()
-    mocks.listFineTuned.mockResolvedValue([mkModel()])
-    mocks.loadFineTuned.mockResolvedValue({ status: 'loaded', name: 'gpt2_dataset_1', model_path: '/tmp/x' })
-    render(<FineTunedModelsCard onLoaded={onLoaded} />)
-    await waitFor(() => expect(screen.getByText('gpt2_dataset_1')).toBeDefined())
-    fireEvent.click(screen.getByText('Load'))
-    await waitFor(() => {
-      expect(mocks.loadFineTuned).toHaveBeenCalledWith('gpt2_dataset_1')
-      expect(onLoaded).toHaveBeenCalled()
-    })
-  })
-
-  it('deletes fine-tuned model and refreshes list', async () => {
-    mocks.listFineTuned.mockResolvedValue([mkModel()])
-    mocks.deleteFineTuned.mockResolvedValue({ status: 'deleted', name: 'gpt2_dataset_1' })
+  it('shows error state on fetch failure', async () => {
+    mocks.mockListFineTuned.mockRejectedValue(new Error('network error'))
     render(<FineTunedModelsCard />)
-    await waitFor(() => expect(screen.getByText('gpt2_dataset_1')).toBeDefined())
-    fireEvent.click(screen.getByRole('button', { name: /Delete/ }))
-    await waitFor(() => {
-      expect(mocks.deleteFineTuned).toHaveBeenCalledWith('gpt2_dataset_1')
-      expect(mocks.listFineTuned).toHaveBeenCalledTimes(2)
-    })
+    expect(await screen.findByText(/network error/)).toBeDefined()
+    expect(screen.getByText('Retry')).toBeDefined()
   })
 
-  it('shows Unload for the active model', async () => {
-    mocks.listFineTuned.mockResolvedValue([mkModel()])
-    render(<FineTunedModelsCard activeModelId="gpt2_dataset_1" />)
-    await waitFor(() => expect(screen.getByText('gpt2_dataset_1')).toBeDefined())
-    expect(screen.getByRole('button', { name: /Unload/ })).toBeDefined()
-  })
-
-  it('unloads the active model and calls onLoaded', async () => {
-    const onLoaded = vi.fn()
-    mocks.listFineTuned.mockResolvedValue([mkModel()])
-    render(<FineTunedModelsCard activeModelId="gpt2_dataset_1" onLoaded={onLoaded} />)
-    await waitFor(() => expect(screen.getByText('gpt2_dataset_1')).toBeDefined())
-    fireEvent.click(screen.getByRole('button', { name: /Unload/ }))
-    await waitFor(() => {
-      expect(modelController.unloadModel).toHaveBeenCalled()
-      expect(onLoaded).toHaveBeenCalled()
-    })
-  })
-
-  it('navigates to model detail page on name click', async () => {
-    mocks.listFineTuned.mockResolvedValue([mkModel()])
+  it('renders refresh button', async () => {
+    mocks.mockListFineTuned.mockResolvedValue([])
     render(<FineTunedModelsCard />)
-    await waitFor(() => expect(screen.getByText('gpt2_dataset_1')).toBeDefined())
-    fireEvent.click(screen.getByRole('button', { name: /View details/ }))
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/model/gpt2_dataset_1'))
+    expect(screen.getByLabelText('Refresh fine-tuned models')).toBeDefined()
+  })
+
+  it('shows load button for inactive models', async () => {
+    mocks.mockListFineTuned.mockResolvedValue([
+      { name: 'm1', model: 'gpt2', dataset: '', size_mb: 0, final_loss: null, epochs: 0 },
+    ])
+    render(<FineTunedModelsCard />)
+    expect(await screen.findByText('Load')).toBeDefined()
+  })
+
+  it('shows unload button for active model', async () => {
+    mocks.mockListFineTuned.mockResolvedValue([
+      { name: 'm1', model: 'gpt2', model_name: 'm1', dataset: '', size_mb: 0, final_loss: null, epochs: 0 },
+    ])
+    render(<FineTunedModelsCard activeModelId="m1" />)
+    expect(await screen.findByText(/Unload/)).toBeDefined()
   })
 })

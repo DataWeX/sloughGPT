@@ -60,7 +60,7 @@ def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
     - "Training complete! Model saved to models/..."
     - "Training failed: CUDA out of memory"
     """
-    summary = dict(job)
+    summary = {k: v for k, v in job.items() if not k.startswith("_")}
     status = job.get("status", "unknown")
     progress = job.get("progress", 0)
     model = job.get("model", "")

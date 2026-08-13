@@ -95,4 +95,29 @@ describe('TokenTreeLineageCard', () => {
     expect(button?.disabled).toBe(true)
     expect(mocks.mockLineage).not.toHaveBeenCalled()
   })
+
+  it('displays the merge tree as preformatted text', async () => {
+    render(<TokenTreeLineageCard />)
+    fireEvent.change(screen.getByLabelText('Token to inspect'), { target: { value: 'quick' } })
+    fireEvent.click(screen.getByText('Show lineage'))
+    await waitFor(() => {
+      expect(screen.getByText('q')).toBeDefined()
+    })
+    expect(document.querySelector('pre')?.textContent).toContain('quick')
+  })
+
+  it('shows character leaf count', async () => {
+    render(<TokenTreeLineageCard />)
+    fireEvent.change(screen.getByLabelText('Token to inspect'), { target: { value: 'quick' } })
+    fireEvent.click(screen.getByText('Show lineage'))
+    await waitFor(() => {
+      expect(screen.getByText('q')).toBeDefined()
+    })
+    expect(screen.getByText(/6 character leaves/)).toBeDefined()
+  })
+
+  it('renders the CardTitle', () => {
+    render(<TokenTreeLineageCard />)
+    expect(screen.getByText('Merge Lineage Explorer')).toBeDefined()
+  })
 })

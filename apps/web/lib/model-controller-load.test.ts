@@ -49,4 +49,15 @@ describe('modelController.load', () => {
     const result = await modelController.load('gpt2')
     expect(result.status).toBe('loaded')
   })
+
+  it('returns model_id in response', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', model_id: 'qwen' })
+    const result = await modelController.load('qwen')
+    expect(result.model_id).toBe('qwen')
+  })
+
+  it('throws on network error', async () => {
+    apiClient.apiPost.mockRejectedValue(new Error('connection refused'))
+    await expect(modelController.load('gpt2')).rejects.toThrow('connection refused')
+  })
 })

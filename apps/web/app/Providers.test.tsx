@@ -55,4 +55,15 @@ describe('Providers', () => {
     )
     expect(order).toEqual(['session', 'theme', 'model', 'locale'])
   })
+
+  it('renders multiple children', () => {
+    render(
+      <Providers>
+        <span>one</span>
+        <span>two</span>
+      </Providers>,
+    )
+    expect(screen.getByText('one')).toBeInTheDocument()
+    expect(screen.getByText('two')).toBeInTheDocument()
+  })
 })

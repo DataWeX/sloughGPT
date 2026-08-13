@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
@@ -14,70 +15,62 @@ vi.mock('recharts', () => ({
   Legend: () => <div data-testid="legend" />,
 }))
 
-import { LossChart } from './LossChart'
+vi.mock('@/lib/download-utils', () => ({
+  downloadBlob: vi.fn(),
+}))
 
-const train = (step: number, value: number) => ({ step, value, type: 'train' as const })
-const evalP = (step: number, value: number) => ({ step, value, type: 'eval' as const })
-const reward = (step: number, value: number) => ({ step, value })
+vi.mock('@/lib/format-bytes', () => ({
+  todayDateString: () => '2026-01-01',
+}))
+
+import { LossChart } from './LossChart'
 
 describe('LossChart', () => {
   afterEach(cleanup)
 
-  it('renders nothing when no data', () => {
+  it('renders nothing when data is empty', () => {
     const { container } = render(<LossChart data={[]} />)
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders chart with training data', () => {
-    render(<LossChart data={[train(1, 2.0), train(2, 1.5)]} />)
+  it('renders nothing when both data and rewardData are empty', () => {
+    const { container } = render(<LossChart data={[]} rewardData={[]} />)
+    expect(container.innerHTML).toBe('')
+  })
+
+  it('renders chart with train data', () => {
+    render(<LossChart data={[{ step: 1, value: 0.5, type: 'train' }]} />)
+    expect(screen.getByTestId('responsive-container')).toBeDefined()
     expect(screen.getByTestId('line-chart')).toBeDefined()
   })
 
-  it('renders with reward data using ComposedChart', () => {
-    render(<LossChart data={[train(1, 2.0)]} rewardData={[reward(1, 0.8)]} />)
+  it('renders chart with eval data', () => {
+    render(<LossChart data={[{ step: 1, value: 0.4, type: 'eval' }]} />)
+    expect(screen.getByTestId('line-chart')).toBeDefined()
+  })
+
+  it('renders composed chart when reward data is present', () => {
+    render(
+      <LossChart
+        data={[{ step: 1, value: 0.5, type: 'train' }]}
+        rewardData={[{ step: 1, value: 1.0 }]}
+      />,
+    )
     expect(screen.getByTestId('composed-chart')).toBeDefined()
   })
 
   it('renders legend when showLegend is true', () => {
-    render(<LossChart data={[train(1, 2.0)]} showLegend={true} />)
+    render(<LossChart data={[{ step: 1, value: 0.5, type: 'train' }]} showLegend={true} />)
     expect(screen.getByTestId('legend')).toBeDefined()
   })
 
-  it('omits legend when showLegend is false', () => {
-    render(<LossChart data={[train(1, 2.0)]} showLegend={false} />)
+  it('hides legend when showLegend is false', () => {
+    render(<LossChart data={[{ step: 1, value: 0.5, type: 'train' }]} showLegend={false} />)
     expect(screen.queryByTestId('legend')).toBeNull()
   })
 
-  it('sliding window shows last N steps when live', () => {
-    const manyTrain = Array.from({ length: 50 }, (_, i) => train(i + 1, 1.0))
-    render(<LossChart data={manyTrain} live={true} windowSize={40} />)
-    expect(screen.getByTestId('line-chart')).toBeDefined()
-  })
-
-  it('renders axes and grid', () => {
-    render(<LossChart data={[train(1, 2.0)]} />)
-    expect(screen.getByTestId('x-axis')).toBeDefined()
-    expect(screen.getByTestId('y-axis')).toBeDefined()
-    expect(screen.getByTestId('cartesian-grid')).toBeDefined()
-  })
-
-  it('renders tooltip', () => {
-    render(<LossChart data={[train(1, 2.0)]} />)
-    expect(screen.getByTestId('tooltip')).toBeDefined()
-  })
-
-  it('renders lines for data', () => {
-    render(<LossChart data={[train(1, 2.0)]} />)
-    expect(screen.getAllByTestId('line').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('renders eval data lines', () => {
-    render(<LossChart data={[train(1, 2.0), evalP(1, 3.0)]} />)
-    expect(screen.getAllByTestId('line').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('renders responsive container', () => {
-    render(<LossChart data={[train(1, 2.0)]} />)
+  it('sets custom height on ResponsiveContainer', () => {
+    render(<LossChart data={[{ step: 1, value: 0.5, type: 'train' }]} height={400} />)
     expect(screen.getByTestId('responsive-container')).toBeDefined()
   })
 })

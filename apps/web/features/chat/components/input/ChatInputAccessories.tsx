@@ -10,7 +10,7 @@ import { multimodalController } from '@/lib/multimodal-controller'
 
 interface ChatInputAccessoriesProps {
   onImage: (dataUrl: string) => void
-  onTranscript: (text: string) => void
+  onTranscript?: (text: string) => void
   disabled: boolean
   onAudioTranscript?: (text: string) => void
   onGeneratedImage?: (dataUrl: string, prompt: string) => void
@@ -79,7 +79,7 @@ export function ChatInputAccessories({
   return (
     <div className="flex items-center">
       <ImageUpload onImage={onImage} disabled={disabled} />
-      <VoiceInput onTranscript={onTranscript} disabled={disabled} />
+      {onTranscript && <VoiceInput onTranscript={onTranscript} disabled={disabled} />}
       {onPDFAnalysis && onPDFError && (
         <PDFUpload onAnalysis={onPDFAnalysis} onError={onPDFError} disabled={disabled} />
       )}

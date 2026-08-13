@@ -3,15 +3,18 @@ Token-tree commands - train, encode, decode, and query a TokenTree tokenizer.
 
 All commands are thin wrappers over the core ``domains.training.token_tree``
 module (infrastructure before endpoints): training materializes BPE merges as
-a tree, and every query handler (encode/decode/similar/lineage) descends the
-tree or its Point-generated embeddings.
+a tree, and every query handler (encode/decode/similar/lineage/embedding/
+path) descends the tree or its Point-generated embeddings.
 """
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from core.printer import printer
 
 from domains.training.token_tree import TokenTree
+from domains.training.token_tree_manager import get_token_tree_manager
 
 
 def _resolve_corpus_file(path_or_name: str) -> Path:
@@ -250,3 +253,279 @@ def cmd_token_tree_vocab(args) -> None:
     printer.table(["id", "token", "freq", "flags"], rows)
     if out["entries"]:
         printer.info(f"Showing {lo}–{hi} of {out['total']}")
+
+
+def cmd_token_tree_embedding(args) -> None:
+    """Inspect a token's generated embedding vector.
+
+    Reports dimensionality, L2 norm, and the largest-magnitude dimensions,
+    mirroring the manager's ``embedding_info`` contract.
+
+    Args:
+        args: SimpleNamespace with ``tree``, ``token``, ``top_k``.
+
+    Side effects:
+        - Prints the embedding summary table.
+    """
+    tree = _load_tree(args.tree)
+    token_id = _resolve_token(tree, args.token)
+    vec = tree.embedding(token_id)
+    if vec is None:
+        printer.error("No embeddings in this tree (trained with embed-dim 0)")
+        sys.exit(2)
+    top_idx = np.argsort(-np.abs(vec))[: max(args.top_k, 1)]
+    query = tree.itos.get(token_id, str(token_id)).replace("</w>", "")
+    printer.header(f"Embedding of {query!r}")
+    printer.key_value("id", str(token_id))
+    printer.key_value("dim", str(vec.shape[0]))
+    printer.key_value("L2 norm", f"{float(np.linalg.norm(vec)):.4f}")
+    printer.key_value("Embedding points", str(tree.embedding_points()))
+    printer.key_value("Compression", f"{tree.embedding_compression_ratio():.2f}x")
+    rows = [
+        [str(int(i)), f"{float(vec[i]):+.4f}"]
+        for i in top_idx
+    ]
+    printer.table(["dim", "value"], rows)
+
+
+def cmd_token_tree_path(args) -> None:
+    """Trace the greedy trie walk the encoder takes over text.
+
+    Prints each longest-prefix query step (remaining suffix, matched token,
+    id, consumed chars) and the resulting token ids, mirroring the manager's
+    ``path`` contract.
+
+    Args:
+        args: SimpleNamespace with ``tree``, ``text``.
+
+    Side effects:
+        - Prints the per-step table and final ids.
+    """
+    tree = _load_tree(args.tree)
+    text = args.text if args.text is not None else sys.stdin.read()
+    steps = tree.trace_path(text)
+    printer.header(f"Path ({len(steps)} steps)")
+    rows = []
+    for s in steps:
+        display = tree.itos.get(s["id"], "?").replace("</w>", "")
+        rows.append([s["remaining"], display, str(s["id"]), str(s["consumed"])])
+    printer.table(["remaining", "token", "id", "consumed"], rows)
+    ids = [s["id"] for s in steps]
+    printer.key_value("Ids", " ".join(str(i) for i in ids))
+    printer.key_value("Round-trips", str(tree.decode(ids) == text.lower()))
+
+
+def cmd_token_tree_matrix(args) -> None:
+    """Summarize the full embedding matrix.
+
+    Prints the matrix shape, row-norm distribution, live/dead token counts,
+    and the most/least energetic tokens, mirroring the manager's
+    ``matrix_summary`` contract.
+
+    Args:
+        args: SimpleNamespace with ``tree``, ``top_k``.
+
+    Side effects:
+        - Prints the matrix summary block.
+    """
+    tree = _load_tree(args.tree)
+    stats = tree.embedding_matrix_stats(top_n=args.top_k)
+    if stats["matrix"] is None:
+        printer.error("No embeddings in this tree (trained with embed-dim 0)")
+        sys.exit(2)
+    rows, cols = stats["matrix"]
+    printer.header(f"Embedding matrix ({rows} x {cols})")
+    printer.key_value("L2 norm min", f"{stats['norm_min']:.4f}")
+    printer.key_value("L2 norm mean", f"{stats['norm_mean']:.4f}")
+    printer.key_value("L2 norm max", f"{stats['norm_max']:.4f}")
+    printer.key_value(
+        "Tokens", f"{stats['live_tokens']} live, {stats['dead_tokens']} dead"
+    )
+
+    def energy_rows(key: str):
+        return [
+            [tok.replace("</w>", ""), str(tid), f"{norm:.4f}"]
+            for tok, tid, norm in stats[key]
+        ]
+
+    printer.header("Most energetic")
+    printer.table(
+        ["token", "id", "norm"], energy_rows("most_energetic")
+    )
+    printer.header("Least energetic")
+    printer.table(
+        ["token", "id", "norm"], energy_rows("least_energetic")
+    )
+
+
+def cmd_token_tree_compare(args) -> None:
+    """Diff two saved token trees (by name) side by side.
+
+    Delegates to the manager's ``compare`` so the current tree is untouched.
+    Prints per-side stats, token/merge overlap counts, and the top shared and
+    exclusive tokens by corpus frequency.
+
+    Args:
+        args: SimpleNamespace with ``a``, ``b``, ``top_n``.
+
+    Side effects:
+        - Prints the comparison block; exits(2) on error.
+    """
+    try:
+        out = get_token_tree_manager().compare(args.a, args.b, top_n=args.top_n)
+    except (FileNotFoundError, ValueError) as e:
+        printer.error(str(e))
+        sys.exit(2)
+
+    a, b = out["a"], out["b"]
+    printer.header(f"Compare {a['name']!r} vs {b['name']!r}")
+
+    def stat_line(side: dict) -> str:
+        s = side["stats"]
+        return (
+            f"vocab {s['vocab_size']} · merges {s['num_merges']} · "
+            f"base {s['num_base_tokens']} · embed_dim {s['embed_dim']} · "
+            f"points {s['embedding_points']}"
+        )
+
+    printer.key_value("A", f"{a['name']} — {stat_line(a)}")
+    printer.key_value("B", f"{b['name']} — {stat_line(b)}")
+
+    printer.header("Vocabulary overlap")
+    printer.key_value("Shared tokens", str(out["shared_tokens"]))
+    printer.key_value("Only in A", str(out["only_a_tokens"]))
+    printer.key_value("Only in B", str(out["only_b_tokens"]))
+    printer.key_value("Shared merges", str(out["shared_merges"]))
+    printer.key_value("Only in A merges", str(out["only_a_merges"]))
+    printer.key_value("Only in B merges", str(out["only_b_merges"]))
+
+    def token_table(key: str, title: str) -> None:
+        rows = [[t.replace("</w>", ""), str(f)] for t, f in out[key]]
+        if rows:
+            printer.header(title)
+            printer.table(["token", "freq"], rows)
+
+    token_table("shared_examples", "Top shared tokens")
+    token_table("only_a_examples", f"Top tokens only in {a['name']}")
+    token_table("only_b_examples", f"Top tokens only in {b['name']}")
+
+
+def cmd_token_tree_merges(args) -> None:
+    """List the most frequent BPE merge rules of a saved tree.
+
+    When ``args.query`` is given, filters rules whose parts contain the
+    substring (case-insensitive), keeping their global frequency rank.
+
+    Args:
+        args: SimpleNamespace with ``tree``, ``top_n``, ``query``.
+
+    Side effects:
+        - Prints a ranked merge table.
+    """
+    tree = _load_tree(args.tree)
+    if args.query:
+        data = tree.search_merges(query=args.query, limit=args.top_n)
+    else:
+        data = tree.top_merges(top_n=args.top_n)
+    rows = [
+        [
+            str(m["rank"]),
+            f"{m['left']!r} + {m['right']!r}",
+            m["token"].replace("</w>", "") or m["token"],
+            str(m["count"]),
+        ]
+        for m in data
+    ]
+    printer.header(f"Merges ({len(data)} shown)")
+    printer.table(["rank", "pair", "token", "count"], rows)
+
+
+def cmd_token_tree_saved(args) -> None:
+    """List saved token trees (from the manager's save dir), newest first.
+
+    Args:
+        args: SimpleNamespace (unused).
+
+    Side effects:
+        - Prints a table of saved trees with vocab/merge counts.
+    """
+    saved = get_token_tree_manager().list_saved()
+    if not saved:
+        printer.info("No saved token trees.")
+        return
+    rows = []
+    for t in saved:
+        rows.append([
+            t["name"],
+            str(t["vocab_size"]),
+            str(t["num_merges"]),
+            t["path"],
+        ])
+    printer.header("Saved token trees")
+    printer.table(["name", "vocab", "merges", "path"], rows)
+
+
+def cmd_token_tree_save(args) -> None:
+    """Save the current tree (or a tree loaded from ``args.tree``) by name.
+
+    Args:
+        args: SimpleNamespace with ``name`` and optional ``tree`` (base path).
+
+    Side effects:
+        - Writes ``<name>.meta.json`` + ``<name>.points.json`` into the
+          manager's save dir; exits(2) on invalid name or missing tree.
+    """
+    mgr = get_token_tree_manager()
+    try:
+        if args.tree:
+            meta_path = Path(str(args.tree) + ".meta.json")
+            if not meta_path.exists():
+                printer.error(f"No token tree found at {args.tree} (missing {meta_path})")
+                sys.exit(2)
+            mgr.adopt(TokenTree.load(args.tree))
+        out = mgr.save(args.name)
+    except ValueError as e:
+        printer.error(str(e))
+        sys.exit(2)
+    printer.success(f"Saved {out['name']!r} ({out['vocab_size']} vocab, {out['num_merges']} merges)")
+
+
+def cmd_token_tree_load(args) -> None:
+    """Load a saved tree by name and make it the manager's current tree.
+
+    Args:
+        args: SimpleNamespace with ``name``.
+
+    Side effects:
+        - Replaces the manager's current tree; exits(2) on missing name.
+    """
+    mgr = get_token_tree_manager()
+    try:
+        out = mgr.load(args.name)
+    except (FileNotFoundError, ValueError) as e:
+        printer.error(str(e))
+        sys.exit(2)
+    printer.success(
+        f"Loaded {out['name']!r} ({out['vocab_size']} vocab, {out['num_merges']} merges)"
+    )
+
+
+def cmd_token_tree_delete(args) -> None:
+    """Delete a saved tree by name.
+
+    Args:
+        args: SimpleNamespace with ``name``.
+
+    Side effects:
+        - Removes the tree's sidecar files; exits(2) on missing name.
+    """
+    mgr = get_token_tree_manager()
+    try:
+        deleted = mgr.delete_saved(args.name)
+    except ValueError as e:
+        printer.error(str(e))
+        sys.exit(2)
+    if not deleted:
+        printer.error(f"No saved token tree named {args.name!r}")
+        sys.exit(2)
+    printer.success(f"Deleted {args.name!r}")

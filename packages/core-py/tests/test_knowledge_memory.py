@@ -1,5 +1,6 @@
 """Tests for KnowledgeMemory — fact CRUD + search + context."""
 
+import json
 import time
 import pytest
 from domains.learner.knowledge import KnowledgeMemory, KnowledgeFact
@@ -130,6 +131,79 @@ class TestAddFactsBatch:
         assert len(results) >= 1
         assert any("Python" in r["content"] for r in results)
 
+    def test_update_fact_changes_content_and_topic(self, km):
+        km.add_fact(KnowledgeFact(content="Original fact text", topic="old_topic", source="test", timestamp=time.time()))
+        item_id = km.list_all()[0]["id"]
+        assert km.update_fact(item_id, "Edited fact text", topic="new_topic") is True
+        items = km.list_all()
+        assert len(items) == 1
+        assert items[0]["content"] == "Edited fact text"
+        assert items[0]["topic"] == "new_topic"
+        assert items[0]["id"] == item_id
+
+    def test_update_fact_keeps_topic_when_omitted(self, km):
+        km.add_fact(KnowledgeFact(content="Keep topic fact", topic="retained", source="test", timestamp=time.time()))
+        item_id = km.list_all()[0]["id"]
+        assert km.update_fact(item_id, "Keep topic fact v2") is True
+        items = km.list_all()
+        assert items[0]["content"] == "Keep topic fact v2"
+        assert items[0]["topic"] == "retained"
+
+    def test_update_fact_unknown_id_returns_false(self, km):
+        km.add_fact(KnowledgeFact(content="Some fact", topic="test", source="test", timestamp=time.time()))
+        assert km.update_fact("nonexistent-id", "New text") is False
+        assert km.list_all()[0]["content"] == "Some fact"
+
+    def test_update_fact_empty_content_returns_false(self, km):
+        km.add_fact(KnowledgeFact(content="Some fact", topic="test", source="test", timestamp=time.time()))
+        item_id = km.list_all()[0]["id"]
+        assert km.update_fact(item_id, "   ") is False
+        assert km.list_all()[0]["content"] == "Some fact"
+
+    def test_update_fact_to_duplicate_returns_false(self, km):
+        km.add_fact(KnowledgeFact(content="First fact", topic="test", source="test", timestamp=time.time()))
+        km.add_fact(KnowledgeFact(content="Second fact", topic="test", source="test", timestamp=time.time()))
+        first_id = km.list_all()[0]["id"]
+        assert km.update_fact(first_id, "Second fact") is False
+        assert km.list_all()[0]["content"] == "First fact"
+
+    def test_updated_fact_can_be_restored_to_original_content(self, km):
+        km.add_fact(KnowledgeFact(content="Original", topic="test", source="test", timestamp=time.time()))
+        item_id = km.list_all()[0]["id"]
+        assert km.update_fact(item_id, "Revised") is True
+        assert km.update_fact(item_id, "Original") is True
+        assert km.list_all()[0]["content"] == "Original"
+
+    def test_update_fact_changes_importance(self, km):
+        km.add_fact(KnowledgeFact(content="Scored fact", topic="test", source="test", timestamp=time.time(), importance=0.5))
+        item_id = km.list_all()[0]["id"]
+        assert km.update_fact(item_id, "Scored fact", importance=0.9) is True
+        assert km.list_all()[0]["importance"] == 0.9
+
+    def test_update_fact_keeps_importance_when_omitted(self, km):
+        km.add_fact(KnowledgeFact(content="Scored fact", topic="test", source="test", timestamp=time.time(), importance=0.5))
+        item_id = km.list_all()[0]["id"]
+        assert km.update_fact(item_id, "Scored fact v2") is True
+        assert km.list_all()[0]["importance"] == 0.5
+
+    def test_update_fact_clamps_importance_out_of_range(self, km):
+        km.add_fact(KnowledgeFact(content="Scored fact", topic="test", source="test", timestamp=time.time(), importance=0.5))
+        item_id = km.list_all()[0]["id"]
+        assert km.update_fact(item_id, "Scored fact", importance=1.5) is True
+        assert km.list_all()[0]["importance"] == 1.0
+        assert km.update_fact(item_id, "Scored fact", importance=-0.2) is True
+        assert km.list_all()[0]["importance"] == 0.0
+
+    def test_update_fact_importance_only_leaves_text_untouched(self, km):
+        km.add_fact(KnowledgeFact(content="Same text", topic="retained", source="test", timestamp=time.time(), importance=0.5))
+        item_id = km.list_all()[0]["id"]
+        assert km.update_fact(item_id, "Same text", importance=0.7) is True
+        items = km.list_all()
+        assert len(items) == 1
+        assert items[0]["content"] == "Same text"
+        assert items[0]["topic"] == "retained"
+        assert items[0]["importance"] == 0.7
+
     def test_search_empty_store_returns_empty(self, km):
         results = km.search("anything")
         assert results == []
@@ -157,6 +231,21 @@ class TestAddFactsBatch:
         km.clear_all()
         re_added = km.add_fact(KnowledgeFact(content="Clear visited test", topic="test", source="test", timestamp=time.time()))
         assert re_added is True
+
+    def test_clear_all_persists_empty_file(self, km):
+        from domains.learner import knowledge as K
+        km.add_fact(KnowledgeFact(content="Persist clear test", topic="test", source="test", timestamp=time.time()))
+        assert K.ENTRIES_PATH.exists()
+        assert km.clear_all() == 1
+        assert K.ENTRIES_PATH.exists()
+        assert json.loads(K.ENTRIES_PATH.read_text()) == []
+
+    def test_clear_all_survives_restart(self, km):
+        km.add_fact(KnowledgeFact(content="Restart clear test", topic="test", source="test", timestamp=time.time()))
+        assert km.clear_all() == 1
+        fresh = KnowledgeMemory()
+        assert len(fresh.list_all()) == 0
+
 
     def test_stats_returns_dict(self, km):
         km.add_fact(KnowledgeFact(content="Stats fact", topic="test", source="test", timestamp=time.time()))

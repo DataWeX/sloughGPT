@@ -49,4 +49,15 @@ describe('ImagePreview', () => {
     fireEvent.click(screen.getByLabelText('Remove test.png'))
     expect(onRemove).toHaveBeenCalledWith('img1')
   })
+
+  it('renders remove button with correct label', () => {
+    render(<ImagePreview image={{ id: 'img2', dataUrl: 'data:image/png;base64,xyz', name: 'photo.jpg' }} onRemove={vi.fn()} />)
+    expect(screen.getByLabelText('Remove photo.jpg')).toBeDefined()
+  })
+
+  it('renders image with correct dataUrl src', () => {
+    render(<ImagePreview image={image} onRemove={vi.fn()} />)
+    const img = screen.getByAltText('test.png') as HTMLImageElement
+    expect(img.src).toBe('data:image/png;base64,abc')
+  })
 })

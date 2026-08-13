@@ -29,4 +29,16 @@ describe('routeMatchesPath', () => {
     expect(routeMatchesPath('/chatt', '/chat')).toBe(false)
     expect(routeMatchesPath('/model', '/models')).toBe(false)
   })
+
+  it('handles deeply nested routes', () => {
+    expect(routeMatchesPath('/training/job/abc/details', '/training')).toBe(true)
+  })
+
+  it('handles empty pathname', () => {
+    expect(routeMatchesPath('', '/')).toBe(true)
+  })
+
+  it('does not match when href is longer than pathname', () => {
+    expect(routeMatchesPath('/chat', '/chat/settings')).toBe(false)
+  })
 })

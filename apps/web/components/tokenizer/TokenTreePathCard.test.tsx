@@ -85,4 +85,35 @@ describe('TokenTreePathCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Trace$/ }))
     await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Failed to trace the token path', 'error'))
   })
+
+  it('renders step numbers as #1, #2, etc.', async () => {
+    mocks.mockPath.mockResolvedValue(TRACE)
+    render(<TokenTreePathCard />)
+    fireEvent.click(screen.getByRole('button', { name: /^Trace$/ }))
+    await waitFor(() => expect(screen.getByText('#1')).toBeDefined())
+    expect(screen.getByText('#2')).toBeDefined()
+  })
+
+  it('shows consumed character counts', async () => {
+    mocks.mockPath.mockResolvedValue(TRACE)
+    render(<TokenTreePathCard />)
+    fireEvent.click(screen.getByRole('button', { name: /^Trace$/ }))
+    await waitFor(() => expect(screen.getByText('+7')).toBeDefined())
+    expect(screen.getByText('+10')).toBeDefined()
+  })
+
+  it('shows tracing... while loading', async () => {
+    let resolvePromise: any
+    mocks.mockPath.mockImplementation(() => new Promise(r => { resolvePromise = r }))
+    render(<TokenTreePathCard />)
+    fireEvent.click(screen.getByRole('button', { name: /^Trace$/ }))
+    expect(screen.getByText('Tracing...')).toBeDefined()
+    resolvePromise(TRACE)
+    await waitFor(() => expect(screen.getByText('Trace')).toBeDefined())
+  })
+
+  it('renders the CardTitle', () => {
+    render(<TokenTreePathCard />)
+    expect(screen.getByText('Token Path Explorer')).toBeDefined()
+  })
 })

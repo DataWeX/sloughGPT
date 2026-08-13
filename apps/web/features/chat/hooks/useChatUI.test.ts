@@ -52,4 +52,24 @@ describe('useChatUI', () => {
     act(() => result.current.setToolPanelOpen(false))
     expect(result.current.toolPanelOpen).toBe(false)
   })
+
+  it('toggleSettings does not affect other states', () => {
+    const { result } = renderHook(() => useChatUI())
+    act(() => result.current.setVoiceMode(true))
+    act(() => result.current.toggleSettings())
+    expect(result.current.voiceMode).toBe(true)
+  })
+
+  it('provides refs for chatScreen and searchInput', () => {
+    const { result } = renderHook(() => useChatUI())
+    expect(result.current.chatScreenRef).toHaveProperty('current')
+    expect(result.current.searchInputRef).toHaveProperty('current')
+  })
+
+  it('handleSearchChange resets matchIndex to 0', () => {
+    const { result } = renderHook(() => useChatUI())
+    act(() => result.current.setMatchIndex(10))
+    act(() => result.current.handleSearchChange('new'))
+    expect(result.current.matchIndex).toBe(0)
+  })
 })

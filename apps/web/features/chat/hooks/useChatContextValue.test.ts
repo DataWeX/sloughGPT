@@ -72,4 +72,12 @@ describe('useChatUIValue', () => {
     const { result } = renderHook(() => useChatUIValue({ ui, showToast }))
     expect(result.current.showToast).toBe(showToast)
   })
+
+  it('dispatches toggle-shortcuts event for onOpenShortcuts', () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+    const { result } = renderHook(() => useChatUIValue({ ui, showToast }))
+    result.current.onOpenShortcuts()
+    expect(dispatchSpy).toHaveBeenCalled()
+    dispatchSpy.mockRestore()
+  })
 })

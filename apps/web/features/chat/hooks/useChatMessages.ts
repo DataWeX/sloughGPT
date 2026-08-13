@@ -20,6 +20,7 @@ import type { SoulNetWebGPU, SoulTransformerWebGPU } from '@/lib/soulnet-webgpu'
 import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
 import { useAppStore, getKnowledgeContext } from '@/lib/store'
+import { publishMemoryEvent } from '@/lib/memory-events'
 import { useChatSessions } from './useChatSessions'
 
 const _log = logger.child('chat-messages')
@@ -391,6 +392,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
             streamComplete = true
             setSessionSaved(true)
             flushTokens()
+            setLoading(false)
             setMessages(prev => prev.map(m =>
               m.id === assistantId && m.content === 'Thinking...' ? { ...m, content: '' } : m
             ))
@@ -407,6 +409,16 @@ export function useChatMessages(config: ChatMessagesConfig) {
           },
           onKnowledge: (source: string, count: number) => {
             showToast(`Knowledge: ${count} facts from ${source}`, 'info')
+          },
+          onMemory: (info) => {
+            publishMemoryEvent(info)
+            if (info.stored) {
+              const list = (info.facts && info.facts.length > 0 ? info.facts : info.fact ? [info.fact] : []) as string[]
+              const first = list[0]
+              const extra = list.length > 1 ? ` +${list.length - 1} more` : ''
+              const shown = first && first.length > 140 ? `${first.slice(0, 140)}…` : first
+              showToast(shown ? `Remembered: ${shown}${extra}` : 'New fact saved to memory', 'success')
+            }
           },
           onThinking: () => {
             setMessages(prev => prev.map(msg =>

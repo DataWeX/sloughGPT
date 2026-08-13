@@ -121,4 +121,29 @@ describe('VoiceInput', () => {
     expect(onerror).not.toBeNull()
     onerror!({ error: 'not-allowed' } as any)
   })
+
+  it('calls stop on recognition when already listening', async () => {
+    const stop = vi.fn()
+    mockSpeechRecognition.mockImplementation(() => ({
+      continuous: false,
+      interimResults: false,
+      lang: '',
+      start: vi.fn(),
+      stop,
+      abort: vi.fn(),
+      onstart: null,
+      onend: null,
+      onerror: null,
+      onresult: null,
+    }))
+    render(<VoiceInput onTranscript={() => {}} />)
+    fireEvent.click(screen.getByLabelText('Start voice input'))
+    expect(stop).not.toHaveBeenCalled()
+  })
+
+  it('renders with default disabled state before capability check', () => {
+    render(<VoiceInput onTranscript={() => {}} />)
+    const btn = screen.getByLabelText(/voice input/i)
+    expect(btn).toBeDefined()
+  })
 })

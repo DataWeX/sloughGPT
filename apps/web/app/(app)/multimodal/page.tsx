@@ -22,6 +22,8 @@ import VisualDatasetCard from '@/components/multimodal/VisualDatasetCard'
 import DPOCard from '@/components/multimodal/DPOCard'
 import ImageGenerationCard from '@/components/multimodal/ImageGenerationCard'
 import AudioCard from '@/components/multimodal/AudioCard'
+import { VoiceSection } from '@/components/multimodal/VoiceSection'
+import { ImageSection } from '@/components/multimodal/ImageSection'
 
 export default function MultimodalPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -222,6 +224,8 @@ export default function MultimodalPage() {
             <DPOCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
             <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
             <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
+            <VoiceSection />
+            <ImageSection />
           </>
         )}
       </div>

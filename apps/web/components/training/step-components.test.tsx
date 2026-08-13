@@ -27,6 +27,7 @@ vi.mock('@sloughgpt/strui', () => {
     SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
     SelectContent: passthrough,
     SelectItem: ({ value, children }: any) => <div data-value={value}>{children}</div>,
+    Badge: ({ children, variant, size }: any) => <span data-variant={variant} data-size={size}>{children}</span>,
   }
 })
 
@@ -215,7 +216,7 @@ describe('TrainStep', () => {
 
   it('shows config summary', () => {
     render(<TrainStep form={makeForm({ trainingEpochs: 5, trainingBatchSize: 16 })} datasets={makeDatasets({ selectedDataset: 'ds-1' })} onNext={vi.fn()} onBack={vi.fn()} />)
-    expect(screen.getByText('distill')).toBeTruthy()
+    expect(screen.getByText('Train from scratch')).toBeTruthy()
     expect(screen.getByText('5')).toBeTruthy()
     expect(screen.getByText('16')).toBeTruthy()
   })
@@ -261,12 +262,12 @@ describe('ResultsStep', () => {
   })
 
   it('renders card title', () => {
-    render(<ResultsStep checkpoints={makeCheckpoints()} goToTrain={vi.fn()} onTest={vi.fn()} />)
+    render(<ResultsStep checkpoints={makeCheckpoints()} goToTrain={vi.fn()} onTest={vi.fn()} addToast={vi.fn()} />)
     expect(screen.getByText('4. Results')).toBeTruthy()
   })
 
   it('shows empty state when no checkpoints', () => {
-    render(<ResultsStep checkpoints={makeCheckpoints()} goToTrain={vi.fn()} onTest={vi.fn()} />)
+    render(<ResultsStep checkpoints={makeCheckpoints()} goToTrain={vi.fn()} onTest={vi.fn()} addToast={vi.fn()} />)
     expect(screen.getByText(/No checkpoints yet/)).toBeTruthy()
   })
 
@@ -274,7 +275,7 @@ describe('ResultsStep', () => {
     const checkpoints = makeCheckpoints({
       checkpoints: [{ name: 'cp-1', loss: 0.5, tags: ['test'] }],
     })
-    render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} />)
+    render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} addToast={vi.fn()} />)
     expect(screen.getByText('cp-1')).toBeTruthy()
     expect(screen.getByText('Loss: 0.5000')).toBeTruthy()
     expect(screen.getByText('Tags: test')).toBeTruthy()
@@ -286,14 +287,14 @@ describe('ResultsStep', () => {
       checkpoints: [{ name: 'cp-1', loss: 0.5 }],
       handleLoadCheckpoint,
     })
-    render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} />)
+    render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} addToast={vi.fn()} />)
     screen.getByText('Load').closest('button')!.click()
     expect(handleLoadCheckpoint).toHaveBeenCalledWith('cp-1', expect.any(Function))
   })
 
   it('calls goToTrain when Train more is clicked', () => {
     const goToTrain = vi.fn()
-    render(<ResultsStep checkpoints={makeCheckpoints()} goToTrain={goToTrain} onTest={vi.fn()} />)
+    render(<ResultsStep checkpoints={makeCheckpoints()} goToTrain={goToTrain} onTest={vi.fn()} addToast={vi.fn()} />)
     screen.getByText('Train more').closest('button')!.click()
     expect(goToTrain).toHaveBeenCalled()
   })
@@ -301,13 +302,13 @@ describe('ResultsStep', () => {
   it('calls onTest when Test model is clicked', () => {
     const onTest = vi.fn()
     const checkpoints = makeCheckpoints({ checkpoints: [{ name: 'cp-1', loss: 0.5 }] })
-    render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={onTest} />)
+    render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={onTest} addToast={vi.fn()} />)
     screen.getByText('Test model').closest('button')!.click()
     expect(onTest).toHaveBeenCalled()
   })
 
   it('hides Test model button when no checkpoints', () => {
-    render(<ResultsStep checkpoints={makeCheckpoints()} goToTrain={vi.fn()} onTest={vi.fn()} />)
+    render(<ResultsStep checkpoints={makeCheckpoints()} goToTrain={vi.fn()} onTest={vi.fn()} addToast={vi.fn()} />)
     expect(screen.queryByText('Test model')).toBeFalsy()
   })
 
@@ -318,7 +319,7 @@ describe('ResultsStep', () => {
         { name: 'cp-2', loss: 0.3 },
       ],
     })
-    render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} />)
+    render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} addToast={vi.fn()} />)
     expect(screen.getByText('2 checkpoint(s) saved')).toBeTruthy()
   })
 })

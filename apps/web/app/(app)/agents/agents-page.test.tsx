@@ -122,4 +122,9 @@ describe('AgentsPage Run History', () => {
     render(<AgentsPage />)
     await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to load run history', 'error') })
   })
+
+  it('calls listRuns with default limit on mount', async () => {
+    render(<AgentsPage />)
+    await waitFor(() => { expect(mockListRuns).toHaveBeenCalledWith(20) })
+  })
 })

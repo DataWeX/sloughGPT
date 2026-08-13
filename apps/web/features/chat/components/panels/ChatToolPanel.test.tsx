@@ -31,6 +31,14 @@ vi.mock('./KnowledgeTab', () => ({
   ),
 }))
 
+vi.mock('./MemoryTab', () => ({
+  MemoryTab: () => <div data-testid="memory-tab">Memory Tab</div>,
+}))
+
+vi.mock('./ContextTab', () => ({
+  ContextTab: () => <div data-testid="context-tab">Context Tab</div>,
+}))
+
 vi.mock('./../input/QuickPrompts', () => ({
   QuickPrompts: ({ onUsePrompt }: { onUsePrompt: (text: string) => void }) => (
     <div data-testid="quick-prompts">

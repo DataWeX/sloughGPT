@@ -63,4 +63,9 @@ describe('SystemChart', () => {
     )
     expect(screen.getAllByTestId('responsive-container').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('renders with single data point', () => {
+    render(<SystemChart data={[{ time: '10:00', cpu: 45, mem: 60 }]} />)
+    expect(screen.getAllByTestId('composed-chart').length).toBeGreaterThanOrEqual(1)
+  })
 })

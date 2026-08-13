@@ -144,4 +144,45 @@ describe('tokenTreeController', () => {
       expect(result).toEqual(trace)
     })
   })
+
+  describe('getMatrixSummary', () => {
+    it('fetches with default top_k', async () => {
+      const summary = {
+        matrix: [128, 16],
+        norm_min: 0.5,
+        norm_mean: 0.8,
+        norm_max: 1,
+        dead_tokens: 2,
+        live_tokens: 126,
+        most_energetic: [['quick', 12, 1]],
+        least_energetic: [['the', 3, 0.55]],
+      }
+      mockApiGet.mockResolvedValue(summary)
+      const result = await tokenTreeController.getMatrixSummary()
+      expect(mockApiGet).toHaveBeenCalledWith('/token-tree/matrix?top_k=8')
+      expect(result).toEqual(summary)
+    })
+
+    it('passes a custom top_k', async () => {
+      mockApiGet.mockResolvedValue({})
+      await tokenTreeController.getMatrixSummary(3)
+      expect(mockApiGet).toHaveBeenCalledWith('/token-tree/matrix?top_k=3')
+    })
+  })
+
+  describe('compare', () => {
+    it('posts both tree names and top_k', async () => {
+      const result = { a: {}, b: {}, shared_tokens: 5, only_a_tokens: 1, only_b_tokens: 2 }
+      mockApiPost.mockResolvedValue(result)
+      const out = await tokenTreeController.compare('v1', 'v2', 5)
+      expect(mockApiPost).toHaveBeenCalledWith('/token-tree/compare', { a: 'v1', b: 'v2', top_k: 5 })
+      expect(out).toEqual(result)
+    })
+
+    it('defaults top_k to 10', async () => {
+      mockApiPost.mockResolvedValue({})
+      await tokenTreeController.compare('a', 'b')
+      expect(mockApiPost).toHaveBeenCalledWith('/token-tree/compare', { a: 'a', b: 'b', top_k: 10 })
+    })
+  })
 })

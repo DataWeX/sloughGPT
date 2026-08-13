@@ -923,6 +923,87 @@ def token_tree_vocab(ctx, **kwargs):
     cmd_token_tree_vocab(_ns(**kwargs))
 
 
+@token_tree.command("embedding", help="Inspect a token's generated embedding vector")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.option("--top-k", "-k", default=8, type=int, help="Largest-magnitude dimensions to show")
+@click.argument("token")
+@click.pass_context
+def token_tree_embedding(ctx, token, **kwargs):
+    from commands.token_tree import cmd_token_tree_embedding
+    kwargs["token"] = token
+    cmd_token_tree_embedding(_ns(**kwargs))
+
+
+@token_tree.command("path", help="Trace the greedy trie walk over text (reads stdin when no --text)")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.option("--text", default=None, help="Text to trace")
+@click.pass_context
+def token_tree_path(ctx, **kwargs):
+    from commands.token_tree import cmd_token_tree_path
+    cmd_token_tree_path(_ns(**kwargs))
+
+
+@token_tree.command("matrix", help="Summarize the full embedding matrix")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.option("--top-k", "-k", default=8, type=int, help="Most/least energetic tokens to show")
+@click.pass_context
+def token_tree_matrix(ctx, **kwargs):
+    from commands.token_tree import cmd_token_tree_matrix
+    cmd_token_tree_matrix(_ns(**kwargs))
+
+
+@token_tree.command("compare", help="Diff two saved token trees by name")
+@click.option("--a", "-a", "a_name", required=True, help="First saved tree name")
+@click.option("--b", "-b", "b_name", required=True, help="Second saved tree name")
+@click.option("--top-k", "-k", default=10, type=int, help="Shared/exclusive token examples per side")
+@click.pass_context
+def token_tree_compare(ctx, a_name, b_name, top_k):
+    from commands.token_tree import cmd_token_tree_compare
+    cmd_token_tree_compare(_ns(a=a_name, b=b_name, top_n=top_k))
+
+
+@token_tree.command("merges", help="List the most frequent BPE merge rules of a saved tree")
+@click.option("--tree", "-t", default="models/slonet-native/token_tree", help="Saved tree base path")
+@click.option("--top-n", "-n", default=20, type=int, help="Maximum merge rules to show")
+@click.option("--query", "-q", default="", help="Filter rules whose parts contain this substring")
+@click.pass_context
+def token_tree_merges(ctx, **kwargs):
+    from commands.token_tree import cmd_token_tree_merges
+    cmd_token_tree_merges(_ns(**kwargs))
+
+
+@token_tree.command("saved", help="List saved token trees")
+@click.pass_context
+def token_tree_saved(ctx):
+    from commands.token_tree import cmd_token_tree_saved
+    cmd_token_tree_saved(_ns())
+
+
+@token_tree.command("save", help="Save the current tree (or --tree path) under a name")
+@click.option("--name", "-n", "name", required=True, help="Name to save the tree under")
+@click.option("--tree", "-t", default=None, help="Optional saved tree base path to adopt first")
+@click.pass_context
+def token_tree_save(ctx, name, **kwargs):
+    from commands.token_tree import cmd_token_tree_save
+    cmd_token_tree_save(_ns(name=name, **kwargs))
+
+
+@token_tree.command("load", help="Load a saved tree by name and make it current")
+@click.argument("name")
+@click.pass_context
+def token_tree_load(ctx, name):
+    from commands.token_tree import cmd_token_tree_load
+    cmd_token_tree_load(_ns(name=name))
+
+
+@token_tree.command("delete", help="Delete a saved token tree by name")
+@click.argument("name")
+@click.pass_context
+def token_tree_delete(ctx, name):
+    from commands.token_tree import cmd_token_tree_delete
+    cmd_token_tree_delete(_ns(name=name))
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # checkpoint — list, load, delete training checkpoints
 # ═══════════════════════════════════════════════════════════════════════
@@ -1158,6 +1239,92 @@ def knowledge_ingest(ctx, texts, topic, file_path):
         return
     data = r.json()
     printer.success(f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# memory  — stats, enable, disable, list, search, store, remember, consolidate, archive, clear
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Inspect and manage the auto-memory layer (stats, search, store, consolidate, archive)")
+def memory():
+    pass
+
+
+@memory.command("stats", help="Show memory statistics")
+def memory_stats():
+    from commands.memory import cmd_memory_stats
+    cmd_memory_stats(_ns())
+
+
+@memory.command("enable", help="Enable the memory layer at runtime")
+def memory_enable():
+    from commands.memory import cmd_memory_enable
+    cmd_memory_enable(_ns(enabled=True))
+
+
+@memory.command("disable", help="Disable the memory layer at runtime")
+def memory_disable():
+    from commands.memory import cmd_memory_enable
+    cmd_memory_enable(_ns(enabled=False))
+
+
+@memory.command("list", help="List stored memory items, most recent first")
+@click.option("--limit", "-n", default=50, type=int, help="Max items to show")
+def memory_list(limit):
+    from commands.memory import cmd_memory_list
+    cmd_memory_list(_ns(limit=limit))
+
+
+@memory.command("search", help="Semantic-search stored memory")
+@click.argument("query")
+@click.option("--limit", "-n", default=5, type=int, help="Max results")
+def memory_search(query, limit):
+    from commands.memory import cmd_memory_search
+    cmd_memory_search(_ns(query=query, limit=limit))
+
+
+@memory.command("store", help="Persist one explicit fact")
+@click.argument("content")
+@click.option("--topic", default="manual", help="Topic label")
+@click.option("--source", default="cli", help="Provenance label")
+def memory_store(content, topic, source):
+    from commands.memory import cmd_memory_store
+    cmd_memory_store(_ns(content=content, topic=topic, source=source))
+
+
+@memory.command("remember", help="Persist one completed turn (user + assistant)")
+@click.argument("user_message")
+@click.argument("assistant_response")
+def memory_remember(user_message, assistant_response):
+    from commands.memory import cmd_memory_remember
+    cmd_memory_remember(_ns(
+        user_message=user_message, assistant_response=assistant_response,
+    ))
+
+
+@memory.command("clear", help="Remove all stored memory")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def memory_clear(yes):
+    from commands.memory import cmd_memory_clear
+    cmd_memory_clear(_ns(yes=yes))
+
+
+@memory.command("consolidate", help="Merge near-duplicate facts, keeping the longest")
+@click.option("--threshold", type=float, default=None,
+              help="Min similarity for a merge (default from config)")
+def memory_consolidate(threshold):
+    from commands.memory import cmd_memory_consolidate
+    cmd_memory_consolidate(_ns(threshold=threshold))
+
+
+@memory.command("archive", help="Inspect or prune the task-backed provenance archive")
+@click.option("--limit", "-n", default=10, type=int, help="Recent records to show (0 = none)")
+@click.option("--prune-days", type=float, default=None,
+              help="Retention window in days; delete older records")
+def memory_archive(limit, prune_days):
+    from commands.memory import cmd_memory_archive
+    cmd_memory_archive(_ns(limit=limit, prune_days=prune_days))
 
 
 # ═══════════════════════════════════════════════════════════════════════

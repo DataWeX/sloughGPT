@@ -692,9 +692,8 @@ class InferenceRouter:
             skip_context = False
             if ctx_core and req.use_context_core:
                 try:
-                    from domains.learner.knowledge import get_knowledge_memory
-                    kmem = get_knowledge_memory()
-                    if kmem.stats().get("total_items", 0) == 0 and not req.knowledge:
+                    from domains.memory.memory_service import get_memory_service
+                    if get_memory_service().stats().get("total_facts", 0) == 0 and not req.knowledge:
                         skip_context = True
                 except Exception as e:
                     logger.debug("Knowledge memory check failed: %s", e)
@@ -792,15 +791,22 @@ class InferenceRouter:
                     data={"context": context_info},
                     message=f"{len(context_info.get('layers', []))} context layers")
 
-            knowledge_retrieved = []
-            try:
-                enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
-                if enrichment.get("facts"):
-                    knowledge_retrieved = enrichment["facts"]
-            except Exception as e:
-                logger.debug("Knowledge enrichment failed: %s", e)
+            frame_context = []
+            if frame:
+                for layer in frame.layers:
+                    if layer.layer_type in ("memory", "rag") and layer.content:
+                        frame_context.append(layer.content)
 
-            all_knowledge = knowledge_retrieved + (req.knowledge or [])
+            knowledge_retrieved = []
+            if not frame_context:
+                try:
+                    enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
+                    if enrichment.get("facts"):
+                        knowledge_retrieved = enrichment["facts"]
+                except Exception as e:
+                    logger.debug("Knowledge enrichment failed: %s", e)
+
+            all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
             if all_knowledge:
                 try:
                     from domains.models.provider import KnowledgeProcessor, apply_processors
@@ -889,6 +895,24 @@ class InferenceRouter:
                     await self._flush_session_to_disk(session_id)
                 else:
                     logger.info("Session %s was deleted during generation, skipping save", session_id, extra={"tag": "INF"})
+
+                _memory_stored = False
+                _memory_fact = None
+                try:
+                    from domains.memory.memory_service import get_memory_service
+                    _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", full_response)
+                    _memory_stored = len(_memory_facts) > 0
+                    if _memory_stored:
+                        _memory_fact = _memory_facts[0]
+                except Exception as e:
+                    logger.debug("Auto-memory remember failed: %s", e)
+
+                if _memory_stored:
+                    yield _sse_event(
+                        "chat", "MEMORY", "success",
+                        data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
+                        message="New fact remembered",
+                    )
 
                 duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
                 tokens = len(full_response.split())

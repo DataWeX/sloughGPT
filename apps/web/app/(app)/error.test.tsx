@@ -58,4 +58,12 @@ describe('AppRouteError', () => {
     render(<RouteError error={error} reset={reset} />)
     expect(screen.getByTestId('handler')).toHaveTextContent('custom|function|Error')
   })
+
+  it('preserves error digest', () => {
+    const error = new Error('digest test') as Error & { digest?: string }
+    error.digest = 'abc123'
+    const reset = vi.fn()
+    render(<RouteError error={error} reset={reset} />)
+    expect(screen.getByTestId('handler')).toHaveTextContent('digest test|function|Error')
+  })
 })

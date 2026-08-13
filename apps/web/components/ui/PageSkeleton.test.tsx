@@ -47,4 +47,10 @@ describe('ListSkeleton', () => {
     const skeletons = container.querySelectorAll('.animate-pulse')
     expect(skeletons.length).toBe(3)
   })
+
+  it('renders 0 items when items=0', () => {
+    const { container } = render(<ListSkeleton items={0} />)
+    const skeletons = container.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBe(0)
+  })
 })

@@ -70,4 +70,18 @@ describe('modelController.list', () => {
     const rows = await modelController.list()
     expect(rows[0].parameters).toBe(1000000000)
   })
+
+  it('maps thumbnail field', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      models: [{ id: 't1', name: 'Thumb', thumbnail: 'https://example.com/img.png' }],
+    })
+    const rows = await modelController.list()
+    expect(rows[0].thumbnail).toBe('https://example.com/img.png')
+  })
+
+  it('handles null models field', async () => {
+    apiClient.apiGet.mockResolvedValue({ models: null })
+    const rows = await modelController.list()
+    expect(rows).toEqual([])
+  })
 })

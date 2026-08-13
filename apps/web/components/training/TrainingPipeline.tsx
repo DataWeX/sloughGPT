@@ -74,12 +74,14 @@ export function TrainingPipeline({
   session,
   checkpoints,
   onTest,
+  addToast,
 }: {
   form: TrainingFormState
   datasets: UseTrainingDatasetsReturn
   session: UseTrainingSessionReturn
   checkpoints: UseTrainingCheckpointsReturn
   onTest: () => void
+  addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [step, setStep] = useState<StepId>('data')
   const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(new Set())
@@ -141,7 +143,7 @@ export function TrainingPipeline({
                 <Button size="sm" onClick={onTest}>Test model</Button>
                 {session.distillCheckpoint && (
                   <Button size="sm" variant="outline" onClick={() => {
-                    checkpoints.handleLoadCheckpoint(session.distillCheckpoint!, () => {})
+                    checkpoints.handleLoadCheckpoint(session.distillCheckpoint!, addToast)
                   }}>Load checkpoint</Button>
                 )}
                 <Button size="sm" variant="ghost" onClick={() => {
@@ -172,7 +174,7 @@ export function TrainingPipeline({
       {step === 'data' && <DataStep {...stepProps} />}
       {step === 'configure' && <ConfigureStep {...stepProps} />}
       {step === 'train' && <TrainStep {...stepProps} />}
-      {step === 'results' && <ResultsStep checkpoints={checkpoints} goToTrain={goToTrain} onTest={onTest} />}
+      {step === 'results' && <ResultsStep checkpoints={checkpoints} goToTrain={goToTrain} onTest={onTest} addToast={addToast} />}
     </div>
   )
 }

@@ -69,4 +69,13 @@ describe('reportError', () => {
     // Should not throw
     expect(true).toBe(true)
   })
+
+  it('batch array resets after flush', () => {
+    for (let i = 0; i < 10; i++) reportError(`e${i}`)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    reportError('after-flush')
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(5000)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
 })

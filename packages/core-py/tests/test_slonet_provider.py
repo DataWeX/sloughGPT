@@ -119,3 +119,65 @@ def test_to_server_builds_guard_backed_server():
 
     no_guard = provider.to_server()
     assert no_guard._process_guard is None
+
+
+class TestConvertHFToSloNet:
+    def test_returns_dict(self):
+        sd = _fake_gpt2_state_dict()
+        result = convert_hf_to_slonet(sd, n_layer=2)
+        assert isinstance(result, dict)
+
+    def test_all_values_are_numpy(self):
+        sd = _fake_gpt2_state_dict()
+        result = convert_hf_to_slonet(sd, n_layer=2)
+        for k, v in result.items():
+            assert isinstance(v, np.ndarray), f"{k} is not ndarray"
+
+    def test_final_norm_exists(self):
+        sd = _fake_gpt2_state_dict()
+        result = convert_hf_to_slonet(sd, n_layer=2)
+        assert "norm.weight" in result
+
+    def test_attn_bias_converted(self):
+        sd = _fake_gpt2_state_dict()
+        result = convert_hf_to_slonet(sd, n_layer=2)
+        for i in range(2):
+            assert f"blocks.{i}.attn.q_proj.bias" in result
+            assert f"blocks.{i}.attn.k_proj.bias" in result
+            assert f"blocks.{i}.attn.v_proj.bias" in result
+
+    def test_ff_bias_converted(self):
+        sd = _fake_gpt2_state_dict()
+        result = convert_hf_to_slonet(sd, n_layer=2)
+        for i in range(2):
+            assert f"blocks.{i}.ff.w1.bias" in result
+            assert f"blocks.{i}.ff.w2.bias" in result
+
+    def test_single_layer(self):
+        sd = _fake_gpt2_state_dict()
+        result = convert_hf_to_slonet(sd, n_layer=1)
+        assert "blocks.0.attn.q_proj.weight" in result
+        assert "blocks.1.attn.q_proj.weight" not in result
+
+    def test_large_n_embed(self):
+        n_embed, n_layer = 256, 2
+        sd = {}
+        sd["wte.weight"] = np.random.randn(1000, n_embed).astype(np.float32)
+        sd["wpe.weight"] = np.random.randn(512, n_embed).astype(np.float32)
+        sd["ln_f.weight"] = np.ones(n_embed, dtype=np.float32)
+        sd["ln_f.bias"] = np.zeros(n_embed, dtype=np.float32)
+        for i in range(n_layer):
+            sd[f"h.{i}.ln_1.weight"] = np.ones(n_embed, dtype=np.float32)
+            sd[f"h.{i}.ln_1.bias"] = np.zeros(n_embed, dtype=np.float32)
+            sd[f"h.{i}.attn.c_attn.weight"] = np.random.randn(n_embed, 3 * n_embed).astype(np.float32)
+            sd[f"h.{i}.attn.c_attn.bias"] = np.random.randn(3 * n_embed).astype(np.float32)
+            sd[f"h.{i}.attn.c_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+            sd[f"h.{i}.attn.c_proj.bias"] = np.zeros(n_embed, dtype=np.float32)
+            sd[f"h.{i}.ln_2.weight"] = np.ones(n_embed, dtype=np.float32)
+            sd[f"h.{i}.ln_2.bias"] = np.zeros(n_embed, dtype=np.float32)
+            sd[f"h.{i}.mlp.c_fc.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(np.float32)
+            sd[f"h.{i}.mlp.c_fc.bias"] = np.zeros(4 * n_embed, dtype=np.float32)
+            sd[f"h.{i}.mlp.c_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
+            sd[f"h.{i}.mlp.c_proj.bias"] = np.zeros(n_embed, dtype=np.float32)
+        result = convert_hf_to_slonet(sd, n_layer=2)
+        assert result["blocks.0.attn.q_proj.weight"].shape == (n_embed, n_embed)

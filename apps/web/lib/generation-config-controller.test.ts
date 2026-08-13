@@ -58,4 +58,14 @@ describe('generationConfigController.update', () => {
     await generationConfigController.update({})
     expect(apiClient.apiPatch).toHaveBeenCalledWith('/config/generation', {})
   })
+
+  it('get throws on network error', async () => {
+    apiClient.apiGet.mockRejectedValue(new Error('network'))
+    await expect(generationConfigController.get()).rejects.toThrow('network')
+  })
+
+  it('update throws on network error', async () => {
+    apiClient.apiPatch.mockRejectedValue(new Error('network'))
+    await expect(generationConfigController.update({ temperature: 0.5 })).rejects.toThrow('network')
+  })
 })

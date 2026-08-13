@@ -131,4 +131,12 @@ describe('ChatToolbarContext', () => {
     fireEvent.click(screen.getByText('toggle'))
     expect(screen.getByTestId('loaded').textContent).toBe('false')
   })
+
+  it('passes search group values', () => {
+    const { result } = renderHook(() => useChatToolbarContext(), { wrapper: toolbarWrapper as any })
+    expect(result.current.search.query).toBe('')
+    expect(result.current.search.matchIndex).toBe(0)
+    expect(result.current.search.matchCount).toBe(0)
+    expect(result.current.search.showMobile).toBe(false)
+  })
 })

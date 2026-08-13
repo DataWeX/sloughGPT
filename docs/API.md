@@ -89,6 +89,7 @@ list is documented in [`docs/routers.md`](routers.md).
 | Souls (`/souls`) | ✅ |
 | Knowledge (`/knowledge`) | ✅ |
 | Tokenizer (`/tokenizer`) | ✅ |
+| Token tree (`/token-tree/*`) | ✅ |
 | System (`/system/*`) | ✅ |
 | Datasets (`/datasets`) | ✅ |
 | Training (`/training/*`) + auto-train (`/auto-train/*`) | ✅ |

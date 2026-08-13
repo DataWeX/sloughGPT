@@ -105,6 +105,22 @@ class TokenTreeManager:
         with self._lock:
             return self._tree is not None
 
+    def adopt(self, tree: TokenTree) -> TokenTree:
+        """Replace the current tree with an externally-built one.
+
+        Used to hand a tree trained outside the manager (e.g. via the CLI)
+        to the manager so ``save``/``stats``/queries act on it.
+
+        Args:
+            tree: a trained :class:`TokenTree`.
+
+        Returns:
+            the adopted tree (the manager's new current tree).
+        """
+        with self._lock:
+            self._tree = tree
+        return tree
+
     def train(
         self,
         texts: Sequence[str],
@@ -234,6 +250,20 @@ class TokenTreeManager:
             "compression_ratio": round(tree.embedding_compression_ratio(), 2),
         }
 
+    def matrix_summary(self, top_k: int = 8) -> dict:
+        """Summarize the full embedding matrix.
+
+        Args:
+            top_k: how many most- and least-energetic tokens to return.
+
+        Returns:
+            ``{"matrix", "norm_min", "norm_mean", "norm_max",
+            "dead_tokens", "live_tokens", "most_energetic",
+            "least_energetic"}`` — see ``TokenTree.embedding_matrix_stats``.
+        """
+        tree = self.get_tree()
+        return tree.embedding_matrix_stats(top_n=top_k)
+
     def encode(self, text: str) -> dict:
         """Tree-walk encode text into tokens and ids.
 
@@ -250,10 +280,8 @@ class TokenTreeManager:
     def path(self, text: str) -> dict:
         """Trace the greedy longest-prefix walk the encoder takes over text.
 
-        Replays ``tree.encode`` internals step by step: text is normalized and
-        pretokenized into words, each word is padded with the word suffix, and
-        ``tree.query`` consumes the longest matching token from the remaining
-        suffix until the word is exhausted.
+        Delegates the walk to ``tree.trace_path`` (core) and decorates each
+        step with the human-readable token string.
 
         Args:
             text: input string.
@@ -266,23 +294,15 @@ class TokenTreeManager:
             ``encode(text)["ids"]``.
         """
         tree = self.get_tree()
-        normalized = tree._normalize(text, lowercase=True)
-        steps = []
-        for word in tree._pretokenize(normalized, lowercase=True):
-            s = word + tree._word_suffix
-            i = 0
-            while i < len(s):
-                remaining = s[i:]
-                token_id, advance = tree.query(remaining)
-                steps.append(
-                    {
-                        "remaining": remaining,
-                        "token": tree.itos.get(token_id, "?"),
-                        "id": token_id,
-                        "consumed": advance,
-                    }
-                )
-                i += advance
+        steps = [
+            {
+                "remaining": step["remaining"],
+                "token": tree.itos.get(step["id"], "?"),
+                "id": step["id"],
+                "consumed": step["consumed"],
+            }
+            for step in tree.trace_path(text)
+        ]
         return {"steps": steps, "ids": [step["id"] for step in steps]}
 
     def decode(self, ids: Sequence[int]) -> dict:
@@ -453,6 +473,89 @@ class TokenTreeManager:
                 p.unlink()
                 removed = True
         return removed
+
+    def compare(self, name_a: str, name_b: str, top_n: int = 10) -> dict:
+        """Diff two saved trees without changing the manager's current tree.
+
+        Args:
+            name_a: name of the first saved tree.
+            name_b: name of the second saved tree.
+            top_n: how many shared / exclusive token examples to return per
+                side.
+
+        Returns:
+            ``{"a", "b", "shared_tokens", "only_a_tokens", "only_b_tokens",
+            "shared_merges", "only_a_merges", "only_b_merges",
+            "shared_examples", "only_a_examples", "only_b_examples"}`` where
+            each example is ``[token, freq]`` and each side carries ``{"name",
+            "stats", "vocab"}`` (stats from ``TokenTree.stats()``, vocab as a
+            ``{token: freq}`` map).
+
+        Raises:
+            FileNotFoundError: when either saved tree is missing.
+            ValueError: when a name is invalid.
+        """
+        a_name = self._sanitize_name(name_a)
+        b_name = self._sanitize_name(name_b)
+        if a_name == b_name:
+            raise ValueError("Cannot compare a tree with itself")
+        a = TokenTree.load(str(_SAVE_DIR / a_name))
+        b = TokenTree.load(str(_SAVE_DIR / b_name))
+
+        a_vocab = {t: f for t, f in self._token_freqs(a)}
+        b_vocab = {t: f for t, f in self._token_freqs(b)}
+        a_merges = {f"{l}+{r}" for l, r in a.merges}
+        b_merges = {f"{l}+{r}" for l, r in b.merges}
+
+        shared = set(a_vocab) & set(b_vocab)
+        only_a = set(a_vocab) - set(b_vocab)
+        only_b = set(b_vocab) - set(a_vocab)
+        shared_m = a_merges & b_merges
+        only_a_m = a_merges - b_merges
+        only_b_m = b_merges - a_merges
+
+        return {
+            "a": {"name": a_name, "stats": a.stats(), "vocab": a_vocab},
+            "b": {"name": b_name, "stats": b.stats(), "vocab": b_vocab},
+            "shared_tokens": len(shared),
+            "only_a_tokens": len(only_a),
+            "only_b_tokens": len(only_b),
+            "shared_merges": len(shared_m),
+            "only_a_merges": len(only_a_m),
+            "only_b_merges": len(only_b_m),
+            "shared_examples": self._top_by_freq(a_vocab, shared, top_n),
+            "only_a_examples": self._top_by_freq(a_vocab, only_a, top_n),
+            "only_b_examples": self._top_by_freq(b_vocab, only_b, top_n),
+        }
+
+    @staticmethod
+    def _token_freqs(tree: TokenTree) -> List[tuple]:
+        """Return ``[(token, freq)]`` for every vocab id of a tree.
+
+        Args:
+            tree: the tree to read.
+
+        Returns:
+            list of ``(token, frequency)`` pairs in vocab id order.
+        """
+        return [(tree.vocab[tid], tree._freqs.get(tid, 0)) for tid in range(len(tree.vocab))]
+
+    @staticmethod
+    def _top_by_freq(
+        vocab: dict, tokens: set, top_n: int
+    ) -> List[list]:
+        """Return the ``top_n`` tokens of a subset ranked by frequency.
+
+        Args:
+            vocab: ``{token: freq}`` map.
+            tokens: subset of tokens to rank.
+            top_n: maximum number of entries to return.
+
+        Returns:
+            list of ``[token, freq]`` lists, highest frequency first.
+        """
+        ranked = sorted(tokens, key=lambda t: vocab.get(t, 0), reverse=True)
+        return [[t, vocab.get(t, 0)] for t in ranked[:top_n]]
 
 
 def get_token_tree_manager() -> TokenTreeManager:

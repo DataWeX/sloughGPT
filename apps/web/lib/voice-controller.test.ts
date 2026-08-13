@@ -43,4 +43,20 @@ describe('voiceController', () => {
     await voiceController.getStatus()
     expect(apiGet).toHaveBeenCalledWith('/voice/status')
   })
+
+  it('tts returns audio field', async () => {
+    apiPost.mockResolvedValue({ audio: 'base64audio', duration_ms: 200, backend: 'model', sample_rate: 16000 })
+    const result = await voiceController.tts('hi')
+    expect(result.audio).toBe('base64audio')
+  })
+
+  it('getStatus throws on network error', async () => {
+    apiGet.mockRejectedValue(new Error('timeout'))
+    await expect(voiceController.getStatus()).rejects.toThrow('timeout')
+  })
+
+  it('tts throws on network error', async () => {
+    apiPost.mockRejectedValue(new Error('timeout'))
+    await expect(voiceController.tts('hi')).rejects.toThrow('timeout')
+  })
 })

@@ -567,6 +567,39 @@ class TestAutoIngestChat:
         topics = {f["topic"] for f in mem.list_all()}
         assert topics  # non-empty topic set inferred from user message
 
+    def test_ingest_from_chat_returns_stored_texts(self):
+        store = FakeAsyncStore()
+        mem = KnowledgeMemory(vector_store=store, load_persisted=False)
+        response = ("Python is a high level programming language. "
+                    "NumPy provides fast array operations for science.")
+        stored = mem.ingest_from_chat("tell me about python and numpy", response)
+        assert len(stored) >= 1
+        assert any("Python is a high level" in f for f in stored)
+
+    def test_ingest_from_chat_empty_for_short_fragments(self, monkeypatch):
+        store = FakeAsyncStore()
+        mem = KnowledgeMemory(vector_store=store, load_persisted=False)
+        monkeypatch.setattr(K, "_extract_facts_from_text", lambda text: ["short"])
+        assert mem.ingest_from_chat("user", "assistant") == []
+
+    def test_ingest_from_chat_empty_for_duplicate(self):
+        store = FakeAsyncStore()
+        mem = KnowledgeMemory(vector_store=store, load_persisted=False)
+        response = ("Photosynthesis is the process plants use to convert light "
+                    "into chemical energy stored in glucose.")
+        assert len(mem.ingest_from_chat("explain photosynthesis", response)) >= 1
+        assert mem.ingest_from_chat("explain photosynthesis", response) == []
+
+    def test_ingest_from_chat_respects_max_facts(self):
+        store = FakeAsyncStore()
+        mem = KnowledgeMemory(vector_store=store, load_persisted=False)
+        response = ("Fact alpha is the first declarative statement here. "
+                    "Fact beta is the second declarative statement here. "
+                    "Fact gamma is the third declarative statement here. "
+                    "Fact delta is the fourth declarative statement here.")
+        stored = mem.ingest_from_chat("list facts", response, max_facts=2)
+        assert len(stored) == 2
+
 
 class TestRunAsync:
     def test_without_running_loop(self):

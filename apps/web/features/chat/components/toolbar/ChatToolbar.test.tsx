@@ -156,4 +156,19 @@ describe('ChatToolbar', () => {
     fireEvent.click(screen.getByLabelText('Toggle search'))
     expect(ctx.search.setShowMobile).toHaveBeenCalledWith(!ctx.search.showMobile)
   })
+
+  it('renders with different sidebar states', () => {
+    renderToolbar(createContextValue({ sidebar: { open: true, onToggle: vi.fn(), onClose: vi.fn() } }))
+    expect(screen.getByTestId('chat-more-menu')).toBeDefined()
+  })
+
+  it('renders with health status ok', () => {
+    renderToolbar(createContextValue({ health: { status: 'ok', summary: 'Ready', modelLoaded: true, modelType: 'gpt2' } }))
+    expect(screen.getByTestId('model-dropdown')).toBeDefined()
+  })
+
+  it('passes knowledge context to toolbar', () => {
+    renderToolbar(createContextValue({ knowledge: { showing: true, count: 5, context: 'test', onToggle: vi.fn() } }))
+    expect(screen.getByTestId('chat-more-menu')).toBeDefined()
+  })
 })

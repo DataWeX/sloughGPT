@@ -46,14 +46,17 @@ describe('ThemeSwitcher', () => {
   it('clicking mode toggle changes button label', () => {
     renderSwitcher()
     const toggleBtn = screen.getAllByRole('button')[0]
+    const before = toggleBtn.getAttribute('aria-label')
     fireEvent.click(toggleBtn)
-    expect(toggleBtn.getAttribute('aria-label')).toBeDefined()
+    const after = toggleBtn.getAttribute('aria-label')
+    expect(after).toBeDefined()
+    expect(after).not.toBe(before)
   })
 
   it('clicking a radio button selects it', () => {
     renderSwitcher()
     const radios = screen.getAllByRole('radio')
     fireEvent.click(radios[0])
-    expect(radios[0]).toBeDefined()
+    expect(radios[0]).toHaveAttribute('aria-checked', 'true')
   })
 })

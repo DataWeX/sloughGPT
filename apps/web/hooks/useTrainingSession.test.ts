@@ -2,12 +2,12 @@ import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const {
-  mockStartAutoTrain, mockStopAutoTrain, mockStartHFFineTune, mockStartVisualTrain,
+  mockStartAutoTrain, mockStopAutoTrain, mockCreate, mockStartVisualTrain,
   mockStartTurboTrain, mockListJobs,
 } = vi.hoisted(() => ({
   mockStartAutoTrain: vi.fn(),
   mockStopAutoTrain: vi.fn(() => Promise.resolve()),
-  mockStartHFFineTune: vi.fn(),
+  mockCreate: vi.fn(),
   mockStartVisualTrain: vi.fn(),
   mockStartTurboTrain: vi.fn(),
   mockListJobs: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock('@/lib/controllers', () => ({
   trainingJobsController: {
     startAutoTrain: mockStartAutoTrain,
     stopAutoTrain: mockStopAutoTrain,
-    startHFFineTune: mockStartHFFineTune,
+    create: mockCreate,
     startVisualTrain: mockStartVisualTrain,
     startTurboTrain: mockStartTurboTrain,
     list: mockListJobs,
@@ -48,7 +48,7 @@ describe('useTrainingSession', () => {
     vi.clearAllMocks()
     globalThis.EventSource = MockEventSource as any
     mockStartAutoTrain.mockResolvedValue(undefined)
-    mockStartHFFineTune.mockRejectedValue(new Error('fail'))
+    mockCreate.mockRejectedValue(new Error('fail'))
     mockListJobs.mockResolvedValue([])
   })
 
@@ -117,7 +117,7 @@ describe('useTrainingSession', () => {
 
   it('startFineTune polls for completion', async () => {
     vi.useFakeTimers()
-    mockStartHFFineTune.mockResolvedValue({ job_id: 'job-1', message: 'Queued' })
+    mockCreate.mockResolvedValue({ job_id: 'job-1', status: 'started' })
     mockListJobs.mockResolvedValue([
       { id: 'job-1', status: 'completed', result: { model_path: '/model/final', final_loss: 1.2 } },
     ])
@@ -134,7 +134,7 @@ describe('useTrainingSession', () => {
 
   it('startFineTune handles failure', async () => {
     vi.useFakeTimers()
-    mockStartHFFineTune.mockResolvedValue({ job_id: 'job-2', message: 'Queued' })
+    mockCreate.mockResolvedValue({ job_id: 'job-2', status: 'started' })
     mockListJobs.mockResolvedValue([
       { id: 'job-2', status: 'failed', error: 'OOM' },
     ])

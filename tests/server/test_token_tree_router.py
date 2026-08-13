@@ -64,6 +64,34 @@ def _mock_manager():
         "leaves": ["q", "u", "i", "c", "k", "</w>"],
         "tree": "quick</w>\n  q...\n",
     }
+    mgr.matrix_summary.return_value = {
+        "matrix": [128, 16],
+        "norm_min": 0.5,
+        "norm_mean": 0.8,
+        "norm_max": 1.0,
+        "dead_tokens": 2,
+        "live_tokens": 126,
+        "most_energetic": [
+            ["quick</w>", 12, 1.0],
+            ["brown</w>", 20, 0.98],
+        ],
+        "least_energetic": [
+            ["the</w>", 3, 0.55],
+        ],
+    }
+    mgr.compare.return_value = {
+        "a": {"name": "tree-a", "stats": _mock_tree().stats(), "vocab": {}},
+        "b": {"name": "tree-b", "stats": _mock_tree().stats(), "vocab": {}},
+        "shared_tokens": 100,
+        "only_a_tokens": 28,
+        "only_b_tokens": 0,
+        "shared_merges": 15,
+        "only_a_merges": 5,
+        "only_b_merges": 0,
+        "shared_examples": [["the</w>", 42]],
+        "only_a_examples": [["quick</w>", 9]],
+        "only_b_examples": [],
+    }
     return mgr
 
 
@@ -303,3 +331,113 @@ class TestLineage:
     def test_lineage_missing_token_returns_422(self):
         resp = client.post("/token-tree/lineage", json={})
         assert resp.status_code == 422
+
+
+class TestMatrix:
+    @patch(MGR_TARGET)
+    def test_get_matrix(self, mock_get_mgr):
+        mock_get_mgr.return_value = _mock_manager()
+        resp = client.get("/token-tree/matrix")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["matrix"] == [128, 16]
+        assert data["live_tokens"] == 126
+        assert data["dead_tokens"] == 2
+        assert data["most_energetic"][0][0] == "quick</w>"
+        assert data["least_energetic"][0][2] == 0.55
+
+    @patch(MGR_TARGET)
+    def test_get_matrix_default_top_k(self, mock_get_mgr):
+        mgr = _mock_manager()
+        mock_get_mgr.return_value = mgr
+        client.get("/token-tree/matrix")
+        mgr.matrix_summary.assert_called_once_with(top_k=8)
+
+    @patch(MGR_TARGET)
+    def test_get_matrix_custom_top_k(self, mock_get_mgr):
+        mgr = _mock_manager()
+        mock_get_mgr.return_value = mgr
+        resp = client.get("/token-tree/matrix", params={"top_k": 3})
+        assert resp.status_code == 200
+        mgr.matrix_summary.assert_called_once_with(top_k=3)
+
+    @patch(MGR_TARGET)
+    def test_get_matrix_disabled_embeddings(self, mock_get_mgr):
+        mgr = _mock_manager()
+        mgr.matrix_summary.return_value = {
+            "matrix": None,
+            "norm_min": 0.0,
+            "norm_mean": 0.0,
+            "norm_max": 0.0,
+            "dead_tokens": 0,
+            "live_tokens": 0,
+            "most_energetic": [],
+            "least_energetic": [],
+        }
+        mock_get_mgr.return_value = mgr
+        resp = client.get("/token-tree/matrix")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["matrix"] is None
+
+    def test_get_matrix_invalid_top_k_returns_422(self):
+        resp = client.get("/token-tree/matrix", params={"top_k": 0})
+        assert resp.status_code == 422
+
+    def test_matrix_wrong_method_405(self):
+        resp = client.post("/token-tree/matrix")
+        assert resp.status_code == 405
+
+
+class TestCompare:
+    """POST /token-tree/compare"""
+
+    @patch(MGR_TARGET)
+    def test_compare_returns_overlap(self, mock_get_mgr):
+        mock_get_mgr.return_value = _mock_manager()
+        resp = client.post("/token-tree/compare", json={"a": "tree-a", "b": "tree-b", "top_k": 5})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["a"]["name"] == "tree-a"
+        assert data["b"]["name"] == "tree-b"
+        assert data["shared_tokens"] == 100
+        assert data["only_a_tokens"] == 28
+        assert data["shared_examples"][0][0] == "the</w>"
+
+    @patch(MGR_TARGET)
+    def test_compare_default_top_k(self, mock_get_mgr):
+        mgr = _mock_manager()
+        mock_get_mgr.return_value = mgr
+        client.post("/token-tree/compare", json={"a": "tree-a", "b": "tree-b"})
+        mgr.compare.assert_called_once_with("tree-a", "tree-b", top_n=10)
+
+    @patch(MGR_TARGET)
+    def test_compare_custom_top_k(self, mock_get_mgr):
+        mgr = _mock_manager()
+        mock_get_mgr.return_value = mgr
+        resp = client.post("/token-tree/compare", json={"a": "tree-a", "b": "tree-b", "top_k": 3})
+        assert resp.status_code == 200
+        mgr.compare.assert_called_once_with("tree-a", "tree-b", top_n=3)
+
+    @patch(MGR_TARGET)
+    def test_compare_missing_tree_returns_404(self, mock_get_mgr):
+        mgr = _mock_manager()
+        mgr.compare.side_effect = FileNotFoundError("Saved tree not found: ghost")
+        mock_get_mgr.return_value = mgr
+        resp = client.post("/token-tree/compare", json={"a": "tree-a", "b": "ghost"})
+        assert resp.status_code == 404
+
+    @patch(MGR_TARGET)
+    def test_compare_self_returns_400(self, mock_get_mgr):
+        mgr = _mock_manager()
+        mgr.compare.side_effect = ValueError("Cannot compare a tree with itself")
+        mock_get_mgr.return_value = mgr
+        resp = client.post("/token-tree/compare", json={"a": "tree-a", "b": "tree-a"})
+        assert resp.status_code == 400
+
+    def test_compare_missing_fields_returns_422(self):
+        resp = client.post("/token-tree/compare", json={"a": "tree-a"})
+        assert resp.status_code == 422
+
+    def test_compare_wrong_method_405(self):
+        resp = client.get("/token-tree/compare")
+        assert resp.status_code == 405

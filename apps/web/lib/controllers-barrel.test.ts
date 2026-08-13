@@ -45,4 +45,10 @@ describe('controllers barrel', () => {
       expect(typeof (barrel as Record<string, unknown>)[name]).toBe('object')
     }
   })
+
+  it('has no duplicate controller references', () => {
+    const names = Object.keys(barrel).filter(k => typeof (barrel as any)[k] === 'object' && (barrel as any)[k] !== null)
+    const unique = new Set(names)
+    expect(unique.size).toBe(names.length)
+  })
 })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label } from '@sloughgpt/strui'
 import { TrainingPresets } from '@/components/training/TrainingPresets'
 import type { StepProps } from './DataStep'
 
@@ -111,34 +111,28 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
 
             <div className="grid grid-cols-3 gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Epochs</label>
-                <input type="number" min={1} max={500} value={form.trainingEpochs}
+                <Label htmlFor="train-epochs" variant="uppercase">Epochs</Label>
+                <Input id="train-epochs" type="number" min={1} max={500} value={form.trainingEpochs}
                   onChange={e => form.setTrainingEpochs(Number(e.target.value))}
-                  className={`h-8 rounded-md bg-background px-2 text-xs font-mono ${
-                    form.trainingEpochs < 1 || form.trainingEpochs > 500
-                      ? 'border border-destructive/60 text-destructive'
-                      : 'border border-border/60'
-                  }`} />
+                  error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                  aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                  className="h-8 text-xs font-mono" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Batch size</label>
-                <input type="number" min={1} max={256} value={form.trainingBatchSize}
+                <Label htmlFor="train-batch" variant="uppercase">Batch size</Label>
+                <Input id="train-batch" type="number" min={1} max={256} value={form.trainingBatchSize}
                   onChange={e => form.setTrainingBatchSize(Number(e.target.value))}
-                  className={`h-8 rounded-md bg-background px-2 text-xs font-mono ${
-                    form.trainingBatchSize < 1 || form.trainingBatchSize > 256
-                      ? 'border border-destructive/60 text-destructive'
-                      : 'border border-border/60'
-                  }`} />
+                  error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                  aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                  className="h-8 text-xs font-mono" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Learning rate</label>
-                <input type="text" value={form.trainingLR}
+                <Label htmlFor="train-lr" variant="uppercase">Learning rate</Label>
+                <Input id="train-lr" type="text" inputMode="decimal" value={form.trainingLR}
                   onChange={e => form.setTrainingLR(Number(e.target.value) || 1e-3)}
-                  className={`h-8 rounded-md bg-background px-2 text-xs font-mono ${
-                    form.trainingLR <= 0 || form.trainingLR > 1
-                      ? 'border border-destructive/60 text-destructive'
-                      : 'border border-border/60'
-                  }`} />
+                  error={form.trainingLR <= 0 || form.trainingLR > 1}
+                  aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
+                  className="h-8 text-xs font-mono" />
               </div>
             </div>
 

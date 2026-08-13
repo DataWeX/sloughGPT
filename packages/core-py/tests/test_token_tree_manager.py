@@ -60,6 +60,28 @@ class TestExplicitTrain:
         assert "vocab_size" in stats
 
 
+class TestAdopt:
+    def test_adopt_replaces_current_tree(self):
+        from domains.training.token_tree import TokenTree
+        mgr = TokenTreeManager.get_instance()
+        before = mgr.get_tree(vocab_size=32)
+        external = TokenTree().train(["zzz zzz qux qux"], vocab_size=16, min_frequency=1)
+        adopted = mgr.adopt(external)
+        assert adopted is external
+        assert mgr.get_tree() is external
+        assert mgr.get_tree() is not before
+
+    def test_adopt_tree_saves_and_queries(self, tmp_path, monkeypatch):
+        from domains.training.token_tree import TokenTree
+        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
+        mgr = TokenTreeManager.get_instance()
+        external = TokenTree().train(["the quick brown fox"], vocab_size=32, min_frequency=1)
+        mgr.adopt(external)
+        info = mgr.save("adopted")
+        assert info["name"] == "adopted"
+        assert mgr.stats()["trained"] is True
+
+
 class TestQueries:
     def test_similar_returns_ranked_neighbors(self):
         mgr = TokenTreeManager.get_instance()
@@ -173,6 +195,34 @@ class TestEmbeddingInfo:
         mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
         with pytest.raises(KeyError):
             mgr.embedding_info("zzz-no-such-token")
+
+
+class TestMatrixSummary:
+    def test_matrix_summary_shape_and_totals(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        out = mgr.matrix_summary(top_k=4)
+        assert out["matrix"] == [mgr.get_tree().vocab_size, 8]
+        assert out["live_tokens"] + out["dead_tokens"] == mgr.get_tree().vocab_size
+        assert out["norm_min"] <= out["norm_max"] <= 1.0
+
+    def test_matrix_summary_energy_entries(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        out = mgr.matrix_summary(top_k=3)
+        assert len(out["most_energetic"]) == 3
+        assert len(out["least_energetic"]) == 3
+        for entry in out["most_energetic"]:
+            assert isinstance(entry[0], str)
+            assert isinstance(entry[1], int)
+            assert entry[2] > 0
+
+    def test_matrix_summary_disabled_embeddings(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=0)
+        out = mgr.matrix_summary(top_k=4)
+        assert out["matrix"] is None
+        assert out["most_energetic"] == []
 
 
 class TestTopMerges:
@@ -305,3 +355,89 @@ class TestPersistence:
         info = mgr.save("shakespeare.v2")
         assert info["name"] == "shakespeare.v2"
         assert (tmp_path / "shakespeare.v2.meta.json").exists()
+
+
+class TestCompare:
+    def _save_two(self, tmp_path, monkeypatch):
+        """Save two distinct trees and return the manager."""
+        monkeypatch.setattr(token_tree_manager_module, "_SAVE_DIR", tmp_path)
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(["alpha alpha beta gamma gamma delta"], vocab_size=32, min_frequency=1)
+        mgr.save("tree-a")
+        mgr.train(["beta beta epsilon zeta zeta"], vocab_size=32, min_frequency=1)
+        mgr.save("tree-b")
+        return mgr
+
+    def test_compare_reports_counts(self, tmp_path, monkeypatch):
+        mgr = self._save_two(tmp_path, monkeypatch)
+        out = mgr.compare("tree-a", "tree-b")
+        assert out["a"]["name"] == "tree-a"
+        assert out["b"]["name"] == "tree-b"
+        assert out["shared_tokens"] > 0
+        assert out["shared_merges"] >= 0
+        assert out["a"]["stats"]["vocab_size"] > 0
+        assert out["b"]["stats"]["vocab_size"] > 0
+
+    def test_compare_does_not_touch_current_tree(self, tmp_path, monkeypatch):
+        mgr = self._save_two(tmp_path, monkeypatch)
+        mgr.train(["different corpus entirely"], vocab_size=16, min_frequency=1)
+        current = mgr.stats()["vocab_size"]
+        out = mgr.compare("tree-a", "tree-b")
+        assert out["a"]["stats"]["vocab_size"] != current
+        assert mgr.stats()["vocab_size"] == current
+
+    def test_compare_identical_trees(self, tmp_path, monkeypatch):
+        mgr = self._save_two(tmp_path, monkeypatch)
+        mgr.load("tree-a")
+        mgr.save("tree-a-copy")
+        out = mgr.compare("tree-a", "tree-a-copy")
+        vsize = out["a"]["stats"]["vocab_size"]
+        assert out["shared_tokens"] == vsize
+        assert out["only_a_tokens"] == 0
+        assert out["only_b_tokens"] == 0
+        assert out["shared_merges"] == out["a"]["stats"]["num_merges"]
+        assert out["only_a_merges"] == 0
+        assert out["only_b_merges"] == 0
+        assert len(out["shared_examples"]) == min(10, vsize)
+
+    def test_compare_self_raises(self, tmp_path, monkeypatch):
+        mgr = self._save_two(tmp_path, monkeypatch)
+        with pytest.raises(ValueError):
+            mgr.compare("tree-a", "tree-a")
+
+    def test_compare_missing_raises(self, tmp_path, monkeypatch):
+        mgr = self._save_two(tmp_path, monkeypatch)
+        with pytest.raises(FileNotFoundError):
+            mgr.compare("tree-a", "ghost")
+        with pytest.raises(FileNotFoundError):
+            mgr.compare("ghost", "tree-a")
+
+    def test_compare_examples_ranked_by_freq(self, tmp_path, monkeypatch):
+        mgr = self._save_two(tmp_path, monkeypatch)
+        out = mgr.compare("tree-a", "tree-b")
+        for side in ("only_a_examples", "only_b_examples", "shared_examples"):
+            ranks = out[side]
+            assert isinstance(ranks, list)
+            freqs = [item[1] for item in ranks]
+            assert freqs == sorted(freqs, reverse=True)
+            for item in ranks:
+                assert isinstance(item[0], str)
+                assert isinstance(item[1], int)
+
+    def test_compare_examples_cap_top_n(self, tmp_path, monkeypatch):
+        mgr = self._save_two(tmp_path, monkeypatch)
+        out = mgr.compare("tree-a", "tree-b", top_n=3)
+        assert len(out["only_a_examples"]) <= 3
+        assert len(out["only_b_examples"]) <= 3
+        assert len(out["shared_examples"]) <= 3
+
+    def test_compare_sanitizes_names(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(token_tree_manager_module, "_SAVE_DIR", tmp_path)
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(["corpus one"], vocab_size=16, min_frequency=1)
+        mgr.save("plain")
+        for bad in ("../escape", "a/b"):
+            with pytest.raises(ValueError):
+                mgr.compare(bad, "plain")
+            with pytest.raises(ValueError):
+                mgr.compare("plain", bad)

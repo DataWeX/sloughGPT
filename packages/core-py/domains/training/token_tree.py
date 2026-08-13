@@ -51,7 +51,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -331,6 +331,35 @@ class TokenTree:
             ids.append(self.eos_id)
         return ids
 
+    def trace_path(self, text: str) -> List[dict]:
+        """Trace the greedy longest-prefix walk ``encode`` performs over text.
+
+        Mirrors ``encode`` step by step: text is normalized and pretokenized
+        into words, each word is padded with the word suffix, and ``query``
+        consumes the longest matching token from the remaining suffix until
+        every word is exhausted. Each step records the unconsumed suffix, the
+        matched token id, and how many characters the query advanced.
+
+        Args:
+            text: input string.
+
+        Returns:
+            list of ``{"remaining", "id", "consumed"}`` steps. Concatenating
+            the consumed prefixes reproduces ``encode(text)``: the sequence of
+            ``id`` values is exactly ``encode(text)``.
+        """
+        normalized = self._normalize(text, lowercase=True)
+        steps: List[dict] = []
+        for word in self._pretokenize(normalized, lowercase=True):
+            s = word + self._word_suffix
+            i = 0
+            while i < len(s):
+                remaining = s[i:]
+                token_id, advance = self.query(remaining)
+                steps.append({"remaining": remaining, "id": token_id, "consumed": advance})
+                i += advance
+        return steps
+
     def encode_batch(
         self,
         texts: Sequence[str],
@@ -546,6 +575,59 @@ class TokenTree:
                 else np.zeros(self._embed_dim, dtype=np.float32)
             )
         return np.stack(rows)
+
+    def embedding_matrix_stats(self, top_n: int = 8) -> Dict[str, Any]:
+        """Summarize the full embedding matrix in one shot.
+
+        Rows are L2-normalized generated embeddings (see
+        :meth:`embedding_matrix`). ``norm_*`` fields describe the row-norm
+        distribution, ``dead_tokens`` counts zero-norm rows, and the
+        most/least energetic lists rank live rows by norm.
+
+        Args:
+            top_n: how many most- and least-energetic tokens to return.
+
+        Returns:
+            dict with ``matrix`` ([rows, cols] or None), ``norm_min``,
+            ``norm_mean``, ``norm_max``, ``dead_tokens``, ``live_tokens``,
+            ``most_energetic``, ``least_energetic`` — each energy entry a
+            ``[token, token_id, norm]`` triple sorted by norm.
+        """
+        mat = self.embedding_matrix()
+        if mat is None:
+            return {
+                "matrix": None,
+                "norm_min": 0.0,
+                "norm_mean": 0.0,
+                "norm_max": 0.0,
+                "dead_tokens": 0,
+                "live_tokens": 0,
+                "most_energetic": [],
+                "least_energetic": [],
+            }
+        norms = np.linalg.norm(mat, axis=1).astype(np.float64)
+        live = np.flatnonzero(norms > 0.0)
+        dead = int(len(norms) - len(live))
+        k = min(top_n, len(live))
+
+        def energy_rows(ids: np.ndarray) -> List[List[Any]]:
+            return [
+                [self.itos[int(tid)], int(tid), float(norms[tid])]
+                for tid in ids
+            ]
+
+        top_ids = live[np.argsort(-norms[live])][:k]
+        bottom_ids = live[np.argsort(norms[live])][:k]
+        return {
+            "matrix": [int(mat.shape[0]), int(mat.shape[1])],
+            "norm_min": float(norms.min()),
+            "norm_mean": float(norms.mean()),
+            "norm_max": float(norms.max()),
+            "dead_tokens": dead,
+            "live_tokens": int(len(live)),
+            "most_energetic": energy_rows(top_ids),
+            "least_energetic": energy_rows(bottom_ids),
+        }
 
     def similar(self, token_id: int, top_k: int = 5) -> List[Tuple[int, float]]:
         """Query the Point-generated embeddings for nearest-neighbor tokens.

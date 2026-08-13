@@ -51,4 +51,14 @@ describe('ChatSettings', () => {
     render(<ChatSettings {...baseProps} availableModels={[]} />)
     expect(screen.getByText('gpt2')).toBeDefined()
   })
+
+  it('renders temperature value', () => {
+    render(<ChatSettings {...baseProps} temperature={0.5} />)
+    expect(screen.getByText('0.5')).toBeDefined()
+  })
+
+  it('renders maxTokens value', () => {
+    render(<ChatSettings {...baseProps} maxTokens={500} />)
+    expect(screen.getByText('500')).toBeDefined()
+  })
 })

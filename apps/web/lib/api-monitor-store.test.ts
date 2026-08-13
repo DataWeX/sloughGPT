@@ -45,4 +45,13 @@ describe('useApiMonitor', () => {
     const ts2 = useApiMonitor.getState().lastOnline
     expect(ts2).toBeGreaterThan(ts1!)
   })
+
+  it('can set multiple status transitions', () => {
+    useApiMonitor.getState().setStatus('connected')
+    expect(useApiMonitor.getState().status).toBe('connected')
+    useApiMonitor.getState().setStatus('reloading')
+    expect(useApiMonitor.getState().status).toBe('reloading')
+    useApiMonitor.getState().setStatus('offline')
+    expect(useApiMonitor.getState().status).toBe('offline')
+  })
 })

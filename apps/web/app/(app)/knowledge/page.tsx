@@ -16,6 +16,7 @@ import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX } from '
 import { useToastStore } from '@/lib/toast-store'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount } from '@/lib/knowledge-controller'
 import { KnowledgeCategoryChart } from '@/components/knowledge/KnowledgeCategoryChart'
+import { MemoryCard } from '@/components/knowledge/MemoryCard'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, MS_PER_SECOND } from '@/lib/format-bytes'
 
@@ -784,6 +785,8 @@ export default function KnowledgePage() {
             </div>
           </>
         )}
+
+        <MemoryCard />
       </div>
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>

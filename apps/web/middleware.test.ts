@@ -81,4 +81,16 @@ describe('middleware', () => {
     expect(Array.isArray(config.matcher)).toBe(true)
     expect(config.matcher.length).toBeGreaterThan(0)
   })
+
+  it('handles GET requests', () => {
+    const response = middleware(makeRequest('/models', 'GET'))
+    expect(response).toBeDefined()
+    expect(mockNext.next).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles POST requests', () => {
+    const response = middleware(makeRequest('/chat', 'POST'))
+    expect(response).toBeDefined()
+    expect(mockNext.next).toHaveBeenCalledTimes(1)
+  })
 })

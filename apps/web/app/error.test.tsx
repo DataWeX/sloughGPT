@@ -28,4 +28,14 @@ describe('RootError', () => {
     render(<RootError error={error} reset={vi.fn()} />)
     expect(screen.getByTestId('handler')).toBeInTheDocument()
   })
+
+  it('handles TypeError', () => {
+    render(<RootError error={new TypeError('type err')} reset={vi.fn()} />)
+    expect(screen.getByTestId('handler')).toHaveTextContent('type err|function')
+  })
+
+  it('handles empty error message', () => {
+    render(<RootError error={new Error('')} reset={vi.fn()} />)
+    expect(screen.getByTestId('handler')).toHaveTextContent('|function')
+  })
 })

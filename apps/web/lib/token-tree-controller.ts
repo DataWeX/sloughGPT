@@ -44,6 +44,23 @@ export interface EmbeddingInfo {
   compression_ratio: number
 }
 
+export interface MatrixEnergyToken {
+  token: string
+  id: number
+  norm: number
+}
+
+export interface MatrixSummary {
+  matrix: [number, number] | null
+  norm_min: number
+  norm_mean: number
+  norm_max: number
+  dead_tokens: number
+  live_tokens: number
+  most_energetic: [string, number, number][]
+  least_energetic: [string, number, number][]
+}
+
 export interface TrainTreeResult {
   status: string
   vocab_size: number
@@ -103,6 +120,26 @@ export interface SavedTree {
   num_merges: number
   trained: boolean
   saved_at: number | null
+}
+
+export interface CompareSide {
+  name: string
+  stats: TokenTreeStats
+  vocab: Record<string, number>
+}
+
+export interface CompareResult {
+  a: CompareSide
+  b: CompareSide
+  shared_tokens: number
+  only_a_tokens: number
+  only_b_tokens: number
+  shared_merges: number
+  only_a_merges: number
+  only_b_merges: number
+  shared_examples: [string, number][]
+  only_a_examples: [string, number][]
+  only_b_examples: [string, number][]
 }
 
 export const tokenTreeController = {
@@ -169,5 +206,14 @@ export const tokenTreeController = {
 
   async lineage(token: string): Promise<LineageResult> {
     return apiPost<LineageResult>('/token-tree/lineage', { token })
+  },
+
+  async getMatrixSummary(top_k = 8): Promise<MatrixSummary> {
+    const params = new URLSearchParams({ top_k: String(top_k) })
+    return apiGet<MatrixSummary>(`/token-tree/matrix?${params.toString()}`)
+  },
+
+  async compare(a: string, b: string, top_k = 10): Promise<CompareResult> {
+    return apiPost<CompareResult>('/token-tree/compare', { a, b, top_k })
   },
 }

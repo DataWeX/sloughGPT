@@ -565,14 +565,20 @@ class KnowledgeMemory:
         VISITED_PATH.write_text(json.dumps(list(self._visited), indent=2))
 
     def _save_entries(self):
-        """Persist all vector entries to JSON for restart survival."""
+        """Persist all vector entries to JSON for restart survival.
+
+        An emptied store is persisted as ``[]`` when a file already exists,
+        so ``clear_all`` survives a restart. The file is only left untouched
+        when nothing has ever been persisted (avoids creating an empty file
+        for a never-used store).
+        """
         try:
             from domains.inference.vector_store import VectorEntry
             entries = getattr(self._vector_store, '_entries', None)
-            if not entries:
+            if not entries and not ENTRIES_PATH.exists():
                 return
             data = []
-            for eid, entry in entries.items():
+            for eid, entry in (entries or {}).items():
                 data.append({
                     "id": entry.id,
                     "vector": entry.vector,
@@ -782,9 +788,9 @@ class KnowledgeMemory:
                     added += 1
         return added
 
-    def auto_ingest_from_chat(self, user_message: str, assistant_response: str,
-                               max_facts: int = 3) -> int:
-        """Extract and store facts from a chat exchange.
+    def ingest_from_chat(self, user_message: str, assistant_response: str,
+                         max_facts: int = 3) -> list[str]:
+        """Extract and store facts from a chat exchange, returning the stored texts.
 
         Analyzes the assistant's response for declarative statements (facts)
         and stores them in the knowledge base with topic inference.
@@ -795,18 +801,22 @@ class KnowledgeMemory:
             max_facts: Maximum number of facts to extract per exchange
 
         Returns:
-            Number of new facts stored
+            List of the newly stored fact texts; empty when nothing was
+            extracted or everything was already known.
+
+        Side effects:
+            - writes new facts into the vector store (persisted).
         """
         facts = _extract_facts_from_text(assistant_response)
         if not facts:
-            return 0
+            return []
 
         # Infer topic from user message
         topics = _extract_topics(user_message)
         topic = topics[0] if topics else "general"
 
         now = time.time()
-        added = 0
+        stored = []
         for fact_text in facts[:max_facts]:
             if len(fact_text) < 20:  # skip very short fragments
                 continue
@@ -818,11 +828,28 @@ class KnowledgeMemory:
                 importance=0.6,  # slightly above default for chat-sourced
             )
             if self.add_fact(fact):
-                added += 1
+                stored.append(fact_text)
 
-        if added > 0:
-            logger.info("Auto-ingested %d facts from chat (topic=%s)", added, topic, extra={"tag": "INF"})
-        return added
+        if stored:
+            logger.info("Auto-ingested %d facts from chat (topic=%s)", len(stored), topic, extra={"tag": "INF"})
+        return stored
+
+    def auto_ingest_from_chat(self, user_message: str, assistant_response: str,
+                               max_facts: int = 3) -> int:
+        """Extract and store facts from a chat exchange.
+
+        Convenience wrapper around ``ingest_from_chat`` returning only the
+        number of newly stored facts.
+
+        Args:
+            user_message: The user's message for context
+            assistant_response: The assistant's response to extract facts from
+            max_facts: Maximum number of facts to extract per exchange
+
+        Returns:
+            Number of new facts stored
+        """
+        return len(self.ingest_from_chat(user_message, assistant_response, max_facts))
 
     # ---- queries -----------------------------------------------------------
 
@@ -967,6 +994,76 @@ class KnowledgeMemory:
             return deleted
         except Exception as e:
             logger.warning(f"delete_by_id failed: {e}", extra={"tag": "INF"})
+            return False
+
+    def update_fact(self, item_id: str, content: str,
+                    topic: Optional[str] = None,
+                    importance: Optional[float] = None) -> bool:
+        """Edit an existing fact's text, topic, and/or importance score.
+
+        The vector-store entry keeps its id, so the fact stays discoverable
+        and the dedup index migrates from the old content hash to the new one
+        (the new text must not already exist as another fact).
+
+        Args:
+            item_id: vector-store entry id of the fact to edit.
+            content: new fact text; whitespace-only input is rejected.
+            topic: optional new topic label; ``None`` keeps the existing one.
+            importance: optional importance score in [0, 1]; out-of-range
+                values are clamped. ``None`` keeps the existing one.
+
+        Returns:
+            True when the fact was updated, False when the id is unknown,
+            the new text is empty, or it duplicates another stored fact.
+
+        Side effects:
+            - mutates ``_visited`` (hash migration)
+            - recomputes the entry embedding and rewrites persisted entries
+        """
+        text = (content or "").strip()
+        if not text:
+            return False
+        try:
+            results = self._run_async(
+                self._vector_store.query(vector=self._zero_vec(), top_k=5000)
+            )
+            target = None
+            for r in results:
+                if r.id == item_id:
+                    target = r
+                    break
+            if target is None:
+                return False
+            old_hash = target.metadata.get("content_hash")
+            new_hash = hashlib.md5(text.encode()).hexdigest()
+            with self._lock:
+                if new_hash in self._visited and new_hash != old_hash:
+                    return False
+                if old_hash and old_hash in self._visited:
+                    self._visited.discard(old_hash)
+                self._visited.add(new_hash)
+            from domains.inference.vector_store import VectorEntry
+            meta = dict(target.metadata)
+            meta["content_hash"] = new_hash
+            if topic is not None:
+                meta["topic"] = topic.strip() or meta.get("topic", "general")
+            if importance is not None:
+                meta["importance"] = min(1.0, max(0.0, float(importance)))
+            entry = VectorEntry(
+                id=item_id,
+                vector=self._get_embedding(text),
+                text=text,
+                metadata=meta,
+            )
+            if hasattr(self._vector_store, 'upsert_sync'):
+                self._vector_store.upsert_sync([entry])
+            else:
+                self._run_async(self._vector_store.upsert([entry]))
+            self._save_visited()
+            self._save_entries()
+            return True
+        except Exception as e:
+            logger.warning(f"update_fact failed: {e}", extra={"tag": "INF"})
             return False
 
     def clear_all(self) -> int:

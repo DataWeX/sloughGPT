@@ -13,6 +13,22 @@ export const MS_PER_MINUTE = 60 * MS_PER_SECOND
 export const MS_PER_HOUR = 60 * MS_PER_MINUTE
 export const MS_PER_DAY = 24 * MS_PER_HOUR
 
+/**
+ * Human-readable relative time from a unix-seconds timestamp.
+ * "Just now", "5m ago", "3h ago", "2d ago", falling back to a short date
+ * once the event is more than a week old.
+ */
+export function formatRelativeTime(seconds: number): string {
+  const ts = seconds * MS_PER_SECOND
+  if (!seconds || seconds <= 0 || isNaN(ts)) return ''
+  const diffMs = Date.now() - ts
+  if (diffMs < MS_PER_MINUTE) return 'Just now'
+  if (diffMs < MS_PER_HOUR) return `${Math.floor(diffMs / MS_PER_MINUTE)}m ago`
+  if (diffMs < MS_PER_DAY) return `${Math.floor(diffMs / MS_PER_HOUR)}h ago`
+  if (diffMs < 7 * MS_PER_DAY) return `${Math.floor(diffMs / MS_PER_DAY)}d ago`
+  return new Date(ts).toLocaleDateString()
+}
+
 /** Today's date as YYYY-MM-DD for filenames. */
 export function todayDateString(): string {
   return new Date().toISOString().slice(0, 10)

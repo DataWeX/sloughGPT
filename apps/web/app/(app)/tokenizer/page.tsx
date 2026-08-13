@@ -13,8 +13,10 @@ import { TokenTreeMergesCard } from '@/components/tokenizer/TokenTreeMergesCard'
 import { TokenTreeVocabCard } from '@/components/tokenizer/TokenTreeVocabCard'
 import { TokenTreePersistenceCard } from '@/components/tokenizer/TokenTreePersistenceCard'
 import { TokenTreeEmbeddingsCard } from '@/components/tokenizer/TokenTreeEmbeddingsCard'
+import { TokenTreeMatrixCard } from '@/components/tokenizer/TokenTreeMatrixCard'
 import { TokenTreePathCard } from '@/components/tokenizer/TokenTreePathCard'
 import { TokenTreeLineageCard } from '@/components/tokenizer/TokenTreeLineageCard'
+import { TokenTreeCompareCard } from '@/components/tokenizer/TokenTreeCompareCard'
 import { TokenTreePlaygroundCard } from '@/components/tokenizer/TokenTreePlaygroundCard'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -268,9 +270,11 @@ export default function TokenizerPage() {
         <TokenTreeTrainCard onTrained={() => setTreeVersion(v => v + 1)} />
         <TokenTreePersistenceCard refreshKey={treeVersion} onLoaded={() => setTreeVersion(v => v + 1)} />
         <TokenTreeEmbeddingsCard />
+        <TokenTreeMatrixCard />
         <TokenTreeCodecCard />
         <TokenTreePathCard />
         <TokenTreeLineageCard />
+        <TokenTreeCompareCard key={treeVersion} />
         <TokenTreePlaygroundCard />
       </div>
     </div>

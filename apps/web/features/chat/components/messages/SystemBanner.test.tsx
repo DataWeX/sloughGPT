@@ -45,4 +45,14 @@ describe('SystemBanner', () => {
     expect(svgCount(c2)).toBe(1)
     expect(svgCount(c3)).toBe(1)
   })
+
+  it('does not render action button when onAction is missing', () => {
+    const { container } = render(<SystemBanner type="info" title="Info" actionLabel="Retry" />)
+    expect(container.querySelector('button')).toBeNull()
+  })
+
+  it('does not render message when message prop is absent', () => {
+    render(<SystemBanner type="info" title="Info" />)
+    expect(screen.queryByText('Something happened')).toBeNull()
+  })
 })

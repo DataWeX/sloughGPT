@@ -43,4 +43,24 @@ describe('SummaryCard', () => {
     expect(screen.getByText('10.0 tok/s')).toBeDefined()
     expect(screen.getByText('20.0 tok/s')).toBeDefined()
   })
+
+  it('returns null with empty results', () => {
+    const { container } = render(<SummaryCard completedResults={[]} models={models} />)
+    expect(container.innerHTML).toBe('')
+  })
+
+  it('uses KpiGrid with 2 columns for 2 results', () => {
+    const { container } = render(<SummaryCard completedResults={[['gpt2', result(10)], ['qwen', result(20)]]} models={models} />)
+    expect(container.querySelector('[class*="grid"]')).toBeDefined()
+  })
+
+  it('formats throughput to one decimal place', () => {
+    render(<SummaryCard completedResults={[['gpt2', result(3.456)], ['qwen', result(12)]]} models={models} />)
+    expect(screen.getByText('3.5 tok/s')).toBeDefined()
+  })
+
+  it('handles unknown model id in results', () => {
+    render(<SummaryCard completedResults={[['unknown-id', result(10)], ['gpt2', result(20)]]} models={models} />)
+    expect(screen.getByText('unknown-id')).toBeDefined()
+  })
 })

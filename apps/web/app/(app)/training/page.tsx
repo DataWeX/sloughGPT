@@ -187,6 +187,7 @@ export default function TrainingPage() {
           session={session}
           checkpoints={checkpoints}
           onTest={() => test.setTestDialogOpen(true)}
+          addToast={addToast}
         />
       </div>
 

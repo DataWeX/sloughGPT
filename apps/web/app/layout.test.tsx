@@ -64,4 +64,9 @@ describe('RootLayout', () => {
   it('exports a mobile-safe viewport', () => {
     expect(viewport).toEqual({ width: 'device-width', initialScale: 1, viewportFit: 'cover' })
   })
+
+  it('renders without crashing with no children', () => {
+    const { container } = render(<RootLayout children={null} />)
+    expect(container.querySelector('html')).toBeTruthy()
+  })
 })

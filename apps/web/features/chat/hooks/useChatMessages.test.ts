@@ -232,4 +232,48 @@ describe('useChatMessages', () => {
     await act(async () => { await result.current.sendMessage() })
     expect(result.current.currentError).toBeTruthy()
   })
+
+  it('shows the remembered fact in the memory toast', async () => {
+    const showToast = vi.fn()
+    mockStreamChatResponse.mockImplementation(({ onMemory }) => {
+      onMemory?.({ stored: true, fact: 'The capital of France is Paris.' })
+    })
+    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    act(() => { result.current.setInput('What is the capital?') })
+    await act(async () => { await result.current.sendMessage() })
+    expect(showToast).toHaveBeenCalledWith('Remembered: The capital of France is Paris.', 'success')
+  })
+
+  it('falls back to generic toast when memory event has no fact', async () => {
+    const showToast = vi.fn()
+    mockStreamChatResponse.mockImplementation(({ onMemory }) => {
+      onMemory?.({ stored: true })
+    })
+    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    act(() => { result.current.setInput('What is the capital?') })
+    await act(async () => { await result.current.sendMessage() })
+    expect(showToast).toHaveBeenCalledWith('New fact saved to memory', 'success')
+  })
+
+  it('shows the count of additional stored facts in the memory toast', async () => {
+    const showToast = vi.fn()
+    mockStreamChatResponse.mockImplementation(({ onMemory }) => {
+      onMemory?.({ stored: true, fact: 'Paris is the capital.', facts: ['Paris is the capital.', 'The Seine flows through it.', 'Louvre is a museum.'] })
+    })
+    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    act(() => { result.current.setInput('Tell me about Paris') })
+    await act(async () => { await result.current.sendMessage() })
+    expect(showToast).toHaveBeenCalledWith('Remembered: Paris is the capital. +2 more', 'success')
+  })
+
+  it('does not toast when memory was skipped', async () => {
+    const showToast = vi.fn()
+    mockStreamChatResponse.mockImplementation(({ onMemory }) => {
+      onMemory?.({ stored: false })
+    })
+    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    act(() => { result.current.setInput('What is the capital?') })
+    await act(async () => { await result.current.sendMessage() })
+    expect(showToast).not.toHaveBeenCalled()
+  })
 })

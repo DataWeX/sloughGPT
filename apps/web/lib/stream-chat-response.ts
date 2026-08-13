@@ -29,13 +29,14 @@ interface StreamChatParams {
   onKnowledge?: (source: string, count: number) => void
   onThinking?: () => void
   onToolCall?: (event: ToolCallEvent) => void
+  onMemory?: (info: { stored: boolean; fact?: string; facts?: string[] }) => void
 }
 
 export async function streamChatResponse(params: StreamChatParams): Promise<void> {
   const {
     messages, model, systemPrompt, maxTokens, temperature,
     userId, sessionId, images, signal,
-    onToken, onComplete, onError, onKnowledge, onThinking, onToolCall,
+    onToken, onComplete, onError, onKnowledge, onThinking, onToolCall, onMemory,
   } = params
 
   const response = await fetch(`${PUBLIC_API_URL}/chat/stream`, {
@@ -65,6 +66,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
   const reader = response.body?.getReader()
   const decoder = new TextDecoder()
   let hasContent = false
+  let completed = false
   let buffer = ''
 
   if (!reader) return
@@ -96,6 +98,18 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         }
 
         const d = envelope.data ?? {}
+
+        // ── Post-complete memory event (arrives after status=complete) ──
+        if (envelope.phase === 'MEMORY') {
+          onMemory?.({
+            stored: d.stored === true,
+            fact: typeof d.fact === 'string' ? d.fact : undefined,
+            facts: Array.isArray(d.facts)
+              ? d.facts.filter((f): f is string => typeof f === 'string')
+              : undefined,
+          })
+          continue
+        }
 
         // ── Tool call events (must come before generic error check) ──
         if (envelope.phase === 'TOOL') {
@@ -133,7 +147,8 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         if (envelope.status === 'complete') {
           if (!hasContent) onToken('')
           onComplete()
-          return
+          completed = true
+          continue
         }
       } catch {
         // skip malformed lines
@@ -142,5 +157,5 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
   }
 
   if (!hasContent) onToken('')
-  onComplete()
+  if (!completed) onComplete()
 }

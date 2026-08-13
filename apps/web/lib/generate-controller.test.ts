@@ -50,4 +50,10 @@ describe('generateController.generate', () => {
     const result = await generateController.generate({ prompt: 'hi' })
     expect(result.text).toBe('')
   })
+
+  it('forwards optional parameters', async () => {
+    apiClient.apiPost.mockResolvedValue({ text: 'ok', model: 'm', tokens_generated: 1 })
+    await generateController.generate({ prompt: 'hi', max_new_tokens: 50, temperature: 0.5 })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/inference/generate', { prompt: 'hi', max_new_tokens: 50, temperature: 0.5 })
+  })
 })

@@ -225,25 +225,32 @@ class TestPhase5ModelRegistry:
 
 
 class TestPhaseTaskQueue:
-    """_phase_task_queue — queue + training handler registration."""
+    """_phase_task_queue — queue + training/memory handler registration."""
 
     def test_initializes_queue_and_handlers(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         q = object()
         with patch("domains.infrastructure.task_queue.get_task_queue", return_value=q) as mock_q, \
-             patch("domains.infrastructure.training_queue.register_training_handlers") as mock_reg:
+             patch("domains.infrastructure.training_queue.register_training_handlers") as mock_reg, \
+             patch("domains.memory.register_memory_handlers") as mock_mem, \
+             patch("domains.memory.maintenance.start_memory_maintenance") as mock_maint:
             asyncio.run(orch._phase_task_queue())
         mock_q.assert_called_once()
         mock_reg.assert_called_once()
+        mock_mem.assert_called_once()
+        mock_maint.assert_called_once()
         assert orch._task_queue is q
 
     def test_queue_failure_swallowed(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with patch("domains.infrastructure.task_queue.get_task_queue",
                    side_effect=RuntimeError("boom")), \
-             patch("domains.infrastructure.training_queue.register_training_handlers") as mock_reg:
+             patch("domains.infrastructure.training_queue.register_training_handlers") as mock_reg, \
+             patch("domains.memory.register_memory_handlers") as mock_mem, \
+             patch("domains.memory.maintenance.start_memory_maintenance") as mock_maint:
             asyncio.run(orch._phase_task_queue())
         mock_reg.assert_called_once()
+        mock_mem.assert_called_once()
 
 
 # ── Phase: config + ready ────────────────────────────────────────────────────

@@ -79,4 +79,24 @@ describe('ChatSessionStatsCard', () => {
       expect(container.querySelector('[data-testid="chat-session-stats"]')).toBeNull()
     })
   })
+
+  it('renders avg as one decimal', async () => {
+    mockLoadSessions.mockResolvedValue([
+      { id: '1', name: 'C1', messages: [{ role: 'user', content: 'a' }, { role: 'user', content: 'b' }, { role: 'user', content: 'c' }], createdAt: Date.now(), updatedAt: Date.now() },
+    ] as any)
+    render(<ChatSessionStatsCard sessionId="s1" />)
+    await waitFor(() => {
+      expect(screen.getAllByText('3.0').length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('shows card title', async () => {
+    mockLoadSessions.mockResolvedValue([
+      { id: '1', name: 'C1', messages: [{ role: 'user', content: 'a' }], createdAt: Date.now(), updatedAt: Date.now() },
+    ] as any)
+    render(<ChatSessionStatsCard sessionId="s1" />)
+    await waitFor(() => {
+      expect(screen.getByText('Session Stats')).toBeDefined()
+    })
+  })
 })

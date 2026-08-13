@@ -61,4 +61,34 @@ describe('useServerOutput', () => {
     const { result } = renderHook(() => useServerOutput())
     expect(typeof result.current.exportLines).toBe('function')
   })
+
+  it('collects streamed lines into state', async () => {
+    let resolve: any
+    const lines = ['line1', 'line2', 'line3']
+    let idx = 0
+    ;(systemController.streamOutput as any).mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: () => {
+          if (idx < lines.length) {
+            return Promise.resolve({ value: lines[idx++], done: false })
+          }
+          return Promise.resolve({ done: true })
+        },
+      }),
+    })
+    const { result } = renderHook(() => useServerOutput())
+    await vi.waitFor(() => {
+      expect(result.current.lines.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('togglePause does not affect lines', () => {
+    ;(systemController.streamOutput as any).mockReturnValue({
+      [Symbol.asyncIterator]: () => ({ next: () => Promise.resolve({ done: true }) }),
+    })
+    const { result } = renderHook(() => useServerOutput())
+    act(() => result.current.togglePause())
+    expect(result.current.paused).toBe(true)
+    expect(result.current.lines).toEqual([])
+  })
 })

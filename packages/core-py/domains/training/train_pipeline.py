@@ -924,6 +924,43 @@ class SloughGPTTrainer:
             return max(1, min(int(self.config.max_steps), epoch_budget))
         return epoch_budget
 
+    def _training_elapsed(self) -> float:
+        """Seconds since training start (0 before the loop begins)."""
+        start = getattr(self, "_training_start_time", None)
+        if start is None:
+            return 0.0
+        return max(0.0, time.time() - start)
+
+    def _steps_per_sec(self) -> float:
+        """Rolling optimizer steps per second based on whole-run elapsed time."""
+        elapsed = self._training_elapsed()
+        if elapsed <= 0 or self.global_step <= 0:
+            return 0.0
+        return self.global_step / elapsed
+
+    def _eta_seconds(self, steps_per_epoch: int) -> Optional[float]:
+        """Estimated seconds until the final step, or None when speed is 0."""
+        total = self._progress_denominator(steps_per_epoch)
+        remaining = max(0, total - self.global_step)
+        sps = self._steps_per_sec()
+        if sps <= 0 or remaining <= 0:
+            return None
+        return remaining / sps
+
+    @staticmethod
+    def _format_eta(seconds: Optional[float]) -> str:
+        """Render a seconds value as a human ETA string (``--`` when unknown)."""
+        if seconds is None or seconds < 0:
+            return "--"
+        total_s = int(seconds)
+        m, s = divmod(total_s, 60)
+        h, m = divmod(m, 60)
+        if h:
+            return f"{h}h {m:02d}m"
+        if m:
+            return f"{m}m {s:02d}s"
+        return f"{s}s"
+
     def train(
         self,
         resume: bool = False,

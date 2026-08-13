@@ -276,6 +276,10 @@ def _empty_knowledge(monkeypatch):
     )
 
 
+def _boom_service():
+    raise RuntimeError("memory service down")
+
+
 class TestRag:
     def test_disabled_returns_empty(self):
         cc = ContextCore(rag_enabled=False)
@@ -329,17 +333,24 @@ class TestRag:
         asyncio.run(cc.get_rag_context("nothing matches"))
         assert len(calls) == 1
 
-    def test_no_store_uses_knowledge_memory(self, monkeypatch):
+    def test_no_store_uses_relevance_gated_knowledge(self, monkeypatch):
         cc = ContextCore()
-        fake_kmem = SimpleNamespace(
-            search=lambda q, top_k: [{"topic": "t", "content": "c" * 50}]
-        )
         monkeypatch.setattr(cc, "_auto_ingest", lambda: None)
+        captured = {}
+
+        def _fake_enrich(user_message, auto_search=True, max_facts=5, min_score=0.15):
+            captured["auto_search"] = auto_search
+            captured["max_facts"] = max_facts
+            return {"facts": ["alpha knowledge fact"], "source": "memory", "topics": []}
+
         monkeypatch.setattr(
-            "domains.learner.knowledge.get_knowledge_memory", lambda: fake_kmem
+            "domains.learner.knowledge_augmenter.enrich_with_knowledge",
+            _fake_enrich,
         )
         out = asyncio.run(cc.get_rag_context("q"))
-        assert "[Knowledge: t]" in out
+        assert "[Knowledge] alpha knowledge fact" in out
+        assert captured["auto_search"] is False
+        assert captured["max_facts"] == cc.rag_top_k
 
 
 # ── RAG error paths & auto-ingest ───────────────────────────────────────
@@ -354,7 +365,9 @@ class TestRagErrorPaths:
         def _boom():
             raise RuntimeError("kmem down")
 
-        monkeypatch.setattr("domains.learner.knowledge.get_knowledge_memory", _boom)
+        monkeypatch.setattr(
+            "domains.learner.knowledge_augmenter.enrich_with_knowledge", _boom
+        )
         out = asyncio.run(cc.get_rag_context("blue"))
         assert "Related: color = blue" in out
 
@@ -522,6 +535,105 @@ class TestContextFrameBuild:
         assert "[SESSION]" in prompt
         assert "[MEMORY]" in prompt
         assert "[RAG]" in prompt
+
+
+# ── Auto-memory layer in the context frame ──────────────────────────────
+
+
+class TestAutoMemoryInFrame:
+    """Auto-memory facts must be surfaced in the frame's memory layer."""
+
+    @staticmethod
+    def _fake_service(facts):
+        return SimpleNamespace(retrieve=lambda q, limit: facts)
+
+    def _patch_service(self, monkeypatch, fake):
+        monkeypatch.setattr(
+            "domains.memory.memory_service.get_memory_service", lambda: fake
+        )
+
+    def test_get_auto_memory_context_formats_facts(self, monkeypatch):
+        cc = ContextCore()
+        self._patch_service(monkeypatch, self._fake_service([
+            {"content": "user prefers the code editor Zed"},
+            {"content": "user dislikes notifications", "score": 0.9},
+        ]))
+        out = asyncio.run(cc.get_auto_memory_context("editors", limit=5))
+        assert "[Memory] user prefers the code editor Zed" in out
+        assert "[Memory] user dislikes notifications" in out
+
+    def test_get_auto_memory_context_blank_query_returns_empty(self, monkeypatch):
+        cc = ContextCore()
+        called = []
+        self._patch_service(monkeypatch, SimpleNamespace(
+            retrieve=lambda q, l: called.append(q) or [{"content": "x"}]
+        ))
+        assert asyncio.run(cc.get_auto_memory_context("")) == ""
+        assert called == []
+
+    def test_get_auto_memory_context_empty_returns_empty(self, monkeypatch):
+        cc = ContextCore()
+        self._patch_service(monkeypatch, self._fake_service([]))
+        assert asyncio.run(cc.get_auto_memory_context("q")) == ""
+
+    def test_get_auto_memory_context_failure_fail_closed(self, monkeypatch):
+        cc = ContextCore()
+        monkeypatch.setattr(
+            "domains.memory.memory_service.get_memory_service", _boom_service
+        )
+        assert asyncio.run(cc.get_auto_memory_context("q")) == ""
+
+    def test_frame_memory_layer_includes_auto_memory(self, monkeypatch):
+        cc = ContextCore()
+        self._patch_service(monkeypatch, self._fake_service([
+            {"content": "the user's favorite color is blue"},
+        ]))
+        frame = asyncio.run(cc.build_context_frame(query="color"))
+        memory = [l for l in frame.layers if l.layer_type == "memory"]
+        assert memory
+        assert "[Memory] the user's favorite color is blue" in memory[0].content
+        assert memory[0].source == "episodic_store+auto_memory"
+
+    def test_frame_memory_layer_combines_episodic_and_auto(self, monkeypatch):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        cc.episodic_memory["s1"] = [
+            {"content": {"role": "user", "content": "episodic line"}, "timestamp": "t"}
+        ]
+        self._patch_service(monkeypatch, self._fake_service([
+            {"content": "auto-memory line"},
+        ]))
+        frame = asyncio.run(cc.build_context_frame(query="q"))
+        memory = [l for l in frame.layers if l.layer_type == "memory"]
+        assert memory
+        assert "[user]: episodic line" in memory[0].content
+        assert "[Memory] auto-memory line" in memory[0].content
+
+    def test_frame_no_memory_layer_when_everything_empty(self, monkeypatch):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        self._patch_service(monkeypatch, self._fake_service([]))
+        frame = asyncio.run(cc.build_context_frame(query="q"))
+        assert "memory" not in [l.layer_type for l in frame.layers]
+
+    def test_frame_auto_memory_respects_budget(self, monkeypatch):
+        cc = ContextCore(max_tokens=20)
+        cc.set_session_id("s1")
+        cc.add_message("user", "hi")
+        self._patch_service(monkeypatch, self._fake_service([
+            {"content": "x" * 200},
+        ]))
+        frame = asyncio.run(cc.build_context_frame(query="q"))
+        assert "memory" not in [l.layer_type for l in frame.layers]
+
+    def test_include_memory_false_skips_auto_memory(self, monkeypatch):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        self._patch_service(monkeypatch, self._fake_service([
+            {"content": "should not appear"},
+        ]))
+        frame = asyncio.run(cc.build_context_frame(include_memory=False, query="q"))
+        assert "memory" not in [l.layer_type for l in frame.layers]
 
 
 # ── Inspector, export/import, reset ─────────────────────────────────────

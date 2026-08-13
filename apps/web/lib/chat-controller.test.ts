@@ -201,6 +201,22 @@ describe('chatController.getSuggestions', () => {
   })
 })
 
+describe('chatController.inspectContext', () => {
+  it('GETs /context/inspect and returns the inspector', async () => {
+    const inspector = { system_prompt: 'be warm', working_memory: [], semantic_keys: ['espresso'] }
+    apiClient.apiGet.mockResolvedValue(inspector)
+    const result = await chatController.inspectContext()
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/context/inspect')
+    expect(result).toEqual(inspector)
+  })
+
+  it('returns null when the backend is unavailable', async () => {
+    apiClient.apiGet.mockRejectedValue(new Error('down'))
+    const result = await chatController.inspectContext()
+    expect(result).toBeNull()
+  })
+})
+
 describe('chatController.saveSessionContext', () => {
   it('calls apiPost with session context', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'stored' })

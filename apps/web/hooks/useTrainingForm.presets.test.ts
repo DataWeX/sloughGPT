@@ -44,4 +44,17 @@ describe('BUILT_IN_PRESETS', () => {
     expect(large.epochs).toBe(300)
     expect(large.lr).toBe(1e-4)
   })
+
+  it('distill presets have no native architecture params', () => {
+    const distill = BUILT_IN_PRESETS.filter(p => p.method === 'distill')
+    distill.forEach(p => {
+      expect(p.nativeEmbed).toBeUndefined()
+      expect(p.nativeLayers).toBeUndefined()
+    })
+  })
+
+  it('preset names are unique', () => {
+    const names = BUILT_IN_PRESETS.map(p => p.name)
+    expect(new Set(names).size).toBe(names.length)
+  })
 })

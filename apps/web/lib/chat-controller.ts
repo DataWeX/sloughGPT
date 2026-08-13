@@ -126,6 +126,26 @@ export const chatController = {
       return []
     }
   },
+
+  async inspectContext(): Promise<ContextInspector | null> {
+    try {
+      return await apiGet<ContextInspector>('/context/inspect')
+    } catch {
+      return null
+    }
+  },
+}
+
+export interface ContextInspector {
+  system_prompt?: string
+  session_messages?: Array<{ role?: string; content?: string }>
+  working_memory?: unknown[]
+  semantic_keys?: string[]
+  episodic_count?: number
+  sensory_buffer_size?: number
+  frame_history_size?: number
+  last_frame?: Record<string, unknown> | null
+  error?: string
 }
 
 export type { ChatResponse }

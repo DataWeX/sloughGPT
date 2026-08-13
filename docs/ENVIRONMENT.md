@@ -113,6 +113,110 @@ Related knobs: `SLO_GUARD_MAX_RESTARTS` (default `3`), `SLO_GUARD_RESTART_DELAY`
 
 ---
 
+## Memory (Auto-Memory)
+
+### Behavior
+Every completed chat turn (user + assistant, combined ≥ `SLO_MEMORY_MIN_CHARS`
+chars) is distilled into knowledge facts automatically. When facts exist, the
+chat loop builds a context frame: the RAG layer pulls relevance-gated facts
+(`MIN_RELEVANCE_SCORE` + topical overlap, via `enrich_with_knowledge`) and the
+memory layer pulls prior-session episodes; both are injected into the model
+prompt alongside the context-manager system prompt. Disable entirely with
+`SLO_MEMORY_ENABLED=false`.
+
+### SLO_MEMORY_ENABLED
+**Optional** — Default: `true`
+
+Master switch for the auto-memory layer. When `false`, every memory method
+(`remember`, `retrieve`, `store`) no-ops so the chat loop and future task
+executor are completely unaffected.
+
+```bash
+SLO_MEMORY_ENABLED=false   # disable long-term learning
+```
+
+### SLO_MEMORY_MIN_CHARS
+**Optional** — Default: `80`
+
+Minimum combined length (user message + assistant response) before a completed
+turn is worth remembering. Short small-talk turns are noise, not knowledge.
+
+```bash
+SLO_MEMORY_MIN_CHARS=120   # only remember substantive exchanges
+```
+
+### SLO_MEMORY_MAX_FACTS
+**Optional** — Default: `5`
+
+Maximum number of memory facts returned by a single retrieval.
+
+```bash
+SLO_MEMORY_MAX_FACTS=10
+```
+
+### SLO_MEMORY_STORE_PATH
+**Optional** — Default: `data/memory`
+
+Directory used by the task-backed memory store (`memory.remember` /
+`memory.store` / `memory.consolidate` tasks). Every successfully processed
+task appends one JSONL provenance record to `<store_path>/facts.jsonl`. The
+learner's `KnowledgeMemoryProvider` remains the retrieval index; this archive
+is the durable, inspectable record of task-mined facts.
+
+### SLO_MEMORY_SYNC
+**Optional** — Default: `false`
+
+When `true`, `remember()` stores inline instead of being offloaded to a worker
+thread. Useful for tests and CLI/task producers; the chat loop always uses
+`asyncio.to_thread`.
+
+### SLO_MEMORY_CONSOLIDATION_THRESHOLD
+**Optional** — Default: `0.80`
+
+Minimum n-gram cosine similarity for two same-topic facts to be treated as
+near-duplicates by the `memory.consolidate` task. When merged, the longest
+fact is kept and the duplicates are deleted. The default `0.80` collapses
+near-verbatim copies (measured ~0.845) while keeping genuine paraphrases
+(~0.586) and cross-topic facts distinct. Lower to merge more aggressively
+(paraphrases), raise to only collapse near-verbatim copies.
+
+```bash
+SLO_MEMORY_CONSOLIDATION_THRESHOLD=0.90   # conservative: only near-verbatim
+```
+
+### SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES
+**Optional** — Default: `60`
+
+How often the server runs an automatic maintenance pass. Each pass prunes
+the provenance archive to `SLO_MEMORY_ARCHIVE_RETENTION_DAYS` and enqueues
+one `memory.consolidate` task, so near-duplicate facts are merged and the
+audit trail stays bounded without operator action. Set to `0` to disable
+automatic maintenance (consolidation can still be run manually via
+`sloughgpt memory consolidate`).
+
+```bash
+SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES=1440   # once a day
+```
+
+### SLO_MEMORY_ARCHIVE_RETENTION_DAYS
+**Optional** — Default: `30`
+
+Every `memory.store`, `memory.remember`, and `memory.consolidate` task append
+a durable record to the provenance archive (`<store_path>/facts.jsonl`). The
+archive is bounded automatically: every maintenance pass (see
+`SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES`) prunes records older than this
+window, and it can be pruned on demand with
+`sloughgpt memory archive --prune-days N` (default retention `30`). Records
+without a timestamp are treated as oldest and pruned first. The archive is
+append-only and fail-closed: a corrupt line is skipped on read, and a failed
+prune rewrite leaves the original file untouched.
+
+```bash
+SLO_MEMORY_ARCHIVE_RETENTION_DAYS=90   # keep three months of provenance
+```
+
+---
+
 ## Logging
 
 ### SLO_LOG_LEVEL

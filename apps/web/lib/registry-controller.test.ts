@@ -46,4 +46,16 @@ describe('registryController', () => {
     const result = await registryController.best()
     expect(result).toBeNull()
   })
+
+  it('list calls correct endpoint', async () => {
+    apiGet.mockResolvedValue([])
+    await registryController.list()
+    expect(apiGet).toHaveBeenCalledWith('/registry/models')
+  })
+
+  it('stats calls correct endpoint', async () => {
+    apiGet.mockResolvedValue({ total_models: 0, loaded_models: 0, failed_models: 0, circuit_breaker_open: false })
+    await registryController.stats()
+    expect(apiGet).toHaveBeenCalledWith('/registry/stats')
+  })
 })

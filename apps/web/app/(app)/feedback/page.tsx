@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { feedbackController, type FeedbackStats, type WorkflowStatus, type TrainingStats } from '@/lib/feedback-controller'
 import { FeedbackInsightsCard } from '@/components/feedback/FeedbackInsightsCard'
+import { WorkflowSection } from '@/components/workflow/WorkflowSection'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -293,6 +294,8 @@ export default function FeedbackPage() {
                 </CardContent>
               </Card>
             )}
+
+            <WorkflowSection />
           </>
         )}
       </div>

@@ -205,7 +205,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     onComplete?: () => void,
   ) => {
     setFinetunedModelPath(null); setFinetunedModelLoss(null)
-    trainingJobsController.startHFFineTune({
+    trainingJobsController.create({
       model: params.model,
       dataset: params.dataset,
       name: `${params.model}-${Date.now()}`,
@@ -216,7 +216,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       lora_rank: 8,
     }).then(resp => {
       const jobId = resp.job_id
-      addToast(resp.message || 'Training queued', 'info')
+      addToast('Training queued', 'info')
       setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.epochs)
       const pollId = setInterval(async () => {
         try {
