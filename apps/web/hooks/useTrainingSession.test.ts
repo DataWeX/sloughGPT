@@ -97,6 +97,27 @@ describe('useTrainingSession', () => {
     }
   })
 
+  it('startSSETraining captures step/ETA/speed/elapsed fields', async () => {
+    mockStartAutoTrain.mockResolvedValue(undefined)
+    const { result } = renderHook(() => useTrainingSession())
+    act(() => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast) })
+
+    const es = (globalThis as any).__lastES as MockEventSource | null
+    if (es) {
+      es.dispatchMessage(JSON.stringify({
+        stream: 'auto-train',
+        phase: 'TRAIN',
+        data: { progress: 40, global_step: 80, total_steps: 200, steps_per_sec: 4.25, eta_s: 28, elapsed_s: 19 },
+      }))
+      expect(result.current.progress).toBe(40)
+      expect(result.current.globalStep).toBe(80)
+      expect(result.current.totalSteps).toBe(200)
+      expect(result.current.stepsPerSec).toBe(4.25)
+      expect(result.current.eta).toBe(28)
+      expect(result.current.elapsedSeconds).toBe(19)
+    }
+  })
+
   it('startSSETraining handles complete status', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const onCheckpointUpdate = vi.fn()

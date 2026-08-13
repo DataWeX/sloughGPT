@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
+import { makeForm, makeDatasets, makeCheckpoints } from './__test-helper'
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
@@ -43,93 +44,6 @@ vi.mock('@/components/training/DatasetSelector', () => ({
 vi.mock('@/components/training/TrainingPresets', () => ({
   TrainingPresets: () => <div data-testid="training-presets" />,
 }))
-
-function makeForm(overrides: Record<string, any> = {}) {
-  return {
-    method: 'distill' as const,
-    inputMode: 'dataset' as const,
-    textInput: '',
-    showAdvanced: false,
-    algo: '',
-    trainingEpochs: 3,
-    trainingLR: 0.001,
-    trainingBatchSize: 8,
-    availableModels: [],
-    selectedModel: '',
-    useLoRA: false,
-    visualVisionEncoder: '',
-    visualLLM: '',
-    visualStage1Epochs: 1,
-    visualStage2Epochs: 2,
-    nativeEmbed: 64,
-    nativeLayers: 4,
-    nativeHeads: 4,
-    nativeBlockSize: 128,
-    loadingFinetunedModel: false,
-    allJobs: [] as any[],
-    customPresets: [],
-    canStart: true,
-    setMethod: vi.fn(),
-    setInputMode: vi.fn(),
-    setTextInput: vi.fn(),
-    setShowAdvanced: vi.fn(),
-    setAlgo: vi.fn(),
-    setTrainingEpochs: vi.fn(),
-    setTrainingLR: vi.fn(),
-    setTrainingBatchSize: vi.fn(),
-    setSelectedModel: vi.fn(),
-    setUseLoRA: vi.fn(),
-    setVlmVisionEncoder: vi.fn(),
-    setVlmLLM: vi.fn(),
-    setVlmStage1Epochs: vi.fn(),
-    setVlmStage2Epochs: vi.fn(),
-    setNativeEmbed: vi.fn(),
-    setNativeLayers: vi.fn(),
-    setNativeHeads: vi.fn(),
-    setNativeBlockSize: vi.fn(),
-    setLoadingFinetunedModel: vi.fn(),
-    applyPreset: vi.fn(),
-    saveCustomPreset: vi.fn(),
-    deleteCustomPreset: vi.fn(),
-    startTraining: vi.fn(),
-    ...overrides,
-  }
-}
-
-function makeDatasets(overrides: Record<string, any> = {}) {
-  return {
-    datasets: [],
-    selectedDataset: '',
-    loadingDatasets: false,
-    importModalOpen: false,
-    datasetPreview: null as any,
-    setSelectedDataset: vi.fn(),
-    setImportModalOpen: vi.fn(),
-    setDatasetPreview: vi.fn(),
-    fetchDatasets: vi.fn(),
-    ...overrides,
-  }
-}
-
-function makeCheckpoints(overrides: Record<string, any> = {}) {
-  return {
-    checkpoints: [] as any[],
-    loadingCheckpoints: false,
-    loadingJobs: false,
-    activeCheckpoint: null,
-    builds: [],
-    loadingBuilds: false,
-    jobs: [],
-    setActiveCheckpoint: vi.fn(),
-    setCheckpoints: vi.fn(),
-    fetchCheckpoints: vi.fn(),
-    fetchBuilds: vi.fn(),
-    fetchJobs: vi.fn(),
-    handleLoadCheckpoint: vi.fn(),
-    handleDeleteCheckpoint: vi.fn(),
-    ...overrides,
-  }
-}
 
 afterEach(() => { cleanup() })
 

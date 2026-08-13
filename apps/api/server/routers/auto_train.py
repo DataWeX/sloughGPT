@@ -13,7 +13,7 @@ mutable globals.
 
 from dataclasses import dataclass, field
 import threading
-from typing import Optional
+from typing import Any, Dict, Optional
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
@@ -52,6 +52,23 @@ class AutoTrainState:
 _auto_train_cancel_event: Optional[threading.Event] = None
 _auto_train_pause_event: Optional[threading.Event] = None
 _complete_enqueued = [False]
+
+_turbo_lock = threading.Lock()
+_turbo_cancel_event = threading.Event()
+_turbo_state: Dict[str, Any] = {
+    "status": "idle",  # idle | running | complete | error
+    "job_id": None,
+    "global_step": 0,
+    "total_steps": 0,
+    "progress": 0.0,
+    "loss": None,
+    "learning_rate": None,
+    "steps_per_sec": None,
+    "eta_s": None,
+    "elapsed_s": None,
+    "result": None,
+    "error": None,
+}
 
 
 class _AutoTrainCancelled(Exception):
@@ -392,6 +409,7 @@ class AutoTrainRouter:
     def _register_routes(self):
         self.router.add_api_route("/start", self.start, methods=["POST"])
         self.router.add_api_route("/start-turbo", self.start_turbo, methods=["POST"])
+        self.router.add_api_route("/turbo/status", self.turbo_status, methods=["GET"])
         self.router.add_api_route("/stop", self.stop, methods=["POST"])
         self.router.add_api_route("/pause", self.pause, methods=["POST"])
         self.router.add_api_route("/resume", self.resume, methods=["POST"])
@@ -486,21 +504,69 @@ class AutoTrainRouter:
         return {"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": self.state.config}
 
     async def start_turbo(self, req: TurboStartRequest):
+        global _turbo_state, _turbo_cancel_event
+
+        data_path = req.data_path
+        if not data_path and req.dataset_id:
+            data_path = _resolve_dataset_path(req.dataset_id)
+
+        if not data_path:
+            return {"status": "error", "message": "No data_path or dataset_id provided"}
+
+        with _turbo_lock:
+            if _turbo_state.get("status") == "running":
+                return {"status": "error", "message": "A turbo training job is already running"}
+            _turbo_state = {
+                "status": "running",
+                "job_id": f"turbo_{int(time.time())}",
+                "global_step": 0,
+                "total_steps": 0,
+                "progress": 0.0,
+                "loss": None,
+                "learning_rate": None,
+                "steps_per_sec": None,
+                "eta_s": None,
+                "elapsed_s": None,
+                "result": None,
+                "error": None,
+            }
+            _turbo_cancel_event = threading.Event()
+
+        output_dir = Path(self.REPO_ROOT / "models" / "turbo-trained")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        job_id = _turbo_state["job_id"]
+        threading.Thread(
+            target=self._run_turbo,
+            args=(req, data_path, str(output_dir), job_id),
+            name=f"turbo-train-{job_id}",
+            daemon=True,
+        ).start()
+
+        autotrain_logger.info(
+            "Turbo training started in background: job_id=%s data=%s",
+            job_id, data_path, extra={"tag": "TRAIN"},
+        )
+        return {"status": "started", "job_id": job_id, "message": "Turbo training started in background"}
+
+    def _run_turbo(self, req: TurboStartRequest, data_path: str, output_dir: str, job_id: str) -> None:
+        """Run SloughGPTTrainer on a daemon thread, publishing progress to _turbo_state."""
+        from domains.training.train_pipeline import SloughGPTTrainer
+
+        def on_progress(info: Dict[str, Any]) -> None:
+            with _turbo_lock:
+                _turbo_state["global_step"] = int(info.get("global_step", _turbo_state["global_step"]))
+                _turbo_state["total_steps"] = int(info.get("total_steps", _turbo_state["total_steps"]))
+                _turbo_state["progress"] = float(info.get("progress_percent", 0))
+                _turbo_state["loss"] = info.get("train_loss", _turbo_state["loss"])
+                _turbo_state["learning_rate"] = info.get("learning_rate", _turbo_state["learning_rate"])
+                _turbo_state["steps_per_sec"] = info.get("steps_per_sec", _turbo_state["steps_per_sec"])
+                _turbo_state["eta_s"] = info.get("eta_s", _turbo_state["eta_s"])
+                _turbo_state["elapsed_s"] = info.get("elapsed_s", _turbo_state["elapsed_s"])
+
         try:
-            from domains.training.train_pipeline import SloughGPTTrainer
-
-            data_path = req.data_path
-            if not data_path and req.dataset_id:
-                data_path = _resolve_dataset_path(req.dataset_id)
-
-            if not data_path:
-                return {"status": "error", "message": "No data_path or dataset_id provided"}
-
             n_layer = req.n_layer or req.n_decoder_layers or 3
             block_size = req.block_size or req.max_tgt_len or 128
-
-            output_dir = Path(self.REPO_ROOT / "models" / "turbo-trained")
-            output_dir.mkdir(parents=True, exist_ok=True)
 
             trainer = SloughGPTTrainer(
                 data_path=data_path,
@@ -513,36 +579,63 @@ class AutoTrainRouter:
                 batch_size=req.batch_size,
                 epochs=req.epochs,
                 lr=req.learning_rate,
-                checkpoint_dir=str(output_dir),
+                checkpoint_dir=output_dir,
             )
 
-            autotrain_logger.info("Starting SloughGPTTrainer with method=%s data=%s", req.method, data_path, extra={"tag": "TRAIN"})
-            result = trainer.train()
+            autotrain_logger.info(
+                "Starting SloughGPTTrainer with method=%s data=%s",
+                req.method, data_path, extra={"tag": "TRAIN"},
+            )
+            result = trainer.train(on_progress=on_progress, cancel_event=_turbo_cancel_event)
             autotrain_logger.info("SloughGPTTrainer result: %s", result, extra={"tag": "TRAIN"})
-            if not (isinstance(result, dict) and result.get("status") == "error"):
-                try:
-                    from infrastructure.auth import get_audit_logger
-                    get_audit_logger().log(
-                        "training.start",
-                        resource=data_path or req.dataset_id or "turbo",
-                        detail="turbo",
-                        extra={"method": req.method or "", "epochs": req.epochs},
-                    )
-                except Exception:
-                    pass
-            return result
+
+            if _turbo_cancel_event.is_set():
+                with _turbo_lock:
+                    _turbo_state["status"] = "error"
+                    _turbo_state["error"] = "Training cancelled"
+                return
+
+            if isinstance(result, dict) and result.get("status") == "error":
+                with _turbo_lock:
+                    _turbo_state["status"] = "error"
+                    _turbo_state["error"] = result.get("message") or "Training failed"
+                return
+
+            try:
+                from infrastructure.auth import get_audit_logger
+                get_audit_logger().log(
+                    "training.start",
+                    resource=data_path or req.dataset_id or "turbo",
+                    detail="turbo",
+                    extra={"method": req.method or "", "epochs": req.epochs},
+                )
+            except Exception:
+                pass
+            with _turbo_lock:
+                _turbo_state["status"] = "complete"
+                _turbo_state["result"] = result
+                _turbo_state["progress"] = 100.0
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
-            emit_error_event(err, source="auto_train_start")
+            emit_error_event(err, source="auto_train_turbo")
             autotrain_logger.error("SloughGPTTrainer failed: %s", e, extra={"tag": "TRAIN"})
-            return {"status": "error", "message": str(e), "error_code": err.code}
+            with _turbo_lock:
+                _turbo_state["status"] = "error"
+                _turbo_state["error"] = str(e)
+
+    async def turbo_status(self):
+        """Return the current turbo training job progress."""
+        with _turbo_lock:
+            return dict(_turbo_state)
 
     async def stop(self):
         global _auto_train_cancel_event
         self.state.running = False
         if _auto_train_cancel_event is not None:
             _auto_train_cancel_event.set()
+        _turbo_cancel_event.set()
+        if _auto_train_cancel_event is not None:
             try:
                 from infrastructure.auth import get_audit_logger
                 get_audit_logger().log(

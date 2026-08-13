@@ -1018,6 +1018,8 @@ class SloughGPTTrainer:
             denom = self._progress_denominator(steps_per_epoch)
             pct = 100 if done else min(99, int(100 * self.global_step / denom))
             lr = self.scheduler.get_last_lr()[0] if self.scheduler else self.config.learning_rate
+            sps = self._steps_per_sec()
+            eta = None if sps <= 0 else max(0, int((denom - self.global_step) / sps))
             try:
                 on_progress(
                     {
@@ -1025,10 +1027,14 @@ class SloughGPTTrainer:
                         "epoch": int(self.current_epoch + 1),
                         "epochs": int(self.config.epochs),
                         "steps_per_epoch": int(steps_per_epoch),
+                        "total_steps": int(denom),
                         "progress_percent": int(pct),
                         "train_loss": train_loss,
                         "eval_loss": eval_loss,
                         "learning_rate": float(lr),
+                        "steps_per_sec": round(sps, 2),
+                        "eta_s": eta,
+                        "elapsed_s": round(self._training_elapsed(), 1),
                         "done": done,
                         "done_reason": done_reason,
                     }
@@ -1087,8 +1093,13 @@ class SloughGPTTrainer:
                         if self.scheduler
                         else self.config.learning_rate
                     )
+                    denom = self._progress_denominator(steps_per_epoch)
+                    pct = min(100, int(100 * self.global_step / denom))
+                    sps = self._steps_per_sec()
+                    eta = self._eta_seconds(steps_per_epoch)
                     logger.info(
-                        f"Step {self.global_step} | Loss: {metrics['loss']:.4f} | LR: {lr:.2e}",
+                        f"Step {self.global_step}/{denom} | Loss: {metrics['loss']:.4f} | "
+                        f"LR: {lr:.2e} | {pct}% | {sps:.1f} steps/s | ETA {self._format_eta(eta)}",
                         extra={"tag": "TRAIN"},
                     )
                     if self._experiment_tracker is not None:

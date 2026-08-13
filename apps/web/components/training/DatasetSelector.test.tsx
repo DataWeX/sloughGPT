@@ -4,7 +4,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 import { datasetLabel, DatasetSelector } from './DatasetSelector'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
-import type { Dataset } from '@/lib/dataset-controller'
+import { ds, makeDatasets } from './__test-helper'
 
 vi.mock('@/components/DatasetImportModal', () => ({
   DatasetImportModal: () => <div data-testid="import-modal" />,
@@ -19,27 +19,7 @@ vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
 }))
 
-const ds = (overrides: Partial<Dataset> = {}) => ({
-  id: '1',
-  name: 'shakespeare',
-  type: 'text',
-  source: '',
-  size: 0,
-  created_at: '2026-01-01T00:00:00Z',
-  ...overrides,
-})
-
-const datasets: UseTrainingDatasetsReturn = {
-  datasets: [],
-  selectedDataset: '',
-  loadingDatasets: false,
-  importModalOpen: false,
-  datasetPreview: null,
-  setSelectedDataset: vi.fn(),
-  setImportModalOpen: vi.fn(),
-  setDatasetPreview: vi.fn(),
-  fetchDatasets: vi.fn(),
-}
+const datasets: UseTrainingDatasetsReturn = makeDatasets()
 
 describe('datasetLabel', () => {
   it('returns name only for basic dataset', () => {

@@ -556,6 +556,10 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 rec["progress"] = int(info.get("progress_percent", rec.get("progress", 0)))
                 rec["current_epoch"] = int(info.get("epoch", rec.get("current_epoch", 0)))
                 rec["global_step"] = int(info.get("global_step", 0))
+                rec["total_steps"] = int(info.get("total_steps", rec.get("total_steps", 0)))
+                rec["steps_per_sec"] = info.get("steps_per_sec", rec.get("steps_per_sec"))
+                rec["eta_s"] = info.get("eta_s", rec.get("eta_s"))
+                rec["elapsed_s"] = info.get("elapsed_s", rec.get("elapsed_s"))
                 tl = info.get("train_loss")
                 if tl is not None:
                     rec["train_loss"] = float(tl)

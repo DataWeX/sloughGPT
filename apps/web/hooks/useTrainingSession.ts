@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { trainingJobsController } from '@/lib/controllers'
+import { trainingJobsController, type TrainingJob } from '@/lib/controllers'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -14,6 +14,11 @@ export interface TrainingSessionState {
   progress: number
   epoch: number
   totalEpochs: number
+  globalStep: number
+  totalSteps: number
+  eta: number | null
+  stepsPerSec: number | null
+  elapsedSeconds: number | null
   message: string
   startTime: number | null
   lossHistory: { step: number; loss: number }[]
@@ -36,6 +41,11 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
   setProgress: (p: number) => void
   setEpoch: (e: number) => void
   setTotalEpochs: (t: number) => void
+  setGlobalStep: (s: number) => void
+  setTotalSteps: (s: number) => void
+  setEta: (e: number | null) => void
+  setStepsPerSec: (s: number | null) => void
+  setElapsedSeconds: (e: number | null) => void
   setMessage: (m: string) => void
   setLossHistory: (h: { step: number; loss: number }[]) => void
   setEvalResult: (r: string | null) => void
@@ -82,6 +92,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   const [progress, setProgress] = useState(0)
   const [epoch, setEpoch] = useState(0)
   const [totalEpochs, setTotalEpochs] = useState(0)
+  const [globalStep, setGlobalStep] = useState(0)
+  const [totalSteps, setTotalSteps] = useState(0)
+  const [eta, setEta] = useState<number | null>(null)
+  const [stepsPerSec, setStepsPerSec] = useState<number | null>(null)
+  const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null)
   const [message, setMessage] = useState('')
   const [startTime, setStartTime] = useState<number | null>(null)
   const [lossHistory, setLossHistory] = useState<{ step: number; loss: number }[]>([])
@@ -113,6 +128,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     setDistillCheckpoint(null); setDistillFinalLoss(null); setDistillEpochs(null)
     setVisualOutputDir(null); setVisualSouPath(null)
     setPhase('idle'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
+    setGlobalStep(0); setTotalSteps(0); setEta(null); setStepsPerSec(null); setElapsedSeconds(null)
     setMessage(''); setLossHistory([]); setEvalResult(null)
   }, [])
 
@@ -146,6 +162,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     esRef.current?.close(); esRef.current = null
     trainingJobsController.startAutoTrain(body).then(() => {
       setPhase('TRAINING'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
+      setGlobalStep(0); setTotalSteps(0); setEta(null); setStepsPerSec(null); setElapsedSeconds(null)
       setMessage(''); setLossHistory([]); setEvalResult(null); setStartTime(Date.now())
       const es = new EventSource(`${PUBLIC_API_URL}/auto-train/stream`)
       esRef.current = es
@@ -169,6 +186,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             })
           }
           if (env.data?.progress != null) setProgress(env.data.progress)
+          if (env.data?.global_step != null) setGlobalStep(env.data.global_step)
+          if (env.data?.total_steps != null) setTotalSteps(env.data.total_steps)
+          if (env.data?.eta_s != null) setEta(env.data.eta_s)
+          if (env.data?.steps_per_sec != null) setStepsPerSec(env.data.steps_per_sec)
+          if (env.data?.elapsed_s != null) setElapsedSeconds(env.data.elapsed_s)
           if (env.meta?.epoch != null) setEpoch(env.meta.epoch)
           if (env.meta?.total_epochs != null) setTotalEpochs(env.meta.total_epochs)
           if (env.message) setMessage(env.message)
@@ -236,6 +258,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             addToast(myJob.error || 'Training failed', 'error')
           } else if (myJob.loss != null) {
             setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
+            if (myJob.global_step != null) setGlobalStep(myJob.global_step)
+            if (myJob.total_steps != null) setTotalSteps(myJob.total_steps)
+            if (myJob.eta_s != null) setEta(myJob.eta_s)
+            if (myJob.steps_per_sec != null) setStepsPerSec(myJob.steps_per_sec)
+            if (myJob.elapsed_s != null) setElapsedSeconds(myJob.elapsed_s)
           }
         } catch { clearInterval(pollId); ftPollRef.current = null }
       }, 3000)
@@ -313,12 +340,15 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [])
 
   return {
-    phase, loss, progress, epoch, totalEpochs, message, startTime, lossHistory, evalResult,
+    phase, loss, progress, epoch, totalEpochs, globalStep, totalSteps, eta, stepsPerSec, elapsedSeconds,
+    message, startTime, lossHistory, evalResult,
     finetunedModelPath, finetunedModelLoss, distillCheckpoint, distillFinalLoss, distillEpochs,
     turboPhase, turboResult, turboError,
     visualOutputDir, visualSouPath,
     paused,
-    setPhase, setLoss, setProgress, setEpoch, setTotalEpochs, setMessage,
+    setPhase, setLoss, setProgress, setEpoch, setTotalEpochs,
+    setGlobalStep, setTotalSteps, setEta, setStepsPerSec, setElapsedSeconds,
+    setMessage,
     setLossHistory, setEvalResult,
     setFinetunedModelPath, setFinetunedModelLoss,
     setDistillCheckpoint, setDistillFinalLoss, setDistillEpochs,

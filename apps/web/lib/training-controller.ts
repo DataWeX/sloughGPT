@@ -18,6 +18,10 @@ export interface TrainingJob {
   epochs?: number
   current_epoch?: number
   global_step?: number
+  total_steps?: number
+  steps_per_sec?: number
+  eta_s?: number | null
+  elapsed_s?: number
   loss?: number
   train_loss?: number
   eval_loss?: number
@@ -148,6 +152,21 @@ export interface TurboTrainResponse {
   message?: string
 }
 
+export interface TurboJobStatus {
+  status: 'idle' | 'running' | 'complete' | 'error'
+  job_id?: string | null
+  global_step?: number
+  total_steps?: number
+  progress?: number
+  loss?: number | null
+  learning_rate?: number | null
+  steps_per_sec?: number | null
+  eta_s?: number | null
+  elapsed_s?: number | null
+  error?: string | null
+  result?: Record<string, unknown> | null
+}
+
 export const trainingJobsController = {
   async startAutoTrain(params?: AutoTrainStartRequest): Promise<AutoTrainStartResponse> {
     return apiPost<AutoTrainStartResponse>('/auto-train/start', params ?? null)
@@ -174,6 +193,10 @@ export const trainingJobsController = {
 
   async startTurboTrain(params?: TurboTrainStartRequest): Promise<TurboTrainResponse> {
     return apiPost<TurboTrainResponse>('/auto-train/start-turbo', params ?? null)
+  },
+
+  async getTurboStatus(): Promise<TurboJobStatus> {
+    return apiGet<TurboJobStatus>('/auto-train/turbo/status')
   },
 
   async list(): Promise<TrainingJob[]> {

@@ -952,9 +952,12 @@ class TestTrain:
         ev = events[0]
         assert set(ev) >= {"global_step", "epoch", "epochs", "steps_per_epoch",
                            "progress_percent", "train_loss", "eval_loss",
-                           "learning_rate", "done", "done_reason"}
+                           "learning_rate", "done", "done_reason",
+                           "total_steps", "steps_per_sec", "eta_s", "elapsed_s"}
         assert ev["epochs"] == 1
         assert ev["progress_percent"] < 100
+        assert ev["total_steps"] >= ev["global_step"]
+        assert ev["eta_s"] is None or ev["eta_s"] >= 0
 
     def test_on_progress_exception_caught(self, data_path, tmp_path):
         cfg = tiny_config(tmp_path, max_steps=1)

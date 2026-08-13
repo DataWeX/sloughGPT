@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Button, Progress } from '@sloughgpt/strui'
 import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
 import dynamic from 'next/dynamic'
 import type { TrainingFormState } from '@/hooks/useTrainingForm'
@@ -24,6 +24,17 @@ const STEPS = [
 ] as const
 
 type StepId = typeof STEPS[number]['id']
+
+function formatDuration(sec: number | null): string {
+  if (sec == null || !Number.isFinite(sec) || sec < 0) return '--'
+  const total = Math.round(sec)
+  const s = total % 60
+  const m = Math.floor(total / 60) % 60
+  const h = Math.floor(total / 3600)
+  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`
+  if (m > 0) return `${m}m ${s.toString().padStart(2, '0')}s`
+  return `${s}s`
+}
 
 function StepIndicator({ current, completed, onStepClick }: { current: StepId; completed: Set<StepId>; onStepClick: (id: StepId) => void }) {
   return (
@@ -131,6 +142,24 @@ export function TrainingPipeline({
         <CardContent className="space-y-4">
           {session.lossHistory.length > 0 && (
             <LossChart data={session.lossHistory.map(p => ({ step: p.step, value: p.loss, type: 'train' as const }))} height={200} />
+          )}
+
+          {session.phase !== 'complete' && session.phase !== 'error' && (
+            <div className="space-y-2">
+              <Progress value={session.progress} max={100} label="Progress" showValue size="sm" />
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                {session.totalSteps > 0 && (
+                  <span>Step {session.globalStep}/{session.totalSteps}</span>
+                )}
+                {session.stepsPerSec != null && session.stepsPerSec > 0 && (
+                  <span>{session.stepsPerSec.toFixed(1)} steps/s</span>
+                )}
+                {session.eta != null && (
+                  <span>ETA {formatDuration(session.eta)}</span>
+                )}
+                <span>Elapsed {formatDuration(session.elapsedSeconds)}</span>
+              </div>
+            </div>
           )}
 
           {session.phase === 'complete' && (

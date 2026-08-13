@@ -95,6 +95,11 @@ const session: UseTrainingSessionReturn = {
   progress: 0,
   epoch: 0,
   totalEpochs: 0,
+  globalStep: 0,
+  totalSteps: 0,
+  eta: null,
+  stepsPerSec: null,
+  elapsedSeconds: null,
   message: '',
   startTime: null,
   lossHistory: [],
@@ -114,6 +119,11 @@ const session: UseTrainingSessionReturn = {
   setProgress: vi.fn(),
   setEpoch: vi.fn(),
   setTotalEpochs: vi.fn(),
+  setGlobalStep: vi.fn(),
+  setTotalSteps: vi.fn(),
+  setEta: vi.fn(),
+  setStepsPerSec: vi.fn(),
+  setElapsedSeconds: vi.fn(),
   setMessage: vi.fn(),
   setLossHistory: vi.fn(),
   setEvalResult: vi.fn(),
@@ -198,6 +208,37 @@ describe('TrainingPipeline', () => {
     const trainSession = { ...session, trainingRunning: true, epoch: 3, totalEpochs: 10 }
     render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
     expect(screen.getByText('Epoch 3/10')).toBeDefined()
+  })
+
+  it('shows step, speed, ETA and elapsed stats during training', () => {
+    const trainSession = {
+      ...session,
+      trainingRunning: true,
+      phase: 'TRAINING' as const,
+      globalStep: 80,
+      totalSteps: 500,
+      stepsPerSec: 4.25,
+      eta: 98,
+      elapsedSeconds: 20,
+    }
+    render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    expect(screen.getByText('Step 80/500')).toBeDefined()
+    expect(screen.getByText('4.3 steps/s')).toBeDefined()
+    expect(screen.getByText('ETA 1m 38s')).toBeDefined()
+    expect(screen.getByText('Elapsed 20s')).toBeDefined()
+  })
+
+  it('does not show stats when training is complete', () => {
+    const completeSession = {
+      ...session,
+      trainingRunning: true,
+      phase: 'complete' as const,
+      globalStep: 500,
+      totalSteps: 500,
+      eta: 0,
+    }
+    render(<TrainingPipeline form={form} datasets={datasets} session={completeSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    expect(screen.queryByText(/Step /)).toBeNull()
   })
 
   it('shows complete message and Test button', () => {

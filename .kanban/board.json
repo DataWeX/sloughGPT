@@ -24,6 +24,23 @@
   ],
   "cards": [
     {
+      "id": "20260813_143145_training-eta-integration-log-sse-ui",
+      "title": "Training ETA integration (log + SSE + UI)",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "ux",
+        "integration"
+      ],
+      "created_at": "2026-08-13T14:31:45.141350+00:00",
+      "updated_at": "2026-08-13T14:31:45.141350+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260813_130054_memorytab-store-fact-importance-badge",
       "title": "MemoryTab store-fact + importance badge",
       "description": "Added manual Store fact to the chat sidebar MemoryTab (mirrors MemoryCard handleAdd): '+ Store' toggle in the search row, inline form (content textarea + optional topic + Save, disabled until content). On success the stored fact is highlighted via the existing pendingFactRef highlight path (matches memory-event behavior). Inline error text for duplicate/memory-off ('Already remembered (or memory is disabled)') and failure ('Failed to store fact') since the chat page mounts no toast store. Added importance badge (importance X.X) to item metadata row, matching MemoryCard. 4 new tests (store+highlight, duplicate inline error, Save disabled state, importance badge). tsc 0; MemoryTab 39/39; panels 117/117.",
