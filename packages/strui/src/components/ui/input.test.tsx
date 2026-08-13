@@ -1,7 +1,26 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { Input, SearchInput, inputFieldClassName } from './input'
+import { Input, SearchInput, inputFieldClassName, sanitizeInputType } from './input'
+
+describe('sanitizeInputType', () => {
+  it('keeps safe text-like types', () => {
+    for (const t of ['text', 'email', 'password', 'number', 'search', 'tel', 'url', 'date', 'time']) {
+      expect(sanitizeInputType(t)).toBe(t)
+    }
+  })
+
+  it('coerces control types to text', () => {
+    for (const t of ['file', 'checkbox', 'radio', 'button', 'hidden', 'submit', 'reset', 'image']) {
+      expect(sanitizeInputType(t)).toBe('text')
+    }
+  })
+
+  it('coerces unknown and empty types to text', () => {
+    expect(sanitizeInputType('banana')).toBe('text')
+    expect(sanitizeInputType(undefined)).toBe('text')
+  })
+})
 
 describe('Input', () => {
   it('renders input element', () => {
@@ -68,6 +87,27 @@ describe('Input', () => {
     expect(html).toContain('type="password"')
   })
 
+  it('sanitizes unsupported type to text', () => {
+    const html = renderToStaticMarkup(<Input type="file" />)
+    expect(html).toContain('type="text"')
+    expect(html).not.toContain('type="file"')
+  })
+
+  it('defaults type to text', () => {
+    const html = renderToStaticMarkup(<Input />)
+    expect(html).toContain('type="text"')
+  })
+
+  it('sets aria-invalid when error', () => {
+    const html = renderToStaticMarkup(<Input error aria-describedby="x-error" />)
+    expect(html).toContain('aria-invalid="true"')
+  })
+
+  it('omits aria-invalid when not in error', () => {
+    const html = renderToStaticMarkup(<Input />)
+    expect(html).not.toContain('aria-invalid')
+  })
+
   it('passes placeholder prop', () => {
     const html = renderToStaticMarkup(<Input placeholder="Enter text" />)
     expect(html).toContain('placeholder="Enter text"')
@@ -93,6 +133,17 @@ describe('SearchInput', () => {
   it('hides clear button when value is empty', () => {
     const html = renderToStaticMarkup(<SearchInput value="" onChange={() => {}} />)
     expect(html).not.toContain('Clear search')
+  })
+
+  it('defaults aria-label to Search', () => {
+    const html = renderToStaticMarkup(<SearchInput />)
+    expect(html).toContain('aria-label="Search"')
+  })
+
+  it('respects a provided aria-label', () => {
+    const html = renderToStaticMarkup(<SearchInput aria-label="Find models" />)
+    expect(html).toContain('aria-label="Find models"')
+    expect(html).not.toContain('aria-label="Search"')
   })
 
   it('accepts custom className', () => {

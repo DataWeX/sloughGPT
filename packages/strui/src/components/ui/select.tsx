@@ -26,6 +26,7 @@ interface SelectContextValue {
   onValueChange: (value: string) => void
   placeholder?: string
   triggerRef: React.RefObject<HTMLButtonElement | null>
+  contentId: string
   registerItem: (el: HTMLElement | null) => void
   unregisterItem: (el: HTMLElement | null) => void
   focusFirst: () => void
@@ -59,6 +60,7 @@ function Select({ value: controlledValue, defaultValue = '', onValueChange, chil
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const itemsRef = useRef<Map<HTMLElement, number>>(new Map())
   const nextId = useRef(0)
+  const contentId = useId()
 
   const handleChange = useCallback(
     (v: string) => {
@@ -108,7 +110,7 @@ function Select({ value: controlledValue, defaultValue = '', onValueChange, chil
 
   return (
     <SelectContext.Provider
-      value={{ open, onOpenChange: setOpen, value, onValueChange: handleChange, triggerRef, registerItem, unregisterItem, focusFirst, focusNext, focusPrev }}
+      value={{ open, onOpenChange: setOpen, value, onValueChange: handleChange, triggerRef, contentId, registerItem, unregisterItem, focusFirst, focusNext, focusPrev }}
     >
       {children}
     </SelectContext.Provider>
@@ -136,6 +138,7 @@ const SelectTrigger = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonEle
         role="combobox"
         aria-expanded={ctx.open}
         aria-haspopup="listbox"
+        aria-controls={ctx.contentId}
         onClick={() => ctx.onOpenChange(!ctx.open)}
         className={cn(
           'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm',
@@ -159,21 +162,55 @@ SelectTrigger.displayName = 'SelectTrigger'
 
 /* ── Content ────────────────────────────────────────────────────── */
 
+interface SelectPosition {
+  top: number
+  left: number
+  width: number
+}
+
 const SelectContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => {
     const ctx = useSelectContext()
     const contentRef = useRef<HTMLDivElement>(null)
     const previousActiveElement = useRef<HTMLElement | null>(null)
+    const [pos, setPos] = useState<SelectPosition | null>(null)
+
+    const computePosition = useCallback(() => {
+      const trigger = ctx.triggerRef.current
+      const content = contentRef.current
+      if (!trigger || !content) return
+      const rect = trigger.getBoundingClientRect()
+      const viewH = window.innerHeight
+      const viewW = window.innerWidth
+      const h = content.offsetHeight
+      const w = content.offsetWidth
+      const flip = rect.bottom + 6 + h > viewH && rect.top - h - 6 >= 8
+      const top = flip ? Math.max(8, rect.top - h - 6) : rect.bottom + 6
+      const left = Math.max(8, Math.min(rect.left, viewW - w - 8))
+      setPos({ top, left, width: rect.width })
+    }, [ctx.triggerRef])
 
     useLayoutEffect(() => {
       if (ctx.open) {
         previousActiveElement.current = document.activeElement as HTMLElement
+        computePosition()
         requestAnimationFrame(() => ctx.focusFirst())
       } else if (previousActiveElement.current) {
         previousActiveElement.current.focus()
         previousActiveElement.current = null
       }
-    }, [ctx.open, ctx.focusFirst])
+    }, [ctx.open, ctx.focusFirst, computePosition])
+
+    useEffect(() => {
+      if (!ctx.open) return
+      computePosition()
+      window.addEventListener('resize', computePosition)
+      document.addEventListener('scroll', computePosition, true)
+      return () => {
+        window.removeEventListener('resize', computePosition)
+        document.removeEventListener('scroll', computePosition, true)
+      }
+    }, [ctx.open, computePosition])
 
     useEffect(() => {
       if (!ctx.open) return
@@ -221,9 +258,11 @@ const SelectContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>
           if (typeof ref === 'function') ref(node)
           else if (ref) ref.current = node
         }}
+        id={ctx.contentId}
         role="listbox"
+        style={pos ? { top: pos.top, left: pos.left, minWidth: pos.width } : { visibility: 'hidden' }}
         className={cn(
-          'absolute z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg',
+          'fixed z-50 max-h-96 min-w-[8rem] overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg',
           'animate-in fade-in-0 zoom-in-95 duration-150',
           className,
         )}

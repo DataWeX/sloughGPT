@@ -14,6 +14,16 @@ export const inputFieldClassName = [
   'disabled:cursor-not-allowed disabled:opacity-40 disabled:bg-muted',
 ].join(' ')
 
+const SAFE_INPUT_TYPES = new Set([
+  'text', 'email', 'password', 'number', 'search', 'tel', 'url',
+  'date', 'time', 'datetime-local', 'month', 'week', 'color', 'range',
+])
+
+/** Coerce `type` to a text-like value so control types (file, checkbox, button, hidden...) can never slip through. */
+export function sanitizeInputType(type: string | undefined): string {
+  return type && SAFE_INPUT_TYPES.has(type) ? type : 'text'
+}
+
 /* ── Base Input ─────────────────────────────────────────────── */
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -26,6 +36,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(({ className, type, error, leftIcon, rightElement, ...props }, ref) => {
+  const safeType = sanitizeInputType(type)
   if (leftIcon || rightElement) {
     return (
       <div className="relative flex items-center">
@@ -35,7 +46,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({ className, type, error
           </span>
         )}
         <input
-          type={type}
+          type={safeType}
+          aria-invalid={error ? true : undefined}
           className={cn(
             inputFieldClassName,
             'h-10',
@@ -58,7 +70,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({ className, type, error
 
   return (
     <input
-      type={type}
+      type={safeType}
+      aria-invalid={error ? true : undefined}
       className={cn(
         inputFieldClassName,
         'h-10',
@@ -112,6 +125,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           type="search"
           value={value}
           onChange={handleChange}
+          aria-label={props['aria-label'] ?? 'Search'}
           className={cn(
             inputFieldClassName,
             'pl-8',
