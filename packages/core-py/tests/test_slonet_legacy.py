@@ -20,7 +20,6 @@ from domains.training.slonet import (
     SloTransformer,
     Tensor,
     _accel_op,
-    _load_pytorch_zip_weights,
     _rebuild_net_from_params,
     _sanitize,
     export_to_sou,
@@ -117,9 +116,6 @@ class TestSOURoundTrip:
         path.write_bytes(raw)
         net = import_from_sou(str(path))
         assert net.soul_name == "v1z"
-
-    def test_load_pytorch_zip_weights_garbage(self):
-        assert _load_pytorch_zip_weights(b"garbage-bytes") == {}
 
     def test_souls_from_directory(self, tmp_path):
         d = tmp_path / "souls"
@@ -1221,7 +1217,8 @@ class TestTensorUtilOps:
         out = normalize(a)
         assert np.allclose(out.data[0], [0.6, 0.8])
         out.backward()
-        assert np.allclose(a.grad.data, [0.2, 0.2])
+        # Correct gradient: g/||x|| - x*(x·g)/||x||^3 = [0.2,0.2] - [3,4]*7/125 = [0.032, -0.024]
+        assert np.allclose(a.grad.data, [[0.032, -0.024]])
 
     def test_normalize_zero_vector_safe(self):
         a = Tensor(np.array([[0.0, 0.0]]))
@@ -2331,16 +2328,6 @@ class TestStateDictAccelHelpers:
 
 
 class TestImportFromSouVariants:
-    def test_pytorch_zip_lineage(self, tmp_path, monkeypatch):
-        meta = {"lineage": "slonet", "soul_name": "X", "system_prompt": ""}
-        mj = json.dumps(meta).encode()
-        raw = b"SOUL" + struct.pack("<I", 2) + struct.pack("<I", len(mj)) + mj + b"PKjunk"
-        p = tmp_path / "pk.soul"
-        p.write_bytes(raw)
-        monkeypatch.setattr(slonet, "_load_pytorch_zip_weights", lambda b: {"w0": np.ones(2)})
-        net = import_from_sou(str(p))
-        assert net.lineage == "slolib-pytorch"
-
     def test_tok_emb_rebuild(self, tmp_path):
         meta = {"lineage": "slonet", "soul_name": "X", "system_prompt": ""}
         mj = json.dumps(meta).encode()

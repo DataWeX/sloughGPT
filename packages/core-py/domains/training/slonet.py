@@ -89,13 +89,19 @@ class no_grad:
 
 
 def _broadcast_back(g: np.ndarray, shape: tuple) -> np.ndarray:
-    """Sum gradient over broadcast axes to match target shape."""
+    """Sum gradient over broadcast axes to match target shape.
+
+    Always returns a copy to prevent gradient aliasing when multiple inputs
+    share the same upstream gradient array (e.g. _add(a, b) where both a and b
+    have the same shape — without the copy, a.grad.data and b.grad.data would
+    point to the same numpy array, causing double-counting on accumulation).
+    """
     if g.ndim > len(shape):
         g = g.sum(axis=tuple(range(g.ndim - len(shape))), keepdims=False)
     for i, d in enumerate(shape):
         if d == 1 and i < g.ndim and g.shape[i] > 1:
             g = np.sum(g, axis=i, keepdims=True)
-    return g
+    return g.copy()
 
 
 def _broadcast_forward(t: np.ndarray, target_shape: tuple) -> np.ndarray:
@@ -329,7 +335,7 @@ class Tensor:
     def max(self): return _max(self)
     def backward(self):
         if self.grad is None:
-            self.grad = Tensor(np.ones_like(self.data))
+            self.grad = Tensor(np.ones_like(self.data), _copy=False)
         visited, topo = set(), []
         def build(v):
             if v.id in visited: return
@@ -340,7 +346,7 @@ class Tensor:
         build(self)
         for node in reversed(topo):
             g = node.grad.data if node.grad is not None else np.ones_like(node.data)
-            node.grad = Tensor(g)
+            node.grad = Tensor(g, _copy=False)
             if node._backward_fn: node._backward_fn(g)
             # Release forward-DAG references after the reverse pass. Persistent
             # leaves (model parameters) otherwise pin every step's computation
@@ -561,10 +567,12 @@ def _add(a, b):
     def bk(g):
         if a.requires_grad:
             ga = _broadcast_back(g, _a_shape)
-            a.grad = Tensor(ga if a.grad is None else a.grad.data + ga)
+            if a.grad is None: a.grad = Tensor(ga, _copy=False)
+            else: a.grad.data += ga
         if b.requires_grad:
             gb = _broadcast_back(g, _b_shape)
-            b.grad = Tensor(gb if b.grad is None else b.grad.data + gb)
+            if b.grad is None: b.grad = Tensor(gb, _copy=False)
+            else: b.grad.data += gb
     out._backward_fn = bk
     def fwd(t_a, t_b):
         t_a = np.zeros_like(a.data) if t_a is None else _broadcast_forward(t_a, _out_shape)
@@ -578,7 +586,9 @@ def _neg(a):
     out = Tensor(_accel_op("neg", a.data, lambda x: -x), requires_grad=a.requires_grad, _children=(a,), _copy=False)
     if out.requires_grad and a.requires_grad: a._consumers.append(out)
     def bk(g):
-        if a.requires_grad: a.grad = Tensor(-g if a.grad is None else a.grad.data - g)
+        if a.requires_grad:
+            if a.grad is None: a.grad = Tensor(-g, _copy=False)
+            else: a.grad.data -= g
     out._backward_fn = bk
     def fwd(t_a):
         if t_a is None: return np.zeros_like(a.data)
@@ -599,10 +609,12 @@ def _mul(a, b):
     def bk(g):
         if a.requires_grad:
             ga = _broadcast_back(g * b.data, _a_shape)
-            a.grad = Tensor(ga if a.grad is None else a.grad.data + ga)
+            if a.grad is None: a.grad = Tensor(ga, _copy=False)
+            else: a.grad.data += ga
         if b.requires_grad:
             gb = _broadcast_back(g * a.data, _b_shape)
-            b.grad = Tensor(gb if b.grad is None else b.grad.data + gb)
+            if b.grad is None: b.grad = Tensor(gb, _copy=False)
+            else: b.grad.data += gb
     out._backward_fn = bk
     def fwd(t_a, t_b):
         t_a = np.zeros_like(a.data) if t_a is None else t_a
@@ -616,7 +628,10 @@ def _pow(a, p):
     out = Tensor(_accel_op("pow", a.data, p, lambda x, pp: x ** pp), requires_grad=a.requires_grad, _children=(a,), _copy=False)
     if out.requires_grad and a.requires_grad: a._consumers.append(out)
     def bk(g):
-        if a.requires_grad: a.grad = Tensor(p*(a.data**(p-1))*g)
+        if a.requires_grad:
+            ga = p * (a.data ** (p - 1)) * g
+            if a.grad is None: a.grad = Tensor(ga, _copy=False)
+            else: a.grad.data += ga
     out._backward_fn = bk
     def fwd(t_a, _=None):
         if t_a is None: return np.zeros_like(a.data)
@@ -649,6 +664,9 @@ def _matmul(a, b):
         if isinstance(a, Tensor) and a.requires_grad: a._consumers.append(out)
         if isinstance(b, Tensor) and b.requires_grad: b._consumers.append(out)
     _a_shape = a_data.shape; _b_shape = b_data.shape; _out_shape = out.data.shape
+    # Pre-compute transposed/reshaped views for backward (avoid per-call allocs)
+    _b_T = b_data.reshape(-1, b_data.shape[-1]).T if b_data.ndim >= 2 else None
+    _a_flat = a_data.reshape(-1, a_data.shape[-1]) if a_data.ndim >= 2 else None
     def bk(g):
         ga = None; gb = None
         if a_req or (isinstance(a, Tensor) and a._backward_fn):
@@ -656,27 +674,23 @@ def _matmul(a, b):
             if b_data.ndim == 1:
                 ga = np.outer(g_out, b_data)
             else:
-                ga = np.matmul(g_out, b_data.reshape(-1, b_data.shape[-1]).T)
+                ga = np.matmul(g_out, _b_T)
             ga = ga.reshape(_a_shape) if ga.shape != _a_shape else ga
             if a_req:
-                if a.grad is None: a.grad = Tensor(ga)
-                else: a.grad.data[:] += ga
+                if a.grad is None: a.grad = Tensor(ga, _copy=False)
+                else: a.grad.data += ga
         if b_req or (isinstance(b, Tensor) and b._backward_fn):
             g_out = g.reshape(_out_shape) if g.shape != _out_shape else g
             if a_data.ndim == 1:
-                # a is (n,), b is (n, m) → gb is outer(a, g) = (n, m)
                 gb = np.outer(a_data, g_out)
             elif g_out.ndim == 1:
-                # g_out = (n,), a_flat = (n, k) → gb = a_flat.T @ g_out = (k,)
-                a_flat = a_data.reshape(-1, a_data.shape[-1])
-                gb = np.matmul(a_flat.T, g_out)
+                gb = np.matmul(_a_flat.T, g_out)
             else:
-                a_flat = a_data.reshape(-1, a_data.shape[-1])
-                gb = np.matmul(a_flat.T, g_out.reshape(-1, g_out.shape[-1]))
+                gb = np.matmul(_a_flat.T, g_out.reshape(-1, g_out.shape[-1]))
             gb = gb.reshape(_b_shape) if gb.shape != _b_shape else gb
             if b_req:
-                if b.grad is None: b.grad = Tensor(gb)
-                else: b.grad.data[:] += gb
+                if b.grad is None: b.grad = Tensor(gb, _copy=False)
+                else: b.grad.data += gb
     out._backward_fn = bk
     def fwd(t_a, t_b):
         t_a = np.zeros_like(a_data) if t_a is None else t_a
@@ -693,7 +707,10 @@ def _transpose(a):
     def bk(g):
         if a.requires_grad:
             tg = g.T if _ndim == 2 else np.transpose(g, list(range(_ndim-2)) + [_ndim-1, _ndim-2])
-            a.grad = Tensor(tg if a.grad is None else a.grad.data + tg)
+            if a.grad is None:
+                a.grad = Tensor(tg, _copy=False)
+            else:
+                a.grad.data += tg
     out._backward_fn = bk
     def fwd(t_a):
         if t_a is None: return np.zeros_like(a.data).T
@@ -708,7 +725,10 @@ def _reshape(a, s):
     def bk(g):
         if a.requires_grad:
             ga = g.reshape(a.shape)
-            a.grad = Tensor(ga)
+            if a.grad is None:
+                a.grad = Tensor(ga, _copy=False)
+            else:
+                a.grad.data += ga
     out._backward_fn = bk
     def fwd(t_a):
         if t_a is None: return np.zeros(s, dtype=np.float32)
@@ -745,8 +765,10 @@ def _slice(a, key):
                 full[key] += g
             else:
                 np.add.at(full, key, g)
-            ga = full if a.grad is None else a.grad.data + full
-            a.grad = Tensor(ga)
+            if a.grad is None:
+                a.grad = Tensor(full, _copy=False)
+            else:
+                a.grad.data += full
     out._backward_fn = bk
     def fwd(t_a):
         if t_a is None: return np.zeros(out.shape, dtype=np.float32)
@@ -759,7 +781,10 @@ def _sum(a):
     out = Tensor(_accel_op("sum", a.data, lambda x: x.sum()), requires_grad=a.requires_grad, _children=(a,), _copy=False)
     if out.requires_grad and a.requires_grad: a._consumers.append(out)
     def bk(g):
-        if a.requires_grad: a.grad = Tensor(np.full_like(a.data, g))
+        if a.requires_grad:
+            ga = np.full_like(a.data, g)
+            if a.grad is None: a.grad = Tensor(ga, _copy=False)
+            else: a.grad.data += ga
     out._backward_fn = bk
     def fwd(t_a):
         if t_a is None: return np.array(0.0, dtype=np.float32)
@@ -773,7 +798,10 @@ def _mean(a):
     if out.requires_grad and a.requires_grad: a._consumers.append(out)
     n = a.data.size
     def bk(g):
-        if a.requires_grad: a.grad = Tensor(np.full_like(a.data, g/n))
+        if a.requires_grad:
+            ga = np.full_like(a.data, g / n)
+            if a.grad is None: a.grad = Tensor(ga, _copy=False)
+            else: a.grad.data += ga
     out._backward_fn = bk
     def fwd(t_a):
         if t_a is None: return np.array(0.0, dtype=np.float32)
@@ -788,7 +816,9 @@ def _max(a):
     def bk(g):
         if a.requires_grad:
             mask = a.data == a.data.max()
-            a.grad = Tensor(np.where(mask, g, 0.0), _copy=False)
+            ga = np.where(mask, g, 0.0)
+            if a.grad is None: a.grad = Tensor(ga, _copy=False)
+            else: a.grad.data += ga
     out._backward_fn = bk
     def fwd(t_a):
         if t_a is None: return np.array(0.0, dtype=np.float32)
@@ -815,7 +845,10 @@ def sigmoid(x):
     def bk(g):
         if x.requires_grad:
             gs = s*(1-s)*g
-            x.grad = Tensor(gs, _copy=False)
+            if x.grad is None:
+                x.grad = Tensor(gs, _copy=False)
+            else:
+                x.grad.data += gs
     out._backward_fn = bk
     def fwd(t_x):
         if t_x is None: return np.zeros_like(s)
@@ -831,7 +864,10 @@ def tanh(x):
     def bk(g):
         if x.requires_grad:
             gt = (1-t*t)*g
-            x.grad = Tensor(gt, _copy=False)
+            if x.grad is None:
+                x.grad = Tensor(gt, _copy=False)
+            else:
+                x.grad.data += gt
     out._backward_fn = bk
     def fwd(t_x):
         if t_x is None: return np.zeros_like(t)
@@ -846,7 +882,10 @@ def relu(x):
     def bk(g):
         if x.requires_grad:
             gr = np.where(x.data>0, g, 0.0)
-            x.grad = Tensor(gr)
+            if x.grad is None:
+                x.grad = Tensor(gr, _copy=False)
+            else:
+                x.grad.data += gr
     out._backward_fn = bk
     def fwd(t_x):
         if t_x is None: return np.zeros_like(out.data)
@@ -873,18 +912,21 @@ def gelu(x):
     if isinstance(x, Tensor):
         out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
         if out.requires_grad and x.requires_grad: x._consumers.append(out)
+        # Cache tanh value for backward (avoids 3x recomputation)
+        _tanh_val = np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3))
+        _sqrt_2_pi = np.sqrt(2/np.pi)
         def bk(g):
             if x.requires_grad:
-                d_gelu = 0.5 * np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3)) + \
-                         0.5 * d * (1 - np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3))**2) * \
-                         np.sqrt(2/np.pi) * (1 + 3 * 0.044715 * d**2)
-                x.grad = Tensor(d_gelu * g if x.grad is None else x.grad.data + d_gelu * g, _copy=False)
+                d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (1 + 3 * 0.044715 * d**2)
+                grad_val = d_gelu * g
+                if x.grad is None:
+                    x.grad = Tensor(grad_val, _copy=False)
+                else:
+                    x.grad.data += grad_val
         out._backward_fn = bk
         def fwd(t_x):
             if t_x is None: return np.zeros_like(out.data)
-            d_gelu = 0.5 * np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3)) + \
-                     0.5 * d * (1 - np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3))**2) * \
-                     np.sqrt(2/np.pi) * (1 + 3 * 0.044715 * d**2)
+            d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (1 + 3 * 0.044715 * d**2)
             return d_gelu * t_x
         out._forward_fn = fwd
         return out
@@ -912,7 +954,11 @@ def silu(x):
         def bk(g):
             if x.requires_grad:
                 d_silu = s + d * s * (1 - s)
-                x.grad = Tensor(d_silu * g if x.grad is None else x.grad.data + d_silu * g, _copy=False)
+                grad_val = d_silu * g
+                if x.grad is None:
+                    x.grad = Tensor(grad_val, _copy=False)
+                else:
+                    x.grad.data += grad_val
         out._backward_fn = bk
         def fwd(t_x):
             if t_x is None: return np.zeros_like(out.data)
@@ -961,9 +1007,13 @@ def cross_entropy(logits, targets):
         probs[np.arange(n), t] -= 1
         probs /= n
         if ndim > 2:
-            logits.grad = Tensor(probs.reshape(orig_shape) * g)
+            grad_val = probs.reshape(orig_shape) * g
         else:
-            logits.grad = Tensor(probs * g)
+            grad_val = probs * g
+        if logits.grad is None:
+            logits.grad = Tensor(grad_val, _copy=False)
+        else:
+            logits.grad.data += grad_val
     out._backward_fn = bk
     def fwd(t_logits, _=None):
         if t_logits is None: return np.array(0.0, dtype=np.float32)
@@ -1458,7 +1508,11 @@ class SloDropout(SloLayer):
         out = Tensor(x.data * mask, requires_grad=x.requires_grad, _children=(x,))
         def bk(g):
             if x.requires_grad:
-                x.grad = Tensor(g * mask)
+                grad_val = g * mask
+                if x.grad is None:
+                    x.grad = Tensor(grad_val, _copy=False)
+                else:
+                    x.grad.data += grad_val
         out._backward_fn = bk; return out
 
     def parameters(self) -> List[Tensor]: return []
@@ -1505,9 +1559,9 @@ class SloEmbedding(SloLayer):
             w_grad = np.zeros_like(self.weight.data)
             np.add.at(w_grad, flat_np, grad_out)
             if self.weight.grad is None:
-                self.weight.grad = Tensor(w_grad)
+                self.weight.grad = Tensor(w_grad, _copy=False)
             else:
-                self.weight.grad.data[:] += w_grad
+                self.weight.grad.data += w_grad
         out._backward_fn = bk; return out
 
     def parameters(self) -> List[Tensor]: return [self.weight]
@@ -2098,16 +2152,24 @@ def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> Tup
     element-wise (scale/rotate per head dimension).
     """
     q_data = Q.data * cos + _rotate_half(Q.data) * sin
-    k_data = K.data * cos + _rotate_half(K.data) * sin
+    # Skip RoPE for K when sequence lengths differ (cross-attention:
+    # K comes from encoder with different seq len than Q, so cos/sin
+    # sized for Q would broadcast incorrectly over K's seq dim).
+    if K.data.shape[1] == cos.shape[1]:
+        k_data = K.data * cos + _rotate_half(K.data) * sin
+    else:
+        k_data = K.data
 
     Q_out = Tensor(q_data, requires_grad=True, _children=(Q,))
     K_out = Tensor(k_data, requires_grad=True, _children=(K,))
+
+    _rope_applied_k = K.data.shape[1] == cos.shape[1]
 
     def bk_q(g):
         if Q.requires_grad:
             g_q = g * cos + _rotate_half(g) * sin
             if Q.grad is None:
-                Q.grad = Tensor(g_q)
+                Q.grad = Tensor(g_q, _copy=False)
             else:
                 Q.grad.data += g_q
             if Q._backward_fn:
@@ -2115,9 +2177,12 @@ def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> Tup
 
     def bk_k(g):
         if K.requires_grad:
-            g_k = g * cos + _rotate_half(g) * sin
+            if _rope_applied_k:
+                g_k = g * cos + _rotate_half(g) * sin
+            else:
+                g_k = g
             if K.grad is None:
-                K.grad = Tensor(g_k)
+                K.grad = Tensor(g_k, _copy=False)
             else:
                 K.grad.data += g_k
             if K._backward_fn:
@@ -2241,6 +2306,104 @@ def _fuse_quant_weights_int4(linears):
     return W, S, int(zps[0]), fused_bias
 
 
+def _fused_qkv_matmul(x: Tensor, W_q: Tensor, W_k: Tensor, W_v: Tensor,
+                       q_dim: int, k_dim: int, v_dim: int,
+                       has_bias_q: bool, has_bias_k: bool, has_bias_v: int,
+                       b_q=None, b_k=None, b_v=None) -> Tensor:
+    """Fused Q/K/V projection: single matmul + optional bias + split.
+
+    Concatenates W_q, W_k, W_v along axis 0, computes x @ W_fused.T,
+    adds concatenated bias, returns full output Tensor.
+    Backward splits gradient and accumulates into individual weight/bias grads.
+    """
+    W_q_data = W_q.data
+    W_k_data = W_k.data
+    W_v_data = W_v.data
+    W_fused_np = np.concatenate([W_q_data, W_k_data, W_v_data], axis=0)
+    W_fused = Tensor(W_fused_np, requires_grad=True, _copy=False)
+
+    out = _matmul(x, W_fused.T())
+
+    bias_fused = None
+    if has_bias_q or has_bias_k or has_bias_v:
+        bias_np = np.concatenate([
+            b_q.data if has_bias_q else np.zeros(q_dim, dtype=np.float32),
+            b_k.data if has_bias_k else np.zeros(k_dim, dtype=np.float32),
+            b_v.data if has_bias_v else np.zeros(v_dim, dtype=np.float32),
+        ])
+        bias_fused = Tensor(bias_np, requires_grad=True, _copy=False)
+        out = out + bias_fused
+
+    _q_dim = q_dim
+    _k_dim = k_dim
+    _v_dim = v_dim
+    _W_q_ref = W_q
+    _W_k_ref = W_k
+    _W_v_ref = W_v
+    _b_q_ref = b_q if has_bias_q else None
+    _b_k_ref = b_k if has_bias_k else None
+    _b_v_ref = b_v if has_bias_v else None
+
+    orig_bk = out._backward_fn
+    def bk_fused(g):
+        B, N, C = g.shape
+        g_q = g[:, :, :_q_dim]
+        g_k = g[:, :, _q_dim:_q_dim + _k_dim]
+        g_v = g[:, :, _q_dim + _k_dim:]
+
+        x_data = x.data
+        if x_data.ndim == 3:
+            x_flat = x_data.reshape(-1, x_data.shape[-1])
+        else:
+            x_flat = x_data
+        g_q_flat = g_q.reshape(-1, _q_dim)
+        g_k_flat = g_k.reshape(-1, _k_dim)
+        g_v_flat = g_v.reshape(-1, _v_dim)
+
+        gW_q = g_q_flat.T @ x_flat
+        gW_k = g_k_flat.T @ x_flat
+        gW_v = g_v_flat.T @ x_flat
+
+        if _W_q_ref.grad is None:
+            _W_q_ref.grad = Tensor(gW_q, _copy=False)
+        else:
+            _W_q_ref.grad.data += gW_q
+        if _W_k_ref.grad is None:
+            _W_k_ref.grad = Tensor(gW_k, _copy=False)
+        else:
+            _W_k_ref.grad.data += gW_k
+        if _W_v_ref.grad is None:
+            _W_v_ref.grad = Tensor(gW_v, _copy=False)
+        else:
+            _W_v_ref.grad.data += gW_v
+
+        if _b_q_ref is not None:
+            gb_q = g_q.sum(axis=(0, 1))
+            if _b_q_ref.grad is None:
+                _b_q_ref.grad = Tensor(gb_q, _copy=False)
+            else:
+                _b_q_ref.grad.data += gb_q
+        if _b_k_ref is not None:
+            gb_k = g_k.sum(axis=(0, 1))
+            if _b_k_ref.grad is None:
+                _b_k_ref.grad = Tensor(gb_k, _copy=False)
+            else:
+                _b_k_ref.grad.data += gb_k
+        if _b_v_ref is not None:
+            gb_v = g_v.sum(axis=(0, 1))
+            if _b_v_ref.grad is None:
+                _b_v_ref.grad = Tensor(gb_v, _copy=False)
+            else:
+                _b_v_ref.grad.data += gb_v
+
+        if orig_bk is not None:
+            g_cat = np.concatenate([g_q, g_k, g_v], axis=-1)
+            orig_bk(g_cat)
+
+    out._backward_fn = bk_fused
+    return out
+
+
 class SloMultiHeadAttention(SloLayer):
     def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
                  use_rope: bool = False, max_seq_len: int = 2048, rope_base: float = 10000.0, name="", _lazy=False):
@@ -2333,17 +2496,17 @@ class SloMultiHeadAttention(SloLayer):
             # upstream. Do NOT call _backward_fn here — the topo loop handles it.
             if Q.requires_grad:
                 if Q.grad is None:
-                    Q.grad = Tensor(g_Q_np)
+                    Q.grad = Tensor(g_Q_np, _copy=False)
                 else:
                     Q.grad.data += g_Q_np
             if K_exp.requires_grad:
                 if K_exp.grad is None:
-                    K_exp.grad = Tensor(g_K_np)
+                    K_exp.grad = Tensor(g_K_np, _copy=False)
                 else:
                     K_exp.grad.data += g_K_np
             if V_exp.requires_grad:
                 if V_exp.grad is None:
-                    V_exp.grad = Tensor(g_V_np)
+                    V_exp.grad = Tensor(g_V_np, _copy=False)
                 else:
                     V_exp.grad.data += g_V_np
 
@@ -2366,13 +2529,16 @@ class SloMultiHeadAttention(SloLayer):
             V_r = qkv[..., qd + kd:].reshape(B, N, K_H, E)
         else:
             Q_r = self.W_q.forward_numpy(q).reshape(B, N, H, E)
-            K_r = self.W_k.forward_numpy(k).reshape(B, N, K_H, E)
-            V_r = self.W_v.forward_numpy(v).reshape(B, N, K_H, E)
+            N_K = k.shape[1]
+            N_V = v.shape[1]
+            K_r = self.W_k.forward_numpy(k).reshape(B, N_K, K_H, E)
+            V_r = self.W_v.forward_numpy(v).reshape(B, N_V, K_H, E)
         if self.use_rope:
             cos, sin = self.rope.forward(N, start_pos)
             cos_a, sin_a = cos.reshape(1, N, 1, E), sin.reshape(1, N, 1, E)
             Q_r = Q_r * cos_a + _rotate_half(Q_r) * sin_a
-            K_r = K_r * cos_a + _rotate_half(K_r) * sin_a
+            if K_r.shape[1] == N:
+                K_r = K_r * cos_a + _rotate_half(K_r) * sin_a
         if kv_cache is not None:
             k_cache, v_cache = kv_cache
             K_r = np.concatenate([k_cache, K_r], axis=1)
@@ -2422,14 +2588,20 @@ class SloMultiHeadAttention(SloLayer):
         E = self.head_dim
         K_H = self.n_kv_head
 
-        Q_raw = self.W_q.forward(q)
-        K_raw = self.W_k.forward(k)
-        V_raw = self.W_v.forward(v)
+        if q is k and k is v:
+            Q_raw, K_raw, V_raw = self._fused_qkv_forward(q)
+        else:
+            Q_raw = self.W_q.forward(q)
+            K_raw = self.W_k.forward(k)
+            V_raw = self.W_v.forward(v)
 
         # Reshape to 4D using _reshape (preserves gradient tracking)
+        # Use actual sequence lengths from K/V (differs from Q in cross-attention)
+        N_K = K_raw.data.shape[1]
+        N_V = V_raw.data.shape[1]
         Q_4d = _reshape(Q_raw, (B, N, H, E))
-        K_4d = _reshape(K_raw, (B, N, K_H, E))
-        V_4d = _reshape(V_raw, (B, N, K_H, E))
+        K_4d = _reshape(K_raw, (B, N_K, K_H, E))
+        V_4d = _reshape(V_raw, (B, N_V, K_H, E))
 
         if self.use_rope:
             cos, sin = self.rope.forward(N, start_pos)
@@ -2457,6 +2629,36 @@ class SloMultiHeadAttention(SloLayer):
         if self.use_rope:
             ps += self.rope.parameters()
         return ps
+
+    def _fused_qkv_forward(self, x: Tensor):
+        """Fused Q/K/V projection: one matmul instead of three.
+
+        Concatenates W_q, W_k, W_v weights, does a single matmul, splits.
+        Saves 2 matmuls per forward call when q is k is v (self-attention).
+        Returns (Q_raw, K_raw, V_raw) as separate Tensors with autograd.
+        """
+        q_dim = self.W_q.out_features
+        k_dim = self.W_k.out_features
+        v_dim = self.W_v.out_features
+        fused_dim = q_dim + k_dim + v_dim
+        W_q = self.W_q.weight
+        W_k = self.W_k.weight
+        W_v = self.W_v.weight
+        has_bias_q = self.W_q.use_bias
+        has_bias_k = self.W_k.use_bias
+        has_bias_v = self.W_v.use_bias
+
+        out = _fused_qkv_matmul(x, W_q, W_k, W_v, q_dim, k_dim, v_dim,
+                                 has_bias_q, has_bias_k, has_bias_v,
+                                 self.W_q.bias if has_bias_q else None,
+                                 self.W_k.bias if has_bias_k else None,
+                                 self.W_v.bias if has_bias_v else None)
+
+        Q_raw = _slice(out, (slice(None), slice(None), slice(0, q_dim)))
+        K_raw = _slice(out, (slice(None), slice(None), slice(q_dim, q_dim + k_dim)))
+        V_raw = _slice(out, (slice(None), slice(None), slice(q_dim + k_dim, None)))
+
+        return Q_raw, K_raw, V_raw
 
     def _fused_qkv(self):
         """Cached fused ``[W_q; W_k; W_v]`` quantized weight pack, or None.
@@ -2542,11 +2744,20 @@ class SloCrossAttention(SloLayer):
             g_K = np.einsum("bhnm,bnhd->bmhd", g_softmax, Q.data) * scale
 
             if Q.requires_grad:
-                Q.grad = Tensor(g_Q) if Q.grad is None else Q.grad + Tensor(g_Q)
+                if Q.grad is None:
+                    Q.grad = Tensor(g_Q, _copy=False)
+                else:
+                    Q.grad.data += g_Q
             if K.requires_grad:
-                K.grad = Tensor(g_K) if K.grad is None else K.grad + Tensor(g_K)
+                if K.grad is None:
+                    K.grad = Tensor(g_K, _copy=False)
+                else:
+                    K.grad.data += g_K
             if V.requires_grad:
-                V.grad = Tensor(g_V) if V.grad is None else V.grad + Tensor(g_V)
+                if V.grad is None:
+                    V.grad = Tensor(g_V, _copy=False)
+                else:
+                    V.grad.data += g_V
 
         out_t._backward_fn = bk
         def fwd(t_q, t_k, t_v):
@@ -2636,7 +2847,10 @@ def _softmax(x: Tensor, dim: int = -1) -> Tensor:
             # Standard softmax backward: gx = s * (g - sum(s * g, dim))
             sg = np.sum(s * g, axis=dim, keepdims=True)
             gx = s * (g - sg)
-            x.grad = Tensor(gx if x.grad is None else x.grad.data + gx)
+            if x.grad is None:
+                x.grad = Tensor(gx, _copy=False)
+            else:
+                x.grad.data += gx
     out._backward_fn = bk
     def fwd(t_x):
         if t_x is None: return np.zeros_like(s)
@@ -2670,20 +2884,33 @@ def _layernorm(x: Tensor, weight: Tensor, bias: Tensor, eps: float = 1e-5) -> Te
     def bk(g):
         sum_axes = tuple(range(g.ndim - 1))
         if x.requires_grad:
-            gx = g * weight.data / np.sqrt(var + eps)
-            x.grad = Tensor(gx if x.grad is None else x.grad.data + gx)
+            norm_axis = -1 if d.ndim > 2 else 1
+            g_hat = g * weight.data / np.sqrt(var + eps)
+            gx = g_hat - g_hat.mean(axis=norm_axis, keepdims=True) - normed * (g_hat * normed).mean(axis=norm_axis, keepdims=True)
+            if x.grad is None:
+                x.grad = Tensor(gx, _copy=False)
+            else:
+                x.grad.data += gx
         if weight.requires_grad:
             gw = (g * normed).sum(axis=sum_axes)
-            weight.grad = Tensor(gw if weight.grad is None else weight.grad.data + gw)
+            if weight.grad is None:
+                weight.grad = Tensor(gw, _copy=False)
+            else:
+                weight.grad.data += gw
         if bias.requires_grad:
             gb = g.sum(axis=sum_axes)
-            bias.grad = Tensor(gb if bias.grad is None else bias.grad.data + gb)
+            if bias.grad is None:
+                bias.grad = Tensor(gb, _copy=False)
+            else:
+                bias.grad.data += gb
     out._backward_fn = bk
     def fwd(t_x, t_w, t_b):
         t_x = np.zeros_like(d) if t_x is None else t_x
         t_w = np.zeros_like(weight.data) if t_w is None else t_w
         t_b = np.zeros_like(bias.data) if t_b is None else t_b
-        return t_x * weight.data / np.sqrt(var + eps) + normed * t_w + t_b
+        norm_axis = -1 if d.ndim > 2 else 1
+        t_normed = (t_x - t_x.mean(axis=norm_axis, keepdims=True) - normed * (normed * t_x).mean(axis=norm_axis, keepdims=True)) / np.sqrt(var + eps)
+        return t_normed * weight.data + normed * t_w + t_b
     out._forward_fn = fwd
     return out
 
@@ -2714,17 +2941,22 @@ def _rmsnorm(x: Tensor, weight: Tensor, eps: float = 1e-5) -> Tensor:
             if weight.requires_grad:
                 sum_axes = tuple(range(g.ndim - 1))
                 gw = (g * x_normed).sum(axis=sum_axes)
-                weight.grad = Tensor(gw if weight.grad is None else weight.grad.data + gw)
+                if weight.grad is None:
+                    weight.grad = Tensor(gw, _copy=False)
+                else:
+                    weight.grad.data += gw
             if x.requires_grad:
                 g_yw = g * _w_data
                 gx = g_yw / rms - d * (g_yw * d).sum(axis=-1, keepdims=True) / (_N * rms**3)
-                x.grad = Tensor(gx if x.grad is None else x.grad.data + gx)
+                if x.grad is None:
+                    x.grad = Tensor(gx, _copy=False)
+                else:
+                    x.grad.data += gx
         out._backward_fn = bk
         def fwd(t_x, t_w):
             t_x = np.zeros_like(d) if t_x is None else t_x
             t_w = np.zeros_like(weight.data) if t_w is None else t_w
-            g_yw = t_x * _w_data
-            gx = g_yw / rms - d * (g_yw * d).sum(axis=-1, keepdims=True) / (_N * rms**3)
+            gx = t_x * _w_data / rms - d * _w_data * (d * t_x).sum(axis=-1, keepdims=True) / (_N * rms**3)
             return gx + x_normed * t_w
         out._forward_fn = fwd
     return out
@@ -2828,14 +3060,23 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
                     grad_in = grad_in[:, :, sl_h, sl_w]
             elif padding > 0:
                 grad_in = grad_in[:, :, padding:-padding, padding:-padding]
-            x.grad = Tensor(grad_in if x.grad is None else x.grad.data + grad_in)
+            if x.grad is None:
+                x.grad = Tensor(grad_in, _copy=False)
+            else:
+                x.grad.data += grad_in
         if weight.requires_grad:
             dY_flat = g.transpose(0, 2, 3, 1).reshape(n * oh * ow, oc)
             gw = (cols.T @ dY_flat).T.reshape(oc, c, kh, kw)
-            weight.grad = Tensor(gw if weight.grad is None else weight.grad.data + gw)
+            if weight.grad is None:
+                weight.grad = Tensor(gw, _copy=False)
+            else:
+                weight.grad.data += gw
         if bias is not None and bias.requires_grad:
             gb = g.sum(axis=(0, 2, 3))
-            bias.grad = Tensor(gb if bias.grad is None else bias.grad.data + gb)
+            if bias.grad is None:
+                bias.grad = Tensor(gb, _copy=False)
+            else:
+                bias.grad.data += gb
     out._backward_fn = bk
     def fwd(t_x, t_w, t_b):
         t_x_np = np.zeros_like(x.data) if t_x is None else t_x
@@ -2883,13 +3124,22 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
                 x_grad = np.broadcast_to(x_grad, g.shape).copy()
             else:
                 x_grad = g * gamma.data.reshape(1, c, 1, 1) / np.sqrt(var + eps)
-            x.grad = Tensor(x_grad if x.grad is None else x.grad.data + x_grad)
+            if x.grad is None:
+                x.grad = Tensor(x_grad, _copy=False)
+            else:
+                x.grad.data += x_grad
         if gamma.requires_grad:
             g_gamma = (g * norm).sum(axis=(0, 2, 3))
-            gamma.grad = Tensor(g_gamma if gamma.grad is None else gamma.grad.data + g_gamma)
+            if gamma.grad is None:
+                gamma.grad = Tensor(g_gamma, _copy=False)
+            else:
+                gamma.grad.data += g_gamma
         if beta.requires_grad:
             g_beta = g.sum(axis=(0, 2, 3))
-            beta.grad = Tensor(g_beta if beta.grad is None else beta.grad.data + g_beta)
+            if beta.grad is None:
+                beta.grad = Tensor(g_beta, _copy=False)
+            else:
+                beta.grad.data += g_beta
     out._backward_fn = bk
     def fwd(t_x, t_g, t_b):
         t_x = np.zeros_like(x.data) if t_x is None else t_x
@@ -2939,7 +3189,10 @@ def _maxpool2d(x: Tensor, kernel_size, stride):
                         for ow in range(out_w):
                             ih, iw = max_indices[(i, ch, oh, ow)]
                             grad_in[i, ch, ih, iw] += g[i, ch, oh, ow]
-            x.grad = Tensor(grad_in if x.grad is None else x.grad.data + grad_in)
+            if x.grad is None:
+                x.grad = Tensor(grad_in, _copy=False)
+            else:
+                x.grad.data += grad_in
     out._backward_fn = bk
     def fwd(t_x):
         if t_x is None: return np.zeros_like(result)
@@ -2961,7 +3214,12 @@ def flatten(x: Tensor) -> Tensor:
     out = Tensor(x.data.reshape(x.data.shape[0], -1), requires_grad=x.requires_grad, _children=(x,))
     if out.requires_grad and x.requires_grad: x._consumers.append(out)
     def bk(g):
-        if x.requires_grad: x.grad = Tensor(g.reshape(orig_shape) if x.grad is None else x.grad.data + g.reshape(orig_shape))
+        if x.requires_grad:
+            grad_val = g.reshape(orig_shape)
+            if x.grad is None:
+                x.grad = Tensor(grad_val, _copy=False)
+            else:
+                x.grad.data += grad_val
     out._backward_fn = bk
     def fwd(t_x):
         if t_x is None: return np.zeros((out.shape[0], np.prod(tuple(s for i, s in enumerate(orig_shape) if i > 0))))
@@ -3322,7 +3580,8 @@ def _invalidate_gpu_cache():
         pass
 
 
-def clip_grad_norm_(params, max_norm=1.0, norm_type=2.0):
+def clip_grad_norm_(params: Sequence[Tensor], max_norm: float = 1.0,
+                    norm_type: float = 2.0) -> float:
     """Clip gradients to a maximum norm."""
     params_list = [p for p in params if p.grad is not None and p.requires_grad]
     if not params_list:
@@ -3340,11 +3599,31 @@ def clip_grad_norm_(params, max_norm=1.0, norm_type=2.0):
 
 
 class SloSGD:
-    def __init__(self, lr=0.01, momentum=0.0, max_grad_norm=None):
+    """Stochastic gradient descent with optional momentum.
+
+    Updates ``p -= lr * g`` (via a velocity buffer when ``momentum > 0``).
+    State is serialized by parameter name, matching ``SloAdam``/``SloAdamW``.
+
+    Args:
+        lr: learning rate.
+        momentum: momentum coefficient (0 disables).
+        max_grad_norm: if set, clip the global gradient norm before stepping.
+    """
+
+    def __init__(self, lr: float = 0.01, momentum: float = 0.0,
+                 max_grad_norm: Optional[float] = None) -> None:
         self.lr = lr; self.momentum = momentum; self.max_grad_norm = max_grad_norm
         self._v: Dict[int, Any] = {}
 
-    def step(self, params):
+    def step(self, params: Sequence[Tensor]) -> None:
+        """Take one SGD step over ``params`` (momentum + optional clipping).
+
+        Side effects:
+            - updates each trainable parameter's data in place
+            - clears each parameter's gradient after use
+            - when ``max_grad_norm`` is set, clips the global gradient norm
+              first
+        """
         if self.max_grad_norm is not None:
             clip_grad_norm_(params, self.max_grad_norm)
         for p in params:
@@ -3356,7 +3635,7 @@ class SloSGD:
             p.data -= self.lr*g
             p.grad = None
 
-    def state_dict(self, params=None):
+    def state_dict(self, params: Optional[Sequence[Tensor]] = None) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
@@ -3384,7 +3663,8 @@ class SloSGD:
                 )
         return state
 
-    def load_state_dict(self, state_dict, params=None):
+    def load_state_dict(self, state_dict: dict,
+                        params: Optional[Sequence[Tensor]] = None) -> None:
         """Restore optimizer state by parameter name.
 
         Args:
@@ -3409,28 +3689,100 @@ class SloSGD:
 
 
 class SloAdam:
-    def __init__(self, lr=0.001, b1=0.9, b2=0.999, eps=1e-8, weight_decay=0.0, max_grad_norm=None):
+    """Adam optimizer with coupled L2 weight decay (NumPy/SloNet parameters).
+
+    Bias-corrected first and second moments with shape-safe updates: a
+    broadcast gradient is reduced to its parameter's shape before the step so
+    a parameter's shape is never mutated. Weight decay is folded into the
+    gradient as L2 regularisation (the coupled Adam scheme). For decoupled
+    weight decay use ``SloAdamW``, which subclasses this class.
+
+    State is serialized by parameter name (see ``state_dict`` /
+    ``load_state_dict``), so checkpoints are interchangeable with ``SloAdamW``.
+
+    Args:
+        lr: learning rate.
+        b1: first moment decay.
+        b2: second moment decay.
+        eps: denominator stabiliser.
+        weight_decay: coupled L2 coefficient (folded into the gradient).
+        max_grad_norm: if set, clip the global gradient norm before stepping.
+    """
+
+    def __init__(self, lr: float = 0.001, b1: float = 0.9, b2: float = 0.999,
+                 eps: float = 1e-8, weight_decay: float = 0.0,
+                 max_grad_norm: Optional[float] = None) -> None:
         self.lr = lr; self.b1 = b1; self.b2 = b2; self.eps = eps
         self.weight_decay = weight_decay; self.max_grad_norm = max_grad_norm
         self._m: Dict[int, Any] = {}; self._v: Dict[int, Any] = {}; self._t = 0
 
     @staticmethod
-    def _zeros_like(t):
+    def _zeros_like(t: Any) -> Any:
         """Create zeros array matching the input's framework (numpy or torch)."""
         if isinstance(t, np.ndarray):
             return np.zeros_like(t)
         return t.new_zeros(t.shape, dtype=t.dtype)
 
-    @staticmethod
-    def _sqrt(t):
-        if isinstance(t, np.ndarray):
-            return np.sqrt(t)
-        return t.sqrt()
+    def _reduce_to_param_shape(self, g: Any, p: Tensor) -> Any:
+        """Reduce a broadcast gradient or update to the parameter's shape.
 
-    def step(self, params):
+        Broadcast backward passes (for example ``_sum`` backward, which spreads
+        the downstream gradient over a batch dimension) produce arrays with
+        leading axes beyond the parameter's rank. Each excess leading axis is
+        summed away, then the result is broadcast to the parameter's exact
+        shape so a step can never mutate the parameter's shape.
+
+        Args:
+            g: array to reduce (raw gradient or pre-update array).
+            p: the owning parameter.
+
+        Returns:
+            Array with shape ``p.data.shape``.
+        """
+        while g.ndim > p.data.ndim:
+            g = g.sum(axis=0)
+        if g.shape != p.data.shape:
+            g = np.broadcast_to(g, p.data.shape)
+        return g
+
+    def _adam_update(self, m: Any, v: Any, vmax: Any = None) -> Any:
+        """Compute the bias-corrected Adam update for one parameter.
+
+        Args:
+            m: first moment (parameter shape).
+            v: second moment (parameter shape).
+            vmax: optional running maximum of the *uncorrected* second moment
+                (amsgrad, torch semantics). Updated in place to ``max(vmax, v)``;
+                the current-step bias correction is then applied to that maximum
+                before it enters the denominator.
+
+        Returns:
+            Per-parameter update ``lr * m_hat / (sqrt(v_hat) + eps)`` in the
+            shape of ``m`` and ``v``.
+        """
+        t = self._t
+        mh = m / (1 - self.b1 ** t)
+        vh = v / (1 - self.b2 ** t)
+        if vmax is not None:
+            vmax[...] = np.maximum(vmax, v)
+            vh = vmax / (1 - self.b2 ** t)
+        return self.lr * mh / (np.sqrt(vh) + self.eps)
+
+    def step(self, params: Sequence[Tensor]) -> None:
+        """Take one Adam step over ``params`` (coupled L2 weight decay).
+
+        Each gradient is broadcast-safe: weight decay (coupled) is folded in
+        and the final update is reduced to the parameter's shape.
+
+        Side effects:
+            - updates each trainable parameter's data in place
+            - clears each parameter's gradient after use
+            - when ``max_grad_norm`` is set, clips the global gradient norm
+              first
+        """
         if self.max_grad_norm is not None:
             clip_grad_norm_(params, self.max_grad_norm)
-        self._t += 1; b1 = self.b1; b2 = self.b2; eps = self.eps; lr = self.lr; wd = self.weight_decay
+        self._t += 1; b1 = self.b1; b2 = self.b2; wd = self.weight_decay
         for p in params:
             if p.grad is None or not p.requires_grad: continue
             g = p.grad.data; pid = id(p)
@@ -3440,12 +3792,10 @@ class SloAdam:
             if pid not in self._v: self._v[pid] = self._zeros_like(p.data)
             self._m[pid] = b1*self._m[pid]+(1-b1)*g
             self._v[pid] = b2*self._v[pid]+(1-b2)*(g**2)
-            mh = self._m[pid]/(1-b1**self._t); vh = self._v[pid]/(1-b2**self._t)
-            upd = lr*mh/(self._sqrt(vh)+eps)
-            if upd.shape != p.data.shape: upd = upd.sum(axis=0)
-            p.data -= upd; p.grad = None
+            upd = self._adam_update(self._m[pid], self._v[pid])
+            p.data -= self._reduce_to_param_shape(upd, p); p.grad = None
 
-    def state_dict(self, params=None):
+    def state_dict(self, params: Optional[Sequence[Tensor]] = None) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
@@ -3477,7 +3827,8 @@ class SloAdam:
                 state["state"][name] = entry
         return state
 
-    def load_state_dict(self, state_dict, params=None):
+    def load_state_dict(self, state_dict: dict,
+                        params: Optional[Sequence[Tensor]] = None) -> None:
         """Restore optimizer state by parameter name.
 
         Args:
@@ -3506,6 +3857,140 @@ class SloAdam:
                 if "v" in entry:
                     buf = entry["v"]
                     self._v[id(p)] = (np.array(buf, dtype=np.float64) if isinstance(buf, list) else buf)
+
+
+class SloAdamW(SloAdam):
+    """Adam with decoupled weight decay (AdamW, Loshchilov & Hutter 2019).
+
+    Subclasses :class:`SloAdam` and reuses its bias-corrected moment updates,
+    broadcast-safe reduction, and name-keyed serialization. The weight decay
+    is applied directly to the parameters after the gradient update
+    (``p -= lr * weight_decay * p``) instead of being folded into the
+    gradient as L2 regularisation. Decoupled decay acts on the weights alone
+    and is annealed by the LR schedule — the modern default for transformer
+    training (``torch.optim.AdamW``, ``transformers.Trainer``).
+
+    State is serialized by parameter name in the same format as ``SloAdam``,
+    so checkpoints are interchangeable between the two optimizers.
+
+    Args:
+        lr: learning rate.
+        b1: first moment decay.
+        b2: second moment decay.
+        eps: denominator stabiliser.
+        weight_decay: decoupled decay coefficient (applied every step).
+        amsgrad: track the running maximum of the second moment and use it
+            (bias-corrected at the current step) in the update denominator,
+            matching ``torch.optim.AdamW(amsgrad=True)``.
+        maximize: invert gradient signs so the step ascends the objective.
+        max_grad_norm: if set, clip the global gradient norm to this before
+            stepping.
+    """
+
+    def __init__(self, lr: float = 0.001, b1: float = 0.9, b2: float = 0.999,
+                 eps: float = 1e-8, weight_decay: float = 0.01,
+                 amsgrad: bool = False, maximize: bool = False,
+                 max_grad_norm: Optional[float] = None) -> None:
+        super().__init__(lr=lr, b1=b1, b2=b2, eps=eps,
+                         weight_decay=weight_decay, max_grad_norm=max_grad_norm)
+        self.amsgrad = amsgrad; self.maximize = maximize
+        self._vmax: Dict[int, Any] = {}
+
+    def step(self, params: Sequence[Tensor]) -> None:
+        """Take one AdamW step over ``params`` (decoupled weight decay).
+
+        Each gradient is reduced to its parameter's shape and inverted when
+        ``maximize`` is set, then the bias-corrected Adam update is applied.
+        With ``amsgrad`` the update denominator uses the running maximum of
+        the second moment, bias-corrected at the current step (torch
+        semantics). Finally the decoupled weight decay
+        is applied directly to the parameters (``p -= lr * wd * p``) without
+        entering the moments. Because the decay term scales with the current
+        learning rate, it is annealed by the LR schedule exactly like the
+        gradient step — the defining property of decoupled decay.
+
+        Side effects:
+            - updates each trainable parameter's data in place
+            - clears each parameter's gradient after use
+            - when ``max_grad_norm`` is set, clips the global gradient norm
+              first
+        """
+        if self.max_grad_norm is not None:
+            clip_grad_norm_(params, self.max_grad_norm)
+        self._t += 1; lr = self.lr; b1 = self.b1; b2 = self.b2; wd = self.weight_decay
+        for p in params:
+            if p.grad is None or not p.requires_grad:
+                continue
+            g = self._reduce_to_param_shape(p.grad.data, p)
+            if self.maximize:
+                g = -g
+            pid = id(p)
+            if pid not in self._m:
+                self._m[pid] = self._zeros_like(p.data)
+            if pid not in self._v:
+                self._v[pid] = self._zeros_like(p.data)
+            self._m[pid] = b1 * self._m[pid] + (1 - b1) * g
+            self._v[pid] = b2 * self._v[pid] + (1 - b2) * (g ** 2)
+            vmax_buf = None
+            if self.amsgrad:
+                if pid not in self._vmax:
+                    self._vmax[pid] = self._zeros_like(p.data)
+                vmax_buf = self._vmax[pid]
+            p.data -= self._adam_update(self._m[pid], self._v[pid], vmax_buf)
+            if wd != 0:
+                p.data -= lr * wd * p.data
+            p.grad = None
+
+    def state_dict(self, params: Optional[Sequence[Tensor]] = None) -> dict:
+        """Serialize optimizer state by parameter name (not id).
+
+        Args:
+            params: List of parameters to include. If None, returns only
+                hyperparameters and timestep (no per-param state).
+
+        Returns:
+            Dict with 'hyperparameters', 't', and 'state' (name-keyed
+            buffers). When ``amsgrad`` is active, each entry also carries
+            the 'maxv' running maximum.
+        """
+        state = super().state_dict(params)
+        state["hyperparameters"]["amsgrad"] = self.amsgrad
+        state["hyperparameters"]["maximize"] = self.maximize
+        if params is None:
+            return state
+        for i, p in enumerate(params):
+            name = getattr(p, "name", f"param_{i}")
+            pid = id(p)
+            if pid in self._vmax:
+                buf_v = self._vmax[pid]
+                state["state"].setdefault(name, {})["maxv"] = (
+                    buf_v.tolist() if isinstance(buf_v, np.ndarray)
+                    else buf_v.detach().cpu().tolist() if hasattr(buf_v, "detach") else buf_v)
+        return state
+
+    def load_state_dict(self, state_dict: dict,
+                        params: Optional[Sequence[Tensor]] = None) -> None:
+        """Restore optimizer state by parameter name.
+
+        Args:
+            state_dict: Dict from state_dict().
+            params: List of parameters to match against state keys.
+        """
+        hyper = state_dict.get("hyperparameters", {})
+        self.amsgrad = hyper.get("amsgrad", self.amsgrad)
+        self.maximize = hyper.get("maximize", self.maximize)
+        super().load_state_dict(state_dict, params)
+        if params is None:
+            return
+        saved_state = state_dict.get("state", {})
+        self._vmax.clear()
+        for i, p in enumerate(params):
+            name = getattr(p, "name", f"param_{i}")
+            if name in saved_state:
+                entry = saved_state[name]
+                if "maxv" in entry:
+                    buf_v = entry["maxv"]
+                    self._vmax[id(p)] = (np.array(buf_v, dtype=np.float64) if isinstance(buf_v, list) else buf_v)
 
 
 # =============================================================================
@@ -3640,18 +4125,12 @@ def import_from_sou(path: str) -> SloNet:
                 weights[name] = np.frombuffer(rem[pos:pos+count*4], dtype=np.float32).copy().reshape(shape)
                 pos += count * 4
     else:
-        # v1/v2 JSON weights or PyTorch ZIP
-        pk_pos = raw.find(b"PK", weight_offset)
-        if pk_pos > 0:
-            weights = _load_pytorch_zip_weights(raw[pk_pos:])
-            if weights:
-                lineage = "slolib-pytorch"
-        else:
-            rem = raw[weight_offset:]
-            if len(rem) >= 4:
-                wl = struct.unpack("<I", rem[:4])[0]
-                if 0 < wl <= len(rem) - 4:
-                    weights = json.loads(rem[4:4+wl].decode())
+        # v1/v2 JSON weights
+        rem = raw[weight_offset:]
+        if len(rem) >= 4:
+            wl = struct.unpack("<I", rem[:4])[0]
+            if 0 < wl <= len(rem) - 4:
+                weights = json.loads(rem[4:4+wl].decode())
 
     # Detect SloTransformer from lineage or named weight keys
     is_transformer = (
@@ -3744,16 +4223,6 @@ def _rebuild_net_from_params(net: SloNet, weights: Dict[str, Any]) -> None:
     net.layers.append(lstm)
 
 
-def _load_pytorch_zip_weights(zip_data: bytes) -> Dict[str, np.ndarray]:
-    """Load weights from a PyTorch ZIP checkpoint using torch-free pt_loader."""
-    try:
-        from domains.infrastructure.pt_loader import load_pt_bytes as _load_pt
-        return _load_pt(zip_data)
-    except Exception as e:
-        logger.warning("_load_pytorch_zip_weights failed: %s: %s", type(e).__name__, e, extra={"tag": "TRAIN"})
-        return {}
-
-
 def souls_from_directory(dir_path) -> List[SloNet]:
     souls = []
     import logging
@@ -3767,7 +4236,7 @@ def souls_from_directory(dir_path) -> List[SloNet]:
 
 
 # =============================================================================
-# NPZ CHECKPOINT HELPERS (torch-free, native)
+# NPZ CHECKPOINT HELPERS (native)
 # =============================================================================
 
 
@@ -3793,7 +4262,7 @@ def save_checkpoint_npz(
     state_dict: Dict[str, Any],
     meta: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Save a model checkpoint as ``.npz`` (torch-free).
+    """Save a model checkpoint as ``.npz``.
 
     Args:
         path: Output path (``.npz`` extension added if missing).
@@ -3809,7 +4278,18 @@ def save_checkpoint_npz(
     np_state = _state_dict_to_numpy(state_dict)
     arrays = {k: np.asarray(v) for k, v in np_state.items()}
     arrays["_meta_json"] = np.array(json.dumps(meta or {}, default=str))
-    np.savez_compressed(str(p), **arrays)
+    # Atomic write: save to a temp file in the same directory, then rename so a
+    # crash mid-write never leaves a truncated .npz as the newest checkpoint.
+    tmp_path = str(p.with_name(p.stem + ".tmp.npz"))
+    try:
+        np.savez_compressed(tmp_path, **arrays)
+        os.replace(tmp_path, str(p))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
     return str(p)
 
 
@@ -3838,7 +4318,7 @@ def train_char_lstm_from_gpt(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8
     net = SloNet([SloEmbedding(len(charset), embed_dim), SloLSTM(len(charset), embed_dim, hidden_dim, num_layers=2, dropout=0.2)],
                   soul_name=soul_name, soul_traits={"warmth":0.5,"creativity":0.5,"curiosity":0.5,"confidence":0.5},
                   system_prompt=f"You are {soul_name}.", lineage="gpt2-teacher-distillation")
-    opt = SloAdam(lr=lr)
+    opt = SloAdamW(lr=lr)
     topics = ["What is consciousness?","Explain machine learning","Write a haiku about time","How do neural networks learn?","What makes humans unique?"]
     for ep in range(epochs):
         for topic in topics:
@@ -3922,7 +4402,7 @@ class SloTransformer(SloNet):
     """Native SloNet decoder-only Transformer: embedding → blocks → norm → lm_head.
 
     Architecture: RoPE, RMSNorm, SwiGLU, KV-cache, GQA support.
-    Drop-in replacement for SloughGPTModel (no PyTorch).
+    Drop-in replacement for the original SloughGPTModel.
     """
 
     def __init__(
@@ -5403,7 +5883,7 @@ def train_soul_transformer(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8, 
         block_size=64, max_seq_len=128, dropout=0.1, use_rope=True,
         soul_name=soul_name,
     )
-    opt = SloAdam(lr=lr)
+    opt = SloAdamW(lr=lr)
     topics = ["What is consciousness?", "Explain machine learning", "Write a haiku about time",
               "How do neural networks learn?", "What makes humans unique?"]
     for ep in range(epochs):
@@ -5445,12 +5925,16 @@ def log_softmax(x, dim=-1):
         def bk(g):
             if x.requires_grad:
                 probs = np.exp(lp)
-                x.grad = Tensor(g - probs * g.sum(axis=dim, keepdims=True))
+                grad_val = g - probs * g.sum(axis=dim, keepdims=True)
+                if x.grad is None:
+                    x.grad = Tensor(grad_val, _copy=False)
+                else:
+                    x.grad.data += grad_val
         out._backward_fn = bk
         def fwd(t_x):
             if t_x is None: return np.zeros_like(lp)
             probs = np.exp(lp)
-            return t_x - probs * t_x.sum(axis=dim, keepdims=True)
+            return t_x - (probs * t_x).sum(axis=dim, keepdims=True)
         out._forward_fn = fwd
         return out
     return lp
@@ -5482,7 +5966,11 @@ def kl_div_loss(input_log_prob, target_prob, reduction="batchmean"):
         if isinstance(input_log_prob, Tensor) and input_log_prob.requires_grad:
             g_inp = -tp
             g_inp = g_inp / ilp.shape[0] if reduction == "batchmean" else g_inp
-            input_log_prob.grad = Tensor(g_inp * g)
+            grad_val = g_inp * g
+            if input_log_prob.grad is None:
+                input_log_prob.grad = Tensor(grad_val, _copy=False)
+            else:
+                input_log_prob.grad.data += grad_val
     out._backward_fn = bk; return out
 
 
@@ -5496,7 +5984,11 @@ def normalize(x, p=2, dim=1):
         out = Tensor(nd, requires_grad=x.requires_grad, _children=(x,))
         def bk(g):
             if x.requires_grad:
-                x.grad = Tensor(g / norm)
+                grad_val = g / norm - xd * (xd * g).sum(axis=dim, keepdims=True) / (norm ** 3)
+                if x.grad is None:
+                    x.grad = Tensor(grad_val, _copy=False)
+                else:
+                    x.grad.data += grad_val
         out._backward_fn = bk; return out
     return nd
 
@@ -5513,9 +6005,17 @@ def pairwise_distance(x1, x2):
         out = Tensor(dist, requires_grad=True, _children=(_x1, _x2))
         def bk(g):
             if _x1.requires_grad:
-                _x1.grad = Tensor(diff / (dist[..., np.newaxis] + 1e-8) * g[..., np.newaxis])
+                grad_val = diff / (dist[..., np.newaxis] + 1e-8) * g[..., np.newaxis]
+                if _x1.grad is None:
+                    _x1.grad = Tensor(grad_val, _copy=False)
+                else:
+                    _x1.grad.data += grad_val
             if _x2.requires_grad:
-                _x2.grad = Tensor(-diff / (dist[..., np.newaxis] + 1e-8) * g[..., np.newaxis])
+                grad_val = -diff / (dist[..., np.newaxis] + 1e-8) * g[..., np.newaxis]
+                if _x2.grad is None:
+                    _x2.grad = Tensor(grad_val, _copy=False)
+                else:
+                    _x2.grad.data += grad_val
         out._backward_fn = bk; return out
     return dist
 
@@ -5647,7 +6147,8 @@ class SloDataLoader:
 class SloLRScheduler:
     """Base LR scheduler (analogous to torch.optim.lr_scheduler._LRScheduler).
 
-    Works with SloSGD / SloAdam via the .lr attribute on the optimizer.
+    Works with SloSGD / SloAdam / SloAdamW via the .lr attribute on the
+    optimizer.
     """
 
     def __init__(self, optimizer, last_epoch=-1):
@@ -6021,7 +6522,7 @@ def compute_sensitivity(
 __all__ = ["Tensor", "SloLayer", "SloLinear", "SloEmbedding", "SloLSTM", "SloLayerNorm", "SloRMSNorm",
            "SloTransformerBlock", "SloMultiHeadAttention", "SloFeedForward", "SloDropout",
            "SloRotaryEmbedding", "SloTransformer",
-           "SloNet", "SloSGD", "SloAdam", "sigmoid", "tanh", "relu", "gelu", "silu", "softmax",
+           "SloNet", "SloSGD", "SloAdam", "SloAdamW", "sigmoid", "tanh", "relu", "gelu", "silu", "softmax",
            "cross_entropy", "mse_loss", "log_softmax", "kl_div_loss",
            "normalize", "pairwise_distance", "argmax", "argmin",
            "squeeze", "unsqueeze", "cat", "eye",
