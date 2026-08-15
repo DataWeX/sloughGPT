@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from schemas.common import success_response
+from schemas.common import success_response, error_response
 
 
 class SelfTrainRequest(BaseModel):
@@ -80,7 +80,7 @@ class SelfTrainRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="self_train_start")
-            return success_response(data={"status": "error", "error": str(e)})
+            return error_response(str(e), "E_INFRA_STARTUP")
 
     async def stop_self_train(self):
         """Stop self-training subprocess."""

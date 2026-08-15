@@ -10,7 +10,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from typing import Optional, Dict, Any
 
-from schemas.common import success_response
+from schemas.common import success_response, error_response
 
 
 def _numpy_perplexity(model, ids):
@@ -134,7 +134,7 @@ class BenchmarkRouter:
                 "num_parameters": getattr(provider, "num_parameters", None),
             }
         except Exception as e:
-            return {"model": model, "error": str(e)}
+            return error_response(str(e), "E_DOMAIN", details={"model": model})
 
     async def run_benchmark(self, model: str = "gpt2"):
         """Run model benchmark - returns real metrics"""

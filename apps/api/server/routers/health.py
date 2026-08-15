@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from controllers.health import get_health_controller
 from startup_progress import STARTUP_PHASE
-from schemas.common import success_response
+from schemas.common import success_response, error_response
 
 
 class HealthRouter:
@@ -93,7 +93,7 @@ class HealthRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="health_model_health")
-            return success_response(data={"status": "error", "message": str(e)})
+            return error_response(str(e), "E_INFRA_REGISTRY")
 
     async def health_summary(self):
         ctrl = get_health_controller()

@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 
-from schemas.common import success_response
+from schemas.common import success_response, error_response
 
 logger = logging.getLogger("slo.inference")
 
@@ -998,20 +998,20 @@ class InferenceRouter:
     async def inspect_context(self) -> dict:
         ctx_core = self._get_context_core()
         if not ctx_core:
-            return {"error": "ContextCore not available"}
+            return error_response("ContextCore not available", "E_INFRA_STARTUP")
         return ctx_core.get_context_inspector()
 
     async def store_fact(self, key: str, value: str) -> dict:
         ctx_core = self._get_context_core()
         if not ctx_core:
-            return {"error": "ContextCore not available"}
+            return error_response("ContextCore not available", "E_INFRA_STARTUP")
         ctx_core.store_fact(key, value)
         return {"stored": key}
 
     async def get_facts(self, query: str = "") -> dict:
         ctx_core = self._get_context_core()
         if not ctx_core:
-            return {"error": "ContextCore not available", "facts": []}
+            return error_response("ContextCore not available", "E_INFRA_STARTUP")
         if query:
             return {"facts": ctx_core.search_semantic(query)}
         return {"facts": [{"key": k, **v} for k, v in ctx_core.semantic_memory.items()]}
@@ -1020,7 +1020,7 @@ class InferenceRouter:
         self._context_core = None
         ctx_core = self._get_context_core()
         if not ctx_core:
-            return {"error": "ContextCore not available"}
+            return error_response("ContextCore not available", "E_INFRA_STARTUP")
         if all:
             ctx_core.reset_all()
         else:
