@@ -62,10 +62,10 @@ class ModelsController:
         except Exception:
             _cuda_available = _mps_available = None
         if device == "cuda" and (_cuda_available is None or not _cuda_available()):
-            logger.warning("device='cuda' requested but CUDA unavailable — falling back to cpu")
+            logger.warning("device='cuda' requested but CUDA unavailable — falling back to cpu", extra={"tag": "MODEL"})
             return "cpu"
         if device == "mps" and (_mps_available is None or not _mps_available()):
-            logger.warning("device='mps' requested but MPS unavailable — falling back to cpu")
+            logger.warning("device='mps' requested but MPS unavailable — falling back to cpu", extra={"tag": "MODEL"})
             return "cpu"
         return device
 

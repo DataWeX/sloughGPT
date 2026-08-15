@@ -5,10 +5,10 @@ All middleware re-exported via ``get_configured_middleware()`` for
 registration in the FastAPI app.
 
 Unified log format (single line per request):
-    HH:MM:SS INF [REQ] corr=abc1 GET /chat 200 (0.34s)
-    HH:MM:SS WRN [REQ] corr=abc1 POST /multimodal/analyze 400 (19.61s) err="validation failed"
-    HH:MM:SS ERR [REQ] corr=abc1 POST /chat 500 (2.10s) err="RuntimeError: ..."
-    HH:MM:SS WRN [SLOW] corr=abc1 GET /models 200 (12.4s)
+    HH:MM:SS INF  [REQ]   GET /chat 200 (0.34s) corr=abc1
+    HH:MM:SS WRN  [REQ]   400 on POST /multimodal/analyze (19.61s) corr=abc1
+    HH:MM:SS ERR  [REQ]   500 on POST /chat (2.10s) corr=abc1
+    HH:MM:SS WRN  [SLOW]  GET /models 200 (12.4s) corr=abc1
 
 Type tags for quick scanning:
     [REQ]   — normal request log (level varies by status)
@@ -27,6 +27,8 @@ from typing import Awaitable, Callable
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from schemas.common import error_response
 
 logger = logging.getLogger("slo.middleware")
 
@@ -57,16 +59,17 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
             return await asyncio.wait_for(call_next(request), timeout=self.timeout)
         except asyncio.TimeoutError:
             logger.warning(
-                "Request timeout (%0.1fs) on %s %s",
+                "request timeout after %0.1fs on %s %s corr=%s",
                 self.timeout, request.method, request.url.path,
-                extra={"tag": "REQ", "context": {"status": 504, "timeout_s": self.timeout}, "error_code": "E_INFRA_TIMEOUT"},
+                request.scope.get("correlation_id", "-"),
+                extra={"tag": "REQ", "context": {"status": 504, "timeout_s": self.timeout}},
             )
             return JSONResponse(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                content={
-                    "error": f"Request timed out after {self.timeout}s",
-                    "code": "E_INFRA_TIMEOUT",
-                },
+                content=error_response(
+                    f"Request timed out after {self.timeout}s",
+                    "E_INFRA_TIMEOUT",
+                ),
             )
 
 
@@ -123,9 +126,10 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             elapsed = time.monotonic() - start
+            elapsed_str = f"{elapsed:.3f}s"
             logger.exception(
-                "%s %s %s UNHANDLED (%.3fs)",
-                corr_id, method, path, elapsed,
+                "unhandled exception on %s %s (%s) corr=%s",
+                method, path, elapsed_str, corr_id,
                 extra={
                     "tag": "REQ",
                     "context": {
@@ -133,7 +137,7 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
                         "method": method,
                         "path": path,
                         "status": 500,
-                        "elapsed": f"{elapsed:.3f}s",
+                        "elapsed": elapsed_str,
                     },
                 },
             )
@@ -155,33 +159,33 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
         # Choose log level by status code.
         if sc >= 500:
             logger.error(
-                "%s %s %s %d (%s)",
-                corr_id, method, path, sc, elapsed_str,
+                "%d on %s %s (%s) corr=%s",
+                sc, method, path, elapsed_str, corr_id,
                 extra={"tag": "REQ", "context": ctx},
             )
         elif sc >= 400:
             logger.warning(
-                "%s %s %s %d (%s)",
-                corr_id, method, path, sc, elapsed_str,
+                "%d on %s %s (%s) corr=%s",
+                sc, method, path, elapsed_str, corr_id,
                 extra={"tag": "REQ", "context": ctx},
             )
         elif elapsed > SLOW_THRESHOLD_SECONDS:
             if path in _COLD_START_PATHS and elapsed < 60.0:
                 logger.debug(
-                    "%s %s %s %d (%s) cold-start",
-                    corr_id, method, path, sc, elapsed_str,
+                    "cold-start %s %s %d (%s) corr=%s",
+                    method, path, sc, elapsed_str, corr_id,
                     extra={"tag": "REQ", "context": ctx},
                 )
             else:
                 logger.warning(
-                    "%s %s %s %d (%s)",
-                    corr_id, method, path, sc, elapsed_str,
+                    "%s %s %d (%s) corr=%s",
+                    method, path, sc, elapsed_str, corr_id,
                     extra={"tag": "SLOW", "context": ctx},
                 )
         else:
             logger.debug(
-                "%s %s %s %d (%s)",
-                corr_id, method, path, sc, elapsed_str,
+                "%s %s %d (%s) corr=%s",
+                method, path, sc, elapsed_str, corr_id,
                 extra={"tag": "REQ", "context": ctx},
             )
 
