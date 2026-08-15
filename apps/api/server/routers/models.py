@@ -56,7 +56,7 @@ class ModelsRouter:
 
     def _register_routes(self):
         self.router.add_api_route(path="", endpoint=self.list_models, methods=["GET"], response_model=StandardResponse[List[ModelInfo]])
-        self.router.add_api_route(path="/load", endpoint=self.load_model, methods=["POST"], response_model=StandardResponse[LoadModelResponse])
+        self.router.add_api_route(path="/load", endpoint=self.load_model, methods=["POST"])
         self.router.add_api_route(path="/unload", endpoint=self.unload_model, methods=["POST"])
         self.router.add_api_route(path="/current", endpoint=self.current_model, methods=["GET"])
         self.router.add_api_route(path="/hf", endpoint=self.list_hf_models, methods=["GET"])
