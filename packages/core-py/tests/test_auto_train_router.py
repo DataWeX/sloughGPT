@@ -32,6 +32,8 @@ class TestListCheckpoints:
     def test_empty(self, tmp_path):
         ar = AutoTrainRouter()
         ar.CHECKPOINTS_DIR = tmp_path
+        ar.TURBO_DIR = tmp_path / "turbo"
+        ar.TURBO_DIR.mkdir()
         ar.LORA_DIR = tmp_path / "lora"
         ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
@@ -42,6 +44,8 @@ class TestListCheckpoints:
     def test_returns_success_status(self, tmp_path):
         ar = AutoTrainRouter()
         ar.CHECKPOINTS_DIR = tmp_path
+        ar.TURBO_DIR = tmp_path / "turbo"
+        ar.TURBO_DIR.mkdir()
         ar.LORA_DIR = tmp_path / "lora"
         ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
@@ -85,25 +89,32 @@ class TestLoadCheckpoint:
     def test_load_not_found(self, tmp_path):
         ar = AutoTrainRouter()
         ar.CHECKPOINTS_DIR = tmp_path
+        ar.TURBO_DIR = tmp_path / "turbo"
+        ar.TURBO_DIR.mkdir()
+        ar.LORA_DIR = tmp_path / "lora"
+        ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
         resp = client.post("/auto-train/checkpoints/missing/load")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "error"
-        assert "not found" in body["message"].lower()
+        assert "error" in body
+        assert "not found" in body["error"].lower()
 
     def test_load_invalid_soul(self, tmp_path):
         ckpt = tmp_path / "bad.soul"
         ckpt.write_bytes(b"\x00" * 100)
         ar = AutoTrainRouter()
         ar.CHECKPOINTS_DIR = tmp_path
+        ar.TURBO_DIR = tmp_path / "turbo"
+        ar.TURBO_DIR.mkdir()
+        ar.LORA_DIR = tmp_path / "lora"
+        ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
         resp = client.post("/auto-train/checkpoints/bad/load")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "error"
-        assert "data" in body
-        assert body["data"]["name"] == "bad.soul"
+        assert "error" in body
+        assert body.get("details", {}).get("name") == "bad.soul"
 
 
 class TestDownloadCheckpoint:

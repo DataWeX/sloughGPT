@@ -53,6 +53,74 @@ def _json_safe_payload(o: Any) -> Any:
     return o
 
 
+def _patch_checkpoint_metadata(trainer, result):
+    """Patch .meta.json sidecar with actual training results.
+
+    The .soul file is written atomically inside save_checkpoint() via
+    save_soul(), but the companion .meta.json can end up with stale
+    initial values (step=0, duration=0.0, loss=null) when the profile
+    is constructed before training begins.  This function re-reads the
+    sidecar and overwrites the stale fields with the real training
+    results from the TrainResult.
+
+    Args:
+        trainer: The SloughGPTTrainer instance (has _last_checkpoint_path,
+            global_step, _last_train_loss, _best_val_loss, _completed_epochs,
+            _training_start_time).
+        result: The TrainResult returned by trainer.train().
+
+    Side effects:
+        - Overwrites .meta.json if the checkpoint path exists.
+    """
+    from pathlib import Path as _Path
+    import json as _json
+    import time as _time
+
+    ckpt_path = getattr(trainer, "_last_checkpoint_path", None)
+    if not ckpt_path:
+        return
+    meta_path = _Path(ckpt_path + ".meta.json")
+    if not meta_path.exists():
+        return
+
+    try:
+        meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    # Compute actual training duration
+    start_t = getattr(trainer, "_training_start_time", None)
+    duration = round(_time.time() - start_t, 1) if start_t else 0.0
+
+    # Patch top-level fields
+    meta["epochs_trained"] = getattr(trainer, "_completed_epochs", 0) or result.get("epochs_completed", 0)
+    final_loss = getattr(trainer, "_last_train_loss", None)
+    if final_loss is None:
+        final_loss = result.get("final_loss")
+    meta["final_train_loss"] = final_loss
+    best_eval = getattr(trainer, "_best_val_loss", None)
+    if best_eval is not None and best_eval != float("inf"):
+        meta["final_val_loss"] = best_eval
+
+    # Patch nested metadata fields
+    md = meta.get("metadata", {})
+    md["training_duration_s"] = duration
+    ts = md.get("training_state", {})
+    ts["step"] = getattr(trainer, "global_step", 0)
+    ts["completed_epochs"] = getattr(trainer, "_completed_epochs", 0)
+    # Update scheduler last_epoch to match actual progress
+    sched = ts.get("scheduler", {})
+    if sched:
+        sched["last_epoch"] = getattr(trainer, "current_epoch", 0)
+    md["training_state"] = ts
+    meta["metadata"] = md
+
+    try:
+        meta_path.write_text(_json.dumps(meta, indent=2, default=str), encoding="utf-8")
+    except Exception:
+        logger.debug("Failed to patch checkpoint metadata at %s", meta_path, exc_info=True)
+
+
 async def training_handler(task) -> dict:
     """
     TaskQueue handler for SloughGPTTrainer (standard training).
@@ -176,6 +244,14 @@ async def training_handler(task) -> dict:
             from domains.api.sse_envelope import sse_complete
             enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
             return {"status": "cancelled"}
+
+        # Patch the .meta.json sidecar with actual training results.
+        # The .soul metadata is written inside save_checkpoint() via save_soul(),
+        # but the sidecar may end up with stale initial values (step=0,
+        # duration=0.0, loss=null) if the atomic rename races with a concurrent
+        # read or if the profile was constructed before training started.
+        _patch_checkpoint_metadata(trainer, result)
+
         from domains.api.sse_envelope import sse_complete
         enqueue(sse_complete(
             "auto-train",
