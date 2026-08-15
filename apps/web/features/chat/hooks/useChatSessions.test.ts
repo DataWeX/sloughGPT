@@ -260,11 +260,10 @@ describe('useChatSessions.loadSession', () => {
     })
 
     expect(opts.setMessages).not.toHaveBeenCalled()
-    expect(opts.setSessionLoading).toHaveBeenCalledTimes(1)
-    expect(opts.setSessionLoading).toHaveBeenCalledWith(true)
+    expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
   })
 
-  it('does not release loading or apply messages when a stale load eventually times out', async () => {
+  it('releases loading when a superseded load eventually times out without applying messages', async () => {
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
 
@@ -279,7 +278,33 @@ describe('useChatSessions.loadSession', () => {
     await act(async () => { await load })
 
     expect(opts.setMessages).not.toHaveBeenCalled()
-    expect(opts.setSessionLoading).toHaveBeenCalledTimes(1)
-    expect(opts.setSessionLoading).toHaveBeenCalledWith(true)
+    expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
+  })
+
+  it('keeps loading held while a newer load is in flight, releasing only after the last settles', async () => {
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    vi.useFakeTimers()
+    mockFetchMessages.mockImplementation(() => new Promise<never>(() => {}))
+
+    const load1 = result.current.loadSession('s1')
+    await act(async () => {})
+    await vi.advanceTimersByTimeAsync(100)
+    const load2 = result.current.loadSession('s2')
+    await act(async () => {})
+    expect(opts.sessionIdRef.current).toBe('s2')
+
+    await vi.advanceTimersByTimeAsync(7900)
+    await act(async () => { await load1 })
+
+    expect(opts.setMessages).not.toHaveBeenCalled()
+    expect(opts.setSessionLoading).not.toHaveBeenLastCalledWith(false)
+
+    await vi.advanceTimersByTimeAsync(200)
+    await act(async () => { await load2 })
+
+    expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
+    expect(opts.setMessages).toHaveBeenCalledWith(localSession.messages)
   })
 })

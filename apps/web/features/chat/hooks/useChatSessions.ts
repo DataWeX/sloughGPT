@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import {
   CURRENT_SESSION_KEY, generateSessionId,
   type ChatMessage, type ChatSession,
@@ -70,6 +70,12 @@ export function useChatSessions(opts: {
 
   const [sessions, setSessions] = useState<ChatSession[]>([])
 
+  /** Number of loadSession calls still in flight for this hook instance. Loading
+   *  is released when the count reaches zero so a superseded load (e.g. the user
+   *  clicked New Chat while an old session was still merging) can never leave the
+   *  skeleton mounted: some later load may never come to clear it. */
+  const inFlightLoadsRef = useRef(0)
+
   const saveSessionToStorage = useCallback(async (msgs: ChatMessage[], sessionId: string) => {
     const sessionName = (() => {
       const first = msgs.find(m => m.role === 'user')?.content || ''
@@ -104,6 +110,7 @@ export function useChatSessions(opts: {
   const loadSession = useCallback(async (sessionId: string) => {
     sessionIdRef.current = sessionId
     setSessionLoading(true)
+    inFlightLoadsRef.current++
     try {
       const session = await chatDB.loadSession(sessionId)
       if (session) {
@@ -141,7 +148,8 @@ export function useChatSessions(opts: {
         if (filteredMessages.length > 0) showToast(`Loaded: ${session.name}`)
       }
     } finally {
-      if (sessionIdRef.current === sessionId) setSessionLoading(false)
+      inFlightLoadsRef.current--
+      if (inFlightLoadsRef.current <= 0) setSessionLoading(false)
     }
   }, [showToast, setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef])
 
