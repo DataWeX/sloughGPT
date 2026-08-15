@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const {
   mockSaveSession, mockLoadSession, mockLoadSessions,
@@ -155,5 +155,82 @@ describe('useChatSessions', () => {
     expect(result.current.sidebarConversations[0].name).toBe('Test Chat')
     expect(result.current.sidebarConversations[0].starred).toBe(true)
     expect(result.current.sidebarConversations[0].message_count).toBe(1)
+  })
+})
+
+describe('useChatSessions.loadSession', () => {
+  const localSession = {
+    id: 's1',
+    name: 'Test chat',
+    messages: [
+      { id: 'm1', role: 'user' as const, content: 'hello', timestamp: new Date() },
+    ],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    synced: false,
+    starred: false,
+    pinned: false,
+  }
+
+  const defaultOpts = () => ({
+    setMessages: vi.fn(),
+    setInput: vi.fn(),
+    setSessionSaved: vi.fn(),
+    setSessionLoading: vi.fn(),
+    sessionIdRef: { current: 's1' } as React.MutableRefObject<string>,
+    showToast: vi.fn(),
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadSession.mockResolvedValue(localSession)
+    mockGetDraft.mockResolvedValue('')
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('merges remote messages with local and releases sessionLoading', async () => {
+    mockFetchMessages.mockResolvedValue([{ role: 'assistant', content: 'remote reply' }])
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    await act(async () => { await result.current.loadSession('s1') })
+
+    expect(opts.setSessionLoading).toHaveBeenNthCalledWith(1, true)
+    const contents = opts.setMessages.mock.calls[0][0].map((m: { content: string }) => m.content)
+    expect(contents).toContain('remote reply')
+    expect(contents).toContain('hello')
+    expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
+    expect(opts.showToast).toHaveBeenCalledWith('Loaded: Test chat')
+  })
+
+  it('falls back to local messages when the remote merge hangs past the timeout', async () => {
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    vi.useFakeTimers()
+    mockFetchMessages.mockImplementation(() => new Promise<never>(() => {}))
+    let settled = false
+    const load = result.current.loadSession('s1').then(() => { settled = true })
+    await vi.advanceTimersByTimeAsync(8001)
+    await act(async () => { await load })
+
+    expect(settled).toBe(true)
+    expect(opts.setMessages).toHaveBeenCalledWith(localSession.messages)
+    expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
+    expect(opts.showToast).toHaveBeenCalledWith('Loaded: Test chat')
+  })
+
+  it('falls back to local messages when the remote merge rejects', async () => {
+    mockFetchMessages.mockRejectedValue(new Error('server down'))
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    await act(async () => { await result.current.loadSession('s1') })
+
+    expect(opts.setMessages).toHaveBeenCalledWith(localSession.messages)
+    expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
   })
 })

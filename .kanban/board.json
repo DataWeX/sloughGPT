@@ -24,6 +24,149 @@
   ],
   "cards": [
     {
+      "id": "20260815_052916_chat-skeleton-stuck-after-knowledge-clear",
+      "title": "Chat skeleton stuck after knowledge clear",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "chat",
+        "skeleton",
+        "bugfix"
+      ],
+      "created_at": "2026-08-15T05:29:16.258058+00:00",
+      "updated_at": "2026-08-15T05:29:16.258058+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260815_050310_fix-turbophase-type-error-in-usetrainingsession",
+      "title": "Fix turboPhase type error in useTrainingSession",
+      "description": "tsc failed on hooks/useTrainingSession.ts:494. The turboPhase ternary used  as the first condition, so the negated conjunction in the final branch prevented TS from narrowing  out of , producing . Restructured the discriminant as the outer condition:  \u2014 behavior identical (verified truth table), and TS narrows correctly. tsc --noEmit: exit 0. useTrainingSession tests 15/15, training page tests 11/11 pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "web",
+        "typescript",
+        "training"
+      ],
+      "created_at": "2026-08-15T05:03:10.862797+00:00",
+      "updated_at": "2026-08-15T05:03:10.862797+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260815_050106_standardize-route-loading-fallbacks-labeled-skeletons",
+      "title": "Standardize route loading fallbacks \u2014 labeled skeletons",
+      "description": "13 loading.tsx fallbacks (agents, auth, benchmark, feedback, files, images, learn, monitoring, registry, security, souls, tokenizer, voice) passed title=\"\" to PageContainer, which renders an anonymous PageSkeleton with no page label. Coded properly: each now passes the real page title/subtitle plus loadingContent={<PageSkeleton cards={3} header={false} />}, so the loading state renders the actual AppRouteHeader (labeled skeleton) with content skeletons below. Dropped the centering className hacks on agents/monitoring that compensated for the anonymous skeleton. route-fallbacks.test.tsx: 66/66 pass. tsc: 0 errors in these files; one pre-existing error in hooks/useTrainingSession.ts (concurrent actor's in-progress work, not touched).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "web",
+        "ui",
+        "loading"
+      ],
+      "created_at": "2026-08-15T05:01:06.367548+00:00",
+      "updated_at": "2026-08-15T05:01:06.367548+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260815_045624_skeleton-loading-pass-replace-loading-text-states",
+      "title": "Skeleton loading pass \u2014 replace Loading... text states",
+      "description": "Replaced text-based loading states with proper design-system placeholders per PageContainer/PageSkeleton pattern: settings Process Isolation card 'Loading...' text -> Skeleton block approximating content shape; security 'Load older' and souls checkpoint 'Load' buttons swap label for inline spinner (spinner replaces button label per design system). Verified remaining pages (dataset snapshots, knowledge list, learn) already use skeletons; StatusCard 'Loading\u2026' is a semantic model-status label, left as-is. 79/79 tests across 3 files pass, tsc --noEmit clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "web",
+        "ui",
+        "loading"
+      ],
+      "created_at": "2026-08-15T04:56:24.276786+00:00",
+      "updated_at": "2026-08-15T04:56:24.276786+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260815_045128_fix-stale-page-loading-tests-tokenizermultimodal-skeleton-fl",
+      "title": "Fix stale page loading tests \u2014 tokenizer/multimodal skeleton flow",
+      "description": "The tokenizer and multimodal page tests asserted page headers render synchronously, but both pages now load data via PageContainer with a loading prop, which renders PageSkeleton instead of the header while fetching. Updated 3 tests: tokenizer loading test asserts skeleton + no header then content after deferred getStats resolves; multimodal header test waits for load; multimodal loading test asserts header absent while pending then present after deferred capabilities resolve. Never-resolving-promise hacks replaced with deferred-promise resolution verifying the full skeleton->content transition. Full-suite failures were 3/3952; both files now 31/31 pass, tsc --noEmit clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "web",
+        "tests",
+        "loading"
+      ],
+      "created_at": "2026-08-15T04:51:28.771362+00:00",
+      "updated_at": "2026-08-15T04:51:28.771362+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260815_035844_fix-get-user-adaptersquality-500-missing-get-quality-report",
+      "title": "Fix GET /user-adapters/quality 500 \u2014 missing get_quality_report",
+      "description": "Root cause: router called store.get_quality_report() which did not exist on PerUserLoRAStore (only get_quality_adapters/get_stats). Fix: added get_quality_report(min_feedback_count=3, max_age_days=None) to packages/core-py/domains/feedback/per_user_lora.py returning {count, adapters} via get_quality_adapters; router get_quality now parses min_feedback_count/max_age_days query params (frontend user-adapters-controller getQuality sends these, expects {count, adapters}). Updated router-test mock lambda to accept **kw; added 5 store tests (empty, feedback filter, count consistency, age filter, max_age_days=0 no-op). 61 tests pass; real-store+router end-to-end smoke verified 200.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "feedback",
+        "user-adapters",
+        "api"
+      ],
+      "created_at": "2026-08-15T03:58:44.687831+00:00",
+      "updated_at": "2026-08-15T03:58:44.687831+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260815_035844_eaxax-moffs-landed-full-vm-test-suite-green",
+      "title": "EAX/AX moffs landed; full VM test suite green",
+      "description": "All 14 test_vm*.py files pass: 2607 passed, EXIT=0. EAX moffs A1/A3 disp32 landed (test pins a134120000 / 66a334120000 / 66a134120000 confirmed intact). Root-caused the mass test_vm_os_layer.py failures to commit a28cf10a's strict MemFault bounds checks: tests grow cpu._mem past _mem_size (1MB default) by slice-assigning code at 0x100000, so _read8(0x100000) faulted. Fix: runtime fault checks now compare against len(self._mem) (actual backing store) instead of _mem_size (configured capacity) in _read8/_write8/_write16/_read32/_write32/_push32/_pop32, step() trace fallback, and 16-bit PUSH/POP stack checks. load() intentionally stays on _mem_size (enforced sandbox API). Also fixed 5 stale tests in test_vm_os_layer.py to conform to the strict contract (step()/run() raise InsFault/MemFault, per test_vm.py:389-440): TestX86REPExecution::test_rep_stosb, TestX86ShiftOps::test_ror_eax/test_sar_eax/test_shl_8bit_cl switched from run() to step() (they ran off the end of code into zero memory); TestCPUInstructionDecode::test_div_8_overflow now wraps step() in pytest.raises(InsFault) instead of asserting step() returns False. Test helpers at 7516/8715 upgraded to X86CPU(memory_size=2*1024*1024); length pins at 9626/9630 >= 6 to >= 5 for 5-byte moffs. NOTE: new test_vm*.py file set (agent restructured): test_vm.py, test_vm_os_layer.py, test_vm_assembler_emission.py, test_vm_cpu_exec.py, test_vm_devices_coverage.py, test_vm_devices_layer.py, test_vm_engine.py, test_vm_permissions_more.py, test_vm_programs.py, test_vm_rbac.py, test_vm_router.py, test_vm_runner_ops.py, test_vm_syscalls_shell.py, test_vm_training_bridge_more.py.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "vm",
+        "assembler",
+        "memory-fault"
+      ],
+      "created_at": "2026-08-15T03:58:44.659128+00:00",
+      "updated_at": "2026-08-15T03:58:44.659128+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260815_035844_accumulator-immediate-alu-opcodes-implemented-04-3d-family-a",
+      "title": "Accumulator-immediate ALU opcodes implemented (04-3D family + A8/A9 TEST)",
+      "description": "'code it properly' pass: implemented the missing accumulator-immediate ALU opcodes in the CPU runtime. The dispatcher previously raised InsFault unknown-opcode for 0x04 ADD AL,imm8; 0x05 ADD EAX,imm32; 0x0C/0x0D OR; 0x14/0x15 ADC; 0x1C/0x1D SBB; 0x24/0x25 AND; 0x2C/0x2D SUB; 0x34/0x35 XOR; 0x3C/0x3D CMP (16 entries, AL/imm8 + EAX/imm32). vm.py: _exec_one now has a dict-based _alu_acc_imm block after the alu_ops group (before TEST 85/84); 8-bit uses _get8l(0)/_set8l(0,...)/_fetch_byte, 32-bit uses _get32(0)/_set32(0,...)/_fetch_dword with sign-extension (imm & 0x80000000 -> subtract 0x100000000); CMP (alu_op 7) updates flags but does NOT write back. _exec_16bit got the matching _alu_acc_imm16 dict for the 0x66-prefixed AX/imm16 (and AL/imm8) forms, using _get16(0)/_set16(0,...) and little-endian lo|hi<<8 with imm & 0x8000 sign-extension. Also implemented the missing TEST accumulator-immediate forms: 0xA8 TEST AL,imm8 and 0xA9 TEST EAX,imm32 in _exec_one, plus 0x66 A8/A9 in _exec_16bit, via _update_flags_logic(a & imm, width), no write. Fixed an inconsistency: _exec_16bit's unknown-opcode fallback used to log a warning and skip the byte; it now raises InsFault('unknown opcode 0x66 0x..') consistent with the 32-bit path and the strict contract (test_vm.py:389-440). Tests added in test_vm_cpu_exec.py: test_alu_acc_imm8 (all 8 opcodes incl. CF-set ADC/SBB paths + CMP no-write + ZF), test_alu_acc_imm32 (incl. sign-extended XOR -1), test_alu_acc_imm_16bit (66-prefixed AX forms + 66 A8/A9), test_alu_test_acc_imm. Full 14-file VM suite: 2611 passed, 1 warning, EXIT=0. Moffs pins intact (test_vm_assembler_emission.py 329-330 66a134120000/66a334120000, 334-335 a134120000).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "vm",
+        "cpu",
+        "alu",
+        "opcodes"
+      ],
+      "created_at": "2026-08-15T03:58:44.630862+00:00",
+      "updated_at": "2026-08-15T03:58:44.630862+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260814_123941_checkpoint-resume-hardening",
       "title": "Checkpoint resume hardening",
       "description": "Hardening checkpoint resume against corrupt/truncated .soul/.npz files:\n\n- CheckpointManager.latest_valid_path() + load_latest(): skip unreadable checkpoints newest-first (warn + continue), fall back to previous good checkpoint. Crash mid-write of the newest file no longer blocks recovery.\n- train() explicit resume_path: unreadable file now raises ValueError 'Cannot resume from <path>: checkpoint is unreadable (...)' instead of a raw traceback; missing/unsupported keeps its contextual ValueError.\n- /training recovery endpoint: fallback uses latest_valid_path().\n- CLI (cmd_train, cmd_train_native) + train_pipeline __main__: catch ValueError, print clean error, exit 2.\n- Tests: latest_valid_path skips corrupt newest, load_latest skips corrupt newest, all-corrupt -> None, explicit corrupt path raises. Full test_train_pipeline.py 137/137 pass.\n- Docs: docs/policies/CONTRIBUTING.md resume semantics + regression list updated.",

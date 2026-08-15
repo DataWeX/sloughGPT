@@ -12,9 +12,31 @@ import type { Conversation } from '@/lib/session-controller'
 
 const MAX_STORAGE_MESSAGES = 40
 
+/** Upper bound on the backend remote-merge phase of loadSession. If the server
+ *  is slow or offline, fetchMessages can otherwise hold sessionLoading true for
+ *  minutes (http-client retries with a fresh 30s timeout per attempt), leaving
+ *  the chat screen stuck on its loading skeleton instead of the conversation. */
+const REMOTE_MERGE_TIMEOUT_MS = 8000
+
 /** Module-level tracking: prevents duplicate backend session creation across
  *  React StrictMode double-mounts and concurrent hook instances. */
 const _createdSessions = new Set<string>()
+
+/** Resolves `promise` unless it settles within `ms`, in which case it rejects
+ *  so callers can fall back to locally cached data. The losing promise keeps a
+ *  handler attached (Promise.race) so its eventual outcome is never an
+ *  unhandled rejection. */
+async function withRemoteTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Remote merge timed out')), ms)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 export interface UseChatSessionsReturn {
   sessions: ChatSession[]
@@ -84,7 +106,10 @@ export function useChatSessions(opts: {
           return true
         })
         try {
-          const remoteMsgs = await sessionController.fetchMessages(sessionId)
+          const remoteMsgs = await withRemoteTimeout(
+            sessionController.fetchMessages(sessionId),
+            REMOTE_MERGE_TIMEOUT_MS,
+          )
           const remoteChatMsgs = remoteMsgs.map(m => ({
             id: `remote_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             role: m.role as 'user' | 'assistant',
