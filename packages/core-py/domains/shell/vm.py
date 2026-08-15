@@ -3415,12 +3415,27 @@ class X86Assembler:
         elif dst in self._REG32:
             val = self._parse_imm(src)
             if op == "test":
-                # TEST r/m32, imm32 — F7 /0 id
+                if self._REG32[dst] == 0:
+                    # TEST EAX, imm32 — A9 id (accumulator short form)
+                    if self._pfx(dst):
+                        self._output.append(0x66)
+                    self._output.append(0xA9)
+                    self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
+                else:
+                    # TEST r/m32, imm32 — F7 /0 id
+                    if self._pfx(dst):
+                        self._output.append(0x66)
+                    self._output.append(0xF7)
+                    modrm = (0xC0 | (0 << 3) | self._REG32[dst])
+                    self._output.append(modrm)
+                    self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
+            elif self._REG32[dst] == 0 and not (-128 <= val <= 127):
+                # ALU EAX, imm32 — 05/0D/15/1D/25/2D/35/3D id (accumulator
+                # short form). Immediate exceeds imm8 range, so the 5-byte
+                # form beats 81 /digit id at 6 bytes.
                 if self._pfx(dst):
                     self._output.append(0x66)
-                self._output.append(0xF7)
-                modrm = (0xC0 | (0 << 3) | self._REG32[dst])
-                self._output.append(modrm)
+                self._output.append(0x05 + alu_op[op] * 8)
                 self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
             elif op == "sub" and -128 <= val <= 127:
                 if self._pfx(dst):
@@ -3446,12 +3461,27 @@ class X86Assembler:
         elif dst in self._REG16:
             val = self._parse_imm(src)
             if op == "test":
-                # TEST r/m16, imm16 — F7 /0 iw
+                if self._REG16[dst] == 0:
+                    # TEST AX, imm16 — A9 iw (accumulator short form)
+                    if self._pfx(dst):
+                        self._output.append(0x66)
+                    self._output.append(0xA9)
+                    self._output.extend(struct.pack("<H", val & 0xFFFF))
+                else:
+                    # TEST r/m16, imm16 — F7 /0 iw
+                    if self._pfx(dst):
+                        self._output.append(0x66)
+                    self._output.append(0xF7)
+                    modrm = (0xC0 | (0 << 3) | self._REG16[dst])
+                    self._output.append(modrm)
+                    self._output.extend(struct.pack("<H", val & 0xFFFF))
+            elif self._REG16[dst] == 0 and not (-128 <= val <= 127):
+                # ALU AX, imm16 — 05/0D/15/1D/25/2D/35/3D iw (accumulator
+                # short form). Immediate exceeds imm8 range, so the 4-byte
+                # form beats 81 /digit iw at 5 bytes.
                 if self._pfx(dst):
                     self._output.append(0x66)
-                self._output.append(0xF7)
-                modrm = (0xC0 | (0 << 3) | self._REG16[dst])
-                self._output.append(modrm)
+                self._output.append(0x05 + alu_op[op] * 8)
                 self._output.extend(struct.pack("<H", val & 0xFFFF))
             elif -128 <= val <= 127:
                 if self._pfx(dst):
@@ -3470,10 +3500,20 @@ class X86Assembler:
         elif dst in self._REG8:
             val = self._parse_imm(src)
             if op == "test":
-                # TEST r/m8, imm8 — F6 /0 ib
-                self._output.append(0xF6)
-                modrm = (0xC0 | (0 << 3) | self._REG8[dst])
-                self._output.append(modrm)
+                if self._REG8[dst] == 0:
+                    # TEST AL, imm8 — A8 ib (accumulator short form)
+                    self._output.append(0xA8)
+                    self._output.append(val & 0xFF)
+                else:
+                    # TEST r/m8, imm8 — F6 /0 ib
+                    self._output.append(0xF6)
+                    modrm = (0xC0 | (0 << 3) | self._REG8[dst])
+                    self._output.append(modrm)
+                    self._output.append(val & 0xFF)
+            elif self._REG8[dst] == 0:
+                # ALU AL, imm8 — 04/0C/14/1C/24/2C/34/3C ib (accumulator
+                # short form, always 2 bytes vs 80 /digit ib at 3 bytes).
+                self._output.append(0x04 + alu_op[op] * 8)
                 self._output.append(val & 0xFF)
             else:
                 # ALU r/m8, imm8 — 80 /digit ib. r/m8 has no imm16 form, so

@@ -75,7 +75,7 @@ export function useTheme() {
   return context
 }
 
-/** Accent presets — ids kept for localStorage; hues match ``globals.css`` theme-* accent overrides */
+/** Accent presets — ids kept for localStorage; hues match ``globals.css`` theme-* */
 export const THEMES: { id: StoredThemeId; name: string; color: string }[] = [
   { id: 'blue', name: 'Periwinkle', color: '#5a82dc' },
   { id: 'purple', name: 'Lilac', color: '#9b6cd6' },

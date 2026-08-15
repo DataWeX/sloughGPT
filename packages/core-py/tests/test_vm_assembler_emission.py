@@ -25,6 +25,7 @@ import numpy as np  # imported first to avoid a coverage+numpy extension reload 
 from domains.shell.vm import (
     X86Assembler,
     X86CPU,
+    FLAG_ZF,
     _parity,
     _char_to_scancode,
     _scancode_to_char,
@@ -375,13 +376,15 @@ def test_alu_reg_reg():
 
 
 def test_alu_reg_imm():
-    assert _hex("add al, 5") == "80c005"
-    assert _hex("add al, 200") == "80c0c8"
-    assert _hex("add ax, 0x1234") == "81c03412"
-    assert _hex("add ax, 0x1234", 32) == "6681c03412"
+    # accumulator-immediate short forms: AL always (04/0C/14/1C/24/2C/34/3C ib),
+    # AX/EAX when the immediate exceeds imm8 range (05/0D/.../3D iw/id)
+    assert _hex("add al, 5") == "0405"
+    assert _hex("add al, 200") == "04c8"
+    assert _hex("add ax, 0x1234") == "053412"
+    assert _hex("add ax, 0x1234", 32) == "66053412"
     assert _hex("add eax, 5") == "6683c005"
     assert _hex("add eax, 5", 32) == "83c005"
-    assert _hex("add eax, 0x1234") == "6681c034120000"
+    assert _hex("add eax, 0x1234") == "66053412"
     assert _hex("add eax, 0x12345678") == "6681c078563412"
     assert _hex("or eax, 5") == "6683c805"
     assert _hex("and eax, 5") == "6683e005"
@@ -390,25 +393,27 @@ def test_alu_reg_imm():
     assert _hex("cmp eax, 5") == "6683f805"
     assert _hex("sub eax, 0x12345678") == "6681e878563412"
     assert _hex("sub ax, 5") == "83e805"
-    assert _hex("sub al, 5") == "80e805"
+    assert _hex("sub al, 5") == "2c05"
     assert _hex("add bl, 5") == "80c305"
     assert _hex("add bx, 5") == "83c305"
 
 
 def test_alu_reg8_large_imm_truncates():
-    # r/m8 has no imm16 form; the immediate is truncated to imm8 (80 /digit ib).
-    assert _hex("add al, 0x1234") == "80c034"
-    assert _hex("sub al, 0x1234") == "80e834"
+    # r/m8 has no imm16 form; the immediate is truncated to imm8.
+    # The accumulator forms (04/0C/.../3C ib) truncate the same way.
+    assert _hex("add al, 0x1234") == "0434"
+    assert _hex("sub al, 0x1234") == "2c34"
 
 
 def test_test_forms():
     assert _hex("test eax, ebx") == "6685d8"
     assert _hex("test ax, bx") == "85d8"
     assert _hex("test al, bl") == "84d8"
-    assert _hex("test eax, 0x12345678") == "66f7c078563412"
-    assert _hex("test ax, 0x1234") == "f7c03412"
-    assert _hex("test ax, 0x1234", 32) == "66f7c03412"
-    assert _hex("test al, 5") == "f6c005"
+    # accumulator-immediate short forms: TEST AL/EAX/AX, imm — A8/A9
+    assert _hex("test eax, 0x12345678") == "66a978563412"
+    assert _hex("test ax, 0x1234") == "a93412"
+    assert _hex("test ax, 0x1234", 32) == "66a93412"
+    assert _hex("test al, 5") == "a805"
     assert _hex("test bl, 0x7F") == "f6c37f"
     assert _hex("test bl, 0x1FF") == "f6c3ff"
 
@@ -650,6 +655,55 @@ def test_asm_run():
     cpu = X86Assembler().run("[BITS 32]\nmov eax, 5\nmov ebx, 3\nadd eax, ebx\nhlt", org=0x1000)
     assert cpu.eax == 8
     assert cpu.ebx == 3
+
+
+def test_asm_run_acc_imm_short_forms():
+    # Accumulator-immediate short forms emitted by the assembler
+    # (04/0C/.../3C ib, 05/0D/.../3D id, 66-prefixed iw, A8/A9 for TEST)
+    # decode and execute correctly in the runtime.
+    asm = X86Assembler()
+    cpu = X86CPU()
+    cpu.load(asm.assemble(
+        "[BITS 32]\n"
+        "add al, 5\n"          # 04 05
+        "sub al, 3\n"          # 2C 03 -> AL = 2
+        "mov eax, 0x100\n"
+        "add eax, 0x1000\n"    # 05 00 10 00 00 (imm exceeds imm8 range)
+        "sub eax, 0x1\n"       # 2D 01 00 00 00
+        "add ax, 0x1234\n"     # 66 05 34 12 (16-bit AX form)
+        "and eax, 0xFF\n"      # 25 FF 00 00 00
+        "test eax, 0x1\n"      # A9 01 00 00 00
+        "test al, 0xCC\n"      # A8 CC
+        "hlt\n",
+        org=0x1000,
+    ))
+    for _ in range(8):
+        cpu.step()  # up to and including `test eax, 0x1`
+    assert cpu.eax == 0x33
+    assert cpu._flag(FLAG_ZF) is False  # 0x33 & 1 == 1
+    cpu.step()  # test al, 0xCC
+    assert cpu.eax == 0x33
+    assert cpu._flag(FLAG_ZF) is True   # 0x33 & 0xCC == 0
+
+
+def test_execute_acc_imm_roundtrip_32bit():
+    # Round-trip: assemble [BITS 32] accumulator-immediate ADC/SBB (short forms
+    # 15/1D id), run them in the CPU, verify EAX.
+    asm = X86Assembler()
+    cpu = X86CPU()
+    cpu.load(asm.assemble(
+        "[BITS 32]\n"
+        "mov eax, 10\n"
+        "adc eax, 0x100\n"   # 15 00 01 00 00 (CF=0) -> 0x10A
+        "sbb eax, 0x100\n"   # 1D 00 01 00 00 (CF=0) -> 0xA
+        "hlt\n",
+        org=0x1000,
+    ))
+    cpu.step()  # mov eax, 10
+    cpu.step()  # adc eax, 0x100
+    assert cpu.eax == 0x10A
+    cpu.step()  # sbb eax, 0x100
+    assert cpu.eax == 0xA
 
 
 # ══════════════════════════════════════════════════════════════════════════════

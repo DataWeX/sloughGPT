@@ -385,6 +385,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
               cleanedToken = cleanStreamedContent(cleanedToken)
             }
             assistantContentLen += cleanedToken.length
+            if (assistantContentLen === cleanedToken.length) {
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId && m.content === 'Thinking...' ? { ...m, content: '' } : m
+              ))
+            }
             tokenBufRef.current.push({ id: assistantId, text: cleanedToken })
             scheduleFlush()
           },

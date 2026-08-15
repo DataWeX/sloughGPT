@@ -666,21 +666,25 @@ def _matmul(a, b):
     _a_shape = a_data.shape; _b_shape = b_data.shape; _out_shape = out.data.shape
     _b_T = np.swapaxes(b_data, -2, -1) if b_data.ndim >= 2 else None
     _a_T = np.swapaxes(a_data, -2, -1) if a_data.ndim >= 2 else None
-    _both_batched = a_data.ndim >= 3 and b_data.ndim >= 3
     def bk(g):
         ga = None; gb = None
         if a_req or (isinstance(a, Tensor) and a._backward_fn):
             g_out = g.reshape(_out_shape) if g.shape != _out_shape else g
             if _b_T is None:
                 # b is 1D (K,): C[..., m] = sum_k a[..., m, k] * b[k]
-                #   ga = g[..., :, newaxis] * b[newaxis, :]
+                #   ga[..., m, k] = g[..., m] * b[k]
                 ga = g_out[..., np.newaxis] * b_data
             elif a_data.ndim == 1 and b_data.ndim >= 3:
                 # a is 1D (K,), b is (B, K, N): ga[k] = sum_{b,n} g[b,n] * b[b,k,n]
                 #   broadcast g to (B,1,N), multiply by b (B,K,N), sum over batch+N
                 ga = (g_out[:, np.newaxis, :] * b_data).sum(axis=(0, 2))
+            elif a_data.ndim >= 2 and b_data.ndim > a_data.ndim:
+                # a has fewer batch dims than b (e.g. 2D a, 3D b):
+                #   matmul gives extra batch dims, sum them away
+                sum_axes = tuple(range(b_data.ndim - a_data.ndim))
+                ga = np.matmul(g_out, _b_T).sum(axis=sum_axes)
             else:
-                # ga = g @ b^T
+                # ga = g @ b^T (same or more batch dims than b)
                 ga = np.matmul(g_out, _b_T)
             if ga.shape != _a_shape:
                 ga = ga.reshape(_a_shape)
@@ -706,8 +710,9 @@ def _matmul(a, b):
                 #   Flatten a's batch dims so the matmul sums over them
                 a_flat = a_data.reshape(-1, a_data.shape[-1])
                 gb = np.matmul(a_flat.T, g_out.ravel())
-            elif _both_batched:
-                # Both (..., M, K) and (..., K, N): gb = a^T @ g (preserves batch)
+            elif a_data.ndim >= 2 and b_data.ndim >= 3:
+                # a is 2D+ and b is 3D+: gb = a^T @ g
+                #   numpy broadcasts a^T (K,M) with g (B,M,N) -> (B,K,N)
                 gb = np.matmul(_a_T, g_out)
             else:
                 # a is (B..., M, K), b is (K, N): flatten a's batch dims

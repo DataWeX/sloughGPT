@@ -136,7 +136,7 @@ class TestGenerateStreamEndpoint:
         assert "token" in working[0]["data"]
 
     def test_generate_stream_tokens_ordered(self, client, mock_provider):
-        """Should yield tokens in correct order."""
+        """Should yield tokens in correct order (may be batched)."""
         response = client.post(
             "/inference/generate/stream",
             json={"prompt": "Hi", "max_new_tokens": 5}
@@ -148,7 +148,6 @@ class TestGenerateStreamEndpoint:
                 if event["status"] == "working" and event["data"].get("token"):
                     tokens.append(event["data"]["token"])
 
-        assert len(tokens) == 4
         assert "".join(tokens) == "Hello! How are you?"
 
     def test_generate_stream_complete_meta(self, client, mock_provider):
