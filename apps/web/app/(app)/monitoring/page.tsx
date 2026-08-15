@@ -117,24 +117,30 @@ export default function SystemHealthPage() {
         trainingController.list().catch(() => []),
       ])
       const ok = [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex, at, tj].some(v => v != null)
-      setDetailed(d)
-      setMetrics(m)
-      setInfo(i)
-      setDisk(di)
-      setKnowledgeStats(ks)
-      setAdapterStatus(as)
+      // Keep last-good data: only overwrite a slice when its fetch succeeded, so a
+      // transient failure never blanks previously loaded cards.
+      if (d != null) setDetailed(d)
+      if (m != null) setMetrics(m)
+      if (i != null) setInfo(i)
+      if (di != null) setDisk(di)
+      if (ks != null) setKnowledgeStats(ks)
+      if (as != null) setAdapterStatus(as)
       if (bq && 'coherence_score' in bq) {
         setBenchQuality(bq as { status: string; total_responses: number; coherence_score: number; quality_score: number; repetition_rate: number; avg_length: number; empty_rate: number })
-      } else {
+      } else if (bq != null) {
         setBenchQuality(null)
       }
-      setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
-      setDpoStatus(dsRes as typeof dpoStatus)
-      setVisualStatus(vs as typeof visualStatus)
-      setExecutorStatus(ex)
-      setAutoTrainStatus(at)
-      setTrainingJobs(Array.isArray(tj) ? tj : [])
+      if (bs != null) setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
+      if (dsRes != null) setDpoStatus(dsRes as typeof dpoStatus)
+      if (vs != null) setVisualStatus({
+        visual_loaded: vs.engine.vision_model != null,
+        training: { status: vs.engine.status },
+      })
+      if (ex != null) setExecutorStatus(ex)
+      if (at != null) setAutoTrainStatus(at)
+      if (Array.isArray(tj)) setTrainingJobs(tj)
       setLastUpdated(new Date().toLocaleTimeString())
+      if (d == null) setError('Failed to load system health')
       return ok
     } catch (e: unknown) {
       setError(extractErrorMessage(e, 'Failed to load system health'))

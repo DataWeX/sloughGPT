@@ -366,8 +366,10 @@ describe('MonitoringPage — fetchAll failure handling', () => {
     await act(async () => {})
   })
 
-  it('continues to show previously fetched data on partial failure', async () => {
+  it('keeps previously fetched data on partial failure', async () => {
     const { systemController } = await import('@/lib/system-controller')
+    type Health = Awaited<ReturnType<typeof systemController.getDetailedHealth>>
+    vi.mocked(systemController.getDetailedHealth).mockResolvedValue(mockDetailedHealth as unknown as Health)
     render(<MonitoringPage />)
     await waitFor(() => {
       expect(screen.getByTestId('status-card')).toBeTruthy()
@@ -376,6 +378,7 @@ describe('MonitoringPage — fetchAll failure handling', () => {
     await act(async () => { fireEvent.click(screen.getAllByText(/refresh/i)[0]) })
     await waitFor(() => {
       expect(screen.getByTestId('status-card')).toBeTruthy()
+      expect(screen.getAllByText(/error/i).length).toBeGreaterThanOrEqual(1)
     })
   })
 })
