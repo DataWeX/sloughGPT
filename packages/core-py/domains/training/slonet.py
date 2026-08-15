@@ -665,33 +665,45 @@ def _matmul(a, b):
         if isinstance(b, Tensor) and b.requires_grad: b._consumers.append(out)
     _a_shape = a_data.shape; _b_shape = b_data.shape; _out_shape = out.data.shape
     _b_T = np.swapaxes(b_data, -2, -1) if b_data.ndim >= 2 else None
-    _a_mT = np.swapaxes(a_data, -2, -1) if a_data.ndim >= 2 else None
-    _a_flat = a_data.reshape(-1, a_data.shape[-1]) if a_data.ndim >= 2 else None
+    _a_T = np.swapaxes(a_data, -2, -1) if a_data.ndim >= 2 else None
     _both_batched = a_data.ndim >= 3 and b_data.ndim >= 3
     def bk(g):
         ga = None; gb = None
         if a_req or (isinstance(a, Tensor) and a._backward_fn):
             g_out = g.reshape(_out_shape) if g.shape != _out_shape else g
             if _b_T is None:
-                ga = np.outer(g_out, b_data)
+                # b is 1D (K,): C[..., m] = sum_k a[..., m, k] * b[k]
+                #   -> ga = g[..., :, newaxis] * b[newaxis, :]
+                ga = g_out[..., np.newaxis] * b_data
             else:
+                # b is (..., K, N): ga = g @ b^T = g @ swapaxes(b, -2, -1)
                 ga = np.matmul(g_out, _b_T)
-            ga = ga.reshape(_a_shape) if ga.shape != _a_shape else ga
+            if ga.shape != _a_shape:
+                ga = ga.reshape(_a_shape)
             if a_req:
                 if a.grad is None: a.grad = Tensor(ga, _copy=False)
                 else: a.grad.data += ga
         if b_req or (isinstance(b, Tensor) and b._backward_fn):
             g_out = g.reshape(_out_shape) if g.shape != _out_shape else g
             if a_data.ndim == 1:
-                gb = np.outer(a_data, g_out)
+                # a is 1D (K,): C[n] = sum_k a[k] * b[k, n]
+                #   -> gb = a[:, newaxis] * g[newaxis, :]
+                gb = a_data[..., np.newaxis] * g_out
             elif b_data.ndim == 1:
-                gb = np.matmul(_a_flat.T, g_out.ravel())
+                # b is 1D (K,): gb = sum over batch of (a^T @ g)
+                #   Flatten a's batch dims so the matmul sums over them.
+                a_flat = a_data.reshape(-1, a_data.shape[-1])
+                gb = np.matmul(a_flat.T, g_out.ravel())
             elif _both_batched:
-                gb = np.matmul(_a_mT, g_out)
+                # Both (..., M, K) and (..., K, N): gb = a^T @ g (preserves batch)
+                gb = np.matmul(_a_T, g_out)
             else:
+                # a is (B..., M, K), b is (K, N): flatten a's batch dims
+                a_flat = a_data.reshape(-1, a_data.shape[-1])
                 g_flat = g_out.reshape(-1, g_out.shape[-1])
-                gb = np.matmul(_a_flat.T, g_flat)
-            gb = gb.reshape(_b_shape) if gb.shape != _b_shape else gb
+                gb = np.matmul(a_flat.T, g_flat)
+            if gb.shape != _b_shape:
+                gb = gb.reshape(_b_shape)
             if b_req:
                 if b.grad is None: b.grad = Tensor(gb, _copy=False)
                 else: b.grad.data += gb

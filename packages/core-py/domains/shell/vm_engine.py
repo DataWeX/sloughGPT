@@ -41,8 +41,12 @@ class Breakpoint:
     def should_trigger(self) -> bool:
         if not self.enabled:
             return False
-        if self.condition is not None and not self.condition():
-            return False
+        if self.condition is not None:
+            try:
+                if not self.condition():
+                    return False
+            except Exception:
+                return False
         return True
 
 
@@ -518,6 +522,8 @@ class VMEngine:
 
     def step(self) -> bool:
         """Execute a single instruction. Returns False on fault/halt."""
+        if self._trace is None:
+            self._trace = ExecutionTrace()
         eip = self._cpu.eip
 
         # Check breakpoints before execution
@@ -697,6 +703,8 @@ class VMEngine:
 
     def continue_execution(self) -> ExecutionTrace:
         """Continue execution after a breakpoint hit."""
+        if self._halted:
+            return self._trace
         # Temporarily disable breakpoint checking to step past the current one
         self._skip_breakpoint_check = True
         try:

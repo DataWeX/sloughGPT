@@ -4405,45 +4405,45 @@ class X86CPU:
 
     def _read8(self, addr: int) -> int:
         a = addr & 0xFFFFFFFF
-        if a >= self._mem_size:
+        if a >= len(self._mem):
             raise MemFault(f"read8 out of bounds at 0x{a:X}")
         return self._mem[a]
 
     def _write8(self, addr: int, val: int):
         a = addr & 0xFFFFFFFF
-        if a >= self._mem_size:
+        if a >= len(self._mem):
             raise MemFault(f"write8 out of bounds at 0x{a:X}")
         self._mem[a] = val & 0xFF
 
     def _write16(self, addr: int, val: int):
         a = addr & 0xFFFFFFFF
-        if a + 1 >= self._mem_size:
+        if a + 1 >= len(self._mem):
             raise MemFault(f"write16 out of bounds at 0x{a:X}")
         self._mem[a] = val & 0xFF
         self._mem[a + 1] = (val >> 8) & 0xFF
 
     def _read32(self, addr: int) -> int:
         a = addr & 0xFFFFFFFF
-        if a + 3 >= self._mem_size:
+        if a + 3 >= len(self._mem):
             raise MemFault(f"read32 out of bounds at 0x{a:X}")
         return struct.unpack_from("<I", self._mem, a)[0]
 
     def _write32(self, addr: int, val: int):
         a = addr & 0xFFFFFFFF
-        if a + 3 >= self._mem_size:
+        if a + 3 >= len(self._mem):
             raise MemFault(f"write32 out of bounds at 0x{a:X}")
         struct.pack_into("<I", self._mem, a, val & 0xFFFFFFFF)
 
     def _push32(self, val: int):
         esp = self._get32(4) - 4
-        if esp < 0 or esp >= self._mem_size:
+        if esp < 0 or esp >= len(self._mem):
             raise InsFault("stack overflow")
         self._set32(4, esp)
         self._write32(esp, val)
 
     def _pop32(self) -> int:
         esp = self._get32(4)
-        if esp + 4 > self._mem_size:
+        if esp + 4 > len(self._mem):
             raise InsFault("stack underflow")
         val = self._read32(esp)
         self._set32(4, esp + 4)
@@ -4584,7 +4584,7 @@ class X86CPU:
         start_eip = self._eip
         try:
             if self._trace_enabled:
-                opcode_byte = self._mem[start_eip] if start_eip < self._mem_size else 0
+                opcode_byte = self._mem[start_eip] if start_eip < len(self._mem) else 0
                 self._trace.append({
                     "step": self._step_count,
                     "eip": start_eip,
@@ -6121,7 +6121,7 @@ class X86CPU:
             reg = opcode - 0x50
             val = self._read_rm_reg(reg, 16)
             esp = (self._regs[4] - 2) & 0xFFFFFFFF
-            if esp + 2 > self._mem_size:
+            if esp + 2 > len(self._mem):
                 raise InsFault("stack overflow")
             self._regs[4] = esp
             self._write16(esp, val)
@@ -6131,7 +6131,7 @@ class X86CPU:
         if 0x58 <= opcode <= 0x5F:
             reg = opcode - 0x58
             esp = self._regs[4] & 0xFFFFFFFF
-            if esp + 2 > self._mem_size:
+            if esp + 2 > len(self._mem):
                 raise InsFault("stack underflow")
             val = self._read16(esp)
             self._regs[4] = (esp + 2) & 0xFFFFFFFF
