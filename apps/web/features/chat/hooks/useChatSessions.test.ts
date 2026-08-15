@@ -1,5 +1,6 @@
 import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { ChatMessage } from '@/lib/chat-utils'
 
 const {
   mockSaveSession, mockLoadSession, mockLoadSessions,
@@ -67,6 +68,7 @@ describe('useChatSessions', () => {
     setSessionSaved: vi.fn(),
     setSessionLoading: vi.fn(),
     sessionIdRef: { current: 's1' } as React.MutableRefObject<string>,
+    messagesRef: { current: [] } as React.MutableRefObject<ChatMessage[]>,
     showToast: vi.fn(),
   })
 
@@ -178,6 +180,7 @@ describe('useChatSessions.loadSession', () => {
     setSessionSaved: vi.fn(),
     setSessionLoading: vi.fn(),
     sessionIdRef: { current: 's1' } as React.MutableRefObject<string>,
+    messagesRef: { current: [] } as React.MutableRefObject<ChatMessage[]>,
     showToast: vi.fn(),
   })
 
@@ -355,5 +358,29 @@ describe('useChatSessions.loadSession', () => {
       expect.objectContaining({ content: 'remote reply' }),
     ]))
     expect(mockSetKV).toHaveBeenCalledWith('man_current_conversation', 's1')
+  })
+
+  it('does not clobber messages the user sent while a load was in flight', async () => {
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    let resolveRemote: (v: Array<{ role: string; content: string }>) => void = () => {}
+    mockFetchMessages.mockImplementation(
+      () => new Promise<Array<{ role: string; content: string }>>(res => { resolveRemote = res }),
+    )
+    const load = result.current.loadSession('s1')
+    await vi.waitFor(() => expect(mockFetchMessages).toHaveBeenCalled())
+
+    opts.messagesRef.current = [{ id: 'u1', role: 'user', content: 'sent mid-load', timestamp: new Date() }]
+
+    await act(async () => {
+      resolveRemote([{ role: 'assistant', content: 'stale loaded reply' }])
+      await load
+    })
+
+    expect(opts.setMessages).not.toHaveBeenCalled()
+    expect(mockSetKV).not.toHaveBeenCalledWith('man_current_conversation', 's1')
+    expect(opts.showToast).not.toHaveBeenCalledWith('Loaded: Test chat')
+    expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
   })
 })

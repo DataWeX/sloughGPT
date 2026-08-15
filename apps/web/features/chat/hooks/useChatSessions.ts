@@ -64,9 +64,10 @@ export function useChatSessions(opts: {
   setSessionSaved: (v: boolean) => void
   setSessionLoading: (v: boolean) => void
   sessionIdRef: React.MutableRefObject<string>
+  messagesRef: React.MutableRefObject<ChatMessage[]>
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }): UseChatSessionsReturn {
-  const { setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef, showToast } = opts
+  const { setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef, messagesRef, showToast } = opts
 
   const [sessions, setSessions] = useState<ChatSession[]>([])
 
@@ -119,8 +120,11 @@ export function useChatSessions(opts: {
     sessionIdRef.current = sessionId
     setSessionLoading(true)
     inFlightLoadsRef.current++
+    const baselineMsgCount = messagesRef.current.length
     const superseded = () =>
-      sessionIdRef.current !== sessionId || deletedSessionsRef.current.has(sessionId)
+      sessionIdRef.current !== sessionId ||
+      deletedSessionsRef.current.has(sessionId) ||
+      messagesRef.current.length !== baselineMsgCount
     try {
       const session = await chatDB.loadSession(sessionId)
       if (session) {

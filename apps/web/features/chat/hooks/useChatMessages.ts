@@ -83,7 +83,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
   // ── Session operations (delegated) ──────────────────────────────────────
   const sessions = useChatSessions({
     setMessages, setInput, setSessionSaved, setSessionLoading,
-    sessionIdRef, showToast,
+    sessionIdRef, messagesRef, showToast,
   })
 
   // ── Token accumulator for streaming perf ─────────────────────────────────
