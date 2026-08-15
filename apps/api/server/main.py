@@ -117,9 +117,12 @@ except Exception as exc:
 
 
 # ── Lifespan ────────────────────────────────────────────────────────
+_pgq_engine = None  # PGQ core infra engine instance
+
 @asynccontextmanager
 async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
+    global _pgq_engine
     _install_stack_dump_timer()
     try:
         from infrastructure.startup import StartupOrchestrator
@@ -127,6 +130,14 @@ async def lifespan(app_inst: FastAPI):
         profile = os.environ.get("SLO_STARTUP_PROFILE", "full")
         orch = StartupOrchestrator(app_inst, cfg, profile=profile)
         await orch.run()
+
+        # Start PGQ core infra engine (background thread)
+        try:
+            from domains.infrastructure.pugqeep import PGQ
+            _pgq_engine = PGQ("sloughgpt")
+            logger.info("PGQ core engine created", extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("PGQ engine creation failed (non-fatal): %s", e, extra={"tag": "START"})
 
         # Start auto-trainer if SLO_AUTO_TRAIN=1
         try:
@@ -168,6 +179,14 @@ async def lifespan(app_inst: FastAPI):
             stop_auto_trainer()
         except (ImportError, AttributeError) as e:
             logger.debug("Auto-trainer shutdown skipped: %s", e)
+
+        # Stop PGQ engine
+        if _pgq_engine is not None:
+            try:
+                _pgq_engine.stop()
+                logger.info("PGQ engine stopped", extra={"tag": "START"})
+            except Exception as e:
+                logger.debug("PGQ engine shutdown skipped: %s", e)
 
         await orch.shutdown()
     except Exception as exc:
