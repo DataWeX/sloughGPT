@@ -8,6 +8,8 @@ import { logger } from '@/lib/dev-log'
 
 const _log = logger.child('training-stream')
 
+const MAX_LOSS_HISTORY = 200
+
 /**
  * Manages the SSE EventSource for distill (auto-train) training.
  * Parses the standard envelope and writes progress to the app shell.
@@ -48,25 +50,6 @@ export function useTrainingStream() {
           const patch: Record<string, unknown> = {}
 
           if (env.phase) patch.phase = env.phase
-
-          if (env.data?.loss != null) {
-            const current = readTraining()
-            const hist = [...current.lossHistory, {
-              step: (current.lossHistory[current.lossHistory.length - 1]?.step ?? 0) + 1,
-              loss: env.data.loss,
-            }]
-            patch.loss = env.data.loss
-            patch.lossHistory = hist.length > 200 ? hist.slice(-200) : hist
-          }
-          if (env.data?.eval_loss != null) {
-            const current = readTraining()
-            const hist = [...current.lossHistory, {
-              step: env.data?.step ?? current.lossHistory.length,
-              loss: env.data.eval_loss,
-              isEval: true,
-            }]
-            patch.lossHistory = hist.length > 200 ? hist.slice(-200) : hist
-          }
           if (env.data?.progress != null) patch.progress = env.data.progress
           if (env.data?.global_step != null) patch.globalStep = env.data.global_step
           if (env.data?.total_steps != null) patch.totalSteps = env.data.total_steps
@@ -77,6 +60,23 @@ export function useTrainingStream() {
           if (env.meta?.total_epochs != null) patch.totalEpochs = env.meta.total_epochs
           if (env.message) patch.message = env.message
           if (env.data?.eval_report) patch.evalResult = env.data.eval_report
+
+          // lossHistory accumulation — must read current state then write once
+          // to avoid stale reads when both loss and eval_loss arrive together.
+          if (env.data?.loss != null || env.data?.eval_loss != null) {
+            const current = readTraining()
+            let hist = current.lossHistory
+            if (env.data?.loss != null) {
+              const step = (hist[hist.length - 1]?.step ?? 0) + 1
+              hist = [...hist, { step, loss: env.data.loss }]
+              patch.loss = env.data.loss
+            }
+            if (env.data?.eval_loss != null) {
+              const step = env.data?.step ?? hist.length
+              hist = [...hist, { step, loss: env.data.eval_loss, isEval: true }]
+            }
+            patch.lossHistory = hist.length > MAX_LOSS_HISTORY ? hist.slice(-MAX_LOSS_HISTORY) : hist
+          }
 
           if (Object.keys(patch).length > 0) writeTraining(patch)
 
