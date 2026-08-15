@@ -115,4 +115,18 @@ describe('sessionController.fetchMessages', () => {
     const result = await sessionController.fetchMessages('s1')
     expect(result).toEqual([])
   })
+
+  it('forwards signal and silent opts to apiGet when provided', async () => {
+    apiClient.apiGet.mockResolvedValue({ messages: [{ role: 'user', content: 'hello' }] })
+    const controller = new AbortController()
+
+    const result = await sessionController.fetchMessages('s1', { signal: controller.signal, silent: true })
+
+    expect(result).toHaveLength(1)
+    expect(apiClient.apiGet).toHaveBeenCalledWith(
+      '/session/s1/messages',
+      undefined,
+      { signal: controller.signal, silent: true },
+    )
+  })
 })

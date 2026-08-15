@@ -100,8 +100,10 @@ export const sessionController = {
     await apiPost(`/session/${id}/context`, { messages })
   },
 
-  async fetchMessages(id: string): Promise<Array<{ role: string; content: string }>> {
-    const data = await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`)
+  async fetchMessages(id: string, opts?: { signal?: AbortSignal; silent?: boolean }): Promise<Array<{ role: string; content: string }>> {
+    const data = opts
+      ? await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`, undefined, { signal: opts.signal, silent: opts.silent })
+      : await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`)
     return data.messages || []
   },
 }

@@ -120,6 +120,16 @@ describe('apiGet', () => {
     expect(mockFetch).toHaveBeenCalledTimes(3)
   })
 
+  it('does not retry or relabel when the caller-provided signal is aborted', async () => {
+    const controller = new AbortController()
+    mockFetch.mockRejectedValue(new DOMException('The operation was aborted.', 'AbortError'))
+    controller.abort()
+
+    await expect(apiGet('/cancelled', undefined, { signal: controller.signal })).rejects.toThrow(DOMException)
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
   it('retries on network error then succeeds', async () => {
     mockFetch
       .mockRejectedValueOnce(new Error('Failed to fetch'))

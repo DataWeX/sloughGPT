@@ -109,6 +109,9 @@ async function request<T>(
     } catch (e: unknown) {
       if (timer) clearTimeout(timer)
       if (e instanceof ApiError) throw e
+      // A caller-provided abort is terminal: never retry an explicitly cancelled
+      // request, and surface the abort instead of relabelling it as a timeout.
+      if (opts?.signal?.aborted) throw e
       const status = 0
       const name = e instanceof Error ? e.name : undefined
       const message_ = e instanceof Error ? e.message : undefined

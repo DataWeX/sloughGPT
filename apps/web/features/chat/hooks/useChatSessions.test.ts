@@ -193,17 +193,19 @@ describe('useChatSessions.loadSession', () => {
 
   it('merges remote messages with local and releases sessionLoading', async () => {
     mockFetchMessages.mockResolvedValue([{ role: 'assistant', content: 'remote reply' }])
-    const opts = defaultOpts()
+    const opts = { ...defaultOpts(), sessionIdRef: { current: 's9' } as React.MutableRefObject<string> }
     const { result } = renderHook(() => useChatSessions(opts))
 
     await act(async () => { await result.current.loadSession('s1') })
 
+    expect(opts.sessionIdRef.current).toBe('s1')
     expect(opts.setSessionLoading).toHaveBeenNthCalledWith(1, true)
     const contents = opts.setMessages.mock.calls[0][0].map((m: { content: string }) => m.content)
     expect(contents).toContain('remote reply')
     expect(contents).toContain('hello')
     expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
     expect(opts.showToast).toHaveBeenCalledWith('Loaded: Test chat')
+    expect(mockFetchMessages).toHaveBeenCalledWith('s1', expect.objectContaining({ silent: true, signal: expect.any(AbortSignal) }))
   })
 
   it('falls back to local messages when the remote merge hangs past the timeout', async () => {
@@ -211,13 +213,18 @@ describe('useChatSessions.loadSession', () => {
     const { result } = renderHook(() => useChatSessions(opts))
 
     vi.useFakeTimers()
-    mockFetchMessages.mockImplementation(() => new Promise<never>(() => {}))
+    let capturedSignal: AbortSignal | undefined
+    mockFetchMessages.mockImplementation((_id: string, reqOpts?: { signal?: AbortSignal }) => {
+      capturedSignal = reqOpts?.signal
+      return new Promise<never>(() => {})
+    })
     let settled = false
     const load = result.current.loadSession('s1').then(() => { settled = true })
     await vi.advanceTimersByTimeAsync(8001)
     await act(async () => { await load })
 
     expect(settled).toBe(true)
+    expect(capturedSignal?.aborted).toBe(true)
     expect(opts.setMessages).toHaveBeenCalledWith(localSession.messages)
     expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
     expect(opts.showToast).toHaveBeenCalledWith('Loaded: Test chat')
@@ -232,5 +239,47 @@ describe('useChatSessions.loadSession', () => {
 
     expect(opts.setMessages).toHaveBeenCalledWith(localSession.messages)
     expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
+  })
+
+  it('drops stale remote results when the session changes while loading', async () => {
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    let resolveRemote: (v: Array<{ role: string; content: string }>) => void = () => {}
+    mockFetchMessages.mockImplementation(
+      () => new Promise<Array<{ role: string; content: string }>>(res => { resolveRemote = res }),
+    )
+    const load = result.current.loadSession('s1')
+    await vi.waitFor(() => expect(mockFetchMessages).toHaveBeenCalled())
+
+    opts.sessionIdRef.current = 's2'
+
+    await act(async () => {
+      resolveRemote([{ role: 'assistant', content: 'stale remote reply' }])
+      await load
+    })
+
+    expect(opts.setMessages).not.toHaveBeenCalled()
+    expect(opts.setSessionLoading).toHaveBeenCalledTimes(1)
+    expect(opts.setSessionLoading).toHaveBeenCalledWith(true)
+  })
+
+  it('does not release loading or apply messages when a stale load eventually times out', async () => {
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    vi.useFakeTimers()
+    mockFetchMessages.mockImplementation(() => new Promise<never>(() => {}))
+    const load = result.current.loadSession('s1')
+    await act(async () => {})
+
+    opts.sessionIdRef.current = 's2'
+
+    await vi.advanceTimersByTimeAsync(8001)
+    await act(async () => { await load })
+
+    expect(opts.setMessages).not.toHaveBeenCalled()
+    expect(opts.setSessionLoading).toHaveBeenCalledTimes(1)
+    expect(opts.setSessionLoading).toHaveBeenCalledWith(true)
   })
 })

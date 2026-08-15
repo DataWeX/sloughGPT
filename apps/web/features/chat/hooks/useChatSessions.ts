@@ -22,17 +22,22 @@ const REMOTE_MERGE_TIMEOUT_MS = 8000
  *  React StrictMode double-mounts and concurrent hook instances. */
 const _createdSessions = new Set<string>()
 
-/** Resolves `promise` unless it settles within `ms`, in which case it rejects
- *  so callers can fall back to locally cached data. The losing promise keeps a
- *  handler attached (Promise.race) so its eventual outcome is never an
- *  unhandled rejection. */
-async function withRemoteTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+/** Runs `task` with an AbortSignal and rejects if `ms` elapses before it
+ *  settles. On timeout the controller is aborted so the underlying request is
+ *  cancelled, and the race guarantees the caller is never left awaiting a
+ *  request that ignores its signal. The losing task keeps a handler attached
+ *  (Promise.race) so its eventual outcome is never an unhandled rejection. */
+async function withRemoteTimeout<T>(task: (signal: AbortSignal) => Promise<T>, ms: number): Promise<T> {
+  const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error('Remote merge timed out')), ms)
+    timer = setTimeout(() => {
+      controller.abort()
+      reject(new Error('Remote merge timed out'))
+    }, ms)
   })
   try {
-    return await Promise.race([promise, timeout])
+    return await Promise.race([task(controller.signal), timeout])
   } finally {
     if (timer) clearTimeout(timer)
   }
@@ -97,6 +102,7 @@ export function useChatSessions(opts: {
   }, [])
 
   const loadSession = useCallback(async (sessionId: string) => {
+    sessionIdRef.current = sessionId
     setSessionLoading(true)
     try {
       const session = await chatDB.loadSession(sessionId)
@@ -107,9 +113,10 @@ export function useChatSessions(opts: {
         })
         try {
           const remoteMsgs = await withRemoteTimeout(
-            sessionController.fetchMessages(sessionId),
+            (signal) => sessionController.fetchMessages(sessionId, { signal, silent: true }),
             REMOTE_MERGE_TIMEOUT_MS,
           )
+          if (sessionIdRef.current !== sessionId) return
           const remoteChatMsgs = remoteMsgs.map(m => ({
             id: `remote_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             role: m.role as 'user' | 'assistant',
@@ -120,8 +127,10 @@ export function useChatSessions(opts: {
           const uniqueLocal = filteredMessages.filter(m => !seen.has(`${m.role}:${m.content}`))
           setMessages([...remoteChatMsgs, ...uniqueLocal])
         } catch {
+          if (sessionIdRef.current !== sessionId) return
           setMessages(filteredMessages)
         }
+        if (sessionIdRef.current !== sessionId) return
         await chatDB.setKV(CURRENT_SESSION_KEY, sessionId)
         const isComplete = filteredMessages.length > 0 &&
           filteredMessages[filteredMessages.length - 1].role === 'assistant'
@@ -132,9 +141,9 @@ export function useChatSessions(opts: {
         if (filteredMessages.length > 0) showToast(`Loaded: ${session.name}`)
       }
     } finally {
-      setSessionLoading(false)
+      if (sessionIdRef.current === sessionId) setSessionLoading(false)
     }
-  }, [showToast, setMessages, setInput, setSessionSaved, setSessionLoading])
+  }, [showToast, setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef])
 
   const deleteSession = useCallback(async (sessionId: string) => {
     await chatDB.deleteSession(sessionId)
