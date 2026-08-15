@@ -273,9 +273,9 @@ class TestLoadModel:
     def test_load_preserves_controller_error(self, mock_controller):
         mock_controller.load_model.return_value = {"status": "error", "error": "boom"}
         resp = client.post("/models/load", json={"model_id": "gpt2"})
-        data = _data(resp)
-        assert data["status"] == "error"
-        assert data["error"] == "boom"
+        body = resp.json()
+        assert body["error"] == "boom"
+        assert body["code"] == "E_DOMAIN"
 
     def test_load_records_load_event_on_success(self, mock_controller):
         mock_controller.load_model.return_value = self.LOADED
