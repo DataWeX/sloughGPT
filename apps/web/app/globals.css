@@ -586,36 +586,6 @@ select:focus-visible {
   border-color: rgb(var(--primary) / 0.5);
 }
 
-/* Accent chips — refined variants (RGB triples for Tailwind /opacity) */
-.theme-blue {
-  --primary: 90 130 220;
-  --ring: 140 176 240;
-}
-.theme-purple {
-  --primary: 155 108 214;
-  --ring: 192 162 238;
-}
-.theme-pink {
-  --primary: 218 130 170;
-  --ring: 238 178 206;
-}
-.theme-red {
-  --primary: 230 120 130;
-  --ring: 242 172 180;
-}
-.theme-orange {
-  --primary: 236 155 90;
-  --ring: 244 194 144;
-}
-.theme-green {
-  --primary: 72 178 130;
-  --ring: 134 210 174;
-}
-.theme-teal {
-  --primary: 72 166 200;
-  --ring: 134 202 228;
-}
-
 /* Palettes — full-spectrum overrides applied via html class */
 html.palette-neural-precision {
   --background: 240 242 247;
@@ -673,6 +643,46 @@ html.dark.palette-neural-precision {
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+
+/* Accent themes — website color for accented elements (message bubbles,
+   buttons, focus rings). Override --primary/--ring on <html> so the chosen
+   accent wins even when a palette class is present; the palette still
+   controls the rest of the color system (background, card, border, etc.). */
+html.theme-blue,
+html.dark.theme-blue {
+  --primary: 90 130 220;
+  --ring: 140 176 240;
+}
+html.theme-purple,
+html.dark.theme-purple {
+  --primary: 155 108 214;
+  --ring: 192 162 238;
+}
+html.theme-pink,
+html.dark.theme-pink {
+  --primary: 218 130 170;
+  --ring: 238 178 206;
+}
+html.theme-red,
+html.dark.theme-red {
+  --primary: 230 120 130;
+  --ring: 242 172 180;
+}
+html.theme-orange,
+html.dark.theme-orange {
+  --primary: 236 155 90;
+  --ring: 244 194 144;
+}
+html.theme-green,
+html.dark.theme-green {
+  --primary: 72 178 130;
+  --ring: 134 210 174;
+}
+html.theme-teal,
+html.dark.theme-teal {
+  --primary: 72 166 200;
+  --ring: 134 202 228;
 }
 
 /* Shadow design tokens — layered depth system */

@@ -20,25 +20,13 @@ class StatusRouter:
 
     async def get_status(self):
         """Get overall service status"""
-        import psutil
-
         uptime = (datetime.now() - self._start_time).total_seconds()
 
         return success_response(data={
             "status": "healthy",
-            "version": self._app_version(),
             "uptime_seconds": uptime,
-            "timestamp": datetime.now(timezone.utc).timestamp(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-
-    @staticmethod
-    def _app_version() -> str:
-        """Resolve the installed package version (with fallback)."""
-        try:
-            from importlib.metadata import version as _pkg_version
-            return _pkg_version("sloughgpt")
-        except Exception:
-            return "unknown"
 
     async def ready(self):
         """Readiness check"""

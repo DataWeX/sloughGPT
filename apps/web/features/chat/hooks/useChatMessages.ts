@@ -108,7 +108,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setMessages(prev => {
       const updated = prev.map(m => {
         const delta = byId.get(m.id)
-        return delta ? { ...m, content: m.content + delta } : m
+        if (!delta) return m
+        const content = m.content === 'Thinking...' ? '' : m.content
+        return { ...m, content: content + delta }
       })
       const now = Date.now()
       if (now - lastSaveRef.current > 500) {
@@ -385,11 +387,6 @@ export function useChatMessages(config: ChatMessagesConfig) {
               cleanedToken = cleanStreamedContent(cleanedToken)
             }
             assistantContentLen += cleanedToken.length
-            if (assistantContentLen === cleanedToken.length) {
-              setMessages(prev => prev.map(m =>
-                m.id === assistantId && m.content === 'Thinking...' ? { ...m, content: '' } : m
-              ))
-            }
             tokenBufRef.current.push({ id: assistantId, text: cleanedToken })
             scheduleFlush()
           },

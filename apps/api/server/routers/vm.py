@@ -40,7 +40,7 @@ class VMRunRequest(BaseModel):
 
     @model_validator(mode="after")
     def _require_program_or_source(self):
-        if not (self.program or (self.source or "").strip()):
+        if self.program is None and self.source is None:
             raise ValueError("Either 'program' or 'source' must be provided")
         return self
 
@@ -99,7 +99,7 @@ async def run_assembly(req: VMRunRequest):
     t0 = time.monotonic()
 
     try:
-        from domains.shell.vm import X86VirtualSystem, X86CPU
+        from domains.shell.vm import X86VirtualSystem, X86CPU, InsFault, MemFault
         from domains.shell.vm_permissions import Role
     except ImportError as e:
         raise HTTPException(status_code=503, detail=f"VM module not available: {e}")
@@ -185,7 +185,12 @@ async def run_assembly(req: VMRunRequest):
         vs.cpu._trace_enabled = req.debug
         vs.cpu._trace.clear()
         try:
-            vs.cpu.run(max_steps=req.max_steps)
+            try:
+                vs.cpu.run(max_steps=req.max_steps)
+            except (InsFault, MemFault):
+                # A runaway program (fetch beyond loaded code, stack/memory
+                # fault) halts cleanly, matching X86VirtualSystem.run().
+                pass
         finally:
             vs._syscall._sys_write = original_write
             vs._syscall._sys_train_start = original_train_start
@@ -375,7 +380,7 @@ async def list_builtins():
 async def vm_info():
     """Return VM capabilities and limits."""
     reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
-    registers = {name.lower(): {"size_bits": 32, "name": name} for name in reg_names}
+    registers = {name: {"size_bits": 32, "name": name} for name in reg_names}
     return {
         "isa": "x86-32",
         "max_steps": 1000000,

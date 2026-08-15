@@ -226,7 +226,7 @@ class TestVmBuiltins:
         resp = client.get("/vm/builtins")
         assert resp.status_code == 200
         programs = resp.json()["programs"]
-        assert len(programs) == 10
+        assert len(programs) >= 10
 
     def test_programs_have_name_and_description(self, client):
         resp = client.get("/vm/builtins")

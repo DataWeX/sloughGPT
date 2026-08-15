@@ -1499,7 +1499,7 @@ class TestKLDivMeanReduction:
         tp = np.array([[0.3, 0.7], [0.6, 0.4]])
         loss = kl_div_loss(ilp, tp, reduction="mean")
         loss.backward()
-        assert np.allclose(ilp.grad.data, -tp)
+        assert np.allclose(ilp.grad.data, -tp / 2)
 
     def test_ndarray_input_no_backward_grad(self):
         ilp = np.log(np.array([[0.5, 0.5]], dtype=np.float32))

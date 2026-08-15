@@ -119,8 +119,8 @@ export const MessageBubble = memo(function MessageBubble({
     >
       {/* Role label — outside bubble for clear separation */}
       <span className={cn(
-        "text-[10px] font-semibold tracking-wider uppercase mb-1 block",
-        role === 'user' ? 'text-primary/60 text-right' : 'text-muted-foreground/50'
+        "text-[10px] font-semibold tracking-wider uppercase mb-0.5 block",
+        role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70'
       )}>
         {role === 'user' ? 'You' : 'Assistant'}
         {isBookmarked && (
@@ -142,7 +142,7 @@ export const MessageBubble = memo(function MessageBubble({
 
       <div
         className={cn(
-          "relative rounded-2xl px-4 py-2.5 sm:px-4 sm:py-3 max-w-[88%] sm:max-w-[75%] lg:max-w-[65%] transition-all duration-200 leading-relaxed",
+          "relative rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 max-w-[90%] sm:max-w-[80%] lg:max-w-[72%] transition-all duration-200 leading-relaxed",
           role === 'user'
             ? 'bg-primary text-primary-foreground rounded-br-md shadow-md'
             : 'bg-card text-foreground rounded-bl-md border border-border/40 shadow-sm',
@@ -168,7 +168,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         {showTimestamp && (
           <p className={cn(
-            "mt-2 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
+            "mt-1 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
             role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
           )}>
             {formatTime(timestamp)}

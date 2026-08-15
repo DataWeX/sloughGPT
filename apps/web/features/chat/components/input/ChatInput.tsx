@@ -91,12 +91,12 @@ export const ChatInput = memo(function ChatInput({
 
   return (
     <section
-      className="shrink-0 bg-background/95 backdrop-blur-sm px-3 sm:px-4 pb-3 pt-1"
-      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      className="shrink-0 bg-background/95 backdrop-blur-sm px-4 sm:px-6 pb-2 pt-1"
+      style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-3xl">
         {loading && (
-          <div className="flex justify-center pb-1.5" role="status" aria-live="polite">
+          <div className="flex justify-center pb-1" role="status" aria-live="polite">
             <div className="flex gap-[3px] items-center">
               <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
               <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />

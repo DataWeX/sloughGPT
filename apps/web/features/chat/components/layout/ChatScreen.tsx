@@ -81,12 +81,12 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         )}
 
         {sessionLoading && (
-          <div className="mx-auto w-full max-w-2xl px-3 sm:px-4 py-6 space-y-3" role="status" aria-busy="true" aria-label="Loading messages">
+          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 py-4 space-y-2" role="status" aria-busy="true" aria-label="Loading messages">
             <span className="sr-only">Loading conversation...</span>
             {[1, 2, 3].map(i => (
-                <div key={i} className="animate-pulse space-y-1.5" aria-hidden="true">
-                <div className={cn("h-6 rounded-lg bg-muted/40", i % 2 === 0 ? "ml-10 w-2/3" : "mr-10 w-1/2 ml-auto")} />
-                <div className={cn("h-3 rounded bg-muted/30", i % 2 === 0 ? "ml-10 w-1/3" : "mr-10 w-1/4 ml-auto")} />
+                <div key={i} className="animate-pulse space-y-1" aria-hidden="true">
+                <div className={cn("h-5 rounded-lg bg-muted/40", i % 2 === 0 ? "ml-8 w-2/3" : "mr-8 w-1/2 ml-auto")} />
+                <div className={cn("h-2.5 rounded bg-muted/30", i % 2 === 0 ? "ml-8 w-1/3" : "mr-8 w-1/4 ml-auto")} />
               </div>
             ))}
           </div>
@@ -99,14 +99,14 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         )}
 
         {toolEvents && toolEvents.length > 0 && (
-          <div className="mx-auto w-full max-w-2xl px-3 sm:px-4 pb-1">
+          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 pb-1">
             <ToolCallPanel events={toolEvents} />
           </div>
         )}
 
         <div
           id="chat-messages"
-          className="mx-auto w-full max-w-2xl space-y-3 sm:space-y-4 px-3 sm:px-4 pb-4"
+          className="mx-auto w-full max-w-3xl space-y-1.5 sm:space-y-2 px-4 sm:px-6 pb-4"
           role="feed"
           aria-label="Message history"
           aria-busy={loading}
@@ -121,12 +121,12 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
             return (
               <React.Fragment key={message.id}>
               {showDateDivider && (
-                <div className="relative flex items-center py-3" role="separator" aria-label={formatDateLabel(new Date(message.timestamp))}>
-                  <div className="flex-1 border-t border-border/50" />
-                  <span className="mx-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2.5 py-1 rounded-full bg-muted/50 border border-border/30">
+                <div className="relative flex items-center py-2" role="separator" aria-label={formatDateLabel(new Date(message.timestamp))}>
+                  <div className="flex-1 border-t border-border/40" />
+                  <span className="mx-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest">
                     {formatDateLabel(new Date(message.timestamp))}
                   </span>
-                  <div className="flex-1 border-t border-border/50" />
+                  <div className="flex-1 border-t border-border/40" />
                 </div>
               )}
               <MessageBubble
@@ -174,7 +174,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
               suggestions = ['Tell me more', 'Give an example', 'Why is that?']
             }
             return (
-              <div className="flex flex-wrap gap-1.5 px-3 sm:px-4" role="group" aria-label="Suggested follow-ups">
+              <div className="flex flex-wrap gap-1 px-4 sm:px-6" role="group" aria-label="Suggested follow-ups">
                 {suggestions.map(s => (
                   <button
                     key={s}
@@ -189,7 +189,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
           })()}
 
           {loading && messages.length > 0 && messages[messages.length - 1].role !== 'assistant' && (
-            <ReasoningPanel isThinking={true} className="py-2" />
+            <ReasoningPanel isThinking={true} className="py-1" />
           )}
 
           <div ref={ref} />

@@ -90,7 +90,7 @@ class TestVMInfo:
     def test_info_has_eax(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert "eax" in resp.json()["registers"]
+        assert "EAX" in resp.json()["registers"]
 
 
 class TestVMRun:

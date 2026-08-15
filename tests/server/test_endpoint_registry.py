@@ -9,6 +9,7 @@ All tests marked ``slow`` (deselected by default). Run with:
 from __future__ import annotations
 from pathlib import Path
 import json
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +19,14 @@ pytestmark = pytest.mark.slow
 # ── test data paths ──────────────────────────────────────────────────
 _TEST_SHAKESPEARE = Path(__file__).resolve().parents[2] / "datasets" / "shakespeare"
 _TEST_IMPORT_NAME = "_test_registry_import"
+
+# Disable the real model autoload and background workflow before importing
+# ``main``: this module boots the full server lifespan at import time (via
+# ``client.__enter__()`` below), and the default autoload target is the real
+# Qwen model. Without this guard, collection of this file would load the model
+# and register providers globally, corrupting later tests.
+os.environ["SLO_AUTOLOAD_MODEL"] = ""
+os.environ["SLO_AUTO_WORKFLOW"] = "false"
 
 try:
     from apps.api.server.main import app

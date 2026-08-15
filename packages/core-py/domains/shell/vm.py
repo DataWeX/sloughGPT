@@ -3416,11 +3416,14 @@ class X86Assembler:
             val = self._parse_imm(src)
             if op == "test":
                 if self._REG32[dst] == 0:
-                    # TEST EAX, imm32 — A9 id (accumulator short form)
+                    # TEST EAX, imm32 — A9 iw/id (accumulator short form)
                     if self._pfx(dst):
                         self._output.append(0x66)
                     self._output.append(0xA9)
-                    self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
+                    if self._bits == 16 and val <= 0xFFFF:
+                        self._output.extend(struct.pack("<H", val & 0xFFFF))
+                    else:
+                        self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
                 else:
                     # TEST r/m32, imm32 — F7 /0 id
                     if self._pfx(dst):
@@ -3430,13 +3433,17 @@ class X86Assembler:
                     self._output.append(modrm)
                     self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
             elif self._REG32[dst] == 0 and not (-128 <= val <= 127):
-                # ALU EAX, imm32 — 05/0D/15/1D/25/2D/35/3D id (accumulator
-                # short form). Immediate exceeds imm8 range, so the 5-byte
-                # form beats 81 /digit id at 6 bytes.
+                # ALU EAX, imm32 — 05/0D/15/1D/25/2D/35/3D iw/id (accumulator
+                # short form). Immediate exceeds imm8 range, so the short
+                # form beats 81 /digit id.  In 16-bit mode (0x66 prefix), the
+                # immediate is 2 bytes; otherwise 4 bytes.
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x05 + alu_op[op] * 8)
-                self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
+                if self._bits == 16 and val <= 0xFFFF:
+                    self._output.extend(struct.pack("<H", val & 0xFFFF))
+                else:
+                    self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
             elif op == "sub" and -128 <= val <= 127:
                 if self._pfx(dst):
                     self._output.append(0x66)

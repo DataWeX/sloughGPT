@@ -6004,7 +6004,8 @@ def kl_div_loss(input_log_prob, target_prob, reduction="batchmean"):
     def bk(g):
         if isinstance(input_log_prob, Tensor) and input_log_prob.requires_grad:
             g_inp = -tp
-            g_inp = g_inp / ilp.shape[0] if reduction == "batchmean" else g_inp
+            if reduction != "sum":
+                g_inp = g_inp / ilp.shape[0]
             grad_val = g_inp * g
             if input_log_prob.grad is None:
                 input_log_prob.grad = Tensor(grad_val, _copy=False)

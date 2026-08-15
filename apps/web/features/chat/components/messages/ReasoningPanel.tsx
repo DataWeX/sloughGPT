@@ -12,12 +12,12 @@ export function ReasoningPanel({ isThinking, className }: ReasoningPanelProps) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className={cn("mx-auto w-full max-w-2xl px-3 sm:px-4", className)}>
+    <div className={cn("mx-auto w-full max-w-3xl px-4 sm:px-6", className)}>
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
         className={cn(
-          "w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-left",
+          "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors text-left",
           isThinking
             ? "border-primary/20 bg-primary/[0.03]"
             : "border-border/30 bg-muted/20 hover:bg-muted/30 text-muted-foreground",
