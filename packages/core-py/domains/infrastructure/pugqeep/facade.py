@@ -1,28 +1,27 @@
 """
 PGQ — Point-Graph-Queue system facade.
 
-Generic data structure manager with tiered caching:
-  - Disk → Hot cache → In-memory
-  - Compress any structured data into Points (generator functions)
-  - Manage task queues with priority and routing
+Core infra engine for spawning processes, branching parallel tasks,
+and managing data across tiers.
+
+Architecture:
+    Queue (core engine — main process)
+      └── Tree (model instance — branches stems into parallel tasks)
+            └── Graph/PointLibrary (context — what the tree knows)
+                  └── Point (star — function-calling capacity)
 
 Quick start:
     from pugqeep import PGQ
 
-    # Compress any data
-    sys = PGQ(name="sensor-data")
-    sys.put("readings", sensor_array)
-    data = sys.get("readings")
+    # Spawn the core engine
+    pgq = PGQ("infra")
+    pgq.spawn(load_config, "config.json")
+    pgq.spawn(start_server, port=8000)
+    pgq.run()
 
-    # Tiered caching
-    sys = PGQ(name="ml-weights", cache_dir=Path("/tmp/cache"))
-    sys.put("layer1", weights, tier="memory")
-    sys.put("layer2", weights, tier="hot")
-
-    # Task queue
-    sys = PGQ(name="pipeline")
-    sys.submit_task(Task(name="process", data=input))
-    task = sys.next_task()
+    # Or use data operations
+    pgq.put("weights", numpy_array)
+    data = pgq.get("weights")
 """
 
 import logging
@@ -41,6 +40,7 @@ from .store import MemoryStore, JSONStore, DirectoryStore
 from .dedup import PointDeduplicator, PointLibrarySync
 from .queue import ModelQueue
 from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
+from .engine import Engine, Process, Stem, ProcessStatus, StemStatus
 
 logger = logging.getLogger("slo.pugqeep")
 
