@@ -82,17 +82,17 @@ class LearnerRouter:
         learner = get_learner()
         if action == "subscribe":
             if not url:
-                return error_response("url required")
+                return error_response("url required", code="E_VAL_REQUEST")
             ok = learner.subscribe_feed(url, poll_interval)
             return success_response(data={"status": "ok" if ok else "already_subscribed", "feeds": learner.list_feeds()})
         elif action == "unsubscribe":
             if not url:
-                return error_response("url required")
+                return error_response("url required", code="E_VAL_REQUEST")
             ok = learner.unsubscribe_feed(url)
             return success_response(data={"status": "ok" if ok else "not_found", "feeds": learner.list_feeds()})
         elif action == "list":
             return success_response(data={"feeds": learner.list_feeds()})
-        return error_response("unknown action")
+        return error_response("unknown action", code="E_VAL_REQUEST")
 
     @staticmethod
     def learn_ingest_url(url: str = Query(..., min_length=1, max_length=2000)):

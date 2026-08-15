@@ -500,7 +500,7 @@ class AutoTrainRouter:
 
     async def start(self, req: StartRequest):
         if not req.source_text and not req.dataset_id and not req.checkpoint_name:
-            return {"status": "error", "message": "Provide source_text, dataset_id, or checkpoint_name"}
+            return error_response("Provide source_text, dataset_id, or checkpoint_name", code="E_VAL_REQUEST")
 
         data_path = ""
         if req.source_text:
@@ -573,11 +573,11 @@ class AutoTrainRouter:
             data_path = _resolve_dataset_path(req.dataset_id)
 
         if not data_path:
-            return {"status": "error", "message": "No data_path or dataset_id provided"}
+            return error_response("No data_path or dataset_id provided", code="E_VAL_REQUEST")
 
         with _turbo_lock:
             if _turbo_state.get("status") == "running":
-                return {"status": "error", "message": "A turbo training job is already running"}
+                return error_response("A turbo training job is already running", code="E_INFRA_BUSY")
             _turbo_state = {
                 "status": "running",
                 "job_id": f"turbo_{int(time.time())}",
@@ -1016,7 +1016,7 @@ class AutoTrainRouter:
 
         cp = self._find_checkpoint(name)
         if cp is None:
-            return error_response(message=f"Checkpoint not found: {name}", data={"name": name})
+            return error_response(f"Checkpoint not found: {name}", code="E_NOT_FOUND", details={"name": name})
 
         try:
             soul_net = import_from_sou(str(cp))
@@ -1033,8 +1033,9 @@ class AutoTrainRouter:
             itos = md.get("itos") or md.get("metadata", {}).get("itos")
             if stoi is None or itos is None:
                 return error_response(
-                    message="Checkpoint has no stoi/itos vocab - retrain to include vocab.",
-                    data={"name": cp.name},
+                    "Checkpoint has no stoi/itos vocab - retrain to include vocab.",
+                    code="E_VAL_FIELD",
+                    details={"name": cp.name},
                 )
 
             provider = SloTransformerProvider(
@@ -1079,7 +1080,7 @@ class AutoTrainRouter:
             emit_error_event(err, source="load_checkpoint")
             import traceback
             autotrain_logger.error("Failed to load checkpoint %s: %s", cp.name, e, extra={"tag": "TRAIN", "context": {"checkpoint": cp.name, "error": str(e), "traceback": traceback.format_exc()}})
-            return error_response(message=str(e), data={"name": cp.name})
+            return error_response(str(e), details={"name": cp.name})
 
     async def download_checkpoint(self, name: str):
         if not _VALID_CKPT_NAME.match(name) or '..' in name:
@@ -1218,7 +1219,7 @@ class AutoTrainRouter:
 
     async def start_from_sessions(self, req: FromSessionsRequest):
         if self.state.running:
-            return error_response("Training already in progress")
+            return error_response("Training already in progress", code="E_INFRA_BUSY")
 
         self.state.running = True
         self.state.config = {

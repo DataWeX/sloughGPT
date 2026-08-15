@@ -396,7 +396,7 @@ class ModelsRouter:
         import state as server_state
         import time
         if server_state.model is None:
-            return error_response(message="No model loaded")
+            return error_response("No model loaded", code="E_NOT_FOUND")
         try:
             from domains.training.export import export_model as do_export, ExportConfig
             config = ExportConfig(
@@ -415,7 +415,7 @@ class ModelsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="export_model")
-            return error_response(message=err.user_message)
+            return error_response(err.user_message, code=err.code)
 
     async def get_export_formats(self):
         """Get list of supported export formats."""
@@ -535,7 +535,7 @@ class ModelsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="verify_download")
-            return {"status": "error", "model_id": model_id, "error": err.user_message, "code": err.code}
+            return error_response(err.user_message, code=err.code, details={"model_id": model_id})
 
     async def retry_download(self, model_id: str) -> Dict[str, Any]:
         """Redownload a cached model (cleanup + fresh download)."""

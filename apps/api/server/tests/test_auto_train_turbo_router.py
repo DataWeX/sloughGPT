@@ -102,8 +102,8 @@ def test_start_turbo_missing_data():
     resp = client.post("/auto-train/start-turbo", json={})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["status"] == "error"
-    assert "data_path" in body["message"]
+    assert "error" in body
+    assert "data_path" in body["error"]
 
 
 def test_start_turbo_rejects_when_running():
@@ -111,8 +111,8 @@ def test_start_turbo_rejects_when_running():
     mod._turbo_state["job_id"] = "turbo_123"
     resp = client.post("/auto-train/start-turbo", json={"data_path": "x.txt"})
     body = resp.json()
-    assert body["status"] == "error"
-    assert "already running" in body["message"]
+    assert "error" in body
+    assert "already running" in body["error"]
 
 
 @patch("domains.training.train_pipeline.SloughGPTTrainer")

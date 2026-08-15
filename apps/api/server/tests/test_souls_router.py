@@ -120,7 +120,7 @@ class TestSwitchSoul:
         resp = client.post("/souls/switch", json={"name": "nonexistent_soul_xyz"})
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "error" or body["data"].get("success") is False
+        assert "error" in body or body["data"].get("success") is False
 
 
 class TestSchemaValidation:

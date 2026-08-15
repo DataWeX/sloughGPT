@@ -55,21 +55,29 @@ def success_response(
 
 def error_response(
     message: str,
-    data: Any = None,
-    meta: dict[str, Any] | None = None,
-    status_code: int = 500,
+    code: str = "E_DOMAIN",
+    details: dict[str, Any] | None = None,
+    correlation_id: str | None = None,
 ) -> dict:
-    """Build an error StandardResponse as a plain dict.
+    """Build a structured error response body.
+
+    Matches the shape produced by exception handlers in
+    ``infrastructure.exception_handlers._error_response()``:
+
+        {"error": "...", "code": "...", "details": {...}, "correlation_id": "..."}
 
     Args:
-        message: Error description.
-        data: Optional error details.
-        meta: Optional metadata.
+        message: Human-readable error description.
+        code: Machine-readable error code (e.g. ``E_NOT_FOUND``).
+        details: Optional extra context (validation errors, etc.).
+        correlation_id: Optional request correlation ID.
 
     Returns:
-        dict matching StandardResponse shape.
+        dict with unified error response shape.
     """
-    resp: dict[str, Any] = {"status": "error", "message": message, "data": data}
-    if meta:
-        resp["meta"] = meta
-    return resp
+    body: dict[str, Any] = {"error": message, "code": code}
+    if details:
+        body["details"] = details
+    if correlation_id:
+        body["correlation_id"] = correlation_id
+    return body

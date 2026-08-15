@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import time
 
-from schemas.common import success_response
+from schemas.common import success_response, error_response
 
 import urllib.parse
 
@@ -747,7 +747,7 @@ class KBRouter:
             texts = unique[:500]
 
             if len(texts) < 10:
-                return {"status": "error", "message": f"Only {len(texts)} texts found. Need at least 10."}
+                return error_response(f"Only {len(texts)} texts found. Need at least 10.", code="E_VAL_FIELD")
 
             result = train_embedder(
                 texts, epochs=15, lr=5e-4, batch_size=32,
