@@ -79,14 +79,18 @@ function _flushLogs() {
   _logTimer = null
   _lastFlushAt = now
 
-  fetch(`${_getApiUrl()}/errors/logs/ingest`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ logs: payload }),
-    keepalive: true,
-  }).catch(() => {
-    /* silent — don't loop on network errors */
-  })
+  try {
+    void fetch(`${_getApiUrl()}/errors/logs/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logs: payload }),
+      keepalive: true,
+    }).catch(() => {
+      /* silent — don't loop on network errors */
+    })
+  } catch {
+    /* fetch unavailable or returned a non-promise — drop the flush */
+  }
 }
 
 function _scheduleFlush() {
