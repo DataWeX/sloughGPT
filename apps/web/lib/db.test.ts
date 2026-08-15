@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { tables, fakeTables, FakeDexie } = vi.hoisted(() => {
   const tables = new Map<string, Map<string, any>>()
-  const fakeTables = new Map<string, FakeTable>()
 
   class FakeTable {
     private _key: string
@@ -61,6 +60,8 @@ const { tables, fakeTables, FakeDexie } = vi.hoisted(() => {
       }
     }
   }
+
+  const fakeTables = new Map<string, FakeTable>()
 
   class FakeDexie {
     sessions = new FakeTable('sessions')
@@ -295,26 +296,19 @@ describe('chatDB', () => {
 })
 
 describe('chatDB — circuit breaker (_dbDead)', () => {
-  let origPut: ((obj: any) => void) | undefined
-
-  beforeEach(() => {
-    const errorsTable = fakeTables.get('errors')
-    origPut = errorsTable?.put
+  // _dbDead is module-private state, so each test imports a fresh module to
+  // start with the breaker closed (false) and exercise every trigger path.
+  async function freshDB() {
     vi.resetModules()
-  })
+    return await import('./db')
+  }
 
-  afterEach(() => {
-    const errorsTable = fakeTables.get('errors')
-    if (errorsTable && origPut) errorsTable.put = origPut
-  })
-
-  it('addError triggers circuit breaker on Dexie failure, then short-circuits', async () => {
-    const { chatDB, isDBDead } = await import('./db')
+  it('addError triggers the circuit breaker on Dexie failure, then short-circuits', async () => {
+    const { chatDB, isDBDead } = await freshDB()
     expect(isDBDead()).toBe(false)
-
     const errorsTable = fakeTables.get('errors')!
-    errorsTable.put = () => { throw new Error('IndexedDB unavailable') }
 
+    errorsTable.put = () => { throw new Error('IndexedDB unavailable') }
     await chatDB.addError('test-trigger')
     expect(isDBDead()).toBe(true)
 
@@ -324,26 +318,28 @@ describe('chatDB — circuit breaker (_dbDead)', () => {
     expect(putSpy).not.toHaveBeenCalled()
   })
 
-  it('getErrors returns empty array when DB is dead', async () => {
-    const { chatDB, isDBDead } = await import('./db')
-
+  it('getErrors returns empty when the DB is dead', async () => {
+    const { chatDB, isDBDead } = await freshDB()
     const errorsTable = fakeTables.get('errors')!
+
     errorsTable.put = () => { throw new Error('dead') }
     await chatDB.addError('x')
     expect(isDBDead()).toBe(true)
 
-    const errors = await chatDB.getErrors()
-    expect(errors).toEqual([])
+    expect(await chatDB.getErrors()).toEqual([])
   })
 
-  it('clearErrors is a no-op when DB is dead', async () => {
-    const { chatDB, isDBDead } = await import('./db')
-
+  it('clearErrors is a no-op when the DB is dead', async () => {
+    const { chatDB, isDBDead } = await freshDB()
     const errorsTable = fakeTables.get('errors')!
+
     errorsTable.put = () => { throw new Error('dead') }
     await chatDB.addError('x')
     expect(isDBDead()).toBe(true)
 
+    const clearSpy = vi.fn()
+    errorsTable.clear = clearSpy
     await chatDB.clearErrors()
+    expect(clearSpy).not.toHaveBeenCalled()
   })
 })

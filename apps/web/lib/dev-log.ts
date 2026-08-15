@@ -58,65 +58,81 @@ const IS_DEV = process.env.NODE_ENV === 'development'
 const BATCH_INTERVAL_MS = 5000
 const MAX_BATCH_SIZE = 20
 const MIN_FLUSH_INTERVAL_MS = 3000 // don't flush more than once per 3s
-let _logBatch: LogRecord[] = []
-let _logTimer: ReturnType<typeof setTimeout> | null = null
-let _lastFlushAt = 0
 
 function _getApiUrl(): string {
   return PUBLIC_API_URL
 }
 
-function _flushLogs() {
-  if (_logBatch.length === 0) return
-  const now = Date.now()
-  if (now - _lastFlushAt < MIN_FLUSH_INTERVAL_MS) {
-    // Too soon — re-schedule instead of flushing
-    if (!_logTimer) _logTimer = setTimeout(_flushLogs, MIN_FLUSH_INTERVAL_MS)
-    return
-  }
-  const payload = _logBatch
-  _logBatch = []
-  _logTimer = null
-  _lastFlushAt = now
+/**
+ * Batched, rate-limited HTTP transport for log records.
+ *
+ * Owns the buffered records, the flush timer, and the min-interval gate.
+ * Each ``WebLogger`` references one transport; production loggers share the
+ * module-wide default while tests can pass a fresh instance to keep batches
+ * isolated instead of mutating one shared module-level pool.
+ *
+ * Side effects:
+ *   - POSTs buffered records to ``<PUBLIC_API_URL>/errors/logs/ingest``
+ *     when flushed; failures are swallowed (never retried in a loop).
+ */
+export class LogTransport {
+  private _batch: LogRecord[] = []
+  private _timer: ReturnType<typeof setTimeout> | null = null
+  private _lastFlushAt = 0
 
-  try {
-    void fetch(`${_getApiUrl()}/errors/logs/ingest`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ logs: payload }),
-      keepalive: true,
-    }).catch(() => {
-      /* silent — don't loop on network errors */
-    })
-  } catch {
-    /* fetch unavailable or returned a non-promise — drop the flush */
-  }
-}
-
-function _scheduleFlush() {
-  if (_logTimer) return
-  _logTimer = setTimeout(_flushLogs, BATCH_INTERVAL_MS)
-}
-
-function _enqueueLog(record: LogRecord) {
-  // Always forward warnings+; in dev, forward everything
-  if (!IS_DEV && LEVEL_ORDER[record.level] < LEVEL_ORDER.warning) return
-
-  _logBatch.push(record)
-  if (_logBatch.length >= MAX_BATCH_SIZE) {
-    if (_logTimer) {
-      clearTimeout(_logTimer)
-      _logTimer = null
+  /** Buffer a record, auto-flushing once the batch is full. */
+  enqueue(record: LogRecord): void {
+    this._batch.push(record)
+    if (this._batch.length >= MAX_BATCH_SIZE) {
+      if (this._timer) {
+        clearTimeout(this._timer)
+        this._timer = null
+      }
+      this.flush()
+    } else {
+      this._scheduleFlush()
     }
-    _flushLogs()
-  } else {
-    _scheduleFlush()
+  }
+
+  /** Send buffered logs to the backend immediately (rate-limited). */
+  flush(): void {
+    if (this._batch.length === 0) return
+    const now = Date.now()
+    if (now - this._lastFlushAt < MIN_FLUSH_INTERVAL_MS) {
+      // Too soon — re-schedule instead of flushing
+      if (!this._timer) this._timer = setTimeout(() => this.flush(), MIN_FLUSH_INTERVAL_MS)
+      return
+    }
+    const payload = this._batch
+    this._batch = []
+    this._timer = null
+    this._lastFlushAt = now
+
+    try {
+      void fetch(`${_getApiUrl()}/errors/logs/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logs: payload }),
+        keepalive: true,
+      }).catch(() => {
+        /* silent — don't loop on network errors */
+      })
+    } catch {
+      /* fetch unavailable or returned a non-promise — drop the flush */
+    }
+  }
+
+  private _scheduleFlush(): void {
+    if (this._timer) return
+    this._timer = setTimeout(() => this.flush(), BATCH_INTERVAL_MS)
   }
 }
+
+const sharedTransport = new LogTransport()
 
 // Flush remaining logs on page unload
 if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', _flushLogs)
+  window.addEventListener('beforeunload', () => sharedTransport.flush())
 }
 
 // ── WebLogger class ──────────────────────────────────────────────────
@@ -125,11 +141,18 @@ export class WebLogger {
   private _name: string
   private _level: LogLevel
   private _context: LogContext
+  private _transport: LogTransport
 
-  constructor(name = 'slo.web', level: LogLevel = 'info', context: LogContext = {}) {
+  constructor(
+    name = 'slo.web',
+    level: LogLevel = 'info',
+    context: LogContext = {},
+    transport: LogTransport = sharedTransport,
+  ) {
     this._name = name
     this._level = level
     this._context = context
+    this._transport = transport
   }
 
   get name() { return this._name }
@@ -149,6 +172,7 @@ export class WebLogger {
       `${this._name}.${suffix}`,
       this._level,
       { ...this._context, ...context },
+      this._transport,
     )
   }
 
@@ -180,7 +204,7 @@ export class WebLogger {
 
   /** Flush any buffered logs to the backend immediately. */
   flush() {
-    _flushLogs()
+    this._transport.flush()
   }
 
   // ── Internal ──────────────────────────────────────────────────────
@@ -202,8 +226,9 @@ export class WebLogger {
     const prefix = `[${this._name}]`
     console[method](prefix, message, record)
 
-    // Forward to backend
-    _enqueueLog(record)
+    // Production only forwards warnings+; dev forwards everything
+    if (!IS_DEV && LEVEL_ORDER[level] < LEVEL_ORDER.warning) return
+    this._transport.enqueue(record)
   }
 }
 

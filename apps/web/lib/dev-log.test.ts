@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.hoisted(() => { (process.env as Record<string, string>).NODE_ENV = 'development' })
 
-import { WebLogger, devDebug, logger } from './dev-log'
+import { LogTransport, WebLogger, devDebug, logger } from './dev-log'
 
 beforeEach(() => {
   vi.spyOn(console, 'debug').mockImplementation(() => {})
@@ -146,11 +146,42 @@ describe('WebLogger — flush rate limiting', () => {
     vi.stubGlobal('fetch', originalFetch)
   })
 
-  it('new logger starts with empty batch', async () => {
-    vi.resetModules()
-    const { WebLogger } = await import('./dev-log')
-    const log = new WebLogger('fresh', 'debug')
+  it('new logger instance starts with an empty batch', () => {
+    const log = new WebLogger('fresh', 'debug', {}, new LogTransport())
     log.flush()
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('flush sends logs to backend', () => {
+    const log = new WebLogger('test', 'debug', {}, new LogTransport())
+    log.info('hello')
+    log.flush()
+    expect(fetch).toHaveBeenCalledTimes(1)
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    expect(body.logs).toHaveLength(1)
+    expect(body.logs[0].message).toBe('hello')
+  })
+
+  it('flush is a no-op when batch is empty', () => {
+    const log = new WebLogger('test', 'debug', {}, new LogTransport())
+    log.flush()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not flush more than once per min interval', () => {
+    const log = new WebLogger('test', 'debug', {}, new LogTransport())
+    log.info('first')
+    log.flush()
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    log.info('second')
+    log.flush()
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(5000)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    const body = JSON.parse((fetch as any).mock.calls[1][1].body)
+    expect(body.logs).toHaveLength(1)
+    expect(body.logs[0].message).toBe('second')
   })
 })
