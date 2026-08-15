@@ -355,6 +355,31 @@ class TestBuildTrainingStateMetadata:
         state = _build_training_state_metadata(scheduler=_Boom())
         assert "scheduler" not in state
 
+    def test_initial_lr_overrides_optimizer_hyperparameters(self):
+        """initial_lr replaces the scheduler-decayed lr in optimizer hyperparameters."""
+        opt = SloAdam(lr=0.0, weight_decay=0.0)  # decayed lr = 0
+        params = [np.array([1.0, 2.0])]
+        state = _build_training_state_metadata(
+            optimizer=opt, params=params, step=10, epoch=2, initial_lr=0.003,
+        )
+        assert state["optimizer"]["hyperparameters"]["lr"] == 0.003
+
+    def test_initial_lr_stored_in_scheduler(self):
+        """initial_lr is persisted in scheduler state for resume."""
+        opt = SloAdam(lr=0.001, weight_decay=0.0)
+        sched = create_scheduler(opt, scheduler_type="cosine", total_steps=100, warmup_steps=10, min_lr=1e-5)
+        state = _build_training_state_metadata(
+            scheduler=sched, initial_lr=0.003,
+        )
+        assert state["scheduler"]["initial_lr"] == 0.003
+
+    def test_initial_lr_backward_compatible(self):
+        """Omitting initial_lr preserves the (possibly decayed) optimizer lr."""
+        opt = SloAdam(lr=0.0, weight_decay=0.0)
+        params = [np.array([1.0, 2.0])]
+        state = _build_training_state_metadata(optimizer=opt, params=params)
+        assert state["optimizer"]["hyperparameters"]["lr"] == 0.0
+
 
 # =============================================================================
 # _parse_training_state_metadata

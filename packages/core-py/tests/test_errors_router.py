@@ -213,24 +213,25 @@ class TestDedup:
 
 class TestDedupPruning:
     def test_prunes_old_entries_when_map_exceeds_500(self):
+        import time
         er = ErrorsRouter()
         er._dedup_map.clear()
+        er._error_buffer.clear()
+        client = TestClient(_app(er))
+
+        client.post("/errors/log", json={"errors": [_make_error("fresh")]})
+        now = time.time()
+        er._dedup_map["fresh"] = now - 15
 
         for i in range(501):
             er._dedup_map[f"old-{i}"] = 0.0
 
-        er._dedup_map["fresh"] = 9999999999.0
-        er._fingerprint("fresh")
+        resp = client.get("/errors/recent")
+        assert resp.json()["data"]["total"] == 1
 
-        for i in range(501):
-            msg = f"trigger-{i}"
-            er._dedup_map[msg] = 0.0
-
-        client = TestClient(_app(er))
-        er._error_buffer.clear()
         client.post("/errors/log", json={"errors": [_make_error("fresh")]})
         resp = client.get("/errors/recent")
-        assert resp.json()["data"]["total"] >= 1
+        assert resp.json()["data"]["total"] == 2
 
 
 class TestIngestLogs:
