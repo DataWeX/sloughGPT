@@ -6,8 +6,8 @@ registration in the FastAPI app.
 
 Unified log format (single line per request):
     HH:MM:SS INF [REQ] corr=abc1 GET /chat 200 (0.34s)
-    HH:MM:SS WRN [REQ] corr=abc1 POST /multimodal/analyze 400 (19.61s) error="validation failed"
-    HH:MM:SS ERR [REQ] corr=abc1 POST /chat 500 (2.10s) error="RuntimeError: ..."
+    HH:MM:SS WRN [REQ] corr=abc1 POST /multimodal/analyze 400 (19.61s) err="validation failed"
+    HH:MM:SS ERR [REQ] corr=abc1 POST /chat 500 (2.10s) err="RuntimeError: ..."
     HH:MM:SS WRN [SLOW] corr=abc1 GET /models 200 (12.4s)
 
 Type tags for quick scanning:
@@ -19,7 +19,6 @@ Type tags for quick scanning:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 import uuid
@@ -39,12 +38,7 @@ REQUEST_TIMEOUT_SECONDS = 60.0
 SLOW_THRESHOLD_SECONDS = 1.0
 
 # Paths that are always slow during cold start — suppress SLOW log for these
-_COLD_START_PATHS = {"/health", "/health/stream", "/models", "/models/hf", "/souls", "/chat/sessions", "/training/jobs"}
-
-# Max bytes to capture from response body for error logging
-_ERROR_BODY_MAX_BYTES = 512
-# Max bytes to capture from request body for error logging
-_ERROR_REQ_BODY_MAX_BYTES = 256
+_COLD_START_PATHS = frozenset({"/health", "/health/stream", "/models", "/models/hf", "/souls", "/chat/sessions", "/training/jobs"})
 
 
 class RequestTimeoutMiddleware(BaseHTTPMiddleware):
@@ -77,69 +71,71 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
-    """Ensures every request has a correlation ID for log tracing."""
+    """Ensures every request has a correlation ID for log tracing.
+
+    Stores the ID in ``request.scope["correlation_id"]`` (not ``request.state``)
+    so that downstream middleware running inside the same ``BaseHTTPMiddleware``
+    chain can read it.  ``request.state`` is per-middleware-layer in Starlette
+    and does NOT propagate through ``call_next``.
+    """
 
     HEADER = "X-Correlation-ID"
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         corr_id = request.headers.get(self.HEADER) or request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
-        request.state.correlation_id = corr_id
+        request.scope["correlation_id"] = corr_id
         response = await call_next(request)
         response.headers[self.HEADER] = corr_id
         return response
 
 
 class UnifiedRequestMiddleware(BaseHTTPMiddleware):
-    """Single middleware that logs every request with timing, correlation, and error details.
+    """Logs every request: method, path, status, duration, correlation ID.
 
-    Replaces the old RequestTimingMiddleware + RequestLoggingMiddleware pair.
-    Produces one clean log line per request:
+    Produces one clean log line per request.  Log level is chosen by status
+    code so that errors are visible immediately in stdout:
 
-        HH:MM:SS INF [REQ] abc1 GET /chat 200 (0.34s)
-        HH:MM:SS WRN [REQ] abc1 POST /multimodal/analyze 400 (19.61s) error="validation failed"
-        HH:MM:SS ERR [REQ] abc1 POST /chat 500 (2.10s) error="RuntimeError: oops"
+        5xx  → logger.error   (tag REQ)
+        4xx  → logger.warning (tag REQ)
+        >1s  → logger.warning (tag SLOW)  — unless path is in _COLD_START_PATHS
+        else → logger.debug   (tag REQ)
 
-    On 4xx/5xx, captures the response body (truncated) as the error field.
-    On POST/PUT/PATCH errors, also captures the first N bytes of request body.
-    On unhandled exceptions, logs the full traceback.
+    On unhandled exceptions the full traceback is logged via logger.exception.
+
+    Error detail extraction is intentionally left to FastAPI exception
+    handlers — they already produce structured JSON responses.  This
+    middleware avoids reading response bodies because:
+      * StreamingResponse has no pre-buffered body attribute.
+      * Buffering the body to inspect it would break streaming endpoints.
+      * Double-parsing what the handler already logged adds no value.
     """
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        corr_id = getattr(request.state, "correlation_id", "-")
+        corr_id = request.scope.get("correlation_id", "-")
         path = request.url.path
         method = request.method
         start = time.monotonic()
-
-        # Capture request body for error debugging (must read before handler consumes it)
-        req_body_preview = None
-        if method in ("POST", "PUT", "PATCH"):
-            try:
-                raw_body = await request.body()
-                if raw_body:
-                    req_body_preview = raw_body[:_ERROR_REQ_BODY_MAX_BYTES].decode("utf-8", errors="replace")
-            except Exception:
-                pass
 
         try:
             response = await call_next(request)
         except Exception:
             elapsed = time.monotonic() - start
-            ctx = {
-                "corr": corr_id,
-                "method": method,
-                "path": path,
-                "status": 500,
-                "elapsed": f"{elapsed:.3f}s",
-            }
-            if req_body_preview:
-                ctx["req_body"] = req_body_preview
             logger.exception(
                 "%s %s %s UNHANDLED (%.3fs)",
                 corr_id, method, path, elapsed,
-                extra={"tag": "REQ", "context": ctx},
+                extra={
+                    "tag": "REQ",
+                    "context": {
+                        "corr": corr_id,
+                        "method": method,
+                        "path": path,
+                        "status": 500,
+                        "elapsed": f"{elapsed:.3f}s",
+                    },
+                },
             )
             raise
 
@@ -147,12 +143,7 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
         sc = response.status_code
         elapsed_str = f"{elapsed:.3f}s"
 
-        # --- Build error body for 4xx/5xx ---
-        error_msg = None
-        if sc >= 400:
-            error_msg = self._extract_error_body(response)
-
-        # --- Context dict for structured logging ---
+        # Structured context for log aggregators (Datadog, ELK, etc.)
         ctx = {
             "corr": corr_id,
             "method": method,
@@ -160,30 +151,21 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
             "status": sc,
             "elapsed": elapsed_str,
         }
-        if error_msg:
-            ctx["error"] = error_msg
-        if req_body_preview and sc >= 400:
-            ctx["req_body"] = req_body_preview
 
-        # --- Log level by status code ---
+        # Choose log level by status code.
         if sc >= 500:
-            parts = [f"{corr_id} {method} {path} {sc} ({elapsed_str})"]
-            if error_msg:
-                parts.append(f'error="{error_msg}"')
             logger.error(
-                " ".join(parts),
+                "%s %s %s %d (%s)",
+                corr_id, method, path, sc, elapsed_str,
                 extra={"tag": "REQ", "context": ctx},
             )
         elif sc >= 400:
-            parts = [f"{corr_id} {method} {path} {sc} ({elapsed_str})"]
-            if error_msg:
-                parts.append(f'error="{error_msg}"')
             logger.warning(
-                " ".join(parts),
+                "%s %s %s %d (%s)",
+                corr_id, method, path, sc, elapsed_str,
                 extra={"tag": "REQ", "context": ctx},
             )
         elif elapsed > SLOW_THRESHOLD_SECONDS:
-            # Slow but successful — separate [SLOW] tag for grep-ability
             if path in _COLD_START_PATHS and elapsed < 60.0:
                 logger.debug(
                     "%s %s %s %d (%s) cold-start",
@@ -204,36 +186,6 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
             )
 
         return response
-
-    @staticmethod
-    def _extract_error_body(response: Response) -> str | None:
-        """Safely read and truncate the response body for error logging.
-
-        For StreamingResponse the body is not seekable — returns None.
-        For JSONResponse / HTMLResponse / etc. reads up to _ERROR_BODY_MAX_BYTES.
-        """
-        body = getattr(response, "body", None)
-        if body is None:
-            return None
-        try:
-            raw = body if isinstance(body, bytes) else body.encode("utf-8", errors="replace")
-            text = raw[:_ERROR_BODY_MAX_BYTES].decode("utf-8", errors="replace")
-            if len(raw) > _ERROR_BODY_MAX_BYTES:
-                text += "..."
-
-            # Try to parse JSON and extract "detail" or "error" field
-            try:
-                parsed = json.loads(raw[:_ERROR_BODY_MAX_BYTES])
-                if isinstance(parsed, dict):
-                    detail = parsed.get("detail") or parsed.get("error") or parsed.get("message")
-                    if detail:
-                        return str(detail)[:256]
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-            return text if text else None
-        except Exception:
-            return None
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
@@ -278,8 +230,16 @@ class ClientErrorFilterMiddleware(BaseHTTPMiddleware):
 def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) -> list[tuple[type[BaseHTTPMiddleware], dict]]:
     """Return middleware classes with kwargs in registration order.
 
-    Registration order (FastAPI applies in reverse — last in list runs first on request):
-        ClientErrorFilter → UnifiedRequest → CorrelationId → Metrics → RequestTimeout
+    FastAPI/Starlette applies middleware in reverse registration order:
+    the LAST ``add_middleware`` call wraps the app outermost and runs
+    first on each request.  The list below is therefore the registration
+    order, and the inbound request path is the reverse of it.
+
+    Request path (inbound → outbound):
+        ClientErrorFilter → CorrelationId → UnifiedRequest → Metrics → RequestTimeout → handler
+
+    CorrelationId MUST run before UnifiedRequest inbound so that
+    ``request.state.correlation_id`` is populated when UnifiedRequest logs.
     """
     return [
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),
