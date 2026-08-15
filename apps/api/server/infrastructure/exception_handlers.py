@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -85,8 +85,7 @@ async def _request_validation_error_handler(request: Request, exc: RequestValida
 
 async def _http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Re-raise HTTPExceptions as JSON."""
-    from fastapi import HTTPException as _HTTPException
-    h = exc  # type: _HTTPException
+    h = exc  # type: HTTPException
     corr_id = request.scope.get("correlation_id", "-")
 
     # Map status code to error code
@@ -190,7 +189,6 @@ def register_all_handlers(app: FastAPI):
     app.add_exception_handler(ValidationError, _validation_error_handler)
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)
 
-    from fastapi import HTTPException
     app.add_exception_handler(HTTPException, _http_exception_handler)
 
     app.add_exception_handler(Exception, _unhandled_error_handler)
