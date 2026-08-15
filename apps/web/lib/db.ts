@@ -102,7 +102,28 @@ interface ManDB extends Dexie {
   errors: Table<ErrorEntry, string>
 }
 
+// ── IndexedDB circuit breaker ────────────────────────────────────────
+// When IndexedDB dies (browser tab suspended, storage full, private
+// browsing cleanup), every failed Dexie write re-throws, which fires
+// window.onerror, which calls chatDB.addError(), which fails again —
+// infinite cascade.  This flag breaks the cycle.
+
+let _dbDead = false
+
+/** Returns true if IndexedDB is known to be unavailable. */
+export function isDBDead(): boolean { return _dbDead }
+
+function _markDBDead(err: unknown) {
+  if (_dbDead) return
+  _dbDead = true
+  const msg = err instanceof Error ? err.message : String(err)
+  console.warn('[ManDB] IndexedDB marked dead — all further writes will be skipped:', msg)
+}
+
 const db = new Dexie('ManDB') as ManDB
+
+// Catch global Dexie errors (connection lost, blocked, etc.)
+;(db as any).on?.('error', (err: unknown) => { _markDBDead(err) })
 
 db.version(1).stores({
   sessions: 'id, name, updatedAt, synced',
@@ -322,19 +343,28 @@ export const chatDB = {
   },
 
   async addError(message: string, stack?: string): Promise<void> {
-    await db.errors.put({
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      message,
-      stack,
-      timestamp: Date.now(),
-    })
+    if (_dbDead) return // circuit breaker — don't cascade
+    try {
+      await db.errors.put({
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        message,
+        stack,
+        timestamp: Date.now(),
+      })
+    } catch (err: unknown) {
+      _markDBDead(err)
+    }
   },
 
   async getErrors(limit = 20): Promise<ErrorEntry[]> {
-    return db.errors.orderBy('timestamp').reverse().limit(limit).toArray()
+    if (_dbDead) return []
+    try {
+      return await db.errors.orderBy('timestamp').reverse().limit(limit).toArray()
+    } catch { return [] }
   },
 
   async clearErrors(): Promise<void> {
-    await db.errors.clear()
+    if (_dbDead) return
+    try { await db.errors.clear() } catch { /* ignore */ }
   },
 }

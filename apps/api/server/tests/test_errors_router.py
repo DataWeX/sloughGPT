@@ -2,17 +2,19 @@
 import pytest
 
 from tests.test_support import get_test_client
-from routers.errors import _error_buffer, _error_count_since_clear, clear_errors
+from routers.errors import _error_buffer, _error_count_since_clear, _dedup_map, clear_errors
 
 client = get_test_client()
 
 
 @pytest.fixture(autouse=True)
 def _clear_error_state():
-    """Clear error buffer before and after each test."""
+    """Clear error buffer and dedup map before and after each test."""
     _error_buffer.clear()
+    _dedup_map.clear()
     yield
     _error_buffer.clear()
+    _dedup_map.clear()
 
 
 class TestLogErrors:

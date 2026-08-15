@@ -57,8 +57,10 @@ const IS_DEV = process.env.NODE_ENV === 'development'
 
 const BATCH_INTERVAL_MS = 5000
 const MAX_BATCH_SIZE = 20
+const MIN_FLUSH_INTERVAL_MS = 3000 // don't flush more than once per 3s
 let _logBatch: LogRecord[] = []
 let _logTimer: ReturnType<typeof setTimeout> | null = null
+let _lastFlushAt = 0
 
 function _getApiUrl(): string {
   return PUBLIC_API_URL
@@ -66,9 +68,16 @@ function _getApiUrl(): string {
 
 function _flushLogs() {
   if (_logBatch.length === 0) return
+  const now = Date.now()
+  if (now - _lastFlushAt < MIN_FLUSH_INTERVAL_MS) {
+    // Too soon — re-schedule instead of flushing
+    if (!_logTimer) _logTimer = setTimeout(_flushLogs, MIN_FLUSH_INTERVAL_MS)
+    return
+  }
   const payload = _logBatch
   _logBatch = []
   _logTimer = null
+  _lastFlushAt = now
 
   fetch(`${_getApiUrl()}/errors/logs/ingest`, {
     method: 'POST',

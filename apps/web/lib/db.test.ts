@@ -59,6 +59,7 @@ const { tables, FakeDexie } = vi.hoisted(() => {
     sessions = new FakeTable('sessions')
     pendingMessages = new FakeTable('pending')
     version() { return { stores() {} } }
+    on(_event: string, _handler: (...args: any[]) => void) { /* no-op */ }
   }
 
   return { tables, FakeDexie }

@@ -70,10 +70,15 @@ class FrontendLogBatch(BaseModel):
 class ErrorsRouter:
     """OOP router for error-logging endpoints."""
 
+    # Dedup: message -> last-seen timestamp.  Identical errors within this
+    # window are collapsed into a count bump instead of new records.
+    _DEDUP_WINDOW_S = 10
+
     def __init__(self):
         self.router = APIRouter(prefix="/errors", tags=["errors"])
         self._error_buffer: list[dict] = []
         self._error_count_since_clear = 0
+        self._dedup_map: dict[str, float] = {}
 
         self._error_buffer = self._load_from_disk()
         self._error_count_since_clear = 0
@@ -143,10 +148,39 @@ class ErrorsRouter:
     # ── Route handlers ──────────────────────────────────────────────────
 
     async def log_errors(self, batch: ErrorBatch, request: Request):
-        now = datetime.now(timezone.utc).isoformat()
+        now_ts = datetime.now(timezone.utc)
+        now_iso = now_ts.isoformat()
+        now_epoch = now_ts.timestamp()
         client_host = request.client.host if request.client else "unknown"
 
+        logged = 0
+        batch_messages: set = set()
         for entry in batch.errors:
+            message = entry.message or ""
+            fp = self._fingerprint(message)
+
+            # Dedup: skip if the same exact message arrived in a PRIOR
+            # request within the window.  Never dedup within the current
+            # batch — each entry in a batch is a distinct error event.
+            last_seen = self._dedup_map.get(message)
+            if (message not in batch_messages
+                    and last_seen is not None
+                    and (now_epoch - last_seen) < self._DEDUP_WINDOW_S):
+                # Bump count on the existing record instead of creating a new one
+                for rec in reversed(self._error_buffer):
+                    if rec.get("message") == message:
+                        rec["count"] = rec.get("count", 1) + 1
+                        rec["timestamp"] = entry.timestamp or now_iso
+                        break
+                continue
+
+            batch_messages.add(message)
+            self._dedup_map[message] = now_epoch
+            # Prune old dedup entries
+            if len(self._dedup_map) > 500:
+                self._dedup_map = {k: v for k, v in self._dedup_map.items()
+                                   if (now_epoch - v) < self._DEDUP_WINDOW_S * 10}
+
             error_record = {
                 "id": uuid.uuid4().hex[:12],
                 "message": entry.message,
@@ -156,9 +190,10 @@ class ErrorsRouter:
                 "line": entry.line,
                 "col": entry.col,
                 "client_host": client_host,
-                "timestamp": entry.timestamp or now,
+                "timestamp": entry.timestamp or now_iso,
                 "metadata": entry.metadata or {},
-                "fingerprint": self._fingerprint(entry.message),
+                "fingerprint": fp,
+                "count": 1,
             }
             self._error_buffer.append(error_record)
             self._error_count_since_clear += 1
@@ -175,11 +210,12 @@ class ErrorsRouter:
                 entry.line or 0,
                 entry.col or 0,
             )
+            logged += 1
 
         while len(self._error_buffer) > MAX_ERRORS:
             self._error_buffer.pop(0)
 
-        return success_response(data={"status": "ok", "logged": len(batch.errors)})
+        return success_response(data={"status": "ok", "logged": logged})
 
     async def ingest_frontend_logs(self, batch: FrontendLogBatch):
         from domains.infrastructure.output_buffer import get_server_buffer
@@ -225,15 +261,16 @@ class ErrorsRouter:
         groups: dict[str, dict] = {}
         for entry in reversed(self._error_buffer):
             fp = entry.get("fingerprint") or self._fingerprint(entry.get("message", ""))
+            count = entry.get("count", 1)
             if fp in groups:
-                groups[fp]["count"] += 1
+                groups[fp]["count"] += count
                 groups[fp]["latest"] = entry.get("timestamp", "")
             else:
                 groups[fp] = {
                     "fingerprint": fp,
                     "message": entry.get("message", "")[:200],
                     "source": entry.get("source", ""),
-                    "count": 1,
+                    "count": count,
                     "latest": entry.get("timestamp", ""),
                     "sample_id": entry.get("id", ""),
                     "sample_url": entry.get("url", ""),
@@ -302,6 +339,7 @@ class ErrorsRouter:
         self._error_buffer.clear()
         self._clear_disk()
         self._error_count_since_clear = 0
+        self._dedup_map.clear()
         return success_response(data={"status": "ok", "cleared": True})
 
     async def unread_count(self):
@@ -362,6 +400,7 @@ _errors_instance = ErrorsRouter()
 router = _errors_instance.router
 _error_buffer = _errors_instance._error_buffer
 _error_count_since_clear = _errors_instance._error_count_since_clear
+_dedup_map = _errors_instance._dedup_map
 
 
 def clear_errors():

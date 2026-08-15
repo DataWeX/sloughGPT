@@ -45,6 +45,8 @@ function isExtensionError(message: string, url?: string): boolean {
 
 let batch: ErrorReport[] = []
 let timer: ReturnType<typeof setTimeout> | null = null
+const _recentMessages = new Map<string, number>() // message -> last-sent timestamp
+const DEDUP_WINDOW_MS = 5000
 
 function flush() {
   if (batch.length === 0) return
@@ -68,6 +70,18 @@ function schedule() {
 }
 
 function push(report: ErrorReport) {
+  // Dedup: same message within window → skip
+  const now = Date.now()
+  const lastSent = _recentMessages.get(report.message)
+  if (lastSent !== undefined && now - lastSent < DEDUP_WINDOW_MS) return
+  _recentMessages.set(report.message, now)
+  // Prune old entries periodically
+  if (_recentMessages.size > 100) {
+    for (const [msg, ts] of _recentMessages) {
+      if (now - ts > DEDUP_WINDOW_MS * 2) _recentMessages.delete(msg)
+    }
+  }
+
   batch.push(report)
   if (batch.length >= MAX_BATCH_SIZE) {
     if (timer) {
