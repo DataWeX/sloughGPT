@@ -194,7 +194,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         from domains.infrastructure.metrics import get_metrics_collector
         collector = get_metrics_collector()
-        collector.set_active_requests(collector._active_requests + 1)
+        collector.set_active_requests(collector.get_active_requests() + 1)
         start = time.monotonic()
         status_code = 500
         try:
@@ -203,16 +203,20 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             elapsed = time.monotonic() - start
-            collector.set_active_requests(max(0, collector._active_requests - 1))
+            collector.set_active_requests(max(0, collector.get_active_requests() - 1))
             path = request.url.path
             collector.record_request(path, status_code, elapsed)
 
 
 class ClientErrorFilterMiddleware(BaseHTTPMiddleware):
-    """Filters out client-side errors from browser extensions (crypto wallets, etc.).
+    """Adds a DEBUG note for client-side errors originating from browser extensions.
 
-    Extension-injected scripts that fail don't indicate server problems.
-    Logs them at DEBUG level instead of ERROR to reduce noise.
+    Extension-injected scripts (crypto wallets, etc.) that fail don't indicate
+    server problems.  The bulk suppression of these errors is handled by the
+    ``_ClientExtensionFilter`` logging filter in ``main.py``; this middleware
+    only emits a supplementary DEBUG line for extension-origin 4xx/5xx so the
+    failure is traceable without polluting the error level.  Because it wraps
+    the app outermost, it cannot alter the level of the UnifiedRequest log.
     """
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -239,7 +243,7 @@ def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) 
         ClientErrorFilter → CorrelationId → UnifiedRequest → Metrics → RequestTimeout → handler
 
     CorrelationId MUST run before UnifiedRequest inbound so that
-    ``request.state.correlation_id`` is populated when UnifiedRequest logs.
+    ``request.scope["correlation_id"]`` is populated when UnifiedRequest logs.
     """
     return [
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),

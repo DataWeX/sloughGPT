@@ -66,6 +66,11 @@ class MetricsCollector:
         with self._lock:
             self._active_requests = count
 
+    def get_active_requests(self) -> int:
+        """Return the current in-flight request count (thread-safe)."""
+        with self._lock:
+            return self._active_requests
+
     def set_model_info(self, loaded: bool, name: str = ""):
         with self._lock:
             self._model_loaded = loaded

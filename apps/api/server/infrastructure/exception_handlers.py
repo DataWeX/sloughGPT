@@ -48,7 +48,7 @@ def _error_response(
 async def _domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch domain-layer exceptions (SloughGPTDomainError subclasses)."""
     msg = str(exc) or "Domain error"
-    corr_id = getattr(request.state, "correlation_id", "-")
+    corr_id = request.scope.get("correlation_id", "-")
     logger.warning(
         "%s on %s %s",
         msg, request.method, request.url.path,
@@ -67,7 +67,7 @@ async def _domain_error_handler(request: Request, exc: Exception) -> JSONRespons
 async def _validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
     """Catch Pydantic validation errors."""
     errors = exc.errors()
-    corr_id = getattr(request.state, "correlation_id", "-")
+    corr_id = request.scope.get("correlation_id", "-")
     logger.warning(
         "Validation failed on %s", request.url.path,
         extra={"context": {"corr": corr_id, "fields": len(errors), "status": 422}},
@@ -88,7 +88,7 @@ async def _request_validation_error_handler(request: Request, exc: RequestValida
     errors = exc.errors()
     # Pydantic v2 may include bytes in error detail (raw request body) — convert for JSON safety
     _safe = json.loads(json.dumps(errors, default=str))
-    corr_id = getattr(request.state, "correlation_id", "-")
+    corr_id = request.scope.get("correlation_id", "-")
     logger.warning(
         "Request validation failed on %s %s", request.method, request.url.path,
         extra={"context": {"corr": corr_id, "errors": len(_safe), "status": 422}},
@@ -108,7 +108,7 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
     """Re-raise HTTPExceptions as JSON."""
     from fastapi import HTTPException as _HTTPException
     h = exc  # type: _HTTPException
-    corr_id = getattr(request.state, "correlation_id", "-")
+    corr_id = request.scope.get("correlation_id", "-")
 
     # Map status code to error code
     code_map = {
@@ -137,7 +137,7 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
 
 async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all — classify raw exceptions into AppError, emit event, return structured response."""
-    corr_id = getattr(request.state, "correlation_id", "-")
+    corr_id = request.scope.get("correlation_id", "-")
 
     # Classify into the error taxonomy
     try:
@@ -181,7 +181,7 @@ def register_all_handlers(app: FastAPI):
         from domains.infrastructure.errors import AppError
 
         async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-            corr_id = getattr(request.state, "correlation_id", "-")
+            corr_id = request.scope.get("correlation_id", "-")
             try:
                 from domains.infrastructure.errors import emit_error_event
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
