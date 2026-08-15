@@ -90,12 +90,15 @@ async function renderLoaded() {
 }
 
 describe('TokenizerPage', () => {
-  it('shows loading skeleton and calls getStats on mount', () => {
-    mockGetStats.mockReturnValue(new Promise(() => {}))
+  it('shows loading skeleton and calls getStats on mount', async () => {
+    let resolveStats: (v: typeof stats) => void
+    mockGetStats.mockReturnValue(new Promise(r => { resolveStats = r }))
     render(<TokenizerPage />)
-    expect(screen.getAllByText('Tokenizer').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('BPE tokenizer management')).toBeTruthy()
+    expect(screen.queryByText('Tokenizer')).toBeNull()
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0)
     expect(mockGetStats).toHaveBeenCalled()
+    await act(async () => { resolveStats!(stats) })
+    expect(screen.getByText('Vocab: 100 · Merges: 20')).toBeTruthy()
   })
 
   it('displays stats in header and stat cards after load', async () => {

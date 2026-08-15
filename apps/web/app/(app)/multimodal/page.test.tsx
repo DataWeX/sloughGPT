@@ -64,8 +64,8 @@ beforeEach(() => {
 describe('MultimodalPage — initial load flow', () => {
   it('renders page header', async () => {
     render(<MultimodalPage />)
-    expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
     await act(async () => {})
+    expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders without crashing', async () => {
@@ -140,8 +140,11 @@ describe('MultimodalPage — error handling', () => {
 
 describe('MultimodalPage — loading state', () => {
   it('shows loading while fetching capabilities', async () => {
-    mockGetCapabilities.mockReturnValue(new Promise(() => {}))
+    let resolveCaps: (v: { vision: boolean; audio: boolean; image_gen: boolean }) => void
+    mockGetCapabilities.mockReturnValue(new Promise(r => { resolveCaps = r }))
     render(<MultimodalPage />)
+    expect(screen.queryByText(/vision|multimodal/i)).toBeNull()
+    await act(async () => { resolveCaps!({ vision: true, audio: true, image_gen: false }) })
     expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
   })
 })

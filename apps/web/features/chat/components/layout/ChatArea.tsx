@@ -75,6 +75,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     const containerRef = useRef<HTMLDivElement>(null)
     const [isNearBottom, setIsNearBottom] = useState(true)
     const prevMessageCountRef = useRef(messages.length)
+    const prevLastContentLenRef = useRef(0)
 
     const filteredMessages = searchQuery
       ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -93,13 +94,19 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
       setIsNearBottom(distFromBottom < NEAR_BOTTOM_THRESHOLD)
     }, [])
 
-    // Auto-scroll on new messages when user is near bottom
+    // Auto-scroll on new messages AND during streaming when user is near bottom
     useEffect(() => {
-      if (isNearBottom && messages.length > prevMessageCountRef.current) {
-        scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
+      const lastMsg = messages[messages.length - 1]
+      const lastContentLen = lastMsg?.content?.length ?? 0
+      const contentGrew = lastContentLen > prevLastContentLenRef.current
+      const msgAdded = messages.length > prevMessageCountRef.current
+
+      if (isNearBottom && (msgAdded || contentGrew)) {
+        scrollRef.current?.scrollIntoView({ behavior: msgAdded ? 'smooth' : 'auto' })
       }
       prevMessageCountRef.current = messages.length
-    }, [messages.length, isNearBottom])
+      prevLastContentLenRef.current = lastContentLen
+    }, [messages, isNearBottom])
 
     // Scroll to bottom on initial load
     useEffect(() => {
