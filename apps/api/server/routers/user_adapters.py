@@ -84,7 +84,7 @@ class UserAdaptersRouter:
         try:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
-            store.reset_adapter(user_id)
+            store.reset_user_adapter(user_id)
             try:
                 from infrastructure.auth import get_audit_logger
                 get_audit_logger().log("adapter.reset", resource=user_id)
@@ -147,12 +147,17 @@ class UserAdaptersRouter:
         except ImportError:
             raise HTTPException(status_code=503, detail="Per-user LoRA not available")
 
-    async def get_quality(self):
+    async def get_quality(self, min_feedback_count: int = 3, max_age_days: Optional[int] = None):
         """Get adapter quality metrics"""
         try:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
-            return success_response(data=store.get_quality_report())
+            return success_response(
+                data=store.get_quality_report(
+                    min_feedback_count=min_feedback_count,
+                    max_age_days=max_age_days,
+                )
+            )
         except ImportError:
             raise HTTPException(status_code=503, detail="Not available")
 
@@ -163,6 +168,7 @@ class UserAdaptersRouter:
             store = get_per_user_lora()
             store.delete_adapter(user_id)
             try:
+                from infrastructure.auth import get_audit_logger
                 get_audit_logger().log("adapter.delete", user=audit_user(auth_user), resource=user_id)
             except Exception:
                 pass

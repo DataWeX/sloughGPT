@@ -31,7 +31,7 @@ def _make_store():
     store.prune_low_quality.return_value = ["user3", "user4"]
     store.delete_adapter.return_value = None
     store.update_adapter.return_value = None
-    store.reset_adapter.return_value = None
+    store.reset_user_adapter.return_value = None
     store.merge_all.return_value = None
     store.aggregate_best_adapters.return_value = {
         "output_path": "data/user_adapters/best.npz",
@@ -142,7 +142,7 @@ class TestResetAdapter:
         data = resp.json()["data"]
         assert data["status"] == "reset"
         assert data["user_id"] == "user1"
-        store.reset_adapter.assert_called_once_with("user1")
+        store.reset_user_adapter.assert_called_once_with("user1")
 
     @patch(STORE_TARGET)
     def test_reset_adapter_import_error(self, mock_get):

@@ -41,7 +41,7 @@ def _make_store(**overrides):
         get_stats=lambda: {"total_adapters": 2, "total_feedback": 15},
         get_adapter=lambda uid: SimpleNamespace(feedback_count=10) if uid == "u1" else None,
         update_adapter=lambda uid, rating: None,
-        reset_adapter=lambda uid: None,
+        reset_user_adapter=lambda uid: None,
         merge_all=lambda: None,
         aggregate_best_adapters=lambda **kw: {
             "user_count": 2,
@@ -49,7 +49,7 @@ def _make_store(**overrides):
             "output_path": "/tmp/best.npz",
             "eval": {"delta": {"verdict": "better", "perplexity_delta": -0.5}},
         },
-        get_quality_report=lambda: {"avg_feedback": 7.5, "total": 15},
+        get_quality_report=lambda **kw: {"avg_feedback": 7.5, "total": 15},
         delete_adapter=lambda uid: None,
         prune_low_quality=lambda min_feedback_count=1, max_age_days=30: ["u2"],
     )

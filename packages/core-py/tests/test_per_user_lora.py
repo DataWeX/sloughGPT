@@ -225,6 +225,30 @@ class TestMergeAdapters:
         assert merged["user_count"] == 0
 
 
+class TestMergeAll:
+    def test_merges_every_adapter(self, store):
+        store.create_adapter("a")
+        store.create_adapter("b")
+        store.create_adapter("c")
+        merged = store.merge_all()
+        assert merged["user_count"] == 3
+        assert merged["W_a"].shape == (4, 16)
+        assert merged["W_b"].shape == (16, 4)
+
+    def test_empty_store(self, store):
+        merged = store.merge_all()
+        assert merged["user_count"] == 0
+
+    def test_matches_explicit_merge(self, store):
+        store.create_adapter("a")
+        store.create_adapter("b")
+        expected = store.merge_adapters(["a", "b"])
+        merged = store.merge_all()
+        assert merged["user_count"] == expected["user_count"]
+        np.testing.assert_allclose(merged["W_a"], expected["W_a"])
+        np.testing.assert_allclose(merged["W_b"], expected["W_b"])
+
+
 class TestGetAllAdapters:
     def test_empty_store(self, store):
         assert store.get_all_adapters() == []
@@ -308,6 +332,48 @@ class TestGetQualityAdapters:
         store._update_metadata(store._cache["old"])
         quality = store.get_quality_adapters(min_feedback_count=1, max_age_days=30)
         assert len(quality) == 0
+
+
+class TestGetQualityReport:
+    def test_empty_store(self, store):
+        report = store.get_quality_report()
+        assert report == {"count": 0, "adapters": []}
+
+    def test_filters_by_feedback(self, store):
+        store.create_adapter("low")
+        store.update_adapter("low", 1.0)
+        store.create_adapter("high")
+        for _ in range(5):
+            store.update_adapter("high", 1.0)
+        report = store.get_quality_report(min_feedback_count=3)
+        assert report["count"] == 1
+        assert [a["user_id"] for a in report["adapters"]] == ["high"]
+
+    def test_count_matches_adapters(self, store):
+        for uid in ["u1", "u2", "u3"]:
+            store.create_adapter(uid)
+            for _ in range(5):
+                store.update_adapter(uid, 1.0)
+        report = store.get_quality_report(min_feedback_count=1)
+        assert report["count"] == len(report["adapters"]) == 3
+
+    def test_filters_by_age(self, store):
+        store.create_adapter("old")
+        for _ in range(5):
+            store.update_adapter("old", 1.0)
+        store._cache["old"].updated_at = str(time.time() - 60 * 86400)
+        store._update_metadata(store._cache["old"])
+        report = store.get_quality_report(min_feedback_count=1, max_age_days=30)
+        assert report["count"] == 0
+        assert report["adapters"] == []
+
+    def test_zero_max_age_days_means_no_age_filter(self, store):
+        store.create_adapter("u1")
+        for _ in range(5):
+            store.update_adapter("u1", 1.0)
+        report = store.get_quality_report(min_feedback_count=1, max_age_days=0)
+        assert report["count"] == 1
+
 
 
 class TestPruneLowQuality:

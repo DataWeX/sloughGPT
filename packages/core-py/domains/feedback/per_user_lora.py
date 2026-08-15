@@ -353,6 +353,23 @@ class PerUserLoRAStore:
             "user_count": count,
         }
 
+    def merge_all(self) -> Dict[str, Any]:
+        """
+        Merge every stored user adapter into aggregated weights.
+
+        Args:
+            none
+
+        Returns:
+            Dict with ``W_a``/``W_b`` (aggregated weight matrices) and
+            ``user_count`` (number of adapters merged)
+
+        Side effects:
+            - none
+        """
+        user_ids = [a["user_id"] for a in self.get_all_adapters()]
+        return self.merge_adapters(user_ids)
+
     def get_all_adapters(self) -> list:
         """Get metadata for all user adapters."""
         conn = sqlite3.connect(self.db_path)
@@ -449,6 +466,31 @@ class PerUserLoRAStore:
             quality_adapters.append(adapter)
 
         return quality_adapters
+
+    def get_quality_report(
+        self,
+        min_feedback_count: int = 3,
+        max_age_days: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get a quality report of adapters meeting the quality threshold.
+
+        Args:
+            min_feedback_count: Minimum feedback count to be considered
+            max_age_days: Optional max age in days (uses updated_at)
+
+        Returns:
+            Dict with ``count`` (number of qualifying adapters) and ``adapters``
+            (list of adapter metadata dicts)
+
+        Side effects:
+            - none
+        """
+        adapters = self.get_quality_adapters(
+            min_feedback_count=min_feedback_count,
+            max_age_days=max_age_days,
+        )
+        return {"count": len(adapters), "adapters": adapters}
 
     def aggregate_best_adapters(
         self,

@@ -363,6 +363,24 @@ class TestTrainingExecutorShutdown:
         executor.submit(_sleep_fn, "s2", duration=5.0)
         executor.shutdown(wait=False)
 
+    @patch(RM_PATCH, side_effect=_rm_factory)
+    def test_shutdown_resets_singleton(self, _mock_rm):
+        """A dead singleton must not be reused after shutdown."""
+        import domains.training.executor as exec_mod
+
+        exec_mod._instance = None
+        ex = get_training_executor()
+        assert exec_mod._instance is ex
+
+        ex.shutdown(wait=False)
+        assert exec_mod._instance is None
+
+        fresh = get_training_executor()
+        assert fresh is not ex
+        assert exec_mod._instance is fresh
+        fresh.shutdown(wait=False)
+        exec_mod._instance = None
+
 
 # ── submit_training ─────────────────────────────────────────────────────
 

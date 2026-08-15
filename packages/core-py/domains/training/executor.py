@@ -335,8 +335,16 @@ class TrainingExecutor:
     # ── Shutdown ──────────────────────────────────────────────────────
 
     def shutdown(self, wait: bool = True) -> None:
-        """Shut down the underlying thread pool."""
+        """Shut down the underlying thread pool.
+
+        Resets the process-wide singleton so a subsequent
+        ``get_training_executor()`` lazily creates a fresh pool instead of
+        returning a dead executor whose ``submit()`` would raise.
+        """
+        global _instance
         self._executor.shutdown(wait=wait, cancel_futures=not wait)
+        if _instance is self:
+            _instance = None
         logger.info("TrainingExecutor shut down (workers=%d)", self._max_workers, extra={"tag": "TRAIN"})
 
     # ── Internals ─────────────────────────────────────────────────────
