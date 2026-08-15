@@ -168,7 +168,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean },
     addToast: TrainingToastFn, onComplete?: () => void,
   ) => {
-    writeTraining({ modelPath: null, finalLoss: null })
+    writeTraining({ ...IDLE_STATE, phase: 'TRAINING', method: 'hf' })
     trainingJobsController.create({
       model: params.model, dataset: params.dataset, name: `${params.model}-${Date.now()}`,
       epochs: params.epochs, batch_size: params.batchSize, learning_rate: params.lr,
@@ -176,7 +176,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     }).then(resp => {
       const jobId = resp.job_id as string
       addToast('Training queued', 'info')
-      writeTraining({ phase: 'TRAINING', method: 'hf', progress: 0, totalEpochs: params.epochs, jobId })
+      writeTraining({ totalEpochs: params.epochs, jobId })
       startStandardPoll(jobId, { addToast, onComplete })
     }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [startStandardPoll])
@@ -185,7 +185,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean },
     addToast: TrainingToastFn, onComplete?: () => void,
   ) => {
-    writeTraining({ modelPath: null, finalLoss: null })
+    writeTraining({ ...IDLE_STATE, phase: 'TRAINING', method: 'hf' })
     trainingJobsController.startVisualTrain({
       dataset: params.dataset, vision_encoder: params.visionEncoder, llm: params.llm,
       stage1_epochs: params.stage1Epochs, stage2_epochs: params.stage2Epochs,
@@ -193,7 +193,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     }).then(resp => {
       const jobId = resp.job_id as string
       addToast(resp.message || 'Image model training queued', 'info')
-      writeTraining({ phase: 'TRAINING', method: 'hf', progress: 0, totalEpochs: params.stage1Epochs + params.stage2Epochs, jobId })
+      writeTraining({ totalEpochs: params.stage1Epochs + params.stage2Epochs, jobId })
       startStandardPoll(jobId, {
         addToast, completeMessage: 'Image model training complete',
         onComplete: (job) => {
@@ -212,10 +212,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     addToast: TrainingToastFn,
   ) => {
     clearAllPolls()
-    writeTraining({
-      ...IDLE_STATE,
-      phase: 'TRAINING', method: 'turbo',
-    })
+    writeTraining({ ...IDLE_STATE, phase: 'TRAINING', method: 'turbo' })
     trainingJobsController.startTurboTrain({
       dataset_id: datasetId, epochs: config.epochs, learning_rate: config.lr,
       n_embed: config.embed, n_head: config.heads, n_layer: config.layers,
@@ -248,7 +245,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     turboLoss: training.loss,
     distillCheckpoint: training.checkpoint,
     distillFinalLoss: training.finalLoss,
-    distillEpochs: training.totalEpochs || null,
+    distillEpochs: training.totalEpochs ?? null,
     finetunedModelPath: training.modelPath,
     finetunedModelLoss: training.finalLoss,
     setPhase: (p: string) => writeTraining({ phase: p as TrainingShellState['phase'] }),

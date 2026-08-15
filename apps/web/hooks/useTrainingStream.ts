@@ -29,11 +29,12 @@ export function useTrainingStream() {
     closeStream()
     trainingJobsController.startAutoTrain(body).then(() => {
       writeTraining({
-        phase: 'TRAINING', method: 'slnet', progress: 0, loss: null,
-        epoch: 0, totalEpochs: 0, globalStep: 0, totalSteps: 0,
-        eta: null, stepsPerSec: null, elapsedSeconds: null,
-        message: '', lossHistory: [], evalResult: null,
+        phase: 'TRAINING', method: 'slnet',
+        loss: null, progress: 0, epoch: 0, totalEpochs: 0,
+        globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null,
+        elapsedSeconds: null, message: '', lossHistory: [], evalResult: null,
         startTime: Date.now(), error: null,
+        checkpoint: null, finalLoss: null, modelPath: null, jobId: null,
       })
 
       const es = new EventSource(`${PUBLIC_API_URL}/auto-train/stream`)
@@ -44,7 +45,9 @@ export function useTrainingStream() {
           const env = JSON.parse(e.data)
           if (env.stream !== 'auto-train') return
 
-          writeTraining({ phase: env.phase || 'TRAINING' })
+          const patch: Record<string, unknown> = {}
+
+          if (env.phase) patch.phase = env.phase
 
           if (env.data?.loss != null) {
             const current = readTraining()
@@ -52,7 +55,8 @@ export function useTrainingStream() {
               step: (current.lossHistory[current.lossHistory.length - 1]?.step ?? 0) + 1,
               loss: env.data.loss,
             }]
-            writeTraining({ loss: env.data.loss, lossHistory: hist.length > 200 ? hist.slice(-200) : hist })
+            patch.loss = env.data.loss
+            patch.lossHistory = hist.length > 200 ? hist.slice(-200) : hist
           }
           if (env.data?.eval_loss != null) {
             const current = readTraining()
@@ -61,22 +65,28 @@ export function useTrainingStream() {
               loss: env.data.eval_loss,
               isEval: true,
             }]
-            writeTraining({ lossHistory: hist.length > 200 ? hist.slice(-200) : hist })
+            patch.lossHistory = hist.length > 200 ? hist.slice(-200) : hist
           }
-          if (env.data?.progress != null) writeTraining({ progress: env.data.progress })
-          if (env.data?.global_step != null) writeTraining({ globalStep: env.data.global_step })
-          if (env.data?.total_steps != null) writeTraining({ totalSteps: env.data.total_steps })
-          if (env.data?.eta_s != null) writeTraining({ eta: env.data.eta_s })
-          if (env.data?.steps_per_sec != null) writeTraining({ stepsPerSec: env.data.steps_per_sec })
-          if (env.data?.elapsed_s != null) writeTraining({ elapsedSeconds: env.data.elapsed_s })
-          if (env.meta?.epoch != null) writeTraining({ epoch: env.meta.epoch })
-          if (env.meta?.total_epochs != null) writeTraining({ totalEpochs: env.meta.total_epochs })
-          if (env.message) writeTraining({ message: env.message })
-          if (env.data?.eval_report) writeTraining({ evalResult: env.data.eval_report })
+          if (env.data?.progress != null) patch.progress = env.data.progress
+          if (env.data?.global_step != null) patch.globalStep = env.data.global_step
+          if (env.data?.total_steps != null) patch.totalSteps = env.data.total_steps
+          if (env.data?.eta_s != null) patch.eta = env.data.eta_s
+          if (env.data?.steps_per_sec != null) patch.stepsPerSec = env.data.steps_per_sec
+          if (env.data?.elapsed_s != null) patch.elapsedSeconds = env.data.elapsed_s
+          if (env.meta?.epoch != null) patch.epoch = env.meta.epoch
+          if (env.meta?.total_epochs != null) patch.totalEpochs = env.meta.total_epochs
+          if (env.message) patch.message = env.message
+          if (env.data?.eval_report) patch.evalResult = env.data.eval_report
+
+          if (Object.keys(patch).length > 0) writeTraining(patch)
 
           if (env.status === 'complete') {
             closeStream()
-            writeTraining({ phase: 'complete', checkpoint: env.data?.checkpoint ?? null, finalLoss: env.data?.final_loss ?? null })
+            writeTraining({
+              phase: 'complete',
+              checkpoint: env.data?.checkpoint ?? null,
+              finalLoss: env.data?.final_loss ?? null,
+            })
             addToast('Training complete', 'success')
             onCheckpointUpdate?.()
           }

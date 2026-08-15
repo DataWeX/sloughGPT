@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useEffect } from 'react'
 import { trainingJobsController, type TrainingJob } from '@/lib/controllers'
-import { readTraining, writeTraining, type TrainingShellState, type TrainingToastFn } from '@/lib/app-shell'
+import { readTraining, writeTraining, type TrainingToastFn } from '@/lib/app-shell'
 
 export interface TrainingPolling {
   startStandardPoll: (jobId: string, opts?: { addToast?: TrainingToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string }) => void
@@ -11,12 +11,11 @@ export interface TrainingPolling {
 }
 
 /**
- * Manages training poll intervals. Pure logic — no React state, no reconciliation.
+ * Manages training poll intervals. Reads fresh shell state on every tick
+ * via readTraining() — no stale closures, no React state.
  *
- * - Standard poll: GET /training/jobs/{id} every 3s. Handles running/completed/failed.
- * - Turbo poll: GET /auto-train/status every 3s. Handles running/complete/error.
- *
- * Both read fresh state from appShellStore on each tick (no stale closures).
+ * - Standard poll: GET /training/jobs/{id} every 3s.
+ * - Turbo poll: GET /auto-train/status every 3s.
  */
 export function useTrainingPolling(): TrainingPolling {
   const standardPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -32,13 +31,15 @@ export function useTrainingPolling(): TrainingPolling {
     opts?: { addToast?: TrainingToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string },
   ) => {
     if (standardPollRef.current) { clearInterval(standardPollRef.current); standardPollRef.current = null }
+
     const pollId = setInterval(async () => {
       try {
         const job = await trainingJobsController.get(jobId)
         if (!job) { clearInterval(pollId); standardPollRef.current = null; return }
-        const current = readTraining()
+
         if (job.status === 'running') {
-          const patch: Partial<TrainingShellState> = {
+          const current = readTraining()
+          const patch: Record<string, unknown> = {
             progress: job.progress ?? current.progress,
             loss: job.loss ?? job.train_loss ?? current.loss,
             epoch: job.current_epoch ?? current.epoch,
@@ -58,12 +59,13 @@ export function useTrainingPolling(): TrainingPolling {
           writeTraining(patch)
           return
         }
+
         clearInterval(pollId); standardPollRef.current = null
+
         if (job.status === 'completed') {
           const result = job.result as Record<string, unknown> | undefined
           writeTraining({
-            phase: 'complete',
-            progress: 100,
+            phase: 'complete', progress: 100,
             checkpoint: job.checkpoint ?? null,
             finalLoss: (result?.final_loss as number) ?? job.loss ?? job.train_loss ?? null,
             modelPath: (result?.model_path as string) ?? null,
@@ -71,9 +73,8 @@ export function useTrainingPolling(): TrainingPolling {
           opts?.addToast?.(opts.completeMessage ?? 'Training complete', 'success')
           opts?.onComplete?.(job)
         } else {
-          const errMsg = job.error || 'Training failed'
-          writeTraining({ phase: 'error', error: errMsg })
-          opts?.addToast?.(errMsg, 'error')
+          writeTraining({ phase: 'error', error: job.error || 'Training failed' })
+          opts?.addToast?.(job.error || 'Training failed', 'error')
         }
       } catch {
         clearInterval(pollId); standardPollRef.current = null
@@ -84,10 +85,12 @@ export function useTrainingPolling(): TrainingPolling {
 
   const startTurboPoll = useCallback((addToast?: TrainingToastFn) => {
     if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
+
     const pollId = setInterval(async () => {
       try {
         const s = await trainingJobsController.getTurboStatus()
         const current = readTraining()
+
         if (s.status === 'running' || s.status === 'idle') {
           writeTraining({
             progress: s.progress ?? current.progress,
@@ -100,19 +103,19 @@ export function useTrainingPolling(): TrainingPolling {
           })
           return
         }
+
         clearInterval(pollId); turboPollRef.current = null
+
         if (s.status === 'complete') {
           writeTraining({
-            phase: 'complete',
-            progress: 100,
+            phase: 'complete', progress: 100,
             checkpoint: (s.result?.checkpoint as string) ?? null,
             finalLoss: (s.result?.final_loss as number) ?? null,
           })
           addToast?.('Turbo training complete!', 'success')
         } else {
-          const errMsg = s.error || 'Training failed'
-          writeTraining({ phase: 'error', error: errMsg })
-          addToast?.(errMsg, 'error')
+          writeTraining({ phase: 'error', error: s.error || 'Training failed' })
+          addToast?.(s.error || 'Training failed', 'error')
         }
       } catch {
         clearInterval(pollId); turboPollRef.current = null
