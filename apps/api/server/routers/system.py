@@ -8,7 +8,7 @@ import psutil
 import platform
 import time
 
-from schemas.common import success_response
+from schemas.common import success_response, error_response
 from infrastructure.auth import require_auth_if_enabled
 
 
@@ -164,10 +164,10 @@ class SystemRouter:
         """Get metadata for a single training job by ID."""
         from domains.training.executor import _instance
         if _instance is None:
-            return success_response(data={"error": "executor not initialized"})
+            return error_response("executor not initialized", "E_INFRA_STARTUP")
         status = _instance.status(job_id)
         if status is None:
-            return success_response(data={"error": f"job {job_id} not found"})
+            return error_response(f"job {job_id} not found", "E_NOT_FOUND")
         return success_response(data=status)
 
     async def get_executor_job_result(self, job_id: str):
@@ -178,13 +178,13 @@ class SystemRouter:
         """
         from domains.training.executor import _instance
         if _instance is None:
-            return success_response(data={"error": "executor not initialized"})
+            return error_response("executor not initialized", "E_INFRA_STARTUP")
         summary = _instance.result_summary(job_id)
         if summary is None:
             info = _instance.status(job_id)
             if info is None:
-                return success_response(data={"error": f"job {job_id} not found"})
-            return success_response(data={"error": "job not completed or has no weight result"})
+                return error_response(f"job {job_id} not found", "E_NOT_FOUND")
+            return error_response("job not completed or has no weight result", "E_DOMAIN")
         return success_response(data=summary)
 
     async def purge_executor_jobs(

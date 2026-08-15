@@ -438,7 +438,7 @@ Be yourself — let your personality shape how you respond."""
                 for s in souls
             ], meta={"current_soul": current.name if current else None})
         except Exception as e:
-            return success_response(data=[], meta={"current_soul": None, "error": str(e)})
+            return error_response(str(e), "E_DOMAIN")
 
     async def get_soul(self, soul_name: str):
         """Get details for a specific soul by name."""
@@ -607,7 +607,7 @@ Be yourself — let your personality shape how you respond."""
             config = get_trait_config()
             return success_response(data=config.list_snapshots())
         except Exception as e:
-            return success_response(data=[], meta={"error": str(e)})
+            return error_response(str(e), "E_DOMAIN")
 
     async def save_weight_snapshot(self, name: str):
         """

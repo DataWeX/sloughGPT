@@ -105,7 +105,7 @@ class SelfTrainRouter:
                 get_audit_logger().log("self_train.stop", resource=str(proc.pid), detail="killed")
             except Exception:
                 pass
-            return success_response(data={"status": "killed", "error": str(e)})
+            return error_response(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
 
     async def get_self_train_status(self):
         """Get self-training status."""
