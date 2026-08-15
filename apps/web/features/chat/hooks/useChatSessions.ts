@@ -76,6 +76,13 @@ export function useChatSessions(opts: {
    *  skeleton mounted: some later load may never come to clear it. */
   const inFlightLoadsRef = useRef(0)
 
+  /** Session ids deleted while a loadSession for them may still be in flight.
+   *  A delete does not change sessionIdRef, so the existing stale guards would
+   *  otherwise let the load resurrect a deleted session (apply its messages and
+   *  restore CURRENT_SESSION_KEY). Sending a new message re-creates the session
+   *  via saveSessionToStorage, which unmarks the id again. */
+  const deletedSessionsRef = useRef<Set<string>>(new Set())
+
   const saveSessionToStorage = useCallback(async (msgs: ChatMessage[], sessionId: string) => {
     const sessionName = (() => {
       const first = msgs.find(m => m.role === 'user')?.content || ''
@@ -94,6 +101,7 @@ export function useChatSessions(opts: {
       synced: false, starred: false, pinned: false,
     }
     await chatDB.saveSession(session)
+    deletedSessionsRef.current.delete(sessionId)
     if (!_createdSessions.has(sessionId)) {
       _createdSessions.add(sessionId)
       sessionController.create(sessionName, sessionId).catch(err => {
@@ -111,6 +119,8 @@ export function useChatSessions(opts: {
     sessionIdRef.current = sessionId
     setSessionLoading(true)
     inFlightLoadsRef.current++
+    const superseded = () =>
+      sessionIdRef.current !== sessionId || deletedSessionsRef.current.has(sessionId)
     try {
       const session = await chatDB.loadSession(sessionId)
       if (session) {
@@ -123,7 +133,7 @@ export function useChatSessions(opts: {
             (signal) => sessionController.fetchMessages(sessionId, { signal, silent: true }),
             REMOTE_MERGE_TIMEOUT_MS,
           )
-          if (sessionIdRef.current !== sessionId) return
+          if (superseded()) return
           const remoteChatMsgs = remoteMsgs.map(m => ({
             id: `remote_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             role: m.role as 'user' | 'assistant',
@@ -134,10 +144,10 @@ export function useChatSessions(opts: {
           const uniqueLocal = filteredMessages.filter(m => !seen.has(`${m.role}:${m.content}`))
           setMessages([...remoteChatMsgs, ...uniqueLocal])
         } catch {
-          if (sessionIdRef.current !== sessionId) return
+          if (superseded()) return
           setMessages(filteredMessages)
         }
-        if (sessionIdRef.current !== sessionId) return
+        if (superseded()) return
         await chatDB.setKV(CURRENT_SESSION_KEY, sessionId)
         const isComplete = filteredMessages.length > 0 &&
           filteredMessages[filteredMessages.length - 1].role === 'assistant'
@@ -154,6 +164,7 @@ export function useChatSessions(opts: {
   }, [showToast, setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef])
 
   const deleteSession = useCallback(async (sessionId: string) => {
+    deletedSessionsRef.current.add(sessionId)
     await chatDB.deleteSession(sessionId)
     sessionController.delete(sessionId).catch((e) => addGlobalError({ message: 'Session delete sync failed', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     const newSessions = await chatDB.loadSessions()

@@ -307,4 +307,53 @@ describe('useChatSessions.loadSession', () => {
     expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
     expect(opts.setMessages).toHaveBeenCalledWith(localSession.messages)
   })
+
+  it('does not resurrect a session deleted while its load is in flight', async () => {
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    let resolveRemote: (v: Array<{ role: string; content: string }>) => void = () => {}
+    mockFetchMessages.mockImplementation(
+      () => new Promise<Array<{ role: string; content: string }>>(res => { resolveRemote = res }),
+    )
+    const load = result.current.loadSession('s1')
+    await vi.waitFor(() => expect(mockFetchMessages).toHaveBeenCalled())
+
+    mockGetKV.mockResolvedValueOnce('s1')
+    await act(async () => { await result.current.deleteSession('s1') })
+
+    await act(async () => {
+      resolveRemote([{ role: 'assistant', content: 'stale reply for deleted session' }])
+      await load
+    })
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1)
+    expect(opts.setMessages).toHaveBeenCalledWith([])
+    expect(mockSetKV).not.toHaveBeenCalledWith('man_current_conversation', 's1')
+    expect(opts.showToast).not.toHaveBeenCalledWith('Loaded: Test chat')
+    expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
+  })
+
+  it('allows loading a session again after saveSessionToStorage re-creates it', async () => {
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+
+    mockGetKV.mockResolvedValueOnce('s1')
+    await act(async () => { await result.current.deleteSession('s1') })
+
+    await act(async () => {
+      await result.current.saveSessionToStorage(
+        [{ id: '1', role: 'user' as const, content: 'recreated', timestamp: new Date() }],
+        's1',
+      )
+    })
+
+    mockFetchMessages.mockResolvedValue([{ role: 'assistant', content: 'remote reply' }])
+    await act(async () => { await result.current.loadSession('s1') })
+
+    expect(opts.setMessages).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ content: 'remote reply' }),
+    ]))
+    expect(mockSetKV).toHaveBeenCalledWith('man_current_conversation', 's1')
+  })
 })
