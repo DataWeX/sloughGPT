@@ -286,7 +286,11 @@ export default function SoulsPage() {
                         </div>
                       </div>
                       <Button size="sm" variant="ghost" onClick={() => handleLoadCheckpoint(cp.name)} disabled={loadingCheckpoint === cp.name}>
-                        {loadingCheckpoint === cp.name ? 'Loading...' : 'Load'}
+                        {loadingCheckpoint === cp.name ? (
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        ) : (
+                          'Load'
+                        )}
                       </Button>
                     </div>
                   ))}

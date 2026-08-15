@@ -144,7 +144,11 @@ export default function SecurityPage() {
               onClick={loadOlder}
               disabled={loadingMore || !historyMode}
             >
-              {loadingMore ? 'Loading...' : 'Load older'}
+              {loadingMore ? (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                'Load older'
+              )}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => fetchData(historyMode)} aria-label="Refresh audit logs">
               <IconRefresh className="h-4 w-4" />

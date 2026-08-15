@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
   IconRefresh,
+  Skeleton,
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
@@ -660,7 +661,11 @@ export default function SettingsPage() {
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Loading...</p>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-64" />
+                <Skeleton className="h-3 w-full" />
+              </div>
             )}
           </CardContent>
         </Card>
