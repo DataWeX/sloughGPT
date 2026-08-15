@@ -37,29 +37,33 @@ export function ProcessCard({ detailed }: ProcessCardProps) {
         <KpiGrid columns={2}>
           <StatCard
             label="CPU"
-            value={sys.cpu_percent != null ? <span className="font-mono">{sys.cpu_percent}%</span> : '...'}
+            value={sys.cpu_percent != null ? sys.cpu_percent + '%' : '...'}
+            numeric
           />
           <StatCard
             label="Memory"
-            value={sys.memory_percent != null ? <span className="font-mono">{sys.memory_percent}%</span> : '...'}
+            value={sys.memory_percent != null ? sys.memory_percent + '%' : '...'}
+            numeric
           />
           {hasProcessData && (
             <>
               <StatCard
                 label="Open files"
-                value={sys.open_files != null ? <span className="font-mono">{sys.open_files}</span> : '...'}
+                value={sys.open_files != null ? sys.open_files : '...'}
+                numeric
               />
               <StatCard
                 label="Threads"
-                value={sys.threads != null ? <span className="font-mono">{sys.threads}</span> : '...'}
+                value={sys.threads != null ? sys.threads : '...'}
+                numeric
               />
             </>
           )}
           {sys.gc_gen0 != null && (
             <>
-              <StatCard label="GC Gen 0" value={<span className="font-mono">{sys.gc_gen0}</span>} />
-              <StatCard label="GC Gen 1" value={<span className="font-mono">{sys.gc_gen1 ?? 0}</span>} />
-              <StatCard label="GC Gen 2" value={<span className="font-mono">{sys.gc_gen2 ?? 0}</span>} />
+              <StatCard label="GC Gen 0" value={sys.gc_gen0} numeric />
+              <StatCard label="GC Gen 1" value={sys.gc_gen1 ?? 0} numeric />
+              <StatCard label="GC Gen 2" value={sys.gc_gen2 ?? 0} numeric />
             </>
           )}
           {detailed.gpu && (
@@ -71,7 +75,8 @@ export function ProcessCard({ detailed }: ProcessCardProps) {
               />
               <StatCard
                 label="VRAM"
-                value={detailed.gpu.vram_gb ? <span className="font-mono">{detailed.gpu.vram_gb} GB</span> : '...'}
+                value={detailed.gpu.vram_gb ? detailed.gpu.vram_gb + ' GB' : '...'}
+                numeric
               />
             </>
           )}

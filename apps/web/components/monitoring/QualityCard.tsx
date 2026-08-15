@@ -40,12 +40,12 @@ export function QualityCard({ quality, stats }: QualityCardProps) {
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Quality</span>
       <CardContent className="p-0">
         <KpiGrid columns={2}>
-          <StatCard label="Coherence" value={<span className="font-mono">{quality.coherence_score.toFixed(2)}</span>} icon={<QualityDot score={quality.coherence_score} />} />
-          <StatCard label="Score" value={<span className="font-mono">{quality.quality_score.toFixed(2)}</span>} icon={<QualityDot score={quality.quality_score} />} />
-          <StatCard label="Responses" value={<span className="font-mono">{quality.total_responses.toString()}</span>} />
-          <StatCard label="Repetition" value={<span className="font-mono">{(quality.repetition_rate * 100).toFixed(1)}%</span>} />
+          <StatCard label="Coherence" value={quality.coherence_score.toFixed(2)} numeric icon={<QualityDot score={quality.coherence_score} />} />
+          <StatCard label="Score" value={quality.quality_score.toFixed(2)} numeric icon={<QualityDot score={quality.quality_score} />} />
+          <StatCard label="Responses" value={quality.total_responses.toString()} numeric />
+          <StatCard label="Repetition" value={(quality.repetition_rate * 100).toFixed(1) + "%"} numeric />
         </KpiGrid>
-        <div className="flex gap-3 mt-1.5 text-[11px] text-muted-foreground font-mono">
+        <div className="flex gap-3 mt-1.5 text-[11px] text-muted-foreground font-numeric">
           <span>Avg: {quality.avg_length.toFixed(1)}w</span>
           <span>Empty: {(quality.empty_rate * 100).toFixed(1)}%</span>
           {stats && <span>Tokens: {stats.avg_tokens.toFixed(0)}</span>}

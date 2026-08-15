@@ -15,9 +15,9 @@ export function KnowledgeCard({ knowledgeStats, adapterStatus, loaded }: Knowled
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Knowledge</span>
       <CardContent className="p-0">
         <KpiGrid columns={2}>
-          <StatCard label="Items" value={knowledgeStats ? <span className="font-mono">{knowledgeStats.total_items.toString()}</span> : (loaded ? '0' : '...')} />
-          <StatCard label="Topics" value={knowledgeStats ? <span className="font-mono">{knowledgeStats.topic_count.toString()}</span> : (loaded ? '0' : '...')} />
-          <StatCard label="Importance" value={knowledgeStats ? <span className="font-mono">{knowledgeStats.avg_importance.toFixed(2)}</span> : '...'} />
+          <StatCard label="Items" value={knowledgeStats ? knowledgeStats.total_items.toString() : (loaded ? '0' : '...')} numeric />
+          <StatCard label="Topics" value={knowledgeStats ? knowledgeStats.topic_count.toString() : (loaded ? '0' : '...')} numeric />
+          <StatCard label="Importance" value={knowledgeStats ? knowledgeStats.avg_importance.toFixed(2) : '...'} numeric />
           <StatCard
             label="AI training"
             value={!adapterStatus ? '...' : <span className="font-mono">{adapterStatus.adapter_exists ? 'Trained' : 'Not'}</span>}

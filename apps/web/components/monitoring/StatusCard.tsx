@@ -80,20 +80,24 @@ export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRa
           />
           <StatCard
             label="Responses"
-            value={!loaded ? '...' : <span className="font-mono">{String(liveHealth?.inference_count ?? detailed?.inference?.inference_count ?? 0)}</span>}
+            value={!loaded ? '...' : String(liveHealth?.inference_count ?? detailed?.inference?.inference_count ?? 0)}
+            numeric
           />
           <StatCard
             label="Rate"
-            value={!loaded ? '...' : <span className="font-mono">{inferenceRate.toFixed(1)}/min</span>}
+            value={!loaded ? '...' : `${inferenceRate.toFixed(1)}/min`}
+            numeric
           />
           <StatCard
             label="Tokens/s"
-            value={!loaded ? '...' : <span className="font-mono">{liveHealth?.tokens_per_sec != null ? liveHealth.tokens_per_sec.toFixed(1) : '...'}</span>}
+            value={!loaded ? '...' : liveHealth?.tokens_per_sec != null ? liveHealth.tokens_per_sec.toFixed(1) : '...'}
+            numeric
             icon={<span className={`inline-block w-2 h-2 rounded-full ${liveHealth && (liveHealth.tokens_per_sec ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
           />
           <StatCard
             label="Errors"
-            value={!loaded ? '...' : <span className="font-mono">{String(liveHealth?.error_count ?? 0)}</span>}
+            value={!loaded ? '...' : String(liveHealth?.error_count ?? 0)}
+            numeric
             icon={<span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.error_count ?? 0) > 0 ? 'bg-destructive' : 'bg-success'}`} />}
           />
           <StatCard

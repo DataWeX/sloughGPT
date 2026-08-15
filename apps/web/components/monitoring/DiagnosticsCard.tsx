@@ -41,7 +41,7 @@ export function DiagnosticsCard({ liveHealth }: DiagnosticsCardProps) {
               <span className={`mt-1 inline-block w-2 h-2 rounded-full shrink-0 ${severityClass(d.severity)}`} />
               <span className="capitalize font-medium w-20 shrink-0">{d.check}</span>
               <span className="text-muted-foreground flex-1">{d.message}</span>
-              <span className="font-mono text-[10px] text-muted-foreground/70">{Math.round(d.score)}</span>
+              <span className="font-numeric text-[10px] text-muted-foreground/70">{Math.round(d.score)}</span>
             </div>
           ))}
         </div>

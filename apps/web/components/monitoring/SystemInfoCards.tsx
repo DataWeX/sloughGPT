@@ -20,7 +20,7 @@ export function GpuCard({ gpu }: { gpu?: GPUInfo }) {
           <span className="text-muted-foreground">Device</span>
           <span className="text-right truncate font-mono">{gpu.device_type}</span>
           <span className="text-muted-foreground">VRAM</span>
-          <span className="text-right font-mono">{gpu.vram_gb} GB</span>
+          <span className="text-right font-numeric">{gpu.vram_gb} GB</span>
           <span className="text-muted-foreground">Tier</span>
           <span className="text-right font-mono">{gpu.tier}</span>
           {hint && Object.entries(hint).filter(([k]) => !['tier'].includes(k)).map(([k, v]) => (
@@ -67,7 +67,7 @@ export function ServerInfoCard({ info }: { info?: SystemInfo }) {
       <CardContent className="p-0 space-y-1.5 text-xs">
         <div className="flex justify-between"><span className="text-muted-foreground">Platform</span><span className="font-mono">{info.platform} {info.platform_release}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Architecture</span><span className="font-mono">{info.architecture}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">CPU cores</span><span className="font-mono">{info.cpu_count}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">CPU cores</span><span className="font-numeric">{info.cpu_count}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Processor</span><span className="text-xs max-w-[200px] text-right truncate font-mono" title={info.processor}>{info.processor || '—'}</span></div>
       </CardContent>
     </Card>

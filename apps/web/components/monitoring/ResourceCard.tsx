@@ -34,21 +34,25 @@ export const ResourceCard = memo(function ResourceCard({ liveHealth, metrics, de
         <KpiGrid columns={2}>
           <StatCard
             label="CPU"
-            value={cpu != null ? <span className="font-mono">{cpu}%</span> : '...'}
+            value={cpu != null ? cpu + '%' : '...'}
+            numeric
             icon={<StatusDot value={cpu ?? -1} threshold={cpuThreshold} />}
           />
           <StatCard
             label="Memory"
-            value={mem != null ? <span className="font-mono">{mem}%</span> : '...'}
+            value={mem != null ? mem + '%' : '...'}
+            numeric
             icon={<StatusDot value={mem ?? -1} threshold={memThreshold} />}
           />
           <StatCard
             label="Used"
-            value={metrics ? <span className="font-mono">{metrics.memory_used_gb.toFixed(1)} GB</span> : '...'}
+            value={metrics ? metrics.memory_used_gb.toFixed(1) + ' GB' : '...'}
+            numeric
           />
           <StatCard
             label="Available"
-            value={detailed?.system?.memory_available_mb ? <span className="font-mono">{(detailed.system.memory_available_mb / 1024).toFixed(1)} GB</span> : '...'}
+            value={detailed?.system?.memory_available_mb ? (detailed.system.memory_available_mb / 1024).toFixed(1) + ' GB' : '...'}
+            numeric
           />
         </KpiGrid>
       </CardContent>

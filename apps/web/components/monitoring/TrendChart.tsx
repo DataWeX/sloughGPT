@@ -56,7 +56,7 @@ function buildPoints(liveHealth: LiveHealthSnapshot | null): TrendPoint[] {
 function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-lg text-xs font-mono">
+    <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-lg text-xs font-numeric">
       <p className="text-muted-foreground mb-1">{label} ago</p>
       {payload.map((entry, i) => (
         <div key={i} className="flex items-center gap-2">

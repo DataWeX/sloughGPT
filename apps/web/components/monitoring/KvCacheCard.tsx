@@ -24,14 +24,14 @@ export function KvCacheCard({ kvSessions }: KvCacheCardProps) {
         <KpiGrid columns={4}>
           <StatCard
             label="Active"
-            value={<span className="font-mono">{kvSessions.active_sessions ?? 0}</span>}
+            value={kvSessions.active_sessions ?? 0} numeric
             icon={<span className={`inline-block w-2 h-2 rounded-full ${(kvSessions.active_sessions ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
           />
-          <StatCard label="Cached tokens" value={<span className="font-mono">{kvSessions.cached_tokens ?? 0}</span>} />
-          <StatCard label="TTL" value={<span className="font-mono">{(kvSessions.ttl_seconds ?? 0) / 60}m</span>} />
+          <StatCard label="Cached tokens" value={kvSessions.cached_tokens ?? 0} numeric />
+          <StatCard label="TTL" value={(kvSessions.ttl_seconds ?? 0) / 60 + "m"} numeric />
           <StatCard
             label="Oldest"
-            value={<span className="font-mono">{kvSessions.oldest_session_age != null ? `${kvSessions.oldest_session_age.toFixed(0)}s` : '...'}</span>}
+            value={kvSessions.oldest_session_age != null ? `${kvSessions.oldest_session_age.toFixed(0)}s` : '...'} numeric
           />
         </KpiGrid>
         {kvSessions.max_sessions != null && (

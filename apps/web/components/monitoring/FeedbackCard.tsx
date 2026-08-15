@@ -52,8 +52,8 @@ export function FeedbackCard({ dpoStatus, visualStatus, dpoRunning, onDpoRunning
               !visualStatus ? 'bg-warning' : visualStatus.visual_loaded ? 'bg-success' : 'bg-muted-foreground/50'
             }`} />}
           />
-          <StatCard label="Accepted" value={dpoStatus ? <span className="font-mono">{dpoStatus.accepted_count.toString()}</span> : '...'} />
-          <StatCard label="Rejected" value={dpoStatus ? <span className="font-mono">{dpoStatus.rejected_count.toString()}</span> : '...'} />
+          <StatCard label="Accepted" value={dpoStatus ? dpoStatus.accepted_count.toString() : '...'} numeric />
+          <StatCard label="Rejected" value={dpoStatus ? dpoStatus.rejected_count.toString() : '...'} numeric />
         </KpiGrid>
         <div className="mt-2">
           <Button

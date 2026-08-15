@@ -20,10 +20,10 @@ export function LatencyCard({ chartHistory }: LatencyCardProps) {
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Latency</span>
       <CardContent className="p-0">
         <KpiGrid columns={2}>
-          <StatCard label="Avg" value={<span className="font-mono">{avg.toFixed(0)}ms</span>} />
-          <StatCard label="P95" value={<span className="font-mono">{p95.toFixed(0)}ms</span>} />
-          <StatCard label="Min" value={<span className="font-mono">{sorted[0].toFixed(0)}ms</span>} />
-          <StatCard label="Max" value={<span className="font-mono">{sorted[sorted.length - 1].toFixed(0)}ms</span>} />
+          <StatCard label="Avg" value={avg.toFixed(0) + "ms"} numeric />
+          <StatCard label="P95" value={p95.toFixed(0) + "ms"} numeric />
+          <StatCard label="Min" value={sorted[0].toFixed(0) + "ms"} numeric />
+          <StatCard label="Max" value={sorted[sorted.length - 1].toFixed(0) + "ms"} numeric />
         </KpiGrid>
       </CardContent>
     </Card>

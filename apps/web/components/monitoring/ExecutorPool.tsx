@@ -27,12 +27,12 @@ export function ExecutorPool({ status, onRefresh }: ExecutorPoolProps) {
         <KpiGrid columns={4}>
           <StatCard
             label="Active"
-            value={<span className="font-mono">{status.active_jobs.toString()}</span>}
+            value={status.active_jobs.toString()} numeric
             icon={<span className={`inline-block w-2 h-2 rounded-full ${status.active_jobs > 0 ? 'bg-warning' : 'bg-success'}`} />}
           />
-          <StatCard label="Workers" value={<span className="font-mono">{status.max_workers.toString()}</span>} />
-          <StatCard label="Tracked" value={<span className="font-mono">{status.total_tracked.toString()}</span>} />
-          <StatCard label="Queue" value={<span className="font-mono">{status.jobs.filter(j => j.status === 'queued').length.toString()}</span>} />
+          <StatCard label="Workers" value={status.max_workers.toString()} numeric />
+          <StatCard label="Tracked" value={status.total_tracked.toString()} numeric />
+          <StatCard label="Queue" value={status.jobs.filter(j => j.status === 'queued').length.toString()} numeric />
         </KpiGrid>
         {status.jobs.length > 0 && (
           <div className="mt-2 text-[11px] text-muted-foreground space-y-0.5 font-mono">

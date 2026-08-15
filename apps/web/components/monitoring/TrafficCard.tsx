@@ -29,17 +29,17 @@ export function TrafficCard({ liveHealth }: TrafficCardProps) {
         <KpiGrid columns={3}>
           <StatCard
             label="Requests/min"
-            value={<span className="font-mono">{rpm > 0 ? rpm.toFixed(1) : '0'}</span>}
+            value={rpm > 0 ? rpm.toFixed(1) : '0'} numeric
             icon={<span className={`inline-block w-2 h-2 rounded-full ${rpm > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
           />
           <StatCard
             label="Total tokens"
-            value={<span className="font-mono">{formatTokens(totalTokens)}</span>}
+            value={formatTokens(totalTokens)} numeric
             icon={<span className={`inline-block w-2 h-2 rounded-full ${totalTokens > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
           />
           <StatCard
             label="Avg tokens/req"
-            value={<span className="font-mono">{avgPerReq > 0 ? avgPerReq.toFixed(0) : '0'}</span>}
+            value={avgPerReq > 0 ? avgPerReq.toFixed(0) : '0'} numeric
           />
         </KpiGrid>
       </CardContent>
