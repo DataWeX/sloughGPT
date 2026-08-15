@@ -126,3 +126,119 @@ class TestExportErrors:
         assert resp.status_code == 200
         assert "errors" in resp.json()
         assert resp.json()["total"] == 0
+
+
+class TestFingerprint:
+    def test_same_message_same_fingerprint(self):
+        er = ErrorsRouter()
+        assert er._fingerprint("error occurred") == er._fingerprint("error occurred")
+
+    def test_numbers_normalized(self):
+        er = ErrorsRouter()
+        assert er._fingerprint("error 123 happened") == er._fingerprint("error 456 happened")
+
+    def test_hex_ids_normalized(self):
+        er = ErrorsRouter()
+        assert er._fingerprint("id abcdef12 failed") == er._fingerprint("id 09876543 failed")
+
+    def test_different_messages_different_fingerprints(self):
+        er = ErrorsRouter()
+        assert er._fingerprint("error A") != er._fingerprint("error B")
+
+
+class TestDedup:
+    def test_same_message_within_window_bumps_count(self):
+        er = ErrorsRouter()
+        er._error_buffer.clear()
+        er._dedup_map.clear()
+        client = TestClient(_app(er))
+
+        client.post("/errors/log", json={"errors": [_make_error("dup")]})
+        client.post("/errors/log", json={"errors": [_make_error("dup")]})
+
+        resp = client.get("/errors/recent")
+        errors = resp.json()["data"]["errors"]
+        assert len(errors) == 1
+        assert errors[0]["count"] == 2
+
+    def test_same_message_after_window_creates_new_record(self):
+        er = ErrorsRouter()
+        er._error_buffer.clear()
+        er._dedup_map.clear()
+        client = TestClient(_app(er))
+
+        client.post("/errors/log", json={"errors": [_make_error("dup")]})
+        er._dedup_map["dup"] = er._dedup_map.get("dup", 0) - 20
+        client.post("/errors/log", json={"errors": [_make_error("dup")]})
+
+        resp = client.get("/errors/recent")
+        errors = resp.json()["data"]["errors"]
+        assert len(errors) == 2
+
+    def test_different_messages_never_deduped(self):
+        er = ErrorsRouter()
+        er._error_buffer.clear()
+        er._dedup_map.clear()
+        client = TestClient(_app(er))
+
+        client.post("/errors/log", json={"errors": [_make_error("msg-a"), _make_error("msg-b")]})
+
+        resp = client.get("/errors/recent")
+        assert resp.json()["data"]["total"] == 2
+
+    def test_same_message_in_same_batch_not_deduped(self):
+        er = ErrorsRouter()
+        er._error_buffer.clear()
+        er._dedup_map.clear()
+        client = TestClient(_app(er))
+
+        resp = client.post("/errors/log", json={
+            "errors": [_make_error("dup"), _make_error("dup"), _make_error("dup")]
+        })
+        assert resp.json()["data"]["logged"] == 3
+
+    def test_clear_resets_dedup_map(self):
+        er = ErrorsRouter()
+        er._error_buffer.clear()
+        er._dedup_map.clear()
+        client = TestClient(_app(er))
+
+        client.post("/errors/log", json={"errors": [_make_error("dup")]})
+        client.delete("/errors/clear")
+        client.post("/errors/log", json={"errors": [_make_error("dup")]})
+
+        resp = client.get("/errors/recent")
+        assert resp.json()["data"]["total"] == 1
+
+
+class TestDedupPruning:
+    def test_prunes_old_entries_when_map_exceeds_500(self):
+        er = ErrorsRouter()
+        er._dedup_map.clear()
+
+        for i in range(501):
+            er._dedup_map[f"old-{i}"] = 0.0
+
+        er._dedup_map["fresh"] = 9999999999.0
+        er._fingerprint("fresh")
+
+        for i in range(501):
+            msg = f"trigger-{i}"
+            er._dedup_map[msg] = 0.0
+
+        client = TestClient(_app(er))
+        er._error_buffer.clear()
+        client.post("/errors/log", json={"errors": [_make_error("fresh")]})
+        resp = client.get("/errors/recent")
+        assert resp.json()["data"]["total"] >= 1
+
+
+class TestIngestLogs:
+    def test_ingest(self):
+        er = ErrorsRouter()
+        client = TestClient(_app(er))
+        resp = client.post("/errors/logs/ingest", json={
+            "logs": [{"level": "info", "logger": "test", "message": "hello"}]
+        })
+        assert resp.status_code == 200
+        assert resp.json()["data"]["ingested"] == 1
