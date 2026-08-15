@@ -664,26 +664,20 @@ def _matmul(a, b):
         if isinstance(a, Tensor) and a.requires_grad: a._consumers.append(out)
         if isinstance(b, Tensor) and b.requires_grad: b._consumers.append(out)
     _a_shape = a_data.shape; _b_shape = b_data.shape; _out_shape = out.data.shape
-    _needs_gout_reshape = (result.shape != _out_shape)
     _b_T = np.swapaxes(b_data, -2, -1) if b_data.ndim >= 2 else None
     _a_T = np.swapaxes(a_data, -2, -1) if a_data.ndim >= 2 else None
     _a_has_bk = isinstance(a, Tensor) and a._backward_fn is not None
     _b_has_bk = isinstance(b, Tensor) and b._backward_fn is not None
     def bk(g):
-        _g = g
-        if _needs_gout_reshape and g.shape != _out_shape:
-            _g = g.reshape(_out_shape)
         if a_req or _a_has_bk:
             if _b_T is None:
-                # b is 1D (K,): C[..., m] = sum_k a[..., m, k] * b[k]
-                #   ga[..., m, k] = g[..., m] * b[k]
-                ga = _g[..., np.newaxis] * b_data
+                ga = g[..., np.newaxis] * b_data
             elif a_data.ndim == 1 and b_data.ndim >= 3:
-                ga = (_g[:, np.newaxis, :] * b_data).sum(axis=(0, 2))
+                ga = (g[:, np.newaxis, :] * b_data).sum(axis=(0, 2))
             elif a_data.ndim >= 2 and b_data.ndim > a_data.ndim:
-                ga = np.matmul(_g, _b_T).sum(axis=tuple(range(b_data.ndim - a_data.ndim)))
+                ga = np.matmul(g, _b_T).sum(axis=tuple(range(b_data.ndim - a_data.ndim)))
             else:
-                ga = np.matmul(_g, _b_T)
+                ga = np.matmul(g, _b_T)
             if ga.shape != _a_shape:
                 ga = ga.reshape(_a_shape)
             if a_req:
@@ -692,18 +686,18 @@ def _matmul(a, b):
         if b_req or _b_has_bk:
             if a_data.ndim == 1:
                 if b_data.ndim == 1:
-                    gb = a_data * _g
+                    gb = a_data * g
                 elif b_data.ndim == 2:
-                    gb = a_data[:, np.newaxis] * _g[np.newaxis, :]
+                    gb = a_data[:, np.newaxis] * g[np.newaxis, :]
                 else:
-                    gb = a_data[np.newaxis, :, np.newaxis] * _g[:, np.newaxis, :]
+                    gb = a_data[np.newaxis, :, np.newaxis] * g[:, np.newaxis, :]
             elif b_data.ndim == 1:
-                gb = np.matmul(a_data.reshape(-1, _a_shape[-1]).T, _g.ravel())
+                gb = np.matmul(a_data.reshape(-1, _a_shape[-1]).T, g.ravel())
             elif a_data.ndim >= 2 and b_data.ndim >= 3:
-                gb = np.matmul(_a_T, _g)
+                gb = np.matmul(_a_T, g)
             else:
                 a_flat = a_data.reshape(-1, _a_shape[-1])
-                g_flat = _g.reshape(-1, _out_shape[-1])
+                g_flat = g.reshape(-1, _out_shape[-1])
                 gb = np.matmul(a_flat.T, g_flat)
             if gb.shape != _b_shape:
                 gb = gb.reshape(_b_shape)
@@ -2415,8 +2409,7 @@ def _fused_qkv_matmul(x: Tensor, W_q: Tensor, W_k: Tensor, W_v: Tensor,
             else:
                 _b_v_ref.grad.data += gb_v
 
-        if orig_bk is not None:
-            orig_bk(g)
+        orig_bk(g)
 
     out._backward_fn = bk_fused
     return out
