@@ -7,11 +7,15 @@ import { MessageActions } from './MessageActions'
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  delete (navigator as any).clipboard
 })
 
 beforeEach(() => {
-  Object.assign(navigator, {
-    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+  // navigator.clipboard is a read-only getter in jsdom — define an own
+  // configurable property so tests can stub writeText.
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
   })
   // stub speechSynthesis + SpeechSynthesisUtterance for jsdom
   if (!('speechSynthesis' in window)) {
