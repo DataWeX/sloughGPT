@@ -19,6 +19,11 @@ export const PALETTE_LABELS: Record<StoredPaletteId, string> = {
   'neural-precision': 'Neural Precision',
 }
 
+export const PALETTE_COLORS: Record<StoredPaletteId, string> = {
+  'noir-violet': '#6339aa',
+  'neural-precision': '#38bdf8',
+}
+
 export function isStoredThemeId(value: string | null): value is StoredThemeId {
   return value != null && (THEME_IDS as readonly string[]).includes(value)
 }

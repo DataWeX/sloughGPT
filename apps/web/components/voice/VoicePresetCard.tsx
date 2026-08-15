@@ -138,7 +138,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                         onChange={e => setEditRate(parseFloat(e.target.value))}
                         className="w-20"
                       />
-                      <span className="font-mono w-7 text-right">{editRate.toFixed(1)}</span>
+                      <span className="font-numeric w-7 text-right">{editRate.toFixed(1)}</span>
                     </label>
                     <label className="flex items-center gap-1.5">
                       <span className="text-muted-foreground">Pitch</span>
@@ -151,7 +151,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                         onChange={e => setEditPitch(parseFloat(e.target.value))}
                         className="w-20"
                       />
-                      <span className="font-mono w-7 text-right">{editPitch.toFixed(1)}</span>
+                      <span className="font-numeric w-7 text-right">{editPitch.toFixed(1)}</span>
                     </label>
                   </div>
                   {voices.length > 0 && (
@@ -186,7 +186,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                     >
                       {p.name}
                     </button>
-                    <span className="text-[10px] text-muted-foreground font-mono">
+                    <span className="text-[10px] text-muted-foreground font-numeric">
                       {p.rate.toFixed(1)}x · {p.pitch.toFixed(1)}p
                     </span>
                     {p.voice && (

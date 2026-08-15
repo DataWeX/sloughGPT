@@ -38,22 +38,22 @@ export function DataStep({ form, datasets, onNext }: StepProps) {
             <div className="grid grid-cols-3 gap-2 mb-2">
               <div>
                 <span className="text-muted-foreground/60">Samples: </span>
-                <span className="font-mono">{(datasets.datasetPreview.total_samples ?? 0).toLocaleString()}</span>
+                <span className="font-numeric">{(datasets.datasetPreview.total_samples ?? 0).toLocaleString()}</span>
               </div>
               <div>
                 <span className="text-muted-foreground/60">Characters: </span>
-                <span className="font-mono">{(datasets.datasetPreview.total_chars ?? 0).toLocaleString()}</span>
+                <span className="font-numeric">{(datasets.datasetPreview.total_chars ?? 0).toLocaleString()}</span>
               </div>
               <div>
                 <span className="text-muted-foreground/60">Avg: </span>
-                <span className="font-mono">
+                <span className="font-numeric">
                   {(datasets.datasetPreview.total_samples ?? 0) > 0
                     ? Math.round((datasets.datasetPreview.total_chars ?? 0) / (datasets.datasetPreview.total_samples ?? 1)).toLocaleString()
                     : 0} chars
                 </span>
               </div>
             </div>
-            <div className="space-y-1 font-mono text-muted-foreground border-t border-border/30 pt-2">
+            <div className="space-y-1 font-numeric text-muted-foreground border-t border-border/30 pt-2">
               {datasets.datasetPreview.samples.slice(0, 3).map((sample, i) => (
                 <div key={i} className="truncate">{sample.content}</div>
               ))}

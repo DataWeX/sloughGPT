@@ -6,6 +6,11 @@ vi.mock('next/font/local', () => ({
   default: () => ({ variable: '--mock-font' }),
 }))
 
+vi.mock('next/font/google', () => ({
+  Rubik: () => ({ variable: '--mock-font' }),
+  Lato: () => ({ variable: '--mock-font' }),
+}))
+
 vi.mock('./Providers', () => ({
   Providers: ({ children }: any) => <div data-testid="providers">{children}</div>,
 }))

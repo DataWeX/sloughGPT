@@ -59,4 +59,18 @@ describe('ThemeSwitcher', () => {
     fireEvent.click(radios[0])
     expect(radios[0]).toHaveAttribute('aria-checked', 'true')
   })
+
+  it('renders palette swatches as radio buttons', () => {
+    renderSwitcher()
+    const groups = screen.getAllByRole('radiogroup', { name: 'Palette' })
+    expect(groups.length).toBeGreaterThanOrEqual(1)
+    expect(groups[0].querySelectorAll('[role="radio"]').length).toBe(2)
+  })
+
+  it('clicking a palette radio selects it', () => {
+    renderSwitcher()
+    const radios = screen.getAllByRole('radio', { name: 'Neural Precision' })
+    fireEvent.click(radios[0])
+    expect(radios[0]).toHaveAttribute('aria-checked', 'true')
+  })
 })

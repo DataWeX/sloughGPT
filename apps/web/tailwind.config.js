@@ -12,7 +12,8 @@ module.exports = {
         smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
       },
       fontFamily: {
-        sans: ['var(--font-outfit)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-rubik)', 'system-ui', 'sans-serif'],
+        numeric: ['var(--font-lato)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
       },
       colors: {

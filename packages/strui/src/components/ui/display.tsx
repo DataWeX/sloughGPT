@@ -13,9 +13,10 @@ interface StatCardProps {
   description?: string
   loading?: boolean
   className?: string
+  numeric?: boolean
 }
 
-export function StatCard({ label, value, icon, trend, description, loading, className }: StatCardProps) {
+export function StatCard({ label, value, icon, trend, description, loading, className, numeric }: StatCardProps) {
   if (loading) {
     return (
       <div className={cn('flex flex-col p-3 rounded-lg border border-border/50 bg-card/50 gap-2', className)}>
@@ -45,7 +46,7 @@ export function StatCard({ label, value, icon, trend, description, loading, clas
           </span>
         )}
       </div>
-      <span className="text-xl font-bold tracking-tight text-foreground">{value}</span>
+      <span className={cn("text-xl font-bold tracking-tight text-foreground", numeric && "font-numeric")}>{value}</span>
       {(description || trend?.label) && (
         <p className="text-[10px] text-muted-foreground leading-relaxed">
           {trend?.label ?? description}

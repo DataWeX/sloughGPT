@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
+import { Rubik, Lato } from 'next/font/google'
 import localFont from 'next/font/local'
 
 import { Providers } from './Providers'
@@ -8,10 +9,17 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import WebVitals from '@/components/WebVitals'
 
-const outfit = localFont({
-  src: '../public/fonts/outfit-latin.woff2',
-  variable: '--font-outfit',
+const rubik = Rubik({
+  variable: '--font-rubik',
   display: 'swap',
+  subsets: ['latin'],
+})
+
+const lato = Lato({
+  weight: ['300', '400', '700', '900'],
+  variable: '--font-lato',
+  display: 'swap',
+  subsets: ['latin'],
 })
 
 const jetbrainsMono = localFont({
@@ -41,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${outfit.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${rubik.variable} ${lato.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
       </head>
       <body className="font-sans antialiased" suppressHydrationWarning>

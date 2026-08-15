@@ -39,29 +39,29 @@ export function FeedbackInsightsCard({ stats }: FeedbackInsightsCardProps) {
         <div className="space-y-1.5 text-[11px]">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Feedback per message</span>
-            <span className="font-mono">{feedbackPerMsg}</span>
+            <span className="font-numeric">{feedbackPerMsg}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Total conversations</span>
-            <span className="font-mono">{conversations}</span>
+            <span className="font-numeric">{conversations}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Total messages</span>
-            <span className="font-mono">{messages}</span>
+            <span className="font-numeric">{messages}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">History entries</span>
-            <span className="font-mono">{stats.history_length}</span>
+            <span className="font-numeric">{stats.history_length}</span>
           </div>
           {stats.current_weights && (
             <>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Temperature</span>
-                <span className="font-mono">{stats.current_weights.temperature}</span>
+                <span className="font-numeric">{stats.current_weights.temperature}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Repetition penalty</span>
-                <span className="font-mono">{stats.current_weights.repetition_penalty}</span>
+                <span className="font-numeric">{stats.current_weights.repetition_penalty}</span>
               </div>
             </>
           )}
