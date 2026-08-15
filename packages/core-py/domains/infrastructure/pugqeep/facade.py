@@ -88,6 +88,9 @@ class PGQ:
         # Task queue
         self._task_queue = TaskQueue(name=name, storage_dir=storage_dir)
 
+        # Core infra engine
+        self._engine = Engine(name=name)
+
         # Metadata
         self._shapes: Dict[str, Tuple[int, ...]] = {}
         self._dtypes: Dict[str, np.dtype] = {}
