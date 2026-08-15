@@ -83,7 +83,7 @@ class StartupProfileSelector:
 
 
 def _preload_model_imports() -> None:
-    """Import the background model-load dependency graph in the main thread.
+    """Import the background model-load + router-registration graphs on the main thread.
 
     Called once at the start of ``_phase2_model_load``, before the background
     task is created. Without this, the model-load thread and the
@@ -93,14 +93,29 @@ def _preload_model_imports() -> None:
     or a partial ``ImportError``). After preloading, every ``from X import Y``
     in the thread hits ``sys.modules`` and performs zero file reads.
 
+    The router-registration graph is warmed here as well. On a cold boot the
+    model-load thread reads the multi-GB ``.slnc`` and the worker subprocess
+    loads weights from disk at the same time the main thread cold-imports the
+    routers; disk I/O contention can stretch the ``routers`` hook (level 2)
+    past the CLI's startup deadline because the hook body is synchronous and
+    ``asyncio.wait_for`` cannot preempt it. Importing both graphs on the main
+    thread first serializes them, so level 2 completes in milliseconds.
+
     Side effects:
-        - Populates ``sys.modules`` with the model-load dependency graph.
+        - Populates ``sys.modules`` with the model-load dependency graph
+          and the router-registration graph (incl. the ``_cached_routers``
+          list in ``routers``).
     """
     for mod in _PREWARM_MODEL_LOAD_IMPORTS:
         try:
             __import__(mod)
         except Exception as e:
             logger.warning("Preload import failed for %s: %s", mod, e, extra={"tag": "START"})
+    try:
+        from routers import get_all_routers
+        get_all_routers()
+    except Exception as e:
+        logger.warning("Preload routers failed: %s", e, extra={"tag": "START"})
 
 
 class StartupOrchestrator:
