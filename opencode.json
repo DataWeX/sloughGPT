@@ -1,5 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": [".opencode/skills"]
+  },
   "command": {
     "fix": {
       "template": "Diagnose and fix the most recent CLI error. Read ~/.opencode-autofix-log.json, identify root cause, and apply the fix.",

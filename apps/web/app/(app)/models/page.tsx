@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useRouter } from 'next/navigation'
 import type { ModelEntry } from '@/lib/types/models'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { Button, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
@@ -167,38 +167,36 @@ export default function ModelsPage() {
     : 'No model loaded'
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        className="items-start"
-        left={<AppRouteHeaderLead title="Models & Personalities" subtitle={subtitle} />}
-        right={
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => router.push('/compare')}>
-              Compare
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => {
-              const data = models.map(m => ({
-                id: m.id,
-                name: m.name,
-                type: m.type,
-                source: m.source,
-                params: m.params,
-                size_mb: m.size_mb,
-                size_gb: m.size_gb,
-                cached: m.cached,
-                loaded: m.loaded,
-              }))
-              downloadJson(data, `models-export-${todayDateString()}.json`)
-              addToast(`Exported ${models.length} models`, 'success')
-            }}>
-              Export
-            </Button>
-            <Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
-          </div>
-        }
-      />
-
-      <div className="space-y-4">
+    <PageContainer
+      title="Models & Personalities"
+      subtitle={subtitle}
+      className="items-start"
+      headerRight={
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => router.push('/compare')}>
+            Compare
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => {
+            const data = models.map(m => ({
+              id: m.id,
+              name: m.name,
+              type: m.type,
+              source: m.source,
+              params: m.params,
+              size_mb: m.size_mb,
+              size_gb: m.size_gb,
+              cached: m.cached,
+              loaded: m.loaded,
+            }))
+            downloadJson(data, `models-export-${todayDateString()}.json`)
+            addToast(`Exported ${models.length} models`, 'success')
+          }}>
+            Export
+          </Button>
+          <Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
+        </div>
+      }
+    >
         {modelsError && models.length === 0 && (
           <Card>
             <CardContent className="py-4 flex items-center justify-between">
@@ -303,9 +301,6 @@ export default function ModelsPage() {
           </div>
         </CardContent>
       </Card>
-      </div>
-
-
-    </div>
+      </PageContainer>
   )
 }

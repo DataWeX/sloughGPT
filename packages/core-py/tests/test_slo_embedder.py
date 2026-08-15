@@ -543,3 +543,45 @@ class TestLSETree:
         tree = _lse_tree(x, axis=1)
         # Should be close to max = -10
         assert tree[0] > -11.0
+
+
+# ---------------------------------------------------------------------------
+# Canonical .soul extension + extension-agnostic sidecars
+# ---------------------------------------------------------------------------
+
+def test_embedder_default_path_uses_soul_extension():
+    from domains.inference.slo_embedder import _EMBEDDER_PATH
+    assert _EMBEDDER_PATH.name == "text-embedder.soul"
+    assert _EMBEDDER_PATH.suffix == ".soul"
+
+
+def test_train_embedder_soul_path_sidecars():
+    from domains.inference.slo_embedder import train_embedder, SloTextEmbedder
+    texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(20)]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "embedder.soul")
+        result = train_embedder(
+            texts=texts, vocab_size=256, embed_dim=64, max_seq_len=32,
+            n_heads=4, n_layers=2, epochs=2, batch_size=8, save_path=path,
+        )
+        assert os.path.exists(path)
+        assert os.path.exists(os.path.join(tmpdir, "embedder-vocab.json"))
+        assert not os.path.exists(os.path.join(tmpdir, "embedder-vocab.jsonl"))
+        embedder = SloTextEmbedder.load(path)
+        assert embedder is not None
+        assert len(embedder.embed("hello world")) == 64
+        assert result["epochs"] == 2
+
+
+def test_embedder_legacy_sou_path_still_loads():
+    from domains.inference.slo_embedder import train_embedder, SloTextEmbedder
+    texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(20)]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "embedder.sou")
+        train_embedder(
+            texts=texts, vocab_size=256, embed_dim=64, max_seq_len=32,
+            n_heads=4, n_layers=2, epochs=2, batch_size=8, save_path=path,
+        )
+        assert os.path.exists(path)
+        assert os.path.exists(os.path.join(tmpdir, "embedder-vocab.json"))
+        assert SloTextEmbedder.load(path) is not None

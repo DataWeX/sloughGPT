@@ -116,6 +116,14 @@ class TestHumanFormat:
         line = log._format_record(_record(message="colored", tag="MODEL"))
         assert "\033[" in line
 
+    def test_colors_true_emits_ansi_even_when_stderr_not_tty(self, monkeypatch):
+        # Regression: ANSI codes must not be frozen to "" by import-time tty
+        # detection — an explicit colors=True must force colors on any stream.
+        monkeypatch.setattr("sys.stderr", io.StringIO())
+        log = ConsoleLogger("slo.api", colors=True)
+        line = log._format_record(_record(message="colored", tag="MODEL"))
+        assert "\033[" in line
+
     def test_no_colors_no_ansi(self):
         log = ConsoleLogger("slo.api", colors=False)
         line = log._format_record(_record(message="plain", tag="MODEL"))

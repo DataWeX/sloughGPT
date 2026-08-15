@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -43,26 +43,41 @@ export default function RegistryPage() {
 
   if (loading) {
     return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Registry" subtitle="Model registry" />} />
-        <div className="space-y-4">
-          <KpiGrid>
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-          </KpiGrid>
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-          <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
+      <PageContainer
+        title="Registry"
+        subtitle="Model registry"
+        loadingContent={
+          <div className="space-y-4">
+            <KpiGrid>
+              <StatCard label="Loading" value="..." />
+              <StatCard label="Loading" value="..." />
+              <StatCard label="Loading" value="..." />
+              <StatCard label="Loading" value="..." />
+            </KpiGrid>
+            <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+            <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+          </div>
+        }
+      ><></>
+      </PageContainer>
     )
   }
 
+  const toolbar = (
+    <SearchInput
+      value={searchQuery}
+      onChange={setSearchQuery}
+      placeholder="Search models..."
+      className="max-w-sm"
+    />
+  )
+
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Registry" subtitle={`${models.length} models registered`} />} />
-      <div className="space-y-4">
+    <PageContainer
+      title="Registry"
+      subtitle={`${models.length} models registered`}
+      toolbar={toolbar}
+    >
         <KpiGrid>
           <StatCard label="Total Models" value={stats?.total_models ?? 0} />
           <StatCard label="Loaded" value={stats?.loaded_models ?? 0} />
@@ -71,13 +86,6 @@ export default function RegistryPage() {
         </KpiGrid>
 
         <RegistryHealthCard models={models} stats={stats} />
-
-        <SearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search models..."
-          className="max-w-sm"
-        />
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -158,7 +166,6 @@ export default function RegistryPage() {
             </CardContent>
           </Card>
         )}
-      </div>
-    </div>
+    </PageContainer>
   )
 }

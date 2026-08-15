@@ -4,10 +4,7 @@ These scripts are **not** part of the installable `domains` package. Run them fr
 
 | Script | Purpose |
 |--------|---------|
-| `benchmark.py` | Benchmark harness |
-| `convert_to_gguf.py` | Convert checkpoints to GGUF (see also `scripts/export_to_gguf.py`) |
 | `download_model.py` | Download models for local use |
-| `export_for_cloud.py` | Export bundles for cloud deployment |
 | `live_dataset.py` | Live dataset helpers |
 | `lora.py` | LoRA utility / experiments |
 | `model_server.py` | Simple model server |
@@ -19,4 +16,4 @@ Example:
 python3 scripts/tools/performance_test.py --test latency --runs 5 --tokens 20
 ```
 
-Core training flows remain **`./sloughgpt train`** and **`python3 train_sloughgpt.py`** at the repo root.
+Core training flows use **`./sloughgpt train`** at the repo root.

@@ -173,15 +173,15 @@ Cypress.Commands.add('mockVm', (runOverrides: Record<string, unknown> = {}) => {
     statusCode: 200,
     body: {
       programs: [
-        { name: 'hello', description: 'Write "Hello, VM!" to the VGA buffer' },
-        { name: 'train', description: 'Start a training job (requires admin)' },
-        { name: 'train-status', description: 'Poll a training job result (requires admin)' },
+        { name: 'hello', description: 'Write "Hello, VM!" to the VGA buffer', code: 'mov eax, 3\nint 0x80' },
+        { name: 'train', description: 'Start a training job (requires admin)', code: 'mov eax, 28\nint 0x80' },
+        { name: 'train-status', description: 'Poll a training job result (requires admin)', code: 'mov eax, 29\nint 0x80' },
       ],
     },
   }).as('vmBuiltins')
   cy.intercept('GET', `${api}/vm/info`, {
     statusCode: 200,
-    body: { isa: 'x86-32', max_steps: 1000000, default_memory: 1048576, max_memory: 16777216, registers: ['EAX'], features: [] },
+    body: { isa: 'x86-32', max_steps: 1000000, default_memory: 1048576, max_memory: 16777216, registers: { eax: { size_bits: 32, name: 'EAX' } }, features: [] },
   }).as('vmInfo')
   cy.intercept('GET', `${api}/vm/training/jobs/*`, {
     statusCode: 200,

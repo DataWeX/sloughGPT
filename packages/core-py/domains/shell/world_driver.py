@@ -34,6 +34,7 @@ from .evolution import (
     benchmark_specialization,
     benchmark_territoriality,
     benchmark_lifecycle,
+    benchmark_seasons,
 )
 from .simulation import (
     NUM_MATERIALS,
@@ -259,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--grid", type=_parse_grid, default=None,
                         help="world size as W,H,D (default 64,32,64; "
                              "16,8,16 for --social/--culture/--memory"
-                             "/--predation/--territory)")
+                             "/--predation/--territory/--seasons)")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for terrain and spawns")
     parser.add_argument("--world", action="store_true", default=True,
@@ -276,9 +277,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="run an evolution sweep instead of ticks")
     parser.add_argument("--generations", type=int, default=None,
                         help="generations for --evolution/--emergence/--social "
-                             "/--culture/--memory/--predation/--territory "
+                             "/--culture/--memory/--predation/--territory"
+                             "/--seasons "
                              "(default 5, or 12 for --social/--culture"
-                             "/--memory/--predation/--territory)")
+                             "/--memory/--predation/--territory/--seasons)")
     parser.add_argument("--population", type=int, default=8,
                         help="population per generation for --evolution")
     parser.add_argument("--ticks-per-gen", type=int, default=20,
@@ -310,6 +312,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--civilization", action="store_true",
                         help="run the integrated civilization benchmark "
                              "(every opt-in channel on at once, Stage 12)")
+    parser.add_argument("--seasons", action="store_true",
+                        help="run the seasonal year envelope benchmark "
+                             "(diurnal cycle riding a year, Stage 14)")
+    parser.add_argument("--seasonality", type=float, default=1.0,
+                        help="seasonal swing for --seasons "
+                             "(0 = flat diurnal mean, 1 = full swing)")
+    parser.add_argument("--seasons-per-year", type=int, default=4,
+                        help="diurnal cycles per year for --seasons")
+    parser.add_argument("--solar-deposit-rate", type=float, default=0.1,
+                        help="energy per lit surface cell per tick at noon "
+                             "for --seasons")
     parser.add_argument("--social-pools", type=int, default=3,
                         help="organic food pools for --social")
     parser.add_argument("--social-ticks-per-gen", type=int, default=24,
@@ -334,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
             (16, 8, 16) if (args.social or args.culture or args.memory
                             or args.predation or args.territory
                             or args.lifecycle or args.specialize
-                            or args.civilization)
+                            or args.civilization or args.seasons)
             else (64, 32, 64)
         ),
         generate_world=args.world,
@@ -349,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     generations = args.generations if args.generations is not None else (
         12 if (args.social or args.culture or args.memory or args.predation
                or args.territory or args.lifecycle or args.specialize
-               or args.civilization) else 5
+               or args.civilization or args.seasons) else 5
     )
 
     if args.culture:
@@ -573,6 +586,49 @@ def main(argv: list[str] | None = None) -> int:
               f"population={result['population_size']}")
         print(f"civilization_emerged="
               f"{'yes' if result['civilization_emerged'] else 'no'}")
+        return 0
+
+    if args.seasons:
+        result = benchmark_seasons(
+            params,
+            population_size=args.population,
+            generations=generations,
+            ticks_per_generation=args.social_ticks_per_gen,
+            organic_pools=args.social_pools,
+            solar_deposit_rate=args.solar_deposit_rate,
+            seasonality=args.seasonality,
+            seasons_per_year=args.seasons_per_year,
+            hidden_units=args.hidden_units,
+            seed=args.seed,
+        )
+        ctrl = result["control"]
+        seas = result["seasonal"]
+        print("generation control_avg seasonal_avg control_best seasonal_best "
+              "sunshine")
+        for ch, sh in zip(ctrl["history"], seas["history"]):
+            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
+                  f"{sh['avg_fitness']:<12.4f} {ch['best_fitness']:<13.4f} "
+                  f"{sh['best_fitness']:<14.4f} {sh['sunshine']:.4f}")
+        print(f"control_last_avg={result['control_last_avg']:.4f} "
+              f"seasonal_last_avg={result['seasonal_last_avg']:.4f}")
+        print(f"seasonal_conservation_exact="
+              f"{'yes' if result['seasonal_conservation_exact'] else 'no'} "
+              f"violations={len(result['seasonal_violations'])} "
+              f"start={result['seasonal_start_total']:.2f} "
+              f"end={result['seasonal_end_total']:.2f}")
+        print(f"boundary_deposit={result['seasonal_boundary_deposit']:.2f} "
+              f"closed_monotonic="
+              f"{'yes' if result['closed_monotonic'] else 'no'}")
+        print(f"brains_identical="
+              f"{'yes' if result['brains_identical'] else 'no'}")
+        print(f"summer_noon={result['summer_noon']:.4f} "
+              f"winter_noon={result['winter_noon']:.4f}")
+        print(f"deposited={result['deposited']:.2f} "
+              f"sunshine={result['sunshine']:.2f}")
+        print(f"seasonality={result['seasonality']:.2f} "
+              f"seasons_per_year={result['seasons_per_year']}")
+        print(f"seasons_emerged="
+              f"{'yes' if result['seasons_emerged'] else 'no'}")
         return 0
 
     if args.social:

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconDownload } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { ErrorInsightsCard } from '@/components/errors/ErrorInsightsCard'
 import { downloadJson } from '@/lib/download-utils'
 import { errorsController } from '@/lib/errors-controller'
@@ -95,18 +95,19 @@ export default function ErrorsPage() {
 
   if (loading) {
     return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Errors" subtitle="Client-side error monitoring" />} />
-        <div className="space-y-4">
-          <KpiGrid>
-            <StatCard label="Total" value="..." />
-            <StatCard label="Groups" value="..." />
-            <StatCard label="Last Hour" value="..." />
-            <StatCard label="Top Error" value="..." />
-          </KpiGrid>
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
+      <PageContainer
+        title="Errors"
+        subtitle="Client-side error monitoring"
+        loading
+      >
+        <KpiGrid>
+          <StatCard label="Total" value="..." />
+          <StatCard label="Groups" value="..." />
+          <StatCard label="Last Hour" value="..." />
+          <StatCard label="Top Error" value="..." />
+        </KpiGrid>
+        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+      </PageContainer>
     )
   }
 
@@ -117,9 +118,10 @@ export default function ErrorsPage() {
   const topError = grouped.length > 0 ? grouped[0].message.slice(0, 40) : 'None'
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Errors" subtitle={`${total} total errors`} />} />
-      <div className="space-y-4">
+    <PageContainer
+      title="Errors"
+      subtitle={`${total} total errors`}
+    >
         <KpiGrid>
           <StatCard label="Total Errors" value={String(total)} />
           <StatCard label="Error Groups" value={String(grouped.length)} />
@@ -253,7 +255,6 @@ export default function ErrorsPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </div>
+      </PageContainer>
   )
 }

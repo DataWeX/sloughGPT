@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { Skeleton } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -197,38 +197,29 @@ export default function MultimodalPage() {
     } finally { setSynthesizing(false) }
   }
 
-  return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Multimodal" subtitle="Vision, speech, and image generation" />}
-        right={
-          <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading}>
-            <IconRefresh className="h-4 w-4 mr-1" /> Refresh
-          </Button>
-        }
-      />
+  const headerRight = (
+    <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading}>
+      <IconRefresh className="h-4 w-4 mr-1" /> Refresh
+    </Button>
+  )
 
-      <div className="space-y-4">
-        {loading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-24 rounded-lg" />
-            <Skeleton className="h-48 rounded-lg" />
-          </div>
-        ) : (
-          <>
-            <CapabilitiesCard caps={caps} />
-            {report && <TrainingCard report={report} trainStatus={trainStatus} />}
-            <ImageTrainingCard uploading={uploading} onUpload={handleUploadImage} />
-            <BatchTrainingCard batchUploading={batchUploading} trainStatus={trainStatus} onFileUpload={handleBatchUpload} onDirUpload={handleBatchDir} />
-            <VisualDatasetCard creatingDataset={creatingDataset} onCreate={handleCreateVisualDataset} />
-            <DPOCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
-            <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
-            <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
-            <VoiceSection />
-            <ImageSection />
-          </>
-        )}
-      </div>
-    </div>
+  return (
+    <PageContainer
+      title="Multimodal"
+      subtitle="Vision, speech, and image generation"
+      headerRight={headerRight}
+      loading={loading}
+    >
+      <CapabilitiesCard caps={caps} />
+      {report && <TrainingCard report={report} trainStatus={trainStatus} />}
+      <ImageTrainingCard uploading={uploading} onUpload={handleUploadImage} />
+      <BatchTrainingCard batchUploading={batchUploading} trainStatus={trainStatus} onFileUpload={handleBatchUpload} onDirUpload={handleBatchDir} />
+      <VisualDatasetCard creatingDataset={creatingDataset} onCreate={handleCreateVisualDataset} />
+      <DPOCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
+      <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
+      <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
+      <VoiceSection />
+      <ImageSection />
+    </PageContainer>
   )
 }

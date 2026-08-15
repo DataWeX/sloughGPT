@@ -474,7 +474,7 @@ Key state variables: `trainingPhase`, `trainingMethod`, `inputMode`, `trainingLo
 |------|---------|
 | `domains/training/sequence.py` | TrainingSequence enum, TrainingSequenceState, protocols |
 | `domains/training/trainer_protocol.py` | TrainerProtocol (train() → Dict) |
-| `domains/training/status.py` | TrainingStage, CompletionStatus, CheckpointManager |
+| `domains/training/status.py` | TrainingStage, CompletionStatus, TrainingStatusTracker, TrainingCompletionReport |
 | `domains/training/unified_pipeline.py` | UnifiedTrainingPipeline (pretrain → federated → RLHF) |
 | `domains/training/train_pipeline.py` | SloughGPTTrainer, TextDataset, TrainerConfig |
 | `domains/training/distillation.py` | DistillationConfig, DistillationLoss (KL divergence) |
@@ -486,7 +486,7 @@ Key state variables: `trainingPhase`, `trainingMethod`, `inputMode`, `trainingLo
 - **Validation**: Training requires dataset or pasted text; fine-tune requires dataset (not text)
 - **EventSource reconnect**: Auto-reconnect up to 3 times on connection errors before marking as failed
 - **Disabled Metal accelerator during training**: Metal GPU dispatch overhead was 6x slower than CPU numpy for embed_dim≤128. `train_step()`, `train_batch()`, and `contrastive_step()` now disable the accelerator during the forward/backward pass and restore it afterward. Result: embed_dim=64 training drops from 257ms to 92ms per sample (~3x faster).
-- **Torch-free training**: `SloughGPTTrainer` works without PyTorch installed. `_create_optimizer()` uses `SloAdam` instead of `torch.optim.AdamW`; `train_step()` uses `step(params)` and manual grad zeroing; `get_batch()` handles SloNet Tensor float indices. Verified: loss 5.95→4.54 in 100 steps on pure numpy.
+- **Torch-free training**: `SloughGPTTrainer` works without PyTorch installed. `_create_optimizer()` uses `SloAdamW` (decoupled weight decay, the `torch.optim.AdamW` equivalent) instead of `torch.optim.AdamW`; `train_step()` uses `step(params)` and manual grad zeroing; `get_batch()` handles SloNet Tensor float indices. Verified: loss 5.95→4.54 in 100 steps on pure numpy.
 
 ### Native Model Training (SloNet-native)
 
@@ -1315,7 +1315,7 @@ Full token list: see `globals.css` `:root` and `html.dark` sections. Key tokens:
 - Chat `knowledge` field: sent as `injectedKnowledge.map(k => k.content)` — plain strings, not objects
 - Chat `images` field: sent as base64 data URLs; backend uses VisionCNN (own CNN, no downloads) to extract learned feature embeddings; untrained model returns `[vision model untrained — train on images to unlock free description]`; vision model learns freely from user-provided image data
 - TrainingSequence phases: `GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE`
-- SloNet (pure NumPy autograd): `Tensor`, `SloLinear`, `SloEmbedding`, `SloLayerNorm`, `SloLSTM` (forward-only), `SloDropout`, `SloConv2D`, `SloBatchNorm2D`, `SloMaxPool2D`, `flatten`, `SloSGD`, `SloAdam`; `export_to_sou`/`import_from_sou`; `_get_weights_dict()` for checkpoint loading
+- SloNet (pure NumPy autograd): `Tensor`, `SloLinear`, `SloEmbedding`, `SloLayerNorm`, `SloLSTM` (forward-only), `SloDropout`, `SloConv2D`, `SloBatchNorm2D`, `SloMaxPool2D`, `flatten`, `SloSGD`, `SloAdam`, `SloAdamW`; `export_to_sou`/`import_from_sou`; `_get_weights_dict()` for checkpoint loading
 - SoulManager reads `.sou` files; SoulEngine wraps model with soul; both need `set_system_prompt` call on switch
 - `generate()` non-determinism: Metal GPU accelerator (`_MetalBackend`) causes floating-point variance across calls. Fix: `_ACCELERATOR = "none"` during generate() to force CPU numpy. Also seed numpy RNG for extra safety.
 - Training: Metal accelerator disabled during `train_step()`, `train_batch()`, `contrastive_step()` — 3x speedup for embed_dim≤128
@@ -1428,7 +1428,7 @@ import { modelController, trainingController, sessionController } from '@/lib/co
 - `apps/web/app/(app)/chat/page.tsx`: `messagesRef` tracks live streamed content; `storeSessionContext` called after every successful response; `knowledge` sent as plain strings
 - `apps/web/app/(app)/auto-train/page.tsx`: Soul selector; loss curve; eval results; checkpoint catalog; Aggregate Adapters button
 - `apps/web/app/(app)/models/page.tsx`: Model catalog; `ModelIcon` with thumbnail + emoji fallback; soul switcher with checkpoints submenu
-- `packages/core-py/domains/training/slonet.py`: Pure NumPy autograd; Tensor, SloLinear, SloEmbedding, SloLayerNorm, SloLSTM, SloDropout, SloNet, SloSGD, SloAdam; export_to_sou/import_from_sou; `_get_weights_dict()`
+- `packages/core-py/domains/training/slonet.py`: Pure NumPy autograd; Tensor, SloLinear, SloEmbedding, SloLayerNorm, SloLSTM, SloDropout, SloNet, SloSGD, SloAdam, SloAdamW; export_to_sou/import_from_sou; `_get_weights_dict()`
 - `packages/core-py/domains/feedback/per_user_lora.py`: `aggregate_best_adapters(run_eval=True)` auto-evaluates and exports `.sou` via `export_adapter_as_sou`
 - `packages/core-py/domains/feedback/lora_eval.py`: BLEU, perplexity, personality scoring; `export_adapter_as_sou()` method creates `.sou` from `.npz` adapter
 - `packages/core-py/domains/core/soul.py`: `SoulEngine.set_system_prompt()` hot-reloads without model restart

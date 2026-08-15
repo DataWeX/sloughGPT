@@ -7,7 +7,7 @@ Implements proper EWC with:
 - Automatic regularization strength
 - Task importance weighting
 
-Runs entirely on the SloNet autograd stack (pure NumPy). No PyTorch.
+Runs entirely on the SloNet autograd stack (pure NumPy).
 """
 
 from dataclasses import dataclass

@@ -2,9 +2,9 @@
 
 Runnable services and application entrypoints.
 
-- `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`step_*.pt`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
+- `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`.soul`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
 - `web/` — Next.js frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (*UI vs core engine*).
-- `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`cli.py train`** export naming (**`--save-stem`**) and **`cli.py generate`** local `.sou` resolution). `sloughgpt shell` is the interactive TUI (split-pane curses; `sloughgpt tui` is an alias) and the line-mode REPL when run without `--tui`.
+- `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`sloughgpt train`** export naming (**`--save-stem`**) and **`sloughgpt generate`** local `.soul` resolution). `sloughgpt shell` is the interactive TUI (split-pane curses; `sloughgpt tui` is an alias) and the line-mode REPL when run without `--tui`.
 
 ### Quick start (repo root)
 

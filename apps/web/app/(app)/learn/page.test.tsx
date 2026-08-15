@@ -26,6 +26,7 @@ vi.mock('@sloughgpt/strui', () => {
       <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows} />
     ),
     IconRefresh: iconMock('refresh'),
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })
 

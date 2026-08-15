@@ -35,6 +35,14 @@ describe('Sidebar', () => {
     expect(screen.getByText('nav.settings')).toBeDefined()
   })
 
+  it('renders section labels', () => {
+    render(<Sidebar />)
+    expect(screen.getByText('nav.section.core')).toBeDefined()
+    expect(screen.getByText('nav.section.ai')).toBeDefined()
+    expect(screen.getByText('nav.section.system')).toBeDefined()
+    expect(screen.getByText('nav.section.tools')).toBeDefined()
+  })
+
   it('highlights active route', () => {
     render(<Sidebar />)
     const chatLink = screen.getByText('nav.chat').closest('a')
@@ -53,10 +61,11 @@ describe('Sidebar', () => {
     expect(screen.getByText('app.console')).toBeDefined()
   })
 
-  it('hides nav labels when collapsed', () => {
+  it('hides nav labels and section labels when collapsed', () => {
     render(<Sidebar collapsed />)
     expect(screen.queryByText('nav.chat')).toBeNull()
     expect(screen.queryByText('nav.models')).toBeNull()
+    expect(screen.queryByText('nav.section.core')).toBeNull()
   })
 
   it('sets data-collapsed attribute when collapsed', () => {
@@ -68,5 +77,6 @@ describe('Sidebar', () => {
   it('ignores collapsed when variant is drawer', () => {
     render(<Sidebar variant="drawer" collapsed />)
     expect(screen.getByText('nav.chat')).toBeDefined()
+    expect(screen.getByText('nav.section.core')).toBeDefined()
   })
 })

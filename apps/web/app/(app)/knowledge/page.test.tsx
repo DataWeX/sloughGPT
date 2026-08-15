@@ -31,7 +31,7 @@ vi.mock('@/lib/toast-store', () => ({
 }))
 
 vi.mock('@/lib/download-utils', () => ({ downloadJson: vi.fn() }))
-vi.mock('@/lib/format-bytes', () => ({ todayDateString: () => '2026-08-07', MS_PER_SECOND: 1000 }))
+vi.mock('@/lib/format-bytes', () => ({ todayDateString: () => '2026-08-07', MS_PER_SECOND: 1000, formatRelativeTime: (s: number) => `${s}s ago` }))
 vi.mock('@/lib/validation-schemas', () => ({
   knowledgeSchema: {
     shape: {
@@ -62,7 +62,7 @@ vi.mock('@sloughgpt/strui', () => {
     IconBrain: iconMock('brain'),
     IconFilter: iconMock('filter'), IconFolder: iconMock('folder'), IconSettings: iconMock('settings'),
     IconClock: iconMock('clock'), IconDownload: iconMock('download'), IconUpload: iconMock('upload'),
-    IconChevronDown: iconMock('chevron-down'),
+    IconChevronDown: iconMock('chevron-down'), IconEdit: iconMock('edit'),
     FoldSection: ({ heading, children }: any) => <details><summary>{heading}</summary>{children}</details>,
     AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: passthrough, AlertDialogHeader: passthrough, AlertDialogTitle: passthrough,
@@ -81,11 +81,6 @@ vi.mock('@sloughgpt/strui', () => {
     DropdownMenuItem: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
   }
 })
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div>{left}{right}</div>,
-  AppRouteHeaderLead: ({ title }: any) => <h1>{title}</h1>,
-}))
 
 vi.mock('@/components/knowledge/KnowledgeCategoryChart', () => ({
   KnowledgeCategoryChart: ({ topics }: any) => <div data-testid="category-chart" data-count={topics?.length ?? 0} />,

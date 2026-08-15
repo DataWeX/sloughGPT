@@ -14,7 +14,7 @@ Refactor direction: **shrink `apps/api/server/main.py`** by moving more `APIRout
 ## Data and contracts
 
 - **Dataset manifests** — Versioned metadata (`packages/standards/standards/v1/`); resolve to a single training file via `resolve_training_inputs`.
-- **Trainer checkpoints** — Native `step_*.pt` bundles embed char vocabulary for fair `cli.py eval`; deployment exports (GGUF, `.sou`, etc.) are not drop-in for the same eval path without alignment — `docs/policies/CONTRIBUTING.md` (*Checkpoint vocabulary*).
+- **Trainer checkpoints** — Native `.soul` bundles embed char vocabulary for fair `cli.py eval`; deployment exports (GGUF, `.sou`, etc.) are not drop-in for the same eval path without alignment — `docs/policies/CONTRIBUTING.md` (*Checkpoint vocabulary*).
 - **Inference envelope** — `POST /v1/infer` for structured requests, tracing hooks, and future policy/retrieval fields.
 - **Reject ambiguity** — Exactly one of `dataset` | `manifest_uri` | `dataset_ref` for training bodies; validate at the schema layer.
 

@@ -28,6 +28,7 @@ vi.mock('@sloughgpt/strui', () => {
 vi.mock('@/components/icons/NavIcons', () => ({
   IconChat: () => <span data-testid="icon-chat">chat</span>,
   IconModels: () => <span data-testid="icon-models">models</span>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
 }))
 
 vi.mock('next/link', () => ({

@@ -5,7 +5,7 @@ Trains the native SloNet model on knowledge facts (character-level) and
 stores the weight delta as a compact adapter. The adapter is small (MBs)
 and can be re-applied to the base model during inference.
 
-Runtime: pure NumPy / SloNet. No PyTorch, peft, or HuggingFace required.
+Runtime: pure NumPy / SloNet. No external ML framework required.
 """
 
 import json

@@ -1,8 +1,8 @@
 """HuggingFace Local Loader - Download and run models locally.
 
-Torch-free shim: device auto-detection and dtype resolution no longer
-require PyTorch. The underlying ``transformers`` model still needs torch
-at runtime, but this module itself imports neither torch nor slonet_compat.
+Device auto-detection and dtype resolution do not require PyTorch.
+The underlying ``transformers`` model still needs torch at runtime,
+but this module itself imports neither torch nor slonet_compat.
 """
 
 import os

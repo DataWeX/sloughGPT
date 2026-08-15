@@ -2,18 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-
-const NAV_SHORTCUTS: Record<string, string> = {
-  '1': '/chat',
-  '2': '/training',
-  '3': '/datasets',
-  '4': '/models',
-  '5': '/agents',
-  '6': '/compare',
-  '7': '/monitoring',
-  '8': '/knowledge',
-  '9': '/multimodal',
-}
+import { SHORTCUT_TO_PATH } from '@/lib/navigation'
 
 export function useGlobalShortcuts() {
   const router = useRouter()
@@ -31,10 +20,11 @@ export function useGlobalShortcuts() {
       }
 
       if (ctrl && !e.shiftKey && !e.altKey) {
-        if (NAV_SHORTCUTS[e.key]) {
+        const navPath = SHORTCUT_TO_PATH[e.key]
+        if (navPath) {
           e.preventDefault()
           closeIfOpen()
-          router.push(NAV_SHORTCUTS[e.key])
+          router.push(navPath)
           return
         }
         if (e.key === 'n') {

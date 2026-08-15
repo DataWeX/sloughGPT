@@ -12,6 +12,7 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from pydantic import model_validator
 
 logger = logging.getLogger("slo.api.vm")
 router = APIRouter(prefix="/vm", tags=["vm"])
@@ -21,14 +22,27 @@ router = APIRouter(prefix="/vm", tags=["vm"])
 
 
 class VMRunRequest(BaseModel):
-    """Request to run x86 assembly in the VM."""
+    """Request to run x86 assembly in the VM.
 
-    source: str = Field(..., max_length=50000, description="x86 assembly source code")
+    Either ``source`` (raw x86 assembly) or ``program`` (a builtin program
+    name, resolved via the builtin registry) must be supplied.
+    """
+
+    program: Optional[str] = Field(
+        None, max_length=32, description="Builtin program name (e.g. 'hello')"
+    )
+    source: str = Field(None, max_length=50000, description="x86 assembly source code")
     max_steps: int = Field(5000, ge=1, le=1000000, description="Max CPU steps")
     memory_size: int = Field(0x100000, ge=0x10000, le=0x1000000, description="VM memory size in bytes")
     role: str = Field("user", max_length=20, description="Permission role: user, admin, kernel")
     debug: bool = Field(False, description="Include register dump and trace in response")
     keyboard_input: Optional[str] = Field(None, max_length=10000, description="Simulated keyboard input for INT 16h")
+
+    @model_validator(mode="after")
+    def _require_program_or_source(self):
+        if not (self.program or (self.source or "").strip()):
+            raise ValueError("Either 'program' or 'source' must be provided")
+        return self
 
 
 class VMRegister(BaseModel):
@@ -90,9 +104,18 @@ async def run_assembly(req: VMRunRequest):
     except ImportError as e:
         raise HTTPException(status_code=503, detail=f"VM module not available: {e}")
 
+    if req.program:
+        try:
+            from vm_builtins import get_builtin
+            req_source = get_builtin(req.program)
+        except (KeyError, ImportError) as e:
+            raise HTTPException(status_code=404, detail=f"Unknown builtin program: {req.program}")
+    else:
+        req_source = req.source
+
     try:
         vs = X86VirtualSystem(memory_size=req.memory_size)
-        pid = vs.spawn("web_user", req.source)
+        pid = vs.spawn("web_user", req_source)
         if pid is None:
             return VMRunResponse(
                 success=False, exit_code=-1, steps_executed=0,
@@ -276,28 +299,32 @@ async def run_assembly(req: VMRunRequest):
 
 
 @router.get("/training/jobs/{job_id}", response_model=VMTrainingJobResponse)
-async def training_job_status(job_id: int):
+async def training_job_status(job_id: str):
     """Return the status of a training job launched via VM syscall.
 
     Delegates to the VM training bridge, which proxies ``GET /training/jobs/{id}``.
     Returns 404 when the bridge has no record of the job.
     """
     try:
+        job_num = int(job_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Training job not found")
+    try:
         from domains.shell.vm_training_bridge import get_bridge
     except ImportError as e:
         raise HTTPException(status_code=503, detail=f"VM training bridge unavailable: {e}")
 
     bridge = get_bridge()
-    status = bridge.status(job_id)
+    status = bridge.status(job_num)
     if status["status"] == "not_found":
         raise HTTPException(status_code=404, detail="Training job not found")
 
-    info = bridge.job_info(job_id) or {}
+    info = bridge.job_info(job_num) or {}
     result = None
     if status["status"] == "completed":
-        result = bridge.get_result_json(job_id)
+        result = bridge.get_result_json(job_num)
     return VMTrainingJobResponse(
-        job_id=job_id,
+        job_id=job_num,
         api_job_id=str(info.get("api_job_id", "")),
         status=status["status"],
         progress=status["progress"],
@@ -307,7 +334,7 @@ async def training_job_status(job_id: int):
 
 
 @router.post("/training/jobs/{job_id}/stop")
-async def training_job_stop(job_id: int):
+async def training_job_stop(job_id: str):
     """Request a stop for a running training job launched via VM syscall.
 
     Delegates to the VM training bridge, which proxies
@@ -315,47 +342,46 @@ async def training_job_stop(job_id: int):
     has no record of the job or the stop call failed.
     """
     try:
+        job_num = int(job_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Training job not found")
+    try:
         from domains.shell.vm_training_bridge import get_bridge
     except ImportError as e:
         raise HTTPException(status_code=503, detail=f"VM training bridge unavailable: {e}")
 
     bridge = get_bridge()
-    ok = bridge.stop(job_id)
+    ok = bridge.stop(job_num)
     if not ok:
         raise HTTPException(status_code=404, detail="Training job not found or not stoppable")
-    return {"status": "stopping", "job_id": job_id}
+    return {"status": "stopping", "job_id": job_num}
 
 
 @router.get("/builtins")
 async def list_builtins():
-    """List built-in x86 assembly programs."""
-    return {
-        "programs": [
-            {"name": "hello", "description": "Print 'Hello, VM!' to VGA screen"},
-            {"name": "count", "description": "Count 0 to 9 via sys_write"},
-            {"name": "fib", "description": "Fibonacci sequence (first 10)"},
-            {"name": "sort", "description": "Bubble sort 8-element array"},
-            {"name": "vga_color", "description": "Rainbow stripe pattern (colored)"},
-            {"name": "primes", "description": "Sieve of Eratosthenes — primes up to 50"},
-            {"name": "calculator", "description": "Compute 7*8+5, display on VGA"},
-            {"name": "factorial", "description": "Compute 6! = 720, display on VGA"},
-            {"name": "guess", "description": "Number guessing game (keyboard input)"},
-            {"name": "rainbow", "description": "Rainbow colored 'HELLO VM!' text"},
-            {"name": "train", "description": "Launch a training job via SYS_TRAIN_START (requires ADMIN role)"},
-            {"name": "train-status", "description": "Poll a training job via SYS_TRAIN_STATUS / SYS_TRAIN_GET_RESULT (requires ADMIN role)"},
+    """List built-in x86 assembly programs with their source code."""
+    try:
+        from vm_builtins import BUILTIN_PROGRAMS
+        programs = [
+            {"name": name, "description": entry["description"], "code": entry["program"]()}
+            for name, entry in BUILTIN_PROGRAMS.items()
         ]
-    }
+    except ImportError:
+        return {"programs": []}
+    return {"programs": programs}
 
 
 @router.get("/info")
 async def vm_info():
     """Return VM capabilities and limits."""
+    reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
+    registers = {name.lower(): {"size_bits": 32, "name": name} for name in reg_names}
     return {
         "isa": "x86-32",
         "max_steps": 1000000,
         "default_memory": 0x100000,
         "max_memory": 0x1000000,
-        "registers": ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"],
+        "registers": registers,
         "features": [
             "protected mode (32-bit)",
             "flat memory model",

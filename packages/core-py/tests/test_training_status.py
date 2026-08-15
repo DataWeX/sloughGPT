@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from domains.training.status import (
-    CheckpointManager,
     CompletionStatus,
     StageStatus,
     TrainingCompletionReport,
@@ -191,93 +190,6 @@ class TestTrainingStatusTracker:
         assert data["pretraining"]["status"] == "not_started"
 
 
-class TestCheckpointManager:
-    def test_init_creates_dir(self, tmp_path):
-        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-        assert (tmp_path / "ckpts").exists()
-
-    def test_save_checkpoint(self, tmp_path):
-        class FakeModel:
-            def state_dict(self):
-                return {"w": np.array([1.0, 2.0])}
-
-        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-        path = mgr.save_checkpoint(FakeModel(), None, step=1, epoch=1, loss=0.5)
-        assert path.endswith("checkpoint_step1.npz")
-        assert (tmp_path / "ckpts" / "checkpoint_step1.npz").exists()
-        assert mgr.tracker.report.checkpoint_count == 1
-
-    def test_load_checkpoint_roundtrip(self, tmp_path):
-        class FakeModel:
-            def __init__(self):
-                self.data = None
-
-            def state_dict(self):
-                return {"w": np.array([1.0, 2.0])}
-
-            def load_state_dict(self, state_dict):
-                self.data = state_dict
-
-        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-        model = FakeModel()
-        path = mgr.save_checkpoint(model, None, step=5, epoch=2, loss=0.3)
-        loaded = mgr.load_checkpoint(path, FakeModel())
-        assert loaded["step"] == 5
-        assert loaded["epoch"] == 2
-        assert loaded["loss"] == 0.3
-        assert loaded["stage"] == TrainingStage.PRETRAINING
-
-    def test_get_latest_checkpoint(self, tmp_path):
-        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-        model = type("M", (), {"state_dict": lambda self: {}})()
-        mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.5)
-        mgr.save_checkpoint(model, None, step=2, epoch=2, loss=0.4)
-        latest = mgr.get_latest_checkpoint()
-        assert latest is not None
-        assert latest.endswith("checkpoint_step2.npz")
-
-    def test_get_latest_checkpoint_empty(self, tmp_path):
-        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-        assert mgr.get_latest_checkpoint() is None
-
-    def test_get_best_checkpoint(self, tmp_path):
-        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-        model = type("M", (), {"state_dict": lambda self: {}})()
-        mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.9)
-        mgr.save_checkpoint(model, None, step=2, epoch=2, loss=0.2)
-        best = mgr.get_best_checkpoint()
-        assert best is not None
-        assert best.endswith("checkpoint_step2.npz")
-
-    def test_list_checkpoints_sorted_by_step_desc(self, tmp_path):
-        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-        model = type("M", (), {"state_dict": lambda self: {}})()
-        mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.5)
-        mgr.save_checkpoint(model, None, step=2, epoch=2, loss=0.4)
-        ckpts = mgr.list_checkpoints()
-        assert len(ckpts) == 2
-        assert ckpts[0]["step"] == 2
-        assert ckpts[1]["step"] == 1
-
-    def test_tensors_to_numpy(self):
-        class FakeTensor:
-            def __init__(self, arr):
-                self._arr = arr
-
-            def cpu(self):
-                return self
-
-            def numpy(self):
-                return self._arr
-
-        result = CheckpointManager._tensors_to_numpy(
-            {"a": FakeTensor(np.array([1.0])), "b": np.array([2.0]), "c": 3}
-        )
-        assert isinstance(result["a"], np.ndarray)
-        assert isinstance(result["b"], np.ndarray)
-        assert isinstance(result["c"], np.ndarray)
-
-
 class TestStandaloneNpzHelpers:
     def test_save_load_roundtrip(self, tmp_path):
         path = str(tmp_path / "ckpt.npz")
@@ -313,33 +225,3 @@ def test_print_summary_full_report():
     tracker.complete_stage(TrainingStage.PRETRAINING)
     tracker.report.pretraining.error = "recovered"
     tracker.print_summary()
-
-
-def test_get_best_checkpoint_empty(tmp_path):
-    mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-    assert mgr.get_best_checkpoint() is None
-
-
-def test_get_best_checkpoint_skips_corrupt(tmp_path):
-    mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-    model = type("M", (), {"state_dict": lambda self: {}})()
-    good = mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.9)
-    (tmp_path / "ckpts" / "checkpoint_bad.npz").write_bytes(b"garbage not npz")
-    assert mgr.get_best_checkpoint() == good
-
-
-def test_list_checkpoints_skips_corrupt(tmp_path):
-    mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
-    model = type("M", (), {"state_dict": lambda self: {}})()
-    mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.5)
-    (tmp_path / "ckpts" / "checkpoint_bad.npz").write_bytes(b"garbage")
-    ckpts = mgr.list_checkpoints()
-    assert len(ckpts) == 1
-    assert ckpts[0]["step"] == 1
-
-
-def test_tensors_to_numpy_nested_dict():
-    result = CheckpointManager._tensors_to_numpy(
-        {"nested": {"w": np.array([1.0, 2.0])}}
-    )
-    assert isinstance(result["nested"]["w"], np.ndarray)

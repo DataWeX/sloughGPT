@@ -1,7 +1,7 @@
 'use client'
 
 import { PageErrorHandler } from '@/components/PageErrorHandler'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 
 export default function FeedbackError({
   error,
@@ -11,9 +11,8 @@ export default function FeedbackError({
   reset: () => void
 }) {
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Feedback" subtitle="Error" />} />
+    <PageContainer title="Feedback" subtitle="Error">
       <PageErrorHandler error={error} reset={reset} />
-    </div>
+    </PageContainer>
   )
 }

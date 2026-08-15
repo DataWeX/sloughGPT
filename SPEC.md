@@ -103,8 +103,6 @@ Uses:
 Consolidate into `domains/training/train_pipeline.py`:
 - `domains/training/unified_training.py`
 - `domains/training/train_pipeline.py`
-- `train_sloughgpt.py`
-- `scripts/tools/export_for_cloud.py`
 
 ### RAG System
 
@@ -170,7 +168,7 @@ class ModelInterface(Protocol):
 
 | Entry Point | Command |
 |-------------|---------|
-| Training | `python train_sloughgpt.py` |
+| Training | `sloughgpt train` |
 | CLI | `python -m apps.cli` |
 | API Server | `python -m apps.api.server.main` |
 | TUI | `sloughgpt shell` (split-pane curses TUI on a terminal; `sloughgpt tui` alias) |

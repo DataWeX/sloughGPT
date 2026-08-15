@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge } from '@sloughgpt/strui'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
@@ -730,17 +730,7 @@ export default function VMPage() {
   )
 
   return (
-    <div className="sl-page mx-auto max-w-6xl">
-      <AppRouteHeader
-        left={
-          <AppRouteHeaderLead
-            title="VM Console"
-            subtitle="x86-32 assembly sandbox — write, run, inspect"
-          />
-        }
-      />
-
-      <div className="space-y-4">
+    <PageContainer title="VM Console" subtitle="x86-32 assembly sandbox — write, run, inspect" maxWidth="max-w-6xl">
         {/* Top bar: program selector + run */}
         <Card>
           <CardContent className="p-3">
@@ -1413,8 +1403,7 @@ export default function VMPage() {
             </CardContent>
           </Card>
         )}
-      </div>
-    </div>
+    </PageContainer>
   )
 }
 

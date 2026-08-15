@@ -55,7 +55,7 @@ class BrowserSpeechRecognizer:
 
 class ServerSpeechRecognizer:
     """
-    Server-side speech recognition (torch-free).
+    Server-side speech recognition.
 
     Uses an optional pure-Python ASR backend if installed. No model files
     are downloaded; when no backend is available the recognizer degrades
@@ -69,7 +69,7 @@ class ServerSpeechRecognizer:
         self._backend = None
 
     def load_model(self):
-        """Load a torch-free ASR backend if one is installed."""
+        """Load an ASR backend if one is installed."""
         # 1) vosk — offline, pure-Python inference (model loaded from disk)
         try:
             import vosk  # type: ignore
@@ -90,7 +90,7 @@ class ServerSpeechRecognizer:
             pass
 
         logger.warning(
-            "No torch-free ASR backend available (vosk/speech_recognition). "
+            "No ASR backend available (vosk/speech_recognition). "
             "Server speech recognition disabled; browser Web Speech API still works.",
             extra={"tag": "MODEL"},
         )

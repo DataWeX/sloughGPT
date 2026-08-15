@@ -276,7 +276,6 @@ def cmd_train(args):
 
         from domains.training.train_pipeline import SloughGPTTrainer
 
-        save_formats = [config.checkpoint.export_format]
         if getattr(args, "save_stem", None):
             save_stem = train_export_stem_slug(args.save_stem, "export")
         else:
@@ -339,24 +338,28 @@ def cmd_train(args):
         )
 
         start_time = time.time()
-        result = trainer.train(
-            resume=bool(args.resume or getattr(args, "resume_latest", False)),
-            resume_path=resume_path,
-            on_progress=pbar.update,
-        )
+        try:
+            result = trainer.train(
+                resume=bool(args.resume or getattr(args, "resume_latest", False)),
+                resume_path=resume_path,
+                on_progress=pbar.update,
+            )
+        except ValueError as e:
+            printer.error(str(e))
+            sys.exit(2)
         elapsed = time.time() - start_time
 
         pbar.finish()
         printer.blank()
         printer.success(f"Training complete ({format_time(elapsed)})")
+        save_output_path = f"{save_path}.soul"
         if result is not None:
-            _print_train_result(result, f"{save_path}.{save_formats[0]}")
+            _print_train_result(result, save_output_path)
 
         # Save
         printer.step("Saving...")
-        for fmt in save_formats:
-            trainer.save(save_path, format=fmt)
-            printer.success(f"Saved: {save_path}.{fmt}")
+        trainer.save(save_path)
+        printer.success(f"Saved: {save_output_path}")
 
         if tracker:
             tracker.end_run()
@@ -524,13 +527,13 @@ def cmd_quick(args):
     printer.key_value("Prompt", args.prompt)
     printer.key_value("Generated", f"{args.prompt}{text[:100]}...")
 
-    output_base = args.output.replace(".pt", "").replace(".safetensors", "").replace(".soul", "")
-    trainer.save(output_base, format="sou")
+    output_base = args.output.replace(".safetensors", "").replace(".soul", "")
+    trainer.save(output_base)
     printer.success(f"Saved: {output_base}.soul")
 
 
 def cmd_train_native(args):
-    """Train a SloNet model from scratch (pure numpy, torch-free).
+    """Train a SloNet model from scratch (pure numpy).
 
     Drives ``SloughGPTTrainer`` directly with a ``TrainerConfig`` — no
     ``config_loader`` indirection. Checkpoints are auto-saved as ``.soul``
@@ -541,7 +544,7 @@ def cmd_train_native(args):
             heads, block, batch, epochs, lr, weight_decay, scheduler, warmup,
             min_lr, grad_norm, checkpoint_dir, checkpoint_interval,
             max_checkpoints, eval_interval, log_interval, soul_name,
-            save_stem, resume, resume_latest, save_format, dropout).
+            save_stem, resume, resume_latest, dropout).
 
     Returns:
         None. Prints progress and the final checkpoint path.
@@ -556,10 +559,6 @@ def cmd_train_native(args):
     from domains.training.performance import get_optimal_device
 
     checkpoint_dir = getattr(args, "checkpoint_dir", None) or "models/slonet-native"
-    save_format = getattr(args, "save_format", "sou")
-    if save_format not in ("sou", "npz"):
-        printer.warning(f"Unsupported save_format {save_format!r} — using .soul")
-        save_format = "sou"
 
     device = getattr(args, "device", None) or "cpu"
     if device in ("auto", None):
@@ -654,11 +653,15 @@ def cmd_train_native(args):
     )
 
     start_time = time.time()
-    result = trainer.train(
-        resume=bool(getattr(args, "resume", None) or getattr(args, "resume_latest", False)),
-        resume_path=resume_path,
-        on_progress=pbar.update,
-    )
+    try:
+        result = trainer.train(
+            resume=bool(getattr(args, "resume", None) or getattr(args, "resume_latest", False)),
+            resume_path=resume_path,
+            on_progress=pbar.update,
+        )
+    except ValueError as e:
+        printer.error(str(e))
+        sys.exit(2)
     elapsed = time.time() - start_time
     pbar.finish()
     printer.blank()
@@ -670,7 +673,7 @@ def cmd_train_native(args):
     else:
         save_base = f"{checkpoint_dir}/{soul_name}"
     os.makedirs(checkpoint_dir, exist_ok=True)
-    trainer.save(save_base, format=save_format)
+    trainer.save(save_base)
     saved = f"{save_base}.soul"
     # Prune the trainer's auto-named checkpoints so a completed run leaves
     # exactly one final model file.
@@ -700,79 +703,30 @@ def cmd_train_native(args):
 
 
 def cmd_eval(args):
-    """Evaluate char-level model perplexity (.sou via SloNet, .pt via torch)."""
+    """Evaluate char-level model perplexity from a .soul checkpoint via SloNet."""
     printer.header("Model Evaluation")
     printer.key_value("Checkpoint", args.checkpoint)
 
     checkpoint_path = str(args.checkpoint)
-    is_soul = checkpoint_path.endswith(".sou") or checkpoint_path.endswith(".soul")
     data_path = getattr(args, "data", None) or "datasets/shakespeare/input.txt"
 
     try:
-        if is_soul:
-            from domains.training.lm_eval_char import evaluate_soul_char_lm
+        from domains.training.lm_eval_char import evaluate_soul_char_lm
 
-            if not Path(data_path).is_file():
-                printer.warning(f"Data file not found: {data_path}")
-                return
-            printer.info(f"Evaluating on: {data_path}")
-            metrics = evaluate_soul_char_lm(checkpoint_path, data_path)
-            _print_char_lm_metrics(printer, metrics)
-            return
-
-        import torch
-
-        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-
-        if "training_info" in checkpoint:
-            info = checkpoint["training_info"]
-            printer.blank()
-            printer.section("Training Info")
-            for k, v in info.items():
-                printer.key_value(k, str(v))
-
-        def _param_stats(state_dict: dict) -> None:
-            total_params = sum(v.numel() for v in state_dict.values())
-            printer.blank()
-            printer.section("Model Statistics")
-            printer.key_value("Parameters", format_number(total_params))
-            printer.key_value("Parameter Groups", str(len(state_dict)))
-            total_size = sum(v.numel() * v.element_size() for v in state_dict.values())
-            printer.key_value("Size (FP32)", format_size(total_size))
-            printer.key_value("Size (FP16)", format_size(total_size // 2))
-
-        if "model" in checkpoint and isinstance(checkpoint["model"], dict):
-            _param_stats(checkpoint["model"])
-        elif "model_state_dict" in checkpoint and isinstance(checkpoint["model_state_dict"], dict):
-            _param_stats(checkpoint["model_state_dict"])
-
-        if Path(data_path).is_file():
-            from domains.training.lm_eval_char import evaluate_sloughgpt_char_lm
-
-            dev = getattr(args, "device", None) or "cpu"
-            strict = not getattr(args, "no_strict", False)
-            printer.blank()
-            printer.info(f"Evaluating on: {data_path}")
-
-            metrics = evaluate_sloughgpt_char_lm(
-                checkpoint_path,
-                data_path,
-                device=dev,
-                strict_load=strict,
-            )
-            _print_char_lm_metrics(printer, metrics)
-        else:
+        if not Path(data_path).is_file():
             printer.warning(f"Data file not found: {data_path}")
+            return
+        printer.info(f"Evaluating on: {data_path}")
+        metrics = evaluate_soul_char_lm(checkpoint_path, data_path)
+        _print_char_lm_metrics(printer, metrics)
 
-        if args.benchmark:
+        if getattr(args, "benchmark", False):
             printer.blank()
             printer.step("Running benchmark...")
-            _ = torch.randint(0, 1000, (1, 128))
-            with torch.no_grad():
-                start = time.time()
-                for _ in range(10):
-                    pass
-                elapsed = time.time() - start
+            start = time.time()
+            for _ in range(10):
+                evaluate_soul_char_lm(checkpoint_path, data_path)
+            elapsed = time.time() - start
             printer.info(f"10 iterations: {format_time(elapsed)}")
 
     except Exception as e:
@@ -1042,15 +996,15 @@ def _cmd_feedback_export(args):
     except ImportError as e:
         printer.error(f"Feedback module: {e}")
 
-
 def _cmd_checkpoint_info(args):
-    """Inspect a training checkpoint — show metadata, optimizer state, resume readiness."""
-    import torch
+    """Inspect a .soul checkpoint — show metadata, weight summary, training info."""
     from pathlib import Path
+    from domains.training.slonet import import_from_sou
 
     printer.header("Checkpoint Info")
 
     ckpt_path = Path(args.checkpoint)
+
     if not ckpt_path.exists():
         printer.error(f"File not found: {ckpt_path}")
         sys.exit(1)
@@ -1059,95 +1013,49 @@ def _cmd_checkpoint_info(args):
     printer.key_value("Size", format_size(ckpt_path.stat().st_size))
 
     try:
-        checkpoint = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+        net = import_from_sou(str(ckpt_path))
     except Exception as e:
         printer.error(f"Failed to load: {e}")
         sys.exit(1)
 
-    # Top-level keys
-    printer.section("Keys")
-    for k in checkpoint.keys():
-        v = checkpoint[k]
-        if isinstance(v, dict):
-            printer.key_value(k, f"dict ({len(v)} keys)")
-        elif isinstance(v, torch.Tensor):
-            printer.key_value(k, f"tensor {list(v.shape)}")
-        elif isinstance(v, (int, float, str, bool)):
+    meta = getattr(net, "metadata", None) or {}
+
+    # Soul metadata
+    printer.section("Soul Metadata")
+    printer.key_value("Soul Name", getattr(net, "soul_name", "?"))
+    if getattr(net, "soul_traits", None):
+        printer.key_value("Traits", str(net.soul_traits))
+    if getattr(net, "system_prompt", None):
+        printer.key_value("System Prompt", truncate(str(net.system_prompt), 80))
+    printer.key_value("Step", str(getattr(net, "_step", "?")))
+    printer.key_value("Created", str(getattr(net, "_created_at", "?")))
+
+    arch_keys = ["vocab_size", "n_embed", "n_layer", "n_head", "block_size", "use_rope"]
+    arch = {k: meta.get(k) for k in arch_keys if meta.get(k) is not None}
+    if arch:
+        printer.section("Architecture")
+        for k, v in arch.items():
             printer.key_value(k, str(v))
-        elif v is None:
-            printer.key_value(k, "None")
-        else:
-            printer.key_value(k, type(v).__name__)
 
     # Model weights summary
-    state = checkpoint.get("model_state_dict") or checkpoint.get("model") or {}
-    if isinstance(state, dict) and state:
-        printer.section("Model Weights")
-        total_params = sum(v.numel() for v in state.values() if isinstance(v, torch.Tensor))
-        total_bytes = sum(v.numel() * v.element_size() for v in state.values() if isinstance(v, torch.Tensor))
-        printer.key_value("Parameters", format_number(total_params))
-        printer.key_value("Weight Groups", str(len(state)))
-        printer.key_value("Size (FP32)", format_size(total_bytes))
-        for name, tensor in list(state.items())[:10]:
-            printer.key_value(f"  {name}", f"{list(tensor.shape)} {tensor.dtype}")
-
-    # Optimizer state
-    opt_state = checkpoint.get("optimizer_state_dict")
-    if isinstance(opt_state, dict) and opt_state:
-        printer.section("Optimizer State")
-        groups = opt_state.get("param_groups", [])
-        printer.key_value("Param Groups", str(len(groups)))
-        for i, pg in enumerate(groups):
-            lr = pg.get("lr", "?")
-            wd = pg.get("weight_decay", "?")
-            printer.key_value(f"  Group {i}", f"lr={lr}, weight_decay={wd}, params={len(pg.get('params', []))}")
-        # State tensors
-        state_keys = [k for k in opt_state.keys() if k != "param_groups"]
-        if state_keys:
-            printer.key_value("State Entries", str(len(state_keys)))
-    else:
-        printer.section("Optimizer State")
-        printer.warning("Not saved — cannot resume with full optimizer momentum/LR schedule")
-        printer.info("Train with updated CheckpointManager to save optimizer state")
-
-    # Scheduler state
-    sched_state = checkpoint.get("scheduler_state_dict")
-    if isinstance(sched_state, dict) and sched_state:
-        printer.section("Scheduler State")
-        for k, v in sched_state.items():
-            if isinstance(v, (int, float)):
-                printer.key_value(k, str(v))
-    else:
-        printer.section("Scheduler State")
-        printer.info("Not saved (will use fresh scheduler on resume)")
+    params = list(net.parameters())
+    printer.section("Model Weights")
+    total_params = sum(int(np.prod(p.shape)) for p in params)
+    total_bytes = sum(int(p.data.nbytes) for p in params) if params else 0
+    printer.key_value("Parameters", format_number(total_params))
+    printer.key_value("Weight Groups", str(len(params)))
+    printer.key_value("Size (FP32)", format_size(total_bytes))
+    for p in params[:10]:
+        printer.key_value("  weight", f"{list(p.shape)} float32")
 
     # Training metadata
     printer.section("Training Metadata")
-    step = checkpoint.get("step", checkpoint.get("global_step", "?"))
-    epoch = checkpoint.get("epoch", "?")
-    metrics = checkpoint.get("metrics", {})
-    ts = checkpoint.get("timestamp", "")
-    printer.key_value("Step", str(step))
-    printer.key_value("Epoch", str(epoch))
-    printer.key_value("Timestamp", str(ts))
-    if metrics:
-        for k, v in metrics.items():
-            printer.key_value(f"  {k}", str(v))
-
-    # Resume readiness
-    printer.section("Resume Readiness")
-    has_model = "model_state_dict" in checkpoint or "model" in checkpoint
-    has_optim = isinstance(opt_state, dict) and bool(opt_state)
-    has_sched = isinstance(sched_state, dict) and bool(sched_state)
-    printer.status("Model weights", "Yes" if has_model else "No", "ok" if has_model else "error")
-    printer.status("Optimizer state", "Yes" if has_optim else "No", "ok" if has_optim else "warn")
-    printer.status("Scheduler state", "Yes" if has_sched else "No", "info" if has_sched else "info")
-    if has_model and has_optim:
-        printer.success("Full resume possible — weights + optimizer + LR schedule")
-    elif has_model:
-        printer.warning("Partial resume — weights only, optimizer/scheduler reset")
-    else:
-        printer.error("Cannot resume — no model weights found")
+    for k, v in (meta.get("training") or {}).items():
+        printer.key_value(f"  {k}", str(v))
+    for k, v in (meta.get("metrics") or {}).items():
+        printer.key_value(f"  {k}", str(v))
+    if not meta.get("training") and not meta.get("metrics"):
+        printer.info("No training info recorded in metadata")
 
 
 def cmd_demo(args):
@@ -1309,7 +1217,7 @@ def register(subparsers):
     train_parser.add_argument("--export-feedback-format", choices=["jsonl", "dpo"], default="jsonl", help="Export format")
 
     # Checkpoint info
-    train_parser.add_argument("--checkpoint-info", dest="checkpoint_info_path", help="Inspect a checkpoint file (.pt)")
+    train_parser.add_argument("--checkpoint-info", dest="checkpoint_info_path", help="Inspect a checkpoint file (.soul)")
 
     # Embedder training
     train_parser.add_argument("--embed", dest="embed_train", action="store_true", help="Train text embedder on corpus")
@@ -1384,7 +1292,7 @@ def cmd_train_embed(args):
 
     Collects texts from knowledge files and chat history, then trains a
     SloNet transformer encoder to produce 384-dim embeddings.  The trained
-    model is saved to data/models/text-embedder.sou and automatically
+    model is saved to data/models/text-embedder.soul and automatically
     used by simple_embed() instead of downloading sentence-transformers.
     """
     import os

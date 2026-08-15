@@ -5,8 +5,8 @@ import { act } from 'react'
 
 vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => {
-    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
-    C.displayName = `Icon${name}`
+    const C = () => <span data-testid={'icon-' + name}>{name}</span>
+    C.displayName = 'Icon' + name
     return C
   }
   const passthrough = ({ children }: any) => <div>{children}</div>
@@ -27,6 +27,8 @@ vi.mock('@sloughgpt/strui', () => {
     IconDownload: iconMock('download'),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div>{label}: {value}</div>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    EmptyCard: ({ title, description }: any) => <div data-testid="empty-card"><div>{title}</div><div>{description}</div></div>,
   }
 })
 
@@ -78,8 +80,7 @@ describe('ErrorsPage', () => {
   it('shows loading skeleton and fetches all data on mount', () => {
     mockGetGrouped.mockReturnValue(new Promise(() => {}))
     render(<ErrorsPage />)
-    expect(screen.getAllByText('Errors').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Client-side error monitoring')).toBeTruthy()
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
     expect(mockGetGrouped).toHaveBeenCalled()
     expect(mockGetRecent).toHaveBeenCalledWith(30)
     expect(mockGetTrends).toHaveBeenCalledWith(24)

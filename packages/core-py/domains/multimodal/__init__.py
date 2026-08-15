@@ -34,7 +34,7 @@ class MultiModalConfig:
 
 
 # =============================================================================
-# SLOULNET-BASED VISION (always available, no torch needed)
+# SLOULNET-BASED VISION (always available)
 # =============================================================================
 
 from .vision import (

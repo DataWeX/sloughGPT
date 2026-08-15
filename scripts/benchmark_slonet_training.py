@@ -20,9 +20,9 @@ def main():
     print(f"Data size: {os.path.getsize(data_path) / 1024:.1f} KB")
 
     configs = [
-        {"name": "tiny",  "n_embed": 32,  "n_layer": 1, "n_head": 2, "block_size": 32,  "batch_size": 16, "epochs": 3, "learning_rate": 3e-3},
-        {"name": "small", "n_embed": 64,  "n_layer": 2, "n_head": 4, "block_size": 64,  "batch_size": 32, "epochs": 3, "learning_rate": 1e-3},
-        {"name": "medium","n_embed": 128, "n_layer": 4, "n_head": 4, "block_size": 128, "batch_size": 32, "epochs": 3, "learning_rate": 8e-4},
+        {"name": "tiny",  "n_embed": 32,  "n_layer": 1, "n_head": 2, "block_size": 32,  "batch_size": 16, "epochs": 3, "learning_rate": 3e-3, "max_steps": 50},
+        {"name": "small", "n_embed": 64,  "n_layer": 2, "n_head": 4, "block_size": 64,  "batch_size": 32, "epochs": 3, "learning_rate": 1e-3, "max_steps": 80},
+        {"name": "medium","n_embed": 128, "n_layer": 4, "n_head": 4, "block_size": 128, "batch_size": 32, "epochs": 3, "learning_rate": 8e-4, "max_steps": 100},
     ]
 
     results = []

@@ -629,15 +629,10 @@ class _FakeTorchTensor:
     def new_zeros(self, shape, dtype=None):
         return np.zeros(shape)
 
-    def sqrt(self):
-        return np.ones(self.shape)
-
 
 def test_slo_adam_static_stubs():
     assert isinstance(SloAdam._zeros_like(np.zeros(3)), np.ndarray)
-    assert np.array_equal(SloAdam._sqrt(np.array([4.0])), [2.0])
     assert np.array_equal(SloAdam._zeros_like(_FakeTorchTensor((2, 2))), np.zeros((2, 2)))
-    assert np.array_equal(SloAdam._sqrt(_FakeTorchTensor((3,))), np.ones((3,)))
 
 
 def test_slo_adam_load_state_dict_params_none():
@@ -652,6 +647,38 @@ def test_slo_adam_step_updates_weight():
     p.grad = Tensor([1.0, 0.5])
     opt.step([p])
     assert p.data[0] < 1.0
+
+
+def test_slo_adam_single_axis_matches_legacy_reference():
+    rng = np.random.default_rng(21)
+    p0 = rng.normal(size=(2, 3))
+    gs = [rng.normal(size=(4, 2, 3)) for _ in range(3)]
+    opt = SloAdam(lr=0.01, weight_decay=0.1)
+    p = Tensor(p0.copy(), requires_grad=True)
+    for g in gs:
+        p.grad = Tensor(g.copy())
+        opt.step([p])
+
+    m = np.zeros((4, 2, 3)); v = np.zeros((4, 2, 3))
+    ref = p0.copy(); b1, b2, eps, lr, wd = 0.9, 0.999, 1e-8, 0.01, 0.1
+    for t, g in enumerate(gs, start=1):
+        g_ = g + wd * ref
+        m = b1 * m + (1 - b1) * g_
+        v = b2 * v + (1 - b2) * g_ ** 2
+        upd = lr * (m / (1 - b1 ** t)) / (np.sqrt(v / (1 - b2 ** t)) + eps)
+        ref -= upd.sum(axis=0)
+    assert np.allclose(p.data, ref, atol=1e-12)
+
+
+def test_slo_adam_multi_axis_broadcast_grad():
+    rng = np.random.default_rng(22)
+    p0 = rng.normal(size=(2, 3))
+    opt = SloAdam(lr=0.01, weight_decay=0.1)
+    p = Tensor(p0.copy(), requires_grad=True)
+    p.grad = Tensor(rng.normal(size=(5, 4, 2, 3)))
+    opt.step([p])
+    assert p.data.shape == (2, 3)
+    assert np.all(np.isfinite(p.data))
 
 
 def test_plateau_max_mode_init():

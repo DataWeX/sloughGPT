@@ -208,7 +208,6 @@ def cmd_generate(args):
     from utils.helpers import local_soul_candidate_paths
 
     models_dir = Path("models")
-    pt_path = models_dir / "sloughgpt_finetuned.pt"
 
     printer.header("Text Generation")
     printer.key_value("Prompt", args.prompt)
@@ -232,38 +231,6 @@ def cmd_generate(args):
     for sou_path in local_soul_candidate_paths(models_dir):
         if _try_load_sou(sou_path):
             break
-
-    if not loaded and pt_path.exists():
-        try:
-            import torch
-            from domains.training.checkpoint_utils import (
-                load_sloughgpt_from_checkpoint,
-                normalize_raw_checkpoint,
-                torch_load_checkpoint,
-                tokenizer_maps_from_bundle,
-            )
-
-            raw = torch_load_checkpoint(str(pt_path), map_location="cpu")
-            bundle = normalize_raw_checkpoint(raw)
-            stoi_len = len(bundle.get("stoi", {})) or 65
-            model, _ = load_sloughgpt_from_checkpoint(
-                bundle,
-                device="cpu",
-                strict=True,
-                fallback_vocab_size=stoi_len,
-                fallback_n_embed=128,
-                fallback_n_layer=4,
-                fallback_n_head=4,
-                fallback_block_size=64,
-            )
-            engine._model = model
-            stoi, itos = tokenizer_maps_from_bundle(bundle)
-            if stoi is not None and itos is not None:
-                engine.set_vocab(stoi, itos)
-            loaded = True
-            printer.success(f"Loaded checkpoint: {pt_path.name}")
-        except Exception as e:
-            printer.warning(f"Failed to load .pt: {e}")
 
     if not loaded:
         printer.warning("No model found, using demo mode")

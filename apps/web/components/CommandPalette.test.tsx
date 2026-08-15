@@ -83,8 +83,7 @@ describe('CommandPalette', () => {
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
     const input = screen.getByPlaceholderText('Search pages, models, actions...')
-    // selectedIdx starts at 0; ArrowDown twice → index 2 = Training
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    // selectedIdx starts at 0; ArrowDown once → index 1 = Training
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(mockPush).toHaveBeenCalledWith('/training')

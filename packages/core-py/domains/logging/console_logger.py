@@ -49,30 +49,48 @@ from .base import Logger, LogLevel, LogRecord
 # ── ANSI codes ─────────────────────────────────────────────────────────
 
 _NO_COLOR = os.environ.get("NO_COLOR", "").strip() == "1"
-_COLOR_ENABLED = not _NO_COLOR and sys.stderr.isatty()
+_FORCE_COLOR = os.environ.get("FORCE_COLOR", "").strip() == "1"
+_SLO_LOG_COLOR = os.environ.get("SLO_LOG_COLOR", "").strip().lower()
 
 
-def _c(code: str) -> str:
-    return code if _COLOR_ENABLED else ""
+def _default_color_enabled(stream: Optional[TextIO] = None) -> bool:
+    """Auto-detect color support for a stream.
+
+    Precedence: NO_COLOR always disables; SLO_LOG_COLOR/FORCE_COLOR force
+    enable/disable explicitly; otherwise fall back to TTY detection on the
+    target stream at call time.
+    """
+    if _NO_COLOR:
+        return False
+    if _SLO_LOG_COLOR in ("1", "true", "yes", "on"):
+        return True
+    if _SLO_LOG_COLOR in ("0", "false", "no", "off"):
+        return False
+    if _FORCE_COLOR:
+        return True
+    try:
+        return bool((stream or sys.stderr).isatty())
+    except (AttributeError, ValueError):
+        return False
 
 
 class _Ansi:
-    RESET    = _c("\033[0m")
-    BOLD     = _c("\033[1m")
-    DIM      = _c("\033[2m")
-    ITALIC   = _c("\033[3m")
-    UNDER    = _c("\033[4m")
-    RED      = _c("\033[31m")
-    GREEN    = _c("\033[32m")
-    YELLOW   = _c("\033[33m")
-    BLUE     = _c("\033[34m")
-    MAGENTA  = _c("\033[35m")
-    CYAN     = _c("\033[36m")
-    WHITE    = _c("\033[37m")
-    GREY     = _c("\033[90m")
-    BG_RED   = _c("\033[41m")
-    BG_GREEN = _c("\033[42m")
-    BG_BLUE  = _c("\033[44m")
+    RESET    = "\033[0m"
+    BOLD     = "\033[1m"
+    DIM      = "\033[2m"
+    ITALIC   = "\033[3m"
+    UNDER    = "\033[4m"
+    RED      = "\033[31m"
+    GREEN    = "\033[32m"
+    YELLOW   = "\033[33m"
+    BLUE     = "\033[34m"
+    MAGENTA  = "\033[35m"
+    CYAN     = "\033[36m"
+    WHITE    = "\033[37m"
+    GREY     = "\033[90m"
+    BG_RED   = "\033[41m"
+    BG_GREEN = "\033[42m"
+    BG_BLUE  = "\033[44m"
 
 
 # ── Level formatting ───────────────────────────────────────────────────
@@ -137,7 +155,7 @@ class ConsoleLogger(Logger):
     ) -> None:
         super().__init__(name=name, level=level, context=context)
         self._stream = stream or sys.stderr
-        self._colors = _COLOR_ENABLED if colors is None else colors
+        self._colors = _default_color_enabled(self._stream) if colors is None else colors
         self._format = format
 
     # ── Formatting ──────────────────────────────────────────────────────

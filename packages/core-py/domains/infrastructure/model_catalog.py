@@ -22,7 +22,7 @@ class ModelCatalog:
     Each model is a document with:
       - model_id: unique identifier (e.g. "gpt2", "qwen-0.5b")
       - source: "huggingface" | "local" | "soul"
-      - format: "slnc" | "safetensors" | "pt" | "sou"
+      - format: "slnc" | "safetensors" | "soul"
       - path: filesystem path to weights (if local)
       - status: "loaded" | "available" | "error"
       - parameters: parameter count

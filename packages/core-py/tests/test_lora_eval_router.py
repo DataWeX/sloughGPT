@@ -94,7 +94,7 @@ class TestRunEval:
         evaluator = _make_evaluator()
         mock_get.return_value = evaluator
         client = TestClient(_app())
-        resp = client.get("/lora-eval/run")
+        resp = client.get("/lora-eval/run", params={"adapter_path": "/nonexistent/foo.npz"})
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"

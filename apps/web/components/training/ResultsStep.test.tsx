@@ -40,6 +40,14 @@ const checkpointsWithJobs: UseTrainingCheckpointsReturn = {
   ],
 }
 
+const checkpointsWithTurbo: UseTrainingCheckpointsReturn = {
+  ...emptyCheckpoints,
+  checkpoints: [
+    { name: 'cp-1', soul: 'soul-1', loss: 0.45, tags: ['distill'] },
+    { name: 'turbo-1', soul: 'soul-1', loss: 1.2, tags: [], source: 'turbo' },
+  ],
+}
+
 const renderStep = (checkpoints: UseTrainingCheckpointsReturn, addToast = vi.fn()) =>
   render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} addToast={addToast} />)
 
@@ -94,6 +102,13 @@ describe('ResultsStep', () => {
     expect(bestBadges.length).toBe(1)
     expect(screen.getByText('cp-2').parentElement?.textContent).toContain('Best')
     expect(screen.getByText('cp-1').parentElement?.textContent).not.toContain('Best')
+  })
+
+  it('shows a Turbo badge only for turbo-sourced checkpoints', () => {
+    renderStep(checkpointsWithTurbo)
+    expect(screen.getAllByText('Turbo').length).toBe(1)
+    expect(screen.getByText('turbo-1').parentElement?.textContent).toContain('Turbo')
+    expect(screen.getByText('cp-1').parentElement?.textContent).not.toContain('Turbo')
   })
 
   it('renders a Delete button per checkpoint and calls handleDeleteCheckpoint', () => {

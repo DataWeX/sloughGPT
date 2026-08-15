@@ -3,7 +3,7 @@ SloughGPT Inference Module
 
 .soul Soul Unit format — the living identity format for trained AI models.
 
-All exports are lightweight (no torch dependency).
+All exports are lightweight.
 """
 
 from .slo_format import (

@@ -87,6 +87,18 @@ vi.mock('@/lib/chat-utils', () => ({
   formatUptime: (s: number) => `${s}s`,
 }))
 
+vi.mock('@/components/ThemeProvider', () => ({
+  useTheme: () => ({
+    theme: 'purple',
+    mode: 'dark',
+    palette: 'noir-violet',
+    setTheme: vi.fn(),
+    setMode: vi.fn(),
+    setPalette: vi.fn(),
+  }),
+  THEMES: [],
+}))
+
 import SettingsPage from './page'
 
 describe('SettingsPage', () => {

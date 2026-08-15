@@ -22,13 +22,9 @@ vi.mock('@sloughgpt/strui', () => {
       <textarea value={value} onChange={onChange} placeholder={placeholder} />
     ),
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div>{left}{right}</div>,
-  AppRouteHeaderLead: ({ title }: any) => <h1>{title}</h1>,
-}))
 
 vi.mock('@/lib/http-client', () => ({
   apiGet: (...a: unknown[]) => mockGet(...a),

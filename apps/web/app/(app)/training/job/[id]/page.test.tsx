@@ -50,11 +50,6 @@ vi.mock('@/lib/model-controller', () => ({ modelController: { loadModelPath: moc
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
 vi.mock('@/lib/download-utils', () => ({ downloadBlob: mockDownloadBlob, downloadJson: mockDownloadJson }))
 vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="loss-chart" /> }))
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div data-testid="app-route-header">{left}{right}</div>,
-  AppRouteHeaderLead: ({ title }: any) => <div data-testid="app-route-header-lead">{title}</div>,
-}))
-
 import Page from './page'
 
 const COMPLETED_JOB: any = {

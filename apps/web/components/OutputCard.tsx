@@ -37,6 +37,7 @@ const TAG_COLOR: Record<string, string> = {
   MODEL: 'rgb(var(--success))',
   SOUL: 'rgb(var(--success))',
   INF: 'rgb(var(--muted-foreground))',
+  INFO: 'rgb(var(--muted-foreground))',
   WEB: 'rgb(var(--muted-foreground))',
 }
 

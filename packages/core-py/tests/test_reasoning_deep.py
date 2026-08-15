@@ -219,24 +219,27 @@ class TestFormalLogicEngine:
         result = engine.prove_syllogism(
             ("All", "men", "are mortal"),
             ("Socrates", "is a", "man"),
+            ("Socrates", "is", "mortal"),
         )
         assert result is not None
-        assert "Socrates" in result
+        assert "valid" in result
+        assert "mood" in result
 
     def test_prove_syllogism_invalid(self):
         engine = FormalLogicEngine()
         result = engine.prove_syllogism(
             ("All", "cats", "are animals"),
             ("All", "dogs", "are animals"),
+            ("Some", "dogs", "are cats"),
         )
-        # No valid syllogism from two universal affirmative premises with no middle term connection
-        # The engine may or may not find validity depending on implementation
+        assert result is not None
+        assert "valid" in result
 
     def test_to_categorical(self):
         engine = FormalLogicEngine()
         cat = engine._to_categorical(("All", "men", "are mortal"))
         assert len(cat) == 4
-        assert cat[0] in ("All", "Some", "No")
+        assert cat[0] in ("A", "E", "I", "O")
 
     def test_determine_figure(self):
         engine = FormalLogicEngine()
@@ -276,7 +279,7 @@ class TestWorkingMemory:
         wm.add("b")
         wm.access("a")
         recent = wm.get_recent()
-        assert recent[-1] == "a"
+        assert recent[0] == "a"
 
     def test_get_recent_n(self):
         wm = WorkingMemory()

@@ -294,7 +294,7 @@ class TestConfigLoader:
         assert c.trainer_interval == 1000
         assert c.save_best_only is False
         assert c.max_checkpoints == 5
-        assert c.export_format == "sou"
+        assert c.export_format == "soul"
 
     def test_merge_trainer_checkpoint_from_args(self):
         from config_loader import CheckpointConfig, Config, merge_args_with_config
@@ -319,20 +319,30 @@ class TestConfigLoader:
         assert cfg.checkpoint.save_best_only is True
         assert cfg.checkpoint.max_checkpoints == 11
 
-    def test_merge_soul_name_and_export_format(self):
+    def test_merge_soul_name_from_args(self):
+        from config_loader import Config, ModelConfig, merge_args_with_config
+
+        cfg = Config(model=ModelConfig(name="m1", soul_name="orig"))
+        args = SimpleNamespace(soul_name="cli soul")
+        merge_args_with_config(cfg, args)
+        assert cfg.model.soul_name == "cli soul"
+
+    def test_merge_save_format_is_ignored(self):
         from config_loader import Config, ModelConfig, CheckpointConfig, merge_args_with_config
 
         cfg = Config(
             model=ModelConfig(name="m1", soul_name="orig"),
-            checkpoint=CheckpointConfig(export_format="sou"),
+            checkpoint=CheckpointConfig(),
         )
-        args = SimpleNamespace(
-            soul_name="cli soul",
-            save_format="safetensors",
-        )
+        args = SimpleNamespace(soul_name=None, save_format="safetensors")
         merge_args_with_config(cfg, args)
-        assert cfg.model.soul_name == "cli soul"
-        assert cfg.checkpoint.export_format == "safetensors"
+        assert cfg.checkpoint.export_format == "soul"
+
+    def test_checkpoint_export_format_deprecation_warns(self):
+        from config_loader import CheckpointConfig
+
+        with pytest.warns(DeprecationWarning):
+            CheckpointConfig(export_format="sou")
 
     def test_merge_dropout_from_args(self):
         from config_loader import Config, ModelConfig, merge_args_with_config

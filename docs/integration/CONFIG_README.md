@@ -1,8 +1,8 @@
 # SLO Configuration System
 
-**Status:** This document describes a **planned** `.config` format. This repository does **not** currently ship a `train.py` driver or `config/*.config` files at the repo root. For working training flows today, use **`train_sloughgpt.py`**, **`domains.training.train_pipeline`**, or **`cli.py train`** (see **QUICKSTART.md**).
+**Status:** This document describes a **planned** `.config` format. This repository does **not** currently ship a `train.py` driver or `config/*.config` files at the repo root. For working training flows today, use **`domains.training.train_pipeline`** or **`sloughgpt train`** (see **QUICKSTART.md**).
 
-**YAML today:** the repo ships **`config.yaml`** plus **`config_loader.py`** (**`load_config`**, **`merge_args_with_config`**). Local **`cli.py train`** loads that file, applies CLI overrides, resolves device with **`get_device`**, then builds **`SloughGPTTrainer`**; see **`apps/cli/README.md`** for flags and fields.
+**YAML today:** the repo ships **`config.yaml`** plus **`config_loader.py`** (**`load_config`**, **`merge_args_with_config`**). Local **`sloughgpt train`** loads that file, applies CLI overrides, resolves device with **`get_device`**, then builds **`SloughGPTTrainer`**; see **`apps/cli/README.md`** for flags and fields.
 
 This system is intended to provide a Dockerfile/Modelfile-style configuration format for SLO training.
 

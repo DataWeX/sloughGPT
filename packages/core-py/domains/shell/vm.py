@@ -2439,6 +2439,22 @@ class X86Assembler:
         return False
         self._reloc = []  # (offset, label, type)
 
+    def _pfx_size(self, size):
+        """Return True if an explicit operand-size word needs 0x66 prefix.
+
+        Args:
+            size: One of "byte", "word", "dword", or None (register-implied).
+
+        Returns:
+            True when the named operand size differs from the current BITS mode
+            (word in 32-bit mode, dword in 16-bit mode).
+        """
+        if size == "word":
+            return self._bits == 32
+        if size == "dword":
+            return self._bits == 16
+        return False
+
     def assemble(self, source: str, org: int = 0) -> bytearray:
         """Assemble x86 source to machine code bytes.
 
@@ -2720,12 +2736,17 @@ class X86Assembler:
             self._emit_call(operands)
         elif op == "mov":
             self._emit_mov(operands)
-        elif op in ("add", "sub", "and", "or", "xor", "cmp", "test"):
+        elif op in ("add", "sub", "adc", "sbb", "and", "or", "xor", "cmp", "test"):
             self._emit_alu(op, operands)
         elif op in ("inc", "dec"):
             self._emit_inc_dec(op, operands)
-        elif op in ("neg", "not", "mul", "imul", "div", "idiv"):
+        elif op in ("neg", "not", "div", "idiv"):
             self._emit_unary(op, operands)
+        elif op in ("mul", "imul") and len(operands) == 1:
+            self._emit_unary(op, operands)
+        elif op == "imul":
+            # 2-operand IMUL r32, r/m32 (0F AF) — reg, reg and reg, [mem]
+            self._emit_imul(operands)
         elif op in ("shl", "shr", "sal", "sar", "rol", "ror", "rcl", "rcr"):
             self._emit_shift(op, operands)
         elif op == "lea":
@@ -3048,14 +3069,11 @@ class X86Assembler:
             self._emit_modrm_mem(src, mem)
         elif dst.startswith("word") and "[" in dst and src in self._REG16:
             mem = dst[4:].strip()
-            if self._pfx(src):
-                self._output.append(0x66)
+            self._output.append(0x66)
             self._output.append(0x89)
             self._emit_modrm_mem(src, mem)
         elif dst.startswith("dword") and "[" in dst and src in self._REG32:
             mem = dst[5:].strip()
-            if self._pfx(src):
-                self._output.append(0x66)
             self._output.append(0x89)
             self._emit_modrm_mem(src, mem)
         # MOV [mem], imm — size-prefixed memory stores (C6/C7 /0)
@@ -3103,49 +3121,81 @@ class X86Assembler:
             val = self._parse_imm(src)
             self._output.append(0xB0 + self._REG8[dst])
             self._output.append(val & 0xFF)
-        # MOV reg, [mem] / MOV [mem], reg
+        # MOV reg, [mem] / MOV [mem], reg — runtime-correct prefix convention:
+        # REG32: no 0x66 (32-bit is default in runtime)
+        # REG16: always 0x66 (runtime is 32-bit default, 16-bit needs prefix)
+        # REG8: no prefix
         elif dst in self._REG32 and src.startswith("["):
-            if self._pfx(dst):
-                self._output.append(0x66)
-            self._output.append(0x8B)
-            self._emit_modrm_mem(dst, src)
-        elif dst in self._REG16 and src.startswith("["):
             inner = src.strip("[]").strip()
-            if inner.startswith("0x") or (inner.isdigit() and int(inner) > 15):
-                addr = int(inner, 16) if inner.startswith("0x") else int(inner)
+            if dst == "eax" and re.fullmatch(r"0[xX][0-9a-fA-F]+|[0-9]+", inner):
                 self._output.append(0xA1)
-                self._output.extend(struct.pack("<H", addr & 0xFFFF))
+                self._output.extend(struct.pack("<I", self._parse_imm(inner) & 0xFFFFFFFF))
             else:
                 self._output.append(0x8B)
                 self._emit_modrm_mem(dst, src)
-        elif dst.startswith("[") and src in self._REG32:
-            if self._pfx(src):
+        elif dst in self._REG16 and src.startswith("["):
+            inner = src.strip("[]").strip()
+            if dst == "ax" and re.fullmatch(r"0[xX][0-9a-fA-F]+|[0-9]+", inner):
                 self._output.append(0x66)
-            self._output.append(0x89)
-            self._emit_modrm_mem(src, dst)
+                self._output.append(0xA1)
+                self._output.extend(struct.pack("<I", self._parse_imm(inner) & 0xFFFFFFFF))
+            else:
+                self._output.append(0x66)
+                self._output.append(0x8B)
+                self._emit_modrm_mem(dst, src)
+        elif dst.startswith("[") and src in self._REG32:
+            inner = dst.strip("[]").strip()
+            if src == "eax" and re.fullmatch(r"0[xX][0-9a-fA-F]+|[0-9]+", inner):
+                self._output.append(0xA3)
+                self._output.extend(struct.pack("<I", self._parse_imm(inner) & 0xFFFFFFFF))
+            else:
+                self._output.append(0x89)
+                self._emit_modrm_mem(src, dst)
         elif dst.startswith("[") and src in self._REG16:
             inner = dst.strip("[]").strip()
-            if inner.startswith("0x") or (inner.isdigit() and int(inner) > 15):
-                addr = int(inner, 16) if inner.startswith("0x") else int(inner)
+            if src == "ax" and re.fullmatch(r"0[xX][0-9a-fA-F]+|[0-9]+", inner):
+                self._output.append(0x66)
                 self._output.append(0xA3)
-                self._output.extend(struct.pack("<H", addr & 0xFFFF))
+                self._output.extend(struct.pack("<I", self._parse_imm(inner) & 0xFFFFFFFF))
             else:
+                self._output.append(0x66)
                 self._output.append(0x89)
                 self._emit_modrm_mem(src, dst)
         elif dst.startswith("[") and src in self._REG8:
             self._output.append(0x88)
             self._emit_modrm_mem(src, dst)
-        # MOV reg, [imm] — direct address load
+        # MOV reg, [imm] — direct address load (moffs A1/A3 handled above for
+        # eax/ax with a numeric absolute; other regs/forms use modrm disp32)
         elif dst in self._REG32 and (src.startswith("0x") or (src.startswith("[") and src[1:-1].strip().startswith("0x"))):
             inner = src.strip("[]") if src.startswith("[") else src
-            addr = int(inner, 16) if inner.startswith("0x") else int(inner)
-            self._output.append(0xA1)
-            self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
+            mem = f"[{inner}]"
+            self._output.append(0x8B)
+            self._emit_modrm_mem(dst, mem)
+        # MOV [mem], imm — size prefix may follow the bracket (mov [mem], dword 8)
+        elif dst.startswith("[") and (src.startswith("dword") or src.startswith("word") or src.startswith("byte")):
+            size, _, imm_src = src.partition(" ")
+            imm_src = imm_src.strip()
+            val = self._parse_imm(imm_src)
+            if size == "byte":
+                self._output.append(0xC6)  # MOV r/m8, imm8
+                self._emit_modrm_mem("eax", dst)
+                self._output.append(val & 0xFF)
+            elif size == "word":
+                self._output.append(0x66)
+                self._output.append(0xC7)  # MOV r/m16, imm16
+                self._emit_modrm_mem("eax", dst)
+                self._output.extend(struct.pack("<H", val & 0xFFFF))
+            else:
+                self._output.append(0xC7)  # MOV r/m32, imm32
+                self._emit_modrm_mem("eax", dst)
+                self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
         elif dst in self._REG16 and (src.startswith("0x") or (src.startswith("[") and src[1:-1].strip().startswith("0x"))):
+            # 16-bit register, absolute address — emit 66 + 8B modrm disp32.
             inner = src.strip("[]") if src.startswith("[") else src
-            addr = int(inner, 16) if inner.startswith("0x") else int(inner)
-            self._output.append(0xA1)
-            self._output.extend(struct.pack("<H", addr & 0xFFFF))
+            mem = f"[{inner}]"
+            self._output.append(0x66)
+            self._output.append(0x8B)
+            self._emit_modrm_mem(dst, mem)
         else:
             # Fallback: MOV reg, imm
             val = self._parse_imm(src)
@@ -3155,35 +3205,87 @@ class X86Assembler:
                 self._output.append(0xB8 + self._REG32[dst])
                 self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
 
-    def _emit_modrm_mem(self, reg, mem):
-        """Emit ModR/M byte for [memory] operand."""
-        inner = mem.strip("[]").strip().lower()
-        # Resolve register encoding (works for both 8-bit and 32-bit registers)
-        reg_enc = self._REG32.get(reg.lower(), self._REG8.get(reg.lower(), 0))
+    def _mem_operand(self, inner):
+        """Resolve a bracketed memory operand to (mod_bits, rm_field, disp_bytes).
+
+        ``inner`` is the text between ``[`` and ``]``. Returns the mod/rm
+        components so callers can build their own ModR/M byte with any reg
+        field (used by ALU, MOV, IMUL). Raises nothing; unknown labels resolve
+        through ``_parse_label`` (0 when undefined).
+        """
+        inner = inner.strip().lower()
         if inner in self._REG32:
             # [reg]
-            modrm = (0x00 | (reg_enc << 3) | self._REG32[inner])
-            self._output.append(modrm)
-        elif "+" in inner:
+            return 0x00, self._REG32[inner], b""
+        if "+" in inner:
             parts = inner.split("+")
             base = parts[0].strip()
             other = parts[1].strip() if len(parts) > 1 else ""
+            # Check for scaled index: "reg + reg*scale", "reg*scale + reg",
+            # or "reg*scale + disp" (SIB). Prefer the SIB path whenever any
+            # part contains a "*" so base+index+scale is not silently dropped.
+            scaled_reg = None
+            scaled_mul = None
+            base_reg = None
+            extra_regs = []
+            disp_parts = []
+            for p in parts:
+                p = p.strip()
+                if "*" in p:
+                    r, _, s = p.partition("*")
+                    r = r.strip()
+                    s = s.strip()
+                    if r in self._REG32 and s in ("1", "2", "4", "8"):
+                        scaled_reg = r
+                        scaled_mul = int(s)
+                    else:
+                        disp_parts.append(p)
+                elif p in self._REG32:
+                    if base_reg is None:
+                        base_reg = p
+                    else:
+                        extra_regs.append(p)
+                else:
+                    disp_parts.append(p)
+            if scaled_reg is None and extra_regs and base_reg is not None:
+                # Two registers, no explicit scale: [base + reg] — the extra
+                # register is used as a scale-1 index (SIB).
+                scaled_reg = extra_regs[0]
+                scaled_mul = 1
+            if scaled_reg is not None:
+                # SIB with optional base register and/or displacement.
+                addr = 0
+                for dp in disp_parts:
+                    if dp:
+                        addr += self._parse_label(dp)
+                scale_enc = {1: 0, 2: 1, 4: 2, 8: 3}[scaled_mul]
+                index_enc = self._REG32[scaled_reg]
+                if base_reg is not None:
+                    base_enc = self._REG32[base_reg]
+                    if base_reg == "esp":
+                        # base=100 means "no base" without disp; force mod=01.
+                        sib = (scale_enc << 6) | (index_enc << 3) | 0x04
+                        mod_bits = 0x40
+                        disp = bytes([addr & 0xFF]) if -128 <= addr <= 127 else (addr & 0xFFFFFFFF).to_bytes(4, "little")
+                        return mod_bits, 0x04, sib.to_bytes(1, "little") + disp
+                    if addr == 0:
+                        return 0x00, 0x04, (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little")
+                    if -128 <= addr <= 127:
+                        return 0x40, 0x04, (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little") + bytes([addr & 0xFF])
+                    return 0x80, 0x04, (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little") + (addr & 0xFFFFFFFF).to_bytes(4, "little")
+                # [idx*scale + disp32] — no base register
+                sib = (scale_enc << 6) | (index_enc << 3) | 0x05
+                return 0x00, 0x04, sib.to_bytes(1, "little") + (addr & 0xFFFFFFFF).to_bytes(4, "little")
             # Check which part is a register
             if base in self._REG32:
                 # [reg + imm/label]
                 disp = self._parse_imm(other) if other else 0
                 if disp == 0:
-                    modrm = (0x00 | (reg_enc << 3) | self._REG32[base])
-                    self._output.append(modrm)
-                elif -128 <= disp <= 127:
-                    modrm = (0x40 | (reg_enc << 3) | self._REG32[base])
-                    self._output.append(modrm)
-                    self._output.append(disp & 0xFF)
-                else:
-                    modrm = (0x80 | (reg_enc << 3) | self._REG32[base])
-                    self._output.append(modrm)
-                    self._output.extend((disp & 0xFFFFFFFF).to_bytes(4, "little"))
-            elif other in self._REG32:
+                    return 0x00, self._REG32[base], b""
+                if -128 <= disp <= 127:
+                    return 0x40, self._REG32[base], bytes([disp & 0xFF])
+                return 0x80, self._REG32[base], (disp & 0xFFFFFFFF).to_bytes(4, "little")
+            if other in self._REG32:
                 # [reg + label] or [label + reg + imm] — swapped order
                 disp = self._parse_imm(base) if base else 0
                 # Check for third part (e.g. [arr + EDX + 1])
@@ -3192,55 +3294,35 @@ class X86Assembler:
                     if extra:
                         disp += self._parse_imm(extra)
                 if disp == 0:
-                    modrm = (0x00 | (reg_enc << 3) | self._REG32[other])
-                    self._output.append(modrm)
-                elif -128 <= disp <= 127:
-                    modrm = (0x40 | (reg_enc << 3) | self._REG32[other])
-                    self._output.append(modrm)
-                    self._output.append(disp & 0xFF)
-                else:
-                    modrm = (0x80 | (reg_enc << 3) | self._REG32[other])
-                    self._output.append(modrm)
-                    self._output.extend((disp & 0xFFFFFFFF).to_bytes(4, "little"))
-            else:
-                # Check for scaled index: "label + esi*4" or "esi*4 + label"
-                scaled_reg = None
-                scaled_mul = None
-                disp_part = None
-                for p in parts:
-                    p = p.strip()
-                    if "*" in p:
-                        r, _, s = p.partition("*")
-                        r = r.strip()
-                        s = s.strip()
-                        if r in self._REG32 and s in ("1", "2", "4", "8"):
-                            scaled_reg = r
-                            scaled_mul = int(s)
-                        else:
-                            disp_part = p
-                    else:
-                        disp_part = p
-                if scaled_reg is not None:
-                    addr = self._parse_label(disp_part) if disp_part else 0
-                    scale_enc = {1: 0, 2: 1, 4: 2, 8: 3}[scaled_mul]
-                    index_enc = self._REG32[scaled_reg]
-                    modrm = (0x00 | (reg_enc << 3) | 0x04)
-                    sib = (scale_enc << 6) | (index_enc << 3) | 0x05
-                    self._output.append(modrm)
-                    self._output.append(sib)
-                    self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
-                else:
-                    # [label + label] — treat as direct address sum
-                    addr = self._parse_label(inner)
-                    modrm = (0x00 | (reg_enc << 3) | 0x05)
-                    self._output.append(modrm)
-                    self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
-        else:
-            # Direct address [imm32] or [label]
-            modrm = (0x00 | (reg_enc << 3) | 0x05)
-            self._output.append(modrm)
+                    return 0x00, self._REG32[other], b""
+                if -128 <= disp <= 127:
+                    return 0x40, self._REG32[other], bytes([disp & 0xFF])
+                return 0x80, self._REG32[other], (disp & 0xFFFFFFFF).to_bytes(4, "little")
+            # [label + label] — treat as direct address sum
             addr = self._parse_label(inner)
-            self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
+            return 0x00, 0x05, (addr & 0xFFFFFFFF).to_bytes(4, "little")
+        # Bare scaled index: [idx*scale] — SIB with no base register.
+        if "*" in inner:
+            r, _, s = inner.partition("*")
+            r = r.strip()
+            s = s.strip()
+            if r in self._REG32 and s in ("1", "2", "4", "8"):
+                scale_enc = {1: 0, 2: 1, 4: 2, 8: 3}[int(s)]
+                index_enc = self._REG32[r]
+                sib = (scale_enc << 6) | (index_enc << 3) | 0x05
+                return 0x00, 0x04, sib.to_bytes(1, "little") + (0).to_bytes(4, "little")
+        # Direct address [imm32] or [label]
+        addr = self._parse_label(inner)
+        return 0x00, 0x05, (addr & 0xFFFFFFFF).to_bytes(4, "little")
+
+    def _emit_modrm_mem(self, reg, mem):
+        """Emit ModR/M byte for [memory] operand."""
+        inner = mem.strip("[]").strip().lower()
+        reg_enc = self._REG32.get(reg.lower(), self._REG16.get(reg.lower(), self._REG8.get(reg.lower(), 0)))
+        mod_bits, rm_field, disp_bytes = self._mem_operand(inner)
+        modrm = (mod_bits | (reg_enc << 3) | rm_field)
+        self._output.append(modrm)
+        self._output.extend(disp_bytes)
 
     def _emit_alu(self, op, ops):
         if len(ops) < 2:
@@ -3285,6 +3367,50 @@ class X86Assembler:
                 self._output.append(0x00 + alu_op[op] * 8)
                 modrm = (0xC0 | (self._REG8[src] << 3) | self._REG8[dst])
                 self._output.append(modrm)
+        # reg, [mem] — ALU r32, r/m32 (0x03 + op*8)
+        elif dst in self._REG32 and src.startswith("["):
+            mod_bits, rm_field, disp_bytes = self._mem_operand(src.strip("[]").strip())
+            if op == "test":
+                # TEST r32, r/m32 — 85 /r (commutative)
+                if self._pfx(dst):
+                    self._output.append(0x66)
+                self._output.append(0x85)
+                modrm = (mod_bits | (self._REG32[dst] << 3) | rm_field)
+                self._output.append(modrm)
+                self._output.extend(disp_bytes)
+            else:
+                if self._pfx(dst):
+                    self._output.append(0x66)
+                self._output.append(0x03 + alu_op[op] * 8)
+                modrm = (mod_bits | (self._REG32[dst] << 3) | rm_field)
+                self._output.append(modrm)
+                self._output.extend(disp_bytes)
+        elif dst in self._REG16 and src.startswith("["):
+            mod_bits, rm_field, disp_bytes = self._mem_operand(src.strip("[]").strip())
+            if op == "test":
+                self._output.append(0x66)
+                self._output.append(0x85)
+                modrm = (mod_bits | (self._REG16[dst] << 3) | rm_field)
+                self._output.append(modrm)
+                self._output.extend(disp_bytes)
+            else:
+                self._output.append(0x66)
+                self._output.append(0x03 + alu_op[op] * 8)
+                modrm = (mod_bits | (self._REG16[dst] << 3) | rm_field)
+                self._output.append(modrm)
+                self._output.extend(disp_bytes)
+        elif dst in self._REG8 and src.startswith("["):
+            mod_bits, rm_field, disp_bytes = self._mem_operand(src.strip("[]").strip())
+            if op == "test":
+                self._output.append(0x84)
+                modrm = (mod_bits | (self._REG8[dst] << 3) | rm_field)
+                self._output.append(modrm)
+                self._output.extend(disp_bytes)
+            else:
+                self._output.append(0x02 + alu_op[op] * 8)
+                modrm = (mod_bits | (self._REG8[dst] << 3) | rm_field)
+                self._output.append(modrm)
+                self._output.extend(disp_bytes)
         # reg, imm
         elif dst in self._REG32:
             val = self._parse_imm(src)
@@ -3349,90 +3475,101 @@ class X86Assembler:
                 modrm = (0xC0 | (0 << 3) | self._REG8[dst])
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
-            elif -128 <= val <= 255:
+            else:
+                # ALU r/m8, imm8 — 80 /digit ib. r/m8 has no imm16 form, so
+                # the immediate is truncated to 8 bits (same as TEST above).
                 self._output.append(0x80)
                 modrm = (0xC0 | (alu_op[op] << 3) | self._REG8[dst])
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
-            else:
-                self._output.append(0x66)
-                self._output.append(0x81)
-                modrm = (0xC0 | (alu_op[op] << 3) | self._REG8[dst])
-                self._output.append(modrm)
-                self._output.append((val & 0xFFFF).to_bytes(2, "little"))
         # [mem], reg or [mem], imm — ALU r/m32, r/imm
         elif "[" in dst:
             mem = dst
+            size = None
             for pfx in ("dword", "word", "byte"):
                 if mem.startswith(pfx):
+                    size = pfx
                     mem = mem[len(pfx):].strip()
-            # Resolve memory operand: returns (modrm_rm, disp_bytes)
-            inner = mem.strip("[]").strip()
-            if inner in self._REG32:
-                modrm_rm = self._REG32[inner]
-                disp_bytes = b""
-            elif "+" in inner:
-                parts = inner.split("+")
-                base = parts[0].strip()
-                other = parts[1].strip() if len(parts) > 1 else ""
-                if base in self._REG32:
-                    modrm_rm = self._REG32[base]
-                    disp = self._parse_imm(other) if other else 0
-                    if disp != 0:
-                        if -128 <= disp <= 127:
-                            disp_bytes = bytes([disp & 0xFF])
-                        else:
-                            disp_bytes = (disp & 0xFFFFFFFF).to_bytes(4, "little")
-                    else:
-                        disp_bytes = b""
-                elif other in self._REG32:
-                    modrm_rm = self._REG32[other]
-                    disp = self._parse_imm(base) if base else 0
-                    if disp != 0:
-                        if -128 <= disp <= 127:
-                            disp_bytes = bytes([disp & 0xFF])
-                        else:
-                            disp_bytes = (disp & 0xFFFFFFFF).to_bytes(4, "little")
-                    else:
-                        disp_bytes = b""
-                else:
-                    modrm_rm = 5
-                    addr = self._parse_label(inner)
-                    disp_bytes = (addr & 0xFFFFFFFF).to_bytes(4, "little")
-            else:
-                modrm_rm = 5
-                addr = self._parse_label(inner)
-                disp_bytes = (addr & 0xFFFFFFFF).to_bytes(4, "little")
+            mod_bits, rm_field, disp_bytes = self._mem_operand(mem.strip("[]").strip())
             # [mem], reg — ALU r/m32, r32
-            if src in self._REG32:
+            if op == "test" and src in self._REG32:
+                # TEST r/m32, r32 — 85 /r
+                self._output.append(0x85)
+                self._output.append(mod_bits | (self._REG32[src] << 3) | rm_field)
+                self._output.extend(disp_bytes)
+            elif op == "test" and src in self._REG16:
+                # TEST r/m16, r16 — 66 85 /r
+                self._output.append(0x66)
+                self._output.append(0x85)
+                self._output.append(mod_bits | (self._REG16[src] << 3) | rm_field)
+                self._output.extend(disp_bytes)
+            elif op == "test" and src in self._REG8:
+                # TEST r/m8, r8 — 84 /r
+                self._output.append(0x84)
+                self._output.append(mod_bits | (self._REG8[src] << 3) | rm_field)
+                self._output.extend(disp_bytes)
+            elif src in self._REG32:
                 self._output.append(0x01 + alu_op[op] * 8)
-                self._output.append(0x00 | (self._REG32[src] << 3) | modrm_rm)
+                self._output.append(mod_bits | (self._REG32[src] << 3) | rm_field)
                 self._output.extend(disp_bytes)
             elif src in self._REG16:
                 self._output.append(0x66)
                 self._output.append(0x01 + alu_op[op] * 8)
-                self._output.append(0x00 | (self._REG16[src] << 3) | modrm_rm)
+                self._output.append(mod_bits | (self._REG16[src] << 3) | rm_field)
                 self._output.extend(disp_bytes)
             elif src in self._REG8:
                 self._output.append(0x00 + alu_op[op] * 8)
-                self._output.append(0x00 | (self._REG8[src] << 3) | modrm_rm)
+                self._output.append(mod_bits | (self._REG8[src] << 3) | rm_field)
                 self._output.extend(disp_bytes)
             else:
                 # [mem], imm — ALU r/m32, imm32
                 val = self._parse_imm(src)
-                if op == "test":
+                if op == "test" and size == "byte":
+                    # TEST r/m8, imm8 — F6 /0 ib
+                    self._output.append(0xF6)
+                    self._output.append(mod_bits | (0 << 3) | rm_field)
+                    self._output.extend(disp_bytes)
+                    self._output.append(val & 0xFF)
+                elif op == "test" and size == "word":
+                    # TEST r/m16, imm16 — 66 F7 /0 iw
+                    self._output.append(0x66)
                     self._output.append(0xF7)
-                    self._output.append(0x00 | (0 << 3) | modrm_rm)
+                    self._output.append(mod_bits | (0 << 3) | rm_field)
+                    self._output.extend(disp_bytes)
+                    self._output.extend(struct.pack("<H", val & 0xFFFF))
+                elif op == "test":
+                    self._output.append(0xF7)
+                    self._output.append(mod_bits | (0 << 3) | rm_field)
                     self._output.extend(disp_bytes)
                     self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
+                elif size == "byte":
+                    # byte-sized ALU r/m8, imm8 — 80 /digit ib
+                    self._output.append(0x80)
+                    self._output.append(mod_bits | (alu_op[op] << 3) | rm_field)
+                    self._output.extend(disp_bytes)
+                    self._output.append(val & 0xFF)
+                elif size == "word":
+                    # word-sized ALU r/m16, imm8 or imm16 — 66 83 /digit ib / 66 81 /digit iw
+                    if -128 <= val <= 127:
+                        self._output.append(0x66)
+                        self._output.append(0x83)
+                        self._output.append(mod_bits | (alu_op[op] << 3) | rm_field)
+                        self._output.extend(disp_bytes)
+                        self._output.append(val & 0xFF)
+                    else:
+                        self._output.append(0x66)
+                        self._output.append(0x81)
+                        self._output.append(mod_bits | (alu_op[op] << 3) | rm_field)
+                        self._output.extend(disp_bytes)
+                        self._output.extend(struct.pack("<H", val & 0xFFFF))
                 elif -128 <= val <= 127:
                     self._output.append(0x83)
-                    self._output.append(0x00 | (alu_op[op] << 3) | modrm_rm)
+                    self._output.append(mod_bits | (alu_op[op] << 3) | rm_field)
                     self._output.extend(disp_bytes)
                     self._output.append(val & 0xFF)
                 else:
                     self._output.append(0x81)
-                    self._output.append(0x00 | (alu_op[op] << 3) | modrm_rm)
+                    self._output.append(mod_bits | (alu_op[op] << 3) | rm_field)
                     self._output.extend(disp_bytes)
                     self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
 
@@ -3451,19 +3588,30 @@ class X86Assembler:
                 self._output.append(0x66)
             base = 0x40 if op == "inc" else 0x48
             self._output.append(base + self._REG16[reg])
+        # inc/dec r/m8 — FE /0 or FE /1 (register form)
+        elif reg in self._REG8:
+            func = 0 if op == "inc" else 1
+            self._output.append(0xFE)
+            self._output.append(0xC0 | (func << 3) | self._REG8[reg])
         # inc/dec dword [mem] / word [mem] — FF /0 or FF /1
         elif "[" in reg:
             func = 0 if op == "inc" else 1
             mem = reg
+            size = None
             # strip size prefix
             for pfx in ("dword", "word", "byte"):
                 if mem.startswith(pfx):
+                    size = pfx
                     mem = mem[len(pfx):].strip()
-            self._output.append(0xFF)
-            modrm = (0x00 | (func << 3) | 0x05)  # /0 or /1, [disp32]
-            self._output.append(modrm)
-            addr = self._parse_label(mem.strip("[]"))
-            self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
+            mod_bits, rm_field, disp_bytes = self._mem_operand(mem.strip("[]").strip())
+            if size == "byte":
+                self._output.append(0xFE)
+            else:
+                if self._pfx_size(size):
+                    self._output.append(0x66)
+                self._output.append(0xFF)
+            self._output.append(mod_bits | (func << 3) | rm_field)
+            self._output.extend(disp_bytes)
 
     def _emit_unary(self, op, ops):
         if not ops:
@@ -3486,6 +3634,90 @@ class X86Assembler:
             self._output.append(0xF6)
             modrm = (0xC0 | (func << 3) | self._REG8[reg])
             self._output.append(modrm)
+        elif "[" in reg:
+            # [mem] — F6 /func (byte) or F7 /func (word/dword)
+            mem = reg
+            size = None
+            for pfx in ("dword", "word", "byte"):
+                if mem.startswith(pfx):
+                    size = pfx
+                    mem = mem[len(pfx):].strip()
+            inner = mem.strip("[]").strip().lower()
+            mod_bits, rm_field, disp_bytes = self._mem_operand(inner)
+            if size == "byte":
+                self._output.append(0xF6)
+                modrm = (mod_bits | (func << 3) | rm_field)
+                self._output.append(modrm)
+                self._output.extend(disp_bytes)
+            else:
+                if size == "word":
+                    self._output.append(0x66)
+                self._output.append(0xF7)
+                modrm = (mod_bits | (func << 3) | rm_field)
+                self._output.append(modrm)
+                self._output.extend(disp_bytes)
+
+    def _emit_imul(self, ops):
+        """IMUL r32, r/m32 (0F AF /r) or IMUL r32, r/m32, imm (69/6B /r).
+
+        2-operand:
+            imul eax, ecx        -> 0F AF C1
+            imul eax, [ebx+4]    -> 0F AF 43 04
+            imul eax, [label]    -> 0F AF 05 disp32
+        3-operand (immediate fits in sign-extended byte):
+            imul eax, ecx, 5     -> 6B C1 05
+            imul eax, [ebx], -3  -> 6B 43 FD
+        3-operand (larger immediate):
+            imul eax, ecx, 0x100 -> 69 C1 00010000
+        """
+        if len(ops) < 2:
+            return
+        dst, src = ops[0].lower().strip(), ops[1].lower().strip()
+        if dst not in self._REG32:
+            return
+
+        if len(ops) == 2:
+            # 2-operand: IMUL r32, r/m32 (0F AF /r)
+            if self._pfx(dst):
+                self._output.append(0x66)
+            self._output.append(0x0F)
+            self._output.append(0xAF)
+            if src in self._REG32:
+                modrm = (0xC0 | (self._REG32[dst] << 3) | self._REG32[src])
+                self._output.append(modrm)
+            elif src.startswith("["):
+                self._emit_modrm_mem(dst, src)
+            else:
+                return
+        elif len(ops) == 3:
+            # 3-operand: IMUL r32, r/m32, imm
+            imm = self._parse_imm(ops[2].strip())
+            if -128 <= imm <= 127:
+                # IMUL r32, r/m32, imm8 (6B /r ib) — sign-extended
+                if self._pfx(dst):
+                    self._output.append(0x66)
+                self._output.append(0x6B)
+                if src in self._REG32:
+                    modrm = (0xC0 | (self._REG32[dst] << 3) | self._REG32[src])
+                    self._output.append(modrm)
+                elif src.startswith("["):
+                    self._emit_modrm_mem(dst, src)
+                else:
+                    return
+                self._output.append(imm & 0xFF)
+            else:
+                # IMUL r32, r/m32, imm32 (69 /r id)
+                if self._pfx(dst):
+                    self._output.append(0x66)
+                self._output.append(0x69)
+                if src in self._REG32:
+                    modrm = (0xC0 | (self._REG32[dst] << 3) | self._REG32[src])
+                    self._output.append(modrm)
+                elif src.startswith("["):
+                    self._emit_modrm_mem(dst, src)
+                else:
+                    return
+                self._output.extend((imm & 0xFFFFFFFF).to_bytes(4, "little"))
 
     def _emit_shift(self, op, ops):
         if len(ops) < 2:
@@ -3534,56 +3766,33 @@ class X86Assembler:
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
         elif "[" in reg:
-            # [mem], count
+            # [mem], count — ALU r/m, imm8 / r/m, CL
             mem = reg
+            size = None
             for pfx in ("dword", "word", "byte"):
                 if mem.startswith(pfx):
+                    size = pfx
                     mem = mem[len(pfx):].strip()
-            inner = mem.strip("[]").strip()
-            if inner in self._REG32:
-                modrm_rm = self._REG32[inner]
-                disp_bytes = b""
-            elif "+" in inner:
-                parts = inner.split("+")
-                base = parts[0].strip()
-                other = parts[1].strip() if len(parts) > 1 else ""
-                if base in self._REG32:
-                    modrm_rm = self._REG32[base]
-                    disp = self._parse_imm(other) if other else 0
-                    if disp != 0:
-                        if -128 <= disp <= 127:
-                            disp_bytes = bytes([disp & 0xFF])
-                        else:
-                            disp_bytes = (disp & 0xFFFFFFFF).to_bytes(4, "little")
-                    else:
-                        disp_bytes = b""
-                else:
-                    modrm_rm = 5
-                    addr = self._parse_imm(inner)
-                    disp_bytes = (addr & 0xFFFFFFFF).to_bytes(4, "little")
-            else:
-                modrm_rm = 5
-                addr = self._parse_imm(inner)
-                disp_bytes = (addr & 0xFFFFFFFF).to_bytes(4, "little")
-            # Determine if byte or dword based on prefix
-            is_byte = "byte" in reg.lower()
-            if is_byte:
+            mod_bits, rm_field, disp_bytes = self._mem_operand(mem.strip("[]").strip())
+            if size == "byte":
                 if count == "cl":
                     self._output.append(0xD2)
                 else:
                     self._output.append(0xC0)
                     val = self._parse_imm(count)
-                self._output.append(0x00 | (ext << 3) | modrm_rm)
+                self._output.append(mod_bits | (ext << 3) | rm_field)
                 self._output.extend(disp_bytes)
                 if count != "cl":
                     self._output.append(val & 0xFF)
             else:
+                if self._pfx_size(size):
+                    self._output.append(0x66)
                 if count == "cl":
                     self._output.append(0xD3)
                 else:
                     self._output.append(0xC1)
                     val = self._parse_imm(count)
-                self._output.append(0x00 | (ext << 3) | modrm_rm)
+                self._output.append(mod_bits | (ext << 3) | rm_field)
                 self._output.extend(disp_bytes)
                 if count != "cl":
                     self._output.append(val & 0xFF)
@@ -3605,6 +3814,44 @@ class X86Assembler:
             self._output.append(0x87)
             modrm = (0xC0 | (self._REG32[r1] << 3) | self._REG32[r2])
             self._output.append(modrm)
+        elif r1 in self._REG16 and r2 in self._REG16:
+            if self._pfx(r1):
+                self._output.append(0x66)
+            self._output.append(0x87)
+            modrm = (0xC0 | (self._REG16[r1] << 3) | self._REG16[r2])
+            self._output.append(modrm)
+        elif r1 in self._REG8 and r2 in self._REG8:
+            self._output.append(0x86)
+            modrm = (0xC0 | (self._REG8[r1] << 3) | self._REG8[r2])
+            self._output.append(modrm)
+        elif r1 in self._REG32:
+            # XCHG r32, [mem]
+            self._output.append(0x87)
+            self._emit_modrm_mem(r1, r2)
+        elif r2 in self._REG32:
+            # XCHG [mem], r32
+            self._output.append(0x87)
+            self._emit_modrm_mem(r2, r1)
+        elif r1 in self._REG16:
+            # XCHG r16, [mem]
+            if self._pfx(r1):
+                self._output.append(0x66)
+            self._output.append(0x87)
+            self._emit_modrm_mem(r1, r2)
+        elif r2 in self._REG16:
+            # XCHG [mem], r16
+            if self._pfx(r2):
+                self._output.append(0x66)
+            self._output.append(0x87)
+            self._emit_modrm_mem(r2, r1)
+        elif r1 in self._REG8:
+            # XCHG r8, [mem]
+            self._output.append(0x86)
+            self._emit_modrm_mem(r1, r2)
+        elif r2 in self._REG8:
+            # XCHG [mem], r8
+            self._output.append(0x86)
+            self._emit_modrm_mem(r2, r1)
 
     def _emit_lgdt(self, ops):
         if not ops:
@@ -3649,6 +3896,19 @@ class X86Assembler:
             self._output.append(0x0F)
             self._output.append(0x00)
             self._output.append(0xD8 | self._REG16[reg])
+        elif "[" in reg:
+            # LTR [mem] — 0F 00 /3 with ModR/M. Needs 0x67 address-size
+            # prefix in 16-bit mode for [disp32] addressing (like LGDT/LIDT).
+            mem = reg
+            inner = mem.strip("[]").strip().lower()
+            mod_bits, rm_field, disp_bytes = self._mem_operand(inner)
+            if self._bits == 16:
+                self._output.append(0x67)
+            self._output.append(0x0F)
+            self._output.append(0x00)
+            modrm = (mod_bits | (3 << 3) | rm_field)
+            self._output.append(modrm)
+            self._output.extend(disp_bytes)
 
     def _parse_label(self, text):
         text = text.strip()
@@ -4144,31 +4404,49 @@ class X86CPU:
     # ── Memory access ────────────────────────────────────────────────────
 
     def _read8(self, addr: int) -> int:
-        return self._mem[addr & 0xFFFFFFFF]
+        a = addr & 0xFFFFFFFF
+        if a >= self._mem_size:
+            raise MemFault(f"read8 out of bounds at 0x{a:X}")
+        return self._mem[a]
 
     def _write8(self, addr: int, val: int):
-        self._mem[addr & 0xFFFFFFFF] = val & 0xFF
+        a = addr & 0xFFFFFFFF
+        if a >= self._mem_size:
+            raise MemFault(f"write8 out of bounds at 0x{a:X}")
+        self._mem[a] = val & 0xFF
 
     def _write16(self, addr: int, val: int):
         a = addr & 0xFFFFFFFF
+        if a + 1 >= self._mem_size:
+            raise MemFault(f"write16 out of bounds at 0x{a:X}")
         self._mem[a] = val & 0xFF
         self._mem[a + 1] = (val >> 8) & 0xFF
 
     def _read32(self, addr: int) -> int:
         a = addr & 0xFFFFFFFF
+        if a + 3 >= self._mem_size:
+            raise MemFault(f"read32 out of bounds at 0x{a:X}")
         return struct.unpack_from("<I", self._mem, a)[0]
 
     def _write32(self, addr: int, val: int):
         a = addr & 0xFFFFFFFF
+        if a + 3 >= self._mem_size:
+            raise MemFault(f"write32 out of bounds at 0x{a:X}")
         struct.pack_into("<I", self._mem, a, val & 0xFFFFFFFF)
 
     def _push32(self, val: int):
-        self._set32(4, self._get32(4) - 4)
-        self._write32(self._get32(4), val)
+        esp = self._get32(4) - 4
+        if esp < 0 or esp >= self._mem_size:
+            raise InsFault("stack overflow")
+        self._set32(4, esp)
+        self._write32(esp, val)
 
     def _pop32(self) -> int:
-        val = self._read32(self._get32(4))
-        self._set32(4, self._get32(4) + 4)
+        esp = self._get32(4)
+        if esp + 4 > self._mem_size:
+            raise InsFault("stack underflow")
+        val = self._read32(esp)
+        self._set32(4, esp + 4)
         return val
 
     # ── ModRM decoder ────────────────────────────────────────────────────
@@ -4297,7 +4575,11 @@ class X86CPU:
     # ── Execute ──────────────────────────────────────────────────────────
 
     def step(self) -> bool:
-        """Execute one instruction. Returns False on HLT or error."""
+        """Execute one instruction. Returns False on HLT or error.
+
+        InsFault and MemFault are re-raised so callers (VMEngine) can
+        distinguish them from generic Python exceptions.
+        """
         self._check_pending_irqs()
         start_eip = self._eip
         try:
@@ -4312,8 +4594,10 @@ class X86CPU:
             self._exec_one()
         except Halt:
             return False
+        except (InsFault, MemFault):
+            raise
         except Exception as e:
-            logger.error(f"CPU fault at EIP=0x{start_eip:X}: {e}")
+            logger.error(f"CPU fault at EIP=0x{start_eip:X}: {type(e).__name__}: {e}")
             return False
         self._step_count += 1
         return True
@@ -4427,24 +4711,24 @@ class X86CPU:
                     v = self._get8l(rm_val)
                     r = (v + 1) & 0xFF
                     self._set8l(rm_val, r)
-                    self._update_flags_add(v, 1, r)
+                    self._update_flags_add(v, 1, r, 8)
                 else:
                     v = self._read8(rm_val)
                     r = (v + 1) & 0xFF
                     self._write8(rm_val, r)
-                    self._update_flags_add(v, 1, r)
+                    self._update_flags_add(v, 1, r, 8)
                 return
             if reg_f == 1:  # DEC r/m8
                 if rm_is_reg:
                     v = self._get8l(rm_val)
                     r = (v - 1) & 0xFF
                     self._set8l(rm_val, r)
-                    self._update_flags_sub(v, 1, v - 1)
+                    self._update_flags_sub(v, 1, r, 8)
                 else:
                     v = self._read8(rm_val)
                     r = (v - 1) & 0xFF
                     self._write8(rm_val, r)
-                    self._update_flags_sub(v, 1, v - 1)
+                    self._update_flags_sub(v, 1, r, 8)
                 return
 
         # ── PUSH r/m32 (FF /6) ──
@@ -4806,6 +5090,36 @@ class X86CPU:
             self._set32(other, v0)
             return
 
+        # ── XCHG r/m32, r32 (87) ──
+        if opcode == 0x87:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if rm_is_reg:
+                v_rm = self._get32(rm_val)
+                v_r = self._get32(reg_f)
+                self._set32(rm_val, v_r)
+                self._set32(reg_f, v_rm)
+            else:
+                v_rm = self._read32(rm_val)
+                v_r = self._get32(reg_f)
+                self._write32(rm_val, v_r)
+                self._set32(reg_f, v_rm)
+            return
+
+        # ── XCHG r/m8, r8 (86) ──
+        if opcode == 0x86:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if rm_is_reg:
+                v_rm = self._get8l(rm_val)
+                v_r = self._get8l(reg_f)
+                self._set8l(rm_val, v_r)
+                self._set8l(reg_f, v_rm)
+            else:
+                v_rm = self._mem[rm_val & 0xFFFFFFFF]
+                v_r = self._get8l(reg_f)
+                self._mem[rm_val & 0xFFFFFFFF] = v_r
+                self._set8l(reg_f, v_rm)
+            return
+
         # ── Group 1: ALU r/m32, imm32 (81) / ALU r/m32, imm8 (83) ──
         if opcode == 0x81:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
@@ -4883,12 +5197,16 @@ class X86CPU:
         alu_ops = {
             0x01: (0, 32), 0x03: (0, 32),  # ADD
             0x09: (1, 32), 0x0B: (1, 32),  # OR
+            0x11: (2, 32), 0x13: (2, 32),  # ADC
+            0x19: (3, 32), 0x1B: (3, 32),  # SBB
             0x21: (4, 32), 0x23: (4, 32),  # AND
             0x29: (5, 32), 0x2B: (5, 32),  # SUB
             0x31: (6, 32), 0x33: (6, 32),  # XOR
             0x39: (7, 32), 0x3B: (7, 32),  # CMP
             0x00: (0, 8),  0x02: (0, 8),   # ADD8
             0x08: (1, 8),  0x0A: (1, 8),   # OR8
+            0x10: (2, 8),  0x12: (2, 8),   # ADC8
+            0x18: (3, 8),  0x1A: (3, 8),   # SBB8
             0x20: (4, 8),  0x22: (4, 8),   # AND8
             0x28: (5, 8),  0x2A: (5, 8),   # SUB8
             0x30: (6, 8),  0x32: (6, 8),   # XOR8
@@ -5257,6 +5575,34 @@ class X86CPU:
         # ── MUL r/m8 (F6 /4) / MUL r/m32 (F7 /4) ──
         if opcode == 0xF6:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if reg_f == 0:  # TEST r/m8, imm8
+                imm = self._fetch_byte()
+                if rm_is_reg:
+                    a = self._get8l(rm_val)
+                else:
+                    a = self._read8(rm_val)
+                self._update_flags_logic(a & imm, 8)
+                return
+            if reg_f == 2:  # NOT r/m8
+                if rm_is_reg:
+                    v = self._get8l(rm_val)
+                    self._set8l(rm_val, ~v & 0xFF)
+                else:
+                    v = self._read8(rm_val)
+                    self._write8(rm_val, ~v & 0xFF)
+                return
+            if reg_f == 3:  # NEG r/m8
+                if rm_is_reg:
+                    v = self._get8l(rm_val)
+                    r = (-v) & 0xFF
+                    self._set8l(rm_val, r)
+                else:
+                    v = self._read8(rm_val)
+                    r = (-v) & 0xFF
+                    self._write8(rm_val, r)
+                self._set_flag(FLAG_CF, v != 0)
+                self._update_flags_sub(0, v, r, 8)
+                return
             if reg_f == 4:  # MUL r/m8
                 if rm_is_reg:
                     a = self._get8l(rm_val)
@@ -5402,14 +5748,21 @@ class X86CPU:
                 return
             return
 
-        # ── Unknown opcode — skip 1 byte and try again ──
-        logger.warning(f"CPU: unknown opcode 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}")
-        self._eip = (self._eip + 1) & 0xFFFFFFFF
+        # ── Unknown opcode ──
+        raise InsFault(f"unknown opcode 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}")
 
     # ── 16-bit operand operations (0x66 prefix) ──────────────────────────
 
     def _exec_16bit(self, opcode: int):
         """Execute an instruction with 16-bit operand size (after 0x66 prefix)."""
+        if opcode == 0xA1:
+            addr = self._fetch_dword()
+            self._set16(0, self._read16(addr))
+            return
+        if opcode == 0xA3:
+            addr = self._fetch_dword()
+            self._write16(addr, self._get16(0))
+            return
         # STOSW (AB) — store AX at [EDI], advance EDI by 2
         if opcode == 0xAB:
             edi = self._regs[7] & 0xFFFFFFFF
@@ -5465,6 +5818,21 @@ class X86CPU:
             self._regs[7] = (edi + d) & 0xFFFFFFFF
             return
 
+        # XCHG r/m16, r16 (66 87) — swap 16-bit register with r/m16
+        if opcode == 0x87:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if rm_is_reg:
+                v_rm = self._get16(rm_val)
+                v_r = self._get16(reg_f)
+                self._set16(rm_val, v_r)
+                self._set16(reg_f, v_rm)
+            else:
+                v_rm = self._read16(rm_val)
+                v_r = self._get16(reg_f)
+                self._write16(rm_val, v_r)
+                self._set16(reg_f, v_rm)
+            return
+
         # PUSH imm16 (68) — push 16-bit immediate (not standard, but useful)
         if opcode == 0x68:
             lo = self._fetch_byte()
@@ -5518,8 +5886,395 @@ class X86CPU:
                 self._write_rm_mem(rm_val, 16, imm)
             return
 
-        # ADD/SUB/CMP r16, imm8 (81/83 with 16-bit) — simplified: just skip
-        # For now, log and skip unknown 16-bit ops
+        # TEST r/m16, imm16 (F7 /0) — AND without storing, set flags
+        # NOT/NEG/MUL/IMUL/DIV/IDIV r/m16 (F7 /2-/7)
+        if opcode == 0xF7:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if reg_f == 0:  # TEST r/m16, imm16
+                lo = self._fetch_byte()
+                hi = self._fetch_byte()
+                imm = lo | (hi << 8)
+                if rm_is_reg:
+                    a = self._read_rm_reg(rm_val, 16)
+                else:
+                    a = self._read_rm_mem(rm_val, 16)
+                self._update_flags_logic(a & imm, 16)
+                return
+            if reg_f == 2:  # NOT r/m16
+                if rm_is_reg:
+                    v = self._read_rm_reg(rm_val, 16)
+                    self._write_rm_reg(rm_val, 16, ~v & 0xFFFF)
+                else:
+                    v = self._read_rm_mem(rm_val, 16)
+                    self._write_rm_mem(rm_val, 16, ~v & 0xFFFF)
+                return
+            if reg_f == 3:  # NEG r/m16
+                if rm_is_reg:
+                    v = self._read_rm_reg(rm_val, 16)
+                else:
+                    v = self._read_rm_mem(rm_val, 16)
+                r = (-v) & 0xFFFF
+                if rm_is_reg:
+                    self._write_rm_reg(rm_val, 16, r)
+                else:
+                    self._write_rm_mem(rm_val, 16, r)
+                self._set_flag(FLAG_CF, v != 0)
+                self._update_flags_sub(0, v, r)
+                return
+            if reg_f == 4:  # MUL r/m16 — DX:AX = AX * r/m16 (unsigned)
+                if rm_is_reg:
+                    a = self._read_rm_reg(rm_val, 16)
+                else:
+                    a = self._read_rm_mem(rm_val, 16)
+                b = self._get16(0)  # AX
+                result = a * b
+                self._set16(0, result & 0xFFFF)  # AX = low
+                self._set16(2, (result >> 16) & 0xFFFF)  # DX = high
+                self._set_flag(FLAG_CF, bool(result >> 16))
+                self._set_flag(FLAG_OF, bool(result >> 16))
+                return
+            if reg_f == 5:  # IMUL r/m16 — DX:AX = AX * r/m16 (signed)
+                if rm_is_reg:
+                    a = self._read_rm_reg(rm_val, 16)
+                else:
+                    a = self._read_rm_mem(rm_val, 16)
+                b = self._get16(0)  # AX
+                a_s = a if a < 0x8000 else a - 0x10000
+                b_s = b if b < 0x8000 else b - 0x10000
+                result = a_s * b_s
+                self._set16(0, result & 0xFFFF)  # AX = low
+                self._set16(2, (result >> 16) & 0xFFFF)  # DX = high
+                hi = (result >> 16) & 0xFFFF
+                self._set_flag(FLAG_CF, hi != 0 and hi != 0xFFFF)
+                self._set_flag(FLAG_OF, hi != 0 and hi != 0xFFFF)
+                return
+            if reg_f == 6:  # DIV r/m16 — DX:AX / r/m16
+                if rm_is_reg:
+                    divisor = self._read_rm_reg(rm_val, 16)
+                else:
+                    divisor = self._read_rm_mem(rm_val, 16)
+                if divisor == 0:
+                    raise InsFault("DIV by zero")
+                dx = self._get16(2)
+                ax = self._get16(0)
+                dividend = (dx << 16) | ax
+                quotient = dividend // divisor
+                if quotient > 0xFFFF:
+                    raise InsFault("DIV overflow")
+                self._set16(0, quotient)  # AX = quotient
+                self._set16(2, dividend % divisor)  # DX = remainder
+                return
+            if reg_f == 7:  # IDIV r/m16 — DX:AX / r/m16 (signed)
+                if rm_is_reg:
+                    divisor = self._read_rm_reg(rm_val, 16)
+                else:
+                    divisor = self._read_rm_mem(rm_val, 16)
+                if divisor == 0:
+                    raise InsFault("IDIV by zero")
+                dx = self._get16(2)
+                ax = self._get16(0)
+                dividend = (dx << 16) | ax
+                divisor_s = divisor if divisor < 0x8000 else divisor - 0x10000
+                if divisor_s == 0:
+                    raise InsFault("IDIV by zero")
+                dividend_s = dividend if dividend < 0x80000000 else dividend - 0x100000000
+                quotient = int(dividend_s / divisor_s)
+                remainder = dividend_s - quotient * divisor_s
+                self._set16(0, quotient & 0xFFFF)  # AX
+                self._set16(2, remainder & 0xFFFF)  # DX
+                return
+            return
+
+        # ALU r/m16, r16 / r16, r/m16 (16-bit reg forms)
+        _alu_r16_rm16 = {
+            0x01: 0, 0x03: 0,  # ADD
+            0x09: 1, 0x0B: 1,  # OR
+            0x11: 2, 0x13: 2,  # ADC
+            0x19: 3, 0x1B: 3,  # SBB
+            0x21: 4, 0x23: 4,  # AND
+            0x29: 5, 0x2B: 5,  # SUB
+            0x31: 6, 0x33: 6,  # XOR
+            0x39: 7, 0x3B: 7,  # CMP
+        }
+        if opcode in _alu_r16_rm16:
+            alu_op = _alu_r16_rm16[opcode]
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            src_reg = self._read_rm_reg(reg_f, 16)
+            src_rm = self._read_rm_reg(rm_val, 16) if rm_is_reg else self._read_rm_mem(rm_val, 16)
+            if not (opcode & 0x02):  # r/m16, r16 → dest is r/m (bit1=0)
+                if alu_op != 7:
+                    r = self._alu(alu_op, src_rm, src_reg, 16)
+                    if rm_is_reg:
+                        self._write_rm_reg(rm_val, 16, r & 0xFFFF)
+                    else:
+                        self._write_rm_mem(rm_val, 16, r & 0xFFFF)
+                else:
+                    self._alu(alu_op, src_rm, src_reg, 16)
+            else:  # r16, r/m16 → dest is reg (bit1=1)
+                if alu_op != 7:
+                    r = self._alu(alu_op, src_reg, src_rm, 16)
+                    self._write_rm_reg(reg_f, 16, r & 0xFFFF)
+                else:
+                    self._alu(alu_op, src_reg, src_rm, 16)
+            return
+
+        # ALU r/m8, r8 / r8, r/m8 (8-bit reg forms)
+        _alu_r8_rm8 = {
+            0x00: 0, 0x02: 0,  # ADD
+            0x08: 1, 0x0A: 1,  # OR
+            0x10: 2, 0x12: 2,  # ADC
+            0x18: 3, 0x1A: 3,  # SBB
+            0x20: 4, 0x22: 4,  # AND
+            0x28: 5, 0x2A: 5,  # SUB
+            0x30: 6, 0x32: 6,  # XOR
+            0x38: 7, 0x3A: 7,  # CMP
+        }
+        if opcode in _alu_r8_rm8:
+            alu_op = _alu_r8_rm8[opcode]
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            src_reg = self._read_rm_reg(reg_f, 8)
+            src_rm = self._read_rm_reg(rm_val, 8) if rm_is_reg else self._read_rm_mem(rm_val, 8)
+            if not (opcode & 0x02):  # r/m8, r8 → dest is r/m (bit1=0)
+                if alu_op != 7:
+                    r = self._alu(alu_op, src_rm, src_reg, 8)
+                    if rm_is_reg:
+                        self._write_rm_reg(rm_val, 8, r & 0xFF)
+                    else:
+                        self._write_rm_mem(rm_val, 8, r & 0xFF)
+                else:
+                    self._alu(alu_op, src_rm, src_reg, 8)
+            else:  # r8, r/m8 → dest is reg (bit1=1)
+                if alu_op != 7:
+                    r = self._alu(alu_op, src_reg, src_rm, 8)
+                    self._write_rm_reg(reg_f, 8, r & 0xFF)
+                else:
+                    self._alu(alu_op, src_reg, src_rm, 8)
+            return
+
+        # Group 1: ALU r/m16, imm16 (81) / ALU r/m16, imm8 (83)
+        if opcode == 0x81:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            lo = self._fetch_byte()
+            hi = self._fetch_byte()
+            imm = lo | (hi << 8)
+            if imm & 0x8000:
+                imm = imm - 0x10000
+            if rm_is_reg:
+                a = self._read_rm_reg(rm_val, 16)
+            else:
+                a = self._read_rm_mem(rm_val, 16)
+            r = self._alu(reg_f, a, imm, 16)
+            if rm_is_reg:
+                self._write_rm_reg(rm_val, 16, r & 0xFFFF)
+            else:
+                self._write_rm_mem(rm_val, 16, r & 0xFFFF)
+            return
+        if opcode == 0x83:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            imm = self._fetch_byte()
+            if imm & 0x80:
+                imm |= 0xFFFFFF00  # sign-extend to 32-bit, then _alu handles 16-bit
+            if rm_is_reg:
+                a = self._read_rm_reg(rm_val, 16)
+            else:
+                a = self._read_rm_mem(rm_val, 16)
+            r = self._alu(reg_f, a, imm, 16)
+            if rm_is_reg:
+                self._write_rm_reg(rm_val, 16, r & 0xFFFF)
+            else:
+                self._write_rm_mem(rm_val, 16, r & 0xFFFF)
+            return
+
+        # Group 1: ALU r/m8, imm8 (80) with 16-bit prefix
+        if opcode == 0x80:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            imm = self._fetch_byte()
+            if rm_is_reg:
+                a = self._read_rm_reg(rm_val, 8)
+            else:
+                a = self._read_rm_mem(rm_val, 8)
+            r = self._alu(reg_f, a, imm, 8)
+            if rm_is_reg:
+                self._write_rm_reg(rm_val, 8, r & 0xFF)
+            else:
+                self._write_rm_mem(rm_val, 8, r & 0xFF)
+            return
+
+        # INC/DEC r16 (40-4F)
+        if 0x40 <= opcode <= 0x4F:
+            if opcode < 0x48:  # INC
+                reg = opcode - 0x40
+                v = self._read_rm_reg(reg, 16)
+                r = (v + 1) & 0xFFFF
+                self._write_rm_reg(reg, 16, r)
+                self._update_flags_add(v, 1, r, 16)
+            else:  # DEC
+                reg = opcode - 0x48
+                v = self._read_rm_reg(reg, 16)
+                r = (v - 1) & 0xFFFF
+                self._write_rm_reg(reg, 16, r)
+                self._update_flags_sub(v, 1, r)
+            return
+
+        # PUSH r16 (50-57)
+        if 0x50 <= opcode <= 0x57:
+            reg = opcode - 0x50
+            val = self._read_rm_reg(reg, 16)
+            esp = (self._regs[4] - 2) & 0xFFFFFFFF
+            if esp + 2 > self._mem_size:
+                raise InsFault("stack overflow")
+            self._regs[4] = esp
+            self._write16(esp, val)
+            return
+
+        # POP r16 (58-5F)
+        if 0x58 <= opcode <= 0x5F:
+            reg = opcode - 0x58
+            esp = self._regs[4] & 0xFFFFFFFF
+            if esp + 2 > self._mem_size:
+                raise InsFault("stack underflow")
+            val = self._read16(esp)
+            self._regs[4] = (esp + 2) & 0xFFFFFFFF
+            self._write_rm_reg(reg, 16, val)
+            return
+
+        # XCHG AX, r16 (91-97)
+        if 0x91 <= opcode <= 0x97:
+            reg = opcode - 0x90
+            ax = self._get16(0)
+            rv = self._read_rm_reg(reg, 16)
+            self._set16(0, rv)
+            self._write_rm_reg(reg, 16, ax)
+            return
+
+        # MOV r/m8, r8 (88) / MOV r8, r/m8 (8A) — 66 prefix doesn't affect 8-bit
+        if opcode == 0x88:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            src = self._read_rm_reg(reg_f, 8)
+            if rm_is_reg:
+                self._write_rm_reg(rm_val, 8, src)
+            else:
+                self._write_rm_mem(rm_val, 8, src)
+            return
+        if opcode == 0x8A:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if rm_is_reg:
+                src = self._read_rm_reg(rm_val, 8)
+            else:
+                src = self._read_rm_mem(rm_val, 8)
+            self._write_rm_reg(reg_f, 8, src)
+            return
+
+        # MOV r/m8, imm8 (C6 /0) — 0x66 prefix does NOT affect 8-bit operand
+        if opcode == 0xC6:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            imm = self._fetch_byte()
+            if rm_is_reg:
+                self._write_rm_reg(rm_val, 8, imm)
+            else:
+                self._write_rm_mem(rm_val, 8, imm)
+            return
+
+        # IMUL r16, r/m16, imm8 (6B)
+        if opcode == 0x6B:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            imm = self._fetch_byte()
+            if imm & 0x80:
+                imm |= 0xFFFFFF00
+            if rm_is_reg:
+                a = self._read_rm_reg(rm_val, 16)
+            else:
+                a = self._read_rm_mem(rm_val, 16)
+            a_s = a if a < 0x8000 else a - 0x10000
+            r = (a_s * imm) & 0xFFFF
+            self._write_rm_reg(reg_f, 16, r)
+            return
+
+        # IMUL r16, r/m16, imm16 (69)
+        if opcode == 0x69:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            lo = self._fetch_byte()
+            hi = self._fetch_byte()
+            imm = lo | (hi << 8)
+            if imm & 0x8000:
+                imm = imm - 0x10000
+            if rm_is_reg:
+                a = self._read_rm_reg(rm_val, 16)
+            else:
+                a = self._read_rm_mem(rm_val, 16)
+            a_s = a if a < 0x8000 else a - 0x10000
+            r = (a_s * imm) & 0xFFFF
+            self._write_rm_reg(reg_f, 16, r)
+            return
+
+        # IMUL r16, r/m16 (0F AF)
+        if opcode == 0xAF:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if rm_is_reg:
+                a = self._read_rm_reg(rm_val, 16)
+            else:
+                a = self._read_rm_mem(rm_val, 16)
+            b = self._read_rm_reg(reg_f, 16)
+            a_s = a if a < 0x8000 else a - 0x10000
+            b_s = b if b < 0x8000 else b - 0x10000
+            r = (a_s * b_s) & 0xFFFF
+            self._write_rm_reg(reg_f, 16, r)
+            return
+
+        # LEA r16, m (8D)
+        if opcode == 0x8D:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if not rm_is_reg:
+                self._write_rm_reg(reg_f, 16, rm_val & 0xFFFF)
+            return
+
+        # CLD/FD (FC/FD) — clear/set direction flag
+        if opcode == 0xFC:
+            self._set_flag(FLAG_DF, False)
+            return
+        if opcode == 0xFD:
+            self._set_flag(FLAG_DF, True)
+            return
+
+        # HLT (F4) — normal program termination
+        if opcode == 0xF4:
+            raise Halt()
+
+        # Group 3: unary r/m16 (F6 /2-/7 already handled above, /0 TEST handled above)
+        # F6 with 8-bit operand — handled by _exec_one, but 66 F6 should also work
+        if opcode == 0xF6:
+            reg_f, rm_is_reg, rm_val = self._decode_modrm()
+            if reg_f == 0:  # TEST r/m8, imm8
+                imm = self._fetch_byte()
+                if rm_is_reg:
+                    a = self._read_rm_reg(rm_val, 8)
+                else:
+                    a = self._read_rm_mem(rm_val, 8)
+                self._update_flags_logic(a & imm, 8)
+                return
+            if reg_f == 2:  # NOT r/m8
+                if rm_is_reg:
+                    v = self._read_rm_reg(rm_val, 8)
+                    self._write_rm_reg(rm_val, 8, ~v & 0xFF)
+                else:
+                    v = self._read_rm_mem(rm_val, 8)
+                    self._write_rm_mem(rm_val, 8, ~v & 0xFF)
+                return
+            if reg_f == 3:  # NEG r/m8
+                if rm_is_reg:
+                    v = self._read_rm_reg(rm_val, 8)
+                else:
+                    v = self._read_rm_mem(rm_val, 8)
+                r = (-v) & 0xFF
+                if rm_is_reg:
+                    self._write_rm_reg(rm_val, 8, r)
+                else:
+                    self._write_rm_mem(rm_val, 8, r)
+                self._set_flag(FLAG_CF, v != 0)
+                self._update_flags_sub(0, v, r)
+                return
+            return
+
         logger.warning(f"CPU: unknown 16-bit opcode 0x66 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}")
         self._eip = (self._eip + 1) & 0xFFFFFFFF
 
@@ -5534,6 +6289,16 @@ class X86CPU:
         if op == 0:  # ADD
             result = a + b
             self._update_flags_add(a, b, result, bits)
+            return result & mask
+        elif op == 2:  # ADC
+            carry = 1 if self._flag(FLAG_CF) else 0
+            result = a + b + carry
+            self._update_flags_add(a, b, result, bits)
+            return result & mask
+        elif op == 3:  # SBB
+            borrow = 1 if self._flag(FLAG_CF) else 0
+            result = a - b - borrow
+            self._update_flags_sub(a, b + borrow, result, bits)
             return result & mask
         elif op == 1:  # OR
             r = a | b
@@ -7312,7 +8077,12 @@ class X86VirtualSystem:
             # Run a batch of instructions
             batch = min(1000, max_cycles - cycles)
             for _ in range(batch):
-                if not self._cpu.step():
+                try:
+                    if not self._cpu.step():
+                        return cycles
+                except (InsFault, MemFault):
+                    # CPU fault (unknown opcode, stack/memory fault) halts the
+                    # kernel cleanly instead of propagating to callers.
                     return cycles
                 # PIT tick every 100 instructions (simulates timer)
                 if cycles % 100 == 0:

@@ -2,8 +2,8 @@
 
 import logging
 
-from domains.logging.base import LogLevel, LogRecord, Logger
-from domains.logging.bridge import BridgeHandler, _LEVEL_MAP
+from domains.logging.base import Logger, LogLevel, LogRecord
+from domains.logging.bridge import _LEVEL_MAP, BridgeHandler
 
 
 class RecordingLogger(Logger):
@@ -69,6 +69,27 @@ class TestBridgeHandler:
         handler.emit(record)
         assert logger.records[0].context["model"] == "gpt2"
         assert logger.records[0].context["device"] == "cpu"
+
+    def test_structured_fields_are_captured_automatically(self):
+        # Regression: non-standard extra keys (e.g. "mode", "elapsed_ms")
+        # become LogRecord attributes and must land in the record's context
+        # so they render as key=value — mirroring Logger's **ctx kwargs.
+        handler, logger = self.make_handler()
+        record = logging.LogRecord("slo", logging.INFO, "f.py", 1, "generate_sync", (), None)
+        record.mode = "guard"
+        record.elapsed_ms = 511.0
+        handler.emit(record)
+        rec = logger.records[0]
+        assert rec.context["mode"] == "guard"
+        assert rec.context["elapsed_ms"] == 511.0
+
+    def test_explicit_context_wins_over_stray_extra(self):
+        handler, logger = self.make_handler()
+        record = logging.LogRecord("slo", logging.INFO, "f.py", 1, "msg", (), None)
+        record.context = {"mode": "explicit"}
+        record.mode = "stray"
+        handler.emit(record)
+        assert logger.records[0].context["mode"] == "explicit"
 
     def test_emit_ignores_non_dict_extra_context(self):
         handler, logger = self.make_handler()

@@ -140,7 +140,27 @@ async def lifespan(app_inst: FastAPI):
         _start_health_monitor()
         _start_watchdog()
 
+        # Start idle manager if configured
+        if cfg.idle_timeout_seconds > 0:
+            try:
+                from domains.infrastructure.model_server import get_idle_manager
+                idle_mgr = get_idle_manager()
+                idle_mgr._idle_timeout_s = cfg.idle_timeout_seconds
+                logger.info(
+                    "Idle manager active: timeout=%ss", cfg.idle_timeout_seconds,
+                    extra={"tag": "IDLE"},
+                )
+            except Exception as e:
+                logger.warning("Idle manager startup failed (non-fatal): %s", e)
+
         yield
+
+        # Stop idle manager
+        try:
+            from domains.infrastructure.model_server import get_idle_manager
+            get_idle_manager().shutdown()
+        except Exception:
+            pass
 
         # Stop auto-trainer
         try:
@@ -212,7 +232,7 @@ register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 # During the 25-40s model loading phase, the frontend must still get
 # real responses from /health, /health/startup-progress, /health/summary
 # instead of connection errors.  These lightweight routers have zero
-# heavy imports (no torch, no transformers).
+# heavy imports.
 from routers.health import router as _health_router
 from routers.status import router as _status_router
 app.include_router(_health_router)

@@ -234,6 +234,43 @@ class TestBufferLogHandler:
         handler.emit(record)
         assert buf.count == 0
 
+    def test_stray_extra_fields_captured_automatically(self):
+        buf = OutputBuffer()
+        handler = BufferLogHandler(buf)
+        record = logging.LogRecord("slo.test", logging.INFO, "x.py", 1,
+                                   "trained", (), None)
+        record.vocab_size = 512
+        record.corpus_size = 128000
+        handler.emit(record)
+        assert buf.lines[0].context == {"vocab_size": 512, "corpus_size": 128000}
+
+    def test_explicit_context_wins_over_stray(self):
+        buf = OutputBuffer()
+        handler = BufferLogHandler(buf)
+        record = logging.LogRecord("slo.test", logging.INFO, "x.py", 1,
+                                   "msg", (), None)
+        record.context = {"mode": "explicit"}
+        record.mode = "stray"
+        handler.emit(record)
+        assert buf.lines[0].context == {"mode": "explicit"}
+
+    def test_mixed_tag_context_and_stray_all_surface(self):
+        # Production shape from e.g. routers/inference.py request logs.
+        buf = OutputBuffer()
+        handler = BufferLogHandler(buf)
+        record = logging.LogRecord("slo.routers.inference", logging.INFO, "x.py", 1,
+                                   "generate", (), None)
+        record.tag = "INFO"
+        record.context = {"provider": "hf-default"}
+        record.elapsed_ms = 511
+        record.result = "ok"
+        handler.emit(record)
+        line = buf.lines[0]
+        assert line.tag == "INFO"
+        assert line.context["provider"] == "hf-default"
+        assert line.context["elapsed_ms"] == 511
+        assert line.context["result"] == "ok"
+
 
 class TestTeeWriter:
     def test_writes_through_to_original(self):

@@ -36,102 +36,6 @@ def _bundle(model):
     }
 
 
-class TestResolveStoi:
-    def test_uses_bundle_stoi(self):
-        bundle = {"stoi": {"x": 7}}
-        stoi, warnings = ev._resolve_stoi(bundle, "any text")
-        assert stoi == {"x": 7}
-        assert warnings == []
-
-    def test_builds_from_chars(self):
-        bundle = {"chars": ["q", "r", "s"]}
-        stoi, warnings = ev._resolve_stoi(bundle, "abc")
-        assert stoi == {"q": 0, "r": 1, "s": 2}
-        assert warnings == []
-
-    def test_builds_from_eval_text_with_warning(self):
-        stoi, warnings = ev._resolve_stoi({}, "cab")
-        assert stoi == {"a": 0, "b": 1, "c": 2}
-        assert len(warnings) == 1
-
-    def test_empty_eval_text(self):
-        stoi, warnings = ev._resolve_stoi({}, "")
-        assert stoi == {}
-        assert len(warnings) == 1
-
-
-class TestEvaluateSloughgptCharLm:
-    def test_missing_file_raises(self, tmp_path):
-        with pytest.raises(FileNotFoundError):
-            ev.evaluate_sloughgpt_char_lm("nope.pt", str(tmp_path / "missing.txt"))
-
-    def test_too_short_text_raises(self, tmp_path, monkeypatch):
-        model = _make_model()
-        monkeypatch.setattr(ev, "torch_load_checkpoint", lambda *a, **k: _bundle(model))
-        p = tmp_path / "short.txt"
-        p.write_text("ab", encoding="utf-8")
-        with pytest.raises(ValueError):
-            ev.evaluate_sloughgpt_char_lm("ck.pt", str(p))
-
-    def test_end_to_end_metrics(self, tmp_path, monkeypatch):
-        model = _make_model()
-        bundle = _bundle(model)
-        monkeypatch.setattr(ev, "torch_load_checkpoint", lambda *a, **k: bundle)
-        text = "thequickbrownfoxjumpsoverthelazydog"
-        p = tmp_path / "eval.txt"
-        p.write_text(text, encoding="utf-8")
-        out = ev.evaluate_sloughgpt_char_lm("ck.pt", str(p))
-        assert out["block_size"] == BLOCK
-        assert out["vocab_size"] == VOCAB
-        assert out["num_chars_skipped"] == 0
-        assert out["warnings"] == []
-        ids = [bundle["stoi"][c] for c in text]
-        expected_n = ((len(ids) - 1) // BLOCK) * BLOCK
-        assert out["num_token_positions"] == expected_n
-        assert out["mean_loss"] >= 0
-        assert math.isclose(out["perplexity"], math.exp(out["mean_loss"]), rel_tol=1e-9)
-
-    def test_max_chars_truncation_warning(self, tmp_path, monkeypatch):
-        model = _make_model()
-        bundle = _bundle(model)
-        monkeypatch.setattr(ev, "torch_load_checkpoint", lambda *a, **k: bundle)
-        p = tmp_path / "long.txt"
-        p.write_text("a" * 100, encoding="utf-8")
-        out = ev.evaluate_sloughgpt_char_lm("ck.pt", str(p), max_chars=25)
-        assert any("truncated from 100 to 25" in w for w in out["warnings"])
-        assert out["num_token_positions"] == ((25 - 1) // BLOCK) * BLOCK
-
-    def test_skipped_chars_warning(self, tmp_path, monkeypatch):
-        model = _make_model()
-        bundle = _bundle(model)
-        monkeypatch.setattr(ev, "torch_load_checkpoint", lambda *a, **k: bundle)
-        p = tmp_path / "mixed.txt"
-        p.write_text("abcdefghijXYZklmnopqrstuvwxyz", encoding="utf-8")
-        out = ev.evaluate_sloughgpt_char_lm("ck.pt", str(p))
-        assert out["num_chars_skipped"] == 3
-        assert any("Skipped 3 characters" in w for w in out["warnings"])
-
-    def test_infinite_perplexity_for_huge_loss(self, tmp_path, monkeypatch):
-        class _Loss:
-            def item(self):
-                return 150.0
-
-        class _FakeModel:
-            def eval(self):
-                return self
-
-            def __call__(self, x, y):
-                return None, _Loss()
-
-        monkeypatch.setattr(ev, "torch_load_checkpoint", lambda *a, **k: {"stoi": {"a": 0}})
-        monkeypatch.setattr(ev, "load_sloughgpt_from_checkpoint",
-                            lambda *a, **k: (_FakeModel(), {"block_size": 4, "vocab_size": 8}))
-        p = tmp_path / "t.txt"
-        p.write_text("a" * 20, encoding="utf-8")
-        out = ev.evaluate_sloughgpt_char_lm("ck.pt", str(p))
-        assert out["perplexity"] == float("inf")
-
-
 class TestEvaluateSoulCharLm:
     def _write_soul(self, tmp_path, model, *, stoi=None, itos=None, chars=None):
         from domains.inference.slo_format import SloProfile, save_soul
@@ -235,11 +139,11 @@ class TestMain:
         import json as json_lib
         monkeypatch.setattr(
             ev,
-            "evaluate_sloughgpt_char_lm",
+            "evaluate_soul_char_lm",
             lambda *a, **k: {"mean_loss": 2.0, "perplexity": math.exp(2), "num_token_positions": 8,
                              "num_chars_skipped": 0, "block_size": 8, "vocab_size": 64, "warnings": []},
         )
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.pt",
+        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
                                          "--data", "d.txt", "--json"])
         ev.main()
         payload = json_lib.loads(capsys.readouterr().out)
@@ -249,11 +153,11 @@ class TestMain:
         import json as json_lib
         monkeypatch.setattr(
             ev,
-            "evaluate_sloughgpt_char_lm",
+            "evaluate_soul_char_lm",
             lambda *a, **k: {"mean_loss": 200.0, "perplexity": float("inf"), "num_token_positions": 8,
                              "num_chars_skipped": 0, "block_size": 8, "vocab_size": 64, "warnings": []},
         )
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.pt",
+        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
                                          "--data", "d.txt", "--json"])
         ev.main()
         payload = json_lib.loads(capsys.readouterr().out)
@@ -263,8 +167,8 @@ class TestMain:
         def _boom(*a, **k):
             raise ValueError("bad checkpoint")
 
-        monkeypatch.setattr(ev, "evaluate_sloughgpt_char_lm", _boom)
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.pt", "--data", "d.txt"])
+        monkeypatch.setattr(ev, "evaluate_soul_char_lm", _boom)
+        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt"])
         with pytest.raises(SystemExit) as exc:
             ev.main()
         assert exc.value.code == 1

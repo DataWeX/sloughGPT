@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
+import { makeForm, makeDatasets, makeCheckpoints, ds } from './__test-helper'
 
 vi.mock('@/components/training/LossChart', () => ({
   LossChart: () => <div data-testid="loss-chart" />,
@@ -16,78 +17,21 @@ import type { TrainingFormState } from '@/hooks/useTrainingForm'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
-import type { Dataset } from '@/lib/dataset-controller'
 
-const ds = (overrides: Partial<Dataset> = {}) => ({
-  id: '1',
-  name: 'shakespeare',
-  type: 'text',
-  source: '',
-  size: 0,
-  created_at: '2026-01-01T00:00:00Z',
-  ...overrides,
-})
-
-const form: TrainingFormState = {
-  method: 'distill',
-  inputMode: 'dataset',
-  textInput: '',
-  showAdvanced: false,
-  algo: 'bpe',
+const form: TrainingFormState = makeForm({
   trainingEpochs: 5,
   trainingLR: 1e-3,
   trainingBatchSize: 64,
-  availableModels: [],
-  selectedModel: '',
   useLoRA: true,
-  visualVisionEncoder: '',
-  visualLLM: '',
   visualStage1Epochs: 5,
   visualStage2Epochs: 5,
-  nativeEmbed: 128,
   nativeLayers: 4,
-  nativeHeads: 4,
-  nativeBlockSize: 128,
-  loadingFinetunedModel: false,
-  allJobs: [],
-  setMethod: vi.fn(),
-  setInputMode: vi.fn(),
-  setTextInput: vi.fn(),
-  setShowAdvanced: vi.fn(),
-  setAlgo: vi.fn(),
-  setTrainingEpochs: vi.fn(),
-  setTrainingLR: vi.fn(),
-  setTrainingBatchSize: vi.fn(),
-  setSelectedModel: vi.fn(),
-  setUseLoRA: vi.fn(),
-  setVlmVisionEncoder: vi.fn(),
-  setVlmLLM: vi.fn(),
-  setVlmStage1Epochs: vi.fn(),
-  setVlmStage2Epochs: vi.fn(),
-  setNativeEmbed: vi.fn(),
-  setNativeLayers: vi.fn(),
-  setNativeHeads: vi.fn(),
-  setNativeBlockSize: vi.fn(),
-  setLoadingFinetunedModel: vi.fn(),
-  applyPreset: vi.fn(),
-  customPresets: [],
-  saveCustomPreset: vi.fn(),
-  deleteCustomPreset: vi.fn(),
-  canStart: true,
-  startTraining: vi.fn(),
-}
+})
 
-const datasets: UseTrainingDatasetsReturn = {
+const datasets: UseTrainingDatasetsReturn = makeDatasets({
   datasets: [ds({ name: 'shakespeare' })],
   selectedDataset: '1',
-  loadingDatasets: false,
-  importModalOpen: false,
-  datasetPreview: null,
-  setSelectedDataset: vi.fn(),
-  setImportModalOpen: vi.fn(),
-  setDatasetPreview: vi.fn(),
-  fetchDatasets: vi.fn(),
-}
+})
 
 const session: UseTrainingSessionReturn = {
   phase: 'idle',
@@ -112,6 +56,13 @@ const session: UseTrainingSessionReturn = {
   turboPhase: 'idle',
   turboResult: null,
   turboError: null,
+  turboProgress: 0,
+  turboGlobalStep: 0,
+  turboTotalSteps: 0,
+  turboEta: null,
+  turboStepsPerSec: null,
+  turboElapsedSeconds: null,
+  turboLoss: null,
   visualOutputDir: null,
   visualSouPath: null,
   setPhase: vi.fn(),
@@ -135,6 +86,13 @@ const session: UseTrainingSessionReturn = {
   setTurboPhase: vi.fn(),
   setTurboResult: vi.fn(),
   setTurboError: vi.fn(),
+  setTurboProgress: vi.fn(),
+  setTurboGlobalStep: vi.fn(),
+  setTurboTotalSteps: vi.fn(),
+  setTurboEta: vi.fn(),
+  setTurboStepsPerSec: vi.fn(),
+  setTurboElapsedSeconds: vi.fn(),
+  setTurboLoss: vi.fn(),
   trainingRunning: false,
   resetTraining: vi.fn(),
   stopTraining: vi.fn(),
@@ -145,25 +103,11 @@ const session: UseTrainingSessionReturn = {
   startFineTune: vi.fn(),
   startVisualTraining: vi.fn(),
   startTurboTrain: vi.fn(),
+  stopTurboTrain: vi.fn(),
   turboRunning: false,
 }
 
-const checkpoints: UseTrainingCheckpointsReturn = {
-  checkpoints: [],
-  loadingCheckpoints: false,
-  activeCheckpoint: null,
-  builds: [],
-  loadingBuilds: false,
-  jobs: [],
-  loadingJobs: false,
-  setActiveCheckpoint: vi.fn(),
-  setCheckpoints: vi.fn(),
-  fetchCheckpoints: vi.fn(),
-  fetchBuilds: vi.fn(),
-  fetchJobs: vi.fn(),
-  handleLoadCheckpoint: vi.fn(),
-  handleDeleteCheckpoint: vi.fn(),
-}
+const checkpoints: UseTrainingCheckpointsReturn = makeCheckpoints()
 
 describe('TrainingPipeline', () => {
   afterEach(cleanup)

@@ -102,34 +102,29 @@ def dtype(name_or_value: Any) -> np.dtype:
 def _mps_available() -> bool:
     """Check if Apple Metal Performance Shaders are available.
 
-    Only returns ``True`` on Apple Silicon (arm64). On Intel Macs (x86_64),
-    PyTorch 2.x can report MPS as available via ``torch.backends.mps.is_available()``
-    even though it silently crashes during actual inference.
+    Platform-based detection only — no torch import. Returns ``True`` only on
+    Apple Silicon (arm64) running macOS. On Intel Macs (x86_64) MPS is
+    unreliable and always reports ``False``.
     """
     if sys.platform != "darwin":
         return False
-    # Intel Macs: PyTorch may report MPS available but it crashes at runtime.
+    # Intel Macs: MPS reports available but crashes at runtime.
     if platform.machine() in ("x86_64", "i386"):
         return False
-    try:
-        import torch
-        return torch.backends.mps.is_available()
-    except (ImportError, AttributeError):
-        pass
-    # Fallback: check on macOS 12+ with Apple Silicon
-    if platform.system() == "Darwin":
-        machine = platform.machine()
-        if machine in ("arm64", "aarch64"):
-            return True
-    return False
+    return platform.machine() in ("arm64", "aarch64")
 
 
 def _cuda_available() -> bool:
-    """Check if CUDA is available."""
+    """Check if CUDA is available.
+
+    Lazy CuPy detection — mirrors the CUDA accelerator backend
+    (``domains/training/gpu/accelerator.py``). Returns ``True`` only when a
+    CuPy CUDA runtime is importable. No torch import.
+    """
     try:
-        import torch
-        return torch.cuda.is_available()
-    except (ImportError, AttributeError):
+        import cupy as cp
+        return True
+    except Exception:
         return False
 
 

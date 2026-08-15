@@ -179,6 +179,25 @@ class DistillationTrainer:
             s_logits = s_logits[:, :min_len]
             labels = _to_np(labels)[:, :min_len]
 
+        # Align vocabulary dims. The teacher and student may use different
+        # tokenizers, so their logits can differ in the last dim. Pad the
+        # smaller vocab with a large negative logit so its softmax mass is
+        # ~0 in the padded positions (no gradient flow, no NaN).
+        t_vocab = _size(t_logits, -1)
+        s_vocab = _size(s_logits, -1)
+        if t_vocab != s_vocab:
+            max_vocab = max(t_vocab, s_vocab)
+            if s_vocab < max_vocab:
+                s_np = _to_np(s_logits)
+                pad = np.full(s_np.shape[:-1] + (max_vocab - s_vocab,), -1e9,
+                              dtype=s_np.dtype)
+                s_logits = np.concatenate([s_np, pad], axis=-1)
+            if t_vocab < max_vocab:
+                t_np = _to_np(t_logits)
+                pad = np.full(t_np.shape[:-1] + (max_vocab - t_vocab,), -1e9,
+                              dtype=t_np.dtype)
+                t_logits = np.concatenate([t_np, pad], axis=-1)
+
         loss, losses_dict = self.loss_fn(s_logits, t_logits, labels)
         loss = _to_tensor(np.array(loss), requires_grad=True)
         loss.backward()

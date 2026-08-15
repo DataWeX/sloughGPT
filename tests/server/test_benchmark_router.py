@@ -10,6 +10,47 @@ from fastapi.testclient import TestClient
 from apps.api.server.routers.benchmark import router
 
 
+def _fake_provider(ids, logits=None):
+    """Build a SloNetChatProvider stand-in with a numpy forward pass."""
+    import numpy as np
+
+    class _Logits:
+        def __init__(self, arr):
+            self.data = arr
+
+    class _Model:
+        def __init__(self, arr):
+            self._arr = arr
+
+        def forward(self, input_ids, targets=None):
+            if self._arr is None:
+                raise RuntimeError("no logits")
+            return _Logits(self._arr), None
+
+    class _Provider:
+        def __init__(self, token_ids, arr):
+            self._token_ids = token_ids
+            self._arr = arr
+
+        def tokenize(self, text):
+            return list(self._token_ids)
+
+        def _get_model(self):
+            return _Model(self._arr)
+
+    if logits is None:
+        logits = np.zeros((1, len(ids), 3), dtype=np.float64)
+    return _Provider(list(ids), logits)
+
+
+def _patch_server(provider):
+    """Replace the ServerState singleton with a fake holding ``provider``."""
+    fake_core = MagicMock()
+    fake_core.model.get.return_value = provider
+    return patch("domains.infrastructure.server_state.get_server_state",
+                 return_value=fake_core)
+
+
 @pytest.fixture
 def app():
     _app = FastAPI()
@@ -71,12 +112,14 @@ class TestGetMetrics:
 
 class TestPerplexity:
     def test_requires_loaded_model(self, client):
-        resp = client.post("/benchmark/perplexity")
-        assert resp.status_code in (400, 500)
+        with _patch_server(None):
+            resp = client.post("/benchmark/perplexity")
+        assert resp.status_code == 400
 
     def test_accepts_text_param(self, client):
-        resp = client.post("/benchmark/perplexity?text=hello world")
-        assert resp.status_code in (400, 500)
+        with _patch_server(None):
+            resp = client.post("/benchmark/perplexity?text=hello world")
+        assert resp.status_code == 400
 
 
 class TestQuality:
@@ -217,87 +260,62 @@ class TestBenchmarkMethodMismatch:
 
 
 class TestPerplexityPath:
-    """Perplexity with a working controller."""
+    """Perplexity with a working SloNet provider (pure NumPy)."""
 
-    @staticmethod
-    def _torch_ctx():
-        import sys
-        class NoGrad:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-
-        class FakeTensor:
-            def __init__(self, value):
-                self._value = value
-
-            def item(self):
-                return self._value
-
-        class FakeTorch:
-            def no_grad(self):
-                return NoGrad()
-
-            def exp(self, t):
-                return FakeTensor(4.0)
-
-            def tensor(self, loss):
-                return FakeTensor(1.38629436)
-
-        return patch.dict(sys.modules, {"torch": FakeTorch()})
-
-    def test_perplexity_controller_missing_model(self, client):
-        ctrl = MagicMock()
-        ctrl._tokenizer = None
-        ctrl._hf_model = MagicMock()
-        with self._torch_ctx(), \
-             patch("controllers.models.get_models_controller", return_value=ctrl):
+    def test_perplexity_no_provider_returns_400(self, client):
+        with _patch_server(None):
             resp = client.post("/benchmark/perplexity?text=hello")
         assert resp.status_code == 400
 
-    def test_perplexity_controller_raise_returns_500(self, client):
-        with self._torch_ctx(), \
-             patch("controllers.models.get_models_controller",
+    def test_perplexity_model_not_loaded_returns_400(self, client):
+        class _NoModel:
+            def tokenize(self, text):
+                return [1, 2, 3]
+
+            def _get_model(self):
+                return None
+
+        with _patch_server(_NoModel()):
+            resp = client.post("/benchmark/perplexity?text=hello")
+        assert resp.status_code == 400
+
+    def test_perplexity_too_few_tokens_returns_400(self, client):
+        provider = _fake_provider([5])
+        with _patch_server(provider):
+            resp = client.post("/benchmark/perplexity?text=hi")
+        assert resp.status_code == 400
+
+    def test_perplexity_error_returns_500(self, client):
+        with patch("domains.infrastructure.server_state.get_server_state",
                    side_effect=RuntimeError("controller crash")), \
              patch("domains.infrastructure.errors.emit_error_event"):
             resp = client.post("/benchmark/perplexity?text=hello")
         assert resp.status_code == 500
 
     def test_perplexity_computes_value(self, client):
-        class FakeOut:
-            class FakeLoss:
-                def item(self):
-                    return 1.38629436
-            loss = FakeLoss()
-
-        class FakeModel:
-            class _Device:
-                type = "cpu"
-            device = _Device()
-
-            def __call__(self, **kwargs):
-                return FakeOut()
-
-        class FakeInputs:
-            input_ids = MagicMock()
-            input_ids.shape = [1, 5]
-
-        class FakeTokenizer:
-            def __call__(self, *a, **kw):
-                return {"input_ids": FakeInputs().input_ids}
-
-        ctrl = MagicMock()
-        ctrl._tokenizer = FakeTokenizer()
-        ctrl._hf_model = FakeModel()
-        with self._torch_ctx(), \
-             patch("controllers.models.get_models_controller", return_value=ctrl):
+        import numpy as np
+        # ids [0, 1, 2]; successors [1, 2] scored with certainty → ppl 1.0
+        logits = np.zeros((1, 3, 3), dtype=np.float64)
+        logits[0, 0, 1] = 100.0
+        logits[0, 1, 2] = 100.0
+        provider = _fake_provider([0, 1, 2], logits)
+        with _patch_server(provider):
             resp = client.post("/benchmark/perplexity?text=hello")
         assert resp.status_code == 200
         data = resp.json()["data"]
-        assert data["perplexity"] == 4.0
-        assert data["tokens"] == 5
+        assert data["perplexity"] == 1.0
+        assert data["loss"] == 0.0
+        assert data["tokens"] == 3
+
+    def test_perplexity_uses_text_preview(self, client):
+        import numpy as np
+        logits = np.zeros((1, 3, 3), dtype=np.float64)
+        logits[0, 0, 1] = 100.0
+        logits[0, 1, 2] = 100.0
+        provider = _fake_provider([0, 1, 2], logits)
+        with _patch_server(provider):
+            resp = client.post("/benchmark/perplexity?text=a%20very%20long%20sentence%20that%20exceeds%20thirty%20chars")
+        assert resp.json()["data"]["text"] == "a very long sentence that exce"
 
 
 class TestErrorPaths:

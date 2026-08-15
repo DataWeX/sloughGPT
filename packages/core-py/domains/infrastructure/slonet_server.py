@@ -271,8 +271,7 @@ class SloNetServer:
     ) -> str:
         if cancel_event and cancel_event.is_set():
             raise RuntimeError("Generation cancelled before start")
-        import time as _tmod
-        _st0 = _tmod.monotonic()
+        _st0 = time.monotonic()
         if self._use_guard():
             result = self._process_guard.generate(
                 prompt,
@@ -282,12 +281,20 @@ class SloNetServer:
                 top_k=top_k,
                 repetition_penalty=repetition_penalty,
             )
-            logger.info(
-                "DBG slonet_server.generate_sync GUARD elapsed=%.3fs prompt=%r result=%r",
-                _tmod.monotonic() - _st0, prompt[:50], str(result.get("text", ""))[:80],
-                extra={"tag": "DBG"},
+            text = result.get("text", "")
+            logger.debug(
+                "generate_sync",
+                extra={
+                    "tag": "INFO",
+                    "context": {
+                        "mode": "guard",
+                        "elapsed_ms": round((time.monotonic() - _st0) * 1000, 1),
+                        "prompt": prompt[:50],
+                        "result": str(text)[:80],
+                    },
+                },
             )
-            return result.get("text", "")
+            return text
         model = self._acquire_model()
         try:
             tokens = self._tokenizer.encode(prompt)
@@ -305,7 +312,20 @@ class SloNetServer:
                 kv_state=kv_state,
                 quantize_kv=self._quantize_kv,
             )
-            return self._tokenizer.decode(result[0].tolist())
+            text = self._tokenizer.decode(result[0].tolist())
+            logger.debug(
+                "generate_sync",
+                extra={
+                    "tag": "INFO",
+                    "context": {
+                        "mode": "in-process",
+                        "elapsed_ms": round((time.monotonic() - _st0) * 1000, 1),
+                        "prompt": prompt[:50],
+                        "result": str(text)[:80],
+                    },
+                },
+            )
+            return text
         finally:
             self._release_model(model)
 

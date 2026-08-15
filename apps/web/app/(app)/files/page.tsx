@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry } from '@/lib/files-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -125,19 +125,24 @@ export default function FilesPage() {
 
   if (loading) {
     return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Files" subtitle="Manage uploaded files" />} />
-        <div className="space-y-4">
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
+      <PageContainer
+        title="Files"
+        subtitle="Manage uploaded files"
+        loadingContent={
+          <div className="space-y-4">
+            <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+          </div>
+        }
+      ><></>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Files" subtitle={`${files.length} files`} />} />
-      <div className="space-y-4">
+    <PageContainer
+      title="Files"
+      subtitle={`${files.length} files`}
+    >
         <FileStatsCard files={files} />
 
         <Card>
@@ -234,7 +239,6 @@ export default function FilesPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </PageContainer>
   )
 }

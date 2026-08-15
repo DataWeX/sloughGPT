@@ -58,6 +58,7 @@ class ModelRegistry:
         generate_timeout: float = 120.0,
         enable_circuit_breaker: bool = True,
         process_guard: Optional[Any] = None,
+        idle_timeout_s: float = 0.0,
     ) -> ModelServer:
         """Register a model with the registry.
 
@@ -73,6 +74,8 @@ class ModelRegistry:
             process_guard: Optional ``ProcessGuard`` for subprocess isolation.
                 When set, ``_generate_sync()`` delegates to the guard and
                 crash/restart callbacks are wired to the circuit breaker.
+            idle_timeout_s: Auto-unload after this many seconds of inactivity.
+                0 = disabled.
 
         Returns:
             The created ModelServer instance.
@@ -85,6 +88,7 @@ class ModelRegistry:
             generate_timeout=generate_timeout,
             enable_circuit_breaker=enable_circuit_breaker,
             process_guard=process_guard,
+            idle_timeout_s=idle_timeout_s,
         )
         with self._lock:
             old = self._servers.get(model_id)

@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -392,59 +392,114 @@ export default function KnowledgePage() {
     }
   }
 
-  return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Knowledge" subtitle="Manage facts the AI remembers" />}
-        right={
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={fetchData} disabled={loading}>
-              <IconRefresh className={loading ? 'animate-spin h-3 w-3 mr-1' : 'h-3 w-3 mr-1'} />
-              Refresh
-            </Button>
-            {items.length > 0 && (
-              <div className="relative group">
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
-                  Export
-                </Button>
-                <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
-                  <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
-                    <button onClick={handleExport} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
-                      Export as JSON
-                    </button>
-                    <button onClick={handleExportCSV} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
-                      Export as CSV
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-              {importing ? 'Importing...' : 'Import'}
-            </Button>
-            <input ref={fileInputRef} type="file" accept=".json,.txt,.csv" className="hidden" onChange={handleImportFile} />
-            {importProgress && importProgress.total > 0 && (
-              <div className="flex items-center gap-2">
-                <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
-                  />
-                </div>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {importProgress.current}/{importProgress.total}
-                </span>
-              </div>
-            )}
-            <Button size="sm" className="h-7 text-xs" onClick={() => setShowAdd(true)}>
-              <IconPlus className="h-3 w-3 mr-1" />
-              Add
-            </Button>
+  const headerRight = (
+    <div className="flex items-center gap-2">
+      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={fetchData} disabled={loading}>
+        <IconRefresh className={loading ? 'animate-spin h-3 w-3 mr-1' : 'h-3 w-3 mr-1'} />
+        Refresh
+      </Button>
+      {items.length > 0 && (
+        <div className="relative group">
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
+            Export
+          </Button>
+          <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
+            <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
+              <button onClick={handleExport} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                Export as JSON
+              </button>
+              <button onClick={handleExportCSV} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                Export as CSV
+              </button>
+            </div>
           </div>
-        }
-      />
+        </div>
+      )}
+      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+        {importing ? 'Importing...' : 'Import'}
+      </Button>
+      <input ref={fileInputRef} type="file" accept=".json,.txt,.csv" className="hidden" onChange={handleImportFile} />
+      {importProgress && importProgress.total > 0 && (
+        <div className="flex items-center gap-2">
+          <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-muted-foreground font-mono">
+            {importProgress.current}/{importProgress.total}
+          </span>
+        </div>
+      )}
+      <Button size="sm" className="h-7 text-xs" onClick={() => setShowAdd(true)}>
+        <IconPlus className="h-3 w-3 mr-1" />
+        Add
+      </Button>
+    </div>
+  )
 
-      <div className="space-y-4">
+  const toolbar = (
+    <div className="flex items-center gap-2">
+      <div className="relative flex-1">
+        <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+        <Input
+          placeholder="Search knowledge..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="h-9 text-sm pl-9"
+        />
+      </div>
+      <select
+        value={sortBy}
+        onChange={e => setSortBy(e.target.value as typeof sortBy)}
+        className="h-9 text-sm rounded-md border border-border/60 bg-background px-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+        aria-label="Sort by"
+      >
+        <option value="date">Newest</option>
+        <option value="importance">Importance</option>
+        <option value="topic">Topic</option>
+      </select>
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            onClick={handleExportSelected}
+          >
+            Export ({selectedIds.size})
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            onClick={() => setShowBulkTopic(true)}
+          >
+            <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+            Move to topic ({selectedIds.size})
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-8 text-xs"
+            onClick={() => setPendingBatchDelete(true)}
+          >
+            <IconTrash className="h-3 w-3 mr-1" />
+            Delete ({selectedIds.size})
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <PageContainer
+      title="Knowledge"
+      subtitle="Manage facts the AI remembers"
+      headerRight={headerRight}
+      toolbar={toolbar}
+    >
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
@@ -578,58 +633,6 @@ export default function KnowledgePage() {
             ))}
           </div>
         )}
-
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-            <Input
-              placeholder="Search knowledge..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="h-9 text-sm pl-9"
-            />
-          </div>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as typeof sortBy)}
-            className="h-9 text-sm rounded-md border border-border/60 bg-background px-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
-            aria-label="Sort by"
-          >
-            <option value="date">Newest</option>
-            <option value="importance">Importance</option>
-            <option value="topic">Topic</option>
-          </select>
-          {selectedIds.size > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={handleExportSelected}
-              >
-                Export ({selectedIds.size})
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => setShowBulkTopic(true)}
-              >
-                <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
-                Move to topic ({selectedIds.size})
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-8 text-xs"
-                onClick={() => setPendingBatchDelete(true)}
-              >
-                <IconTrash className="h-3 w-3 mr-1" />
-                Delete ({selectedIds.size})
-              </Button>
-            </div>
-          )}
-        </div>
 
         {loading ? (
           <div className="space-y-2">
@@ -790,7 +793,6 @@ export default function KnowledgePage() {
         <MemoryCard />
 
         <LearnSection />
-      </div>
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>
         <AlertDialogContent>
@@ -907,6 +909,6 @@ export default function KnowledgePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageContainer>
   )
 }

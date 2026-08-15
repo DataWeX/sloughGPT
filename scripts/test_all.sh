@@ -19,8 +19,6 @@ python3 -m pytest tests/ \
   --ignore=tests/test_knowledge_graph.py \
   --ignore=tests/test_lm_eval_char.py \
   --ignore=tests/test_rag.py \
-  --ignore=tests/test_train_sloughgpt_generate_text.py \
-  --ignore=tests/test_train_sloughgpt_resume.py \
   --ignore=tests/test_auto_train.py \
   --ignore=tests/test_auto_train_integration.py \
   --ignore=tests/test_chat_loop_e2e.py \

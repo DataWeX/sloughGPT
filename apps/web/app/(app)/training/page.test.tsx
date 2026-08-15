@@ -6,9 +6,35 @@ import { act } from 'react'
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
+    cn: (...a: any[]) => a.join(' '),
     Button: ({ children, onClick, disabled, className }: any) => <button onClick={onClick} disabled={disabled} className={className}>{children}</button>,
     Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
+    Label: ({ children }: any) => <label>{children}</label>,
+    Input: ({ value, onChange, placeholder, type }: any) => <input value={value} onChange={onChange} placeholder={placeholder} type={type} />,
+    Progress: () => <div role="progressbar" />,
+    Badge: ({ children, className }: any) => <span className={className}>{children}</span>,
+    Textarea: ({ value, onChange, placeholder }: any) => <textarea value={value} onChange={onChange} placeholder={placeholder} />,
+    Skeleton: () => <div data-testid="skeleton" />,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, onClick, value }: any) => <button type="button" value={value} onClick={onClick}>{children}</button>,
+    Select: ({ value, onValueChange, disabled, children }: any) => (
+      <select value={value} disabled={disabled} onChange={(e) => onValueChange?.(e.target.value)}>{children}</select>
+    ),
+    SelectTrigger: ({ children }: any) => <>{children}</>,
+    SelectValue: () => null,
+    SelectContent: ({ children }: any) => <>{children}</>,
+    SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+    Dialog: ({ children }: any) => <div data-testid="dialog">{children}</div>,
+    DialogContent: ({ children }: any) => <div data-testid="dialog-content">{children}</div>,
+    DialogHeader: ({ children }: any) => <div>{children}</div>,
+    DialogFooter: ({ children }: any) => <div>{children}</div>,
+    DialogTitle: ({ children }: any) => <div>{children}</div>,
+    DialogDescription: ({ children }: any) => <p>{children}</p>,
+    Spinner: () => <span data-testid="spinner" />,
+    IconCheck: () => <span data-testid="icon-check" />,
+    IconTrash: () => <span data-testid="icon-trash" />,
+    IconRefresh: () => <span data-testid="icon-refresh" />,
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     FoldSection: ({ heading, children }: any) => <details open><summary>{heading}</summary><div>{children}</div></details>,
@@ -46,10 +72,7 @@ vi.mock('@/lib/controllers', () => ({
 vi.mock('@/lib/training-controller', () => ({ trainingJobsController: { exportMetrics: mockExportMetrics } }))
 vi.mock('@/lib/souls-controller', () => ({ soulsController: { loadCheckpoint: vi.fn() } }))
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div data-testid="app-route-header">{left}{right}</div>,
-  AppRouteHeaderLead: ({ title, subtitle }: any) => <div data-testid="app-route-header-lead">{title}<span>{subtitle}</span></div>,
-}))
+
 vi.mock('@/hooks/useTrainingSession', () => ({ useTrainingSession: () => mockSession }))
 vi.mock('@/hooks/useTrainingDatasets', () => ({ useTrainingDatasets: () => mockDatasets }))
 vi.mock('@/hooks/useTrainingCheckpoints', () => ({ useTrainingCheckpoints: () => mockCheckpoints }))

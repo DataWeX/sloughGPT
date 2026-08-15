@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
 import { Button, Switch } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -245,194 +245,188 @@ export default function SystemHealthPage() {
     downloadJson(chartHistory, `system-history-${todayDateString()}.json`)
   }
 
-  return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={
-          <AppRouteHeaderLead
-            title="System Health"
-          />
-        }
-        right={
-          <div className="flex items-center gap-3">
-            {lastUpdated && (
-              <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">Updated {lastUpdated}</span>
-            )}
-            <div className="flex items-center gap-1.5">
-              <label className="text-[10px] text-muted-foreground">Auto</label>
-              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="scale-75" />
-            </div>
-            <Button variant="outline" size="sm" onClick={handleExportReport} disabled={!loaded}>
-              Export
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => fetchAll(true)} disabled={refreshing || !loaded}>
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
-          </div>
-        }
-      />
-
-      <div className="space-y-4">
-        {/* Loading skeletons */}
-        {!loaded && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-            </div></CardContent></Card>
-            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-            </div></CardContent></Card>
-            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-            </div></CardContent></Card>
-          </div>
-        )}
-
-        {/* Row 1: Status + Resources + Alerts — essential overview */}
-        {loaded && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <StatusCard
-              liveHealth={liveHealth}
-              detailed={detailed}
-              connectionStatus={connectionStatus}
-              inferenceRate={inferenceRate}
-              loaded={loaded}
-            />
-            <ResourceCard
-              liveHealth={liveHealth}
-              metrics={metrics}
-              detailed={detailed}
-              cpuThreshold={cpuThreshold}
-              memThreshold={memThreshold}
-              loaded={loaded}
-            />
-            <AlertPanel
-              cpuThreshold={cpuThreshold}
-              memThreshold={memThreshold}
-              onCpuThresholdChange={setCpuThreshold}
-              onMemThresholdChange={setMemThreshold}
-              alerts={alerts}
-            />
-          </div>
-        )}
-
-        {/* Row 2: Server errors — always visible */}
-        {loaded && <ServerErrorsCard liveHealth={liveHealth} />}
-
-        {/* Row 3: Health & memory trend — always visible */}
-        {loaded && (
-          <Card className="p-4">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Health &amp; memory trend</span>
-            <CardContent className="p-0">
-              <div className="h-40">
-                <TrendChart liveHealth={liveHealth} />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Collapsible: Diagnostics (SSE-driven real-time data) */}
-        {loaded && (
-          <FoldSection heading="Diagnostics">
-            <div className="space-y-3">
-              <DiagnosticsCard liveHealth={liveHealth} />
-              <TrafficCard liveHealth={liveHealth} />
-              <ModelMetricsCard liveHealth={liveHealth} />
-              <PathLatenciesCard liveHealth={liveHealth} />
-              <ModelEventsCard liveHealth={liveHealth} />
-              <RateViolationsCard liveHealth={liveHealth} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <LatencyCard chartHistory={chartHistory} />
-                <ProcessCard detailed={detailed} />
-              </div>
-            </div>
-          </FoldSection>
-        )}
-
-        {/* Collapsible: Training & Quality */}
-        {loaded && (
-          <FoldSection heading="Training &amp; Quality">
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {autoTrainStatus && <AutoTrainCard status={autoTrainStatus} />}
-                <WorkflowCard onRefresh={fetchAll} />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {benchQuality && <QualityCard quality={benchQuality} stats={benchStats} />}
-                <FeedbackCard
-                  dpoStatus={dpoStatus}
-                  visualStatus={visualStatus}
-                  dpoRunning={dpoRunning}
-                  onDpoRunningChange={setDpoRunning}
-                  onRefresh={fetchAll}
-                />
-              </div>
-              {(trainingJobs.length > 0 || (executorStatus && executorStatus.initialized)) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <TrainingHistory jobs={trainingJobs} />
-                  {executorStatus && <ExecutorPool status={executorStatus} onRefresh={fetchAll} />}
-                </div>
-              )}
-            </div>
-          </FoldSection>
-        )}
-
-        {/* Collapsible: System Info */}
-        {loaded && (
-          <FoldSection heading="System Info" open={false}>
-            <div className="space-y-3">
-              <KnowledgeCard knowledgeStats={knowledgeStats} adapterStatus={adapterStatus} loaded={loaded} />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <GpuCard gpu={detailed?.gpu as GPUInfo | undefined} />
-                <DiskCard disk={disk ?? undefined} />
-                <ServerInfoCard info={info ?? undefined} />
-              </div>
-              {detailed?.kv_sessions?.enabled && <KvCacheCard kvSessions={detailed.kv_sessions} />}
-              {chartHistory.length > 1 && (
-                <Card className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time chart</span>
-                    <button onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
-                      Export
-                    </button>
-                  </div>
-                  <CardContent className="p-0">
-                    <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
-                      <SystemChart data={chartHistory} />
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </FoldSection>
-        )}
-
-        {/* Collapsible: Server Output & Activity */}
-        {loaded && (
-          <FoldSection heading="Server Output" open={false}>
-            <div className="space-y-3">
-              <OutputCard compact />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2">
-                  <ActivityTicker />
-                </div>
-                <Card className="p-4">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Errors</span>
-                  <CardContent className="p-0 max-h-[200px] overflow-y-auto">
-                    <ErrorList />
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </FoldSection>
-        )}
-
-        {error && (
-          <Card className="p-4 border-destructive/50">
-            <CardContent className="p-0 py-2 text-sm text-destructive">{error}</CardContent>
-          </Card>
-        )}
+  const headerRight = (
+    <div className="flex items-center gap-3">
+      {lastUpdated && (
+        <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">Updated {lastUpdated}</span>
+      )}
+      <div className="flex items-center gap-1.5">
+        <label className="text-[10px] text-muted-foreground">Auto</label>
+        <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="scale-75" />
       </div>
+      <Button variant="outline" size="sm" onClick={handleExportReport} disabled={!loaded}>
+        Export
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => fetchAll(true)} disabled={refreshing || !loaded}>
+        {refreshing ? 'Refreshing...' : 'Refresh'}
+      </Button>
     </div>
+  )
+
+  return (
+    <PageContainer
+      title="System Health"
+      headerRight={headerRight}
+    >
+      {/* Loading skeletons */}
+      {!loaded && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+          </div></CardContent></Card>
+          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+          </div></CardContent></Card>
+          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+          </div></CardContent></Card>
+        </div>
+      )}
+
+      {/* Row 1: Status + Resources + Alerts — essential overview */}
+      {loaded && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <StatusCard
+            liveHealth={liveHealth}
+            detailed={detailed}
+            connectionStatus={connectionStatus}
+            inferenceRate={inferenceRate}
+            loaded={loaded}
+          />
+          <ResourceCard
+            liveHealth={liveHealth}
+            metrics={metrics}
+            detailed={detailed}
+            cpuThreshold={cpuThreshold}
+            memThreshold={memThreshold}
+            loaded={loaded}
+          />
+          <AlertPanel
+            cpuThreshold={cpuThreshold}
+            memThreshold={memThreshold}
+            onCpuThresholdChange={setCpuThreshold}
+            onMemThresholdChange={setMemThreshold}
+            alerts={alerts}
+          />
+        </div>
+      )}
+
+      {/* Row 2: Server errors — always visible */}
+      {loaded && <ServerErrorsCard liveHealth={liveHealth} />}
+
+      {/* Row 3: Health & memory trend — always visible */}
+      {loaded && (
+        <Card className="p-4">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Health &amp; memory trend</span>
+          <CardContent className="p-0">
+            <div className="h-40">
+              <TrendChart liveHealth={liveHealth} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Collapsible: Diagnostics (SSE-driven real-time data) */}
+      {loaded && (
+        <FoldSection heading="Diagnostics">
+          <div className="space-y-3">
+            <DiagnosticsCard liveHealth={liveHealth} />
+            <TrafficCard liveHealth={liveHealth} />
+            <ModelMetricsCard liveHealth={liveHealth} />
+            <PathLatenciesCard liveHealth={liveHealth} />
+            <ModelEventsCard liveHealth={liveHealth} />
+            <RateViolationsCard liveHealth={liveHealth} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <LatencyCard chartHistory={chartHistory} />
+              <ProcessCard detailed={detailed} />
+            </div>
+          </div>
+        </FoldSection>
+      )}
+
+      {/* Collapsible: Training & Quality */}
+      {loaded && (
+        <FoldSection heading="Training &amp; Quality">
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {autoTrainStatus && <AutoTrainCard status={autoTrainStatus} />}
+              <WorkflowCard onRefresh={fetchAll} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {benchQuality && <QualityCard quality={benchQuality} stats={benchStats} />}
+              <FeedbackCard
+                dpoStatus={dpoStatus}
+                visualStatus={visualStatus}
+                dpoRunning={dpoRunning}
+                onDpoRunningChange={setDpoRunning}
+                onRefresh={fetchAll}
+              />
+            </div>
+            {(trainingJobs.length > 0 || (executorStatus && executorStatus.initialized)) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <TrainingHistory jobs={trainingJobs} />
+                {executorStatus && <ExecutorPool status={executorStatus} onRefresh={fetchAll} />}
+              </div>
+            )}
+          </div>
+        </FoldSection>
+      )}
+
+      {/* Collapsible: System Info */}
+      {loaded && (
+        <FoldSection heading="System Info" open={false}>
+          <div className="space-y-3">
+            <KnowledgeCard knowledgeStats={knowledgeStats} adapterStatus={adapterStatus} loaded={loaded} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <GpuCard gpu={detailed?.gpu as GPUInfo | undefined} />
+              <DiskCard disk={disk ?? undefined} />
+              <ServerInfoCard info={info ?? undefined} />
+            </div>
+            {detailed?.kv_sessions?.enabled && <KvCacheCard kvSessions={detailed.kv_sessions} />}
+            {chartHistory.length > 1 && (
+              <Card className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time chart</span>
+                  <button onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
+                    Export
+                  </button>
+                </div>
+                <CardContent className="p-0">
+                  <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
+                    <SystemChart data={chartHistory} />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </FoldSection>
+      )}
+
+      {/* Collapsible: Server Output & Activity */}
+      {loaded && (
+        <FoldSection heading="Server Output" open={false}>
+          <div className="space-y-3">
+            <OutputCard compact />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2">
+                <ActivityTicker />
+              </div>
+              <Card className="p-4">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Errors</span>
+                <CardContent className="p-0 max-h-[200px] overflow-y-auto">
+                  <ErrorList />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </FoldSection>
+      )}
+
+      {error && (
+        <Card className="p-4 border-destructive/50">
+          <CardContent className="p-0 py-2 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
+    </PageContainer>
   )
 }

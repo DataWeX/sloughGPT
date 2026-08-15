@@ -38,11 +38,6 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div>{left}{right}</div>,
-  AppRouteHeaderLead: ({ title }: any) => <h1>{title}</h1>,
-}))
-
 vi.mock('@/lib/dataset-controller', () => ({
   datasetController: {
     list: (...a: unknown[]) => mockList(...a),

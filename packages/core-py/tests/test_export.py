@@ -27,8 +27,6 @@ from domains.training.export import (
     export_to_safetensors,
     export_to_safetensors_bf16,
     export_to_sou,
-    export_to_torch,
-    export_to_torchscript,
     list_export_formats,
 )
 
@@ -172,8 +170,6 @@ def stub_exports(monkeypatch):
         "export_to_gguf",
         "export_to_gguf_fp16",
         "export_to_gguf_q4_k_m",
-        "export_to_torch",
-        "export_to_torchscript",
         "export_to_onnx",
         "export_to_sou",
         "export_all_formats",
@@ -411,25 +407,6 @@ class TestConfigs:
         assert g.rope_freq_base == 50000.0
         assert g.rope_freq_scale == 0.5
         assert g.use_gpu is True
-
-
-class TestExportToTorchscript:
-    def test_trace_with_example(self, tmp_path, fake_torch):
-        model = FakeModel()
-        out = str(tmp_path / "m.torchscript.pt")
-        r = export_to_torchscript(model, out, example_input=object())
-        assert r == out
-        assert model.eval_calls == [1]
-        assert len(fake_torch.traced) == 1
-        assert (tmp_path / "m.torchscript.pt").read_bytes() == b"ts"
-
-    def test_script_without_example(self, tmp_path, fake_torch):
-        model = FakeModel()
-        out = str(tmp_path / "m.torchscript.pt")
-        r = export_to_torchscript(model, out)
-        assert r == out
-        assert len(fake_torch.scripted) == 1
-        assert (tmp_path / "m.torchscript.pt").read_bytes() == b"ts2"
 
 
 class TestExportToOnnx:
@@ -691,26 +668,6 @@ class TestGGUFWrappers:
         assert r == "out.gguf"
 
 
-class TestExportToTorch:
-    def test_default_metadata(self, tmp_path, fake_torch):
-        model = FakeModel(state={"w": np.ones((1,))})
-        out = str(tmp_path / "m.pt")
-        r = export_to_torch(model, out)
-        assert r == out
-        checkpoint, path = fake_torch.saved[0]
-        assert path == out
-        assert checkpoint["metadata"] == {"format": "torch"}
-        assert "w" in checkpoint["model_state_dict"]
-
-    def test_with_metadata(self, tmp_path, fake_torch):
-        model = FakeModel(state={"w": np.ones((1,))})
-        out = str(tmp_path / "m.pt")
-        r = export_to_torch(model, out, metadata={"epochs": 5})
-        assert r == out
-        checkpoint, _ = fake_torch.saved[0]
-        assert checkpoint["metadata"] == {"epochs": 5}
-
-
 class TestExportToSou:
     def test_real_roundtrip(self, tmp_path):
         model = FakeModel(state={"w": np.array([1.0, 2.0, 3.0]), "b": np.array([0.5])})
@@ -761,12 +718,10 @@ class TestExportAllFormats:
         results = {}
         export_all_formats(config, model, tokenizer=None, example_input=object(), results=results)
         assert "safetensors" in results
-        assert "torch" in results
         assert "onnx" in results
         assert "sou" in results
         assert "gguf_q4_k_m" not in results
         assert Path(results["safetensors"]).exists()
-        assert Path(results["torch"]).exists()
         assert Path(results["sou"]).exists()
 
     def test_gguf_success(self, tmp_path, fake_torch, fake_safetensors, monkeypatch):
@@ -855,27 +810,6 @@ class TestExportModel:
         r = export_model(_cfg("gguf_f32"), model=object())
         assert r == {"gguf_f32": "models/out-F32.gguf"}
 
-    def test_torch(self, stub_exports):
-        r = export_model(_cfg("torch"), model=object())
-        assert r == {"torch": "models/out.pt"}
-
-    def test_pytorch_alias(self, stub_exports):
-        r = export_model(_cfg("pytorch"), model=object())
-        assert r == {"torch": "models/out.pt"}
-
-    def test_torchscript_with_example(self, stub_exports):
-        example = object()
-        r = export_model(_cfg("torchscript"), model=object(), example_input=example)
-        assert r == {"torchscript": "models/out.torchscript.pt"}
-        calls = stub_exports["export_to_torchscript"].calls
-        assert calls[0][0][2] is example
-
-    def test_torchscript_without_example(self, stub_exports, caplog):
-        r = export_model(_cfg("torchscript"), model=object())
-        assert r == {}
-        assert stub_exports["export_to_torchscript"].calls == []
-        assert "example_input required for TorchScript export" in caplog.text
-
     def test_onnx(self, stub_exports):
         r = export_model(_cfg("onnx", seq_len=64, opset_version=14), model=object(), example_input=object())
         assert r == {"onnx": "models/out.onnx"}
@@ -913,29 +847,29 @@ class TestExportModel:
             raise ValueError("bad weights")
 
         monkeypatch.setattr(export_mod, "export_to_safetensors", boom)
-        r = export_model(_cfg("safetensors,torch"), model=object())
+        r = export_model(_cfg("safetensors,onnx"), model=object())
         assert "safetensors" not in r
-        assert r == {"torch": "models/out.pt"}
+        assert r == {"onnx": "models/out.onnx"}
         assert "Export failed for format 'safetensors'" in caplog.text
         assert "bad weights" in caplog.text
 
     def test_comma_separated(self, stub_exports):
-        r = export_model(_cfg("torch,gguf_f16"), model=object())
-        assert r == {"torch": "models/out.pt", "gguf_f16": "models/out-F16.gguf"}
+        r = export_model(_cfg("onnx,gguf_f16"), model=object())
+        assert r == {"onnx": "models/out.onnx", "gguf_f16": "models/out-F16.gguf"}
 
     def test_uppercase_stripped(self, stub_exports):
-        r = export_model(_cfg("  TORCH  "), model=object())
-        assert r == {"torch": "models/out.pt"}
+        r = export_model(_cfg("  ONNX  "), model=object())
+        assert r == {"onnx": "models/out.onnx"}
 
     def test_tokenizer_saved(self, stub_exports):
         tok = _FakeTokenizer()
-        r = export_model(_cfg("torch", output="models/named"), model=object(), tokenizer=tok)
+        r = export_model(_cfg("sou", output="models/named"), model=object(), tokenizer=tok)
         assert r["tokenizer"] == "models/tokenizer"
         assert tok.saved_to == ["models/tokenizer"]
 
     def test_tokenizer_not_saved_when_disabled(self, stub_exports):
         tok = _FakeTokenizer()
-        r = export_model(_cfg("torch", tokenizer=False), model=object(), tokenizer=tok)
+        r = export_model(_cfg("sou", tokenizer=False), model=object(), tokenizer=tok)
         assert "tokenizer" not in r
         assert tok.saved_to == []
 
@@ -944,6 +878,6 @@ class TestListExportFormats:
     def test_returns_formats(self):
         fmts = list_export_formats()
         assert isinstance(fmts, dict)
-        for key in ["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "torch", "torchscript", "sou", "all"]:
+        for key in ["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "sou", "all"]:
             assert key in fmts
         assert "SafeTensors" in fmts["safetensors"]

@@ -18,7 +18,7 @@ from domains.shell.vm import (
     ClockDevice, CPU, Assembler, InsFault, Memory, DeviceBus,
     NUM_REGS, FileDevice, VGADevice, PS2KeyboardDevice, ConsoleDevice, IRQDevice,
     DiskProgramLoader, VirtualSystem, DeviceFault, X86Shell, FLAG_DF,
-    FLAG_ZF,
+    FLAG_ZF, FLAG_CF,
 )
 from domains.shell.vm_permissions import Role
 
@@ -5597,8 +5597,26 @@ class TestX86ALUOps:
 
     def test_alu_unknown_op(self):
         cpu = self._cpu()
-        r = cpu._alu(3, 42, 10)
+        r = cpu._alu(8, 42, 10)
         assert r == 42
+
+    def test_alu_adc(self):
+        cpu = self._cpu()
+        cpu._set_flag(FLAG_CF, True)
+        r = cpu._alu(2, 42, 10)
+        assert r == 53
+        cpu._set_flag(FLAG_CF, False)
+        r = cpu._alu(2, 42, 10)
+        assert r == 52
+
+    def test_alu_sbb(self):
+        cpu = self._cpu()
+        cpu._set_flag(FLAG_CF, True)
+        r = cpu._alu(3, 42, 10)
+        assert r == 31
+        cpu._set_flag(FLAG_CF, False)
+        r = cpu._alu(3, 42, 10)
+        assert r == 32
 
 
 # ══════════════════════════════════════════════════════════════════════════════

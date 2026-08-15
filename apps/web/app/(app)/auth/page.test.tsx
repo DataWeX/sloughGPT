@@ -23,13 +23,9 @@ vi.mock('@sloughgpt/strui', () => {
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: () => <span>refresh</span>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div>{left}{right}</div>,
-  AppRouteHeaderLead: ({ title, subtitle }: any) => <div><h1>{title}</h1>{subtitle && <span>{subtitle}</span>}</div>,
-}))
 
 vi.mock('@/components/auth/AuthSessionInfoCard', () => ({
   AuthSessionInfoCard: ({ token }: any) => (

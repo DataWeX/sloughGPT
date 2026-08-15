@@ -168,3 +168,138 @@ class TestDistillEndpointErrors:
         finally:
             import shutil
             shutil.rmtree(ds_dir, ignore_errors=True)
+
+
+# ── SloNet teacher path (pure NumPy) ────────────────────────────────────
+
+
+class TestDistillSlonetTeacher:
+    """Distillation from the active SloNet provider — no torch involved.
+
+    The load path publishes a SloNetChatProvider into ServerState instead of
+    ``ctrl._hf_model``; the teacher forward must therefore run in pure NumPy
+    via ``SloTransformer.forward(input_ids, None) -> (logits, loss)``.
+    """
+
+    @staticmethod
+    def _make_client():
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from training.router import router
+        app = FastAPI()
+        app.include_router(router)
+        return TestClient(app, raise_server_exceptions=False)
+
+    @staticmethod
+    def _fake_provider():
+        import numpy as np
+
+        class _Logits:
+            def __init__(self, arr):
+                self.data = arr
+
+        class _Model:
+            def forward(self, input_ids, targets=None):
+                return _Logits(np.full((input_ids.shape[0], input_ids.shape[1], 16),
+                                       0.5, dtype=np.float32)), None
+
+        class _Provider:
+            model_id = "gpt2"
+
+            def tokenize(self, text):
+                return list(range(1, 201))
+
+            def _get_model(self):
+                return _Model()
+
+        return _Provider()
+
+    def _poll(self, training_jobs, job_id, timeout=30.0):
+        import time
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            status = training_jobs.get(job_id, {}).get("status")
+            if status in ("completed", "failed"):
+                return status
+            time.sleep(0.05)
+        return "timeout"
+
+    def test_slonet_teacher_completes_without_torch(self):
+        import shutil
+        from unittest.mock import MagicMock
+
+        from training.router import training_jobs
+
+        datasets_dir = _REPO_ROOT / "datasets"
+        ds_dir = datasets_dir / "_test_distill_slonet"
+        ds_dir.mkdir(parents=True, exist_ok=True)
+        (ds_dir / "input.txt").write_text("alpha beta gamma delta epsilon zeta eta theta " * 8)
+
+        fake_core = MagicMock()
+        fake_core.model.get.return_value = self._fake_provider()
+
+        ckpt = _REPO_ROOT / "models" / "auto-training" / "_test_slonet_distill_distilled.soul"
+        job_id = None
+        try:
+            client = self._make_client()
+            with patch("domains.infrastructure.model_registry.get_model_registry",
+                       return_value=None), \
+                 patch("domains.infrastructure.server_state.get_server_state",
+                       return_value=fake_core):
+                resp = client.post("/training/distill", json={
+                    "teacher_model": "gpt2",
+                    "dataset": "_test_distill_slonet",
+                    "epochs": 1,
+                    "name": "_test_slonet_distill",
+                })
+                assert resp.status_code == 200
+                job_id = resp.json()["job_id"]
+                # Keep the patches active while the background training thread
+                # runs — it resolves the teacher via get_server_state() and
+                # would otherwise read the real ServerState singleton.
+                assert self._poll(training_jobs, job_id) == "completed"
+            job = training_jobs[job_id]
+            assert job["status"] == "completed"
+            assert "loss" in job
+            assert ckpt.exists()
+        finally:
+            if job_id:
+                training_jobs.pop(job_id, None)
+            shutil.rmtree(ds_dir, ignore_errors=True)
+            ckpt.unlink(missing_ok=True)
+
+    def test_slonet_teacher_not_loaded_fails(self):
+        import shutil
+        from unittest.mock import MagicMock
+
+        from training.router import training_jobs
+
+        datasets_dir = _REPO_ROOT / "datasets"
+        ds_dir = datasets_dir / "_test_distill_slonet_missing"
+        ds_dir.mkdir(parents=True, exist_ok=True)
+        (ds_dir / "input.txt").write_text("alpha beta gamma delta epsilon zeta eta theta " * 8)
+
+        fake_core = MagicMock()
+        fake_core.model.get.return_value = None  # no provider loaded
+
+        job_id = None
+        try:
+            client = self._make_client()
+            with patch("domains.infrastructure.model_registry.get_model_registry",
+                       return_value=None), \
+                 patch("domains.infrastructure.server_state.get_server_state",
+                       return_value=fake_core):
+                resp = client.post("/training/distill", json={
+                    "teacher_model": "gpt2",
+                    "dataset": "_test_distill_slonet_missing",
+                    "epochs": 1,
+                    "name": "_test_slonet_missing",
+                })
+                assert resp.status_code == 200
+                job_id = resp.json()["job_id"]
+                assert self._poll(training_jobs, job_id) == "failed"
+            assert "not loaded" in training_jobs[job_id]["error"]
+        finally:
+            if job_id:
+                training_jobs.pop(job_id, None)
+            shutil.rmtree(ds_dir, ignore_errors=True)

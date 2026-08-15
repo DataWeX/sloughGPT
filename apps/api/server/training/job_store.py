@@ -198,6 +198,35 @@ class JobStore:
         """Mark job as crashed/interrupted."""
         self.update(job_id, crashed=1, status="interrupted", updated_at=datetime.now().isoformat())
 
+    def mark_recovering(self, job_id: str) -> None:
+        """Mark a job as being actively recovered.
+
+        Sets a fresh heartbeat so the row is not mistaken for a crashed or
+        recoverable job while the recovery run is alive (see
+        ``detect_crashed_jobs`` / ``get_recoverable_jobs``).
+        """
+        self.update(
+            job_id,
+            status="recovering",
+            crashed=0,
+            last_heartbeat=datetime.now().isoformat(),
+        )
+
+    @staticmethod
+    def is_stale_heartbeat(job: Dict, timeout_seconds: int = 300) -> bool:
+        """Return True when a job's heartbeat is absent or older than ``timeout_seconds``.
+
+        ``job`` is a store row dict (as returned by ``get`` / ``list``).
+        """
+        hb = job.get("last_heartbeat")
+        if not hb:
+            return True
+        try:
+            last = datetime.fromisoformat(hb)
+        except ValueError:
+            return True
+        return (datetime.now() - last).total_seconds() > timeout_seconds
+
     def heartbeat(self, job_id: str) -> None:
         """Update heartbeat timestamp."""
         self.update(job_id, last_heartbeat=datetime.now().isoformat())
@@ -217,10 +246,15 @@ class JobStore:
         """
         Detect jobs that may have crashed.
 
-        Jobs that are 'running' but haven't sent a heartbeat in timeout_seconds
-        are considered crashed.
+        Jobs that are 'running' (or 'recovering') but haven't sent a heartbeat
+        in timeout_seconds are considered potentially crashed.
+
+        Note: heartbeats are persisted with ``datetime.now().isoformat()``
+        ('T' separator), so the cutoff must be built in the SAME format — an
+        SQLite ``datetime(?, 'unixepoch')`` (space separator) string compares
+        greater and the stale test would silently never fire.
         """
-        cutoff = datetime.now().timestamp() - timeout_seconds
+        cutoff = datetime.fromtimestamp(datetime.now().timestamp() - timeout_seconds).isoformat()
 
         with self._lock:
             conn = sqlite3.connect(str(self.db_path))
@@ -229,8 +263,9 @@ class JobStore:
             cursor = conn.execute(
                 """
                 SELECT * FROM jobs
-                WHERE status = 'running'
-                AND last_heartbeat < datetime(?, 'unixepoch')
+                WHERE status IN ('running', 'recovering')
+                AND last_heartbeat IS NOT NULL
+                AND last_heartbeat < ?
                 AND crashed = 0
             """,
                 (cutoff,),
@@ -242,8 +277,32 @@ class JobStore:
             return [self._row_to_dict(row) for row in rows]
 
     def get_recoverable_jobs(self) -> List[Dict]:
-        """Get jobs that can be recovered (interrupted or crashed)."""
-        return self.list(status="interrupted", include_crashed=True)
+        """Get jobs that can be recovered.
+
+        Returns 'interrupted' and 'failed' jobs (both are accepted by the
+        recovery endpoint), plus 'recovering' rows whose heartbeat went stale
+        (a recovery run that died without completing). A 'recovering' row with
+        a fresh heartbeat is actively being recovered and is NOT listed here.
+        """
+        cutoff = datetime.fromtimestamp(datetime.now().timestamp() - 300).isoformat()
+
+        with self._lock:
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM jobs
+                WHERE status IN ('interrupted', 'failed')
+                   OR (status = 'recovering'
+                       AND (last_heartbeat IS NULL OR last_heartbeat < ?))
+                ORDER BY created_at DESC
+            """,
+                (cutoff,),
+            )
+            rows = cursor.fetchall()
+            conn.close()
+
+            return [self._row_to_dict(row) for row in rows]
 
     def log_event(self, job_id: str, event: str, data: Optional[Dict] = None) -> None:
         """Log a job event."""

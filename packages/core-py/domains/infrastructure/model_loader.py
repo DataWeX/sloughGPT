@@ -1,5 +1,5 @@
 """
-SloNet Model Loader — torch-free model loading via .slnc format.
+SloNet Model Loader — model loading via .slnc format.
 
 Provides a `ModelLoader` class that handles:
   - Model detection (.slnc file, auto-converts from safetensors)

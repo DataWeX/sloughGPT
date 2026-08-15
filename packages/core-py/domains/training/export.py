@@ -1,9 +1,9 @@
 """Model export utilities for SloughGPT.
 
 This module provides comprehensive model export functionality following industry
-best practices for deploying trained PyTorch models to various formats.
+best practices for deploying trained SloNet models to various formats.
 
-Char-LM **perplexity parity** with training uses native ``SloughGPTTrainer`` ``step_*.pt``
+Char-LM **perplexity parity** with training uses native ``SloughGPTTrainer`` ``.soul``
 (``stoi`` / ``itos`` / ``chars``); exported formats encode vocabulary differently — see
 ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 
@@ -32,13 +32,6 @@ GGUF (Mobile/Embedded)
 - Requirements: gguf>=0.10.0
 - Quantizations: Q4_K_M (recommended), Q5_K_M, Q8_0, F16, F32
 
-TorchScript (PyTorch Native)
-----------------------------
-- Format: .torchscript.pt
-- Pros: PyTorch-native, optimized C++ inference
-- Use case: Server deployment with TorchServe, C++ applications
-- Requirements: torch>=2.0
-
 Examples
 ========
 
@@ -47,7 +40,7 @@ Basic export::
     from domains.training.export import export_model, ExportConfig
 
     config = ExportConfig(
-        input_path="model.pt",
+        input_path="model.soul",
         output_path="exported_model",
         format="safetensors",
     )
@@ -56,7 +49,7 @@ Basic export::
 Export for mobile (llama.rn)::
 
     config = ExportConfig(
-        input_path="model.pt",
+        input_path="model.soul",
         output_path="model_mobile",
         format="gguf_q4_k_m",
     )
@@ -65,7 +58,7 @@ Export for mobile (llama.rn)::
 Export all formats::
 
     config = ExportConfig(
-        input_path="model.pt",
+        input_path="model.soul",
         output_path="model_all",
         format="all",
     )
@@ -73,10 +66,10 @@ Export all formats::
 
 CLI Usage::
 
-    python3 cli.py export model.pt -f safetensors
-    python3 cli.py export model.pt -f onnx --seq-len 128
-    python3 cli.py export model.pt -f gguf_q4_k_m
-    python3 cli.py export model.pt -f all
+    python3 cli.py export model.soul -f safetensors
+    python3 cli.py export model.soul -f onnx --seq-len 128
+    python3 cli.py export model.soul -f gguf_q4_k_m
+    python3 cli.py export model.soul -f all
 
 Tags
 ====
@@ -308,12 +301,12 @@ class ModelMetadata:
         # Set timestamps
         metadata.created_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
-        # Get PyTorch version
+        # Record the PyTorch version when torch is importable
         try:
             import torch
-            metadata.torch_version = torch.__version__
+            metadata.torch_version = getattr(torch, "__version__", "")
         except ImportError:
-            pass
+            metadata.torch_version = ""
 
         return metadata
 
@@ -453,7 +446,7 @@ class ExportConfig:
     """Configuration for model export.
 
     Attributes:
-        input_path: Path to input model file (.pt, .safetensors, etc.)
+        input_path: Path to input model file (.soul, .safetensors, etc.)
         output_path: Path for exported model (extension added automatically)
         format: Export format. Options:
             - "safetensors" (default, recommended)
@@ -463,8 +456,6 @@ class ExportConfig:
             - "gguf_fp16" (for separate quantization)
             - "gguf_q5_k_m" (better quality mobile)
             - "gguf_q8_0" (high quality)
-            - "torch" (PyTorch checkpoint)
-            - "torchscript" (PyTorch C++ inference)
             - "sou" (SloughGPT soul + personality)
             - "all" (export all formats)
         quantization: GGUF quantization type (Q4_K_M, Q5_K_M, Q8_0, F16, F32)
@@ -477,7 +468,7 @@ class ExportConfig:
     Example::
 
         config = ExportConfig(
-            input_path="models/sloughgpt.pt",
+            input_path="models/sloughgpt.soul",
             output_path="exports/sloughgpt",
             format="onnx",
             seq_len=128,
@@ -535,8 +526,7 @@ class ONNXExportOptions:
 
     Note:
         PyTorch 2.6+ uses dynamo-based export by default which handles
-        dynamic shapes better. Falls back to TorchScript export for
-        older PyTorch versions.
+        dynamic shapes better.
     """
 
     input_names: List[str] = field(default_factory=lambda: ["input_ids"])
@@ -599,52 +589,6 @@ class GGUFExportOptions:
     rope_freq_base: float = 10000.0
     rope_freq_scale: float = 1.0
     use_gpu: bool = False
-
-
-def export_to_torchscript(
-    model: "Module",
-    output_path: str,
-    example_input: Optional[Any] = None,
-) -> str:
-    """Export model to TorchScript format.
-
-    TorchScript provides optimized C++ inference without Python dependency.
-
-    Args:
-        model: PyTorch model to export
-        output_path: Path for output TorchScript file
-        example_input: Example input for tracing (required for static graphs)
-
-    Returns:
-        Path to exported file
-
-    Raises:
-        RuntimeError: If tracing fails
-
-    Example::
-
-        traced = torch.jit.trace(model, example_input)
-        traced.save("model.torchscript.pt")
-
-    Note:
-        TorchScript export uses either tracing (with example input) or
-        scripting (without example input). Tracing captures actual
-        execution flow but requires static shapes. Scripting preserves
-        control flow but may not capture all dynamic behavior.
-    """
-    import torch
-
-    model.eval()
-
-    if example_input is not None:
-        traced = torch.jit.trace(model, example_input)
-    else:
-        traced = torch.jit.script(model)
-
-    traced.save(output_path)
-    logger.info(f"Exported TorchScript: {output_path}",
-        extra={"tag": "TRAIN"},)
-    return output_path
 
 
 def export_to_onnx(
@@ -1041,40 +985,6 @@ def export_to_gguf_q4_k_m(
     return result
 
 
-def export_to_torch(
-    model: "Module",
-    output_path: str,
-    metadata: Optional[Dict] = None,
-) -> str:
-    """Export model to PyTorch format (legacy).
-
-    This is the traditional PyTorch checkpoint format. For production,
-    prefer SafeTensors which is safer and faster to load.
-
-    Args:
-        model: PyTorch model to export
-        output_path: Path for output file (.pt)
-        metadata: Optional metadata dictionary
-
-    Returns:
-        Path to exported file
-
-    Warning:
-        .pt files can contain arbitrary Python code and are not
-        safe for untrusted sources. Use SafeTensors for production.
-    """
-    import torch
-
-    checkpoint = {
-        "model_state_dict": model.state_dict(),
-        "metadata": metadata or {"format": "torch"},
-    }
-    torch.save(checkpoint, output_path)
-    logger.info(f"Exported PyTorch: {output_path}",
-        extra={"tag": "TRAIN"},)
-    return output_path
-
-
 def export_to_sou(
     model: "Module",
     output_path: str,
@@ -1135,7 +1045,6 @@ def export_all_formats(
 
     Exports to:
         - SafeTensors (.safetensors) - recommended default
-        - PyTorch (.torch) - legacy format
         - ONNX (.onnx) - cross-platform
         - GGUF Q4_K_M (.gguf) - mobile (llama.rn)
         - Slo Unit (.soul) - SloughGPT self-contained + personality
@@ -1149,17 +1058,12 @@ def export_all_formats(
 
     Note:
         SafeTensors is the recommended format as it's safe, fast,
-        and widely supported. The .torch format is included for
-        backward compatibility. The .soul format includes personality
+        and widely supported. The .soul format includes personality
         data and living soul metadata.
     """
     output = _replace_ext(config.output_path, ".safetensors")
     export_to_safetensors(model, output, config.metadata)
     results["safetensors"] = output
-
-    output = _replace_ext(config.output_path, ".torch")
-    export_to_torch(model, output, config.metadata)
-    results["torch"] = output
 
     if example_input is not None:
         output = _replace_ext(config.output_path, ".onnx")
@@ -1229,8 +1133,6 @@ def export_model(
         gguf_fp16     GGUF FP16 (for separate quantization)
         gguf_q5_k_m   GGUF Q5_K_M (better quality mobile)
         gguf_q8_0     GGUF Q8_0 (high quality)
-        torch         PyTorch checkpoint (legacy)
-        torchscript   TorchScript for C++ inference
         sou           Slo Unit with personality
         all           Export all formats at once
         ============  ====================================================
@@ -1240,7 +1142,7 @@ def export_model(
         from domains.training.export import export_model, ExportConfig
 
         config = ExportConfig(
-            input_path="model.pt",
+            input_path="model.soul",
             output_path="exports/model",
             format="all",
             metadata={"model_type": "sloughgpt"},
@@ -1249,7 +1151,6 @@ def export_model(
 
         # results = {
         #     "safetensors": "exports/model.safetensors",
-        #     "torch": "exports/model.torch",
         #     "onnx": "exports/model.onnx",
         #     "gguf_q4_k_m": "exports/model-Q4_K_M.gguf",
         # }
@@ -1313,20 +1214,6 @@ def export_model(
                 export_to_gguf(model, output, q_map[fmt], tokenizer)
                 results[fmt] = output
 
-            elif fmt == "torch" or fmt == "pytorch":
-                output = _replace_ext(config.output_path, ".pt")
-                export_to_torch(model, output, config.metadata)
-                results["torch"] = output
-
-            elif fmt == "torchscript":
-                output = _replace_ext(config.output_path, ".torchscript.pt")
-                if example_input is None:
-                    logger.warning("example_input required for TorchScript export",
-                        extra={"tag": "TRAIN"},)
-                    continue
-                export_to_torchscript(model, output, example_input)
-                results["torchscript"] = output
-
             elif fmt == "onnx":
                 output = _replace_ext(config.output_path, ".onnx")
                 export_to_onnx(
@@ -1378,7 +1265,7 @@ def list_export_formats() -> Dict[str, str]:
         1. Recommended (default): SafeTensors
         2. Cross-platform: ONNX
         3. Mobile: GGUF Q4_K_M
-        4. Legacy: PyTorch, TorchScript
+        4. Self-contained: Slo Unit
 
     See Also:
         :class:`ExportConfig`: Configuration options
@@ -1392,8 +1279,6 @@ def list_export_formats() -> Dict[str, str]:
         "gguf_fp16": "GGUF FP16 (.gguf) - for separate quantization",
         "gguf_q5_k_m": "GGUF Q5_K_M (.gguf) - better quality mobile",
         "gguf_q8_0": "GGUF Q8_0 (.gguf) - high quality, larger size",
-        "torch": "PyTorch (.pt) - training checkpoint",
-        "torchscript": "TorchScript (.torchscript.pt) - PyTorch C++ inference",
         "sou": "Slo Unit (.soul) - SloughGPT self-contained + personality",
         "all": "Export all formats at once",
     }
@@ -1409,13 +1294,11 @@ __all__ = [
     "create_model_metadata",
     # Export functions
     "export_model",
-    "export_to_torch",
     "export_to_safetensors",
     "export_to_safetensors_bf16",
     "export_to_gguf",
     "export_to_gguf_fp16",
     "export_to_gguf_q4_k_m",
-    "export_to_torchscript",
     "export_to_onnx",
     "export_to_sou",
     "export_all_formats",

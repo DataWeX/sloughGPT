@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { workflowController } from '@/lib/workflow-controller'
 import { WorkflowPipeline } from '@/components/workflow/WorkflowPipeline'
 import { WorkflowHealthCard } from '@/components/workflow/WorkflowHealthCard'
@@ -60,155 +60,139 @@ export default function WorkflowPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Workflow" subtitle="Automated feedback pipeline" />} />
-        <div className="space-y-4">
-          <KpiGrid>
-            <StatCard label="Status" value="Loading..." />
-            <StatCard label="Feedback" value="..." />
-            <StatCard label="Adapters" value="..." />
-            <StatCard label="Health" value="..." />
-          </KpiGrid>
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Workflow" subtitle="Automated feedback pipeline" />} />
-      <div className="space-y-4">
-        <KpiGrid>
-          <StatCard
-            label="Status"
-            value={status?.running ? 'Running' : 'Stopped'}
-          />
-          <StatCard
-            label="Feedback Recorded"
-            value={String(status?.stats?.feedback_recorded ?? 0)}
-          />
-          <StatCard
-            label="Auto-train Steps"
-            value={String(status?.stats?.auto_train_steps ?? 0)}
-          />
-          <StatCard
-            label="Workflow Runs"
-            value={String(status?.stats?.workflow_runs ?? 0)}
-          />
-        </KpiGrid>
+    <PageContainer
+      title="Workflow"
+      subtitle="Automated feedback pipeline"
+      loading={loading}
+    >
+      <KpiGrid>
+        <StatCard
+          label="Status"
+          value={status?.running ? 'Running' : 'Stopped'}
+        />
+        <StatCard
+          label="Feedback Recorded"
+          value={String(status?.stats?.feedback_recorded ?? 0)}
+        />
+        <StatCard
+          label="Auto-train Steps"
+          value={String(status?.stats?.auto_train_steps ?? 0)}
+        />
+        <StatCard
+          label="Workflow Runs"
+          value={String(status?.stats?.workflow_runs ?? 0)}
+        />
+      </KpiGrid>
 
-        {triggerMsg && (
-          <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
-            {triggerMsg}
-            <button className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
+      {triggerMsg && (
+        <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
+          {triggerMsg}
+          <button className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
+        </div>
+      )}
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Status</CardTitle>
+          <div className="flex gap-1.5">
+            <Button size="sm" variant="ghost" onClick={fetchStatus}>
+              <IconRefresh className="h-4 w-4" />
+            </Button>
           </div>
-        )}
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3">
+            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+              status?.running
+                ? 'bg-success/15 text-success'
+                : 'bg-muted text-muted-foreground'
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${status?.running ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+              {status?.running ? 'Running' : 'Stopped'}
+            </span>
+            <Button size="sm" onClick={handleToggle} disabled={toggling}>
+              {toggling ? '...' : status?.running ? 'Stop' : 'Start'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Status</CardTitle>
-            <div className="flex gap-1.5">
-              <Button size="sm" variant="ghost" onClick={fetchStatus}>
-                <IconRefresh className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-3">
-              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-                status?.running
-                  ? 'bg-success/15 text-success'
-                  : 'bg-muted text-muted-foreground'
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${status?.running ? 'bg-success' : 'bg-muted-foreground/40'}`} />
-                {status?.running ? 'Running' : 'Stopped'}
-              </span>
-              <Button size="sm" onClick={handleToggle} disabled={toggling}>
-                {toggling ? '...' : status?.running ? 'Stop' : 'Start'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <WorkflowHealthCard status={status} />
 
-        <WorkflowHealthCard status={status} />
+      <WorkflowPipeline status={status} />
 
-        <WorkflowPipeline status={status} />
-
-        {status?.config && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Configuration</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Aggregate', value: `${status.config.aggregate_interval_minutes} min` },
-                  { label: 'Prune', value: `${status.config.prune_interval_minutes} min` },
-                  { label: 'Export', value: `${status.config.export_interval_hours} hr` },
-                  { label: 'Health Check', value: `${status.config.health_check_interval_seconds}s` },
-                ].map(c => (
-                  <div key={c.label} className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground">{c.label}</div>
-                    <div className="text-sm font-mono font-medium">{c.value}</div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {status?.stats && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Stats</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Feedback Recorded</div>
-                  <div className="text-lg font-mono font-medium">{status.stats.feedback_recorded ?? 0}</div>
-                </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Auto-train Steps</div>
-                  <div className="text-lg font-mono font-medium">{status.stats.auto_train_steps ?? 0}</div>
-                </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Workflow Runs</div>
-                  <div className="text-lg font-mono font-medium">{status.stats.workflow_runs ?? 0}</div>
-                </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">DPO Train Steps</div>
-                  <div className="text-lg font-mono font-medium">{status.stats.dpo_train_steps ?? 0}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
+      {status?.config && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Manual Triggers</CardTitle>
+            <CardTitle className="text-base">Configuration</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2">
-              {['aggregate', 'prune', 'export'].map(action => (
-                <Button
-                  key={action}
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleTrigger(action)}
-                  disabled={triggering}
-                >
-                  {action.charAt(0).toUpperCase() + action.slice(1)}
-                </Button>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Aggregate', value: `${status.config.aggregate_interval_minutes} min` },
+                { label: 'Prune', value: `${status.config.prune_interval_minutes} min` },
+                { label: 'Export', value: `${status.config.export_interval_hours} hr` },
+                { label: 'Health Check', value: `${status.config.health_check_interval_seconds}s` },
+              ].map(c => (
+                <div key={c.label} className="rounded-md bg-muted/30 p-3 text-center">
+                  <div className="text-xs text-muted-foreground">{c.label}</div>
+                  <div className="text-sm font-mono font-medium">{c.value}</div>
+                </div>
               ))}
             </div>
           </CardContent>
         </Card>
-      </div>
-    </div>
+      )}
+
+      {status?.stats && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Stats</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md bg-muted/30 p-3 text-center">
+                <div className="text-xs text-muted-foreground">Feedback Recorded</div>
+                <div className="text-lg font-mono font-medium">{status.stats.feedback_recorded ?? 0}</div>
+              </div>
+              <div className="rounded-md bg-muted/30 p-3 text-center">
+                <div className="text-xs text-muted-foreground">Auto-train Steps</div>
+                <div className="text-lg font-mono font-medium">{status.stats.auto_train_steps ?? 0}</div>
+              </div>
+              <div className="rounded-md bg-muted/30 p-3 text-center">
+                <div className="text-xs text-muted-foreground">Workflow Runs</div>
+                <div className="text-lg font-mono font-medium">{status.stats.workflow_runs ?? 0}</div>
+              </div>
+              <div className="rounded-md bg-muted/30 p-3 text-center">
+                <div className="text-xs text-muted-foreground">DPO Train Steps</div>
+                <div className="text-lg font-mono font-medium">{status.stats.dpo_train_steps ?? 0}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Manual Triggers</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            {['aggregate', 'prune', 'export'].map(action => (
+              <Button
+                key={action}
+                size="sm"
+                variant="outline"
+                onClick={() => handleTrigger(action)}
+                disabled={triggering}
+              >
+                {action.charAt(0).toUpperCase() + action.slice(1)}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </PageContainer>
   )
 }

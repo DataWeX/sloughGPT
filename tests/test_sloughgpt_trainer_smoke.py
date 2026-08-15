@@ -23,7 +23,6 @@ def test_sloughgpt_trainer_runs_short_cpu_session(tmp_path: Path, monkeypatch: p
         epochs=1,
         max_steps=3,
         device="cpu",
-        use_mixed_precision=False,
         checkpoint_dir=str(tmp_path / "ckpt"),
         checkpoint_interval=100_000,
     )

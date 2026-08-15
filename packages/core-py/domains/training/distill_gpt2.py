@@ -1,7 +1,7 @@
 """
 Distill GPT-2 teacher → smaller SloTransformer student.
 
-Pure NumPy pipeline — no PyTorch dependency. Uses GPT-2's numpy forward
+Pure NumPy pipeline. Uses GPT-2's numpy forward
 pass as the teacher and SloTransformer's autograd for the student.
 
 Includes DistillEvaluator for post-training quality metrics:

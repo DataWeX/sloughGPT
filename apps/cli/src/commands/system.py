@@ -71,7 +71,7 @@ def cmd_status(args):
 
         models_dir = Path("models")
         if models_dir.exists():
-            models = list(models_dir.rglob("*.pt")) + list(models_dir.rglob("*.pth")) + list(models_dir.rglob("*.soul"))
+            models = list(models_dir.rglob("*.soul"))
             printer.status("Models", f"{len(models)} found", "ok")
         else:
             printer.status("Models", "Directory not found", "error")
@@ -97,63 +97,38 @@ def cmd_status(args):
 
 
 def cmd_optimize(args):
-    """Show and configure optimization settings."""
-    try:
-        import torch
-    except ImportError:
-        printer.error("PyTorch not installed")
-        return
-
+    """Show and configure optimization settings (SloNet accelerator + BLAS)."""
     printer.header("Optimization System")
 
-    printer.section("PyTorch")
-    printer.key_value("Version", torch.__version__)
-
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda"
-    elif torch.backends.mps.is_available():
-        device = "mps"
-    printer.key_value("Device", device)
+    printer.section("Accelerator (SloNet)")
+    try:
+        from domains.training.slonet import _ACCEL_THRESHOLD, _get_accelerator
+        acc = _get_accelerator()
+        if acc is not None:
+            printer.key_value("Backend", acc.name)
+            printer.key_value("Device", getattr(acc, "device_name", str(acc)))
+        else:
+            printer.key_value("Backend", "cpu (numpy)")
+            printer.key_value("Device", "CPU — no accelerator active")
+    except Exception as e:
+        printer.key_value("Backend", "cpu (numpy)")
+        printer.warning(f"Accelerator probe failed: {e}")
 
     printer.section("Available Optimizations")
-    printer.status("torch.compile", "Yes" if hasattr(torch, "compile") else "No (PyTorch 2.0+)", "ok" if hasattr(torch, "compile") else "warn")
-    printer.status("CUDA", "Yes" if torch.cuda.is_available() else "No", "ok" if torch.cuda.is_available() else "info")
-    printer.status("MPS", "Yes" if torch.backends.mps.is_available() else "No", "ok" if torch.backends.mps.is_available() else "info")
-
-    if torch.cuda.is_available():
-        cap = torch.cuda.get_device_capability()
-        printer.key_value("CUDA Compute", f"{cap}")
-        printer.key_value("BF16 Support", "Yes" if cap[0] >= 8 else "No (use FP16)")
-
-    try:
-        from flash_attn import flash_attn_func
-        printer.status("Flash Attention", "Yes", "ok")
-    except ImportError:
-        printer.status("Flash Attention", "No (pip install flash-attn)", "warn")
+    printer.status("Accelerator Dispatch", "Yes (threshold-gated)", "ok")
+    printer.status("KV Cache", "Yes (greedy generation)", "ok")
+    printer.status("Accelerator Threshold", f"{_ACCEL_THRESHOLD} elements", "info")
 
     printer.section("Training Optimizations")
-    printer.info("Mixed Precision (FP16/BF16):  2-3x speedup, 50% memory")
-    printer.info("Gradient Checkpointing:        50% memory savings")
-    printer.info("Flash Attention:               2-4x speedup")
-    printer.info("torch.compile:                 1.5-2x speedup")
+    printer.info("SloNet pure-numpy autograd:  no external dependencies")
+    printer.info("Metal/CUDA/OpenCL dispatch:   threshold-gated GEMM path")
+    printer.info("Gradient clipping:           SloAdam + SloReduceLROnPlateau")
+    printer.info("Deterministic inference:     accelerator disabled during generate()")
 
     printer.section("Inference Optimizations")
-    printer.info("Dynamic Batching:               Maximize GPU utilization")
-    printer.info("KV Cache:                      Skip recomputation")
+    printer.info("KV Cache:                      Skip recomputation (greedy path)")
     printer.info("Prompt Caching:                Reuse computed states")
-
-    printer.section("Recommended Configurations")
-    if torch.cuda.is_available():
-        cap = torch.cuda.get_device_capability()
-        if cap[0] >= 8:
-            printer.command("High-End GPU", "config = TrainingConfig(dtype='bf16', use_compile=True, batch_size=32)")
-        else:
-            printer.command("Mid-Range GPU", "config = TrainingConfig(dtype='fp16', use_compile=True, batch_size=16)")
-    elif torch.backends.mps.is_available():
-        printer.command("Apple Silicon", "config = TrainingConfig(dtype='fp16', batch_size=8)")
-    else:
-        printer.command("CPU Only", "config = TrainingConfig(dtype='fp32', batch_size=4)")
+    printer.info("MorphTokenizer:                Pure Python BPE, no Rust binary")
 
     if args.optimize:
         printer.blank()
@@ -165,10 +140,9 @@ def cmd_optimize(args):
             rm.apply_compute_limits()
             printer.success(f"Thread count optimized: compute={rm.compute_threads} io={rm.io_threads}")
             printer.info(f"OMP={rm.omp_num_threads} MKL={rm.mkl_num_threads} NUMEXPR={rm.numexpr_num_threads}")
-        except Exception:
-            torch.set_num_threads(min(8, torch.get_num_threads()))
-            printer.success("Thread count optimized (torch fallback)")
-        printer.info("Memory format set to channels_last (where applicable)")
+        except Exception as e:
+            printer.warning(f"Thread optimization failed: {e}")
+        printer.info("Accelerator dispatch is threshold-gated (no runtime change needed)")
 
 
 def cmd_config_check(args):
@@ -289,12 +263,13 @@ def cmd_setup(args):
     printer.key_value("Python", platform.python_version())
 
     try:
-        import torch
-        printer.key_value("PyTorch", torch.__version__)
-        printer.key_value("CUDA", str(torch.cuda.is_available()))
-        printer.key_value("MPS", str(torch.backends.mps.is_available()))
-    except ImportError:
-        printer.warning("PyTorch not installed")
+        from domains.training.slonet import _get_accelerator
+        acc = _get_accelerator()
+        backend = acc.name if acc is not None else "cpu"
+        printer.key_value("SloNet Accelerator", backend)
+        printer.key_value("Device", getattr(acc, "device_name", "CPU") if acc is not None else "CPU")
+    except Exception as e:
+        printer.warning(f"Accelerator probe failed: {e}")
 
     if not args.docker_only:
         printer.section("Virtual Environment")
@@ -306,7 +281,7 @@ def cmd_setup(args):
         pip_exe = os.path.join(venv_dir, "bin", "pip")
         printer.info("Installing dependencies...")
         subprocess.run([pip_exe, "install", "--upgrade", "pip"])
-        subprocess.run([pip_exe, "install", "torch", "transformers", "fastapi", "uvicorn", "pydantic"])
+        subprocess.run([pip_exe, "install", "transformers", "fastapi", "uvicorn", "pydantic"])
         printer.success("Dependencies installed")
 
     if not args.local_only:
@@ -332,7 +307,7 @@ def cmd_stats(args):
     model_count = 0
     total_size = 0
     if models_dir.exists():
-        for f in list(models_dir.glob("*.pt")) + list(models_dir.glob("*.safetensors")):
+        for f in list(models_dir.glob("*.soul")) + list(models_dir.glob("*.safetensors")):
             model_count += 1
             total_size += f.stat().st_size
     printer.section("Models")
@@ -354,7 +329,7 @@ def cmd_stats(args):
     ckpt_dir = Path("checkpoints")
     ckpt_count = 0
     if ckpt_dir.exists():
-        ckpt_count = len(list(ckpt_dir.glob("*.pt")))
+        ckpt_count = len(list(ckpt_dir.glob("*.soul")))
     printer.section("Checkpoints")
     printer.key_value("Saved", str(ckpt_count))
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
@@ -95,196 +95,172 @@ export default function BenchmarkPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Benchmark" subtitle="Model evaluation metrics" />} />
-        <div className="space-y-4">
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
-    )
-  }
-
-  if (loadError) {
-    return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Benchmark" subtitle="Model evaluation metrics" />} />
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="py-8 text-center space-y-3">
-              <p className="text-sm text-destructive">{loadError}</p>
-              <Button size="sm" onClick={() => window.location.reload()}>Retry</Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Benchmark" subtitle="Model evaluation metrics" />} />
-      <div className="space-y-4">
-        <div className="flex gap-1 border-b border-border/30 pb-0">
-          {(['metrics', 'quality', 'responses', 'perplexity'] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => {
-                setTab(t)
-                if (t === 'responses') handleLoadResponses()
-              }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-                tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'metrics' && (
-          <>
-            <BenchmarkInsightsCard metrics={metrics} quality={quality} stats={stats} />
-            <KpiGrid>
-              <StatCard label="Model" value={String(metrics?.model ?? '—')} />
-              <StatCard label="Inferences" value={String(metrics?.inference_count ?? 0)} />
-              <StatCard label="Tokens/s" value={String(metrics?.tokens_per_second ?? 0)} />
-              <StatCard label="Memory" value={`${metrics?.memory_mb ?? 0} MB`} />
-              <StatCard label="Total Tokens" value={String(metrics?.total_tokens ?? 0)} />
-              <StatCard label="Loaded" value={metrics?.model_loaded ? 'Yes' : 'No'} />
-            </KpiGrid>
-            <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Model Metrics</CardTitle>
-              <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running}>
-                <IconRefresh className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {metrics ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {[
-                    { label: 'Model', value: String(metrics.model ?? '—') },
-                    { label: 'Inferences', value: String(metrics.inference_count ?? 0) },
-                    { label: 'Total Tokens', value: String(metrics.total_tokens ?? 0) },
-                    { label: 'Tokens/s', value: String(metrics.tokens_per_second ?? 0) },
-                    { label: 'Memory', value: `${metrics.memory_mb ?? 0} MB` },
-                    { label: 'Loaded', value: metrics.model_loaded ? 'Yes' : 'No' },
-                  ].map(s => (
-                    <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className="text-sm font-mono font-medium">{s.value}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No metrics available. Is a model loaded?</p>
-              )}
-              {stats && (
-                <div className="mt-3 text-xs text-muted-foreground">
-                  {stats.total} responses logged · avg {stats.avg_tokens?.toFixed(0) ?? 0} tokens
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          </>
-        )}
-
-        {tab === 'quality' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Quality Metrics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {quality ? (
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Coherence', value: `${(quality.coherence_score * 100).toFixed(1)}%`, color: 'text-success' },
-                    { label: 'Quality', value: `${(quality.quality_score * 100).toFixed(1)}%`, color: 'text-primary' },
-                    { label: 'Repetition', value: `${(quality.repetition_rate * 100).toFixed(1)}%`, color: quality.repetition_rate > 0.3 ? 'text-destructive' : 'text-muted-foreground' },
-                  ].map(s => (
-                    <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className={`text-lg font-mono font-medium ${s.color}`}>{s.value}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No quality data yet. Chat with the model to generate responses.</p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {tab === 'responses' && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Logged Responses ({responses.length})</CardTitle>
-              <div className="flex gap-1">
-                <Button size="sm" variant="ghost" onClick={handleLoadResponses}>
-                  <IconRefresh className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="ghost" className="text-destructive" onClick={handleClearHistory}>
-                  Clear
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {responses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No responses logged yet.</p>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {responses.map((r, i) => (
-                    <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
-                      <div className="text-xs text-muted-foreground mb-1">
-                        {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} · {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
-                      </div>
-                      <div className="text-xs"><span className="text-muted-foreground">User:</span> {r.user_message}</div>
-                      <div className="text-xs mt-0.5"><span className="text-muted-foreground">AI:</span> {r.assistant_response}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {tab === 'perplexity' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Perplexity Calculator</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Textarea
-                value={pplxText}
-                onChange={e => setPplxText(e.target.value)}
-                placeholder="Enter text to calculate perplexity..."
-                rows={3}
-              />
-              <Button size="sm" onClick={handleCalcPerplexity} disabled={pplxLoading || !pplxText.trim()}>
-                {pplxLoading ? 'Calculating...' : 'Calculate'}
-              </Button>
-              {pplxResult && (
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground">Perplexity</div>
-                    <div className="text-lg font-mono font-medium">{pplxResult.perplexity}</div>
-                  </div>
-                  <div className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground">Loss</div>
-                    <div className="text-lg font-mono font-medium">{pplxResult.loss}</div>
-                  </div>
-                  <div className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground">Tokens</div>
-                    <div className="text-lg font-mono font-medium">{pplxResult.tokens}</div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+    <PageContainer
+      title="Benchmark"
+      subtitle="Model evaluation metrics"
+      loading={loading}
+      error={loadError}
+      onRetry={() => window.location.reload()}
+    >
+      <div className="flex gap-1 border-b border-border/30 pb-0">
+        {(['metrics', 'quality', 'responses', 'perplexity'] as Tab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => {
+              setTab(t)
+              if (t === 'responses') handleLoadResponses()
+            }}
+            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
+              tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
       </div>
-    </div>
+
+      {tab === 'metrics' && (
+        <>
+          <BenchmarkInsightsCard metrics={metrics} quality={quality} stats={stats} />
+          <KpiGrid>
+            <StatCard label="Model" value={String(metrics?.model ?? '—')} />
+            <StatCard label="Inferences" value={String(metrics?.inference_count ?? 0)} />
+            <StatCard label="Tokens/s" value={String(metrics?.tokens_per_second ?? 0)} />
+            <StatCard label="Memory" value={`${metrics?.memory_mb ?? 0} MB`} />
+            <StatCard label="Total Tokens" value={String(metrics?.total_tokens ?? 0)} />
+            <StatCard label="Loaded" value={metrics?.model_loaded ? 'Yes' : 'No'} />
+          </KpiGrid>
+          <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Model Metrics</CardTitle>
+            <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running}>
+              <IconRefresh className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {metrics ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  { label: 'Model', value: String(metrics.model ?? '—') },
+                  { label: 'Inferences', value: String(metrics.inference_count ?? 0) },
+                  { label: 'Total Tokens', value: String(metrics.total_tokens ?? 0) },
+                  { label: 'Tokens/s', value: String(metrics.tokens_per_second ?? 0) },
+                  { label: 'Memory', value: `${metrics.memory_mb ?? 0} MB` },
+                  { label: 'Loaded', value: metrics.model_loaded ? 'Yes' : 'No' },
+                ].map(s => (
+                  <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground">{s.label}</div>
+                    <div className="text-sm font-mono font-medium">{s.value}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No metrics available. Is a model loaded?</p>
+            )}
+            {stats && (
+              <div className="mt-3 text-xs text-muted-foreground">
+                {stats.total} responses logged · avg {stats.avg_tokens?.toFixed(0) ?? 0} tokens
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        </>
+      )}
+
+      {tab === 'quality' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Quality Metrics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {quality ? (
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Coherence', value: `${(quality.coherence_score * 100).toFixed(1)}%`, color: 'text-success' },
+                  { label: 'Quality', value: `${(quality.quality_score * 100).toFixed(1)}%`, color: 'text-primary' },
+                  { label: 'Repetition', value: `${(quality.repetition_rate * 100).toFixed(1)}%`, color: quality.repetition_rate > 0.3 ? 'text-destructive' : 'text-muted-foreground' },
+                ].map(s => (
+                  <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground">{s.label}</div>
+                    <div className={`text-lg font-mono font-medium ${s.color}`}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No quality data yet. Chat with the model to generate responses.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'responses' && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Logged Responses ({responses.length})</CardTitle>
+            <div className="flex gap-1">
+              <Button size="sm" variant="ghost" onClick={handleLoadResponses}>
+                <IconRefresh className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={handleClearHistory}>
+                Clear
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {responses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No responses logged yet.</p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {responses.map((r, i) => (
+                  <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                    <div className="text-xs text-muted-foreground mb-1">
+                      {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} · {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
+                    </div>
+                    <div className="text-xs"><span className="text-muted-foreground">User:</span> {r.user_message}</div>
+                    <div className="text-xs mt-0.5"><span className="text-muted-foreground">AI:</span> {r.assistant_response}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'perplexity' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Perplexity Calculator</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              value={pplxText}
+              onChange={e => setPplxText(e.target.value)}
+              placeholder="Enter text to calculate perplexity..."
+              rows={3}
+            />
+            <Button size="sm" onClick={handleCalcPerplexity} disabled={pplxLoading || !pplxText.trim()}>
+              {pplxLoading ? 'Calculating...' : 'Calculate'}
+            </Button>
+            {pplxResult && (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-md bg-muted/30 p-3 text-center">
+                  <div className="text-xs text-muted-foreground">Perplexity</div>
+                  <div className="text-lg font-mono font-medium">{pplxResult.perplexity}</div>
+                </div>
+                <div className="rounded-md bg-muted/30 p-3 text-center">
+                  <div className="text-xs text-muted-foreground">Loss</div>
+                  <div className="text-lg font-mono font-medium">{pplxResult.loss}</div>
+                </div>
+                <div className="rounded-md bg-muted/30 p-3 text-center">
+                  <div className="text-xs text-muted-foreground">Tokens</div>
+                  <div className="text-lg font-mono font-medium">{pplxResult.tokens}</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </PageContainer>
   )
 }

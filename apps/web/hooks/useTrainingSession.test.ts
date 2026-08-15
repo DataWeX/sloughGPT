@@ -188,7 +188,7 @@ describe('useTrainingSession', () => {
     await act(async () => { result.current.startTurboTrain('ds-1', { epochs: 5, lr: 1e-3, embed: 128, heads: 4, layers: 2 }, mockAddToast) })
 
     expect(result.current.turboPhase).toBe('training')
-    expect(mockAddToast).toHaveBeenCalledWith('Turbo training queued', 'info')
+    expect(mockAddToast).toHaveBeenCalledWith('Turbo training started', 'info')
 
     await act(async () => { vi.advanceTimersByTime(3000) })
     expect(result.current.turboPhase).toBe('training')

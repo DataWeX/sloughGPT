@@ -68,7 +68,6 @@ class Doctor:
         """Run all validation checks."""
         self._check_python_version()
         self._check_required_dirs()
-        self._check_pytorch()
         self._check_api_server()
         self._check_env_file()
         return self.result
@@ -97,21 +96,6 @@ class Doctor:
                     "Directory missing",
                     f"Run 'mkdir {dir_name}' or 'cli.py setup'",
                 )
-
-    def _check_pytorch(self):
-        """Check PyTorch installation and device availability."""
-        try:
-            import torch
-            self.result.add_pass("PyTorch", f"v{torch.__version__}")
-
-            if torch.cuda.is_available():
-                self.result.add_pass("CUDA", f"✓ {torch.cuda.get_device_name(0)}")
-            elif torch.backends.mps.is_available():
-                self.result.add_pass("MPS", "Apple Silicon")
-            else:
-                self.result.add_warn("GPU", "No GPU available", "Running on CPU (slower)")
-        except ImportError:
-            self.result.add_fail("PyTorch", "Not installed", "pip install torch")
 
     def _check_api_server(self):
         """Check if API server is reachable."""

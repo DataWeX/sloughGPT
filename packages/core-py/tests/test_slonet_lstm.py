@@ -173,6 +173,7 @@ def test_generate_stops_on_eos():
 def test_generate_sampling_does_not_collapse_to_single_token():
     """Greedy argmax on a fresh LSTM collapses to one repeated token; sampled
     decoding with temperature/top-k must stay diverse."""
+    np.random.seed(0)
     rng = np.random.default_rng(0)
     text = "the quick brown fox jumps over the lazy dog and then runs away home"
     vocab = sorted(set(text))

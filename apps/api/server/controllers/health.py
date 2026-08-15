@@ -386,6 +386,18 @@ class HealthController:
         # Resource allocation from CPU topology
         result["resource_allocation"] = _get_resource_allocation()
 
+        # Idle manager status
+        try:
+            from domains.infrastructure.model_server import get_idle_manager
+            idle_mgr = get_idle_manager()
+            import state as server_state
+            model_id = server_state.model_type or "unknown"
+            idle_info = idle_mgr.get_idle_info(model_id)
+            if idle_info:
+                result["idle"] = idle_info
+        except Exception:
+            pass
+
         return result
 
     def get_detailed_health(self) -> Dict[str, Any]:

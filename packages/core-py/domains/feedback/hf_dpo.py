@@ -4,8 +4,7 @@ HFDPOTrainer — Direct Preference Optimization on user feedback pairs.
 Builds (chosen, rejected) text pairs from the user feedback store and applies
 the DPO preference loss to a SloNet model when a trainable model is provided.
 
-The trainer is intentionally torch-free: preference gradients run through
-SloNet's numpy autograd. When the supplied model is not SloNet-trainable the
+Preference gradients run through SloNet's numpy autograd. When the supplied model is not SloNet-trainable the
 trainer reports an honest ``rejected`` result instead of fabricating metrics.
 """
 from typing import Dict, List, Optional

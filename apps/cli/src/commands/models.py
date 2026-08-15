@@ -31,17 +31,17 @@ def cmd_models(args):
     else:
         printer.info("No soul files found")
 
-    # PyTorch checkpoints
-    printer.section("PyTorch Checkpoints (.pt)")
-    pt_files = list(models_dir.glob("*.pt"))
-    if pt_files:
+    # Compiled models (.slnc mmap format)
+    printer.section("Compiled Models (.slnc)")
+    slnc_files = sorted(models_dir.rglob("*.slnc")) if models_dir.is_dir() else []
+    if slnc_files:
         rows = []
-        for f in sorted(pt_files):
+        for f in slnc_files:
             size = f.stat().st_size
             rows.append([f.name, format_size(size)])
         printer.table(["Name", "Size"], rows)
     else:
-        printer.info("No .pt files found")
+        printer.info("No .slnc files found")
 
     # SafeTensors
     printer.section("SafeTensors (.safetensors)")
@@ -68,8 +68,9 @@ def cmd_models(args):
 
 
 def _cmd_models_info(args):
-    """Show model checkpoint info."""
-    import torch
+    """Show .soul checkpoint info."""
+    import numpy as np
+    from domains.training.slonet import import_from_sou
 
     model_path = Path(args.model)
     if not model_path.exists():
@@ -78,31 +79,28 @@ def _cmd_models_info(args):
 
     printer.header(f"Model: {model_path}")
 
-    checkpoint = torch.load(str(model_path), weights_only=False, map_location="cpu")
+    try:
+        net = import_from_sou(str(model_path))
+    except Exception as e:
+        printer.error(f"Failed to load: {e}")
+        return
 
-    if "model" in checkpoint:
-        model = checkpoint["model"]
-        if hasattr(model, "state_dict"):
-            state = model.state_dict()
-            printer.key_value("State Dict Keys", str(len(state)))
-            total_params = sum(p.numel() for p in state.values() if isinstance(p, torch.Tensor))
-            printer.key_value("Parameters", f"{total_params:,}")
-        elif isinstance(model, dict):
-            printer.key_value("Model Dict Keys", str(len(model)))
-            total_params = sum(p.numel() for p in model.values() if isinstance(p, torch.Tensor))
-            printer.key_value("Parameters", f"{total_params:,}")
+    printer.key_value("Soul Name", getattr(net, "soul_name", "?"))
+    if getattr(net, "soul_traits", None):
+        printer.key_value("Traits", str(net.soul_traits))
+    params = list(net.parameters())
+    total_params = sum(int(np.prod(p.shape)) for p in params)
+    printer.key_value("Parameters", f"{total_params:,}")
 
-    if "chars" in checkpoint:
-        printer.key_value("Vocab Size", str(len(checkpoint["chars"])))
-    if "stoi" in checkpoint:
-        printer.key_value("Char-to-int Map", str(len(checkpoint["stoi"])))
-    if "itos" in checkpoint:
-        printer.key_value("Int-to-char Map", str(len(checkpoint["itos"])))
-    if "training_info" in checkpoint:
-        info = checkpoint["training_info"]
-        if isinstance(info, dict):
-            for k, v in info.items():
-                printer.key_value(str(k), str(v))
+    meta = getattr(net, "metadata", None) or {}
+    for k in ("vocab_size", "n_embed", "n_layer", "n_head", "block_size"):
+        if meta.get(k) is not None:
+            printer.key_value(k.replace("n_", "Num "), str(meta[k]))
+    if meta.get("tokenizer"):
+        printer.key_value("Tokenizer", str(meta["tokenizer"].get("type", "?")))
+    training = meta.get("training") or {}
+    for k, v in training.items():
+        printer.key_value(str(k), str(v))
 
 
 def _interactive_download_select():
@@ -411,7 +409,7 @@ def _cmd_models_status(args):
                 continue
             if size < 1024:
                 continue
-            if f.suffix in (".safetensors", ".bin", ".slnc", ".pt", ".onnx"):
+            if f.suffix in (".safetensors", ".bin", ".slnc", ".onnx"):
                 total_bytes += size
                 file_count += 1
                 if f.suffix == ".slnc":
@@ -522,10 +520,9 @@ def _cmd_models_personalities(args):
 
 
 def cmd_export_cli(args):
-    """Export model to different formats."""
-    import torch
+    """Export a .soul model to different formats."""
+    import numpy as np
     from domains.training.export import export_model, list_export_formats, ExportConfig
-    from domains.models import SloughGPTModel
 
     printer.header("Model Export")
 
@@ -542,31 +539,13 @@ def cmd_export_cli(args):
 
     printer.blank()
     printer.step(f"Loading: {args.model}")
-    checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+    from domains.training.slonet import import_from_sou
+    net = import_from_sou(str(model_path))
+    metadata = dict(getattr(net, "metadata", None) or {})
+    metadata.setdefault("name", getattr(net, "soul_name", "SloughGPT"))
 
-    if isinstance(checkpoint, dict) and "model" in checkpoint:
-        state_dict = checkpoint["model"]
-        metadata = checkpoint.get("metadata", {})
-    else:
-        state_dict = checkpoint
-        metadata = {}
-
-    vocab_size = metadata.get("vocab_size", 256)
-    n_embed = metadata.get("n_embed", 256)
-    n_layer = metadata.get("n_layer", 6)
-    n_head = metadata.get("n_head", 8)
-    block_size = metadata.get("block_size", 128)
-
-    model = SloughGPTModel(
-        vocab_size=vocab_size,
-        n_embed=n_embed,
-        n_layer=n_layer,
-        n_head=n_head,
-        block_size=block_size,
-    )
-    model.load_state_dict(state_dict)
-
-    printer.success(f"Loaded: {format_number(model.num_parameters())} parameters")
+    total_params = sum(int(np.prod(p.shape)) for p in net.parameters())
+    printer.success(f"Loaded: {format_number(total_params)} parameters")
 
     output_path = args.output or str(model_path.with_suffix(""))
 
@@ -610,7 +589,7 @@ def cmd_export_cli(args):
 
     printer.blank()
     printer.step("Exporting...")
-    results = export_model(config, model=model)
+    results = export_model(config, model=net)
 
     if results:
         printer.blank()
@@ -677,38 +656,28 @@ def cmd_soul(args):
         return
 
     if args.create:
-        from domains.inference.slo_format import create_soul_profile, export_to_sou, SouParser
-        from domains.models import SloughGPTModel
-        import torch
+        from domains.inference.slo_format import create_soul_profile, SouParser
+        from domains.training.slonet import export_to_sou, import_from_sou
 
         soul = create_soul_profile(
             name=args.name or "SloughGPT-Slo",
-            base_model="nanogpt",
+            base_model="slonet",
             training_dataset=args.dataset or "",
             epochs_trained=args.epochs or 0,
-            lineage=args.lineage or "nanogpt",
+            lineage=args.lineage or "slonet",
             tags=args.tags.split(",") if args.tags else ["sloughgpt", "soul"],
         )
 
         if args.model:
-            checkpoint = torch.load(args.model, weights_only=False, map_location="cpu")
-            state_dict = checkpoint.get("model_state_dict") or checkpoint.get("model") or checkpoint
-            cfg = checkpoint.get("config") or {}
-            n_embed = cfg.get("n_embed", 256)
-            n_layer = cfg.get("n_layer", 6)
-            n_head = cfg.get("n_head", 8)
-            block_size = cfg.get("block_size", 128)
-            vocab_size = cfg.get("vocab_size", 256)
-
-            model = SloughGPTModel(
-                vocab_size=vocab_size,
-                n_embed=n_embed,
-                n_layer=n_layer,
-                n_head=n_head,
-                block_size=block_size,
+            net = import_from_sou(args.model)
+            export_to_sou(
+                net,
+                args.create,
+                metadata={
+                    "soul_profile": soul.to_dict() if hasattr(soul, "to_dict") else str(soul),
+                    "name": soul.name,
+                },
             )
-            model.load_state_dict(state_dict, strict=False)
-            export_to_sou(model, args.create, soul_profile=soul)
             printer.success(f"Created: {args.create}")
         else:
             SouParser.save(soul, args.create)
@@ -716,57 +685,42 @@ def cmd_soul(args):
 
 
 def cmd_benchmark(args):
-    """Run performance benchmarks on models."""
-    import torch
+    """Benchmark a .soul checkpoint using pure-numpy SloNet inference."""
     import time
     import statistics
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import numpy as np
+    from domains.training.slonet import _get_accelerator
+    from domains.inference.slonet_provider import SloNetChatProvider
 
-    device = args.device
-    if device == "auto":
-        if torch.cuda.is_available():
-            device = "cuda"
-        elif torch.backends.mps.is_available():
-            device = "mps"
-        else:
-            device = "cpu"
+    acc = _get_accelerator()
+    backend = acc.name if acc is not None else "cpu"
 
     printer.header(f"Benchmark - {args.model}")
-    printer.key_value("Device", device)
+    printer.key_value("Backend", backend)
+    printer.key_value("Device", getattr(acc, "device_name", "CPU") if acc is not None else "CPU")
 
-    if device == "mps" and not torch.backends.mps.is_available():
-        printer.warning("MPS not available, falling back to CPU")
-        device = "cpu"
+    if not Path(args.model).exists():
+        printer.error(f"Checkpoint not found: {args.model}")
+        return
 
-    printer.step("Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    printer.step("Loading model...")
+    printer.step("Loading checkpoint...")
     start_time = time.time()
-    model = AutoModelForCausalLM.from_pretrained(args.model)
-    model = model.to(device)
-    model.eval()
+    provider = SloNetChatProvider.from_soul(args.model, model_id="bench")
     load_time = time.time() - start_time
-    params = sum(p.numel() for p in model.parameters())
+    net = provider._get_model()
+    params = sum(int(np.prod(p.shape)) for p in net.parameters())
     printer.key_value("Load Time", f"{load_time:.1f}s")
     printer.key_value("Parameters", f"{params:,}")
 
-    input_ids = tokenizer.encode(args.prompt, return_tensors="pt").to(device)
-    prompt_length = input_ids.shape[1]
-
     printer.step("Warming up...")
-    with torch.no_grad():
-        _ = model.generate(input_ids, max_new_tokens=10, do_sample=False)
+    provider.generate(args.prompt, max_new_tokens=10)
 
     if args.test in ("all", "latency"):
         printer.section("Latency Test")
         latencies = []
-        for i in range(args.runs):
+        for _ in range(args.runs):
             start = time.perf_counter()
-            with torch.no_grad():
-                _ = model.generate(input_ids, max_new_tokens=args.tokens, do_sample=False)
+            provider.generate(args.prompt, max_new_tokens=args.tokens)
             elapsed = (time.perf_counter() - start) * 1000
             latencies.append(elapsed)
         latencies.sort()
@@ -780,13 +734,13 @@ def cmd_benchmark(args):
     if args.test in ("all", "throughput"):
         printer.section("Throughput Test")
         throughputs = []
-        for i in range(min(args.runs, 5)):
+        for _ in range(min(args.runs, 5)):
             start = time.perf_counter()
-            with torch.no_grad():
-                output = model.generate(input_ids, max_new_tokens=args.tokens, do_sample=False)
+            text = provider.generate(args.prompt, max_new_tokens=args.tokens)
             elapsed = time.perf_counter() - start
-            tokens = output.shape[1]
-            tps = tokens / elapsed
+            tokenizer = getattr(provider, "_tokenizer", None)
+            n_tokens = len(tokenizer.encode(text)) if tokenizer is not None else len(text)
+            tps = n_tokens / elapsed if elapsed > 0 else 0.0
             throughputs.append(tps)
         if throughputs:
             printer.key_value("Average", f"{statistics.mean(throughputs):.1f} tok/s")
@@ -991,12 +945,12 @@ def register(subparsers):
         "export",
         help="Export model to different formats",
     )
-    export_parser.add_argument("model", nargs="?", default="models/sloughgpt.pt", help="Input model")
+    export_parser.add_argument("model", nargs="?", default="models/sloughgpt.soul", help="Input model (.soul)")
     export_parser.add_argument("--output", "-o", help="Output path")
     export_parser.add_argument(
         "--format", "-f",
         default="safetensors",
-        choices=["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "torch", "torchscript", "sou", "all"],
+        choices=["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "sou", "all"],
         help="Export format",
     )
     export_parser.add_argument("--quantize", dest="quantization", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"])
@@ -1024,9 +978,8 @@ def register(subparsers):
     soul_parser.set_defaults(func=cmd_soul)
 
     # Benchmark
-    bench_parser = subparsers.add_parser("benchmark", help="Run performance benchmarks")
-    bench_parser.add_argument("--model", "-m", default="gpt2", help="Model to benchmark")
-    bench_parser.add_argument("--device", "-d", default="auto", choices=["auto", "cpu", "cuda", "mps"], help="Device")
+    bench_parser = subparsers.add_parser("benchmark", help="Run performance benchmarks on a .soul checkpoint")
+    bench_parser.add_argument("--model", "-m", default="models/sloughgpt.soul", help="Path to .soul checkpoint")
     bench_parser.add_argument("--test", "-t", default="all", choices=["all", "latency", "throughput"], help="Test type")
     bench_parser.add_argument("--runs", "-r", type=int, default=10, help="Number of runs")
     bench_parser.add_argument("--tokens", "-k", type=int, default=50, help="Max new tokens")
@@ -1040,7 +993,7 @@ def register(subparsers):
     hf_download_parser.set_defaults(func=_cmd_models_download)
 
     info_parser = subparsers.add_parser("info", help="Show model checkpoint info")
-    info_parser.add_argument("model", nargs="?", default="models/sloughgpt.pt", help="Checkpoint path")
+    info_parser.add_argument("model", nargs="?", default="models/sloughgpt.soul", help="Checkpoint path")
     info_parser.set_defaults(func=_cmd_models_info)
 
     personalities_parser = subparsers.add_parser("personalities", help="List built-in personalities")

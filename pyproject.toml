@@ -101,7 +101,7 @@ target-version = ["py39", "py310", "py311"]
 
 [tool.ruff]
 # CI lint job uses a smoke subset only (see .github/workflows/reusable-ci-core.yml):
-#   ruff check tests/ apps/cli/ apps/api/server/ train_sloughgpt.py packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82
+#   ruff check tests/ apps/cli/ apps/api/server/ packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82
 line-length = 100
 target-version = "py39"
 

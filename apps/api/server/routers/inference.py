@@ -395,8 +395,7 @@ class InferenceRouter:
 
         provider_messages = [{"role": "user", "content": req.prompt}]
         try:
-            import time as _time
-            _t0 = _time.monotonic()
+            _t0 = time.monotonic()
             result = await provider.chat(
                 provider_messages,
                 max_tokens=req.max_new_tokens,
@@ -405,12 +404,16 @@ class InferenceRouter:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
             )
-            logger.info(
-                "DBG generate handler: provider=%s elapsed=%.3fs result=%r",
-                getattr(provider, "_text_name", type(provider).__name__),
-                _time.monotonic() - _t0,
-                result[:80],
-                extra={"tag": "DBG"},
+            logger.debug(
+                "generate handler",
+                extra={
+                    "tag": "INFO",
+                    "context": {
+                        "provider": getattr(provider, "_text_name", type(provider).__name__),
+                        "elapsed_ms": round((time.monotonic() - _t0) * 1000, 1),
+                        "result": str(result)[:80],
+                    },
+                },
             )
             tokens = _count_tokens(result, _gen_state)
             actual_model = _gen_state.model_type or req.model
@@ -426,7 +429,7 @@ class InferenceRouter:
                     result,
                     model=actual_model,
                     tokens_generated=tokens,
-                    elapsed_ms=(_time.monotonic() - _t0) * 1000,
+                    elapsed_ms=(time.monotonic() - _t0) * 1000,
                     temperature=req.temperature,
                 )
             except Exception as e:

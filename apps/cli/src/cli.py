@@ -461,7 +461,7 @@ def model_status():
 
 
 @model.command("info", help="Show checkpoint info")
-@click.argument("checkpoint", default="models/sloughgpt.pt")
+@click.argument("checkpoint", default="models/sloughgpt.soul")
 def model_info(checkpoint):
     from commands.models import _cmd_models_info
     _cmd_models_info(_ns(model=checkpoint))
@@ -476,12 +476,12 @@ def model_download(model_id, yes):
 
 
 @model.command("export", help="Export model to different formats")
-@click.argument("checkpoint", default="models/sloughgpt.pt")
+@click.argument("checkpoint", default="models/sloughgpt.soul")
 @click.option("--output", "-o", help="Output path")
 @click.option("--format", "-f", "fmt",
     type=click.Choice(["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m",
-                       "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "torch",
-                       "torchscript", "sou", "all"]),
+                       "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0",
+                       "sou", "all"]),
     default="safetensors", help="Export format")
 @click.option("--quantize", type=click.Choice(["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"]))
 @click.option("--seq-len", default=128, type=int, help="Sequence length for ONNX")
@@ -619,7 +619,7 @@ def train_start(ctx, dataset, epochs, batch_size, lr, api, resume, resume_latest
     cmd_train(_ns(**kwargs))
 
 
-@train.command("native", help="Train a SloNet model from scratch (torch-free, .soul checkpoints)")
+@train.command("native", help="Train a SloNet model from scratch (.soul checkpoints)")
 @click.option("--dataset", default="datasets/tinyshakespeare/input.txt", help="Corpus file or dataset name")
 @click.option("--steps", default=None, type=int, help="Max training steps (default: epoch budget)")
 @click.option("--embed", default=64, type=int, help="Embedding dimension")
@@ -643,7 +643,7 @@ def train_start(ctx, dataset, epochs, batch_size, lr, api, resume, resume_latest
 @click.option("--log-interval", default=50, type=int, help="Progress log interval (steps)")
 @click.option("--soul-name", default="sloughgpt-native", help="Soul name for the checkpoint")
 @click.option("--save-stem", default=None, help="Output filename stem (default: soul name)")
-@click.option("--save-format", default="sou", type=click.Choice(["sou", "npz"]), help="Final export format")
+@click.option("--save-format", default="soul", type=click.Choice(["soul", "sou", "npz"]), help="DEPRECATED — ignored; SloughGPTTrainer.save() always writes .soul")
 @click.option("--resume", default=None, help="Resume from a .soul/.npz checkpoint path")
 @click.option("--resume-latest", is_flag=True, help="Resume from latest checkpoint in --checkpoint-dir")
 @click.option("--device", default="cpu", help="Device (cpu/auto)")
@@ -671,7 +671,7 @@ def train_native(ctx, **kwargs):
 @click.option("--lr", default=1e-3, type=float, help="Learning rate")
 @click.option("--max-tokens", default=100, type=int, help="Generated tokens")
 @click.option("--temperature", default=0.8, type=float, help="Temperature")
-@click.option("--output", default="models/quick.pt", help="Output path")
+@click.option("--output", default="models/quick.soul", help="Output path")
 @click.option("--no-optimize", is_flag=True, help="Disable optimizations")
 @click.option("--soul-name", default="SloughGPT-Quick", help="Slo name")
 @click.option("--datasets", help="Comma-separated datasets (overrides --dataset)")
@@ -717,14 +717,12 @@ def train_self(steps, model, temperature, max_tokens, seed, forever):
 
 
 @train.command("eval", help="Evaluate model perplexity")
-@click.option("--checkpoint", default="models/sloughgpt.pt", help="Checkpoint path")
+@click.option("--checkpoint", default="models/sloughgpt.soul", help="Checkpoint path")
 @click.option("--data", default="datasets/shakespeare/input.txt", help="Eval text")
-@click.option("--device", default="cpu", help="Device for scoring")
-@click.option("--no-strict", is_flag=True, help="Allow partial load")
 @click.option("--benchmark", is_flag=True, help="Run benchmark")
-def train_eval(checkpoint, data, device, no_strict, benchmark):
+def train_eval(checkpoint, data, benchmark):
     from commands.train import cmd_eval
-    args = _ns(checkpoint=checkpoint, data=data, device=device, no_strict=no_strict, benchmark=benchmark)
+    args = _ns(checkpoint=checkpoint, data=data, benchmark=benchmark)
     cmd_eval(args)
 
 

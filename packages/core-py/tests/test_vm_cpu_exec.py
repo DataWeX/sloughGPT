@@ -290,6 +290,26 @@ def test_imul_imm_69_6b():
     assert cpu.eax == 35
 
 
+def test_imul_three_operand_mem():
+    # IMUL EAX, [EBX], 5 — 6B 03 05
+    cpu = _cpu("6b0305", regs={"ebx": 0x3000, "eip": 0x1000})
+    cpu._write32(0x3000, 10)
+    _steps(cpu, 1)
+    assert cpu.eax == 50
+
+    # IMUL EAX, [EBX+4], -1 — 6B 43 04 FF
+    cpu = _cpu("6b4304ff", regs={"ebx": 0x3000, "eip": 0x1000})
+    cpu._write32(0x3004, 7)
+    _steps(cpu, 1)
+    assert cpu.eax == 0xFFFFFFF9  # -7 sign-extended
+
+    # IMUL EAX, [EBX+4], 0x100 — 69 43 04 00010000
+    cpu = _cpu("69430400010000", regs={"ebx": 0x3000, "eip": 0x1000})
+    cpu._write32(0x3004, 3)
+    _steps(cpu, 1)
+    assert cpu.eax == 0x300
+
+
 def test_alu_reg_forms():
     cpu = _cpu("0bc323c32bc33bc303c0")
     cpu.eax = 0xF0F0
@@ -348,6 +368,47 @@ def test_test_forms():
     assert cpu.zf
     _steps(cpu, 1)  # TEST [EBX], AL (3 & 1 = 1)
     assert not cpu.zf
+
+
+def test_test_mem_imm_byte_word():
+    # F6 /0 ib — TEST byte [ebx], imm8 (mem=0 -> ZF)
+    cpu = _cpu("f60305", regs={"ebx": 0x3000})
+    cpu._mem[0x3000] = 0
+    cpu._set_flag(FLAG_ZF, False)
+    _steps(cpu, 1)
+    assert cpu.zf
+    # F6 /0 ib — TEST byte [ebx], imm8 (mem=4 & 5 = 4 -> no ZF)
+    cpu = _cpu("f60305", regs={"ebx": 0x3000})
+    cpu._mem[0x3000] = 4
+    cpu._set_flag(FLAG_ZF, True)
+    _steps(cpu, 1)
+    assert not cpu.zf
+    # 66 F7 /0 iw — TEST word [ebx], imm16 (mem=0 -> ZF)
+    cpu = _cpu("66f7033412", regs={"ebx": 0x3000})
+    cpu._write16(0x3000, 0)
+    cpu._set_flag(FLAG_ZF, False)
+    _steps(cpu, 1)
+    assert cpu.zf
+    # 66 F7 /0 iw — TEST word [ebx], imm16 (mem=0x1234 -> no ZF)
+    cpu = _cpu("66f7033412", regs={"ebx": 0x3000})
+    cpu._write16(0x3000, 0x1234)
+    cpu._set_flag(FLAG_ZF, True)
+    _steps(cpu, 1)
+    assert not cpu.zf
+
+
+def test_f6_not_neg_mem_byte():
+    # F6 /2 — NOT byte [ebx] (0x55 -> 0xAA)
+    cpu = _cpu("f613", regs={"ebx": 0x3000})
+    cpu._mem[0x3000] = 0x55
+    _steps(cpu, 1)
+    assert cpu._mem[0x3000] == 0xAA
+    # F6 /3 — NEG byte [ebx] (1 -> 0xFF, CF set)
+    cpu = _cpu("f61b", regs={"ebx": 0x3000})
+    cpu._mem[0x3000] = 1
+    _steps(cpu, 1)
+    assert cpu._mem[0x3000] == 0xFF
+    assert cpu.cf
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -982,6 +1043,156 @@ def test_f7_div_by_zero():
         cpu._exec_one()
 
 
+def test_66_f7_test():
+    # 66 F7 C0 0100 — TEST AX, 1
+    cpu = _cpu("66f7c00100", regs={"eip": 0x1000})
+    cpu._set16(0, 0x0003)  # AX = 3
+    _steps(cpu, 1)
+    assert not cpu.zf  # 3 & 1 = 1, not zero
+
+def test_66_f7_not():
+    # 66 F7 D0 — NOT AX
+    cpu = _cpu("66f7d0", regs={"eip": 0x1000})
+    cpu._set16(0, 0x1234)  # AX = 0x1234
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0xEDCB
+
+def test_66_f7_neg():
+    # 66 F7 D8 — NEG AX
+    cpu = _cpu("66f7d8", regs={"eip": 0x1000})
+    cpu._set16(0, 5)  # AX = 5
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0xFFFB  # -5 in 16-bit
+    assert cpu.cf
+
+def test_66_f7_mul():
+    # 66 F7 E3 — MUL BX (DX:AX = AX * BX)
+    cpu = _cpu("66f7e3", regs={"eip": 0x1000})
+    cpu._set16(0, 5)   # AX = 5
+    cpu._set16(3, 7)   # BX = 7
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 35   # AX = low 16 bits
+    assert cpu._get16(2) == 0    # DX = high 16 bits
+    assert not cpu.cf  # result fits in 16 bits
+
+def test_66_f7_div():
+    # 66 F7 F3 — DIV BX (AX / BX)
+    cpu = _cpu("66f7f3", regs={"eip": 0x1000})
+    cpu._set16(0, 100)  # AX = 100
+    cpu._set16(3, 7)    # BX = 7
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 14   # AX = quotient
+    assert cpu._get16(2) == 2    # DX = remainder
+
+
+def test_66_group1_add_sub_cmp():
+    # 66 83 C0 05 — ADD AX, 5 (sign-extended imm8)
+    cpu = _cpu("6683c005", regs={"eip": 0x1000})
+    cpu._set16(0, 10)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 15
+
+    # 66 83 E8 03 — SUB AX, 3
+    cpu = _cpu("6683e803", regs={"eip": 0x1000})
+    cpu._set16(0, 10)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 7
+
+    # 66 81 C0 1027 — ADD AX, 0x2710 (imm16)
+    cpu = _cpu("6681c01027", regs={"eip": 0x1000})
+    cpu._set16(0, 100)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 10100
+
+    # 66 83 F8 05 — CMP AX, 5 (sets flags, no write)
+    cpu = _cpu("6683f805", regs={"eip": 0x1000})
+    cpu._set16(0, 5)
+    _steps(cpu, 1)
+    assert cpu.zf  # 5 == 5
+
+    # 66 83 C0 FB — ADD AX, -5 (sign-extended imm8, tests fix: 0xFFFFFF00 not 0xFFFFFFF0)
+    cpu = _cpu("6683c0fb", regs={"eip": 0x1000})
+    cpu._set16(0, 10)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 5  # 10 + (-5) = 5
+
+
+def test_66_div_uses_dx_ax():
+    # 66 F7 F3 — DIV BX: DX:AX / BX
+    cpu = _cpu("66f7f3", regs={"eip": 0x1000})
+    cpu._set16(0, 0)  # AX low
+    cpu._set16(2, 1)  # DX = 1 → dividend = 0x00010000 = 65536
+    cpu._set16(3, 100)  # BX = 100
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 655  # AX = 65536 / 100
+    assert cpu._get16(2) == 36   # DX = 65536 % 100
+
+
+def test_66_alu_reg_reg():
+    # 66 01 D8 — ADD AX, BX (r/m16, r16)
+    cpu = _cpu("6601d8", regs={"eip": 0x1000})
+    cpu._set16(0, 10)  # AX
+    cpu._set16(3, 20)  # BX
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 30
+
+    # 66 03 C3 — ADD AX, BX (r16, r/m16)
+    cpu = _cpu("6603c3", regs={"eip": 0x1000})
+    cpu._set16(0, 10)
+    cpu._set16(3, 20)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 30
+
+    # 66 29 D8 — SUB AX, BX (r/m16, r16)
+    cpu = _cpu("6629d8", regs={"eip": 0x1000})
+    cpu._set16(0, 30)
+    cpu._set16(3, 20)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 10
+
+    # 66 39 C3 — CMP AX, BX (r/m16, r16, no write)
+    cpu = _cpu("6639c3", regs={"eip": 0x1000})
+    cpu._set16(0, 20)
+    cpu._set16(3, 20)
+    _steps(cpu, 1)
+    assert cpu.zf
+    assert cpu._get16(0) == 20  # CMP doesn't write
+
+
+def test_66_inc_dec():
+    # 66 40 — INC AX
+    cpu = _cpu("6640", regs={"eip": 0x1000})
+    cpu._set16(0, 0xFFFE)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0xFFFF
+
+    # 66 48 — DEC AX
+    cpu = _cpu("6648", regs={"eip": 0x1000})
+    cpu._set16(0, 1)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0
+
+
+def test_66_push_pop():
+    # 66 50 — PUSH AX; 66 5B — POP BX
+    cpu = _cpu("6650665b", regs={"eip": 0x1000, "esp": 0x2000})
+    cpu._set16(0, 0x1234)  # AX = 0x1234
+    _steps(cpu, 1)  # PUSH AX
+    assert cpu.esp == 0x1FFE
+    _steps(cpu, 1)  # POP BX
+    assert cpu._get16(3) == 0x1234  # BX = 0x1234
+
+
+def test_66_xchg():
+    # 66 91 — XCHG AX, CX
+    cpu = _cpu("6691", regs={"eip": 0x1000})
+    cpu._set16(0, 0xAAAA)  # AX
+    cpu._set16(1, 0xBBBB)  # CX
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0xBBBB  # AX now has CX's value
+    assert cpu._get16(1) == 0xAAAA  # CX now has AX's value
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Interrupts / IRQ / flag ops / RET
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1076,10 +1287,10 @@ def test_fire_irq_and_push_key_helpers():
 # Misc / helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
-def test_unknown_opcode_advances():
+def test_unknown_opcode_raises():
     cpu = _cpu("62")
-    assert cpu.step()
-    assert cpu.eip == 0x1002
+    with pytest.raises(InsFault, match="unknown opcode"):
+        cpu.step()
 
 
 def test_load_overflow_raises():
@@ -1184,25 +1395,62 @@ def test_mov_r16_imm16_reg_form():
     _steps(cpu, 1)
     assert cpu._get16(3) == 0x1234
 
+def test_mov_r16_from_r_m16_mem():
+    # 66 8B 19 — MOV BX, [ECX]
+    cpu = _cpu("668b19", regs={"ecx": 0x3000, "eip": 0x1000})
+    cpu._write16(0x3000, 0xBEEF)
+    _steps(cpu, 1)
+    assert cpu._get16(3) == 0xBEEF
+
+def test_mov_r16_to_r_m16_mem():
+    # 66 89 19 — MOV [ECX], BX
+    cpu = _cpu("668919", regs={"ecx": 0x3000, "ebx": 0xCAFE, "eip": 0x1000})
+    _steps(cpu, 1)
+    assert cpu._read16(0x3000) == 0xCAFE
+
+def test_mov_r16_from_r_m16_mem_disp8():
+    # 66 8B 72 04 — MOV SI, [EDX+4]
+    cpu = _cpu("668b7204", regs={"edx": 0x3000, "eip": 0x1000})
+    cpu._write16(0x3004, 0x1234)
+    _steps(cpu, 1)
+    assert cpu._get16(6) == 0x1234
+
+def test_mov_r16_from_r_m16_high_reg():
+    # 66 8B 19 — MOV BX, [ECX] — verifies BX (reg=3, not 0)
+    cpu = _cpu("668b19", regs={"ecx": 0x3000, "eip": 0x1000})
+    cpu._write16(0x3000, 0x5678)
+    _steps(cpu, 1)
+    assert cpu._get16(3) == 0x5678  # BX = register 3
+
 def test_group1_sign_extend_imm32():
     cpu = _cpu("81e800000080", regs={"eip": 0x1000})
     cpu.eax = 0
     _steps(cpu, 1)
     assert cpu.eax == 0x80000000
 
-def test_alu_adc_fallback():
-    cpu = _cpu("80d005", regs={"eip": 0x1000})
+def test_alu_adc_byte():
+    cpu = _cpu("80d005", regs={"eip": 0x1000})  # ADC AL, 5
     cpu._set8l(0, 10)
     cpu._set_flag(FLAG_CF, False)
     _steps(cpu, 1)
-    assert cpu._get8l(0) == 10
+    assert cpu._get8l(0) == 15
+    cpu = _cpu("80d005", regs={"eip": 0x1000})  # ADC AL, 5 with carry
+    cpu._set8l(0, 10)
+    cpu._set_flag(FLAG_CF, True)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 16
 
 def test_alu_sbb_via_0x81():
-    cpu = _cpu("81d834120000", regs={"eip": 0x1000})
-    cpu.eax = 100
+    cpu = _cpu("81d834120000", regs={"eip": 0x1000})  # SBB EAX, 0x1234
+    cpu.eax = 0x1234 + 100
     cpu._set_flag(FLAG_CF, False)
     _steps(cpu, 1)
     assert cpu.eax == 100
+    cpu = _cpu("81d834120000", regs={"eip": 0x1000})  # SBB with borrow
+    cpu.eax = 0x1234 + 100
+    cpu._set_flag(FLAG_CF, True)
+    _steps(cpu, 1)
+    assert cpu.eax == 99
 
 def test_shift_rcl_fallback():
     cpu = _cpu("d0d2", regs={"eip": 0x1000})
@@ -1344,9 +1592,8 @@ def test_f7_unary_not_mem():
 
 def test_unknown_opcode():
     cpu = _cpu("dd", regs={"eip": 0x1000})
-    old_eip = cpu.eip
-    _steps(cpu, 1)
-    assert cpu.eip == old_eip + 2
+    with pytest.raises(InsFault, match="unknown opcode"):
+        cpu.step()
 
 def test_mov_r_m8_to_r8_high():
     cpu = _cpu("8a20", regs={"eax": 0x5000, "eip": 0x1000})
@@ -1359,3 +1606,33 @@ def test_mov_r8_high_to_r_m8():
     cpu._set8h(0, 0xBE)  # AH = 0xBE
     _steps(cpu, 1)
     assert cpu._mem[0x5000] == 0xBE
+
+
+def test_xchg_reg32_reg32():
+    cpu = _cpu("87c3", regs={"eax": 111, "ebx": 222, "eip": 0x1000})
+    _steps(cpu, 1)
+    assert cpu.eax == 222
+    assert cpu.ebx == 111
+
+
+def test_xchg_eax_ecx():
+    cpu = _cpu("87c1", regs={"eax": 0xAAAAAAAA, "ecx": 0xBBBBBBBB, "eip": 0x1000})
+    _steps(cpu, 1)
+    assert cpu.eax == 0xBBBBBBBB
+    assert cpu.ecx == 0xAAAAAAAA
+
+
+def test_xchg_reg_mem():
+    cpu = _cpu("874500", regs={"eax": 0xCAFEBABE, "ebp": 0x50000, "eip": 0x1000})
+    cpu._write32(0x50000, 0x12345678)
+    _steps(cpu, 1)
+    assert cpu.eax == 0x12345678
+    assert cpu._read32(0x50000) == 0xCAFEBABE
+
+
+def test_xchg_mem_reg():
+    cpu = _cpu("874d00", regs={"ecx": 0xDEADBEEF, "ebp": 0x50000, "eip": 0x1000})
+    cpu._write32(0x50000, 0x11111111)
+    _steps(cpu, 1)
+    assert cpu.ecx == 0x11111111
+    assert cpu._read32(0x50000) == 0xDEADBEEF

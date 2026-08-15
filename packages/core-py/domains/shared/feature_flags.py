@@ -154,7 +154,7 @@ def _register_defaults():
     """Register all known features from FEATURE tags in the codebase."""
     FeatureFlags.register(
         "slonet_provider",
-        description="Sole torch-free inference engine (SloNetChatProvider)",
+        description="Sole inference engine (SloNetChatProvider)",
         status=FlagStatus.ENABLED,
     )
     FeatureFlags.register(

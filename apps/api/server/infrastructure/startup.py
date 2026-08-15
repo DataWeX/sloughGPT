@@ -282,6 +282,7 @@ class StartupOrchestrator:
             self._phase5_model_registry()
             self._phase6_routers()
 
+        await _restore_training_runtime()
         await self._phase_ready()
 
     async def _phase2_model_load(self):
@@ -512,7 +513,8 @@ class StartupOrchestrator:
         try:
             from domains.infrastructure.task_queue import get_task_queue
             self._task_queue = get_task_queue()
-            logger.info("Task queue initialized", extra={"tag": "START"})
+            await self._task_queue.start()
+            logger.info("Task queue initialized and started", extra={"tag": "START"})
         except Exception as e:
             logger.warning("Task queue init failed: %s", e, extra={"tag": "START"})
         try:
@@ -562,6 +564,19 @@ class StartupOrchestrator:
         logger.info("Startup complete — server ready for requests", extra={"tag": "START"})
 
     # ── Shutdown hooks ──
+
+    async def _shutdown_training_runtime(self):
+        """Gracefully stop tracked training jobs and persist final state.
+
+        Runs before the task queue stops so cooperative trainers get their
+        drain budget to save a final checkpoint. Anything still running when
+        the budget expires is marked ``interrupted`` and stays recoverable.
+        """
+        try:
+            from training.runtime import get_training_runtime
+            await asyncio.to_thread(get_training_runtime().shutdown)
+        except Exception as e:
+            logger.warning("Training runtime shutdown: %s", e, extra={"tag": "START"})
 
     async def _shutdown_task_queue(self):
         """Gracefully stop the background task queue."""
@@ -644,6 +659,7 @@ class StartupOrchestrator:
                 logger.warning("Lifecycle shutdown error: %s", e, extra={"tag": "START"})
 
         # Fallback: direct cleanup
+        await self._shutdown_training_runtime()
         await self._shutdown_task_queue()
         await self._shutdown_jobs()
         await self._shutdown_wandb()
@@ -651,6 +667,15 @@ class StartupOrchestrator:
         await self._shutdown_pool()
         await self._shutdown_executor()
         await self._shutdown_process_guard()
+
+
+async def _restore_training_runtime():
+    """Restore persisted training jobs into the runtime + job registry."""
+    try:
+        from training.runtime import get_training_runtime
+        get_training_runtime().restore()
+    except Exception as e:
+        logger.warning("Training runtime restore failed: %s", e, extra={"tag": "START"})
 
 
 def _sync_soul_traits():
@@ -842,16 +867,28 @@ def _register_loaded(cfg, process_guard) -> None:
     """Register a fully-loaded (eager) model with registry + providers."""
     import state as server_state
     from domains.infrastructure.model_registry import get_model_registry
+    from domains.infrastructure.safetensors_loader import _get_model_dir
     from domains.models.provider import setup_providers
 
     registry = get_model_registry()
 
     if server_state.model is not None and server_state.tokenizer is not None:
-        registry.register(
+        server = registry.register(
             server_state.model_type, server_state.model, server_state.tokenizer,
             make_default=True, generate_timeout=120.0,
             process_guard=process_guard,
+            idle_timeout_s=cfg.idle_timeout_seconds,
         )
+        # Store reload parameters for idle-reload capability
+        if cfg.idle_timeout_seconds > 0 and server_state.model_type:
+            _slnc = str(_get_model_dir(server_state.model_type) / "model.slnc")
+            server.set_hf_model_id(
+                server_state.model_type,
+                slnc_path=_slnc if os.path.exists(_slnc) else None,
+                quantize=cfg.quantize_slonet,
+                quant_bits=cfg.quant_bits,
+                quant_mode=cfg.quant_mode,
+            )
 
     # Pass pre-loaded provider to avoid duplicate SLNC load (~6s)
     preloaded = getattr(server_state, 'provider', None)

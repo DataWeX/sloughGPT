@@ -304,6 +304,64 @@ button {
   --ring: 134 202 228;
 }
 
+/* Palettes — full-spectrum overrides applied via html class */
+html.palette-neural-precision {
+  --background: 240 242 247;
+  --foreground: 22 20 32;
+  --card: 255 255 255;
+  --card-foreground: 22 20 32;
+  --popover: 255 255 255;
+  --popover-foreground: 22 20 32;
+  --primary: 99 57 170;
+  --primary-foreground: 250 248 255;
+  --secondary: 228 232 242;
+  --secondary-foreground: 36 32 50;
+  --muted: 234 236 244;
+  --muted-foreground: 110 104 130;
+  --accent: 56 189 248;
+  --accent-foreground: 10 12 20;
+  --ring: 99 57 170;
+  --border: 218 222 236;
+  --input: 218 222 236;
+  --chart-1: 99 57 170;
+  --chart-2: 52 176 125;
+  --chart-3: 56 189 248;
+  --chart-4: 90 150 220;
+  --chart-5: 220 80 90;
+  --shadow-sm: 0 1px 2px rgba(22, 20, 32, 0.06);
+  --shadow-md: 0 4px 12px rgba(22, 20, 32, 0.08);
+  --shadow-lg: 0 8px 30px rgba(22, 20, 32, 0.10);
+  --shadow-xl: 0 16px 48px rgba(22, 20, 32, 0.14);
+}
+html.dark.palette-neural-precision {
+  --background: 15 14 22;
+  --foreground: 234 232 242;
+  --card: 24 22 34;
+  --card-foreground: 234 232 242;
+  --popover: 30 27 42;
+  --popover-foreground: 234 232 242;
+  --primary: 160 128 216;
+  --primary-foreground: 15 14 22;
+  --secondary: 40 36 56;
+  --secondary-foreground: 234 232 242;
+  --muted: 34 30 48;
+  --muted-foreground: 140 132 164;
+  --accent: 80 200 255;
+  --accent-foreground: 10 12 20;
+  --ring: 160 128 216;
+  --border: 46 42 62;
+  --input: 46 42 62;
+  --chart-1: 160 128 216;
+  --chart-2: 72 192 140;
+  --chart-3: 80 200 255;
+  --chart-4: 100 165 240;
+  --chart-5: 235 100 110;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+
 .sl-sidebar-surface {
   background-color: color-mix(in srgb, rgb(var(--background)) 96%, rgb(var(--card)) 4%);
   background-image:

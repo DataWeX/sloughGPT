@@ -1626,11 +1626,11 @@ class TestAssembleMemoryOperandEncoding:
 
     def test_mov_eax_direct_addr(self):
         code = self._asm_one('MOV EAX, [0x20000]')
-        assert len(code) >= 6
+        assert len(code) >= 5
 
     def test_mov_to_direct_addr(self):
         code = self._asm_one('MOV [0x30000], EAX')
-        assert len(code) >= 6
+        assert len(code) >= 5
 
     def test_sub_reg_bracket_esi(self):
         code = self._asm_one('SUB EAX, [ESI]')
@@ -1735,6 +1735,24 @@ class TestAssemblerMiscCoverage:
         cpu._regs[4] = 0x80000
         cpu.step()
         assert cpu._regs[0] == 0xCAFEBABE
+
+    def test_cpu_mov_ax_mem_offs_66(self):
+        cpu = X86CPU()
+        struct.pack_into('<H', cpu._mem, 0x20000, 0xBEEF)
+        cpu._mem[0xF0000:0xF0006] = bytes([0x66, 0xA1, 0x00, 0x00, 0x02, 0x00])
+        cpu._eip = 0xF0000
+        cpu._regs[4] = 0x80000
+        cpu.step()
+        assert cpu._get16(0) == 0xBEEF
+
+    def test_cpu_mov_mem_offs_ax_66(self):
+        cpu = X86CPU()
+        cpu._mem[0xF0000:0xF0006] = bytes([0x66, 0xA3, 0x00, 0x00, 0x02, 0x00])
+        cpu._eip = 0xF0000
+        cpu._regs[4] = 0x80000
+        cpu._regs[0] = 0xDEADBEEF
+        cpu.step()
+        assert (cpu._mem[0x20000] | (cpu._mem[0x20001] << 8)) == 0xBEEF
 
     def test_cpu_cpuid(self):
         cpu = X86CPU()
@@ -2608,10 +2626,12 @@ class TestAssemblerEncoding:
 
     def test_66_prefix_mov_ax_mem(self):
         r = X86Assembler().assemble("[BITS 32]\nMOV AX, [0x1000]\nHLT")
+        assert r[0] == 0x66
         assert 0xA1 in r
 
     def test_66_prefix_mov_mem_ax(self):
         r = X86Assembler().assemble("[BITS 32]\nMOV [0x1000], AX\nHLT")
+        assert r[0] == 0x66
         assert 0xA3 in r
 
     def test_rep_movsb_encoding(self):

@@ -45,7 +45,7 @@ print(result.message.content)
 
 ## Training jobs
 
-`POST /training/start` expects a `TrainingRequest` JSON body. Pass **`log_interval`** and **`eval_interval`** as keyword arguments so live metrics on **`GET /training/jobs`** refresh at the cadence you want (defaults match the web Console: 10 / 100). Trainer **`step_*.pt`** files on the server include **`stoi` / `itos` / `chars`** so char-LM eval decodes cleanly; formats are summarized in [`docs/policies/CONTRIBUTING.md`](../../../docs/policies/CONTRIBUTING.md) (*Checkpoint vocabulary*). **`get_training_status`** / **`list_training_jobs`** may return a **`checkpoint`** path with the same native semantics.
+`POST /training/start` expects a `TrainingRequest` JSON body. Pass **`log_interval`** and **`eval_interval`** as keyword arguments so live metrics on **`GET /training/jobs`** refresh at the cadence you want (defaults match the web Console: 10 / 100). Trainer **`.soul`** files on the server include **`stoi` / `itos` / `chars`** so char-LM eval decodes cleanly; formats are summarized in [`docs/policies/CONTRIBUTING.md`](../../../docs/policies/CONTRIBUTING.md) (*Checkpoint vocabulary*). **`get_training_status`** / **`list_training_jobs`** may return a **`checkpoint`** path with the same native semantics.
 
 ```python
 job = client.start_training(

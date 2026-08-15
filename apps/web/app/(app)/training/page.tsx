@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { Button } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -19,6 +19,7 @@ import { useTestDialog } from '@/hooks/useTestDialog'
 import { TrainingSummaryCard } from '@/components/training/TrainingSummaryCard'
 import { TrainingHealthCard } from '@/components/training/TrainingHealthCard'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
+import { TurboCard } from '@/components/training/TurboCard'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
@@ -155,19 +156,17 @@ export default function TrainingPage() {
   }, [addToast])
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        className="items-start"
-        left={<AppRouteHeaderLead title="Teach me" subtitle="Teach your agent from your data" />}
-        right={
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={handleExportMetrics}>Export metrics</Button>
-            <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchJobs(); void checkpoints.fetchCheckpoints() }}>Refresh</Button>
-          </div>
-        }
-      />
-
-      <div className="space-y-4">
+    <PageContainer
+      title="Teach me"
+      subtitle="Teach your agent from your data"
+      className="items-start"
+      headerRight={
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={handleExportMetrics}>Export metrics</Button>
+          <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchJobs(); void checkpoints.fetchCheckpoints() }}>Refresh</Button>
+        </div>
+      }
+    >
         {/* Stats */}
         <KpiGrid columns={4}>
           <StatCard label="Training runs" value={form.allJobs.length} />
@@ -189,7 +188,9 @@ export default function TrainingPage() {
           onTest={() => test.setTestDialogOpen(true)}
           addToast={addToast}
         />
-      </div>
+
+        {/* Fast train (turbo) */}
+        <TurboCard datasets={datasets} session={session} addToast={addToast} />
 
       <TestModelDialog
         open={test.testDialogOpen}
@@ -201,6 +202,6 @@ export default function TrainingPage() {
         onGenerate={test.handleTestModel}
         onClear={test.clearTest}
       />
-    </div>
+    </PageContainer>
   )
 }

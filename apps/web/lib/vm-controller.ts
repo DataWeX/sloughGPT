@@ -42,6 +42,12 @@ export interface VMTrainingJob {
 export interface VMBuiltin {
   name: string
   description: string
+  code: string
+}
+
+export interface VMRegisterMeta {
+  size_bits: number
+  name: string
 }
 
 export interface VMInfo {
@@ -49,7 +55,7 @@ export interface VMInfo {
   max_steps: number
   default_memory: number
   max_memory: number
-  registers: string[]
+  registers: Record<string, VMRegisterMeta>
   features: string[]
 }
 

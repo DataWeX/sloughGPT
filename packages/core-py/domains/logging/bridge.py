@@ -25,10 +25,8 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from .base import Logger, LogLevel
-
 
 # ── Standard logging → our LogLevel mapping ────────────────────────────
 
@@ -39,6 +37,40 @@ _LEVEL_MAP = {
     logging.ERROR:    LogLevel.ERROR,
     logging.CRITICAL: LogLevel.CRITICAL,
 }
+
+# Standard logging.LogRecord attributes.  Anything on the record beyond
+# these (plus the explicitly handled context/error_code/tag) was injected
+# via ``extra={...}`` and belongs in the record's context — mirroring the
+# native Logger API where ``log.info(msg, **ctx)`` merges kwargs into context.
+_STANDARD_ATTRS = frozenset({
+    "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
+    "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
+    "created", "msecs", "relativeCreated", "thread", "threadName",
+    "processName", "process", "taskName", "message", "asctime",
+})
+
+_HANDLED_ATTRS = frozenset({"context", "error_code", "tag"})
+
+
+def record_extra_context(record: logging.LogRecord) -> dict:
+    """Collect structured context from a stdlib ``LogRecord``.
+
+    Merges the explicit ``context`` extra dict, then auto-captures any other
+    non-standard ``extra`` fields (injected by stdlib as record attributes)
+    so structured telemetry renders as ``key=value`` context — mirroring the
+    native ``Logger`` API where ``log.info(msg, **ctx)`` merges kwargs into
+    context.  Explicit context keys win over stray top-level fields.
+    """
+    ctx: dict = {}
+    extra_ctx = getattr(record, "context", None)
+    if isinstance(extra_ctx, dict):
+        ctx.update(extra_ctx)
+    for key, value in record.__dict__.items():
+        if key in _STANDARD_ATTRS or key in _HANDLED_ATTRS:
+            continue
+        if key not in ctx:
+            ctx[key] = value
+    return ctx
 
 
 class BridgeHandler(logging.Handler):
@@ -51,6 +83,11 @@ class BridgeHandler(logging.Handler):
         - ``context``: dict merged into the record's context
         - ``error_code``: str error code (e.g. ``"E_MODEL_OOM"``)
         - ``tag``: str type tag (e.g. ``"MODEL"``, ``"REQ"``)
+
+    Any other ``extra`` keys are captured automatically into the record's
+    context (mirroring ``Logger.info(msg, **ctx)``), so structured fields
+    such as ``extra={"mode": "guard", "elapsed_ms": 511}`` render as
+    ``key=value`` context without nesting them under ``context`` manually.
 
     Parameters:
         logger: The ``Logger`` instance to delegate to.
@@ -73,10 +110,8 @@ class BridgeHandler(logging.Handler):
             if hasattr(record, "lineno"):
                 ctx["line"] = record.lineno
 
-        # Merge context from extra dict
-        extra_ctx = getattr(record, "context", None)
-        if isinstance(extra_ctx, dict):
-            ctx.update(extra_ctx)
+        # Merge explicit context + auto-capture non-standard extra fields
+        ctx.update(record_extra_context(record))
 
         # Capture exception if present
         exception = None

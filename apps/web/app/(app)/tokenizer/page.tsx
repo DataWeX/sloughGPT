@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { tokenizerController, type TokenizerStats, type SampleWord } from '@/lib/tokenizer-controller'
 import { TokenizerEfficiencyCard } from '@/components/tokenizer/TokenizerEfficiencyCard'
 import { TokenTreeQueryCard } from '@/components/tokenizer/TokenTreeQueryCard'
@@ -97,186 +97,179 @@ export default function TokenizerPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Tokenizer" subtitle="BPE tokenizer management" />} />
-        <div className="space-y-4">
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
-    )
-  }
+  const toolbar = (
+    <div className="flex gap-1 border-b border-border/30 pb-0">
+      {(['playground', 'vocab', 'samples', 'train'] as Tab[]).map(t => (
+        <button
+          key={t}
+          onClick={() => {
+            setTab(t)
+            if (t === 'vocab') handleLoadVocab()
+            if (t === 'samples') handleLoadSamples()
+          }}
+          className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
+            tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {t.charAt(0).toUpperCase() + t.slice(1)}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Tokenizer" subtitle={stats ? `Vocab: ${stats.vocab_size} · Merges: ${stats.total_merges}` : 'BPE tokenizer'} />} />
-      <div className="space-y-4">
-        {stats && (
-          <KpiGrid>
-            <StatCard label="Vocab Size" value={String(stats.vocab_size)} />
-            <StatCard label="Base Chars" value={String(stats.base_chars)} />
-            <StatCard label="Merges" value={String(stats.total_merges)} />
-            <StatCard label="Special Tokens" value={String(stats.special_tokens)} />
-          </KpiGrid>
-        )}
+    <PageContainer
+      title="Tokenizer"
+      subtitle={stats ? `Vocab: ${stats.vocab_size} · Merges: ${stats.total_merges}` : 'BPE tokenizer'}
+      loading={loading}
+      toolbar={toolbar}
+    >
+      {stats && (
+        <KpiGrid>
+          <StatCard label="Vocab Size" value={String(stats.vocab_size)} />
+          <StatCard label="Base Chars" value={String(stats.base_chars)} />
+          <StatCard label="Merges" value={String(stats.total_merges)} />
+          <StatCard label="Special Tokens" value={String(stats.special_tokens)} />
+        </KpiGrid>
+      )}
 
-        <TokenizerEfficiencyCard stats={stats} samples={samples} />
+      <TokenizerEfficiencyCard stats={stats} samples={samples} />
 
-        <div className="flex gap-1 border-b border-border/30 pb-0">
-          {(['playground', 'vocab', 'samples', 'train'] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => {
-                setTab(t)
-                if (t === 'vocab') handleLoadVocab()
-                if (t === 'samples') handleLoadSamples()
-              }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-                tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'playground' && (
-          <Card>
-            <CardContent className="pt-4 space-y-3">
-              <Textarea
-                value={inputText}
-                onChange={e => setInputText(e.target.value)}
-                placeholder="Enter text to tokenize..."
-                rows={3}
-              />
-              <Button size="sm" onClick={handleTokenize} disabled={tokenizing || !inputText.trim()}>
-                {tokenizing ? 'Tokenizing...' : 'Tokenize'}
-              </Button>
-              {tokenResult && (
-                <div className="space-y-2">
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Tokens ({tokenResult.tokens.length})</div>
-                    <div className="flex flex-wrap gap-1">
-                      {tokenResult.tokens.map((t, i) => (
-                        <span key={i} className="text-xs font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">IDs</div>
-                    <div className="text-xs font-mono text-muted-foreground">[{tokenResult.ids.join(', ')}]</div>
+      {tab === 'playground' && (
+        <Card>
+          <CardContent className="pt-4 space-y-3">
+            <Textarea
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              placeholder="Enter text to tokenize..."
+              rows={3}
+            />
+            <Button size="sm" onClick={handleTokenize} disabled={tokenizing || !inputText.trim()}>
+              {tokenizing ? 'Tokenizing...' : 'Tokenize'}
+            </Button>
+            {tokenResult && (
+              <div className="space-y-2">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Tokens ({tokenResult.tokens.length})</div>
+                  <div className="flex flex-wrap gap-1">
+                    {tokenResult.tokens.map((t, i) => (
+                      <span key={i} className="text-xs font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                        {t}
+                      </span>
+                    ))}
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">IDs</div>
+                  <div className="text-xs font-mono text-muted-foreground">[{tokenResult.ids.join(', ')}]</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-        {tab === 'vocab' && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Vocabulary ({vocabTotal})</CardTitle>
-              <Button size="sm" variant="ghost" onClick={() => handleLoadVocab(vocabOffset)}>
-                <IconRefresh className="h-4 w-4" />
+      {tab === 'vocab' && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Vocabulary ({vocabTotal})</CardTitle>
+            <Button size="sm" variant="ghost" onClick={() => handleLoadVocab(vocabOffset)}>
+              <IconRefresh className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1 max-h-96 overflow-y-auto font-mono text-xs">
+              {vocabEntries.map(e => (
+                <div key={e.id} className="flex items-center gap-3 py-0.5 border-b border-border/20">
+                  <span className="w-12 text-right text-muted-foreground">{e.id}</span>
+                  <span className={e.is_special ? 'text-primary font-medium' : ''}>{e.token}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" variant="outline" onClick={() => handleLoadVocab(Math.max(0, vocabOffset - 50))} disabled={vocabOffset === 0}>
+                Prev
               </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-1 max-h-96 overflow-y-auto font-mono text-xs">
-                {vocabEntries.map(e => (
-                  <div key={e.id} className="flex items-center gap-3 py-0.5 border-b border-border/20">
-                    <span className="w-12 text-right text-muted-foreground">{e.id}</span>
-                    <span className={e.is_special ? 'text-primary font-medium' : ''}>{e.token}</span>
+              <Button size="sm" variant="outline" onClick={() => handleLoadVocab(vocabOffset + 50)} disabled={vocabOffset + 50 >= vocabTotal}>
+                Next
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'samples' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Tokenization Samples</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {samples.length === 0 ? (
+              <Button size="sm" onClick={handleLoadSamples}>Load Samples</Button>
+            ) : (
+              <div className="space-y-2">
+                {samples.map(s => (
+                  <div key={s.word} className="flex items-center gap-3 text-xs py-1 border-b border-border/20">
+                    <span className="font-medium w-24 truncate">{s.word}</span>
+                    <div className="flex gap-1">
+                      {s.tokens.map((t, i) => (
+                        <span key={i} className="font-mono bg-muted/50 px-1 py-0.5 rounded">{t}</span>
+                      ))}
+                    </div>
+                    <span className="text-muted-foreground ml-auto">{s.count} tokens</span>
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2 mt-3">
-                <Button size="sm" variant="outline" onClick={() => handleLoadVocab(Math.max(0, vocabOffset - 50))} disabled={vocabOffset === 0}>
-                  Prev
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleLoadVocab(vocabOffset + 50)} disabled={vocabOffset + 50 >= vocabTotal}>
-                  Next
-                </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'train' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Train Tokenizer</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {trainResult && (
+              <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">
+                {trainResult}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground">Vocab size:</label>
+              <Input
+                type="number"
+                aria-label="Vocab size"
+                value={trainVocab}
+                onChange={e => setTrainVocab(parseInt(e.target.value) || 512)}
+                className="w-24"
+                min={32}
+                max={100000}
+              />
+              <Button size="sm" onClick={handleTrain} disabled={training}>
+                {training ? 'Training...' : 'Train on Shakespeare'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Downloads Shakespeare dataset and trains a BPE tokenizer. Takes a few seconds.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-        {tab === 'samples' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Tokenization Samples</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {samples.length === 0 ? (
-                <Button size="sm" onClick={handleLoadSamples}>Load Samples</Button>
-              ) : (
-                <div className="space-y-2">
-                  {samples.map(s => (
-                    <div key={s.word} className="flex items-center gap-3 text-xs py-1 border-b border-border/20">
-                      <span className="font-medium w-24 truncate">{s.word}</span>
-                      <div className="flex gap-1">
-                        {s.tokens.map((t, i) => (
-                          <span key={i} className="font-mono bg-muted/50 px-1 py-0.5 rounded">{t}</span>
-                        ))}
-                      </div>
-                      <span className="text-muted-foreground ml-auto">{s.count} tokens</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {tab === 'train' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Train Tokenizer</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {trainResult && (
-                <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">
-                  {trainResult}
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">Vocab size:</label>
-                <Input
-                  type="number"
-                  aria-label="Vocab size"
-                  value={trainVocab}
-                  onChange={e => setTrainVocab(parseInt(e.target.value) || 512)}
-                  className="w-24"
-                  min={32}
-                  max={100000}
-                />
-                <Button size="sm" onClick={handleTrain} disabled={training}>
-                  {training ? 'Training...' : 'Train on Shakespeare'}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Downloads Shakespeare dataset and trains a BPE tokenizer. Takes a few seconds.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        <TokenTreeQueryCard key={treeVersion} />
-        <TokenTreeMergesCard refreshKey={treeVersion} />
-        <TokenTreeVocabCard refreshKey={treeVersion} />
-        <TokenTreeTrainCard onTrained={() => setTreeVersion(v => v + 1)} />
-        <TokenTreePersistenceCard refreshKey={treeVersion} onLoaded={() => setTreeVersion(v => v + 1)} />
-        <TokenTreeEmbeddingsCard />
-        <TokenTreeMatrixCard />
-        <TokenTreeCodecCard />
-        <TokenTreePathCard />
-        <TokenTreeLineageCard />
-        <TokenTreeCompareCard key={treeVersion} />
-        <TokenTreePlaygroundCard />
-      </div>
-    </div>
+      <TokenTreeQueryCard key={treeVersion} />
+      <TokenTreeMergesCard refreshKey={treeVersion} />
+      <TokenTreeVocabCard refreshKey={treeVersion} />
+      <TokenTreeTrainCard onTrained={() => setTreeVersion(v => v + 1)} />
+      <TokenTreePersistenceCard refreshKey={treeVersion} onLoaded={() => setTreeVersion(v => v + 1)} />
+      <TokenTreeEmbeddingsCard />
+      <TokenTreeMatrixCard />
+      <TokenTreeCodecCard />
+      <TokenTreePathCard />
+      <TokenTreeLineageCard />
+      <TokenTreeCompareCard key={treeVersion} />
+      <TokenTreePlaygroundCard />
+    </PageContainer>
   )
 }

@@ -2,7 +2,7 @@
 GPU/Accelerator Layer for SloLib
 
 Three backends:
-- **Metal**: macOS GPU via PyTorch MPS (existing install, ~0 setup)
+- **Metal**: Apple Silicon awareness with numpy compute (platform detection, no torch)
 - **CUDA**: NVIDIA GPU via CuPy (pip install cupy-cuda12x)
 - **CPU**: Pure NumPy (always works, no dependencies)
 
@@ -727,171 +727,38 @@ class _CPUBackend(_Accelerator):
 
 
 class _MetalBackend(_Accelerator):
-    """Clean Metal GPU backend via PyTorch MPS.
+    """Metal (Apple GPU) backend — numpy compute on Apple Silicon.
 
-    Delegates compute to MPS (Metal Performance Shaders) through PyTorch.
-    All ops accept numpy arrays and return numpy arrays.
+    Detects MPS availability via a platform check (``ml_types._mps_available``,
+    no torch import). All compute ops use the base ``_Accelerator`` numpy
+    implementations; there is no GPU dispatch. This mirrors the project's
+    ``training/gpu/accelerator.py`` Metal accelerator, which computes in numpy.
     Ops not overridden here fall through to the base _Accelerator numpy impl.
     """
     name = "metal"
     device_type = "gpu"
-    _fp16_available = True
-
-    def __init__(self):
-        self._torch = None
+    _fp16_available = False
 
     def is_available(self) -> bool:
-        if self._torch is not None:
-            return True
         try:
-            import torch
-            ok = torch.backends.mps.is_available() and torch.backends.mps.is_built()
-            if ok:
-                self._torch = torch
-            return ok
+            from domains.infrastructure.ml_types import _mps_available
+            return _mps_available()
         except Exception:
             return False
 
-    def _t(self, a):
-        """Convert numpy → MPS tensor; pass through if already a torch tensor."""
-        if isinstance(a, np.ndarray):
-            dtype = self._torch.float16 if self._fp16_mode else self._torch.float32
-            return self._torch.tensor(a, dtype=dtype, device="mps")
-        return a
-
-    def _n(self, t):
-        """Convert MPS tensor → numpy; pass through if already numpy."""
-        if isinstance(t, self._torch.Tensor):
-            return t.cpu().numpy()
-        return t
-
-    # --- Device transfer (used by _accel_op and callers) ---
-
     def to_device(self, arr):
-        if not isinstance(arr, np.ndarray):
-            return arr
-        dtype = self._torch.float16 if self._fp16_mode else self._torch.float32
-        return self._torch.tensor(arr, dtype=dtype, device="mps")
+        return np.asarray(arr, dtype=np.float32)
 
     def from_device(self, arr):
-        """Convert MPS tensor to numpy. Pass through for numpy arrays."""
-        if isinstance(arr, self._torch.Tensor):
-            return arr.cpu().numpy()
-        return np.asarray(arr)
+        return np.asarray(arr, dtype=np.float32)
 
     def sync(self) -> None:
-        if self._torch is not None:
-            self._torch.mps.synchronize()
+        pass
 
-    # --- Core ops ---
+    def vram_gb(self) -> float:
+        return 8.0
 
-    def matmul(self, a, b):
-        return self._n(self._t(a) @ self._t(b))
-
-    def add(self, a, b):
-        return self._n(self._t(a) + self._t(b))
-
-    def neg(self, a):
-        return self._n(-self._t(a))
-
-    def mul(self, a, b):
-        return self._n(self._t(a) * self._t(b))
-
-    def pow(self, a, p):
-        return self._n(self._t(a) ** p)
-
-    def sum(self, a, axis=None):
-        t = self._t(a)
-        if axis is not None:
-            return self._n(t.sum(dim=axis))
-        return self._n(t.sum())
-
-    def mean(self, a, axis=None):
-        t = self._t(a)
-        if axis is not None:
-            return self._n(t.mean(dim=axis))
-        return self._n(t.mean())
-
-    def sigmoid(self, x):
-        return self._n(self._torch.sigmoid(self._t(x)))
-
-    def tanh(self, x):
-        return self._n(self._torch.tanh(self._t(x)))
-
-    def relu(self, x):
-        return self._n(self._torch.relu(self._t(x)))
-
-    def gelu(self, x):
-        return self._n(self._torch.nn.functional.gelu(self._t(x)))
-
-    def silu(self, x):
-        return self._n(self._torch.nn.functional.silu(self._t(x)))
-
-    def softmax(self, a, axis=-1):
-        return self._n(self._t(a).softmax(dim=axis))
-
-    def layer_norm(self, x, weight, bias, eps=1e-5):
-        tx, tw, tb = self._t(x), self._t(weight), self._t(bias)
-        return self._n(self._torch.nn.functional.layer_norm(
-            tx, tx.shape[-1:], weight=tw, bias=tb, eps=eps
-        ))
-
-    def rms_norm(self, x, weight, eps=1e-5):
-        tx, tw = self._t(x), self._t(weight)
-        rms = self._torch.rsqrt(self._torch.mean(tx ** 2, dim=-1, keepdim=True) + eps)
-        return self._n(tx * rms * tw)
-
-    def scaled_dot_attention(self, q, k, v, mask=None, scale=None, causal=False):
-        tq, tk, tv = self._t(q), self._t(k), self._t(v)
-        tm = self._t(mask) if mask is not None else None
-        return self._n(self._torch.nn.functional.scaled_dot_product_attention(
-            tq, tk, tv, attn_mask=tm, is_causal=causal
-        ))
-
-    def cross_entropy(self, logits, targets):
-        tlog, ttar = self._t(logits), self._t(targets)
-        return self._torch.nn.functional.cross_entropy(
-            tlog, ttar.long(), reduction="mean"
-        ).item()
-
-    def conv2d(self, x, weight, bias=None, stride=1, padding=0, groups=1):
-        tx, tw = self._t(x), self._t(weight)
-        tb = self._t(bias) if bias is not None else None
-        return self._n(self._torch.nn.functional.conv2d(
-            tx, tw, bias=tb, stride=stride, padding=padding, groups=groups
-        ))
-
-    def max_pool2d(self, x, kernel_size, stride):
-        return self._n(self._torch.nn.functional.max_pool2d(
-            self._t(x), kernel_size, stride
-        ))
-
-    def embedding(self, indices, weight):
-        ti, tw = self._t(indices), self._t(weight)
-        return self._n(self._torch.nn.functional.embedding(ti.long(), tw))
-
-    def dropout(self, x, p=0.0, training=True):
-        return self._n(self._torch.nn.functional.dropout(
-            self._t(x), p=p, training=training
-        ))
-
-    def abs(self, x):
-        return self._n(self._torch.abs(self._t(x)))
-
-    def exp(self, x):
-        return self._n(self._torch.exp(self._t(x)))
-
-    def sqrt(self, x):
-        return self._n(self._torch.sqrt(self._t(x)))
-
-    def max(self, x, axis=None):
-        t = self._t(x)
-        if axis is not None:
-            return self._n(t.amax(dim=axis))
-        return self._n(t.amax())
-
-    # Use base class numpy implementations for ops not listed above
-    # (sub, div, clamp, where, gather, scatter, pad, batch_norm, etc.)
+    # Use base class numpy implementations for all compute ops
 
 
 class _CUDABackend(_Accelerator):

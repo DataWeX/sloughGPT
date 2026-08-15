@@ -81,6 +81,7 @@ class WorkerPool:
         self._queue: asyncio.Queue | None = None
         self._workers: list[asyncio.Task] = []
         self._running = False
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._handler: Callable[[Task], Awaitable[Any]] | None = None
 
     @property
@@ -93,11 +94,22 @@ class WorkerPool:
         self._handler = handler
 
     async def start(self):
-        if self._running:
+        """Start the worker pool on the current event loop.
+
+        Idempotent per loop: calling ``start`` twice on the same loop is a
+        no-op. If the pool was previously started on a different loop (e.g. an
+        earlier ``asyncio.run`` that has since closed), the queue and workers
+        are recreated so the pool keeps working.
+
+        Side effects:
+            - creates the internal ``asyncio.Queue`` and N worker tasks
+        """
+        loop = asyncio.get_running_loop()
+        if self._running and self._loop is loop:
             return
         self._running = True
-        # Ensure queue is created in the running event loop
-        _ = self.queue
+        self._loop = loop
+        self._queue = asyncio.Queue()
         self._workers = [
             asyncio.create_task(self._worker_loop(i))
             for i in range(self.num_workers)
@@ -107,6 +119,7 @@ class WorkerPool:
 
     async def stop(self, timeout: float = 5.0):
         self._running = False
+        self._loop = None
         for _ in self._workers:
             await self.queue.put(None)
         pending_workers = [w for w in self._workers if not w.done()]
@@ -154,6 +167,8 @@ class TaskQueue:
         self._lock = asyncio.Lock()
         self._sse_callbacks: list[Callable[[str, Task], None]] = []
         self._dispatcher_task: asyncio.Task | None = None
+        self._started = False
+        self._started_loop: asyncio.AbstractEventLoop | None = None
 
         # Event bus integration
         self._event_bus = None
@@ -196,13 +211,32 @@ class TaskQueue:
     # ── Lifecycle ──
 
     async def start(self):
+        """Start the dispatcher and worker pool on the current event loop.
+
+        Idempotent per loop. When called again on a different loop (e.g. a
+        test's fresh ``asyncio.run`` loop), the loop-bound primitives
+        (``_lock``, ``_stop_event``) and the worker pool are recreated so the
+        queue keeps dispatching instead of silently stalling.
+
+        Side effects:
+            - starts the worker pool and dispatcher task on the running loop
+        """
+        loop = asyncio.get_running_loop()
+        if self._started and self._started_loop is loop:
+            return
+        self._lock = asyncio.Lock()
+        self._stop_event = asyncio.Event()
         await self._pool.start()
+        self._started = True
+        self._started_loop = loop
         self._dispatcher_task = asyncio.create_task(self._dispatch_loop())
         logger.info("TaskQueue started with %d workers", self._pool.num_workers,
             extra={"tag": "INFRA"})
 
     async def stop(self, timeout: float = 5.0):
         self._stop_event.set()
+        self._started = False
+        self._started_loop = None
         if self._dispatcher_task and not self._dispatcher_task.done():
             self._dispatcher_task.cancel()
         for task in list(self._running.values()):
@@ -228,6 +262,38 @@ class TaskQueue:
                 pass
         bus_event = f"task.{event}"
         self._emit_event(bus_event, task)
+
+    def _push_sse_terminal(self, task: Task, status: TaskStatus):
+        """Guarantee a terminal SSE event reaches ``task.metadata["sse_queue"]``.
+
+        Backstops handlers that reach a terminal state without emitting their
+        own SSE event (timeout, missing handler, unhandled exception, explicit
+        cancel). Without this, an SSE consumer waiting on the queue (e.g. the
+        auto-train stream) would hang until its deadline.
+
+        Args:
+            task: The finished task. ``sse_queue`` must be an ``asyncio.Queue``
+                in ``task.metadata``; ``sse_stream`` (default ``"auto-train"``)
+                names the SSE stream.
+            status: The terminal status reached (``FAILED`` or ``CANCELLED``).
+
+        Side effects:
+            - pushes one SSE ``error`` event onto ``task.metadata["sse_queue"]``
+        """
+        sse_queue = task.metadata.get("sse_queue")
+        if sse_queue is None:
+            return
+        stream_name = task.metadata.get("sse_stream", "auto-train")
+        try:
+            from domains.api.sse_envelope import sse_error
+            if status == TaskStatus.CANCELLED:
+                message = task.error or "Training cancelled"
+                sse_queue.put_nowait(sse_error(stream_name, "CANCELLED", message))
+            else:
+                message = task.error or f"Task failed: {task.task_type}"
+                sse_queue.put_nowait(sse_error(stream_name, "FAILED", message))
+        except Exception:
+            pass
 
     # ── Enqueue ──
 
@@ -289,6 +355,7 @@ class TaskQueue:
             self._cancelled[task.id] = task
             self.stats["cancelled"] += 1
         self._emit("cancelled", task)
+        self._push_sse_terminal(task, TaskStatus.CANCELLED)
         return True
 
     async def pause(self, task_id: str) -> bool:
@@ -374,6 +441,7 @@ class TaskQueue:
                     self._failed[task.id] = task
                     self.stats["failed"] += 1
                 self._emit("failed", task)
+                self._push_sse_terminal(task, TaskStatus.FAILED)
         else:
             await self._run_with_controls(task)
 
@@ -406,6 +474,7 @@ class InProcessTaskQueue(TaskQueue):
                 self._failed[task.id] = task
                 self.stats["failed"] += 1
             self._emit("failed", task)
+            self._push_sse_terminal(task, TaskStatus.FAILED)
             return
 
         for attempt in range(task.max_retries + 1):
@@ -417,6 +486,7 @@ class InProcessTaskQueue(TaskQueue):
                     self._cancelled[task.id] = task
                     self.stats["cancelled"] += 1
                 self._emit("cancelled", task)
+                self._push_sse_terminal(task, TaskStatus.CANCELLED)
                 return
 
             await task.pause_event.wait()
@@ -429,6 +499,7 @@ class InProcessTaskQueue(TaskQueue):
                     self._cancelled[task.id] = task
                     self.stats["cancelled"] += 1
                 self._emit("cancelled", task)
+                self._push_sse_terminal(task, TaskStatus.CANCELLED)
                 return
 
             try:
@@ -460,6 +531,7 @@ class InProcessTaskQueue(TaskQueue):
                         self._failed[task.id] = task
                         self.stats["failed"] += 1
                     self._emit("failed", task)
+                    self._push_sse_terminal(task, TaskStatus.FAILED)
                     return
 
 

@@ -61,6 +61,7 @@ export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: Result
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <div className="text-xs font-medium truncate">{cp.name}</div>
+                      {cp.source === 'turbo' && <Badge variant="warning" size="sm">Turbo</Badge>}
                       {cp.name === bestName && <Badge variant="primary" size="sm">Best</Badge>}
                     </div>
                     <div className="text-[10px] text-muted-foreground">

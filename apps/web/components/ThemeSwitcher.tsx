@@ -35,6 +35,7 @@ export function ThemeSwitcher() {
             role="radio"
             aria-checked={theme === t.id}
             aria-label={t.name}
+            title={t.name}
           />
         ))}
       </div>

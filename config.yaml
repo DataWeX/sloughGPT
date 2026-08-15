@@ -58,7 +58,7 @@ checkpoint:
   trainer_interval: 1000
   save_best_only: false
   max_checkpoints: 5
-  export_format: sou  # cli.py train post-run save (sou|safetensors|...)
+  export_format: soul  # DEPRECATED — ignored; SloughGPTTrainer.save() always writes .soul
 
 # Tracking (Weights & Biases / MLflow)
 # CLI: `tracking.enabled: true`, `pip install -e ".[wandb]"`, set `WANDB_API_KEY` (or `WANDB_MODE=offline`).

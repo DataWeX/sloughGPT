@@ -39,6 +39,7 @@ export interface Checkpoint {
   vocab_size?: number
   training_dataset?: string
   training_duration_s?: number
+  source?: string
 }
 
 export interface SoulsResponse {

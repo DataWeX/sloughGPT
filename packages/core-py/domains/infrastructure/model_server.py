@@ -472,6 +472,7 @@ class ModelMetrics:
     last_error: Optional[str] = None
     last_error_at: Optional[float] = None
     consecutive_failures: int = 0
+    last_request_time: float = 0.0
 
     def record_success(self, elapsed_ms: float, tokens: int) -> None:
         self.requests_completed += 1
@@ -481,12 +482,14 @@ class ModelMetrics:
         self.last_generation_time_ms = elapsed_ms
         self.tokens_generated_total += tokens
         self.consecutive_failures = 0
+        self.last_request_time = time.time()
 
     def record_failure(self, error: str) -> None:
         self.requests_failed += 1
         self.last_error = error
         self.last_error_at = time.time()
         self.consecutive_failures += 1
+        self.last_request_time = time.time()
 
     def record_timeout(self) -> None:
         self.requests_timed_out += 1
@@ -518,7 +521,156 @@ class ModelMetrics:
             "tokens_generated_total": self.tokens_generated_total,
             "last_error": self.last_error,
             "error_rate": round(self.error_rate, 4),
+            "last_request_time": self.last_request_time,
         }
+
+
+class IdleManager:
+    """Background monitor that unloads idle models to save memory.
+
+    Tracks last-request timestamps per model. When a model exceeds
+    ``idle_timeout_s`` without requests, calls the unload callback.
+    On next request, auto-reloads via the reload callback before processing.
+
+    Usage::
+
+        manager = IdleManager(idle_timeout_s=300)
+        manager.register("gpt2", unload_fn, reload_fn)
+        # ... on each request:
+        manager.touch("gpt2")
+        # ... background thread handles unloading
+    """
+
+    def __init__(self, idle_timeout_s: float = 300.0, check_interval_s: float = 30.0):
+        self._idle_timeout_s = idle_timeout_s
+        self._check_interval_s = check_interval_s
+        self._models: dict[str, dict] = {}  # model_id → {last_touch, unload_fn, reload_fn, unloaded_at}
+        self._lock = Lock()
+        self._thread: Optional[Thread] = None
+        self._running = False
+        self._on_unload: Optional[Callable[[str], None]] = None
+        self._on_reload: Optional[Callable[[str], None]] = None
+        self._logger = logger
+
+    def register(
+        self,
+        model_id: str,
+        unload_fn: Optional[Callable[[], None]] = None,
+        reload_fn: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """Register a model for idle tracking."""
+        with self._lock:
+            self._models[model_id] = {
+                "last_touch": time.time(),
+                "unload_fn": unload_fn,
+                "reload_fn": reload_fn,
+                "unloaded_at": None,
+            }
+        self._ensure_running()
+
+    def unregister(self, model_id: str) -> None:
+        """Stop tracking a model."""
+        with self._lock:
+            self._models.pop(model_id, None)
+
+    def touch(self, model_id: str) -> bool:
+        """Update last request time. Returns True if model was idle and reloaded."""
+        reloaded = False
+        with self._lock:
+            entry = self._models.get(model_id)
+            if entry is None:
+                return False
+            if entry["unloaded_at"] is not None:
+                # Model was idle-unloaded — trigger reload
+                reload_fn = entry.get("reload_fn")
+                if reload_fn:
+                    self._logger.info(
+                        "Auto-reloading idle model %s", model_id,
+                        extra={"tag": "IDLE"},
+                    )
+                    try:
+                        reload_fn()
+                        entry["unloaded_at"] = None
+                        reloaded = True
+                    except Exception as e:
+                        self._logger.error(
+                            "Auto-reload failed for %s: %s", model_id, e,
+                            extra={"tag": "IDLE"},
+                        )
+            entry["last_touch"] = time.time()
+        return reloaded
+
+    def is_idle_unloaded(self, model_id: str) -> bool:
+        """Check if a model was unloaded due to idle timeout."""
+        with self._lock:
+            entry = self._models.get(model_id)
+            return entry is not None and entry["unloaded_at"] is not None
+
+    def get_idle_info(self, model_id: str) -> Optional[dict]:
+        """Get idle status info for a model."""
+        with self._lock:
+            entry = self._models.get(model_id)
+            if entry is None:
+                return None
+            last_touch = entry["last_touch"]
+            age_s = time.time() - last_touch if last_touch > 0 else 0
+            return {
+                "last_request_age_s": round(age_s, 1),
+                "idle_timeout_s": self._idle_timeout_s,
+                "unloaded": entry["unloaded_at"] is not None,
+                "remaining_s": round(max(0, self._idle_timeout_s - age_s), 1),
+            }
+
+    def _ensure_running(self) -> None:
+        """Start the background check thread if not already running."""
+        if self._running:
+            return
+        self._running = True
+        self._thread = Thread(target=self._check_loop, daemon=True, name="idle-manager")
+        self._thread.start()
+
+    def _check_loop(self) -> None:
+        """Background loop: check for idle models and unload them."""
+        while self._running:
+            time.sleep(self._check_interval_s)
+            now = time.time()
+            with self._lock:
+                for model_id, entry in self._models.items():
+                    if entry["unloaded_at"] is not None:
+                        continue  # already unloaded
+                    age = now - entry["last_touch"]
+                    if age >= self._idle_timeout_s:
+                        unload_fn = entry.get("unload_fn")
+                        if unload_fn:
+                            self._logger.info(
+                                "Idle timeout %.0fs reached for %s — unloading",
+                                age, model_id, extra={"tag": "IDLE"},
+                            )
+                            try:
+                                unload_fn()
+                                entry["unloaded_at"] = now
+                            except Exception as e:
+                                self._logger.error(
+                                    "Idle unload failed for %s: %s", model_id, e,
+                                    extra={"tag": "IDLE"},
+                                )
+
+    def shutdown(self) -> None:
+        """Stop the background check thread."""
+        self._running = False
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5.0)
+
+
+_idle_manager: Optional[IdleManager] = None
+
+
+def get_idle_manager() -> IdleManager:
+    """Get or create the global IdleManager singleton."""
+    global _idle_manager
+    if _idle_manager is None:
+        _idle_manager = IdleManager()
+    return _idle_manager
 
 
 class CircuitBreakerState(Enum):
@@ -823,7 +975,6 @@ class LocalBackend(GenerateBackend):
                 # No cache was passed (first turn or mismatch) — store it now
                 # If we can get it from the model's internal state, do so
                 try:
-                    import torch
                     captured = getattr(self._model_ref, "_past_key_values", None) or \
                                getattr(self._model_ref, "past_key_values", None)
                     if captured is not None:
@@ -976,8 +1127,15 @@ SESSION_KV_CACHE = SessionKVCache()
 
 
 def _mps_empty_cache() -> None:
-    """Free MPS cached memory if available."""
+    """Free MPS cached memory if available.
+
+    Gated on the platform check so torch is never imported on non-Apple
+    platforms; the torch call is only for live torch MPS models.
+    """
     try:
+        from domains.infrastructure.ml_types import _mps_available
+        if not _mps_available():
+            return
         import torch
         if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
             torch.mps.empty_cache()
@@ -1015,6 +1173,7 @@ class ModelServer:
         process_guard: Optional[Any] = None,
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",
+        idle_timeout_s: float = 0.0,
     ):
         # CPU threading optimization — uses ResourceManager for topology-aware tuning
         _optimize_cpu_threads()
@@ -1115,6 +1274,125 @@ class ModelServer:
 
         # Queue workers are lazily started on first generate() call
         # (avoids asyncio loop issues with warmup threads)
+
+        # Idle manager — auto-unload after inactivity
+        self._idle_timeout_s = idle_timeout_s
+        self._hf_model_id: Optional[str] = None  # stored for idle reload
+        self._slnc_path: Optional[str] = None  # stored for idle reload
+        self._reload_quantize: bool = False
+        self._reload_quant_bits: int = 8
+        self._reload_quant_mode: str = "symmetric"
+        if idle_timeout_s > 0:
+            idle_mgr = get_idle_manager()
+            idle_mgr.register(
+                model_id,
+                unload_fn=self._idle_unload,
+                reload_fn=self._idle_reload,
+            )
+
+    def set_hf_model_id(
+        self,
+        hf_model_id: str,
+        slnc_path: Optional[str] = None,
+        quantize: bool = False,
+        quant_bits: int = 8,
+        quant_mode: str = "symmetric",
+    ) -> None:
+        """Store reload parameters for idle-reload capability.
+
+        Args:
+            hf_model_id: HuggingFace model ID (e.g. "gpt2")
+            slnc_path: Optional direct path to .slnc file (skips HF lookup)
+            quantize: Whether to apply quantization on reload
+            quant_bits: Quantization bit width
+            quant_mode: Quantization mode ("symmetric" or "asymmetric")
+        """
+        self._hf_model_id = hf_model_id
+        self._slnc_path = slnc_path
+        self._reload_quantize = quantize
+        self._reload_quant_bits = quant_bits
+        self._reload_quant_mode = quant_mode
+
+    def _idle_unload(self) -> None:
+        """Callback for IdleManager: release model reference to free memory.
+
+        Drops the model object and tokenizer reference so garbage collection
+        can reclaim the memory. The ModelServer shell remains in the registry
+        so it can be re-populated on the next request.
+        """
+        with self._lock:
+            self._model_ref = None
+            self._local_backend = None
+        self.set_status(ModelStatus.UNLOADED)
+        gc.collect()
+        logger.info(
+            "Model %s unloaded (idle) — memory freed", self.model_id,
+            extra={"tag": "IDLE"},
+        )
+
+    def _idle_reload(self) -> None:
+        """Callback for IdleManager: reload model from disk.
+
+        Re-creates the SloNet provider from stored parameters and
+        re-populates the ModelServer's local backend so the next generate()
+        call works without the caller noticing the model was idle-unloaded.
+
+        Reload path priority:
+        1. Direct .slnc path (if stored via set_hf_model_id)
+        2. HuggingFace model ID → look up cached .slnc file
+        """
+        if not self._hf_model_id and not self._slnc_path:
+            logger.warning(
+                "Cannot reload %s: no model ID or path stored", self.model_id,
+                extra={"tag": "IDLE"},
+            )
+            return
+        try:
+            from domains.inference.slonet_provider import SloNetChatProvider
+
+            slnc_path = self._slnc_path
+            if not slnc_path:
+                # Resolve .slnc from HF model ID via cache directory
+                from domains.infrastructure.safetensors_loader import _get_model_dir
+                from pathlib import Path
+                cache_dir = _get_model_dir(self._hf_model_id)
+                candidate = cache_dir / "model.slnc"
+                if not candidate.exists():
+                    logger.error(
+                        "Cannot reload %s: no .slnc file at %s",
+                        self.model_id, candidate, extra={"tag": "IDLE"},
+                    )
+                    return
+                slnc_path = str(candidate)
+
+            provider = SloNetChatProvider.from_slnc(
+                slnc_path,
+                model_id=self._hf_model_id or self.model_id,
+                quantize=self._reload_quantize,
+                quant_bits=self._reload_quant_bits,
+                quant_mode=self._reload_quant_mode,
+            )
+            with self._lock:
+                self._model_ref = provider._model
+                self._tokenizer = provider._tokenizer
+                self._local_backend = LocalBackend(
+                    model=provider._model,
+                    tokenizer=provider._tokenizer,
+                    lock=self._lock,
+                    gen_lock=self._gen_lock,
+                    device="cpu",
+                    tokenize_cache=self._tokenize_cache,
+                )
+                self._status = ModelStatus.READY
+            logger.info(
+                "Model %s reloaded (idle) — ready to serve", self.model_id,
+                extra={"tag": "IDLE"},
+            )
+        except Exception as e:
+            logger.error(
+                "Idle reload failed for %s: %s", self.model_id, e,
+                extra={"tag": "IDLE"},
+            )
 
     @property
     def _resolved_device(self) -> str:
@@ -1230,7 +1508,6 @@ class ModelServer:
         if self._model_ref is None:
             return
         try:
-            import torch
             if hasattr(self._model_ref, "past_key_values"):
                 self._model_ref.past_key_values = None
             for attr in ("_past_key_values", "kv_cache", "_cache"):
@@ -1430,6 +1707,11 @@ class ModelServer:
         """
         with self._metrics_lock:
             self.metrics.requests_total += 1
+            self.metrics.last_request_time = time.time()
+
+        # Touch idle manager — updates last request timestamp, auto-reloads if needed
+        if self._idle_timeout_s > 0:
+            get_idle_manager().touch(self.model_id)
 
         # Circuit breaker check
         if self._circuit_breaker and not self._circuit_breaker.allow_request():
@@ -1614,6 +1896,11 @@ class ModelServer:
         """
         with self._metrics_lock:
             self.metrics.requests_total += 1
+            self.metrics.last_request_time = time.time()
+
+        # Touch idle manager — updates last request timestamp, auto-reloads if needed
+        if self._idle_timeout_s > 0:
+            get_idle_manager().touch(self.model_id)
 
         # Circuit breaker check
         if self._circuit_breaker and not self._circuit_breaker.allow_request():

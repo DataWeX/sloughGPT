@@ -99,7 +99,7 @@ class EmbeddingService:
         """Compute and cache MD5 hash of a model checkpoint file.
 
         Args:
-            checkpoint_path: path to .sou checkpoint file. If None, clears hash.
+            checkpoint_path: path to .soul checkpoint file. If None, clears hash.
 
         Returns:
             MD5 hex digest string, or None if no path provided or file not found.

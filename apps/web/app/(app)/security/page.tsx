@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
 import { SecurityOverviewCard } from '@/components/security/SecurityOverviewCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -99,96 +99,90 @@ export default function SecurityPage() {
 
   if (loading) {
     return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Security" subtitle="Audit logs & API keys" />} />
-        <div className="space-y-4">
-          <KpiGrid>
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-          </KpiGrid>
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-          <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
+      <PageContainer title="Security" subtitle="Audit logs & API keys" loadingCards={4}>
+        <KpiGrid>
+          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value="..." />
+        </KpiGrid>
+        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Security" subtitle="Audit logs & API keys" />} />
-      <div className="space-y-4">
-        <KpiGrid>
-          <StatCard label="API Keys" value={keyInfo?.configured ? `${keyInfo.count} configured` : 'None'} />
-          <StatCard label="Audit Logs" value={logs.length} />
-          <StatCard label="History Mode" value={historyMode ? 'Persisted' : 'Session'} />
-          <StatCard label="Filter" value={filter || 'All'} />
-        </KpiGrid>
+    <PageContainer title="Security" subtitle="Audit logs & API keys">
+      <KpiGrid>
+        <StatCard label="API Keys" value={keyInfo?.configured ? `${keyInfo.count} configured` : 'None'} />
+        <StatCard label="Audit Logs" value={logs.length} />
+        <StatCard label="History Mode" value={historyMode ? 'Persisted' : 'Session'} />
+        <StatCard label="Filter" value={filter || 'All'} />
+      </KpiGrid>
 
-        <SecurityOverviewCard
-          logs={logs}
-          apiKeyConfigured={keyInfo?.configured ?? false}
-          apiKeyCount={keyInfo?.count ?? 0}
-        />
+      <SecurityOverviewCard
+        logs={logs}
+        apiKeyConfigured={keyInfo?.configured ?? false}
+        apiKeyCount={keyInfo?.count ?? 0}
+      />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Audit Logs</CardTitle>
-            <div className="flex items-center gap-1">
-              <Button
-                size="sm"
-                variant={historyMode ? 'default' : 'ghost'}
-                onClick={toggleHistory}
-              >
-                {historyMode ? 'Persisted' : 'Session'}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={loadOlder}
-                disabled={loadingMore || !historyMode}
-              >
-                {loadingMore ? 'Loading...' : 'Load older'}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => fetchData(historyMode)} aria-label="Refresh audit logs">
-                <IconRefresh className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Input
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-              placeholder="Filter by event type..."
-            />
-            {filteredLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No audit logs found.</p>
-            ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredLogs.map((log, i) => (
-                  <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{log.event_type}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
-                      </span>
-                    </div>
-                    {log.resource && <div className="text-xs text-muted-foreground mt-0.5">Resource: {log.resource}</div>}
-                    {log.user && <div className="text-xs text-muted-foreground mt-0.5">User: {log.user}</div>}
-                    {log.detail && <div className="text-xs text-muted-foreground mt-0.5">{log.detail}</div>}
-                    {log.extra && Object.keys(log.extra).length > 0 && (
-                      <div className="text-xs text-muted-foreground mt-0.5 font-mono">
-                        {JSON.stringify(log.extra).slice(0, 120)}
-                      </div>
-                    )}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Audit Logs</CardTitle>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant={historyMode ? 'default' : 'ghost'}
+              onClick={toggleHistory}
+            >
+              {historyMode ? 'Persisted' : 'Session'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={loadOlder}
+              disabled={loadingMore || !historyMode}
+            >
+              {loadingMore ? 'Loading...' : 'Load older'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => fetchData(historyMode)} aria-label="Refresh audit logs">
+              <IconRefresh className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            placeholder="Filter by event type..."
+          />
+          {filteredLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No audit logs found.</p>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {filteredLogs.map((log, i) => (
+                <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{log.event_type}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+                  {log.resource && <div className="text-xs text-muted-foreground mt-0.5">Resource: {log.resource}</div>}
+                  {log.user && <div className="text-xs text-muted-foreground mt-0.5">User: {log.user}</div>}
+                  {log.detail && <div className="text-xs text-muted-foreground mt-0.5">{log.detail}</div>}
+                  {log.extra && Object.keys(log.extra).length > 0 && (
+                    <div className="text-xs text-muted-foreground mt-0.5 font-mono">
+                      {JSON.stringify(log.extra).slice(0, 120)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </PageContainer>
   )
 }

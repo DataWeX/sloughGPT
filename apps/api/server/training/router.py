@@ -1,6 +1,6 @@
 """FastAPI routes for char-level training and job orchestration.
 
-Trainer ``step_*.soul`` charset maps: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
+Trainer ``*.soul`` checkpoint charset maps: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 """
 
 from __future__ import annotations
@@ -147,8 +147,8 @@ def _sloughgpt_trainer_kwds(req_snapshot: dict[str, Any]) -> dict[str, Any]:
 async def train(request: TrainRequest):
     """Start a training job (background thread).
 
-    ``SloughGPTTrainer`` writes periodic ``step_*.soul`` under ``checkpoint_dir`` with
-    ``stoi`` / ``itos`` / ``chars`` for char-LM eval; see
+    ``SloughGPTTrainer`` writes periodic ``<dataset>_<timestamp>.soul`` checkpoints under
+    ``checkpoint_dir`` with ``stoi`` / ``itos`` / ``chars`` for char-LM eval; see
     ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
     from domains.training.dataset_manifest import ManifestError
@@ -212,7 +212,7 @@ async def train_resolve(body: TrainResolveRequest) -> dict[str, Any]:
     """Resolve ``data_path`` and checkpoint stem (dry run; no training).
 
     Does not write checkpoint artifacts. After ``POST /train`` or ``POST /training/start``,
-    native ``step_*.soul`` includes char vocab; see ``docs/policies/CONTRIBUTING.md``
+    native ``*.soul`` checkpoints include char vocab; see ``docs/policies/CONTRIBUTING.md``
     (*Checkpoint vocabulary*).
     """
     from domains.training.dataset_manifest import ManifestError
@@ -457,7 +457,7 @@ async def export_feedback_pairs(request: Request):
 async def start_training(request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     """Start a tracked training job (web UI).
 
-    ``step_*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
+    ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
     from domains.training.dataset_manifest import ManifestError
@@ -535,6 +535,10 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     jid = job_id
     cancel_event = threading.Event()
     training_jobs[job_id]["_cancel_event"] = cancel_event
+    pause_event = threading.Event()
+    training_jobs[job_id]["_pause_event"] = pause_event
+    from training.runtime import get_training_runtime
+    get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, req_snapshot)
 
     def run_training(job_id_: str = jid) -> None:
         from domains.training.train_pipeline import SloughGPTTrainer
@@ -570,19 +574,25 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                     rec["eval_loss"] = fe
                     rec["loss"] = fe
                     rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": fe, "type": "eval"})
+                get_training_runtime().sync(jid)
 
             trainer = SloughGPTTrainer(
                 data_path=data_path_for_thread,
                 **_sloughgpt_trainer_kwds(req_snapshot),
                 experiment_tracker=tracker,
             )
-            result = trainer.train(on_progress=on_progress)
+            result = trainer.train(
+                on_progress=on_progress,
+                cancel_event=cancel_event,
+                pause_event=pause_event,
+            )
             safe_stem = "".join(
                 c if c.isalnum() or c in "-_" else "_" for c in out_stem_for_thread
             )[:120]
             if cancel_event.is_set():
                 training_jobs[jid]["status"] = "cancelled"
                 training_jobs[jid]["progress"] = 0
+                get_training_runtime().sync(jid)
                 get_training_controller().complete()
                 return
             trainer.save(f"models/{safe_stem}_trained.soul")
@@ -592,6 +602,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             bel = result.get("best_eval_loss")
             training_jobs[jid]["loss"] = bel if bel is not None and bel < float("inf") else None
             training_jobs[jid]["checkpoint"] = f"models/{safe_stem}_trained.soul"
+            get_training_runtime().sync(jid)
             get_training_controller().complete()
 
             # Trigger webhook notification (fire and forget)
@@ -617,6 +628,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             training_jobs[jid]["status"] = "failed"
             training_jobs[jid]["error"] = str(e)
             training_jobs[jid]["progress"] = 0
+            get_training_runtime().sync(jid)
             get_training_controller().fail(str(e))
 
             # Trigger webhook notification (fire and forget)
@@ -1117,19 +1129,35 @@ async def start_distillation(request: DistillStartRequest):
     def _run_distill(job_id_: str = job_id):
         """Background thread that runs distillation."""
         try:
-            # Load teacher from model registry
+            import numpy as np
+            import random as _random
+            _random.seed(42)
+            np.random.seed(42)
+
+            # Resolve the teacher: prefer the ModelServer (torch HF) from the
+            # model registry; otherwise use the active SloNet provider that the
+            # load path publishes into ServerState (pure NumPy). The former
+            # ``ctrl._hf_model`` fallback is vestigial — it is never assigned,
+            # only deleted on unload — so it cannot supply a teacher.
             from domains.infrastructure.model_registry import get_model_registry
             registry = get_model_registry()
             server = registry.get(request.teacher_model) if registry else None
-            if server is None:
-                # Try loading via HF controllers
-                from controllers.models import get_models_controller
-                ctrl = get_models_controller()
-                teacher_model = ctrl._hf_model
-                teacher_tokenizer = ctrl._tokenizer
-            else:
+
+            slonet_provider = None
+            teacher_model = None
+            teacher_tokenizer = None
+            if server is not None:
                 teacher_model = server._model_ref
                 teacher_tokenizer = getattr(server, "_tokenizer", None)
+            else:
+                from domains.infrastructure.server_state import get_server_state
+                provider = get_server_state().model.get()
+                if (provider is not None
+                        and getattr(provider, "model_id", None) == request.teacher_model):
+                    slonet_provider = provider
+                    teacher_model = getattr(provider, "_get_model", lambda: None)()
+                    if teacher_model is not None:
+                        teacher_tokenizer = provider.tokenize
 
             if teacher_model is None:
                 training_jobs[job_id]["status"] = "failed"
@@ -1138,7 +1166,10 @@ async def start_distillation(request: DistillStartRequest):
 
             # Tokenize training data
             if teacher_tokenizer is not None:
-                tokens = teacher_tokenizer.encode(data_str[:100000])
+                if slonet_provider is not None:
+                    tokens = teacher_tokenizer(data_str[:100000])
+                else:
+                    tokens = teacher_tokenizer.encode(data_str[:100000])
             else:
                 tokens = [ord(c) for c in data_str[:100000]]
 
@@ -1153,18 +1184,19 @@ async def start_distillation(request: DistillStartRequest):
             itos = {i: c for c, i in stoi.items()}
             vocab_size = len(stoi)
 
-            # Create student SloNet LSTM
-            from domains.training.slonet import SloNet, SloAdam
-            from domains.training.train_pipeline import TextDataset as _TextDataset
+            # Create the student — the project's native NumPy transformer.
+            # SloughGPTModel accepts numpy input_ids and returns
+            # ``(logits, loss)``, matching the DistillationTrainer boundary.
+            # (The earlier ``SloNet(vocab_size=...)`` call never matched a
+            # real constructor — this route was unreachable before.)
+            from domains.models import SloughGPTModel
 
-            student = SloNet(
+            student = SloughGPTModel(
                 vocab_size=vocab_size,
-                embed_dim=request.embed_dim,
-                hidden_dim=request.embed_dim * 2,
-                n_layers=request.n_layers,
-                n_heads=request.n_heads or 4,
+                n_embed=request.embed_dim,
+                n_layer=request.n_layers,
+                n_head=request.n_heads or 4,
                 block_size=request.block_size,
-                padding_idx=0,
             )
 
             # Prepare data for training
@@ -1191,17 +1223,29 @@ async def start_distillation(request: DistillStartRequest):
 
             # Create teacher inputs wrapper
             class _TeacherWrapper:
-                def __init__(self, model, tokenizer):
+                """Expose a teacher forward pass to the DistillationTrainer.
+
+                Two teacher backends:
+                - SloNet model (slonet=True): pure NumPy forward pass
+                  ``forward(input_ids, targets=None) -> (logits, loss)``.
+                - torch HF model (registry ModelServer): lazy torch interop.
+                """
+                def __init__(self, model, tokenizer, slonet=False):
                     self._model = model
                     self._tokenizer = tokenizer
+                    self._slonet = slonet
                 def parameters(self):
                     return []
                 def eval(self):
                     pass
                 def __call__(self, x):
-                    import torch
                     import numpy as np
                     if isinstance(x, np.ndarray):
+                        if self._slonet:
+                            logits_t, _ = self._model.forward(x.astype(np.int64), None)
+                            out_np = np.asarray(logits_t.data, dtype=np.float64)[..., :vocab_size]
+                            return np.squeeze(out_np, 0) if out_np.shape[0] == 1 else out_np
+                        import torch
                         seq = "".join(chr(max(32, min(126, t))) for t in x[0] if t < 256)
                         inp = self._tokenizer(seq, return_tensors="pt", truncation=True, max_length=block_size)
                         with torch.no_grad():
@@ -1210,7 +1254,7 @@ async def start_distillation(request: DistillStartRequest):
                         return np.squeeze(out_np, 0) if out_np.shape[0] == 1 else out_np[:, :vocab_size, :]
                     return np.zeros((x.shape[0], vocab_size), dtype=np.float32)
 
-            teacher_wrapper = _TeacherWrapper(teacher_model, teacher_tokenizer)
+            teacher_wrapper = _TeacherWrapper(teacher_model, teacher_tokenizer, slonet=slonet_provider is not None)
 
             from domains.training.distillation import DistillationTrainer, DistillationConfig
             distill_cfg = DistillationConfig(
@@ -1248,8 +1292,10 @@ async def start_distillation(request: DistillStartRequest):
             safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
             ckpt_path = output_dir / f"{safe_stem}_distilled.soul"
 
-            student.export_to_sou(str(ckpt_path), metadata={
-                "model_type": "slonet_lstm",
+            from domains.training.slonet import export_to_sou
+
+            export_to_sou(student, str(ckpt_path), metadata={
+                "model_type": "slonet_distill",
                 "teacher": request.teacher_model,
                 "distill_temperature": request.temperature,
                 "epochs": request.epochs,
@@ -1701,19 +1747,54 @@ async def control_start_training():
     }
 
 
+def _signal_current_job(pause: Optional[bool] = None, cancel: bool = False) -> Dict[str, Any]:
+    """Signal the controller's current job with cooperative control events.
+
+    Sets/clears the job's ``_pause_event`` and sets ``_cancel_event`` so the
+    running ``SloughGPTTrainer`` loop actually pauses or stops. Returns the
+    signals that were applied (empty when there is no tracked job).
+    """
+    controller = get_training_controller()
+    jid = getattr(controller, "current_job_id", None)
+    if not jid:
+        return {}
+    job = training_jobs.get(jid)
+    if not job:
+        return {}
+    signaled: Dict[str, Any] = {}
+    if pause is not None:
+        ev = job.get("_pause_event")
+        if ev is not None:
+            if pause:
+                ev.set()
+                signaled["pause"] = "requested"
+            else:
+                ev.clear()
+                signaled["resume"] = "requested"
+    if cancel:
+        ev = job.get("_cancel_event")
+        if ev is not None:
+            ev.set()
+            signaled["cancel"] = "requested"
+    return signaled
+
+
 @router.post("/training/control/pause")
 async def control_pause_training():
     """
     Pause current training.
 
-    Pauses the training loop if running.
+    Signals the running trainer's ``pause_event``; the loop sleeps at the next
+    step until ``/training/control/resume`` clears it.
     """
     controller = get_training_controller()
     result = controller.pause()
 
     # Notify the training job if it's listening
     if result["success"]:
-        logger.info("Training pause requested", extra={"tag": "TRAIN"})
+        signaled = _signal_current_job(pause=True)
+        logger.info("Training pause requested: %s", signaled or "no tracked job",
+            extra={"tag": "TRAIN"})
 
     return result
 
@@ -1729,7 +1810,9 @@ async def control_resume_training():
     result = controller.resume()
 
     if result["success"]:
-        logger.info("Training resumed", extra={"tag": "TRAIN"})
+        signaled = _signal_current_job(pause=False)
+        logger.info("Training resumed: %s", signaled or "no tracked job",
+            extra={"tag": "TRAIN"})
 
     return result
 
@@ -1749,7 +1832,9 @@ async def control_stop_training():
         for jid, job in training_jobs.items():
             if job.get("status") == "running":
                 job["status"] = "stopping"
-        logger.info("Training stop requested", extra={"tag": "TRAIN"})
+        signaled = _signal_current_job(cancel=True)
+        logger.info("Training stop requested: %s", signaled or "no tracked job",
+            extra={"tag": "TRAIN"})
 
     return result
 
@@ -2186,8 +2271,8 @@ async def check_crashed_jobs(timeout_seconds: int = 300):
     """
     Check for jobs that may have crashed.
 
-    Jobs that are 'running' but haven't sent a heartbeat in timeout_seconds
-    are considered potentially crashed.
+    Jobs that are 'running' (or 'recovering') but haven't sent a heartbeat in
+    timeout_seconds are considered potentially crashed.
     """
     store = get_job_store()
     crashed = store.detect_crashed_jobs(timeout_seconds)
@@ -2218,9 +2303,11 @@ async def get_recoverable_jobs():
 @router.post("/recovery/recover/{job_id}")
 async def recover_job(job_id: str):
     """
-    Recover and restart an interrupted/crashed job.
+    Recover and restart an interrupted/failed job.
 
-    Resumes training from the last checkpoint if available.
+    Also accepts a 'recovering' job whose heartbeat went stale (a previous
+    recovery run that died without completing). Resumes training from the last
+    checkpoint if available.
     """
     store = get_job_store()
     job = store.get(job_id)
@@ -2228,38 +2315,73 @@ async def recover_job(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if job["status"] not in ("interrupted", "failed"):
+    if job["status"] not in ("interrupted", "failed") and not (
+        job["status"] == "recovering" and store.is_stale_heartbeat(job)
+    ):
         raise HTTPException(
             status_code=400,
-            detail=f"Job status is '{job['status']}', only 'interrupted' or 'failed' jobs can be recovered",
+            detail=(
+                f"Job status is '{job['status']}', only 'interrupted' or 'failed' jobs "
+                "(or a 'recovering' job with a stale heartbeat) can be recovered"
+            ),
         )
 
-    # Get config and checkpoint
+    # Get config and checkpoint. The store's checkpoint_dir column is only
+    # written on completion, so interrupted jobs have it NULL — the job's
+    # stored request config is the authoritative source for the scan directory.
     config = job.get("config", {})
     data_path = job.get("data_path", "")
     checkpoint_path = job.get("checkpoint_path", "")
-    checkpoint_dir = job.get("checkpoint_dir", "checkpoints")
+    checkpoint_dir = job.get("checkpoint_dir") or config.get("checkpoint_dir") or "checkpoints"
     job_name = job.get("name", "recovered_job")
 
-    # Find checkpoint
-    from pathlib import Path
+    # Resolve the checkpoint to resume from. A job's recorded path is loaded
+    # exactly once, here in the request handler. The job explicitly points at
+    # it, so a recorded path that is missing, unsupported, or unreadable fails
+    # the recovery request loudly (422) — resuming from a different checkpoint
+    # would silently change what is being resumed. Only when the job recorded
+    # NO checkpoint path do we fall back to the newest file that actually loads
+    # (skipping partial/corrupt checkpoints — a crash mid-write can leave the
+    # newest file unreadable). The loaded bundle is handed to train() so no
+    # second load happens in the worker thread.
+    from domains.training.train_pipeline import CheckpointManager
 
-    if checkpoint_path and Path(checkpoint_path).exists():
-        pass  # Use existing checkpoint_path
+    manager = CheckpointManager(checkpoint_dir)
+    resume_bundle = None
+    if checkpoint_path:
+        if not CheckpointManager.is_resumable(checkpoint_path):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                    "unsupported (use a .soul or .npz file)"
+                ),
+            )
+        try:
+            resume_bundle = CheckpointManager.load_from_path(checkpoint_path)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})",
+            ) from exc
+        if resume_bundle is None:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                    "unsupported (use a .soul or .npz file)"
+                ),
+            )
     else:
-        # Try to find any checkpoint in the checkpoint dir
-        checkpoint_dir_path = Path(checkpoint_dir)
-        if checkpoint_dir_path.exists():
-            checkpoints = list(checkpoint_dir_path.glob("step_*.soul")) + list(
-                checkpoint_dir_path.glob("*.soul")
-            ) + list(checkpoint_dir_path.glob("*.npz"))
-            if checkpoints:
-                latest = max(checkpoints, key=lambda p: p.stat().st_mtime)
-                checkpoint_path = str(latest)
+        checkpoint_path, resume_bundle = manager.load_latest_with_path()
+        checkpoint_path = checkpoint_path or ""
 
-    # Create recovery job in training_jobs
+    # Create recovery job in training_jobs. config is spread first so the
+    # explicit control fields (id, status, checkpoint_*) always win over any
+    # matching keys persisted in the original request config.
     recovery_job_id = f"recovery_{job_id}"
     recovery_job = {
+        **config,
         "id": recovery_job_id,
         "name": f"Recovered: {job_name}",
         "model": config.get("model", "sloughgpt"),
@@ -2272,12 +2394,12 @@ async def recover_job(job_id: str):
         "checkpoint_path": checkpoint_path,
         "checkpoint_dir": checkpoint_dir,
         "original_job_id": job_id,
-        **config,
     }
     training_jobs[recovery_job_id] = recovery_job
 
-    # Update job store
-    store.update(job_id, status="recovering", crashed=0)
+    # Update job store — fresh heartbeat so an actively-recovered row is never
+    # mistaken for crashed or still-recoverable while the run is alive.
+    store.mark_recovering(job_id)
 
     # Update controller
     controller = get_training_controller()
@@ -2286,22 +2408,21 @@ async def recover_job(job_id: str):
     # Start recovery in background thread
     jid = recovery_job_id
     checkpoint_for_recovery = checkpoint_path
+    cancel_event = threading.Event()
+    pause_event = threading.Event()
+    recovery_job["_cancel_event"] = cancel_event
+    recovery_job["_pause_event"] = pause_event
 
     def run_recovery(job_id_: str = jid):
         try:
             from domains.training.train_pipeline import SloughGPTTrainer
 
+            # Reuse the SAME trainer configuration builder as /training/start so
+            # the recovered run continues with the original job's hyperparameters
+            # (LoRA, dropout, scheduler, device, ...) instead of a fixed subset.
             trainer_config = {
                 "data_path": recovery_job.get("data_path", ""),
-                "epochs": recovery_job.get("epochs", 10),
-                "batch_size": recovery_job.get("batch_size", 32),
-                "lr": recovery_job.get("learning_rate", 1e-3),
-                "n_embed": recovery_job.get("n_embed", 256),
-                "n_layer": recovery_job.get("n_layer", 6),
-                "n_head": recovery_job.get("n_head", 8),
-                "block_size": recovery_job.get("block_size", 128),
-                "checkpoint_dir": recovery_job.get("checkpoint_dir", "checkpoints"),
-                "checkpoint_interval": recovery_job.get("checkpoint_interval", 500),
+                **_sloughgpt_trainer_kwds(recovery_job),
             }
 
             def on_progress(info: dict):
@@ -2311,32 +2432,52 @@ async def recover_job(job_id: str):
                 rec["progress"] = int(info.get("progress_percent", rec.get("progress", 0)))
                 rec["current_epoch"] = int(info.get("epoch", rec.get("current_epoch", 0)))
                 rec["global_step"] = int(info.get("global_step", 0))
+                rec["total_steps"] = int(info.get("total_steps", rec.get("total_steps", 0)))
+                rec["steps_per_sec"] = info.get("steps_per_sec", rec.get("steps_per_sec"))
+                rec["eta_s"] = info.get("eta_s", rec.get("eta_s"))
+                rec["elapsed_s"] = info.get("elapsed_s", rec.get("elapsed_s"))
                 tl = info.get("train_loss")
                 if tl is not None:
+                    rec["train_loss"] = float(tl)
                     rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": float(tl), "type": "train"})
                 el = info.get("eval_loss")
                 if el is not None:
-                    rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": float(el), "type": "eval"})
+                    fe = float(el)
+                    rec["eval_loss"] = fe
+                    rec["loss"] = fe
+                    rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": fe, "type": "eval"})
                 store.update_progress(
-                    jid, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
+                    job_id, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
                 )
 
             trainer = SloughGPTTrainer(**trainer_config)
 
-            # Resume from checkpoint if available
-            result = trainer.train(
+            # Resume from checkpoint if available (bundle pre-loaded once in the
+            # request handler — no disk load happens in this thread)
+            trainer.train(
                 on_progress=on_progress,
                 resume=True,
-                resume_path=checkpoint_for_recovery,
+                resume_checkpoint=resume_bundle,
+                cancel_event=cancel_event,
+                pause_event=pause_event,
             )
 
-            # Mark as completed
+            # Mark as completed. The recovery job lives in-memory only; the
+            # persistent original row is the durable record, so terminal state
+            # and the produced checkpoint path are written to it.
+            if cancel_event.is_set():
+                training_jobs[jid]["status"] = "cancelled"
+                training_jobs[jid]["progress"] = 0
+                store.update(job_id, status="interrupted")
+                controller.complete()
+                return
+
             training_jobs[jid]["status"] = "completed"
             training_jobs[jid]["progress"] = 100
-            store.mark_completed(
-                jid, checkpoint_for_recovery or trainer_config["checkpoint_dir"] + "/final.soul"
-            )
-            store.update(job_id, status="recovered")
+            recovery_checkpoint = getattr(trainer, "_last_checkpoint_path", None) or checkpoint_for_recovery
+            training_jobs[jid]["checkpoint_path"] = recovery_checkpoint
+            training_jobs[jid]["checkpoint"] = recovery_checkpoint
+            store.mark_completed(job_id, recovery_checkpoint or "")
             controller.complete()
 
             # Trigger webhook
@@ -2361,7 +2502,7 @@ async def recover_job(job_id: str):
             logger.error("Recovery failed: %s", e, extra={"tag": "TRAIN"})
             training_jobs[jid]["status"] = "failed"
             training_jobs[jid]["error"] = str(e)
-            store.mark_failed(jid, str(e))
+            store.mark_failed(job_id, str(e))
             controller.fail()
 
     executor = get_training_executor()

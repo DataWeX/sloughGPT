@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 
 import { Providers } from './Providers'
-import { MODE_STORAGE_KEY, THEME_IDS, THEME_STORAGE_KEY } from '@/lib/theme-storage'
+import { MODE_STORAGE_KEY, THEME_IDS, THEME_STORAGE_KEY, PALETTE_IDS, PALETTE_STORAGE_KEY } from '@/lib/theme-storage'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import WebVitals from '@/components/WebVitals'
@@ -34,7 +34,7 @@ export const viewport: Viewport = {
 }
 
 /** Runs before React hydrates; ``useLayoutEffect`` in ThemeProvider re-syncs after any className reconciliation. */
-const themeBootstrapInline = `!function(){try{var k=${JSON.stringify([...THEME_IDS])};var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var m=localStorage.getItem(${JSON.stringify(MODE_STORAGE_KEY)});var r=document.documentElement;var th=k.indexOf(t)>=0?t:"purple";var mo="light"===m||"dark"===m?m:"dark";r.classList.remove("light","dark");k.forEach(function(id){r.classList.remove("theme-"+id)});r.classList.add(mo,"theme-"+th);}catch(e){}}();`
+const themeBootstrapInline = `!function(){try{var k=${JSON.stringify([...THEME_IDS])};var p=${JSON.stringify([...PALETTE_IDS])};var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var m=localStorage.getItem(${JSON.stringify(MODE_STORAGE_KEY)});var pl=localStorage.getItem(${JSON.stringify(PALETTE_STORAGE_KEY)});var r=document.documentElement;var th=k.indexOf(t)>=0?t:"purple";var mo="light"===m||"dark"===m?m:"dark";var pa=p.indexOf(pl)>=0?pl:"noir-violet";r.classList.remove("light","dark");k.forEach(function(id){r.classList.remove("theme-"+id)});p.forEach(function(id){r.classList.remove("palette-"+id)});r.classList.add(mo,"theme-"+th);if(pa!=="noir-violet"){r.classList.add("palette-"+pa);}}catch(e){}}();`
 export default function RootLayout({
   children,
 }: {

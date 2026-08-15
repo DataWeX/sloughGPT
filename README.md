@@ -13,7 +13,7 @@ Self-hosted LLM infrastructure with local model training, inference, and experim
 - **Experiment Tracking** - MLflow-style metrics and parameter logging
 - **Federated Learning** - Privacy-preserving distributed training
 - **Benchmarking** - Performance metrics and model comparison
-- **Optimizations** - Mixed precision, gradient checkpointing, torch.compile, Flash Attention
+- **Optimizations** - KV cache inference, Quantine quantization, threshold-gated accelerator dispatch
 - **API Security** - JWT auth, rate limiting, input validation, audit logging
 - **Batch Processing** - Process up to 50 prompts in one request
 - **Response Caching** - TTL-based caching with hit/miss stats
@@ -32,13 +32,13 @@ Self-hosted LLM infrastructure with local model training, inference, and experim
 # Char-level training: merges config.yaml with flags (see apps/cli/README.md)
 ./sloughgpt train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
 
-# Char-LM perplexity (fair when stoi/itos/chars are on the checkpoint, e.g. cli.py train step_*.pt)
-./sloughgpt eval --checkpoint models/sloughgpt.pt --data datasets/shakespeare/input.txt
+# Char-LM perplexity (fair when stoi/itos/chars are on the checkpoint, e.g. sloughgpt train step_*.soul)
+./sloughgpt eval --checkpoint models/sloughgpt.soul --data datasets/shakespeare/input.txt
 # python3 -m domains.training.lm_eval_char --checkpoint PATH --data PATH [--json]
 # docs/policies/CONTRIBUTING.md — Checkpoint vocabulary (char LM)
 
-# Benchmark inference
-./sloughgpt benchmark -m gpt2 -d mps
+# Benchmark inference (pure-numpy SloNet .soul checkpoints)
+./sloughgpt benchmark -m models/sloughgpt.soul
 
 # Check optimizations
 ./sloughgpt optimize
@@ -46,7 +46,7 @@ Self-hosted LLM infrastructure with local model training, inference, and experim
 # System info
 ./sloughgpt system
 
-# Generate text (local: models/sloughgpt.sou, else newest models/*.sou, else sloughgpt_finetuned.pt)
+# Generate text (local: models/sloughgpt.soul, else newest models/*.soul)
 ./sloughgpt generate "Hello world"
 ./sloughgpt gen "Hello world"   # alias
 
@@ -119,7 +119,7 @@ python3 -m pip install -e ".[dev]"   # optional; includes ruff + pytest among de
 ### Google Colab
 Use `sloughgpt_colab.ipynb` in the repo root. After the runtime can see the repo (clone or upload), run the dependency cell: it installs base packages plus **`python3 -m pip install -e .`** so **`cli.py`** and **`domains`** imports resolve.
 
-Recommended order: **§2** (dataset; default Shakespeare → `datasets/shakespeare.txt` via Karpathy URL), **§3** (device + imports), **§4–§6** (CONFIG, model, exploration). Train with exactly one path: manual **§7** loop, **`RUN_TRAIN_PIPELINE`** in **§7b** (`train_sloughgpt()`), or the optional **`SloughGPTTrainer`** cell (skip the others). Then **§8+** (generation / Soul).
+Recommended order: **§2** (dataset; default Shakespeare → `datasets/shakespeare.txt` via Karpathy URL), **§3** (device + imports), **§4–§6** (CONFIG, model, exploration). Train with exactly one path: manual **§7** loop or the **`SloughGPTTrainer`** cell (skip the others). Then **§8+** (generation / Soul).
 
 Then a typical one-shot chat + model load is:
 
@@ -167,10 +167,9 @@ config = Presets.cpu_only()        # CPU training
 ```
 
 Optimizations:
-- Mixed Precision (FP16/BF16) - 2-3x speedup
-- Gradient Checkpointing - 50% memory savings
-- torch.compile - 1.5-2x speedup
-- Flash Attention (NVIDIA/AMD) - 2-4x speedup
+- KV cache inference - faster multi-turn decoding
+- Quantine per-tensor quantization - INT8/INT4 on CPU
+- Threshold-gated accelerator dispatch (Metal/CUDA/OpenCL)
 
 ## API Endpoints
 
@@ -266,7 +265,7 @@ curl http://localhost:8000/inference/stats
 
 ### Training
 
-Native trainer `step_*.pt` on the API host includes `stoi` / `itos` / `chars` for fair `cli.py eval`; see **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
+Native trainer `step_*.soul` on the API host includes `stoi` / `itos` / `chars` for fair `sloughgpt eval`; see **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
 
 ```bash
 # Start training
@@ -300,10 +299,10 @@ curl http://localhost:8000/benchmark/compare
 
 ### Model Export
 
-Export artifacts (API or `cli.py export`) are for deployment; char-LM perplexity parity uses native trainer `step_*.pt` — **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
+Export artifacts (API or `sloughgpt export`) are for deployment; char-LM perplexity parity uses native trainer `step_*.soul` — **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
 
 ```bash
-# Export model (SafeTensors, Torch, ONNX, GGUF, .sou)
+# Export model (.soul, SafeTensors, GGUF, ONNX)
 curl -X POST http://localhost:8000/model/export \
   -H "Content-Type: application/json" \
   -d '{"output_path": "models/exported", "format": "safetensors"}'
@@ -311,10 +310,10 @@ curl -X POST http://localhost:8000/model/export \
 # List formats
 curl http://localhost:8000/model/export/formats
 
-# CLI export examples (see cli.py export --help; -f is an alias for --format)
-./sloughgpt export models/sloughgpt.pt -f safetensors
-./sloughgpt export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M  # mobile
-./sloughgpt export models/sloughgpt.pt -f onnx --seq-len 128            # cross-platform
+# CLI export examples (see sloughgpt export --help; -f is an alias for --format)
+./sloughgpt export models/sloughgpt.soul -f safetensors
+./sloughgpt export models/sloughgpt.soul -f gguf_q4_k_m --quantize Q4_K_M  # mobile
+./sloughgpt export models/sloughgpt.soul -f onnx --seq-len 128             # cross-platform
 ```
 
 ### Soul Engine
@@ -410,7 +409,7 @@ SloughGPT/
 ## Installation
 
 ```bash
-python3 -m pip install torch transformers fastapi uvicorn
+python3 -m pip install transformers fastapi uvicorn
 ```
 
 ## Development
@@ -421,7 +420,7 @@ python3 apps/api/server/main.py
 
 # Train a model (after `pip install -e .`; same as packages/core-py `domains.training.train_pipeline`)
 python3 -m domains.training.train_pipeline --data datasets/shakespeare/input.txt --epochs 5
-# Periodic step_*.pt embeds stoi/itos/chars for cli.py eval — docs/policies/CONTRIBUTING.md (Checkpoint vocabulary)
+# Periodic step_*.soul embeds stoi/itos/chars for sloughgpt eval — docs/policies/CONTRIBUTING.md (Checkpoint vocabulary)
 ```
 
 ## Contributing & security

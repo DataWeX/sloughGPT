@@ -110,7 +110,7 @@ def check_models():
         print("  Models directory not found")
         return
 
-    models = list(models_dir.glob("*.pt")) + list(models_dir.glob("*.pth"))
+    models = sorted(models_dir.glob("*.soul")) + sorted(models_dir.glob("*.gguf"))
     if models:
         for m in models:
             size = m.stat().st_size / (1024**2)

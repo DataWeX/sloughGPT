@@ -1,8 +1,8 @@
 """
-Torch-free model loading using safetensors + numpy.
+Model loading using safetensors + numpy.
 
-Loads HuggingFace model weights directly from .safetensors files
-without requiring PyTorch. Weights are loaded as numpy arrays.
+Loads HuggingFace model weights directly from .safetensors files.
+Weights are loaded as numpy arrays.
 
 Usage:
     from domains.infrastructure.safetensors_loader import load_model_weights

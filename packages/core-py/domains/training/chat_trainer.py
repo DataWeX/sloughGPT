@@ -1,7 +1,7 @@
 """
 SloChatTrainer — Train a small SloTransformer directly from chat data.
 
-Pure NumPy pipeline — zero PyTorch dependency. Extracts (user, assistant)
+Pure NumPy pipeline. Extracts (user, assistant)
 pairs from chat sessions, builds a character-level tokenizer, and trains
 a small decoder-only transformer via next-token prediction.
 

@@ -20,6 +20,7 @@ vi.mock('@sloughgpt/strui', () => {
     IconRefresh: iconMock('refresh'), IconTrash: iconMock('trash'),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div>{label}: {value}</div>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })
 

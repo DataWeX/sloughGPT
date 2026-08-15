@@ -26,6 +26,7 @@ vi.mock('@sloughgpt/strui', () => {
     AlertDialogContent: passthrough, AlertDialogDescription: passthrough,
     AlertDialogFooter: passthrough, AlertDialogHeader: passthrough, AlertDialogTitle: passthrough,
     EmptyCard: ({ title, description }: any) => <div data-testid="empty-card"><div>{title}</div><div>{description}</div></div>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
@@ -34,11 +35,6 @@ vi.mock('@sloughgpt/strui', () => {
     IconClock: () => <span>clock</span>,
   }
 })
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div>{left}{right}</div>,
-  AppRouteHeaderLead: ({ title }: any) => <h1>{title}</h1>,
-}))
 
 vi.mock('@/components/icons/NavIcons', () => ({
   IconPlus: () => <span>+</span>,

@@ -409,7 +409,7 @@ def create_slo_guard(
     """Create a ProcessGuard for a SloNet model (pure NumPy).
 
     Loads the model in a subprocess via ``SloNetChatProvider.from_slnc()``
-    and streams via ``generate_numpy_stream()``. Zero PyTorch dependency.
+    and streams via ``generate_numpy_stream()``.
 
     Args:
         slnc_path: Path to the .slnc weight file.

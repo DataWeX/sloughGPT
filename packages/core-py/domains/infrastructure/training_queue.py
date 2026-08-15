@@ -15,13 +15,42 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import threading
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("slo.training_queue")
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _json_safe_payload(o: Any) -> Any:
+    """Recursively make a value JSON-serialisable for an SSE event payload.
+
+    Non-finite floats (``inf``/``nan``) are replaced with ``None`` because the
+    SSE envelope serialises with ``json.dumps`` (which rejects them), and a
+    trainer with no eval run can legitimately produce ``perplexity=inf``.
+
+    Args:
+        o: Arbitrary value (dict, list, tuple, dataclass, scalar).
+
+    Returns:
+        A JSON-serialisable copy of ``o`` with non-finite floats replaced by ``None``.
+
+    Side effects:
+        None — the input is not mutated.
+    """
+    if isinstance(o, dict):
+        return {k: _json_safe_payload(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_safe_payload(v) for v in o]
+    if is_dataclass(o):
+        return _json_safe_payload(asdict(o))
+    if isinstance(o, float) and not math.isfinite(o):
+        return None
+    return o
 
 
 async def training_handler(task) -> dict:
@@ -58,6 +87,14 @@ async def training_handler(task) -> dict:
             if task.cancel_event.is_set():
                 cancel_event.set()
                 return
+            try:
+                import routers.auto_train as _at
+                at_cancel = getattr(_at, "_auto_train_cancel_event", None)
+                if at_cancel is not None and at_cancel.is_set():
+                    cancel_event.set()
+                    return
+            except Exception:
+                pass
             await asyncio.sleep(0.1)
 
     async def _bridge_pause():
@@ -139,6 +176,12 @@ async def training_handler(task) -> dict:
             from domains.api.sse_envelope import sse_complete
             enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
             return {"status": "cancelled"}
+        from domains.api.sse_envelope import sse_complete
+        enqueue(sse_complete(
+            "auto-train",
+            data=_json_safe_payload(result),
+            message="Training complete",
+        ))
         return result
     except InterruptedError:
         from domains.api.sse_envelope import sse_complete
@@ -174,6 +217,14 @@ async def training_sessions_handler(task) -> dict:
             if task.cancel_event.is_set():
                 cancel_event.set()
                 return
+            try:
+                import routers.auto_train as _at
+                at_cancel = getattr(_at, "_auto_train_cancel_event", None)
+                if at_cancel is not None and at_cancel.is_set():
+                    cancel_event.set()
+                    return
+            except Exception:
+                pass
             await asyncio.sleep(0.1)
 
     cancel_task = asyncio.create_task(_bridge_cancel())
@@ -222,6 +273,12 @@ async def training_sessions_handler(task) -> dict:
             from domains.api.sse_envelope import sse_complete
             enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
             return {"status": "cancelled"}
+        from domains.api.sse_envelope import sse_complete
+        enqueue(sse_complete(
+            "auto-train",
+            data=_json_safe_payload(metadata),
+            message="Training complete",
+        ))
         return metadata
     except InterruptedError:
         from domains.api.sse_envelope import sse_complete

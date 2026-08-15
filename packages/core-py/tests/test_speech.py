@@ -152,7 +152,7 @@ class TestLoadModel:
         with caplog.at_level("WARNING"):
             rec.load_model()
         assert rec._backend is None
-        assert any("No torch-free ASR backend" in r.message for r in caplog.records)
+        assert any("No ASR backend available" in r.message for r in caplog.records)
 
     def test_vosk_backend(self, with_vosk):
         rec = ServerSpeechRecognizer()

@@ -132,7 +132,7 @@ python3 apps/api/server/main.py
 
 ## Training console
 
-The **Training** page calls `POST /training/start`. Native trainer `step_*.pt` files on the API host embed `stoi` / `itos` / `chars` for fair `cli.py eval`; formats and caveats are in [docs/policies/CONTRIBUTING.md](../../docs/policies/CONTRIBUTING.md) (*Checkpoint vocabulary*).
+The **Training** page calls `POST /training/start`. Native trainer `.soul` files on the API host embed `stoi` / `itos` / `chars` for fair `cli.py eval`; formats and caveats are in [docs/policies/CONTRIBUTING.md](../../docs/policies/CONTRIBUTING.md) (*Checkpoint vocabulary*).
 
 ## License
 

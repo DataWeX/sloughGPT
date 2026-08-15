@@ -119,7 +119,7 @@ describe('vmController', () => {
         max_steps: 1000000,
         default_memory: 0x100000,
         max_memory: 0x1000000,
-        registers: ['EAX', 'ECX'],
+        registers: { eax: { size_bits: 32, name: 'EAX' }, ecx: { size_bits: 32, name: 'ECX' } },
         features: ['protected mode'],
       }
       mockGet('/vm/info', fakeInfo)
@@ -127,7 +127,7 @@ describe('vmController', () => {
       const result = await vmController.info()
       expect(apiClient.apiGet).toHaveBeenCalledWith('/vm/info')
       expect(result.isa).toBe('x86-32')
-      expect(result.registers).toContain('EAX')
+      expect(result.registers.eax).toBeDefined()
       expect(result.features).toContain('protected mode')
     })
   })

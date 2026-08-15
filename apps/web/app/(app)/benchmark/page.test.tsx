@@ -10,7 +10,10 @@ const {
 }))
 
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; return C }
+  const iconMock = (name: string) => {
+    const C = () => <span data-testid={'icon-' + name}>{name}</span>
+    return C
+  }
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
@@ -22,16 +25,13 @@ vi.mock('@sloughgpt/strui', () => {
     Textarea: ({ value, onChange, placeholder }: any) => (
       <textarea value={value} onChange={onChange} placeholder={placeholder} />
     ),
-    StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
+    StatCard: ({ label, value }: any) => <div data-testid={'stat-' + label}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: iconMock('refresh'),
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    EmptyCard: ({ title, description }: any) => <div data-testid="empty-card"><div>{title}</div><div>{description}</div></div>,
   }
 })
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div>{left}{right}</div>,
-  AppRouteHeaderLead: ({ title }: any) => <h1>{title}</h1>,
-}))
 
 vi.mock('@/lib/benchmark-controller', () => ({
   benchmarkController: {
@@ -74,7 +74,9 @@ beforeEach(() => {
 describe('BenchmarkPage — initial load flow', () => {
   it('renders header', async () => {
     render(<BenchmarkPage />)
-    expect(screen.getByText('Benchmark')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Benchmark')).toBeTruthy()
+    })
   })
 
   it('fetches metrics, quality, and stats on mount', async () => {
@@ -89,8 +91,8 @@ describe('BenchmarkPage — initial load flow', () => {
   it('shows loading state initially', async () => {
     mockRun.mockReturnValue(new Promise(() => {})) // never resolves
     render(<BenchmarkPage />)
-    // Should render without crashing while loading
-    expect(screen.getByText('Benchmark')).toBeTruthy()
+    // Should render skeleton while loading
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
   })
 })
 
@@ -98,10 +100,8 @@ describe('BenchmarkPage — metrics tab flow', () => {
   it('displays metrics after loading', async () => {
     render(<BenchmarkPage />)
     await waitFor(() => {
-      // Stats should be loaded
-      expect(mockStats).toHaveBeenCalled()
+      expect(screen.getByText('Benchmark')).toBeTruthy()
     })
-    // Page renders without crashing with metrics data
     expect(screen.getByText('Benchmark')).toBeTruthy()
   })
 

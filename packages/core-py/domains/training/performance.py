@@ -1,15 +1,15 @@
 """
 Performance Optimization Module for SloughGPT
 
-High-performance training and inference optimizations, torch-free:
+High-performance training and inference optimizations:
 - Optimized batching: pre-allocated arrays, vectorized operations
 - Fast sampling: fused top-k/top-p/repetition penalty on numpy
 - KV Cache: efficient cache management for inference
 - Memory optimization: channel-last, gradient checkpointing
 
-CUDA-specific accelerations (CUDA graphs, ``torch.compile``) degrade
-gracefully to plain numpy when PyTorch is unavailable — SloNet models
-always train and infer on the numpy stack.
+CUDA-specific accelerations (CUDA graphs, ``torch.compile``) are no-ops on
+the numpy SloNet stack — SloNet models always train and infer on numpy.
+Device detection is platform-based and never imports torch.
 
 Usage:
     from domains.training.performance import optimize_training, optimize_inference
@@ -26,15 +26,6 @@ import logging
 import numpy as np
 
 logger = logging.getLogger("slo.performance")
-
-
-def _torch_or_none():
-    """Return the real torch module if importable, else None (torch-free)."""
-    try:
-        import torch  # type: ignore
-        return torch  # pragma: no cover (torch-only)
-    except ImportError:
-        return None
 
 
 @dataclass
@@ -99,50 +90,45 @@ class PerformanceConfig:
 
 
 def get_optimal_device() -> str:
-    """Auto-detect best available device (torch-free; degrades to CPU)."""
-    torch = _torch_or_none()
-    if torch is not None:
-        if getattr(torch, "cuda", None) and torch.cuda.is_available():  # pragma: no cover (torch-only)
-            return "cuda"  # pragma: no cover (torch-only)
-        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():  # pragma: no cover (torch-only)
-            return "mps"  # pragma: no cover (torch-only)
-    return "cpu"
+    """Auto-detect best available device (degrades to CPU).
+
+    Delegates to ``ml_types.auto_device()`` — platform-based detection
+    (MPS via Apple Silicon, CUDA via CuPy) with no torch import.
+    """
+    from domains.infrastructure.ml_types import auto_device
+    return auto_device()
 
 
 def get_device_name() -> str:
     """Get human-readable device name."""
-    torch = _torch_or_none()
-    if torch is not None:
-        if getattr(torch, "cuda", None) and torch.cuda.is_available():  # pragma: no cover (torch-only)
-            return torch.cuda.get_device_name(0)  # pragma: no cover (torch-only)
-        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():  # pragma: no cover (torch-only)
-            return "Apple Silicon (MPS)"  # pragma: no cover (torch-only)
+    device = get_optimal_device()
+    if device == "cuda":
+        try:
+            import cupy as cp
+            props = cp.cuda.runtime.getDeviceProperties(0)
+            return str(props["name"])
+        except Exception:
+            return "CUDA"
+    if device == "mps":
+        return "Apple Silicon (MPS)"
     return "CPU"
 
 
 def setup_device_environment():
     """Setup optimal device environment variables.
 
-    PyTorch-specific CUDA knobs are set only when torch is present.
+    No-op on the numpy SloNet stack — torch CUDA knobs are not used.
     """
-    torch = _torch_or_none()
-    if torch is None:
-        return
-    if getattr(torch, "cuda", None) and torch.cuda.is_available():  # pragma: no cover (torch-only)
-        torch.backends.cudnn.benchmark = True  # pragma: no cover (torch-only)
-        torch.backends.cuda.matmul.allow_tf32 = True  # pragma: no cover (torch-only)
-        torch.backends.cudnn.allow_tf32 = True  # pragma: no cover (torch-only)
-        if hasattr(torch.cuda, "set_sync_debug_mode"):  # pragma: no cover (torch-only)
-            torch.cuda.set_sync_debug_mode(torch.cuda.sync_debug_mode.OFF)  # pragma: no cover (torch-only)
+    return None
 
 
 class CUDAGraphManager:
     """Manages CUDA graphs for kernel capture/replay.
 
-    CUDA graphs require PyTorch + CUDA. Without them this manager is a
-    transparent no-op: ``capture()`` returns False and ``replay()`` falls
-    back to a plain forward pass, keeping callers working on the numpy
-    SloNet stack.
+    CUDA graphs require PyTorch + CUDA. On the numpy SloNet stack this
+    manager is a transparent no-op: ``capture()`` returns False and
+    ``replay()`` falls back to a plain forward pass, keeping callers
+    working on the numpy SloNet stack.
     """
 
     def __init__(self, model, config: InferenceOptimizations):
@@ -151,13 +137,7 @@ class CUDAGraphManager:
         self.graphs: Dict[int, Any] = {}
         self.static_inputs: Dict[int, Any] = {}
         self.static_outputs: Optional[np.ndarray] = None
-        torch = _torch_or_none()
-        self._enabled = (
-            config.use_cuda_graphs
-            and torch is not None
-            and getattr(torch, "cuda", None) is not None
-            and torch.cuda.is_available()
-        )
+        self._enabled = False
 
     def capture(
         self,
@@ -165,61 +145,16 @@ class CUDAGraphManager:
         seq_len: int,
         vocab_size: int,
     ) -> bool:
-        """Capture a CUDA graph for given input shape."""
-        if not self._enabled:
-            return False
-        key = (batch_size, seq_len)  # pragma: no cover (CUDA-graphs only)
-        if key in self.graphs:  # pragma: no cover (CUDA-graphs only)
-            return True  # pragma: no cover (CUDA-graphs only)
-        try:  # pragma: no cover (CUDA-graphs only)
-            torch = _torch_or_none()  # pragma: no cover (CUDA-graphs only)
-            torch.cuda.synchronize()  # pragma: no cover (CUDA-graphs only)
-            torch.cuda.reset_peak_memory_stats()  # pragma: no cover (CUDA-graphs only)
+        """Capture a CUDA graph for given input shape.
 
-            static_input = torch.zeros(  # pragma: no cover (CUDA-graphs only)
-                batch_size, seq_len, dtype=torch.long, device="cuda"
-            )  # pragma: no cover (CUDA-graphs only)
-            self.static_inputs[key] = static_input  # pragma: no cover (CUDA-graphs only)
-
-            g = torch.cuda.CUDAGraph()  # pragma: no cover (CUDA-graphs only)
-            self.static_outputs = torch.zeros(  # pragma: no cover (CUDA-graphs only)
-                batch_size, seq_len, vocab_size, dtype=torch.float16, device="cuda"
-            )  # pragma: no cover (CUDA-graphs only)
-
-            with torch.cuda.graph(g):  # pragma: no cover (CUDA-graphs only)
-                output = self.model(static_input)  # pragma: no cover (CUDA-graphs only)
-                if isinstance(output, tuple):  # pragma: no cover (CUDA-graphs only)
-                    logits = output[0]  # pragma: no cover (CUDA-graphs only)
-                else:  # pragma: no cover (CUDA-graphs only)
-                    logits = output  # pragma: no cover (CUDA-graphs only)
-                logits.copy_(logits)  # pragma: no cover (CUDA-graphs only)
-
-            self.graphs[key] = g  # pragma: no cover (CUDA-graphs only)
-            logger.info(f"Captured CUDA graph for shape {key}",  # pragma: no cover (CUDA-graphs only)
-                extra={"tag": "TRAIN"},)  # pragma: no cover (CUDA-graphs only)
-            return True  # pragma: no cover (CUDA-graphs only)
-
-        except Exception as e:  # pragma: no cover (CUDA-graphs only)
-            logger.warning(f"CUDA graph capture failed: {e}",  # pragma: no cover (CUDA-graphs only)
-                extra={"tag": "TRAIN"},)  # pragma: no cover (CUDA-graphs only)
-            self._enabled = False  # pragma: no cover (CUDA-graphs only)
-            return False  # pragma: no cover (CUDA-graphs only)
+        No-op on the numpy stack — always returns False so callers use
+        plain forward passes.
+        """
+        return False
 
     def replay(self, input_ids) -> Any:
         """Replay captured graph or fall back to normal forward."""
-        if not self._enabled:
-            return self.model(input_ids)
-
-        key = (input_ids.shape[0], input_ids.shape[1])  # pragma: no cover (CUDA-graphs only)
-        if key not in self.graphs:  # pragma: no cover (CUDA-graphs only)
-            return self.model(input_ids)  # pragma: no cover (CUDA-graphs only)
-
-        try:  # pragma: no cover (CUDA-graphs only)
-            self.static_inputs[key].copy_(input_ids)  # pragma: no cover (CUDA-graphs only)
-            self.graphs[key].replay()  # pragma: no cover (CUDA-graphs only)
-            return self.static_outputs  # pragma: no cover (CUDA-graphs only)
-        except Exception:  # pragma: no cover (CUDA-graphs only)
-            return self.model(input_ids)  # pragma: no cover (CUDA-graphs only)
+        return self.model(input_ids)
 
 
 class _NumpyBatchIterator:
@@ -462,7 +397,7 @@ class FastInferenceSampler:
         Optimizations:
         - Vectorized repetition penalty (O(1) instead of O(n))
         - Fused top-k/top-p filtering
-        - Pure numpy operations (no PyTorch)
+        - Pure numpy operations
         """
         logits = _as_array(logits, dtype=np.float64)
 
@@ -584,28 +519,12 @@ class OptimizedInferenceEngine:
             self.model.eval()
 
     def _setup_compiled_forward(self):
-        """Setup torch.compile for faster forward passes (torch/CUDA only)."""
-        torch = _torch_or_none()  # pragma: no cover (torch.compile only)
-        if (  # pragma: no cover (torch.compile only)
-            torch is not None
-            and hasattr(torch, "compile")
-            and self.config.use_compile
-            and self.device == "cuda"
-        ):
-            try:  # pragma: no cover (torch.compile only)
-                self._compiled_model = torch.compile(  # pragma: no cover (torch.compile only)
-                    self.model,
-                    mode=self.config.compile_mode,
-                    fullgraph=self.config.compile_mode == "max-autotune",
-                )  # pragma: no cover (torch.compile only)
-                logger.info(f"Model compiled with mode: {self.config.compile_mode}",  # pragma: no cover (torch.compile only)
-                    extra={"tag": "TRAIN"},)  # pragma: no cover (torch.compile only)
-            except Exception as e:  # pragma: no cover (torch.compile only)
-                logger.warning(f"torch.compile failed: {e}",  # pragma: no cover (torch.compile only)
-                    extra={"tag": "TRAIN"},)  # pragma: no cover (torch.compile only)
-                self._compiled_model = None  # pragma: no cover (torch.compile only)
-        else:  # pragma: no cover (torch.compile only)
-            self._compiled_model = None  # pragma: no cover (torch.compile only)
+        """Setup torch.compile for faster forward passes.
+
+        No-op on the numpy SloNet stack — no torch.compile. ``_compiled_model``
+        stays None so ``generate()`` uses the plain model.
+        """
+        self._compiled_model = None
 
     def generate(
         self,

@@ -242,6 +242,16 @@ JSON output example:
 {"ts":"2026-07-15T03:33:03.454Z","level":"INFO","logger":"man.api","msg":"Server started","tag":"START","ctx":{"port":8000}}
 ```
 
+### SLO_LOG_COLOR
+**Optional**
+
+Force or disable ANSI color output in `human` format. Defaults to auto-detection (colors are emitted only when stderr is a TTY and `NO_COLOR` is unset). `NO_COLOR=1` always disables colors.
+
+```bash
+SLO_LOG_COLOR=1   # force colors even when stderr is piped/redirected
+SLO_LOG_COLOR=0   # force plain text even in a terminal
+```
+
 ### Type Tags
 
 Every log line includes a category tag for quick visual scanning:
@@ -253,6 +263,7 @@ Every log line includes a category tag for quick visual scanning:
 | `[SOUL]` | Soul management, personality | `Found 7 souls` |
 | `[REQ]` | HTTP requests, timing | `GET /chat 200 (0.34s)` |
 | `[INF]` | Inference, streaming, knowledge | `Client disconnected` |
+| `[INFO]` | Per-request generation telemetry (debug) | `generate_sync (mode=guard)` |
 | `[TRAIN]` | Training pipeline | `Auto-train configured` |
 | `[INFRA]` | Infrastructure, deployment | `RateLimitMiddleware registered` |
 | `[AUTH]` | Authentication | `Token expiring` |

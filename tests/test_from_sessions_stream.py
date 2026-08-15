@@ -87,6 +87,9 @@ class TestFromSessionsStream:
         from routers.auto_train import state as at_state, stream_from_sessions
         from unittest.mock import AsyncMock, patch
 
+        from domains.infrastructure.training_queue import register_training_handlers
+        register_training_handlers()
+
         at_state.running = True
         at_state.config = {
             "method": "from-sessions",

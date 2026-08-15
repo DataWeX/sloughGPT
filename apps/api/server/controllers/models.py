@@ -71,17 +71,10 @@ class ModelsController:
 
     def _find_model_path(self, model_id: str) -> Optional[Path]:
         """Find model file by ID"""
-        model_path = self.models_dir / f"{model_id}.pt"
-        if model_path.exists():
-            return model_path
-
         model_path = self.models_dir / f"{model_id}.gguf"
         if model_path.exists():
             return model_path
 
-        for f in self.models_dir.glob("*.pt"):
-            if f.stem == model_id:
-                return f
         for f in self.models_dir.glob("*.gguf"):
             if f.stem == model_id:
                 return f
@@ -109,13 +102,6 @@ class ModelsController:
 
         local_dir = self.models_dir
         if local_dir.exists():
-            for f in local_dir.glob("*.pt"):
-                models.append({
-                    "model_id": f.stem,
-                    "path": str(f),
-                    "type": "pt",
-                    "size_mb": f.stat().st_size / (1024 * 1024),
-                })
             for f in local_dir.glob("*.gguf"):
                 models.append({
                     "model_id": f.stem,
@@ -130,7 +116,6 @@ class ModelsController:
         """Load a HuggingFace model via SloNet (pure NumPy inference).
 
         Converts safetensors → .slnc on first load, then loads via mmap.
-        No PyTorch dependency at inference time.
         """
         if model_id.endswith('.gguf'):
             return self._load_gguf_model(model_id, device)
@@ -354,7 +339,6 @@ class ModelsController:
         """Load a model into memory via SloNet (pure NumPy inference).
 
         Converts safetensors → .slnc on first load, then loads via mmap.
-        No PyTorch dependency at inference time.
         """
         resolved_device = self._resolve_device(device)
 

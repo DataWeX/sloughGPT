@@ -210,14 +210,15 @@ Commands below assume the **repository root** and `python3 -m pip install -e .` 
 
 ### Export from training
 ```bash
-python3 train_sloughgpt.py --data data.txt --export_sou --soul_name "MyModel"
+sloughgpt train --dataset data.txt --soul-name "MyModel"
+# (SloughGPTTrainer saves .soul checkpoints by default; set checkpoint.export_format in config.yaml for others)
 ```
 
 ### Export from any checkpoint
 ```bash
 python3 -c "from domains.training.export import export_model, ExportConfig; \
   from domains.inference.sou_format import create_soul_profile; \
-  export_model(ExportConfig(input_path='model.pt', output_path='model', format='sou'))"
+  export_model(ExportConfig(input_path='model.soul', output_path='model', format='sou'))"
 ```
 
 ### Import from .sou

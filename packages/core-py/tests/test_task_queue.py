@@ -227,6 +227,82 @@ class TestInProcessTaskQueue:
         assert t.status == TaskStatus.FAILED
         assert "Timeout" in (t.error or "")
 
+    async def test_no_handler_pushes_sse_error(self, queue):
+        t = Task(task_type="missing", metadata={"sse_queue": asyncio.Queue()})
+        await queue.enqueue(t)
+        await queue.start()
+        await asyncio.sleep(0.3)
+        await queue.stop()
+        assert t.status == TaskStatus.FAILED
+        event = await t.metadata["sse_queue"].get()
+        assert event.startswith("data: ")
+        import json
+        payload = json.loads(event[6:])
+        assert payload["status"] == "error"
+        assert payload["stream"] == "auto-train"
+        assert "No handler" in payload["data"]["error"]
+
+    async def test_handler_exception_pushes_sse_error(self, queue):
+        async def boom_handler(task: Task):
+            raise ValueError("kaboom")
+
+        queue.register_handler("boom", boom_handler)
+        t = Task(task_type="boom", metadata={"sse_queue": asyncio.Queue()})
+        await queue.enqueue(t)
+        await queue.start()
+        await asyncio.sleep(0.3)
+        await queue.stop()
+        assert t.status == TaskStatus.FAILED
+        import json
+        payload = json.loads((await t.metadata["sse_queue"].get())[6:])
+        assert payload["status"] == "error"
+        assert payload["data"]["error"] == "kaboom"
+
+    async def test_timeout_pushes_sse_error(self, queue):
+        async def slow_handler(task: Task):
+            await asyncio.sleep(10)
+
+        queue.register_handler("slow", slow_handler)
+        t = Task(task_type="slow", timeout=0.2, metadata={"sse_queue": asyncio.Queue()})
+        await queue.enqueue(t)
+        await queue.start()
+        await asyncio.sleep(0.5)
+        await queue.stop()
+        assert t.status == TaskStatus.FAILED
+        import json
+        payload = json.loads((await t.metadata["sse_queue"].get())[6:])
+        assert payload["status"] == "error"
+        assert "Timeout" in payload["data"]["error"]
+
+    async def test_cancel_pushes_sse_error(self, queue):
+        async def slow_handler(task: Task):
+            await asyncio.sleep(5)
+
+        queue.register_handler("slow", slow_handler)
+        t = Task(task_type="slow", metadata={"sse_queue": asyncio.Queue()})
+        await queue.enqueue(t)
+        await queue.start()
+        await asyncio.sleep(0.1)
+        await queue.cancel(t.id)
+        await queue.stop(timeout=1.0)
+        import json
+        payload = json.loads((await t.metadata["sse_queue"].get())[6:])
+        assert payload["status"] == "error"
+        assert payload["phase"] == "CANCELLED"
+
+    async def test_success_pushes_no_terminal_error(self, queue):
+        async def echo_handler(task: Task):
+            return "ok"
+
+        queue.register_handler("echo", echo_handler)
+        t = Task(task_type="echo", metadata={"sse_queue": asyncio.Queue()})
+        await queue.enqueue(t)
+        await queue.start()
+        await asyncio.sleep(0.3)
+        await queue.stop()
+        assert t.status == TaskStatus.COMPLETED
+        assert t.metadata["sse_queue"].empty()
+
     async def test_dependency_ordering(self, queue):
         order = []
 

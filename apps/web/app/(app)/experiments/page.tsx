@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { experimentsController } from '@/lib/experiments-controller'
 import { ExperimentDetailsCard } from '@/components/experiments/ExperimentDetailsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -137,25 +137,27 @@ export default function ExperimentsPage() {
 
   if (loading) {
     return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Experiments" subtitle="ML experiment tracking" />} />
-        <div className="space-y-4">
-          <KpiGrid>
-            <StatCard label="Total" value="..." />
-            <StatCard label="Selected" value="..." />
-            <StatCard label="Auto-refresh" value="..." />
-            <StatCard label="Last Created" value="..." />
-          </KpiGrid>
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
+      <PageContainer
+        title="Experiments"
+        subtitle="ML experiment tracking"
+        loading
+      >
+        <KpiGrid>
+          <StatCard label="Total" value="..." />
+          <StatCard label="Selected" value="..." />
+          <StatCard label="Auto-refresh" value="..." />
+          <StatCard label="Last Created" value="..." />
+        </KpiGrid>
+        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Experiments" subtitle={`${experiments.length} experiments`} />} />
-      <div className="space-y-4">
+    <PageContainer
+      title="Experiments"
+      subtitle={`${experiments.length} experiments`}
+    >
         <KpiGrid>
           <StatCard label="Total Experiments" value={String(experiments.length)} />
           <StatCard label="Selected" value={String(selectedIds.size)} />
@@ -296,7 +298,6 @@ export default function ExperimentsPage() {
         {selectedId && (
           <ExperimentDetailsCard experimentId={selectedId} />
         )}
-      </div>
-    </div>
+      </PageContainer>
   )
 }

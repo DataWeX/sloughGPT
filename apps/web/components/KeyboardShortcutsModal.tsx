@@ -9,11 +9,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@sloughgpt/strui'
+import { NAV_SECTIONS } from '@/lib/navigation'
 
 interface Shortcut {
   keys: string[]
   description: string
   category: string
+}
+
+/** Build navigation shortcuts from shared config */
+function buildNavShortcuts(): Shortcut[] {
+  const shortcuts: Shortcut[] = []
+  for (const section of NAV_SECTIONS) {
+    for (const route of section.routes) {
+      if (!route.shortcut) continue
+      const keys = route.shortcut === 'shift+A'
+        ? ['Ctrl', 'Shift', 'A']
+        : ['Ctrl', route.shortcut]
+      shortcuts.push({
+        keys,
+        description: route.description || route.path,
+        category: 'Navigation',
+      })
+    }
+  }
+  return shortcuts
 }
 
 const SHORTCUTS: Shortcut[] = [
@@ -33,17 +53,8 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['?'], description: 'Show keyboard shortcuts', category: 'General' },
   { keys: ['Ctrl', 'K'], description: 'Command palette', category: 'General' },
 
-  // Navigation shortcuts
-  { keys: ['Ctrl', '1'], description: 'Chat', category: 'Navigation' },
-  { keys: ['Ctrl', '2'], description: 'Training', category: 'Navigation' },
-  { keys: ['Ctrl', '3'], description: 'Datasets', category: 'Navigation' },
-  { keys: ['Ctrl', '4'], description: 'Models', category: 'Navigation' },
-  { keys: ['Ctrl', '5'], description: 'Agents', category: 'Navigation' },
-  { keys: ['Ctrl', '6'], description: 'Compare', category: 'Navigation' },
-  { keys: ['Ctrl', '7'], description: 'System Health', category: 'Navigation' },
-  { keys: ['Ctrl', '8'], description: 'Knowledge', category: 'Navigation' },
-  { keys: ['Ctrl', '9'], description: 'Multimodal', category: 'Navigation' },
-  { keys: ['Ctrl', 'Shift', 'A'], description: 'Settings', category: 'Navigation' },
+  // Navigation shortcuts (from shared config)
+  ...buildNavShortcuts(),
 
   // Sidebar shortcuts
   { keys: ['Ctrl', '\\'], description: 'Toggle navigation sidebar', category: 'Sidebar' },

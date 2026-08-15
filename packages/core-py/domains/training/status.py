@@ -1,11 +1,14 @@
 """
-Training Status & Checkpoint Management
+Training Status Tracking
 
 Tracks training completion status and enables:
-- Checkpoint loading with metadata
-- Training resume capability
 - Completion verification
 - Training history
+- Progress summaries
+
+Checkpoint persistence and resume live in the canonical
+``domains.training.train_pipeline.CheckpointManager`` (`.soul`/`.npz` via
+``domains.training.slonet``); this module no longer ships a checkpoint manager.
 """
 
 import json
@@ -13,7 +16,6 @@ import logging
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -120,7 +122,7 @@ class TrainingCompletionReport:
 
 class TrainingStatusTracker:
     """
-    Tracks training status and manages checkpoints.
+    Tracks training completion status and history.
     """
 
     def __init__(self, model_name: str = "sloughgpt"):
@@ -350,186 +352,24 @@ class TrainingStatusTracker:
 
         logger.info("=" * 60, extra={"tag": "TRAIN"})
 
-
 # =============================================================================
-# CHECKPOINT MANAGER
-# =============================================================================
-
-class CheckpointManager:
-    """
-    Manages model checkpoints with metadata.
-    """
-
-    def __init__(self, checkpoint_dir: str = "checkpoints"):
-        self.checkpoint_dir = Path(checkpoint_dir)
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        self.tracker = TrainingStatusTracker()
-
-    @staticmethod
-    def _tensors_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
-        """Convert torch tensors in a state dict to numpy arrays."""
-        result = {}
-        for k, v in state_dict.items():
-            if hasattr(v, "cpu"):
-                result[k] = v.cpu().numpy()
-            elif isinstance(v, np.ndarray):
-                result[k] = v
-            elif isinstance(v, dict):
-                result[k] = CheckpointManager._tensors_to_numpy(v)
-            else:
-                result[k] = np.array(v)
-        return result
-
-    def _save_npz(
-        self,
-        checkpoint_path: Path,
-        state_dict: Dict[str, Any],
-        meta: Dict[str, Any],
-    ) -> None:
-        """Save checkpoint as ``.npz`` (numpy arrays + JSON metadata)."""
-        _save_npz(str(checkpoint_path), state_dict, meta)
-
-    def _load_npz(
-        self,
-        checkpoint_path: Path,
-    ) -> Dict[str, Any]:
-        """Load checkpoint from ``.npz``."""
-        return _load_npz(str(checkpoint_path))
-
-    def save_checkpoint(
-        self,
-        model,
-        optimizer,
-        step: int,
-        epoch: int,
-        loss: float,
-        val_loss: Optional[float] = None,
-        stage: TrainingStage = TrainingStage.PRETRAINING,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> str:
-        """Save checkpoint with metadata.
-
-        Checkpoints are written as torch-free ``.npz`` (model weights as numpy
-        arrays + JSON metadata).
-        """
-        checkpoint_path = self.checkpoint_dir / f"checkpoint_step{step}.npz"
-
-        meta = {
-            "step": step,
-            "epoch": epoch,
-            "loss": loss,
-            "val_loss": val_loss,
-            "stage": stage.value,
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
-            "metadata": metadata or {},
-            "training_status": asdict(self.tracker.report),
-        }
-
-        state_dict = model.state_dict() if hasattr(model, "state_dict") else {}
-        self._save_npz(checkpoint_path, state_dict, meta)
-
-        # Update tracker
-        self.tracker.record_checkpoint(str(checkpoint_path), step, loss)
-        self.tracker.update_stage(stage, epoch, loss, val_loss)
-
-        return str(checkpoint_path)
-
-    def load_checkpoint(
-        self,
-        checkpoint_path: str,
-        model,
-        optimizer=None,
-        device: str = "cpu",
-    ) -> Dict[str, Any]:
-        """Load checkpoint with metadata."""
-        ckpt_path = Path(checkpoint_path)
-
-        checkpoint = self._load_npz(ckpt_path)
-
-        # Load model (npz state_dict is already numpy)
-        state_dict = checkpoint.get("model_state_dict")
-        if state_dict is not None:
-            model.load_state_dict(state_dict)
-
-        # Restore training status
-        if "training_status" in checkpoint:
-            self.tracker.report = TrainingCompletionReport(**checkpoint["training_status"])
-
-        return {
-            "step": checkpoint.get("step", 0),
-            "epoch": checkpoint.get("epoch", 0),
-            "loss": checkpoint.get("loss", 0),
-            "val_loss": checkpoint.get("val_loss"),
-            "stage": TrainingStage(checkpoint.get("stage", "pretraining")),
-            "timestamp": checkpoint.get("timestamp"),
-        }
-
-    def _load_meta(self, path: Path) -> Optional[Dict[str, Any]]:
-        """Load metadata from a checkpoint file (``.npz``)."""
-        try:
-            return self._load_npz(path)
-        except Exception:
-            return None
-
-    def get_latest_checkpoint(self) -> Optional[str]:
-        """Get path to latest checkpoint."""
-        checkpoints = sorted(
-            list(self.checkpoint_dir.glob("checkpoint_*.npz")),
-            key=lambda p: p.stat().st_mtime,
-        )
-        if not checkpoints:
-            return None
-        return str(checkpoints[-1])
-
-    def get_best_checkpoint(self) -> Optional[str]:
-        """Get path to best checkpoint (lowest loss)."""
-        checkpoints = list(self.checkpoint_dir.glob("checkpoint_*"))
-        if not checkpoints:
-            return None
-
-        best_path = None
-        best_loss = float('inf')
-
-        for path in checkpoints:
-            ckpt = self._load_meta(path)
-            if ckpt is None:
-                continue
-            loss = ckpt.get("loss", float('inf'))
-            if loss < best_loss:
-                best_loss = loss
-                best_path = path
-
-        return str(best_path) if best_path else None
-
-    def list_checkpoints(self) -> List[Dict[str, Any]]:
-        """List all checkpoints with metadata."""
-        checkpoints = []
-
-        for path in sorted(list(self.checkpoint_dir.glob("checkpoint_*.npz"))):
-            ckpt = self._load_meta(path)
-            if ckpt is None:
-                continue
-            checkpoints.append({
-                "path": str(path),
-                "step": ckpt.get("step", 0),
-                "epoch": ckpt.get("epoch", 0),
-                "loss": ckpt.get("loss", 0),
-                "val_loss": ckpt.get("val_loss"),
-                "stage": ckpt.get("stage"),
-                "timestamp": ckpt.get("timestamp"),
-            })
-
-        return sorted(checkpoints, key=lambda x: x.get("step", 0), reverse=True)
-
-
-# =============================================================================
-# STANDALONE NPZ CHECKPOINT HELPERS (torch-free, native)
+# STANDALONE NPZ CHECKPOINT HELPERS (native)
 # =============================================================================
 
 
 def _tensors_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
     """Convert tensors in a state dict to numpy arrays."""
-    return CheckpointManager._tensors_to_numpy(state_dict)
+    result = {}
+    for k, v in state_dict.items():
+        if hasattr(v, "cpu"):
+            result[k] = v.cpu().numpy()
+        elif isinstance(v, np.ndarray):
+            result[k] = v
+        elif isinstance(v, dict):
+            result[k] = _tensors_to_numpy(v)
+        else:
+            result[k] = np.array(v)
+    return result
 
 
 # Native implementations live in domains.training.slonet.
@@ -547,5 +387,4 @@ __all__ = [
     "StageStatus",
     "TrainingCompletionReport",
     "TrainingStatusTracker",
-    "CheckpointManager",
 ]

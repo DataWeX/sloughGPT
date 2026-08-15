@@ -5,17 +5,22 @@ import { createContext, useContext, useState, useEffect, useLayoutEffect, ReactN
 import { syncHtmlTheme } from '@/lib/sync-html-theme'
 import {
   isStoredThemeId,
+  isStoredPaletteId,
   MODE_STORAGE_KEY,
   THEME_STORAGE_KEY,
+  PALETTE_STORAGE_KEY,
   type StoredThemeId,
   type ThemeMode,
+  type StoredPaletteId,
 } from '@/lib/theme-storage'
 
 interface ThemeContextType {
   theme: StoredThemeId
   mode: ThemeMode
+  palette: StoredPaletteId
   setTheme: (theme: StoredThemeId) => void
   setMode: (mode: ThemeMode) => void
+  setPalette: (palette: StoredPaletteId) => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -23,12 +28,15 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<StoredThemeId>('purple')
   const [mode, setMode] = useState<ThemeMode>('dark')
+  const [palette, setPalette] = useState<StoredPaletteId>('noir-violet')
   const [mounted, setMounted] = useState(false)
 
   useLayoutEffect(() => {
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
     const savedMode = localStorage.getItem(MODE_STORAGE_KEY)
+    const savedPalette = localStorage.getItem(PALETTE_STORAGE_KEY)
     const t = isStoredThemeId(savedTheme) ? savedTheme : 'purple'
+    const p = isStoredPaletteId(savedPalette) ? savedPalette : 'noir-violet'
     let m: ThemeMode
     if (savedMode === 'light' || savedMode === 'dark') {
       m = savedMode
@@ -39,19 +47,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     setTheme(t)
     setMode(m)
-    syncHtmlTheme(m, t)
+    setPalette(p)
+    syncHtmlTheme(m, t, p)
     setMounted(true)
   }, [])
 
   useEffect(() => {
     if (!mounted) return
-    syncHtmlTheme(mode, theme)
+    syncHtmlTheme(mode, theme, palette)
     localStorage.setItem(THEME_STORAGE_KEY, theme)
     localStorage.setItem(MODE_STORAGE_KEY, mode)
-  }, [theme, mode, mounted])
+    localStorage.setItem(PALETTE_STORAGE_KEY, palette)
+  }, [theme, mode, palette, mounted])
 
   return (
-    <ThemeContext.Provider value={{ theme, mode, setTheme, setMode }}>
+    <ThemeContext.Provider value={{ theme, mode, palette, setTheme, setMode, setPalette }}>
       {children}
     </ThemeContext.Provider>
   )
@@ -67,11 +77,11 @@ export function useTheme() {
 
 /** Accent presets — ids kept for localStorage; hues match ``globals.css`` theme-* */
 export const THEMES: { id: StoredThemeId; name: string; color: string }[] = [
-  { id: 'blue', name: 'Periwinkle', color: '#8b7bc4' },
-  { id: 'purple', name: 'Lilac', color: '#a67fd4' },
-  { id: 'pink', name: 'Rose', color: '#d894b4' },
-  { id: 'red', name: 'Coral', color: '#e88890' },
-  { id: 'orange', name: 'Peach', color: '#e8a86c' },
-  { id: 'green', name: 'Mint', color: '#6bb89a' },
-  { id: 'teal', name: 'Dew', color: '#6cabcc' },
+  { id: 'blue', name: 'Periwinkle', color: '#5a82dc' },
+  { id: 'purple', name: 'Lilac', color: '#9b6cd6' },
+  { id: 'pink', name: 'Rose', color: '#da82aa' },
+  { id: 'red', name: 'Coral', color: '#e67882' },
+  { id: 'orange', name: 'Peach', color: '#ec9b5a' },
+  { id: 'green', name: 'Mint', color: '#48b282' },
+  { id: 'teal', name: 'Dew', color: '#48a6c8' },
 ]

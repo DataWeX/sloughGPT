@@ -94,7 +94,7 @@ class TestCmdTrainNative:
             log_interval=50,
             soul_name="test-native",
             save_stem=None,
-            save_format="sou",
+            save_format="soul",
             resume=None,
             resume_latest=False,
             device="cpu",
@@ -121,7 +121,7 @@ class TestCmdTrainNative:
                 cmd_train_native(args)
         assert exc.value.code == 2
 
-    def test_bad_save_format_warns_and_uses_sou(self):
+    def test_save_format_option_is_ignored(self):
         from commands.train import cmd_train_native
         args = self._args(save_format="pt")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
@@ -130,7 +130,7 @@ class TestCmdTrainNative:
             cmd_train_native(args)
         assert instance.save.called
         save_args = instance.save.call_args
-        assert save_args.kwargs.get("format") == "sou"
+        assert "format" not in save_args.kwargs
 
     def test_full_native_train_pipeline(self):
         from commands.train import cmd_train_native
@@ -140,7 +140,7 @@ class TestCmdTrainNative:
             cmd_train_native(self._args())
             assert instance.train.called
             assert instance.save.called
-            assert instance.save.call_args[1]["format"] == "sou"
+            assert instance.save.call_args[1] == {}
 
     def test_save_stem_overrides_soul_name(self):
         from commands.train import cmd_train_native

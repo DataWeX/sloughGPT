@@ -7,6 +7,7 @@ import { modelController } from '@/lib/model-controller'
 import { sessionController } from '@/lib/session-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
+import { NAV_SECTIONS } from '@/lib/navigation'
 
 interface CommandAction {
   id: string
@@ -16,37 +17,6 @@ interface CommandAction {
   category: 'navigation' | 'action' | 'conversation' | 'model' | 'soul'
   run: () => void
 }
-
-const PAGE_NAV: { path: string; label: string; icon: string; desc: string }[] = [
-  { path: '/chat', label: 'Chat', icon: '💬', desc: 'Open chat' },
-  { path: '/models', label: 'Models', icon: '🧠', desc: 'Manage models' },
-  { path: '/training', label: 'Training', icon: '🏋️', desc: 'Train models' },
-  { path: '/datasets', label: 'Datasets', icon: '📊', desc: 'Manage datasets' },
-  { path: '/knowledge', label: 'Knowledge', icon: '📚', desc: 'Manage knowledge' },
-  { path: '/companion', label: 'Companion', icon: '🧠', desc: 'AI personality' },
-  { path: '/agents', label: 'Agents', icon: '🤖', desc: 'Manage agents' },
-  { path: '/compare', label: 'Compare', icon: '⚖️', desc: 'Compare models' },
-  { path: '/monitoring', label: 'System Health', icon: '💓', desc: 'System status' },
-  { path: '/errors', label: 'Errors', icon: '🚨', desc: 'Error monitoring' },
-  { path: '/experiments', label: 'Experiments', icon: '🧪', desc: 'ML experiment tracking' },
-  { path: '/workflow', label: 'Workflow', icon: '⚙️', desc: 'Feedback pipeline' },
-  { path: '/adapters', label: 'Adapters', icon: '🔧', desc: 'LoRA adapter management' },
-  { path: '/export', label: 'Export', icon: '📦', desc: 'Export models & data' },
-  { path: '/settings', label: 'Settings', icon: '⚙️', desc: 'App settings' },
-  { path: '/tokenizer', label: 'Tokenizer', icon: '🔤', desc: 'BPE tokenizer' },
-  { path: '/learn', label: 'Learner', icon: '🔍', desc: 'Continual web learning' },
-  { path: '/benchmark', label: 'Benchmark', icon: '📏', desc: 'Model evaluation' },
-  { path: '/feedback', label: 'Feedback', icon: '💬', desc: 'Feedback analytics' },
-  { path: '/voice', label: 'Voice', icon: '🔊', desc: 'Text-to-speech' },
-  { path: '/files', label: 'Files', icon: '📁', desc: 'Manage uploaded files' },
-  { path: '/souls', label: 'Souls', icon: '👻', desc: 'Personality management' },
-  { path: '/registry', label: 'Registry', icon: '📦', desc: 'Model registry' },
-  { path: '/security', label: 'Security', icon: '🔒', desc: 'Audit logs & API keys' },
-  { path: '/images', label: 'Images', icon: '🎨', desc: 'AI image generation' },
-  { path: '/auth', label: 'Auth', icon: '🔑', desc: 'Login, register, tokens' },
-  { path: '/multimodal', label: 'Multimodal', icon: '🎨', desc: 'Vision & speech' },
-  { path: '/vm', label: 'VM Console', icon: '🖥️', desc: 'x86 assembly sandbox' },
-]
 
 export function CommandPalette() {
   const router = useRouter()
@@ -77,10 +47,16 @@ export function CommandPalette() {
   }, [])
 
   const actions: CommandAction[] = useMemo(() => {
-    const nav: CommandAction[] = PAGE_NAV.map(p => ({
-      id: `nav-${p.path}`, label: p.label, description: p.desc, icon: p.icon,
-      category: 'navigation' as const, run: () => router.push(p.path),
-    }))
+    const nav: CommandAction[] = NAV_SECTIONS.flatMap(section =>
+      section.routes.map(route => ({
+        id: `nav-${route.path}`,
+        label: route.description || route.path,
+        description: route.description || '',
+        icon: route.icon || '📄',
+        category: 'navigation' as const,
+        run: () => router.push(route.path),
+      }))
+    )
 
     const modelActs: CommandAction[] = models.map(m => ({
       id: `model-${m.id}`, label: `Switch to ${m.name}`, description: m.loaded ? 'Currently loaded' : 'Load and switch',

@@ -470,7 +470,7 @@ export const trainingJobsController = {
   },
 
   // ---------------------------------------------------------------------------
-  // On-device SloNet training from sessions (pure NumPy, no PyTorch)
+  // On-device SloNet training from sessions (pure NumPy)
   // ---------------------------------------------------------------------------
 
   async startFromSessionsSloNet(params: {

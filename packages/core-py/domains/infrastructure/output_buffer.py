@@ -26,6 +26,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from domains.logging.bridge import record_extra_context
+
 
 @dataclass
 class OutputLine:
@@ -233,7 +235,9 @@ class BufferLogHandler(logging.Handler):
     """Captures Python logging records into structured OutputLines.
 
     Extracts structured extras (tag, error_code, context) from the record
-    and stores them as fields — not formatted into text.
+    and stores them as fields — not formatted into text.  Any other
+    non-standard extra keys are auto-captured into context so structured
+    telemetry surfaces in the frontend stream.
     """
 
     _LEVEL_MAP = {
@@ -252,12 +256,9 @@ class BufferLogHandler(logging.Handler):
         try:
             msg = record.getMessage()
             tag = getattr(record, "tag", "")
-            ctx_raw = getattr(record, "context", None)
             error_code = getattr(record, "error_code", None)
 
-            context: dict[str, Any] = {}
-            if isinstance(ctx_raw, dict):
-                context.update(ctx_raw)
+            context = record_extra_context(record)
             if error_code:
                 context["error_code"] = error_code
 

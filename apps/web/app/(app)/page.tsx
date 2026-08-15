@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import {
@@ -132,10 +132,22 @@ export default function HomePage() {
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl space-y-4">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title={<Greeting />} subtitle={subtitleText()} />}
-      />
+    <PageContainer
+      title={<Greeting /> as unknown as string}
+      subtitle={subtitleText()}
+      className="relative"
+      contentClassName="space-y-4"
+    >
+      {/* Decorative training loss curve — signature element */}
+      <div className="absolute top-0 right-0 w-48 h-32 opacity-[0.06] pointer-events-none overflow-hidden hidden sm:block" aria-hidden="true">
+        <svg viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+          <path d="M10 20 Q 30 100, 60 70 T 110 50 T 160 35 T 200 25" stroke="rgb(var(--accent))" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M10 30 Q 40 90, 70 65 T 120 48 T 170 32 T 200 22" stroke="rgb(var(--primary))" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="4 3" />
+          <circle cx="110" cy="50" r="3" fill="rgb(var(--accent))" />
+          <circle cx="160" cy="35" r="2.5" fill="rgb(var(--accent))" />
+          <text x="60" y="120" fill="rgb(var(--muted-foreground))" fontSize="9" fontFamily="var(--font-mono, monospace)" opacity="0.5">loss</text>
+        </svg>
+      </div>
 
       {apiStatus === 'offline' ? (
         startup ? (
@@ -533,10 +545,10 @@ export default function HomePage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
         <Link
           href="/chat"
-          className="group relative overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30"
+          className="group relative overflow-hidden rounded-lg border border-accent/25 bg-gradient-to-br from-accent/8 via-accent/3 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-accent/8 hover:border-accent/40"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
               <IconChat className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
@@ -544,16 +556,16 @@ export default function HomePage() {
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Ask anything, get answers</p>
             </div>
           </div>
-          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
+          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-accent/50 transition-colors">
             <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </Link>
         <Link
           href="/models"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <IconModels className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
@@ -567,10 +579,10 @@ export default function HomePage() {
         </Link>
         <Link
           href="/datasets"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-muted-foreground/15 text-muted-foreground">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-muted-foreground/10 text-muted-foreground">
               <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
@@ -584,10 +596,10 @@ export default function HomePage() {
         </Link>
         <Link
           href="/training"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/10 text-accent">
               <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             </div>
             <div className="min-w-0">
@@ -601,10 +613,10 @@ export default function HomePage() {
         </Link>
         <Link
           href="/monitoring"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-success/15 text-success">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-success/10 text-success">
               <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
             </div>
             <div className="min-w-0">
@@ -618,10 +630,10 @@ export default function HomePage() {
         </Link>
         <Link
           href="/knowledge"
-          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/8 text-primary">
               <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
@@ -635,6 +647,6 @@ export default function HomePage() {
         </Link>
       </div>
 
-    </div>
+    </PageContainer>
   )
 }

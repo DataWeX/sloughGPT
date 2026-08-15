@@ -739,7 +739,7 @@ class ProviderRouter:
 class SloTransformerProvider:
     """Wraps a pure NumPy SloTransformer as an async chat provider.
 
-    Zero PyTorch dependency. Works with any .slo checkpoint.
+    Works with any .slo checkpoint.
     """
 
     def __init__(self, model, stoi: dict, itos: dict, model_id_str: str = "soultransformer"):

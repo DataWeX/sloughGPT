@@ -22,13 +22,9 @@ vi.mock('@sloughgpt/strui', () => {
     ),
     Badge: ({ children, variant }: any) => <span data-variant={variant}>{children}</span>,
     IconRefresh: iconMock('refresh'), IconDownload: iconMock('download'), IconX: iconMock('x'),
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div>{left}{right}</div>,
-  AppRouteHeaderLead: ({ title, subtitle }: any) => <div><h1>{title}</h1><span>{subtitle}</span></div>,
-}))
 
 vi.mock('@/lib/model-controller', () => ({
   modelController: {

@@ -9,7 +9,6 @@ from domains.training.status import (
     StageStatus,
     TrainingCompletionReport,
     TrainingStatusTracker,
-    CheckpointManager,
 )
 
 
@@ -74,9 +73,9 @@ class TestTrainingStatusTracker:
         """Test recording checkpoints."""
         tracker = TrainingStatusTracker("test_model")
 
-        tracker.record_checkpoint("checkpoint_step100.pt", 100, 0.5)
+        tracker.record_checkpoint("checkpoint_step100.soul", 100, 0.5)
 
-        assert tracker.report.checkpoint_path == "checkpoint_step100.pt"
+        assert tracker.report.checkpoint_path == "checkpoint_step100.soul"
         assert tracker.report.last_checkpoint_step == 100
         assert len(tracker.checkpoints) == 1
 
@@ -97,7 +96,7 @@ class TestTrainingStatusTracker:
         assert tracker.report.can_resume() == False
 
         tracker.report.completion_status = CompletionStatus.IN_PROGRESS
-        tracker.report.checkpoint_path = "checkpoint.pt"
+        tracker.report.checkpoint_path = "checkpoint.soul"
 
         assert tracker.report.can_resume() == True
 

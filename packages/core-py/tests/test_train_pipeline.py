@@ -1,17 +1,19 @@
 """Tests for domains/training/train_pipeline.py (100% coverage target)."""
 
+import logging
 import math
 import os
 import sys
 import threading
 import time
+import warnings
 
 import numpy as np
 import pytest
 
 from domains.training import train_pipeline as tp
 from domains.training.lr_schedulers import create_scheduler
-from domains.training.slonet import SloAdam
+from domains.training.slonet import SloAdam, SloAdamW
 from domains.training.train_pipeline import (
     CheckpointManager,
     SloughGPTTrainer,
@@ -287,7 +289,16 @@ class TestLoadSoulCheckpoint:
 class TestBuildTrainingStateMetadata:
     def test_no_optimizer_no_scheduler(self):
         state = _build_training_state_metadata(step=5, epoch=1, accumulation_step=2)
-        assert state == {"step": 5, "epoch": 1, "accumulation_step": 2}
+        assert state == {
+            "step": 5,
+            "epoch": 1,
+            "completed_epochs": 0,
+            "accumulation_step": 2,
+        }
+
+    def test_completed_epochs_passed_through(self):
+        state = _build_training_state_metadata(step=5, epoch=1, completed_epochs=4)
+        assert state["completed_epochs"] == 4
 
     def test_with_optimizer_and_params(self):
         opt = SloAdam(lr=0.001, weight_decay=0.01)
@@ -301,6 +312,26 @@ class TestBuildTrainingStateMetadata:
         opt = SloAdam(lr=0.001, weight_decay=0.0)
         state = _build_training_state_metadata(optimizer=opt)
         assert "optimizer" in state
+
+    def test_optimizer_state_excluded(self):
+        opt = SloAdam(lr=0.001, weight_decay=0.01)
+        params = [np.array([1.0, 2.0])]
+        state = _build_training_state_metadata(
+            optimizer=opt, params=params, step=1, epoch=0, include_optimizer_state=False
+        )
+        assert "optimizer" in state
+        assert set(state["optimizer"]) == {"hyperparameters", "t"}
+        assert "state" not in state["optimizer"]
+
+    def test_optimizer_state_excluded_non_dict_state(self):
+        class _Strange:
+            def state_dict(self, params=None):
+                return ["not", "a", "dict"]
+
+        state = _build_training_state_metadata(
+            optimizer=_Strange(), include_optimizer_state=False
+        )
+        assert state["optimizer"] == ["not", "a", "dict"]
 
     def test_optimizer_state_dict_raises_skipped(self):
         class _Boom:
@@ -381,176 +412,34 @@ class TestParseTrainingStateMetadata:
 # =============================================================================
 
 
-def _tiny_model():
-    from domains.models import SloughGPTModel
-
-    return SloughGPTModel(
-        vocab_size=64, n_embed=16, n_layer=1, n_head=2, block_size=8, dropout=0.0
-    )
-
-
-def _manager(tmp_path, **kwargs):
-    return CheckpointManager(str(tmp_path / "ck"), max_checkpoints=kwargs.get("max_checkpoints", 5),
-                             save_best_only=kwargs.get("save_best_only", False))
+def _manager(tmp_path):
+    return CheckpointManager(str(tmp_path / "ck"))
 
 
 class TestCheckpointManager:
     def test_init_creates_dir(self, tmp_path):
-        m = CheckpointManager(str(tmp_path / "newdir"), max_checkpoints=3, save_best_only=True)
+        m = CheckpointManager(str(tmp_path / "newdir"))
         assert m.checkpoint_dir.is_dir()
-        assert m.max_checkpoints == 3
-        assert m.save_best_only is True
-        assert m.best_metric == float("inf")
-        assert m.checkpoints == []
-
-    def test_save_soul_with_vocab(self, tmp_path):
-        m = _manager(tmp_path)
-        model = _tiny_model()
-        path = m.save(model, None, None, step=1, metrics={"eval_loss": 2.5}, config=TrainerConfig(),
-                      epoch=0, stoi={"a": 0, "b": 1}, itos={0: "a", 1: "b"}, chars=["a", "b"])
-        assert path is not None
-        assert path.endswith(".soul")
-        assert os.path.exists(path)
-        assert os.path.exists(path + ".meta.json")
-        assert m.best_metric == 2.5
-        assert m.checkpoints == [{"step": 1, "path": path, "metrics": {"eval_loss": 2.5}}]
-
-    def test_save_derives_chars_from_itos(self, tmp_path):
-        m = _manager(tmp_path)
-        model = _tiny_model()
-        path = m.save(model, None, None, step=1, metrics={"eval_loss": 2.0}, config=TrainerConfig(),
-                      stoi={"a": 0, "b": 1}, itos={0: "a", 1: "b"})
-        from domains.inference.slo_format import load_soul
-        profile, _ = load_soul(path)
-        assert profile.metadata["chars"] == ["a", "b"]
-        assert profile.metadata["stoi"] == {"a": 0, "b": 1}
-        assert profile.metadata["itos"] == {"0": "a", "1": "b"}
-
-    def test_save_uses_loss_fallback(self, tmp_path):
-        m = _manager(tmp_path)
-        path = m.save(_tiny_model(), None, None, step=1, metrics={"loss": 3.0}, config=TrainerConfig())
-        assert m.best_metric == 3.0
-
-    def test_save_best_only_skips_worse(self, tmp_path):
-        m = _manager(tmp_path, save_best_only=True)
-        model = _tiny_model()
-        p1 = m.save(model, None, None, step=1, metrics={"eval_loss": 2.0}, config=TrainerConfig())
-        p2 = m.save(model, None, None, step=2, metrics={"eval_loss": 5.0}, config=TrainerConfig())
-        assert p1 is not None
-        assert p2 is None
-        assert not os.path.exists(os.path.join(str(m.checkpoint_dir), "assistant_*.soul")) or True
-        assert len(m.checkpoints) == 1
-
-    def test_save_best_only_is_final_bypasses(self, tmp_path):
-        m = _manager(tmp_path, save_best_only=True)
-        model = _tiny_model()
-        p1 = m.save(model, None, None, step=1, metrics={"eval_loss": 2.0}, config=TrainerConfig())
-        p2 = m.save(model, None, None, step=2, metrics={"eval_loss": 5.0}, config=TrainerConfig(), is_final=True)
-        assert p1 is not None
-        assert p2 is not None
-        assert len(m.checkpoints) == 2
-
-    def test_save_npz_fallback_on_soul_failure(self, tmp_path, monkeypatch):
-        import domains.inference as dinf
-
-        def _boom(*a, **k):
-            raise RuntimeError("soul export failed")
-
-        monkeypatch.setattr(dinf, "save_soul", _boom)
-        m = _manager(tmp_path)
-        model = _tiny_model()
-        opt = SloAdam(lr=0.001, weight_decay=0.01)
-        path = m.save(model, opt, None, step=3, metrics={"eval_loss": 1.5}, config=TrainerConfig(),
-                      stoi={"a": 0}, itos={0: "a"})
-        assert path.endswith("step_3.npz")
-        assert os.path.exists(path)
-        bundle = CheckpointManager.load_from_path(path)
-        assert bundle["step"] == 3
-        assert bundle["stoi"] == {"a": 0}
-        assert "model_state_dict" in bundle
-
-    def test_save_npz_optimizer_serialize_failure(self, tmp_path, monkeypatch, caplog):
-        import domains.inference as dinf
-
-        monkeypatch.setattr(dinf, "save_soul", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-
-        class _BadOpt:
-            def state_dict(self, params=None):
-                raise RuntimeError("cannot serialize")
-
-        m = _manager(tmp_path)
-        path = m.save(_tiny_model(), _BadOpt(), None, step=4, metrics={"loss": 1.0}, config=TrainerConfig())
-        assert path.endswith(".npz")
-        assert any("Could not serialize optimizer state" in r.message for r in caplog.records)
-
-    def test_save_npz_with_scheduler(self, tmp_path, monkeypatch):
-        import domains.inference as dinf
-
-        monkeypatch.setattr(dinf, "save_soul", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-
-        class _Sched:
-            def state_dict(self):
-                return {"step": 2}
-
-        m = _manager(tmp_path)
-        path = m.save(_tiny_model(), None, _Sched(), step=4, metrics={"loss": 1.0}, config=TrainerConfig())
-        assert path.endswith(".npz")
-        bundle = CheckpointManager.load_from_path(path)
-        assert bundle["scheduler_state_dict"] == {"step": 2}
-
-    def test_save_npz_scheduler_serialize_failure(self, tmp_path, monkeypatch, caplog):
-        import domains.inference as dinf
-
-        monkeypatch.setattr(dinf, "save_soul", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-
-        class _BadSched:
-            def state_dict(self):
-                raise RuntimeError("cannot serialize scheduler")
-
-        m = _manager(tmp_path)
-        path = m.save(_tiny_model(), None, _BadSched(), step=4, metrics={"loss": 1.0}, config=TrainerConfig())
-        assert path.endswith(".npz")
-        assert any("Could not serialize scheduler state" in r.message for r in caplog.records)
-
-    def test_save_npz_chars_passed(self, tmp_path, monkeypatch):
-        import domains.inference as dinf
-
-        monkeypatch.setattr(dinf, "save_soul", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-        m = _manager(tmp_path)
-        path = m.save(_tiny_model(), None, None, step=4, metrics={"loss": 1.0}, config=TrainerConfig(),
-                      stoi={"a": 0, "b": 1}, itos={0: "a", 1: "b"}, chars=["a", "b"])
-        bundle = CheckpointManager.load_from_path(path)
-        assert bundle["chars"] == ["a", "b"]
-
-    def test_save_npz_chars_derived_keyerror_ignored(self, tmp_path, monkeypatch):
-        import domains.inference as dinf
-
-        monkeypatch.setattr(dinf, "save_soul", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-        m = _manager(tmp_path)
-        path = m.save(_tiny_model(), None, None, step=4, metrics={"loss": 1.0}, config=TrainerConfig(),
-                      stoi={"a": 0, "b": 1}, itos={0: "a"})
-        bundle = CheckpointManager.load_from_path(path)
-        assert "chars" not in bundle
 
     def test_load_from_path_missing(self, tmp_path, caplog):
         m = _manager(tmp_path)
         assert m.load_from_path(str(tmp_path / "nope.soul")) is None
         assert any("not found" in r.message for r in caplog.records)
 
-    def test_load_from_path_soul(self, tmp_path):
+    def test_load_from_path_soul(self, data_path, tmp_path):
         m = _manager(tmp_path)
-        model = _tiny_model()
-        path = m.save(model, None, None, step=5, metrics={"eval_loss": 1.0}, config=TrainerConfig())
-        bundle = m.load_from_path(path)
-        assert bundle["step"] == 5
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        bundle = m.load_from_path(out + ".soul")
         assert "model_state_dict" in bundle
 
     def test_load_from_path_npz(self, tmp_path, monkeypatch):
-        import domains.inference as dinf
+        from domains.training.slonet import save_checkpoint_npz
 
-        monkeypatch.setattr(dinf, "save_soul", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
         m = _manager(tmp_path)
-        path = m.save(_tiny_model(), None, None, step=7, metrics={"loss": 1.0}, config=TrainerConfig())
+        path = str(m.checkpoint_dir / "step_7.npz")
+        save_checkpoint_npz(path, {"w": np.array([1.0, 2.0])}, {"step": 7})
         bundle = m.load_from_path(path)
         assert bundle["step"] == 7
 
@@ -561,64 +450,176 @@ class TestCheckpointManager:
         assert m.load_from_path(str(p)) is None
         assert any("Unsupported checkpoint format" in r.message for r in caplog.records)
 
-    def test_cleanup_within_limit(self, tmp_path):
+    def test_is_resumable_true_for_soul_and_npz(self, tmp_path):
         m = _manager(tmp_path)
-        m.checkpoints = [{"path": "a.soul"}, {"path": "b.soul"}]
-        m._cleanup_old_checkpoints()
-        assert len(m.checkpoints) == 2
+        (tmp_path / "ck" / "model.soul").write_bytes(b"x")
+        (tmp_path / "ck" / "model.npz").write_bytes(b"x")
+        assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "model.soul"))
+        assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "model.npz"))
 
-    def test_cleanup_removes_old_files(self, tmp_path):
-        m = _manager(tmp_path, max_checkpoints=1)
-        for i in range(3):
-            f = m.checkpoint_dir / f"assistant_{i}.soul"
-            f.write_bytes(b"x")
-            m.checkpoints.append({"step": i, "path": str(f), "metrics": {}})
-        m._cleanup_old_checkpoints()
-        assert len(m.checkpoints) == 1
-        assert m.checkpoints[0]["step"] == 2
-        assert not (m.checkpoint_dir / "assistant_0.soul").exists()
-        assert not (m.checkpoint_dir / "assistant_1.soul").exists()
-
-    def test_cleanup_missing_path_skipped(self, tmp_path):
-        m = _manager(tmp_path, max_checkpoints=1)
-        m.checkpoints.append({"step": 0, "path": str(tmp_path / "ghost.soul"), "metrics": {}})
-        m.checkpoints.append({"step": 1, "path": str(tmp_path / "real.soul"), "metrics": {}})
-        (tmp_path / "real.soul").write_bytes(b"x")
-        m._cleanup_old_checkpoints()
-        assert len(m.checkpoints) == 1
-        assert m.checkpoints[0]["step"] == 1
+    def test_is_resumable_false_for_missing_and_unsupported(self, tmp_path):
+        m = _manager(tmp_path)
+        (tmp_path / "ck" / "notes.txt").write_text("not a checkpoint")
+        assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "model.soul")) is False
+        assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "model.pt")) is False
+        assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "notes.txt")) is False
+        assert CheckpointManager.is_resumable(str(tmp_path / "ck")) is False
 
     def test_load_latest_none(self, tmp_path):
         m = _manager(tmp_path)
         assert m.load_latest() is None
 
-    def test_load_latest_picks_newest(self, tmp_path):
+    def test_latest_path_none(self, tmp_path):
         m = _manager(tmp_path)
-        m.save(_tiny_model(), None, None, step=1, metrics={"loss": 1.0}, config=TrainerConfig())
-        old = m.checkpoint_dir / "step_9.pt"
+        assert m.latest_path() is None
+
+    def test_latest_path_picks_newest(self, data_path, tmp_path):
+        m = _manager(tmp_path)
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        for ts in (1_700_000_000, 1_700_000_002):
+            out = str(tmp_path / "ck" / f"model_{ts}")
+            t.save(out)
+        old = tmp_path / "ck" / "step_9.pt"
+        old.write_bytes(b"x")
+        os.utime(old, (100, 100))
+        assert m.latest_path() == str(tmp_path / "ck" / "model_1700000002.soul")
+
+    def test_latest_path_ignores_non_checkpoints(self, tmp_path):
+        m = _manager(tmp_path)
+        (tmp_path / "ck" / "notes.txt").write_text("not a checkpoint")
+        assert m.latest_path() is None
+
+    def test_load_latest_picks_newest(self, data_path, tmp_path, monkeypatch):
+        m = _manager(tmp_path)
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        for ts in (1_700_000_000, 1_700_000_002):
+            out = str(tmp_path / "ck" / f"model_{ts}")
+            t.save(out)
+        old = tmp_path / "ck" / "step_9.pt"
         old.write_bytes(b"x")
         os.utime(old, (100, 100))
         bundle = m.load_latest()
         assert bundle is not None
         assert "model_state_dict" in bundle
 
-    def test_load_best_empty_falls_back_to_latest(self, tmp_path):
+    def test_latest_valid_path_skips_corrupt_newest(self, data_path, tmp_path, caplog):
         m = _manager(tmp_path)
-        assert m.load_best() is None
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.save(str(tmp_path / "ck" / "model_100"))
+        corrupt = tmp_path / "ck" / "model_200.soul"
+        corrupt.write_bytes(b"not a soul file")
+        os.utime(corrupt, (int(time.time()) + 1000, int(time.time()) + 1000))
+        with caplog.at_level(logging.WARNING, logger="slo.trainer"):
+            path = m.latest_valid_path()
+        assert path == str(tmp_path / "ck" / "model_100.soul")
+        assert any("Skipping unreadable checkpoint" in r.message for r in caplog.records)
 
-    def test_load_best_picks_min_eval_loss(self, tmp_path):
+    def test_load_latest_skips_corrupt_newest(self, data_path, tmp_path, caplog):
         m = _manager(tmp_path)
-        model = _tiny_model()
-        p1 = m.save(model, None, None, step=1, metrics={"eval_loss": 5.0}, config=TrainerConfig())
-        p2 = m.save(model, None, None, step=2, metrics={"eval_loss": 1.0}, config=TrainerConfig())
-        best = m.load_best()
-        assert best is not None
-        assert best["step"] == 2
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.save(str(tmp_path / "ck" / "model_100"))
+        corrupt = tmp_path / "ck" / "model_200.soul"
+        corrupt.write_bytes(b"not a soul file")
+        os.utime(corrupt, (int(time.time()) + 1000, int(time.time()) + 1000))
+        with caplog.at_level(logging.WARNING, logger="slo.trainer"):
+            bundle = m.load_latest()
+        assert bundle is not None
+        assert "model_state_dict" in bundle
 
-    def test_load_best_missing_path_none(self, tmp_path):
+    def test_load_latest_all_corrupt_returns_none(self, tmp_path, caplog):
         m = _manager(tmp_path)
-        m.checkpoints = [{"step": 1, "path": str(tmp_path / "ghost.soul"), "metrics": {"eval_loss": 1.0}}]
-        assert m.load_best() is None
+        for i, ts in enumerate((1_700_000_000, 1_700_000_001)):
+            p = tmp_path / "ck" / f"bad_{i}.soul"
+            p.write_bytes(b"garbage")
+            os.utime(p, (ts, ts))
+        with caplog.at_level(logging.WARNING, logger="slo.trainer"):
+            assert m.load_latest() is None
+        assert any("Skipping unreadable checkpoint" in r.message for r in caplog.records)
+
+    def test_load_latest_with_path_empty_returns_none_none(self, tmp_path):
+        m = _manager(tmp_path)
+        assert m.load_latest_with_path() == (None, None)
+
+    def test_load_latest_with_path_returns_newest(self, data_path, tmp_path):
+        m = _manager(tmp_path)
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        for ts in (1_700_000_000, 1_700_000_002):
+            out = str(tmp_path / "ck" / f"model_{ts}")
+            t.save(out)
+        path, bundle = m.load_latest_with_path()
+        assert path == str(tmp_path / "ck" / "model_1700000002.soul")
+        assert bundle is not None
+        assert "model_state_dict" in bundle
+
+    def test_load_latest_with_path_skips_corrupt_newest(self, data_path, tmp_path, caplog):
+        m = _manager(tmp_path)
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.save(str(tmp_path / "ck" / "model_100"))
+        corrupt = tmp_path / "ck" / "model_200.soul"
+        corrupt.write_bytes(b"not a soul file")
+        os.utime(corrupt, (int(time.time()) + 1000, int(time.time()) + 1000))
+        with caplog.at_level(logging.WARNING, logger="slo.trainer"):
+            path, bundle = m.load_latest_with_path()
+        assert path == str(tmp_path / "ck" / "model_100.soul")
+        assert bundle is not None
+        assert "model_state_dict" in bundle
+        assert any("Skipping unreadable checkpoint" in r.message for r in caplog.records)
+
+    def test_load_latest_with_path_all_corrupt_returns_none_none(self, tmp_path, caplog):
+        m = _manager(tmp_path)
+        for i, ts in enumerate((1_700_000_000, 1_700_000_001)):
+            p = tmp_path / "ck" / f"bad_{i}.soul"
+            p.write_bytes(b"garbage")
+            os.utime(p, (ts, ts))
+        with caplog.at_level(logging.WARNING, logger="slo.trainer"):
+            assert m.load_latest_with_path() == (None, None)
+        assert any("Skipping unreadable checkpoint" in r.message for r in caplog.records)
+
+    def test_latest_valid_and_load_latest_agree_with_path(self, data_path, tmp_path):
+        m = _manager(tmp_path)
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.save(str(tmp_path / "ck" / "model_100"))
+        path, bundle = m.load_latest_with_path()
+        assert m.latest_valid_path() == path
+        latest = m.load_latest()
+        assert latest is not None
+        assert latest["step"] == bundle["step"]
+        assert latest["epoch"] == bundle["epoch"]
+
+    def test_candidates_exclude_tmp_artifacts(self, tmp_path):
+        m = _manager(tmp_path)
+        real = tmp_path / "ck" / "step_9.npz"
+        real.write_bytes(b"x")
+        tmp = tmp_path / "ck" / "step_9.tmp.npz"
+        tmp.write_bytes(b"partial")
+        os.utime(tmp, (int(time.time()) + 1000, int(time.time()) + 1000))
+        assert m.latest_path() == str(real)
+
+    def test_save_checkpoint_npz_atomic_no_tmp_left(self, tmp_path):
+        from domains.training.slonet import load_checkpoint_npz, save_checkpoint_npz
+
+        m = _manager(tmp_path)
+        p = tmp_path / "ck" / "step_7.npz"
+        out = save_checkpoint_npz(str(p), {"w": np.array([1.0, 2.0])}, {"step": 7})
+        assert out == str(p)
+        assert p.is_file()
+        assert not list((tmp_path / "ck").glob("*.tmp.npz"))
+        assert load_checkpoint_npz(str(p))["step"] == 7
+
+    def test_save_checkpoint_npz_failure_leaves_no_artifact(self, tmp_path, monkeypatch):
+        from domains.training.slonet import save_checkpoint_npz
+
+        m = _manager(tmp_path)
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(np, "savez_compressed", boom)
+        p = tmp_path / "ck" / "step_7.npz"
+        with pytest.raises(RuntimeError, match="disk full"):
+            save_checkpoint_npz(str(p), {"w": np.array([1.0])}, {})
+        assert not p.exists()
+        assert not list((tmp_path / "ck").glob("*.tmp.npz"))
 
 
 # =============================================================================
@@ -702,7 +703,7 @@ class TestTrainerHelpers:
     def test_create_optimizer(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         opt = t._create_optimizer()
-        assert isinstance(opt, SloAdam)
+        assert isinstance(opt, SloAdamW)
 
     def test_create_scheduler_with_max_steps(self, data_path, tmp_path):
         cfg = tiny_config(tmp_path, max_steps=12)
@@ -910,7 +911,7 @@ class TestTrain:
         assert r.success is True
         assert r.global_step == 2
         assert r.total_steps == 2
-        assert r.epochs_completed == 1
+        assert r.epochs_completed == 0  # 2 of many steps — no epoch completed
         assert math.isfinite(r.final_loss)
         assert r.model_path
         assert os.path.exists(r.model_path)
@@ -925,6 +926,77 @@ class TestTrain:
         assert t._best_val_loss != float("inf")
         assert t._best_model_path is not None
         assert t._patience_counter == 0
+
+    def test_save_best_only_skips_worse_periodic_saves(self, data_path, tmp_path):
+        cfg = tiny_config(
+            tmp_path, max_steps=3, checkpoint_interval=1, save_best_only=True
+        )
+        t = make_trainer(data_path, cfg)
+        losses = iter([1.0, 2.0, 3.0])
+        real_save = t.save_checkpoint
+        periodic = []
+
+        def fake_step():
+            loss = next(losses)
+            t._last_train_loss = loss
+            return {"loss": loss}
+
+        def tracking_save(metrics=None, is_final=False):
+            if not is_final:
+                periodic.append(float(metrics["loss"]))
+            real_save(metrics, is_final=is_final)
+
+        t.train_step = fake_step
+        t.save_checkpoint = tracking_save
+        r = t.train()
+        assert r.success is True
+        assert r.global_step == 3
+        assert periodic == [1.0]  # only the first (best) periodic save
+        assert t._best_checkpoint_loss == 1.0
+
+    def test_save_best_only_off_saves_every_periodic(self, data_path, tmp_path):
+        cfg = tiny_config(
+            tmp_path, max_steps=3, checkpoint_interval=1, save_best_only=False
+        )
+        t = make_trainer(data_path, cfg)
+        losses = iter([3.0, 2.0, 1.0])
+        real_save = t.save_checkpoint
+        periodic = []
+
+        def fake_step():
+            loss = next(losses)
+            t._last_train_loss = loss
+            return {"loss": loss}
+
+        def tracking_save(metrics=None, is_final=False):
+            if not is_final:
+                periodic.append(float(metrics["loss"]))
+            real_save(metrics, is_final=is_final)
+
+        t.train_step = fake_step
+        t.save_checkpoint = tracking_save
+        r = t.train()
+        assert r.success is True
+        assert periodic == [3.0, 2.0, 1.0]  # every periodic save written
+
+    def test_checkpoint_interval_zero_disables_periodic_saves(self, data_path, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=3, checkpoint_interval=0)
+        t = make_trainer(data_path, cfg)
+        real_save = t.save_checkpoint
+        periodic = []
+
+        def tracking_save(metrics=None, is_final=False):
+            if not is_final:
+                periodic.append(float(metrics["loss"]))
+            real_save(metrics, is_final=is_final)
+
+        t.save_checkpoint = tracking_save
+        r = t.train()
+        assert r.success is True
+        assert r.global_step == 3
+        assert periodic == []  # checkpoint_interval=0 disables periodic saves
+        assert t._last_checkpoint_path is not None
+        assert os.path.exists(t._last_checkpoint_path)
 
     def test_early_stopping(self, data_path, tmp_path):
         cfg = tiny_config(tmp_path, max_steps=4, eval_interval=1, early_stopping_patience=1)
@@ -1059,12 +1131,83 @@ class TestTrain:
         r = t2.train(resume=True, resume_path=None)
         assert r.global_step == 2
 
+    def test_resume_no_checkpoint_warns_and_starts_fresh(self, data_path, tmp_path, caplog):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = make_trainer(data_path, cfg)
+        with caplog.at_level(logging.WARNING, logger="slo.trainer"):
+            r = t.train(resume=True, resume_path=None)
+        assert r.global_step == 2
+        assert r.success is True
+        assert any("Resume requested but no checkpoint found" in rec.message for rec in caplog.records)
+
+    def test_resume_explicit_bad_path_raises(self, data_path, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = make_trainer(data_path, cfg)
+        missing = str(tmp_path / "ck" / "does_not_exist.soul")
+        with pytest.raises(ValueError, match="Cannot resume from"):
+            t.train(resume=True, resume_path=missing)
+
+    def test_resume_explicit_unsupported_ext_raises(self, data_path, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = make_trainer(data_path, cfg)
+        bad = tmp_path / "ck" / "legacy.pt"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_bytes(b"x")
+        with pytest.raises(ValueError, match="Cannot resume from"):
+            t.train(resume=True, resume_path=str(bad))
+
+    def test_resume_explicit_corrupt_path_raises(self, data_path, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = make_trainer(data_path, cfg)
+        bad = tmp_path / "ck" / "corrupt.soul"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_bytes(b"not a soul file")
+        with pytest.raises(ValueError, match="Cannot resume from.*unreadable"):
+            t.train(resume=True, resume_path=str(bad))
+
+    def test_resume_with_preloaded_bundle_restores_step(self, data_path, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t1 = make_trainer(data_path, cfg)
+        t1.train()
+        souls = list((tmp_path / "ckpts").glob("*.soul"))
+        bundle = CheckpointManager.load_from_path(str(souls[0]))
+        t2 = make_trainer(data_path, tiny_config(tmp_path, max_steps=2))
+        r = t2.train(resume=True, resume_checkpoint=bundle)
+        assert r.global_step == 2
+        assert t2.global_step == 2
+
+    def test_resume_checkpoint_takes_precedence_over_path(self, data_path, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t1 = make_trainer(data_path, cfg)
+        t1.train()
+        souls = list((tmp_path / "ckpts").glob("*.soul"))
+        bundle = CheckpointManager.load_from_path(str(souls[0]))
+        corrupt = tmp_path / "ck" / "corrupt.soul"
+        corrupt.parent.mkdir(parents=True, exist_ok=True)
+        corrupt.write_bytes(b"not a soul file")
+        t2 = make_trainer(data_path, tiny_config(tmp_path, max_steps=2))
+        r = t2.train(resume=True, resume_path=str(corrupt), resume_checkpoint=bundle)
+        assert r.global_step == 2
+
+    def test_resume_checkpoint_without_resume_raises(self, data_path, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = make_trainer(data_path, cfg)
+        with pytest.raises(ValueError, match="resume_checkpoint requires resume=True"):
+            t.train(resume=False, resume_checkpoint={})
+
+    def test_resume_checkpoint_non_dict_raises(self, data_path, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = make_trainer(data_path, cfg)
+        with pytest.raises(ValueError, match="resume_checkpoint must be a checkpoint bundle dict"):
+            t.train(resume=True, resume_checkpoint="models/some.soul")
+
+
     def test_max_steps_break(self, data_path, tmp_path):
         cfg = tiny_config(tmp_path, max_steps=1)
         t = make_trainer(data_path, cfg)
         r = t.train()
         assert r.global_step == 1
-        assert r.epochs_completed == 1
+        assert r.epochs_completed == 0  # single step — epoch not completed
 
 
 # =============================================================================
@@ -1092,6 +1235,44 @@ class TestSaveCheckpoint:
         assert t._last_checkpoint_path is not None
         assert os.path.exists(t._last_checkpoint_path)
 
+    def test_periodic_checkpoint_keeps_optimizer_state(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.save_checkpoint({"eval_loss": 1.5})
+        from domains.inference.slo_format import load_soul
+        profile, _ = load_soul(t._last_checkpoint_path)
+        ts = profile.metadata["training_state"]
+        assert "state" in ts["optimizer"]
+
+    def test_final_checkpoint_strips_optimizer_state(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.save_checkpoint({"eval_loss": 0.1}, is_final=True)
+        from domains.inference.slo_format import load_soul
+        profile, _ = load_soul(t._last_checkpoint_path)
+        ts = profile.metadata["training_state"]
+        assert "hyperparameters" in ts["optimizer"]
+        assert "state" not in ts["optimizer"]
+
+    def test_save_leaves_no_tmp_files(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.save(str(tmp_path / "ck" / "model"))
+        assert (tmp_path / "ck" / "model.soul").is_file()
+        assert (tmp_path / "ck" / "model.soul.meta.json").is_file()
+        assert not [p for p in (tmp_path / "ck").iterdir() if p.suffix == ".tmp"]
+
+    def test_save_soul_meta_failure_leaves_no_partial_artifact(self, data_path, tmp_path, monkeypatch):
+        import domains.inference.slo_format as slo_format
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("meta write failed")
+
+        monkeypatch.setattr(slo_format.json, "dump", boom)
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        with pytest.raises(RuntimeError, match="meta write failed"):
+            t.save(str(tmp_path / "ck" / "model"))
+        assert not (tmp_path / "ck" / "model.soul").exists()
+        assert not (tmp_path / "ck" / "model.soul.meta.json").exists()
+        assert not [p for p in (tmp_path / "ck").iterdir() if p.suffix == ".tmp"]
+
     def _monotonic_time(self, monkeypatch, base):
         ticks = iter(range(base, base + 20))
 
@@ -1099,6 +1280,12 @@ class TestSaveCheckpoint:
             return next(ticks)
 
         monkeypatch.setattr("domains.training.train_pipeline.time.time", fake_time)
+        # INFO/DEBUG log records (if the CLI configured an active slo.trainer
+        # logger) each consume a fake time.time tick via Logger.makeRecord,
+        # which would break the timestamp arithmetic below. Disable the logger
+        # (checked before Python 3.12's isEnabledFor _cache) so only the
+        # intended time.time calls are counted.
+        monkeypatch.setattr(logging.getLogger("slo.trainer"), "disabled", True)
 
     def test_rolling_save_keeps_max_checkpoints(self, data_path, tmp_path, monkeypatch):
         t = make_trainer(data_path, tiny_config(tmp_path, max_checkpoints=3))
@@ -1163,16 +1350,43 @@ class TestSave:
     def test_save_sou(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "model_out")
-        t.save(out, format="sou")
+        t.save(out)
         assert os.path.exists(out + ".soul")
         assert os.path.exists(out + ".soul.meta.json")
+
+    def test_save_format_param_deprecated(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "model_fmt")
+        with pytest.warns(DeprecationWarning, match="format.*deprecated"):
+            t.save(out, format="npz")
+        assert os.path.exists(out + ".soul")
+        assert not os.path.exists(out + ".npz")
+
+    def test_save_format_sou_deprecated(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "model_fmt_sou")
+        with pytest.warns(DeprecationWarning, match="format.*deprecated"):
+            t.save(out, format="sou")
+        assert os.path.exists(out + ".soul")
+
+    def test_save_without_format_no_warning(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "model_fmt_default")
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            t.save(out)
+        assert not any(
+            issubclass(w.category, DeprecationWarning) and "format" in str(w.message)
+            for w in rec
+        )
+        assert os.path.exists(out + ".soul")
 
     def test_save_sou_embeds_training_state(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         t.global_step = 3
         t.current_epoch = 1
         out = str(tmp_path / "model_ts")
-        t.save(out, format="sou")
+        t.save(out)
         from domains.inference.slo_format import load_soul
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
@@ -1180,20 +1394,45 @@ class TestSave:
         assert ts["epoch"] == 1
         assert "optimizer" in ts
 
-    def test_save_non_sou_format_saves_soul(self, data_path, tmp_path, caplog):
+    def test_save_sou_embeds_final_train_loss(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
-        out = str(tmp_path / "model_st")
-        t.save(out, format="safetensors")
-        assert os.path.exists(out + ".soul")
-        assert os.path.exists(out + ".soul.meta.json")
-        assert any("Unsupported format" in r.message for r in caplog.records)
+        t._last_train_loss = 3.5
+        out = str(tmp_path / "model_loss")
+        t.save(out)
+        from domains.inference.slo_format import load_soul
+        profile, _ = load_soul(out + ".soul")
+        assert profile.final_train_loss == 3.5
 
-    def test_save_unknown_format_uses_soul(self, data_path, tmp_path, caplog):
+    def test_save_sou_untrained_losses_are_null(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
-        out = str(tmp_path / "m")
-        t.save(out, format="pt")
-        assert os.path.exists(out + ".soul")
-        assert any("Unsupported format" in r.message for r in caplog.records)
+        out = str(tmp_path / "model_fresh")
+        t.save(out)
+        from domains.inference.slo_format import load_soul
+        profile, _ = load_soul(out + ".soul")
+        assert profile.final_train_loss is None
+        assert profile.final_val_loss is None
+
+    def test_save_sou_drops_optimizer_state(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "model_noopt")
+        t.save(out, include_optimizer_state=False)
+        from domains.inference.slo_format import load_soul
+        profile, _ = load_soul(out + ".soul")
+        ts = profile.metadata["training_state"]
+        assert "optimizer" in ts
+        assert "hyperparameters" in ts["optimizer"]
+        assert "state" not in ts["optimizer"]
+
+    def test_save_keeps_optimizer_state_by_default(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        t.global_step = 5
+        out = str(tmp_path / "model_fullopt")
+        t.save(out)
+        from domains.inference.slo_format import load_soul
+        profile, _ = load_soul(out + ".soul")
+        ts = profile.metadata["training_state"]
+        assert ts["step"] == 5
+        assert "state" in ts["optimizer"]
 
 
 class TestGenerate:
@@ -1259,7 +1498,7 @@ class TestTokenizerTraining:
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
         out = str(tmp_path / "tok")
-        t.save(out, format="sou")
+        t.save(out)
         profile, _ = load_soul(out + ".soul")
         meta = profile.metadata["tokenizer"]
         assert meta["type"] == "token_tree"
@@ -1270,7 +1509,7 @@ class TestTokenizerTraining:
         from domains.inference.slo_format import load_soul
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "plain")
-        t.save(out, format="sou")
+        t.save(out)
         profile, _ = load_soul(out + ".soul")
         assert "tokenizer" not in profile.metadata
 
@@ -1280,7 +1519,7 @@ class TestTokenizerTraining:
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
         out = str(tmp_path / "tok")
-        t.save(out, format="sou")
+        t.save(out)
 
         provider = SloNetChatProvider.from_soul(out + ".soul", model_id="tree-model")
         assert provider._tokenizer is not None

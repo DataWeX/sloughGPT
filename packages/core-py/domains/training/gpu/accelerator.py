@@ -3,7 +3,6 @@ GPU Acceleration Layer for SloNet
 
 Supports Metal (macOS), CUDA (NVIDIA), and CPU fallback.
 All tensors stay as numpy arrays backed by GPU buffers when available.
-No PyTorch dependency.
 
 Usage:
     from domains.training.gpu.accelerator import get_accelerator, to_gpu, from_gpu

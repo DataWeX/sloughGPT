@@ -2,8 +2,8 @@
 Auto-Train Router — SloNet LM Training Pipeline
 
 Trains a SloNet LSTM as a next-token-prediction language model on user-provided
-text (source_text, dataset, or file).  Pure NumPy — no PyTorch dependency for
-student training.  Exports checkpoints as .soul (binary float32 format).
+text (source_text, dataset, or file).  Pure NumPy student training.
+Exports checkpoints as .soul (binary float32 format).
 
 Phase sequence: TRAINING -> COMPLETE | FAILED
 
@@ -11,7 +11,7 @@ Encapsulates router state in ``AutoTrainRouter`` class rather than module-level
 mutable globals.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, is_dataclass, asdict
 import threading
 from typing import Any, Dict, Optional
 from pathlib import Path
@@ -21,10 +21,13 @@ from fastapi import Request
 from pydantic import BaseModel, Field
 import json
 import logging
+import math
 import re
 import time
 
 from schemas.common import success_response, error_response
+
+from training.runtime import get_training_runtime
 
 try:
     from domains.api.sse_envelope import sse_event, sse_error, sse_complete
@@ -71,6 +74,33 @@ _turbo_state: Dict[str, Any] = {
 }
 
 
+def _finite_payload(o: Any) -> Any:
+    """Recursively convert a value into a JSON-safe plain structure.
+
+    Dataclasses (e.g. ``TrainResult``) become dicts, and non-finite floats
+    (``inf``/``nan`` — produced when a trainer has no eval run) become ``None``
+    so that ``json.dumps(allow_nan=False)`` never fails on the status endpoint.
+
+    Args:
+        o: Arbitrary value (dict, list, tuple, dataclass, scalar).
+
+    Returns:
+        A JSON-serializable copy of ``o`` with non-finite floats replaced by ``None``.
+
+    Side effects:
+        None — the input is not mutated.
+    """
+    if is_dataclass(o):
+        return _finite_payload(asdict(o))
+    if isinstance(o, dict):
+        return {k: _finite_payload(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_finite_payload(v) for v in o]
+    if isinstance(o, float) and not math.isfinite(o):
+        return None
+    return o
+
+
 class _AutoTrainCancelled(Exception):
     pass
 
@@ -94,7 +124,7 @@ _VALID_CKPT_NAME = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
 def _enforce_checkpoint_budget():
     try:
         files = []
-        for ext in ("*.soul", "*.pt", "*.slo"):
+        for ext in ("*.soul", "*.slo"):
             for f in CHECKPOINTS_DIR.glob(ext):
                 files.append(f)
         if not files:
@@ -276,13 +306,27 @@ def _load_soul_meta(ckpt_file: Path) -> dict:
             pass
     if ckpt_file.suffix == ".soul":
         return _read_slo_json_header(ckpt_file)
-    if ckpt_file.suffix == ".pt":
-        pt_meta = ckpt_file.with_suffix(".pt.meta.json")
-        if pt_meta.exists():
-            try:
-                return json.loads(pt_meta.read_text())
-            except Exception:
-                pass
+    if ckpt_file.suffix == ".slo":
+        try:
+            from domains.inference.slo_format import SouParser
+            profile = SouParser.parse(ckpt_file.read_text(encoding="utf-8"))
+            return {
+                "soul_name": profile.name,
+                "tagline": profile.tagline,
+                "description": profile.description,
+                "born_at": profile.born_at,
+                "lineage": profile.lineage,
+                "base_model": profile.base_model,
+                "training_dataset": profile.training_dataset,
+                "final_train_loss": profile.final_train_loss,
+                "system_prompt": profile.system_prompt,
+                "tags": profile.tags,
+                "epochs_trained": profile.epochs_trained,
+                "personality_traits": {k: v for k, v in profile.personality.to_dict().items()},
+                "metadata": dict(profile.metadata),
+            }
+        except Exception:
+            return {}
     return {}
 
 
@@ -403,8 +447,35 @@ class AutoTrainRouter:
         self.router = APIRouter(prefix="/auto-train", tags=["training"])
         self.REPO_ROOT = REPO_ROOT
         self.CHECKPOINTS_DIR = CHECKPOINTS_DIR
+        self.TURBO_DIR = REPO_ROOT / "models" / "turbo-trained"
+        self.TURBO_DIR.mkdir(parents=True, exist_ok=True)
         self.LORA_DIR = LORA_DIR
         self._register_routes()
+
+    def _find_checkpoint(self, name: str) -> Optional[Path]:
+        """Locate a checkpoint file by name across all checkpoint directories.
+
+        Searches ``CHECKPOINTS_DIR`` then ``TURBO_DIR``, appending each known
+        extension (``.soul``/``.slo``) when ``name`` has none.
+
+        Args:
+            name: Checkpoint file name or bare stem.
+
+        Returns:
+            Absolute path to the checkpoint, or ``None`` if not found.
+        """
+        if name.endswith((".soul", ".slo")):
+            for base in (self.CHECKPOINTS_DIR, self.TURBO_DIR):
+                candidate = (base / name).resolve()
+                if candidate.exists() and str(candidate).startswith(str(base.resolve())):
+                    return candidate
+            return None
+        for ext in (".soul", ".slo"):
+            for base in (self.CHECKPOINTS_DIR, self.TURBO_DIR):
+                candidate = (base / (name + ext)).resolve()
+                if candidate.exists() and str(candidate).startswith(str(base.resolve())):
+                    return candidate
+        return None
 
     def _register_routes(self):
         self.router.add_api_route("/start", self.start, methods=["POST"])
@@ -449,20 +520,11 @@ class AutoTrainRouter:
 
         if not resume and req.checkpoint_name:
             ckpt_soul = self.CHECKPOINTS_DIR / f"{req.checkpoint_name}.soul"
-            ckpt_pt = self.CHECKPOINTS_DIR / f"{req.checkpoint_name}.pt"
             if ckpt_soul.exists():
                 resume = True
                 resume_path = str(ckpt_soul)
                 method = "chat-trained"
                 autotrain_logger.info("Auto-resume from %s (SloNet)", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path, "method": method}})
-            elif ckpt_pt.exists():
-                resume = True
-                resume_path = str(ckpt_pt)
-                if not data_path:
-                    method = "chat-trained"
-                    autotrain_logger.info("Checkpoint-only resume (no data): routing to chat_trainer", extra={"tag": "TRAIN", "context": {"checkpoint": resume_path}})
-                else:
-                    autotrain_logger.info("Auto-resume from %s", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path}})
 
         self.state.config = {
             "epochs": req.epochs,
@@ -536,6 +598,27 @@ class AutoTrainRouter:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         job_id = _turbo_state["job_id"]
+        runtime_job = {
+            "id": job_id,
+            "name": getattr(req, "name", None) or "turbo",
+            "model": req.method or "sloughgpt",
+            "dataset": req.dataset_id or data_path,
+            "data_path": data_path,
+            "status": "running",
+            "progress": 0.0,
+            "epochs": req.epochs,
+            "current_epoch": 0,
+            "global_step": 0,
+            "loss": None,
+            "train_loss": None,
+            "checkpoint": None,
+            "checkpoint_dir": str(output_dir),
+            "error": None,
+        }
+        from training.runtime import get_training_runtime
+        get_training_runtime().register(
+            job_id, runtime_job, _turbo_cancel_event, req.model_dump()
+        )
         threading.Thread(
             target=self._run_turbo,
             args=(req, data_path, str(output_dir), job_id),
@@ -563,6 +646,14 @@ class AutoTrainRouter:
                 _turbo_state["steps_per_sec"] = info.get("steps_per_sec", _turbo_state["steps_per_sec"])
                 _turbo_state["eta_s"] = info.get("eta_s", _turbo_state["eta_s"])
                 _turbo_state["elapsed_s"] = info.get("elapsed_s", _turbo_state["elapsed_s"])
+            job = get_training_runtime().get(job_id)
+            if job is not None:
+                with _turbo_lock:
+                    job["progress"] = float(_turbo_state["progress"])
+                    job["global_step"] = int(_turbo_state["global_step"])
+                    job["train_loss"] = _turbo_state["loss"]
+                    job["loss"] = _turbo_state["loss"]
+                get_training_runtime().sync(job_id)
 
         try:
             n_layer = req.n_layer or req.n_decoder_layers or 3
@@ -593,12 +684,22 @@ class AutoTrainRouter:
                 with _turbo_lock:
                     _turbo_state["status"] = "error"
                     _turbo_state["error"] = "Training cancelled"
+                job = get_training_runtime().get(job_id)
+                if job is not None:
+                    job["status"] = "cancelled"
+                    job["error"] = "Training cancelled"
+                    get_training_runtime().sync(job_id)
                 return
 
             if isinstance(result, dict) and result.get("status") == "error":
                 with _turbo_lock:
                     _turbo_state["status"] = "error"
                     _turbo_state["error"] = result.get("message") or "Training failed"
+                job = get_training_runtime().get(job_id)
+                if job is not None:
+                    job["status"] = "failed"
+                    job["error"] = result.get("message") or "Training failed"
+                    get_training_runtime().sync(job_id)
                 return
 
             try:
@@ -613,8 +714,16 @@ class AutoTrainRouter:
                 pass
             with _turbo_lock:
                 _turbo_state["status"] = "complete"
-                _turbo_state["result"] = result
+                _turbo_state["result"] = _finite_payload(result)
                 _turbo_state["progress"] = 100.0
+            job = get_training_runtime().get(job_id)
+            if job is not None:
+                job["status"] = "completed"
+                job["progress"] = 100.0
+                soul_files = sorted(Path(output_dir).glob("*.soul"))
+                if soul_files:
+                    job["checkpoint"] = str(soul_files[-1])
+                get_training_runtime().sync(job_id)
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
@@ -623,11 +732,16 @@ class AutoTrainRouter:
             with _turbo_lock:
                 _turbo_state["status"] = "error"
                 _turbo_state["error"] = str(e)
+            job = get_training_runtime().get(job_id)
+            if job is not None:
+                job["status"] = "failed"
+                job["error"] = str(e)
+                get_training_runtime().sync(job_id)
 
     async def turbo_status(self):
         """Return the current turbo training job progress."""
         with _turbo_lock:
-            return dict(_turbo_state)
+            return _finite_payload(dict(_turbo_state))
 
     async def stop(self):
         global _auto_train_cancel_event
@@ -704,6 +818,7 @@ class AutoTrainRouter:
         task_type = "training-sessions" if method == "chat-trained" else "training"
 
         tq = get_task_queue()
+        await tq.start()
         task = Task(
             name="auto-train",
             task_type=task_type,
@@ -721,6 +836,27 @@ class AutoTrainRouter:
 
         task_id = await tq.enqueue(task)
         autotrain_logger.info("Training task enqueued via task queue: %s", task_id, extra={"tag": "TRAIN"})
+
+        from training.runtime import get_training_runtime
+        runtime_job = {
+            "id": task_id,
+            "name": "auto-train",
+            "model": method,
+            "dataset": self.state.config.get("data_path") or "",
+            "data_path": self.state.config.get("data_path") or "",
+            "data_source": "auto-train",
+            "status": "running",
+            "progress": 0.0,
+            "epochs": self.state.config.get("epochs"),
+            "current_epoch": 0,
+            "global_step": 0,
+            "loss": None,
+            "train_loss": None,
+            "checkpoint": None,
+            "checkpoint_dir": str(CHECKPOINTS_DIR),
+            "error": None,
+        }
+        get_training_runtime().register(task_id, runtime_job, None, dict(self.state.config))
 
         async def event_generator():
             global _auto_train_cancel_event, _auto_train_pause_event
@@ -754,6 +890,21 @@ class AutoTrainRouter:
                         try:
                             ev = json.loads(event[6:])
                             if ev.get("status") in ("complete", "error"):
+                                from training.runtime import get_training_runtime
+                                job = get_training_runtime().get(task_id)
+                                if job is not None:
+                                    if ev.get("status") == "complete":
+                                        job["status"] = "completed"
+                                    else:
+                                        job["status"] = "failed"
+                                        job["error"] = str(ev.get("message") or ev.get("data") or "auto-train failed")
+                                    try:
+                                        soul_files = sorted(CHECKPOINTS_DIR.glob("*.soul"))
+                                        if soul_files:
+                                            job["checkpoint"] = str(soul_files[-1])
+                                    except Exception:
+                                        pass
+                                    get_training_runtime().sync(task_id)
                                 break
                         except json.JSONDecodeError:
                             pass
@@ -784,6 +935,12 @@ class AutoTrainRouter:
                     _srv_state.training_active = False
                 except Exception:
                     pass
+                from training.runtime import get_training_runtime
+                job = get_training_runtime().get(task_id)
+                if job is not None and job.get("status") not in ("completed", "failed", "cancelled"):
+                    job["status"] = "interrupted"
+                    job["error"] = job.get("error") or "Training stream ended before completion"
+                    get_training_runtime().sync(task_id)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -791,7 +948,7 @@ class AutoTrainRouter:
         checkpoints = []
         seen = set()
 
-        for ext in ("*.soul", "*.pt", "*.slo"):
+        for ext in ("*.soul", "*.slo"):
             for f in sorted(self.CHECKPOINTS_DIR.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
                 if f.name in seen:
                     continue
@@ -802,6 +959,15 @@ class AutoTrainRouter:
                 info = self._load_soul(f.name)
                 if info:
                     checkpoints.append(info)
+
+        for f in sorted(self.TURBO_DIR.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if f.name in seen:
+                continue
+            seen.add(f.name)
+            info = self._load_soul(f.name)
+            if info:
+                info["source"] = "turbo"
+                checkpoints.append(info)
 
         for npz in sorted(self.LORA_DIR.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
             if npz.name not in seen:
@@ -817,18 +983,19 @@ class AutoTrainRouter:
 
     async def delete_checkpoint(self, name: str):
         deleted = []
-        for ext in (".soul", ".pt", ".slo"):
-            if name.endswith(ext):
-                candidates = [self.CHECKPOINTS_DIR / name]
-            else:
-                candidates = [self.CHECKPOINTS_DIR / (name + ext)]
-            for candidate in candidates:
-                if candidate.exists():
-                    candidate.unlink()
-                    deleted.append(candidate.name)
-                meta = Path(str(candidate) + ".meta.json")
-                if meta.exists():
-                    meta.unlink()
+        for base in (self.CHECKPOINTS_DIR, self.TURBO_DIR):
+            for ext in (".soul", ".slo"):
+                if name.endswith(ext):
+                    candidates = [base / name]
+                else:
+                    candidates = [base / (name + ext)]
+                for candidate in candidates:
+                    if candidate.exists():
+                        candidate.unlink()
+                        deleted.append(candidate.name)
+                    meta = Path(str(candidate) + ".meta.json")
+                    if meta.exists():
+                        meta.unlink()
 
         if deleted:
             try:
@@ -847,14 +1014,8 @@ class AutoTrainRouter:
         from domains.training.slonet import import_from_sou
         from domains.models.provider import SloTransformerProvider, register_provider
 
-        cp = self.CHECKPOINTS_DIR / name
-        if not cp.exists():
-            for ext in (".soul", ".pt"):
-                candidate = self.CHECKPOINTS_DIR / (name + ext)
-                if candidate.exists():
-                    cp = candidate
-                    break
-        if not cp.exists():
+        cp = self._find_checkpoint(name)
+        if cp is None:
             return error_response(message=f"Checkpoint not found: {name}", data={"name": name})
 
         try:
@@ -923,9 +1084,9 @@ class AutoTrainRouter:
     async def download_checkpoint(self, name: str):
         if not _VALID_CKPT_NAME.match(name) or '..' in name:
             raise HTTPException(status_code=400, detail="Invalid checkpoint name")
-        for d in (self.CHECKPOINTS_DIR, self.LORA_DIR):
+        for d in (self.CHECKPOINTS_DIR, self.TURBO_DIR, self.LORA_DIR):
             fp = (d / name).resolve()
-            if fp.exists() and fp.suffix in (".soul", ".pt") and str(fp).startswith(str(d.resolve())):
+            if fp.exists() and fp.suffix in (".soul", ".slo") and str(fp).startswith(str(d.resolve())):
                 return FileResponse(str(fp), media_type="application/octet-stream", filename=name)
         raise HTTPException(status_code=404, detail="Checkpoint not found")
 
@@ -946,7 +1107,7 @@ class AutoTrainRouter:
         checkpoints = []
         seen = set()
 
-        for ext in ("*.soul", "*.pt", "*.slo"):
+        for ext in ("*.soul", "*.slo"):
             for f in sorted(self.CHECKPOINTS_DIR.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
                 if f.name in seen:
                     continue
@@ -956,6 +1117,14 @@ class AutoTrainRouter:
                 info = self._load_soul(f.name)
                 if info:
                     checkpoints.append(info)
+
+        for f in sorted(self.TURBO_DIR.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if f.name in seen:
+                continue
+            seen.add(f.name)
+            info = self._load_soul(f.name)
+            if info:
+                checkpoints.append(info)
 
         for npz in sorted(self.LORA_DIR.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
             if npz.name not in seen:
@@ -984,9 +1153,9 @@ class AutoTrainRouter:
         import io
         import struct
 
-        for d in (self.CHECKPOINTS_DIR, self.LORA_DIR):
+        for d in (self.CHECKPOINTS_DIR, self.TURBO_DIR, self.LORA_DIR):
             fp = d / name
-            if fp.exists() and fp.suffix in (".soul", ".slo"):
+            if fp.exists() and fp.suffix == ".soul":
                 break
         else:
             raise HTTPException(status_code=404, detail="Checkpoint not found")
@@ -1098,6 +1267,7 @@ class AutoTrainRouter:
             loop.call_soon_threadsafe(queue.put_nowait, event_str)
 
         tq = get_task_queue()
+        await tq.start()
         task = Task(
             name="auto-train-sessions",
             task_type="training-sessions",
@@ -1114,6 +1284,27 @@ class AutoTrainRouter:
 
         task_id = await tq.enqueue(task)
         autotrain_logger.info("From-sessions training task enqueued: %s", task_id, extra={"tag": "TRAIN"})
+
+        from training.runtime import get_training_runtime
+        runtime_job = {
+            "id": task_id,
+            "name": "auto-train-sessions",
+            "model": "sloughgpt",
+            "dataset": "",
+            "data_path": "",
+            "data_source": "from-sessions",
+            "status": "running",
+            "progress": 0.0,
+            "epochs": self.state.config.get("epochs"),
+            "current_epoch": 0,
+            "global_step": 0,
+            "loss": None,
+            "train_loss": None,
+            "checkpoint": None,
+            "checkpoint_dir": str(CHECKPOINTS_DIR),
+            "error": None,
+        }
+        get_training_runtime().register(task_id, runtime_job, None, dict(self.state.config))
 
         async def event_generator():
             global _auto_train_cancel_event
@@ -1146,6 +1337,21 @@ class AutoTrainRouter:
                         try:
                             ev = json.loads(event[6:])
                             if ev.get("status") in ("complete", "error"):
+                                from training.runtime import get_training_runtime
+                                job = get_training_runtime().get(task_id)
+                                if job is not None:
+                                    if ev.get("status") == "complete":
+                                        job["status"] = "completed"
+                                    else:
+                                        job["status"] = "failed"
+                                        job["error"] = str(ev.get("message") or ev.get("data") or "auto-train failed")
+                                    try:
+                                        soul_files = sorted(CHECKPOINTS_DIR.glob("*.soul"))
+                                        if soul_files:
+                                            job["checkpoint"] = str(soul_files[-1])
+                                    except Exception:
+                                        pass
+                                    get_training_runtime().sync(task_id)
                                 break
                         except json.JSONDecodeError:
                             pass
@@ -1168,6 +1374,12 @@ class AutoTrainRouter:
             finally:
                 _auto_train_cancel_event = None
                 self.state.running = False
+                from training.runtime import get_training_runtime
+                job = get_training_runtime().get(task_id)
+                if job is not None and job.get("status") not in ("completed", "failed", "cancelled"):
+                    job["status"] = "interrupted"
+                    job["error"] = job.get("error") or "Training stream ended before completion"
+                    get_training_runtime().sync(task_id)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -1187,20 +1399,9 @@ class AutoTrainRouter:
         return success_response(message="Cancel signal sent")
 
     def _load_soul(self, name: str) -> dict:
-        ckpt_file = self.CHECKPOINTS_DIR / name
-        if not ckpt_file.exists():
-            if name.endswith(".soul"):
-                ckpt_file = self.CHECKPOINTS_DIR / name
-            elif name.endswith(".pt"):
-                ckpt_file = self.CHECKPOINTS_DIR / name
-            else:
-                for ext in (".soul", ".pt"):
-                    candidate = self.CHECKPOINTS_DIR / (name + ext)
-                    if candidate.exists():
-                        ckpt_file = candidate
-                        break
-            if not ckpt_file.exists():
-                return {"name": name, "soul": "unknown"}
+        ckpt_file = self._find_checkpoint(name)
+        if ckpt_file is None:
+            return {"name": name, "soul": "unknown"}
 
         size_mb = round(ckpt_file.stat().st_size / (1024 * 1024), 2)
         meta = _load_soul_meta(ckpt_file)
@@ -1209,7 +1410,7 @@ class AutoTrainRouter:
             m = meta.get("metadata", {})
             raw_soul = (meta.get("soul_name") or meta.get("soul") or meta.get("name") or "unknown")
             soul = raw_soul.replace("-soul", "")
-            if soul == ckpt_file.stem or soul == ckpt_file.name:
+            if ckpt_file.suffix == ".soul" and (soul == ckpt_file.stem or soul == ckpt_file.name):
                 soul = "unknown"
             return {
                 "name": ckpt_file.name,
@@ -1250,29 +1451,6 @@ class AutoTrainRouter:
                     "tokenizer_type": soul_meta.get("tokenizer_type", "char"),
                     "vocab_size": soul_meta.get("vocab_size", 0),
                 }
-            elif ckpt_file.suffix == ".pt":
-                import torch
-                ckpt = torch.load(ckpt_file, map_location="cpu", weights_only=False)
-                result = {
-                    "name": ckpt_file.name,
-                    "download_url": f"/auto-train/checkpoints/{ckpt_file.name}/download",
-                    "soul": ckpt.get("soul_name", "unknown"),
-                    "loss": ckpt.get("train_loss"),
-                    "steps": ckpt.get("steps", 0),
-                    "epochs": ckpt.get("epochs", 0),
-                    "traits": ckpt.get("personality_traits", {}),
-                    "lineage": "legacy-pt",
-                    "model_type": "lstm",
-                    "size_mb": size_mb,
-                    "tokenizer_type": "char",
-                    "vocab_size": 0,
-                }
-                try:
-                    meta_path = ckpt_file.with_suffix(".pt.meta.json")
-                    meta_path.write_text(json.dumps(result, indent=2, default=str))
-                except Exception:
-                    pass
-                return result
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)

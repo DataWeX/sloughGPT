@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
 import {
   AlertDialog,
@@ -29,6 +29,8 @@ import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings, DEFAULT_SETTINGS } from '@/lib/store'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale, LOCALES } from '@/hooks/useLocale'
+import { useTheme } from '@/components/ThemeProvider'
+import { PALETTE_IDS, PALETTE_LABELS, type StoredPaletteId } from '@/lib/theme-storage'
 import { systemController, type DetailedHealth, type SystemMetrics, type DiskUsage, type SystemInfo } from '@/lib/system-controller'
 import { modelController } from '@/lib/model-controller'
 import { formatUptime } from '@/lib/chat-utils'
@@ -66,6 +68,7 @@ export default function SettingsPage() {
   const addToast = useToastStore(s => s.addToast)
   const { healthLegacy: apiHealth } = useLiveStatus()
   const { locale, setLocale } = useLocale()
+  const { palette, setPalette } = useTheme()
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
   const [disk, setDisk] = useState<DiskUsage | null>(null)
@@ -145,11 +148,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Settings" />} />
-
-      <div className="space-y-4">
-        {/* Appearance */}
+    <PageContainer title="Settings">
+      {/* Appearance */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -182,6 +182,43 @@ export default function SettingsPage() {
               <div className="flex gap-1.5 mt-2">
                 <div className="h-5 px-2 rounded bg-primary text-[8px] text-primary-foreground flex items-center justify-center">Button</div>
                 <div className="h-5 px-2 rounded bg-muted text-[8px] text-muted-foreground flex items-center justify-center">Secondary</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Palette */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Palette</CardTitle>
+            <CardDescription>Full-spectrum color palette</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {PALETTE_IDS.map((id) => (
+                <Button
+                  key={id}
+                  size="sm"
+                  variant={palette === id ? 'default' : 'outline'}
+                  className="h-9 text-xs"
+                  onClick={() => setPalette(id)}
+                >
+                  {PALETTE_LABELS[id]}
+                </Button>
+              ))}
+            </div>
+            <div className="mt-3 p-3 rounded-lg border border-border/50 bg-card">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-3 w-3 rounded-full bg-primary" />
+                <div className="h-2 w-16 rounded bg-muted" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-2 w-full rounded bg-muted/50" />
+                <div className="h-2 w-3/4 rounded bg-muted/50" />
+              </div>
+              <div className="flex gap-1.5 mt-2">
+                <div className="h-5 px-2 rounded bg-primary text-[8px] text-primary-foreground flex items-center justify-center">Primary</div>
+                <div className="h-5 px-2 rounded bg-accent text-[8px] text-accent-foreground flex items-center justify-center">Accent</div>
               </div>
             </div>
           </CardContent>
@@ -682,7 +719,6 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </PageContainer>
   )
 }

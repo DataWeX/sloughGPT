@@ -4,7 +4,7 @@ SloNet-based text embedder — train on your own corpus, no downloads.
 Uses the existing SloNet primitives (SloEmbedding, SloTransformerBlock,
 SloLayerNorm, SloLinear) with contrastive learning to produce 384-dim
 text embeddings.  Trains on knowledge files + chat history and saves
-to a ``.sou`` checkpoint that the vector store loads automatically.
+to a ``.soul`` checkpoint that the vector store loads automatically.
 
 Architecture::
 
@@ -82,7 +82,7 @@ def _no_accel():
 
 # Where the trained embedder lives
 _EMBEDDER_DIR = Path(__file__).resolve().parents[4] / "data" / "models"
-_EMBEDDER_PATH = _EMBEDDER_DIR / "text-embedder.sou"
+_EMBEDDER_PATH = _EMBEDDER_DIR / "text-embedder.soul"
 _TOKENIZER_PATH = _EMBEDDER_DIR / "text-embedder-tokenizer.json"
 
 
@@ -408,7 +408,7 @@ def train_embedder(
         epochs: training epochs
         lr: learning rate
         batch_size: mini-batch size
-        save_path: where to save the .sou checkpoint
+        save_path: where to save the .soul checkpoint
         progress_callback: optional callable(epoch, loss, total_epochs)
 
     Returns:
@@ -921,24 +921,24 @@ def _save_checkpoint(
     texts: Optional[List[str]] = None,
     encode_fn=None,
 ):
-    """Save embedder as .sou checkpoint with vocab sidecar.
+    """Save embedder as .soul checkpoint with vocab sidecar.
 
     When ``texts`` is provided, the corpus mean embedding (anisotropy debias)
     and the quality gate metrics are computed from the real training corpus
     and recorded in the checkpoint metadata.
 
     Side effects:
-        - writes ``path`` (.sou) and ``path``-vocab.json
+        - writes ``path`` (.soul) and ``path``-vocab.json
         - records ``quality`` and ``embed_mean`` in the checkpoint meta
     """
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
     # Save vocab as JSON sidecar
-    vocab_path = path.replace(".sou", "-vocab.json")
+    vocab_path = os.path.splitext(path)[0] + "-vocab.json"
     with open(vocab_path, "w") as f:
         json.dump({"vocab": vocab, "itos": {str(k): v for k, v in itos.items()}}, f)
 
-    # Save as .sou (binary format compatible with import_from_sou)
+    # Save as .soul (binary format compatible with import_from_sou)
     from domains.training.slonet import export_to_sou, SloNet
 
     net = SloNet(
@@ -1011,7 +1011,7 @@ def _save_checkpoint(
 
     # Save BPE tokenizer alongside the checkpoint
     if bpe is not None:
-        bpe_save_path = str(path).replace(".sou", "-bpe.json")
+        bpe_save_path = os.path.splitext(str(path))[0] + "-bpe.json"
         try:
             bpe.save(bpe_save_path)
             logger.info("Saved BPE tokenizer to %s", bpe_save_path, extra={"tag": "INFRA"})
@@ -1091,7 +1091,7 @@ class SloTextEmbedder:
             n_layers = params.get("n_layers", DEFAULT_N_LAYERS)
 
             # Load vocab
-            vocab_path = path.replace(".sou", "-vocab.json")
+            vocab_path = os.path.splitext(path)[0] + "-vocab.json"
             if os.path.exists(vocab_path):
                 with open(vocab_path) as f:
                     vdata = json.load(f)
@@ -1105,7 +1105,7 @@ class SloTextEmbedder:
             bpe_tokenizer = None
             try:
                 from domains.multimodal.bpe_tokenizer import BPETokenizer
-                bpe_path = path.replace(".sou", "-bpe.json")
+                bpe_path = os.path.splitext(path)[0] + "-bpe.json"
                 if os.path.exists(bpe_path):
                     bpe_tokenizer = BPETokenizer()
                     if bpe_tokenizer.load(bpe_path):

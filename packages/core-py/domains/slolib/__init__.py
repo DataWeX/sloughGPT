@@ -2,7 +2,7 @@
 SloLib — SloNet's Unified Tensor Library
 
 One library for everything: autograd, GPU acceleration, inference optimization.
-No PyTorch dependency. Pure NumPy + GPU backends.
+Pure NumPy + GPU backends.
 
 Design principles:
 - Inference-first: fused kernels, no unnecessary memory copies

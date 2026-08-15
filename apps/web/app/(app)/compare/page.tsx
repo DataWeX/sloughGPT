@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
@@ -173,40 +173,40 @@ export default function ComparePage() {
     .map(([modelId, r]) => ({ name: models.find(m => m.id === modelId)?.name || modelId, throughput: r.throughput_tokens_per_sec, latency: r.inference_time_ms, memory: r.memory_mb }))
     .sort((a, b) => b.throughput - a.throughput), [completedResults, models])
 
-  return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Model Comparison" subtitle="Side-by-side benchmark results across models" />}
-        right={
-          <div className="flex items-center gap-2">
-            {completedResults.length > 0 && (
-              <>
-                <div className="flex items-center gap-1">
-                  <Input
-                    value={snapshotName}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSnapshotName(e.target.value)}
-                    placeholder="Snapshot name..."
-                    aria-label="Snapshot name"
-                    className="h-8 w-40 text-xs"
-                    onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') saveSnapshot() }}
-                  />
-                  <Button variant="outline" size="sm" onClick={saveSnapshot}>Save</Button>
-                </div>
-                <Button variant="outline" size="sm" onClick={exportResults}>
-                  <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                  Export
-                </Button>
-              </>
-            )}
-            <Button variant="outline" size="sm" onClick={runAll} disabled={loading || running.size > 0}>
-              <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
-            </Button>
+  const headerRight = (
+    <div className="flex items-center gap-2">
+      {completedResults.length > 0 && (
+        <>
+          <div className="flex items-center gap-1">
+            <Input
+              value={snapshotName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSnapshotName(e.target.value)}
+              placeholder="Snapshot name..."
+              aria-label="Snapshot name"
+              className="h-8 w-40 text-xs"
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') saveSnapshot() }}
+            />
+            <Button variant="outline" size="sm" onClick={saveSnapshot}>Save</Button>
           </div>
-        }
-      />
+          <Button variant="outline" size="sm" onClick={exportResults}>
+            <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            Export
+          </Button>
+        </>
+      )}
+      <Button variant="outline" size="sm" onClick={runAll} disabled={loading || running.size > 0}>
+        <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
+      </Button>
+    </div>
+  )
 
-      <div className="space-y-4">
-        {snapshots.length > 0 && (
+  return (
+    <PageContainer
+      title="Model Comparison"
+      subtitle="Side-by-side benchmark results across models"
+      headerRight={headerRight}
+    >
+      {snapshots.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Saved Comparisons</CardTitle>
@@ -251,7 +251,6 @@ export default function ComparePage() {
             <VisualComparisonCard chartData={chartData} />
           </>
         )}
-      </div>
-    </div>
+    </PageContainer>
   )
 }

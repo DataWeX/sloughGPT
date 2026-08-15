@@ -664,9 +664,10 @@ def _matmul(a, b):
         if isinstance(a, Tensor) and a.requires_grad: a._consumers.append(out)
         if isinstance(b, Tensor) and b.requires_grad: b._consumers.append(out)
     _a_shape = a_data.shape; _b_shape = b_data.shape; _out_shape = out.data.shape
-    # Pre-compute transposed/reshaped views for backward (avoid per-call allocs)
-    _b_T = b_data.reshape(-1, b_data.shape[-1]).T if b_data.ndim >= 2 else None
+    _b_T = np.swapaxes(b_data, -2, -1) if b_data.ndim >= 2 else None
     _a_flat = a_data.reshape(-1, a_data.shape[-1]) if a_data.ndim >= 2 else None
+    _a_T = np.swapaxes(a_data, -2, -1) if a_data.ndim >= 2 else None
+    _b_batched = b_data.ndim >= 3
     def bk(g):
         ga = None; gb = None
         if a_req or (isinstance(a, Tensor) and a._backward_fn):
@@ -683,10 +684,13 @@ def _matmul(a, b):
             g_out = g.reshape(_out_shape) if g.shape != _out_shape else g
             if a_data.ndim == 1:
                 gb = np.outer(a_data, g_out)
-            elif g_out.ndim == 1:
-                gb = np.matmul(_a_flat.T, g_out)
+            elif b_data.ndim == 1:
+                gb = np.matmul(a_data.T, g_out) if g_out.ndim == 1 else np.matmul(a_data.T, g_out.ravel())
+            elif _b_batched:
+                gb = np.matmul(_a_T, g_out)
             else:
-                gb = np.matmul(_a_flat.T, g_out.reshape(-1, g_out.shape[-1]))
+                g_flat = g_out.reshape(-1, g_out.shape[-1])
+                gb = np.matmul(_a_flat.T, g_flat)
             gb = gb.reshape(_b_shape) if gb.shape != _b_shape else gb
             if b_req:
                 if b.grad is None: b.grad = Tensor(gb, _copy=False)
@@ -4040,7 +4044,13 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
                     state_items = list(net.state_dict().items())
                 else:
                     state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
-                params = [(k, np.asarray(v, dtype=np.float32)) for k, v in state_items]
+                # Skip non-tensor state entries (e.g. ``config`` metadata some
+                # models embed in state_dict) — they are not weights.
+                params = [
+                    (k, np.asarray(v, dtype=np.float32))
+                    for k, v in state_items
+                    if not isinstance(v, (dict, list, tuple, str, bytes, bool))
+                ]
                 f.write(struct.pack("<I", len(params)))
                 for key, arr in params:
                     name_bytes = key.encode()

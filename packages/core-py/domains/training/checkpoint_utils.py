@@ -1,7 +1,7 @@
 """
 Shared checkpoint helpers for SloughGPT training and inference.
 
-Used by ``train_sloughgpt.py``, ``SloughGPTTrainer`` (inference + ``train(resume=True)``),
+Used by ``SloughGPTTrainer`` (inference + ``train(resume=True)``)
 and CLI load paths so hyperparameters and ``state_dict`` extraction stay consistent.
 
 Char-LM bundles may include ``stoi`` / ``itos`` / ``chars`` (see
@@ -30,18 +30,6 @@ KEY_TRAINING_INFO = "training_info"
 # Re-export standalone NPZ helpers
 save_checkpoint_npz = _save_npz
 load_checkpoint_npz = _load_npz
-
-
-def torch_load_checkpoint(
-    path: str,
-    map_location: str = "cpu",
-) -> Dict[str, Any]:
-    """Load a ``.pt`` checkpoint as a dict with numpy arrays (torch-free)."""
-    from domains.infrastructure.pt_loader import load_pt_file
-    raw = load_pt_file(path, map_location=map_location)
-    if not isinstance(raw, dict):
-        raise TypeError(f"Expected checkpoint at {path!r} to load to dict, got {type(raw).__name__}")
-    return _to_numpy_dict(raw)
 
 
 def normalize_raw_checkpoint(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -73,13 +61,10 @@ def extract_state_dict(bundle: Dict[str, Any]) -> Dict[str, np.ndarray]:
 
 
 def _to_numpy_dict(d: Dict[str, Any]) -> Dict[str, np.ndarray]:
-    """Recursively convert torch tensors in a dict to numpy arrays."""
+    """Recursively normalize arrays in a dict to numpy arrays."""
     result = {}
     for k, v in d.items():
-        if hasattr(v, 'cpu'):
-            arr = v.cpu().numpy()
-            result[k] = arr.astype(arr.dtype)
-        elif isinstance(v, np.ndarray):
+        if isinstance(v, np.ndarray):
             result[k] = v.copy() if v.dtype != np.float32 else v
         elif isinstance(v, dict):
             result[k] = _to_numpy_dict(v)

@@ -2,7 +2,7 @@
 Status Router - Overall service health and info
 """
 from fastapi import APIRouter
-from datetime import datetime
+from datetime import datetime, timezone
 
 from schemas.common import success_response
 
@@ -26,9 +26,19 @@ class StatusRouter:
 
         return success_response(data={
             "status": "healthy",
+            "version": self._app_version(),
             "uptime_seconds": uptime,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).timestamp(),
         })
+
+    @staticmethod
+    def _app_version() -> str:
+        """Resolve the installed package version (with fallback)."""
+        try:
+            from importlib.metadata import version as _pkg_version
+            return _pkg_version("sloughgpt")
+        except Exception:
+            return "unknown"
 
     async def ready(self):
         """Readiness check"""

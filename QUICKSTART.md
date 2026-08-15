@@ -65,8 +65,8 @@ curl -s -X POST http://localhost:8000/models/load \
 # Module entrypoint (no config.yaml merge; --dropout / --lora-alpha on main): python3 -m domains.training.train_pipeline --data datasets/shakespeare/input.txt --epochs 3
 # FP16 mixed-precision preset (after merge): add --optimized
 # API job: ./sloughgpt train --api --dataset shakespeare --epochs 2
-# Char-LM perplexity on held-out text (fair when checkpoint embeds stoi/itos/chars — e.g. cli.py train step_*.pt):
-#   ./sloughgpt eval --checkpoint models/sloughgpt.pt --data datasets/shakespeare/input.txt
+# Char-LM perplexity on held-out text (fair when checkpoint embeds stoi/itos/chars — e.g. sloughgpt train step_*.soul):
+#   ./sloughgpt eval --checkpoint models/sloughgpt.soul --data datasets/shakespeare/input.txt
 #   python3 -m domains.training.lm_eval_char --checkpoint PATH --data PATH [--json]
 # Weights-only bundles without stoi: eval rebuilds vocab from --data (see eval warning). See docs/policies/CONTRIBUTING.md (Checkpoint vocabulary).
 # Details: apps/cli/README.md
@@ -74,7 +74,7 @@ curl -s -X POST http://localhost:8000/models/load \
 
 ### Inference
 ```bash
-# Generate text (local: uses models/sloughgpt.sou if present, else newest models/*.sou, else models/sloughgpt_finetuned.pt)
+# Generate text (local: uses models/sloughgpt.soul if present, else newest models/*.soul)
 ./sloughgpt generate "Hello world" --max-tokens 100
 # Short alias:
 ./sloughgpt gen "Hello world" --max-tokens 100
@@ -106,15 +106,15 @@ curl -s -X POST http://localhost:8000/models/load \
 
 ### Model Export
 
-Export targets (ONNX, GGUF, `.sou`, …) do not preserve native char `stoi` / `itos` the same way as trainer `step_*.pt`; for perplexity parity with training, score the native bundle — **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
+Export targets (ONNX, GGUF, `.soul`, …) do not preserve native char `stoi` / `itos` the same way as trainer `step_*.soul`; for perplexity parity with training, score the native bundle — **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
 
 ```bash
-# Export a checkpoint on disk (-f / --format; see cli.py export --help)
-./sloughgpt export models/sloughgpt.pt -f onnx --seq-len 128
-./sloughgpt export models/sloughgpt.pt -f safetensors
+# Export a checkpoint on disk (-f / --format; see sloughgpt export --help)
+./sloughgpt export models/sloughgpt.soul -f onnx --seq-len 128
+./sloughgpt export models/sloughgpt.soul -f safetensors
 
 # GGUF-style exports support --quantize (Q4_K_M, Q5_K_M, Q8_0, F16, F32)
-./sloughgpt export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M
+./sloughgpt export models/sloughgpt.soul -f gguf_q4_k_m --quantize Q4_K_M
 ```
 
 ### System
@@ -148,14 +148,14 @@ Export targets (ONNX, GGUF, `.sou`, …) do not preserve native char `stoi` / `i
 # List datasets
 ./sloughgpt datasets
 
-# List model artifacts under models/ (.pt, .safetensors, .sou) + HF hints
+# List model artifacts under models/ (.soul, .gguf, .safetensors) + HF hints
 ./sloughgpt models
 
 # Built-in personality presets
 ./sloughgpt personalities
 
 # Inspect a checkpoint file (tensor layout)
-./sloughgpt info models/sloughgpt.pt
+./sloughgpt info models/sloughgpt.soul
 ```
 
 ### API Management
@@ -262,7 +262,7 @@ curl -X POST http://localhost:8000/inference/generate/stream \
 
 ### Training
 
-Native trainer `step_*.pt` on the API host includes `stoi` / `itos` / `chars` for fair `cli.py eval`; see **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
+Native trainer `step_*.soul` on the API host includes `stoi` / `itos` / `chars` for fair `sloughgpt eval`; see **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
 
 ```bash
 curl -X POST http://localhost:8000/train \
@@ -387,7 +387,7 @@ open -a Docker
 ./sloughgpt quick --batch 8
 
 # Or export a smaller artifact (example: GGUF with 4-bit)
-./sloughgpt export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M
+./sloughgpt export models/sloughgpt.soul -f gguf_q4_k_m --quantize Q4_K_M
 ```
 
 ---
@@ -425,7 +425,7 @@ SloughGPT/
 
 ## Next Steps
 
-1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop, **§7b** `train_sloughgpt()`, or optional **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → *Google Colab*; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
+1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop or **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → *Google Colab*; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
 2. **Try different datasets**: Shakespeare, **`tiny`** (small on-disk slice), or a path to your own `.txt`
 3. **Explore model architecture**: Section 5 in the notebook
 4. **Deploy with Docker**: See Docker section above

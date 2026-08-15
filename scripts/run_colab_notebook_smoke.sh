@@ -2,7 +2,7 @@
 # Execute sloughgpt_colab.ipynb end-to-end with smoke-friendly defaults.
 # Uses notebook env hooks: SLOUGH_NOTEBOOK_FORCE_CPU, SLOUGH_NOTEBOOK_TRAIN_CAP (see §3 / §7).
 # Output: sloughgpt_colab.executed.ipynb in repo root (gitignored).
-# §13 / trainer step_*.pt charset for cli.py eval: docs/policies/CONTRIBUTING.md (Checkpoint vocabulary).
+# §13 / trainer step_*.soul charset for sloughgpt eval: docs/policies/CONTRIBUTING.md (Checkpoint vocabulary).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

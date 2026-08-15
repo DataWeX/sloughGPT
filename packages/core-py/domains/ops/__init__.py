@@ -1,5 +1,5 @@
 """
-Optimized Operations for SloughGPT — Zero PyTorch
+Optimized Operations for SloughGPT
 
 Pure NumPy implementations with GPU acceleration via our own accelerator layer.
 Every op is either CPU numpy or GPU-backed. No external dependencies.

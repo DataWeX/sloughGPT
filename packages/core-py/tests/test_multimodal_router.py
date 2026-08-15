@@ -88,7 +88,7 @@ class TestListCheckpoints:
 
     @patch("domains.training.video_trainer.list_video_checkpoints")
     def test_list_with_checkpoints(self, mock_list):
-        mock_list.return_value = [{"name": "ckpt-1", "path": "/tmp/ckpt-1.pt"}]
+        mock_list.return_value = [{"name": "ckpt-1", "path": "/tmp/ckpt-1.npz"}]
         mr = MultimodalRouter()
         client = TestClient(_app(mr))
         resp = client.get("/multimodal/checkpoints")

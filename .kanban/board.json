@@ -24,6 +24,346 @@
   ],
   "cards": [
     {
+      "id": "20260814_123941_checkpoint-resume-hardening",
+      "title": "Checkpoint resume hardening",
+      "description": "Hardening checkpoint resume against corrupt/truncated .soul/.npz files:\n\n- CheckpointManager.latest_valid_path() + load_latest(): skip unreadable checkpoints newest-first (warn + continue), fall back to previous good checkpoint. Crash mid-write of the newest file no longer blocks recovery.\n- train() explicit resume_path: unreadable file now raises ValueError 'Cannot resume from <path>: checkpoint is unreadable (...)' instead of a raw traceback; missing/unsupported keeps its contextual ValueError.\n- /training recovery endpoint: fallback uses latest_valid_path().\n- CLI (cmd_train, cmd_train_native) + train_pipeline __main__: catch ValueError, print clean error, exit 2.\n- Tests: latest_valid_path skips corrupt newest, load_latest skips corrupt newest, all-corrupt -> None, explicit corrupt path raises. Full test_train_pipeline.py 137/137 pass.\n- Docs: docs/policies/CONTRIBUTING.md resume semantics + regression list updated.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "resume",
+        "bugfix",
+        "core-py"
+      ],
+      "created_at": "2026-08-14T12:39:41.050582+00:00",
+      "updated_at": "2026-08-14T12:39:41.050582+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_081214_de-parameterize-trainer-save-validator-torch-check",
+      "title": "De-parameterize trainer save() + validator torch check",
+      "description": "save() always writes .soul; legacy format param kept as DEPRECATED - DeprecationWarning fired at function entry (before any side effects), typed Optional[str], value ignored. CheckpointConfig.__post_init__ DeprecationWarning for export_format not in ('', 'soul'); --save-format CLI option deprecated-but-ignored (Choice [soul,sou,npz]). config_loader save_format merge wiring removed. Validator torch check downgraded to warn. NEW apps/cli/tests/test_validator.py (14 tests) covering torch-missing-warns, CUDA/MPS passes, no-GPU warns, plus CheckResult/ValidationResult semantics and other Doctor checks. Fixed test-isolation bug (logger.disabled=True in _monotonic_time). Verified: core-py 137 pass + root set 102 pass/2 skip; CLI validator 14 + train 23 = 37 pass; 0 warnings.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "cli",
+        "validator"
+      ],
+      "created_at": "2026-08-14T08:12:14.663459+00:00",
+      "updated_at": "2026-08-14T08:12:14.663459+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_052648_sloadamw-hardening-stale-test-cleanup",
+      "title": "SloAdamW hardening + stale test cleanup",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "slonet",
+        "tests"
+      ],
+      "created_at": "2026-08-14T05:26:48.814288+00:00",
+      "updated_at": "2026-08-14T13:03:19.876533+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_052648_checkpoint-format-taxonomy-soul-canonical-in-cliconfig",
+      "title": "Checkpoint format taxonomy: .soul canonical in CLI/config",
+      "description": "Aligned the code-level checkpoint format taxonomy so .soul is canonical and sou is a legacy alias only.\n\nCode fixes:\n- config.yaml: checkpoint.export_format sou -> soul; comment updated.\n- config_loader.py: CheckpointConfig.export_format default sou -> soul.\n- apps/cli/src/commands/train.py cmd_train: save loop now reports the deterministic <save_path>.soul output (trainer.save() always writes .soul regardless of format param, which is an alias gate). Previously printed .sou paths that never existed on disk.\n- cmd_train_native: --save-format default/fallback sou -> soul; removed the never-real npz option (trainer.save() warns and writes .soul for it).\n- apps/cli/src/cli.py: --save-format Choice [sou, npz] -> [soul, sou], default soul.\n- tests updated: test_config.py default assertion -> soul; test_train_commands.py native save-format assertions -> soul; smoke test dropped bogus use_mixed_precision kwarg.\n- Docs: apps/cli/README.md line 31 and docs/FEATURES.md line 95 updated (soul canonical, no npz).\n\nVerified: 49 passed CLI/config group + 125 passed trainer/checkpoint/eval group; pycache cleared.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "checkpoint",
+        "format",
+        "cli"
+      ],
+      "created_at": "2026-08-14T05:26:48.799224+00:00",
+      "updated_at": "2026-08-14T05:26:48.799224+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_040259_x86-assembler-fix-indexed-sib-adcsbb-unaryxchgltr-memory-enc",
+      "title": "X86 assembler: fix indexed SIB, adc/sbb, unary/xchg/ltr memory encodings",
+      "description": "Fixed 6 pinned assembler bugs in packages/core-py/domains/shell/vm.py:\n\n1. Indexed addressing: _mem_operand now SIB-encodes [base+idx*scale] and bare [idx*scale]; two-register sums [base+reg] use scale-1 index. mov eax,[ebx+ecx*2] -> 668b044b (was 668b03, index dropped).\n2. REG8 large imm: r/m8 has no imm16 form; add al,0x1234 now truncates to imm8 via 80 /digit ib -> 80c034 (was TypeError from bytearray.append(bytes)).\n3. adc/sbb: added to dispatch tuple (vm.py:2739); runtime _alu gains op 2 (ADC, adds CF) and op 3 (SBB, subtracts CF); alu_ops table gains 0x10/0x12/0x18/0x1A (8-bit) and 0x11/0x13/0x19/0x1B (32-bit). adc eax,5 -> 83d005 (was NOP 90).\n4. Unary memory: _emit_unary now emits F6 (byte) / F7 (word/dword) with proper ModR/M. not byte [eax] -> f610 (was empty).\n5. xchg word/byte: _emit_xchg handles REG16 (66 87 /r) and REG8 (86 /r). xchg ax,bx -> 87c3 (was empty).\n6. ltr memory: _emit_ltr emits 0F 00 /3 with 0x67 prefix in 16-bit mode. ltr [gdt] -> 670f001d.. (was only the trailing dw).\n\nTests updated: test_vm_assembler_emission.py (renamed/rewrote 6 quirk pins), test_vm_cpu_exec.py (adc/sbb now compute, added CF paths), test_vm_os_layer.py (op 3 is SBB not unknown; added adc/sbb cases). Verification: 2709 VM+shell tests pass; builtins hello/count/counter exit 0.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "vm",
+        "assembler"
+      ],
+      "created_at": "2026-08-14T04:02:59.726447+00:00",
+      "updated_at": "2026-08-14T04:02:59.726447+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_015317_auto-train-sse-checkpoint-format-taxonomy-alignment",
+      "title": "Auto-train SSE + checkpoint format taxonomy alignment",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "checkpoint",
+        "sse",
+        "format"
+      ],
+      "created_at": "2026-08-14T01:53:17.111168+00:00",
+      "updated_at": "2026-08-14T02:00:16.582434+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_011543_x86-assembler-bugfix-imulmovcmp-encodings",
+      "title": "X86 assembler bugfix: imul/mov/cmp encodings",
+      "description": "Fixed four X86Assembler root-cause bugs in packages/core-py/domains/shell/vm.py that produced wrong machine code for VM builtin programs (sort, primes, calculator, factorial):\n\n1. 2-operand IMUL r32, r/m32 (0F AF /r) \u2014 previously routed to unary emitter, emitted F7 /5 (EAX=EAX*EAX). Added _emit_imul + dispatch branch.\n2. MOV [mem], size imm with size word AFTER bracket (mov [arr], dword 8) \u2014 silently emitted nothing. Added branch handling byte/word/dword.\n3. ALU reg, [mem] (cmp edx, [arr+eax+4]) \u2014 no branch, src parsed as immediate. Added reg,[mem] direction using 03+op*8 opcodes (3B for cmp).\n4. ALU [mem], imm with displacement \u2014 inline modrm logic hardcoded mod=00, corrupting the byte stream (e.g. cmp byte [sieve+ecx], 1 -> 83 39 garbage). Refactored shared _mem_operand helper (returns mod_bits, rm_field, disp_bytes) used by _emit_modrm_mem, _emit_alu, _emit_mov, _emit_imul. Added byte (80 /digit ib) and word (66 83/81) sized forms.\n\nAlso:\n- Updated pinned emission tests: add [ebx+4], eax -> 014304 (was corrupt 010304); add byte/word [ebx], 5 -> 800305 / 66830305 (were wrong 83 forms).\n- Added 6 new emission tests covering imul 2-op, mov [mem] imm, cmp reg,[mem], disp mod-bits, byte mem-imm.\n- Reverted workaround edits in apps/api/server/vm_builtins.py back to idiomatic assembly (imul eax, ecx; cmp edx, [arr+eax+4]; cmp byte [sieve+ecx], 1) to prove the assembler fix handles them.\n\nVerification: all 13 builtins run correctly (sort '1 2 3 4 5 6 7 8', primes '2 3 5 7 11 13 17 19 23 29 31 37 41 43 47', calculator 61, factorial 720). Full VM suite 1932 tests pass. train/train-status output 4294967295 (-1) expected when API server is down.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "vm",
+        "assembler"
+      ],
+      "created_at": "2026-08-14T01:15:43.647456+00:00",
+      "updated_at": "2026-08-14T01:15:43.647456+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_011543_x86-vm-assembler-fix-shiftincdec-memory-encodings",
+      "title": "x86 VM assembler: fix shift/inc/dec memory encodings",
+      "description": "Fixed memory-form shift/inc/dec encoding bugs in X86Assembler (vm.py).\n\nRoot cause: _emit_shift hardcoded mod bits (mod=00) and appended displacement bytes as garbage (e.g. 'rol dword [ebx+4], 3' -> c1030403 decoded as rol [ebx],4 + stray 0x03). _emit_inc_dec hardcoded modrm=05 [disp32], dropping the base register entirely ('inc dword [ebx+4]' -> ff0500000000 = INC [0x0]).\n\nFixes:\n- _emit_shift memory branch now uses _mem_operand() for correct mod bits + disp_bytes, strips size prefix (dword/word/byte), emits 66 prefix via new _pfx_size() (word in 32-bit mode, dword in 16-bit mode), correct opcode group (D2/D3 for CL, C0/C1 for imm).\n- _emit_inc_dec memory branch uses _mem_operand(); byte size emits FE /0,/1; word/dword emit FF with 66 prefix per _pfx_size().\n- Added _pfx_size(size) helper next to _pfx().\n\nResults:\n- 'rol dword [ebx+4], 3' -> 66c1430403 (16-bit) / c1430403 (32-bit)\n- 'shl dword [ebx], cl' -> 66d323 (16-bit) / d323 (32-bit)\n- 'inc dword [ebx+4]' -> 66ff4304 (16-bit) / ff4304 (32-bit)\n- 'dec byte [eax]' -> fe08\n- 'inc word [bx]' unchanged (ff0500000000) - 16-bit base reg unsupported by _mem_operand, direct-address path.\n\nTests: updated 3 pins in test_vm_assembler_emission.py (test_inc_dec_memory_uses_disp32_zero renamed to test_inc_dec_memory_uses_proper_modrm; rol/shl dword shift pins). 938 VM tests + 1746 shell/VM tests pass. hello/count/counter builtins all exit 0.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "vm",
+        "assembler"
+      ],
+      "created_at": "2026-08-14T01:15:43.595685+00:00",
+      "updated_at": "2026-08-14T01:15:43.595685+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_002639_turbo-checkpoints-in-catalog",
+      "title": "Turbo checkpoints in catalog",
+      "description": "Turbo-trained models (models/turbo-trained/) appear in GET /auto-train/checkpoints with source=turbo; loadable/deletable/downloadable/exportable. Added _find_checkpoint() resolver (CHECKPOINTS_DIR then TURBO_DIR). 4 catalog tests added earlier.\n\nLoad-for-chat button on TurboCard completion: basename from turboResult.model_path -> trainingJobsController.loadCheckpoint(name), success/failure toast, Loading state. 2 TurboCard tests.\n\nTurbo badge in checkpoint catalog: Checkpoint.source field added to souls-controller.ts; ResultsStep renders a 'Turbo' Badge when source==='turbo'. 1 ResultsStep test.\n\nBUG FIX (found via new real-training test): _run_turbo stored the raw TrainResult whose best_eval_loss=inf crashed /auto-train/turbo/status with json.dumps(allow_nan=False) ValueError (500). Added _finite_payload() recursive sanitizer (dataclass->dict, inf/nan->None), applied at result storage AND turbo_status read. Real training end-to-end test added: start-turbo with tiny real config (n_embed=32, 1 layer, ~600 char corpus) trains in ~0.6s -> status complete -> checkpoint in catalog with source=turbo -> load_checkpoint success. Fixed _reset_turbo fixture to patch TURBO_DIR/CHECKPOINTS_DIR/LORA_DIR alongside REPO_ROOT (previously stale import-time dirs).\n\nSOUL METADATA FIXES (train_pipeline.py): (1) SloughGPTTrainer.save() now passes final_train_loss=self._last_train_loss to create_soul_profile (was default 0.0) so soul top-level final_train_loss is the real value; also mirrored in the metadata dict. (2) _build_training_state_metadata() gained include_optimizer_state=False param which drops the bulky per-param momentum buffers (optimizer['state']), keeping hyperparameters+t so resume rebuilds a fresh-momentum optimizer; SloughGPTTrainer.save() passes False. Verified via real training: final_train_loss now 4.20 (was 0.0), optimizer keys now ['hyperparameters','t'], soul 81KB for tiny model. Resume/restore path still works (load_state_dict try/except -> fresh optimizer).\n\nVerification: turbo router 12/12, auto-train+training e2e 67/67, train_pipeline 133, training-related core-py 214 passed/18 skipped, slo_format 58, resume/restore 10/10, tsc 0 errors.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "turbo",
+        "backend"
+      ],
+      "created_at": "2026-08-14T00:26:39.333423+00:00",
+      "updated_at": "2026-08-14T00:26:39.333423+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_002639_strui-component-bugfixes-aschild-leaks-radio-children-tabs-a",
+      "title": "strui component bugfixes: asChild leaks, radio children, tabs a11y, dialog overlay-close",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "strui",
+        "frontend",
+        "accessibility"
+      ],
+      "created_at": "2026-08-14T00:26:39.284579+00:00",
+      "updated_at": "2026-08-14T00:26:39.284579+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_002639_strui-component-bug-fixes-regression-tests",
+      "title": "strui component bug fixes + regression tests",
+      "description": "Fixed 6 component bugs in packages/strui: (1) tooltip asChild leaked to DOM + position not recomputed on defaultOpen, (2) DropdownMenuRadioItem swallowed children + added onSelect to Item, (3) Dialog/AlertDialog trigger asChild + overlay click-to-close, (4) tabs aria-controls/aria-labelledby + arrow-key nav, (5) ModelStatusPill className drop, (6) RangeSlider showValue prop. 14 new regression tests. Strui suite 720/720, tsc exit 0 (strui + web).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "strui",
+        "ui",
+        "frontend"
+      ],
+      "created_at": "2026-08-14T00:26:39.235913+00:00",
+      "updated_at": "2026-08-14T00:26:39.235913+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_002639_wire-seasons-benchmark-into-world-driver-cli",
+      "title": "Wire --seasons benchmark into world_driver CLI",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "world",
+        "seasons"
+      ],
+      "created_at": "2026-08-14T00:26:39.187455+00:00",
+      "updated_at": "2026-08-14T00:26:39.187455+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_002639_live-realm-view-seasonal-year-envelope-stage-14-observation",
+      "title": "Live realm view: seasonal year envelope (Stage 14 observation surface)",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "realm",
+        "seasons"
+      ],
+      "created_at": "2026-08-14T00:26:39.138813+00:00",
+      "updated_at": "2026-08-14T00:26:39.138813+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_002639_sloadamw-decoupled-weight-decay-optimizer-trainer-wiring",
+      "title": "SloAdamW: decoupled weight decay optimizer + trainer wiring",
+      "description": "SloAdamW: decoupled weight decay optimizer (torch.optim.AdamW equivalent), wired into SloughGPTTrainer._create_optimizer.\n\n- slonet.py: SloAdam refactored - extracted _reduce_to_param_shape (sums ALL leading broadcast axes, replacing the old single upd.sum(axis=0) hack) and _update_step (bias-corrected m_hat/(sqrt(v_hat)+eps) in param shape). Legacy coupled-L2 semantics preserved exactly (590 tests green).\n- SloAdamW(SloAdam): step() applies the Adam update then p -= lr*wd*p (decoupled, LR-annealed), default weight_decay=0.01. State serialized by name, interchangeable with SloAdam checkpoints.\n- train_pipeline.py: _create_optimizer() now returns SloAdamW (verified live lr=0.001 wd=0.01).\n- Tests: test_slonet_adamw.py 14 tests - decay semantics, LR-annealed decay, decoupling-vs-L2, clipping, bias correction, state round-trip + SloAdam interchange, autograd linear-regression convergence (MSE<1e-2), reference AdamW equivalence, broadcast-grad reduction before moments (multi-axis).\n- Verified: py_compile clean, 590/590 slonet+trainer+scheduler+broadcast tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "slonet",
+        "optimizer"
+      ],
+      "created_at": "2026-08-14T00:26:39.090534+00:00",
+      "updated_at": "2026-08-14T00:26:39.090534+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_002639_checkpoint-optimizer-state-policy-periodic-keep-final-strip",
+      "title": "Checkpoint optimizer-state policy (periodic keep / final strip)",
+      "description": "Checkpoint metadata policy \u2014 made uniform and honest across ALL .soul writers.\n\nOPTIMIZER STATE (design confirmed: periodic keeps / final strips)\n- SloughGPTTrainer.save(path, ..., include_optimizer_state=True): kwarg renamed to match internal helper. True embeds step+hyperparams+momentum; False embeds step+hyperparams only (fresh-momentum resume).\n- save_checkpoint(metrics, is_final) passes include_optimizer_state=not is_final; train() final save is is_final=True. Periodic interval/eval saves keep momentum for exact crash-resume.\n- CheckpointManager.save(): was ALWAYS embedding full momentum regardless of its is_final param \u2014 now passes include_optimizer_state=not is_final (aligned with trainer policy), and embeds final_train_loss=metrics.get('loss') with final_val_loss. Docstring updated.\n- train_sloughgpt.py already consistent: periodic _save_checkpoint embeds state, final save_model is weights-only.\n\nHONEST METADATA (trainer save())\n- final_train_loss: None when never trained (was 0.0); final_val_loss: None when no eval ran (was inf). No fabricated numbers.\n- epochs_trained: actual completed epochs (current_epoch+1, 0 when untrained) \u2014 was config.epochs. Fixes previously-failing test_epochs.py (expected 2, got 10).\n\nTESTS (all green: 244 passed)\n- +test_save_keeps_optimizer_state_by_default, +test_save_checkpoint_periodic/final, +test_save_sou_untrained_losses_are_null\n- +test_checkpoint_periodic_keeps_optimizer_state, +test_checkpoint_final_strips_optimizer_state\n- test_epochs.py now 2/2 (was 0/2).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "checkpoints"
+      ],
+      "created_at": "2026-08-14T00:26:39.040202+00:00",
+      "updated_at": "2026-08-14T00:26:39.040202+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260814_002638_checkpoint-metadata-honesty-epochs-trained-final-loss-fix",
+      "title": "Checkpoint metadata honesty: epochs_trained + final-loss fix",
+      "description": "Checkpoint metadata honesty in train_pipeline.py (packages/core-py).\n\n- epochs_trained in SloughGPTTrainer.save now reports actual completed epochs (current_epoch+1 when any step ran, else 0) instead of config.epochs.\n- Final-save call in train() passes the last observed train loss (self._last_train_loss) instead of the fabricated {'loss': 0.0}.\n- Removed the fabricated metrics default (metrics or {'loss': 0.0}) from save_checkpoint; metrics docstring now states it is informational only (serialization reads tracked _last_train_loss/_best_val_loss).\n- New tests in packages/core-py/tests/test_epochs.py (2): epochs_trained matches completed epochs and differs from config.epochs; untrained save reports 0.\n\nCheckpointManager dead-code removal (this session):\n- CheckpointManager.save() deleted; SloughGPTTrainer.save/save_checkpoint are the single canonical writers (CLI train.py + API router.py + train loop). CheckpointManager is now a resume-only loader (load_from_path/load_latest).\n- Removed dead state: max_checkpoints/save_best_only params, best_metric, checkpoints list, _cleanup_old_checkpoints(), load_best(), save_checkpoint_npz import.\n- save_best_only is now wired into the train loop: periodic checkpoint_interval save is skipped when config.save_best_only and metrics['loss'] >= _best_checkpoint_loss (new tracker); eval-improvement and final saves are never gated.\n- Removed unused 'from datetime import datetime, timezone' import.\n- Tests pruned/rewritten: deleted save/cleanup/load_best tests, rewrote load_from_path_soul/npz and load_latest_picks_newest via a real trainer; removed dead _tiny_model helper.\n- Verified: 227 tests pass across test_train_pipeline/test_epochs/test_training_status/test_training_pipeline/test_distillation.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "checkpoint"
+      ],
+      "created_at": "2026-08-14T00:26:38.990381+00:00",
+      "updated_at": "2026-08-14T00:26:38.990381+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_160846_fix-log-formatting-and-coloring-in-main-binary",
+      "title": "Fix log formatting and coloring in main binary",
+      "description": "Telemetry logs were not formatted or colored in the main binary.\n\nROOT CAUSE 1 (formatting): BridgeHandler.emit() (bridge.py:77-79) only reads extra['context'] (dict). The generation-telemetry logs passed structured fields (mode, elapsed_ms, prompt, result) as top-level extra keys, which stdlib copies onto the LogRecord but the bridge never reads -> dropped. Fixed: nested all structured fields under extra['context'] in slonet_server.py (x2), model_worker.py, inference.py.\n\nROOT CAUSE 2 (colors): _Ansi constants were computed at import time as '' when stderr was not a TTY (piped/redirected), so even ConsoleLogger(colors=True) emitted no ANSI. Auto-detect was also frozen at import. Fixed in console_logger.py: _Ansi codes are now unconditional; _default_color_enabled() evaluates NO_COLOR / SLO_LOG_COLOR / FORCE_COLOR / stream.isatty() at construction time.\n\nAlso wired ModelMetrics.last_request_time into record_success()/record_failure() (was in snapshot but never set) and updated test_slonet_server.py snapshot contract + added 2 regression tests (colors=True without tty; structured fields must live under context).\n\nVerification: logging + bridge + slonet_server + server integration suites pass; py_compile clean; tsc exit 0.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "logging",
+        "bridge",
+        "console-logger",
+        "colors"
+      ],
+      "created_at": "2026-08-13T16:08:46.489199+00:00",
+      "updated_at": "2026-08-13T16:08:46.489199+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_160846_turbo-training-ui-wiring",
+      "title": "Turbo training UI wiring",
+      "description": "Backend: start-turbo + turbo/status in auto_train.py (7 router tests pass). Hook: useTrainingSession turbo polling mirrors shared fields. UI: new TurboCard + formatDuration helper, wired into /training below pipeline. Tests: 229 training-related frontend tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "turbo",
+        "frontend"
+      ],
+      "created_at": "2026-08-13T16:08:46.478021+00:00",
+      "updated_at": "2026-08-13T16:08:46.478021+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_160846_structured-logging-auto-capture-extra-fields-in-bridge",
+      "title": "Structured logging: auto-capture extra fields in bridge",
+      "description": "BridgeHandler + BufferLogHandler silently dropped non-standard stdlib extra fields (e.g. extra={'mode','elapsed_ms','total_images'}) because they only exist as LogRecord attributes. Added record_extra_context() in domains/logging/bridge.py which merges explicit context + auto-captures stray extra fields (mirrors Logger **ctx kwargs). Fixed 5 real call sites: structured_log, event_bus, model_worker, slonet_server (x2), plus ~40 tag/context sites. Explicit context still wins. Regression tests updated/added; 168 affected tests + ruff pass (pre-existing E741 left untouched).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "logging",
+        "bridge",
+        "telemetry"
+      ],
+      "created_at": "2026-08-13T16:08:46.467498+00:00",
+      "updated_at": "2026-08-13T16:08:46.467498+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260813_145406_turbo-telemetry-async-polling-fix",
+      "title": "Turbo telemetry + async polling fix",
+      "description": "Fixed startTurboTrain async contract: hook now polls GET /auto-train/turbo/status every 3s (mirroring startFineTune), surfaces live telemetry (progress/step/loss/speed/ETA/elapsed) into shared state, transitions to complete/error on terminal status. Added 7 backend router tests (test_auto_train_turbo_router.py) and rewrote hook turbo tests (running->complete polling, telemetry, poll-to-error, api error, exception). Frontend: 14/14 hook tests + tsc clean. Backend: 7/7. Commits: 6b3f9d67 (telemetry feature), fc02c686 (polling fix).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "training",
+        "frontend"
+      ],
+      "created_at": "2026-08-13T14:54:06.236611+00:00",
+      "updated_at": "2026-08-13T14:54:06.236611+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260813_143145_training-eta-integration-log-sse-ui",
       "title": "Training ETA integration (log + SSE + UI)",
       "description": "",
@@ -762,7 +1102,7 @@
         "done"
       ],
       "created_at": "2026-08-12T01:36:10.800345+00:00",
-      "updated_at": "2026-08-12T01:36:10.800345+00:00",
+      "updated_at": "2026-08-14T00:26:39.384651+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []

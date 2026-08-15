@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-SloughGPT Training Pipeline (SloNet-native, torch-free)
+SloughGPT Training Pipeline (SloNet-native)
 
 Trains :class:`domains.models.SloughGPTModel` on pure NumPy via SloNet. There is
-no PyTorch dependency anywhere in the training path: the optimizer is
-``SloAdam``, scheduling is ``domains.training.lr_schedulers``, and checkpoints
-are ``.soul`` (self-contained weights + vocab + training state) with a ``.npz``
-fallback. PyTorch is only ever used elsewhere to *load* HuggingFace models.
+no external framework dependency anywhere in the training path: the optimizer is
+``SloAdamW`` (decoupled weight decay), scheduling is
+``domains.training.lr_schedulers``, and checkpoints are ``.soul``
+(self-contained weights + vocab + training state) with a ``.npz`` fallback.
 
 Features:
 - Gradient accumulation
@@ -25,14 +25,14 @@ import os
 import logging
 import threading
 import time
+import warnings
 import numpy as np
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from domains.training.tracking import ExperimentTracker
-from datetime import datetime, timezone
 
 try:
     from domains.models import SloughGPTModel
@@ -40,7 +40,7 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models a
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domains.training.trainer_protocol import TrainResult
 from domains.training.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
-from domains.training.slonet import load_checkpoint_npz, save_checkpoint_npz
+from domains.training.slonet import load_checkpoint_npz
 from domains.training.lora import apply_lora_to_model, LoRAConfig
 
 logger = logging.getLogger("slo.trainer")
@@ -258,6 +258,7 @@ def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
         result["step"] = parsed.get("step", 0)
         result["epoch"] = parsed.get("epoch", 0)
         result["accumulation_step"] = parsed.get("accumulation_step", 0)
+        result["completed_epochs"] = parsed.get("completed_epochs")
         if "optimizer" in parsed:
             result["optimizer_state_dict"] = parsed["optimizer"]
         if "scheduler" in parsed:
@@ -267,26 +268,41 @@ def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
 
 
 def _build_training_state_metadata(
-    optimizer=None, scheduler=None, step=0, epoch=0,
-    accumulation_step=0, params=None,
+    optimizer=None, scheduler=None, step=0, epoch=0, completed_epochs=0,
+    accumulation_step=0, params=None, include_optimizer_state=True,
 ) -> dict:
     """Build a JSON-serializable dict of training state for embedding in .soul metadata.
 
     Args:
-        optimizer: SloAdam / SloSGD (or None).
+        optimizer: SloAdamW / SloAdam / SloSGD (or None).
         scheduler: SloLRScheduler (or None).
         step: Current global training step.
         epoch: Current epoch.
+        completed_epochs: Number of fully completed epochs so far (honest
+            epochs_trained claim; a mid-epoch save reports the completed count).
         accumulation_step: Current gradient accumulation step.
-        params: List of model parameters (for SloAdam/SloSGD name-based state).
+        params: List of model parameters (for SloAdamW/SloAdam/SloSGD name-based
+            state).
+        include_optimizer_state: If False, the bulky per-parameter momentum
+            buffers (``optimizer["state"]``) are dropped; optimizer
+            hyperparameters are still embedded so a resume can rebuild a
+            fresh optimizer. Keeps checkpoint metadata small.
 
     Returns:
         Dict ready to embed in soul.metadata["training_state"].
     """
-    state: dict = {"step": step, "epoch": epoch, "accumulation_step": accumulation_step}
+    state: dict = {
+        "step": step, "epoch": epoch, "completed_epochs": completed_epochs,
+        "accumulation_step": accumulation_step,
+    }
     if optimizer is not None:
         try:
             opt_state = optimizer.state_dict(params=params) if params is not None else optimizer.state_dict()
+            if not include_optimizer_state and isinstance(opt_state, dict):
+                # Momentum buffers dwarf the weights themselves; hyperparameters
+                # alone let resume recreate a working (fresh-momentum) optimizer.
+                opt_state = dict(opt_state)
+                opt_state.pop("state", None)
             state["optimizer"] = _make_json_safe(opt_state)
         except Exception:
             pass
@@ -306,8 +322,8 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
     optimizer.load_state_dict() can consume them.
 
     Returns:
-        Dict with keys: step, epoch, accumulation_step, optimizer (optional),
-        scheduler (optional).
+        Dict with keys: step, epoch, completed_epochs (optional),
+        accumulation_step, optimizer (optional), scheduler (optional).
     """
 
     def _to_numpy(obj):
@@ -321,6 +337,8 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
         "epoch": raw.get("epoch", 0),
         "accumulation_step": raw.get("accumulation_step", 0),
     }
+    if "completed_epochs" in raw:
+        result["completed_epochs"] = raw.get("completed_epochs")
     opt_raw = raw.get("optimizer")
     if isinstance(opt_raw, dict):
         opt = dict(opt_raw)
@@ -344,166 +362,32 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
 
 
 class CheckpointManager:
-    """Manages .soul checkpointing with automatic cleanup.
+    """Reads checkpoints written by :class:`SloughGPTTrainer`.
 
-    Checkpoints embed ``stoi`` / ``itos`` / ``chars`` so char-LM eval scores
-    against the training charset (see ``docs/policies/CONTRIBUTING.md``).
+    A resume-only manager: ``SloughGPTTrainer.save`` / ``save_checkpoint`` are
+    the single writers (periodic checkpoints embed optimizer momentum for exact
+    resume; final checkpoints strip it for a compact artifact), while this class
+    locates and loads the most recent checkpoint for crash-resume.
     """
 
-    def __init__(
-        self,
-        checkpoint_dir: str = "checkpoints",
-        max_checkpoints: int = 5,
-        save_best_only: bool = False,
-    ):
+    def __init__(self, checkpoint_dir: str = "checkpoints"):
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        self.max_checkpoints = max_checkpoints
-        self.save_best_only = save_best_only
-        self.best_metric = float("inf")
-        self.checkpoints: List[Dict[str, Any]] = []
-
-    def save(
-        self,
-        model: Any,
-        optimizer: Optional[Any],
-        scheduler: Optional[Any],
-        step: int,
-        metrics: Dict[str, float],
-        config: TrainerConfig,
-        epoch: int = 0,
-        is_final: bool = False,
-        *,
-        stoi: Optional[Dict[str, int]] = None,
-        itos: Optional[Dict[int, str]] = None,
-        chars: Optional[List[str]] = None,
-    ) -> Optional[str]:
-        """Save a checkpoint as ``.soul`` (with a ``.npz`` fallback if export fails).
-
-        Args:
-            model: SloNet model to persist.
-            optimizer: SloAdam / SloSGD (or None) — state embedded in metadata.
-            scheduler: SloLRScheduler (or None).
-            step: Current global step.
-            metrics: Loss dict; ``eval_loss`` preferred, else ``loss``.
-            config: TrainerConfig (for metadata).
-            epoch: Current epoch.
-            is_final: If True, bypasses ``save_best_only`` gating.
-            stoi/itos/chars: Vocab maps; when provided they are embedded so
-                char-LM eval uses the **training** charset.
-
-        Returns:
-            Path string of the saved checkpoint, or None if skipped by best-only.
-        """
-        metric_value = metrics.get("eval_loss", metrics.get("loss", float("inf")))
-
-        if self.save_best_only and metric_value >= self.best_metric and not is_final:
-            return None
-
-        if metric_value < self.best_metric:
-            self.best_metric = metric_value
-
-        # Use .soul format for all checkpoints
-        import time
-        timestamp = int(time.time())
-        model_path = self.checkpoint_dir / f"assistant_{timestamp}.soul"
-
-        # Export as .soul format (includes weights + metadata)
-        try:
-            from domains.inference import create_soul_profile, save_soul
-
-            soul = create_soul_profile(
-                name="assistant",
-                base_model="sloughgpt",
-                training_dataset=getattr(config, 'data_path', 'unknown'),
-                epochs_trained=epoch,
-                final_val_loss=metric_value,
-                lineage="sloughgpt",
-                tags=["sloughgpt", "trained", "soul"],
-            )
-
-            # Save vocab in soul metadata
-            if stoi is not None:
-                soul.metadata["stoi"] = stoi
-            if itos is not None:
-                soul.metadata["itos"] = itos
-            if chars is not None:
-                soul.metadata["chars"] = chars
-            elif stoi is not None and itos is not None:
-                soul.metadata["chars"] = [itos[i] for i in range(len(stoi))]
-
-            # Embed training state so .soul is fully self-contained
-            soul.metadata["training_state"] = _build_training_state_metadata(
-                optimizer=optimizer, scheduler=scheduler,
-                step=step, epoch=epoch,
-                accumulation_step=0,
-                params=list(model.parameters()) if hasattr(model, "parameters") else None,
-            )
-
-            save_soul(model, str(model_path), soul_profile=soul)
-
-        except Exception as exc:
-            # Fallback to .npz if .soul export fails
-            logger.warning("Soul export failed, falling back to .npz: %s", exc,
-                extra={"tag": "TRAIN"},)
-            model_path = self.checkpoint_dir / f"step_{step}.npz"
-
-            meta = {
-                "step": step,
-                "epoch": epoch,
-                "metrics": metrics,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "config": {
-                    "vocab_size": config.vocab_size,
-                    "n_embed": config.n_embed,
-                    "n_layer": config.n_layer,
-                    "n_head": config.n_head,
-                    "block_size": config.block_size,
-                },
-            }
-
-            if optimizer is not None:
-                try:
-                    meta["optimizer_state_dict"] = optimizer.state_dict()
-                except Exception as exc:
-                    logger.warning("Could not serialize optimizer state: %s", exc,
-                        extra={"tag": "TRAIN"},)
-
-            if scheduler is not None:
-                try:
-                    meta["scheduler_state_dict"] = scheduler.state_dict()
-                except Exception as exc:
-                    logger.warning("Could not serialize scheduler state: %s", exc,
-                        extra={"tag": "TRAIN"},)
-
-            if stoi is not None:
-                meta["stoi"] = stoi
-            if itos is not None:
-                meta["itos"] = itos
-            if chars is not None:
-                meta["chars"] = chars
-            elif stoi is not None and itos is not None:
-                try:
-                    meta["chars"] = [itos[i] for i in range(len(stoi))]
-                except (KeyError, TypeError):
-                    pass
-
-            np_state = {
-                k: v for k, v in model.state_dict().items() if hasattr(v, "dtype")
-            }
-            save_checkpoint_npz(str(model_path), np_state, meta=meta)
-
-        self.checkpoints.append({"step": step, "path": str(model_path), "metrics": metrics})
-
-        logger.info(f"Checkpoint saved: {model_path} (step={step}, loss={metric_value:.4f})",
-            extra={"tag": "TRAIN"},)
-
-        self._cleanup_old_checkpoints()
-        return str(model_path)
 
     @staticmethod
-    def load_from_path(path: str, map_location: str = "cpu") -> Optional[Dict[str, Any]]:
-        """Load a training checkpoint from an explicit path (.soul or .npz)."""
+    def load_from_path(path: str) -> Optional[Dict[str, Any]]:
+        """Load a training checkpoint from an explicit path (.soul or .npz).
+
+        Args:
+            path: Absolute or relative path to a ``.soul`` or ``.npz`` checkpoint.
+
+        Returns:
+            Loaded checkpoint bundle (``model_state_dict`` plus metadata) or
+            ``None`` when the file is missing or uses an unsupported format.
+
+        Side effects:
+            - logs a warning when the file is missing or unsupported
+        """
         p = Path(path).expanduser()
         if not p.is_file():
             logger.warning("Checkpoint file not found: %s", p,
@@ -517,39 +401,113 @@ class CheckpointManager:
             extra={"tag": "TRAIN"},)
         return None
 
-    def _cleanup_old_checkpoints(self):
-        """Remove old checkpoints keeping only the most recent ones."""
-        if len(self.checkpoints) <= self.max_checkpoints:
-            return
+    @staticmethod
+    def is_resumable(path: str) -> bool:
+        """Cheap, parse-free check that ``path`` is a resumable checkpoint.
 
-        to_remove = self.checkpoints[: -self.max_checkpoints]
-        self.checkpoints = self.checkpoints[-self.max_checkpoints :]
+        Unlike :meth:`load_from_path`, this never reads the file contents — it
+        only verifies the path exists and uses a supported extension, so it can
+        be used to resolve a resume path without paying a full load.
 
-        for ckpt in to_remove:
-            path = Path(ckpt["path"])
-            if path.exists():
-                path.unlink()
+        Returns:
+            True when ``path`` is an existing ``.soul`` or ``.npz`` file,
+            False otherwise.
+        """
+        p = Path(path).expanduser()
+        return p.is_file() and p.suffix in (".soul", ".npz")
+
+    def _candidates_newest_first(self) -> List[Path]:
+        """Checkpoint files under ``checkpoint_dir``, newest modification first.
+
+        In-progress temp artifacts (``*.tmp`` / ``*.tmp.npz``) written during an
+        atomic save are excluded, so an orphaned temp (from a crash between the
+        write and the rename) never surfaces as a resume candidate.
+        """
+        return sorted(
+            [
+                p
+                for p in list(self.checkpoint_dir.glob("*.soul"))
+                + list(self.checkpoint_dir.glob("*.npz"))
+                if not (p.name.endswith(".tmp") or p.name.endswith(".tmp.npz"))
+            ],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+
+    def latest_path(self) -> Optional[str]:
+        """Return the path of the most recently modified checkpoint, if any.
+
+        This is a pure path lookup — it does not validate the file's contents.
+        Use :meth:`latest_valid_path` to skip unreadable (e.g. partially
+        written) checkpoints.
+
+        Returns:
+            Absolute path to the newest ``.soul`` or ``.npz`` file under
+            ``checkpoint_dir``, or ``None`` when the directory holds no
+            checkpoints.
+        """
+        candidates = self._candidates_newest_first()
+        return str(candidates[0]) if candidates else None
+
+    def load_latest_with_path(self) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """Load the newest readable checkpoint and return its path and bundle.
+
+        Single-load primitive: iterates checkpoints newest-first and returns
+        the first ``(path, bundle)`` that parses successfully, skipping
+        unreadable (e.g. partially written) files. Prefer this over calling
+        :meth:`latest_valid_path` then :meth:`load_latest`, which would load
+        the same checkpoint twice.
+
+        Returns:
+            ``(path, bundle)`` for the newest loadable checkpoint, or
+            ``(None, None)`` when no checkpoint in the directory loads.
+
+        Side effects:
+            - logs a warning per skipped unreadable checkpoint
+        """
+        for p in self._candidates_newest_first():
+            try:
+                bundle = CheckpointManager.load_from_path(str(p))
+            except Exception as exc:
+                logger.warning("Skipping unreadable checkpoint %s: %s", p, exc,
+                    extra={"tag": "TRAIN"},)
+                continue
+            if bundle is not None:
+                return str(p), bundle
+        return None, None
+
+    def latest_valid_path(self) -> Optional[str]:
+        """Path of the most recent checkpoint that actually loads.
+
+        Iterates checkpoints newest-first and returns the first one that
+        parses successfully, skipping corrupt or partially-written files (each
+        skipped file is logged). A crash mid-write can leave a ``.soul`` as the
+        newest file; this method falls back to the previous good checkpoint
+        instead of failing.
+
+        Returns:
+            Path of the newest loadable ``.soul``/``.npz`` under
+            ``checkpoint_dir``, or ``None`` when no checkpoint loads.
+
+        Side effects:
+            - logs a warning per skipped unreadable checkpoint
+        """
+        return self.load_latest_with_path()[0]
 
     def load_latest(self) -> Optional[Dict[str, Any]]:
-        """Load the most recently modified .soul or .npz checkpoint."""
-        candidates = (
-            list(self.checkpoint_dir.glob("*.soul"))
-            + list(self.checkpoint_dir.glob("*.npz"))
-        )
-        if not candidates:
-            return None
-        latest = max(candidates, key=lambda p: p.stat().st_mtime)
-        return CheckpointManager.load_from_path(str(latest), map_location="cpu")
+        """Load the most recent readable ``.soul`` or ``.npz`` checkpoint.
 
-    def load_best(self) -> Optional[Dict[str, Any]]:
-        """Load the checkpoint with the best metric."""
-        if not self.checkpoints:
-            return self.load_latest()
-        best = min(self.checkpoints, key=lambda c: c["metrics"].get("eval_loss", float("inf")))
-        path = Path(best["path"])
-        if path.exists():
-            return CheckpointManager.load_from_path(str(path), map_location="cpu")
-        return None
+        Unlike :meth:`latest_path`, this skips unreadable checkpoints and
+        returns the newest one that parses (crash-resilient resume).
+
+        Returns:
+            The loaded checkpoint bundle, or ``None`` when no checkpoint in
+            the directory loads.
+
+        Side effects:
+            - logs a warning per skipped unreadable checkpoint
+        """
+        return self.load_latest_with_path()[1]
 
 
 # =============================================================================
@@ -559,7 +517,7 @@ class CheckpointManager:
 
 class SloughGPTTrainer:
     """
-    Unified trainer for SloughGPTModel (pure NumPy / SloNet, no PyTorch).
+    Unified trainer for SloughGPTModel (pure NumPy / SloNet).
 
     Satisfies :class:`domains.training.trainer_protocol.TrainerProtocol` structurally (``train()``).
 
@@ -663,6 +621,7 @@ class SloughGPTTrainer:
         self._last_train_loss = None  # last raw train loss for fallback
         self._patience_counter = 0  # early stopping: evals since last improvement
         self._best_model_path = None  # path to best checkpoint
+        self._best_checkpoint_loss = float("inf")  # best train loss for save_best_only
         self._early_stopped = False  # True if early stopping triggered
 
         self.device = self._setup_device()
@@ -697,12 +656,8 @@ class SloughGPTTrainer:
         self.optimizer = self._create_optimizer()
         self.scheduler = self._create_scheduler()
 
-        # Setup checkpointing
-        self.checkpoint_manager = CheckpointManager(
-            self.config.checkpoint_dir,
-            self.config.max_checkpoints,
-            self.config.save_best_only,
-        )
+        # Setup checkpointing (resume-only manager; save_checkpoint is the writer)
+        self.checkpoint_manager = CheckpointManager(self.config.checkpoint_dir)
 
         # Training state
         self.global_step = 0
@@ -750,10 +705,10 @@ class SloughGPTTrainer:
                 extra={"tag": "TRAIN"},)
 
     def _create_optimizer(self):
-        """Create SloAdam optimizer with weight decay."""
-        from domains.training.slonet import SloAdam
+        """Create SloAdamW optimizer with decoupled weight decay."""
+        from domains.training.slonet import SloAdamW
 
-        return SloAdam(
+        return SloAdamW(
             lr=self.config.learning_rate,
             weight_decay=self.config.weight_decay,
         )
@@ -924,6 +879,24 @@ class SloughGPTTrainer:
             return max(1, min(int(self.config.max_steps), epoch_budget))
         return epoch_budget
 
+    def _steps_per_epoch(self) -> int:
+        """Optimizer steps in one full pass over the training data (0 when no data)."""
+        if getattr(self, "train_data", None) is None:
+            return 0
+        return len(self.train_data) // self.config.block_size // self.config.batch_size
+
+    @property
+    def _completed_epochs(self) -> int:
+        """Fully completed epochs of training, derived from the absolute step count.
+
+        Computed as ``global_step // steps_per_epoch`` so the value stays honest
+        across mid-epoch checkpoints and resume boundaries (the trainer restarts
+        an epoch's inner loop at the resumed step, so per-process epoch counting
+        would drift; the absolute step count does not).
+        """
+        spe = self._steps_per_epoch()
+        return self.global_step // spe if spe else 0
+
     def _training_elapsed(self) -> float:
         """Seconds since training start (0 before the loop begins)."""
         start = getattr(self, "_training_start_time", None)
@@ -965,6 +938,7 @@ class SloughGPTTrainer:
         self,
         resume: bool = False,
         resume_path: Optional[str] = None,
+        resume_checkpoint: Optional[Dict[str, Any]] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
         cancel_event: Optional[threading.Event] = None,
         pause_event: Optional[threading.Event] = None,
@@ -972,27 +946,75 @@ class SloughGPTTrainer:
         """Full training loop.
 
         Args:
-            resume: If True, load checkpoint from ``resume_path`` or latest in ``checkpoint_dir``.
+            resume: If True, load a checkpoint and continue training. The
+                checkpoint comes from ``resume_checkpoint`` when provided,
+                otherwise ``resume_path``, otherwise the latest readable
+                checkpoint under ``checkpoint_dir``. An explicit ``resume_path``
+                that cannot be loaded raises :class:`ValueError`; an implicit
+                resume (no path) with no checkpoint logs a warning and starts
+                fresh.
             resume_path: Optional checkpoint path (.soul or .npz). Accepts full
                 ``CheckpointManager`` bundles (model + optimizer + scheduler + step/epoch) and
                 **weights-only** bundles (``model_state_dict`` or flat tensors) as normalized
                 by :func:`domains.training.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
                 and scheduler load are best-effort.
+            resume_checkpoint: Optional pre-loaded checkpoint bundle to restore
+                from, bypassing all disk I/O. Takes precedence over
+                ``resume_path`` and ``latest``. Callers that already resolved
+                and loaded a checkpoint (e.g. crash recovery, which uses
+                :meth:`CheckpointManager.load_latest_with_path`) hand it here so
+                the checkpoint is loaded exactly once.
             on_progress: Optional callback invoked on a throttled schedule with a dict
                 containing at least: ``global_step``, ``epoch`` (1-based), ``epochs``,
                 ``steps_per_epoch``, ``progress_percent`` (0--99 while running),
                 ``train_loss`` (last batch), optional ``eval_loss``, ``learning_rate``.
             cancel_event: Optional threading.Event — if set, training stops cooperatively.
             pause_event: Optional threading.Event — if set, training loop sleeps until cleared.
+
+        Raises:
+            ValueError: When ``resume`` is True and an explicit ``resume_path``
+                is missing, uses an unsupported format, or is unreadable
+                (corrupt/truncated). The path is never silently replaced by a
+                different checkpoint. Also raised when ``resume_checkpoint`` is
+                provided without ``resume=True`` — a pre-loaded bundle must
+                never be silently discarded.
         """
+        if resume_checkpoint is not None and not isinstance(resume_checkpoint, dict):
+            raise ValueError(
+                "resume_checkpoint must be a checkpoint bundle dict (as returned by "
+                "load_from_path / load_latest_with_path), got "
+                f"{type(resume_checkpoint).__name__}"
+            )
+        if resume_checkpoint is not None and not resume:
+            raise ValueError(
+                "resume_checkpoint requires resume=True: a pre-loaded bundle is "
+                "only consumed when resuming training"
+            )
         if resume:
-            checkpoint = None
-            if resume_path:
-                checkpoint = CheckpointManager.load_from_path(resume_path, map_location="cpu")
-            if checkpoint is None:
+            if resume_checkpoint is not None:
+                checkpoint = resume_checkpoint
+            elif resume_path:
+                try:
+                    checkpoint = CheckpointManager.load_from_path(resume_path)
+                except Exception as exc:
+                    raise ValueError(
+                        f"Cannot resume from '{resume_path}': checkpoint is unreadable ({exc})"
+                    ) from exc
+                if checkpoint is None:
+                    raise ValueError(
+                        f"Cannot resume from '{resume_path}': checkpoint missing or unsupported "
+                        "(use a .soul or .npz file)"
+                    )
+            else:
                 checkpoint = self.checkpoint_manager.load_latest()
             if checkpoint:
                 self._restore_from_checkpoint_bundle(checkpoint)
+            else:
+                logger.warning(
+                    "Resume requested but no checkpoint found under %s — starting fresh",
+                    self.checkpoint_manager.checkpoint_dir,
+                    extra={"tag": "TRAIN"},
+                )
 
         logger.info(f"Training config: {self.config}",
             extra={"tag": "TRAIN"},)
@@ -1174,15 +1196,31 @@ class SloughGPTTrainer:
                             eval_loss=float(eval_metrics["eval_loss"]),
                         )
 
-                # Checkpoint
-                if self.global_step % self.config.checkpoint_interval == 0:
-                    self.save_checkpoint({"loss": metrics["loss"]})
+                # Checkpoint. With save_best_only, periodic (train-loss) saves
+                # are skipped unless the loss is a new best; eval-improvement
+                # and final saves are never gated. checkpoint_interval=0
+                # disables periodic checkpoints entirely (final save remains).
+                if self.config.checkpoint_interval and self.global_step % self.config.checkpoint_interval == 0:
+                    if (
+                        self.config.save_best_only
+                        and metrics["loss"] >= self._best_checkpoint_loss
+                    ):
+                        logger.info(
+                            "Skipping periodic checkpoint (save_best_only; loss %.4f not a new best)",
+                            float(metrics["loss"]),
+                            extra={"tag": "TRAIN"},
+                        )
+                    else:
+                        self._best_checkpoint_loss = metrics["loss"]
+                        self.save_checkpoint({"loss": metrics["loss"]})
 
             if self.config.max_steps and self.global_step >= self.config.max_steps:
                 break
 
         if not self._early_stopped:
-            self.save_checkpoint({"loss": 0.0}, is_final=True)
+            # Report the last observed loss, never a fabricated value. The soul
+            # profile's final_train_loss is re-derived from _last_train_loss.
+            self.save_checkpoint({"loss": self._last_train_loss}, is_final=True)
             if self._experiment_tracker is not None:
                 self._experiment_tracker.log_metrics(
                     {
@@ -1213,14 +1251,33 @@ class SloughGPTTrainer:
             global_step=self.global_step,
             final_loss=final_loss,
             total_steps=self.global_step,
-            epochs_completed=self.current_epoch + 1,
+            epochs_completed=self._completed_epochs,
             model_path=self._best_model_path or model_path,
             checkpoint_name=checkpoint_name,
         )
 
     def save_checkpoint(self, metrics: Optional[Dict[str, float]] = None, is_final: bool = False):
-        """Save a checkpoint in .soul format with vocab."""
-        metrics = metrics or {"loss": 0.0}
+        """Save a checkpoint in ``.soul`` format with vocab.
+
+        Periodic checkpoints (``is_final=False``) embed full optimizer state so
+        a crashed run resumes exactly; the final checkpoint (``is_final=True``)
+        drops momentum buffers — keeping the delivered artifact small, since it
+        is intended for inference, not resume.
+
+        Args:
+            metrics: Optional training metrics to record (informational only;
+                serialization reads tracked ``_last_train_loss`` /
+                ``_best_val_loss``, never a fabricated placeholder).
+            is_final: True on the last save of a run; prunes older checkpoints
+                and strips optimizer momentum buffers from the artifact.
+
+        Side effects:
+            - writes ``<checkpoint_dir>/<dataset>_<timestamp>.soul``
+            - prunes stale checkpoints via ``_prune_stale_checkpoints``
+
+        Returns:
+            None.
+        """
         chars_list: Optional[List[str]] = None
         if self.itos is not None:
             try:
@@ -1232,7 +1289,6 @@ class SloughGPTTrainer:
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate descriptive checkpoint name from dataset
-        import time
         timestamp = int(time.time())
         soul_name = getattr(self, 'soul_name', 'assistant')
 
@@ -1250,10 +1306,12 @@ class SloughGPTTrainer:
         start_t = getattr(self, '_training_start_time', None)
         training_duration = round(time.time() - start_t, 1) if start_t else None
 
-        # Save in .soul format with vocab
-        self.save(str(checkpoint_path), format="sou",
+        # Save in .soul format with vocab; periodic checkpoints keep optimizer
+        # state (accurate resume), final artifact strips momentum buffers.
+        self.save(str(checkpoint_path),
                   stoi=self.stoi, itos=self.itos, chars=chars_list,
-                  training_duration=training_duration)
+                  training_duration=training_duration,
+                  include_optimizer_state=not is_final)
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
         self._prune_stale_checkpoints(keep_final=is_final)
 
@@ -1274,6 +1332,9 @@ class SloughGPTTrainer:
             - rewires ``_best_model_path`` so it never points at a deleted file
               (on final saves it points at the final checkpoint; otherwise it is
               reset to None when the best checkpoint was pruned by the window)
+
+        Returns:
+            None.
         """
         checkpoint_dir = Path(self.config.checkpoint_dir)
         if not checkpoint_dir.is_dir():
@@ -1310,41 +1371,72 @@ class SloughGPTTrainer:
         elif self._best_model_path and self._best_model_path not in keep:
             self._best_model_path = None
 
-    def save(self, path: str, format: str = "sou", stoi=None, itos=None, chars=None, training_duration=None):
-        """Save model in .soul format (the only SloNet checkpoint format)."""
-        if format != "sou":
-            logger.warning(
-                "Unsupported format %r — SloNet checkpoints are .soul; saving .soul",
-                format, extra={"tag": "TRAIN"},
+    def save(self, path: str, format: Optional[str] = None, stoi=None, itos=None, chars=None,
+             training_duration=None, include_optimizer_state: bool = True):
+        """Save the model in ``.soul`` format (the only SloNet checkpoint format).
+
+        Args:
+            path: Output path without the extension; ``.soul`` is appended.
+            format: DEPRECATED and ignored. Retained for backward compatibility;
+                ``SloughGPTTrainer.save()`` always writes ``.soul`` regardless of
+                this value. Passing a non-None value emits a
+                ``DeprecationWarning``.
+            stoi: String-to-index vocab map embedded in soul metadata so the
+                checkpoint is self-contained for char-level inference.
+            itos: Index-to-string vocab map embedded in soul metadata.
+            chars: Ordered character list used to rebuild ``itos`` when
+                ``itos`` alone is insufficient; derived from ``itos`` when not
+                provided.
+            training_duration: Training duration in seconds, embedded into
+                metadata when provided.
+            include_optimizer_state: If True, embed the full optimizer state
+                (step, hyperparameters, and per-parameter momentum buffers) so
+                a mid-training run resumes exactly. If False, only step and
+                hyperparameters are embedded — momentum buffers are dropped,
+                keeping the checkpoint small; a resume rebuilds the optimizer
+                with fresh momentum. Pass False for final delivered artifacts
+                that only need inference weights.
+
+        Returns:
+            None.
+
+        Side effects:
+            - Writes ``<path>.soul`` and its ``<path>.soul.meta.json``.
+        """
+        if format is not None:
+            warnings.warn(
+                f"The `format` parameter is deprecated and ignored — "
+                f"SloughGPTTrainer.save() always writes .soul (got {format!r})",
+                DeprecationWarning,
+                stacklevel=2,
             )
+
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
-        metadata = {
-            "vocab_size": self.vocab_size,
-            "stoi": stoi or self.stoi,
-            "itos": itos or self.itos,
-            "config": {
-                "n_embed": self.config.n_embed,
-                "n_layer": self.config.n_layer,
-                "n_head": self.config.n_head,
-                "block_size": self.config.block_size,
-                "model_type": "sloughgpt",
-            },
-            "training_dataset": self.data_path,
-            "epochs_trained": self.config.epochs,
-            "final_val_loss": self._best_val_loss,
-        }
-        if training_duration is not None:
-            metadata["training_duration_s"] = training_duration
-
         from domains.inference import create_soul_profile, save_soul
+
+        # Honest metadata: only claim a loss that was actually observed. A save
+        # before any training step has neither a train loss nor an eval loss,
+        # so both serialize as null rather than fabricated 0.0 values.
+        final_train_loss = self._last_train_loss
+        final_val_loss = (
+            None if self._best_val_loss == float("inf") else self._best_val_loss
+        )
+
+        # Honest metadata: only claim what actually happened. A save before any
+        # training step has no observed loss, so epochs serialize as 0 rather
+        # than the config's target epoch count. Fully completed epochs come
+        # from the absolute step count (global_step // steps_per_epoch), so a
+        # mid-epoch stop reports the completed epochs, not the entered count.
+        epochs_trained = self._completed_epochs
 
         soul = create_soul_profile(
             name=self.soul_name,
             base_model="sloughgpt",
             training_dataset=self.data_path,
-            epochs_trained=self.config.epochs,
-            final_val_loss=self._best_val_loss,
+            epochs_trained=epochs_trained,
+            final_train_loss=final_train_loss,
+            final_val_loss=final_val_loss,
             lineage="sloughgpt",
             tags=["sloughgpt", "trained", "soul"],
         )
@@ -1363,7 +1455,13 @@ class SloughGPTTrainer:
             except (KeyError, TypeError):
                 pass
         soul.metadata["vocab_size"] = self.vocab_size
-        soul.metadata["config"] = metadata["config"]
+        soul.metadata["config"] = {
+            "n_embed": self.config.n_embed,
+            "n_layer": self.config.n_layer,
+            "n_head": self.config.n_head,
+            "block_size": self.config.block_size,
+            "model_type": "sloughgpt",
+        }
         if training_duration is not None:
             soul.metadata["training_duration_s"] = training_duration
 
@@ -1376,21 +1474,25 @@ class SloughGPTTrainer:
                 "tree": tokenizer.to_dict(),
             }
 
-        # Embed training state so .soul is fully self-contained
+        # Embed training state so the .soul is self-contained. Momentum buffers
+        # are omitted when include_optimizer_state=False (final artifacts) —
+        # they dwarf the weights and are not needed for inference; resume
+        # rebuilds a fresh-momentum optimizer from the embedded hyperparameters.
         soul.metadata["training_state"] = _build_training_state_metadata(
             optimizer=getattr(self, "optimizer", None),
             scheduler=getattr(self, "scheduler", None),
             step=getattr(self, "global_step", getattr(self, "_step", 0)),
             epoch=getattr(self, "current_epoch", getattr(self, "_epoch", 0)),
+            completed_epochs=getattr(self, "_completed_epochs", 0),
             accumulation_step=getattr(self, "accumulation_step", 0),
             params=list(self.model.parameters()) if hasattr(self.model, "parameters") else None,
+            include_optimizer_state=include_optimizer_state,
         )
 
         output_path = path + ".soul"
         save_soul(self.model, output_path, soul_profile=soul)
 
-        logger.info("Model saved to %s (%s)", output_path, format,
-            extra={"tag": "TRAIN"},)
+        logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})
 
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
@@ -1422,7 +1524,8 @@ def main():
     import argparse
 
     _epilog = (
-        "step_*.npz in --checkpoint-dir includes stoi/itos/chars for char-LM eval. "
+        "checkpoints in --checkpoint-dir are .soul files and include "
+        "stoi/itos/chars for char-LM eval. "
         "See docs/policies/CONTRIBUTING.md (Checkpoint vocabulary)."
     )
     parser = argparse.ArgumentParser(
@@ -1487,12 +1590,15 @@ def main():
         lora_alpha=float(args.lora_alpha),
     )
 
-    if args.resume_latest:
-        trainer.train(resume=True, resume_path=None)
-    elif args.resume:
-        trainer.train(resume=True, resume_path=args.resume)
-    else:
-        trainer.train()
+    try:
+        if args.resume_latest:
+            trainer.train(resume=True, resume_path=None)
+        elif args.resume:
+            trainer.train(resume=True, resume_path=args.resume)
+        else:
+            trainer.train()
+    except ValueError as exc:
+        raise SystemExit(f"error: {exc}") from exc
     print("\n=== Generated Text ===")
     print(trainer.generate("First"))
 

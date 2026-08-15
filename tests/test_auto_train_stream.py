@@ -69,6 +69,9 @@ class TestAutoTrainStreamEvents:
         from unittest.mock import AsyncMock
         import tempfile, os
 
+        from domains.infrastructure.training_queue import register_training_handlers
+        register_training_handlers()
+
         model, tok = _make_tiny_model_and_tokenizer()
 
         # Write source text to a temp file so SloughGPTTrainer can find it

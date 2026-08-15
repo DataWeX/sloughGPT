@@ -4,13 +4,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ThemeProvider, useTheme } from './ThemeProvider'
 
 function TestChild() {
-  const { theme, mode, setTheme, setMode } = useTheme()
+  const { theme, mode, palette, setTheme, setMode, setPalette } = useTheme()
   return (
     <div>
       <span data-testid="theme">{theme}</span>
       <span data-testid="mode">{mode}</span>
+      <span data-testid="palette">{palette}</span>
       <button data-testid="set-theme" onClick={() => setTheme('blue')}>set theme</button>
       <button data-testid="set-mode" onClick={() => setMode('light')}>set mode</button>
+      <button data-testid="set-palette" onClick={() => setPalette('neural-precision')}>set palette</button>
     </div>
   )
 }
@@ -69,5 +71,54 @@ describe('ThemeProvider', () => {
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
     const btns = container.querySelectorAll('[data-testid="set-theme"]')
     expect(btns.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('ThemeProvider — palette', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('defaults palette to noir-violet when no localStorage', () => {
+    const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    const palettes = container.querySelectorAll('[data-testid="palette"]')
+    const last = palettes[palettes.length - 1]
+    expect(last.textContent).toBe('noir-violet')
+  })
+
+  it('reads saved palette from localStorage', () => {
+    localStorage.setItem('man_palette', 'neural-precision')
+    const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    const palettes = container.querySelectorAll('[data-testid="palette"]')
+    const last = palettes[palettes.length - 1]
+    expect(last.textContent).toBe('neural-precision')
+  })
+
+  it('falls back to noir-violet for invalid localStorage value', () => {
+    localStorage.setItem('man_palette', 'solarized')
+    const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    const palettes = container.querySelectorAll('[data-testid="palette"]')
+    const last = palettes[palettes.length - 1]
+    expect(last.textContent).toBe('noir-violet')
+  })
+
+  it('setPalette updates context value', async () => {
+    const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    const btn = container.querySelector('[data-testid="set-palette"]') as HTMLButtonElement
+    btn.click()
+    await waitFor(() => {
+      const palettes = container.querySelectorAll('[data-testid="palette"]')
+      const last = palettes[palettes.length - 1]
+      expect(last.textContent).toBe('neural-precision')
+    })
+  })
+
+  it('persists palette to localStorage', async () => {
+    const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    const btn = container.querySelector('[data-testid="set-palette"]') as HTMLButtonElement
+    btn.click()
+    await waitFor(() => {
+      expect(localStorage.getItem('man_palette')).toBe('neural-precision')
+    })
   })
 })

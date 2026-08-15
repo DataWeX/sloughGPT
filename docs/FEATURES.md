@@ -91,8 +91,8 @@ PYTHONPATH=apps/cli/src python3 -m cli train native \
 Key flags: `--steps`, `--embed/--layers/--heads/--block` (arch), `--batch`,
 `--lr`, `--weight-decay`, `--scheduler`, `--warmup`, `--min-lr`, `--grad-norm`,
 `--checkpoint-dir`, `--checkpoint-interval`, `--max-checkpoints`,
-`--eval-interval`, `--log-interval`, `--soul-name`, `--save-stem`,
-`--save-format` (`sou`/`npz`), `--resume PATH`, `--resume-latest`.
+  `--eval-interval`, `--log-interval`, `--soul-name`, `--save-stem`,
+  `--save-format` (DEPRECATED — ignored; checkpoints are always `.soul`), `--resume PATH`, `--resume-latest`.
 
 ### Token-tree tokenizer
 

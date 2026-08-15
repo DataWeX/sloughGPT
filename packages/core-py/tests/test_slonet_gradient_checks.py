@@ -111,6 +111,14 @@ class TestGradientChecks:
         ok, details = _check_grad("matmul", f)
         assert ok, "\n".join(details)
 
+    def test_matmul_batched(self):
+        def f():
+            x = Tensor(np.random.randn(2, 3, 4), **R)
+            W = Tensor(np.random.randn(2, 4, 5), **R)
+            return lambda: _matmul(x, W), [x, W]
+        ok, details = _check_grad("matmul_batched", f)
+        assert ok, "\n".join(details)
+
     def test_softmax(self):
         def f():
             x = Tensor(np.random.randn(2, 3), **R)

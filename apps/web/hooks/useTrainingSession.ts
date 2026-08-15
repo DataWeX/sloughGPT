@@ -31,6 +31,13 @@ export interface TrainingSessionState {
   turboPhase: 'idle' | 'training' | 'complete' | 'error'
   turboResult: { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null
   turboError: string | null
+  turboProgress: number
+  turboGlobalStep: number
+  turboTotalSteps: number
+  turboEta: number | null
+  turboStepsPerSec: number | null
+  turboElapsedSeconds: number | null
+  turboLoss: number | null
   visualOutputDir: string | null
   visualSouPath: string | null
 }
@@ -57,6 +64,13 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
   setTurboPhase: (p: 'idle' | 'training' | 'complete' | 'error') => void
   setTurboResult: (r: { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null) => void
   setTurboError: (e: string | null) => void
+  setTurboProgress: (p: number) => void
+  setTurboGlobalStep: (s: number) => void
+  setTurboTotalSteps: (s: number) => void
+  setTurboEta: (e: number | null) => void
+  setTurboStepsPerSec: (s: number | null) => void
+  setTurboElapsedSeconds: (e: number | null) => void
+  setTurboLoss: (l: number | null) => void
   trainingRunning: boolean
   resetTraining: () => void
   stopTraining: () => void
@@ -73,6 +87,7 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
   startTurboTrain: (datasetId: string, config: {
     epochs: number; lr: number; embed: number; heads: number; layers: number
   }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => void
+  stopTurboTrain: () => void
   turboRunning: boolean
 }
 
@@ -113,6 +128,13 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   const [turboPhase, setTurboPhase] = useState<'idle' | 'training' | 'complete' | 'error'>('idle')
   const [turboResult, setTurboResult] = useState<{ status: string; final_loss?: number; total_steps?: number; model_path?: string } | null>(null)
   const [turboError, setTurboError] = useState<string | null>(null)
+  const [turboProgress, setTurboProgress] = useState(0)
+  const [turboGlobalStep, setTurboGlobalStep] = useState(0)
+  const [turboTotalSteps, setTurboTotalSteps] = useState(0)
+  const [turboEta, setTurboEta] = useState<number | null>(null)
+  const [turboStepsPerSec, setTurboStepsPerSec] = useState<number | null>(null)
+  const [turboElapsedSeconds, setTurboElapsedSeconds] = useState<number | null>(null)
+  const [turboLoss, setTurboLoss] = useState<number | null>(null)
 
 
 
@@ -138,6 +160,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     esRef.current?.close(); esRef.current = null
     if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
     if (visualPollRef.current) { clearInterval(visualPollRef.current); visualPollRef.current = null }
+    if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
     resetTraining()
   }, [resetTraining])
@@ -323,6 +346,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   ) => {
     if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
     setTurboPhase('training'); setTurboResult(null); setTurboError(null)
+    setTurboProgress(0); setTurboGlobalStep(0); setTurboTotalSteps(0)
+    setTurboEta(null); setTurboStepsPerSec(null); setTurboElapsedSeconds(null); setTurboLoss(null)
     trainingJobsController.startTurboTrain({
       dataset_id: datasetId,
       epochs: config.epochs,
@@ -335,23 +360,23 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         setTurboError(result.message || 'Training failed'); setTurboPhase('error')
         return
       }
-      addToast('Turbo training queued', 'info')
+      addToast('Turbo training started', 'info')
       const pollId = setInterval(async () => {
         try {
           const status = await trainingJobsController.getTurboStatus()
           if (status.status === 'running' || status.status === 'idle') {
-            if (status.progress != null) setProgress(status.progress)
-            if (status.loss != null) setLoss(status.loss)
-            if (status.global_step != null) setGlobalStep(status.global_step)
-            if (status.total_steps != null) setTotalSteps(status.total_steps)
-            if (status.steps_per_sec != null) setStepsPerSec(status.steps_per_sec)
-            if (status.eta_s != null) setEta(status.eta_s)
-            if (status.elapsed_s != null) setElapsedSeconds(status.elapsed_s)
+            if (status.progress != null) { setTurboProgress(status.progress); setProgress(status.progress) }
+            if (status.loss != null) { setTurboLoss(status.loss); setLoss(status.loss) }
+            if (status.global_step != null) { setTurboGlobalStep(status.global_step); setGlobalStep(status.global_step) }
+            if (status.total_steps != null) { setTurboTotalSteps(status.total_steps); setTotalSteps(status.total_steps) }
+            if (status.steps_per_sec != null) { setTurboStepsPerSec(status.steps_per_sec); setStepsPerSec(status.steps_per_sec) }
+            if (status.eta_s != null) { setTurboEta(status.eta_s); setEta(status.eta_s) }
+            if (status.elapsed_s != null) { setTurboElapsedSeconds(status.elapsed_s); setElapsedSeconds(status.elapsed_s) }
             return
           }
           clearInterval(pollId); turboPollRef.current = null
           if (status.status === 'complete') {
-            setProgress(100)
+            setTurboProgress(100); setProgress(100)
             setTurboResult((status.result as { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null) ?? { status: 'complete' })
             setTurboPhase('complete')
             addToast('Turbo training complete!', 'success')
@@ -370,11 +395,22 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     })
   }, [])
 
+  const stopTurboTrain = useCallback(() => {
+    if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
+    trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop turbo training', e))
+    setTurboPhase('idle'); setTurboResult(null); setTurboError(null)
+    setTurboProgress(0); setTurboGlobalStep(0); setTurboTotalSteps(0)
+    setTurboEta(null); setTurboStepsPerSec(null); setTurboElapsedSeconds(null); setTurboLoss(null)
+    setProgress(0); setLoss(null); setGlobalStep(0); setTotalSteps(0)
+    setEta(null); setStepsPerSec(null); setElapsedSeconds(null)
+  }, [])
+
   return {
     phase, loss, progress, epoch, totalEpochs, globalStep, totalSteps, eta, stepsPerSec, elapsedSeconds,
     message, startTime, lossHistory, evalResult,
     finetunedModelPath, finetunedModelLoss, distillCheckpoint, distillFinalLoss, distillEpochs,
     turboPhase, turboResult, turboError,
+    turboProgress, turboGlobalStep, turboTotalSteps, turboEta, turboStepsPerSec, turboElapsedSeconds, turboLoss,
     visualOutputDir, visualSouPath,
     paused,
     setPhase, setLoss, setProgress, setEpoch, setTotalEpochs,
@@ -384,8 +420,10 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     setFinetunedModelPath, setFinetunedModelLoss,
     setDistillCheckpoint, setDistillFinalLoss, setDistillEpochs,
     setTurboPhase, setTurboResult, setTurboError,
+    setTurboProgress, setTurboGlobalStep, setTurboTotalSteps,
+    setTurboEta, setTurboStepsPerSec, setTurboElapsedSeconds, setTurboLoss,
     trainingRunning, turboRunning: turboPhase === 'training',
     resetTraining, stopTraining, pauseTraining, resumeTraining,
-    startSSETraining, startFineTune, startVisualTraining, startTurboTrain,
+    startSSETraining, startFineTune, startVisualTraining, startTurboTrain, stopTurboTrain,
   }
 }

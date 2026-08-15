@@ -16,6 +16,7 @@ vi.mock('@sloughgpt/strui', () => {
     ),
     Input: ({ value, onChange, className, placeholder }: any) => <input value={value} onChange={onChange} className={className} placeholder={placeholder} />,
     EmptyCard: ({ message }: any) => <div>{message}</div>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div><span>{label}</span><span>{String(value)}</span></div>,
     IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconClock: iconMock('clock'),
@@ -34,11 +35,6 @@ vi.mock('@/components/icons/NavIcons', () => {
   const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
   return { IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconClock: iconMock('clock') }
 })
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left }: any) => <header>{left}</header>,
-  AppRouteHeaderLead: ({ title }: any) => <h1>{title}</h1>,
-}))
 
 const { mockList, mockListRuns, mockAddToast } = vi.hoisted(() => ({
   mockList: vi.fn(), mockListRuns: vi.fn(), mockAddToast: vi.fn(),

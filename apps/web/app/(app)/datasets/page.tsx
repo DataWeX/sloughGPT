@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -196,71 +196,72 @@ export default function DatasetsPage() {
     setCompareData(results)
   }
 
-  return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Datasets" />}
-        right={
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={fetchDatasets} disabled={loading}>
-              <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5 mr-1' : 'h-3.5 w-3.5 mr-1'} />
-              Refresh
-            </Button>
-            <Button size="sm" className="h-8 text-xs" onClick={() => setImportOpen(true)}>
-              <IconPlus className="h-3.5 w-3.5 mr-1" />
-              Import
-            </Button>
-          </div>
-        }
-      />
+  const headerRight = (
+    <div className="flex items-center gap-2">
+      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={fetchDatasets} disabled={loading}>
+        <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5 mr-1' : 'h-3.5 w-3.5 mr-1'} />
+        Refresh
+      </Button>
+      <Button size="sm" className="h-8 text-xs" onClick={() => setImportOpen(true)}>
+        <IconPlus className="h-3.5 w-3.5 mr-1" />
+        Import
+      </Button>
+    </div>
+  )
 
-      <div className="space-y-4">
-        {datasets.length > 0 && (
-          <div className="flex items-center gap-3">
-            <Input
-              placeholder="Search datasets..."
-              value={search}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-              className="h-9 text-sm max-w-xs"
-            />
-            {searching && (
-              <span className="text-xs text-muted-foreground flex items-center gap-1.5" role="status">
-                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Searching…
-              </span>
-            )}
-            <div className="flex items-center gap-1 ml-auto">
-              {(['date', 'size', 'name'] as const).map(s => (
-                <button
-                  key={s}
-                  onClick={() => setSortBy(s)}
-                  className={`text-xs px-2 py-1 rounded border transition-colors ${sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-            {datasets.length > 1 && (
-              <div className="flex-1 max-w-xs">
-                <div className="text-xs text-muted-foreground mb-1">Size comparison</div>
-                <div className="flex items-end gap-1 h-8">
-                  {datasets.slice(0, 8).map(ds => {
-                    const maxSize = Math.max(...datasets.map(d => d.size || 1))
-                    const height = Math.max(((ds.size || 0) / maxSize) * 100, 4)
-                    return (
-                      <div
-                        key={ds.id}
-                        className="flex-1 bg-primary/30 rounded-t transition-all hover:bg-primary/50"
-                        style={{ height: `${height}%` }}
-                        title={`${ds.name}: ${formatBytes(ds.size)}`}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+  const toolbar = datasets.length > 0 ? (
+    <div className="flex items-center gap-3">
+      <Input
+        placeholder="Search datasets..."
+        value={search}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+        className="h-9 text-sm max-w-xs"
+      />
+      {searching && (
+        <span className="text-xs text-muted-foreground flex items-center gap-1.5" role="status">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          Searching…
+        </span>
+      )}
+      <div className="flex items-center gap-1 ml-auto">
+        {(['date', 'size', 'name'] as const).map(s => (
+          <button
+            key={s}
+            onClick={() => setSortBy(s)}
+            className={`text-xs px-2 py-1 rounded border transition-colors ${sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+      {datasets.length > 1 && (
+        <div className="flex-1 max-w-xs">
+          <div className="text-xs text-muted-foreground mb-1">Size comparison</div>
+          <div className="flex items-end gap-1 h-8">
+            {datasets.slice(0, 8).map(ds => {
+              const maxSize = Math.max(...datasets.map(d => d.size || 1))
+              const height = Math.max(((ds.size || 0) / maxSize) * 100, 4)
+              return (
+                <div
+                  key={ds.id}
+                  className="flex-1 bg-primary/30 rounded-t transition-all hover:bg-primary/50"
+                  style={{ height: `${height}%` }}
+                  title={`${ds.name}: ${formatBytes(ds.size)}`}
+                />
+              )
+            })}
           </div>
-        )}
+        </div>
+      )}
+    </div>
+  ) : undefined
+
+  return (
+    <PageContainer
+      title="Datasets"
+      headerRight={headerRight}
+      toolbar={toolbar}
+    >
 
         {compareIds.size >= 2 && (
           <div className="flex items-center gap-2">
@@ -462,8 +463,6 @@ export default function DatasetsPage() {
             ))}
           </div>
         )}
-      </div>
-
       <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -482,6 +481,6 @@ export default function DatasetsPage() {
       </AlertDialog>
 
       <DatasetInlineImportModal open={importOpen} onOpenChange={setImportOpen} onImported={fetchDatasets} />
-    </div>
+    </PageContainer>
   )
 }

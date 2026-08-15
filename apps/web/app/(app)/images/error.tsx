@@ -1,7 +1,7 @@
 'use client'
 
 import { PageErrorHandler } from '@/components/PageErrorHandler'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 
 export default function ImagesError({
   error,
@@ -11,9 +11,8 @@ export default function ImagesError({
   reset: () => void
 }) {
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Images" subtitle="Error" />} />
+    <PageContainer title="Images" subtitle="Error">
       <PageErrorHandler error={error} reset={reset} />
-    </div>
+    </PageContainer>
   )
 }

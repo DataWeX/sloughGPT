@@ -1,11 +1,11 @@
 """
-domains/models/ - Pluggable model backends (native SloNet, no PyTorch)
+domains/models/ - Pluggable model backends (native SloNet)
 
 **ModelInterface** is the generic contract (forward, generate, load, ...) for any
 neural backend in this repo.
 
 **SloughGPTModel** is the default first-party **implementation** — a native
-SloNet Transformer (RoPE, RMSNorm, SwiGLU, KV-cache). No PyTorch dependency.
+SloNet Transformer (RoPE, RMSNorm, SwiGLU, KV-cache).
 
 External architectures plug in via **ModelLoader.register** or loaders.
 """
@@ -169,7 +169,7 @@ class ModelLoader:
 
 
 # =============================================================================
-# SloughGPTModel — native SloNet Transformer (no PyTorch)
+# SloughGPTModel — native SloNet Transformer
 # Architecture: RoPE, RMSNorm, SwiGLU, KV-cache, GQA
 # =============================================================================
 
@@ -177,7 +177,7 @@ class SloughGPTModel(SloTransformer, ModelInterface):
     """First-party SloNet Transformer implementing ModelInterface.
 
     Native SloNet decoder-only causal LM with RoPE, RMSNorm, SwiGLU, KV-cache.
-    No PyTorch dependency. Drop-in for the old torch-based SloughGPTModel.
+    Drop-in for the original torch-based SloughGPTModel.
     """
 
     def __init__(

@@ -203,6 +203,21 @@ def test_main_emergence_mode(capsys):
     assert "emergence=" in out
 
 
+def test_main_seasons_mode(capsys):
+    code = main(["--grid", "6,4,6", "--seed", "5", "--babies", "2",
+                 "--seasons", "--generations", "2", "--population", "3",
+                 "--ticks-per-gen", "4", "--seasons-per-year", "2"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "generation control_avg seasonal_avg" in out
+    assert "control_last_avg=" in out
+    assert "seasonal_last_avg=" in out
+    assert "seasonal_conservation_exact=" in out
+    assert "summer_noon=" in out
+    assert "winter_noon=" in out
+    assert "seasons_emerged=" in out
+
+
 def test_main_rejects_bad_grid(capsys):
     code = main(["--grid", "4,5"])
     captured = capsys.readouterr()

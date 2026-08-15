@@ -8,7 +8,7 @@ Includes:
 - Reference Model (for KL divergence)
 - Advantage estimation (GAE)
 
-Runs entirely on numpy/SloNet — no PyTorch dependency.
+Runs entirely on numpy/SloNet.
 """
 
 from dataclasses import dataclass

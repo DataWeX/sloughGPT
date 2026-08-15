@@ -2,6 +2,7 @@
 """Configuration loader for SloughGPT."""
 
 import os
+import warnings
 import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -72,14 +73,25 @@ class CheckpointConfig:
     save_dir: str = "models"
     #: Set by CLI ``--resume`` merge when present; not required in YAML.
     resume: Optional[str] = None
-    #: ``SloughGPTTrainer`` periodic ``step_*.pt`` directory (``--checkpoint-dir``).
+    #: ``SloughGPTTrainer`` periodic ``step_*.soul`` directory (``--checkpoint-dir``).
     trainer_dir: str = "checkpoints"
     #: Steps between full trainer checkpoints (``--checkpoint-interval``).
     trainer_interval: int = 1000
     save_best_only: bool = False
     max_checkpoints: int = 5
-    #: Post-training artifact format for ``cli.py train`` (``--save-format``).
-    export_format: str = "sou"
+    #: DEPRECATED — ignored by ``sloughgpt train``; ``SloughGPTTrainer.save()``
+    #: always writes a ``.soul`` file, so there is no format to select.
+    export_format: str = "soul"
+
+    def __post_init__(self) -> None:
+        """Warn when a non-default (non-``soul``) ``export_format`` is set."""
+        if self.export_format not in ("", "soul"):
+            warnings.warn(
+                f"checkpoint.export_format is deprecated and ignored — "
+                f"SloughGPTTrainer.save() always writes .soul (got {self.export_format!r})",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
 
 @dataclass
@@ -134,16 +146,8 @@ def load_config(config_path: str = "config.yaml") -> Config:
 
 
 def get_device(config: DeviceConfig) -> str:
-    """Get device string based on config."""
+    """Get device string based on config (SloNet runs on numpy; auto = cpu)."""
     if config.type == "auto":
-        try:
-            import torch
-            if torch.cuda.is_available():
-                return "cuda"
-            elif torch.backends.mps.is_available():
-                return "mps"
-        except ImportError:
-            pass
         return "cpu"
     return config.type
 
@@ -232,8 +236,9 @@ def merge_args_with_config(config: Config, args) -> Config:
         if _sn:
             config.model.soul_name = _sn
 
-    if hasattr(args, "save_format") and getattr(args, "save_format", None):
-        config.checkpoint.export_format = str(args.save_format)
+    # NOTE: --save-format is intentionally NOT merged. SloughGPTTrainer.save()
+    # always writes .soul, so the option is accepted for backward compatibility
+    # but has no effect on the checkpoint format.
 
     if hasattr(args, "train_device") and getattr(args, "train_device", None):
         config.device.type = str(args.train_device)

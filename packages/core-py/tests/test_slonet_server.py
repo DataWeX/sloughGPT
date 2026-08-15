@@ -267,8 +267,10 @@ class TestGenerate:
             "avg_generation_time_ms", "max_generation_time_ms",
             "min_generation_time_ms", "last_generation_time_ms",
             "tokens_generated_total", "last_error", "error_rate",
+            "last_request_time",
         }
         assert set(s.keys()) == expected
+        assert s["last_request_time"] > 0
 
     async def test_generate_cancelled_before_start(self, server):
         cancel = threading.Event()

@@ -176,7 +176,7 @@ def _worker_loop(
 
 
 # ---------------------------------------------------------------------------
-# SloNet worker (pure NumPy — no PyTorch dependency)
+# SloNet worker (pure NumPy)
 # ---------------------------------------------------------------------------
 
 def _slo_worker_main(
@@ -195,7 +195,7 @@ def _slo_worker_main(
     """Worker subprocess entry point for SloNet models (pure NumPy).
 
     Loads via ``SloNetChatProvider.from_slnc()`` and streams via
-    ``generate_numpy_stream()``. Zero PyTorch dependency.
+    ``generate_numpy_stream()``.
     """
     if extra_sys_paths:
         for p in extra_sys_paths:
@@ -255,10 +255,17 @@ def _slo_worker_main(
         elapsed_ms = (time.time() - start) * 1000
         generated = result[0].tolist()
         text = provider._tokenizer.decode(generated)
-        logger.info(
-            "DBG worker generate elapsed=%.1fms prompt_len=%d tokens=%d text=%r",
-            elapsed_ms, len(token_ids), len(generated), text[:80],
-            extra={"tag": "DBG"},
+        logger.debug(
+            "worker generate",
+            extra={
+                "tag": "INFO",
+                "context": {
+                    "elapsed_ms": round(elapsed_ms, 1),
+                    "prompt_len": len(token_ids),
+                    "tokens": len(generated),
+                    "text": text[:80],
+                },
+            },
         )
         return {
             "text": text,
@@ -503,7 +510,7 @@ class ModelWorkerProcess:
 
     Two construction modes:
 
-    SloNet (preferred — pure NumPy, no PyTorch)::
+    SloNet (preferred — pure NumPy)::
 
         worker = ModelWorkerProcess(
             slnc_path="models/gpt2.slnc",

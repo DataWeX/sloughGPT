@@ -28,12 +28,12 @@ class TestFindModelPath:
     def test_find_nonexistent(self, ctrl):
         assert ctrl._find_model_path("no-such-model") is None
 
-    def test_find_pt_file(self, ctrl):
+    def test_find_gguf_file(self, ctrl):
         ctrl.models_dir.mkdir(parents=True, exist_ok=True)
-        (ctrl.models_dir / "test.pt").touch()
+        (ctrl.models_dir / "test.gguf").touch()
         result = ctrl._find_model_path("test")
         assert result is not None
-        assert result.name == "test.pt"
+        assert result.name == "test.gguf"
 
 
 class TestResolveDevice:
@@ -195,13 +195,13 @@ class TestInferConfig:
 
 
 class TestListAvailableModels:
-    def test_lists_pt_and_gguf(self, ctrl):
+    def test_lists_gguf_models(self, ctrl):
         ctrl.models_dir.mkdir(parents=True, exist_ok=True)
-        (ctrl.models_dir / "a.pt").write_bytes(b"x" * 2048)
+        (ctrl.models_dir / "a.gguf").write_bytes(b"x" * 2048)
         (ctrl.models_dir / "b.gguf").write_bytes(b"y" * 1024)
         models = ctrl.list_available_models()
         ids = {m["model_id"]: m for m in models}
-        assert ids["a"]["type"] == "pt"
+        assert ids["a"]["type"] == "gguf"
         assert ids["b"]["type"] == "gguf"
         assert round(ids["a"]["size_mb"], 3) == round(2048 / (1024 * 1024), 3)
 

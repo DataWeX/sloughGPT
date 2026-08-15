@@ -5,7 +5,7 @@ FEATURE: soul-format — Self-contained model format (weights + personality + me
 DO NOT DELETE. Core infrastructure used by all model loading.
 
 The living identity format for trained AI models. Every .soul file is self-contained:
-model weights + soul profile + training metadata — no PyTorch dependency required.
+model weights + soul profile + training metadata — fully self-contained.
 
 Format: SOUL + version + config_len + JSON_config + [state_len + JSON state_dict]
 
@@ -523,7 +523,7 @@ def save_soul(
 ) -> str:
     """Export model to .soul format (binary: header + config + JSON weights).
 
-    Uses pure Python/numpy binary format — no PyTorch dependency.
+    Uses pure Python/numpy binary format.
 
     Args:
         model: any object with a ``state_dict()`` method (PyTorch, SloNet, etc.)
@@ -557,19 +557,33 @@ def save_soul(
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-    # Write .meta.json first (small, fast — serves as sidecar for list endpoint)
-    meta_path = output_path + ".meta.json"
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(
-            _soul_json_sanitize(soul_profile.to_dict()),
-            f,
-            indent=2,
-            default=str,
-            allow_nan=False,
-        )
-
     # Atomic write: write to temp file, then rename
     import tempfile
+
+    # Write .meta.json first (small, fast — serves as sidecar for list endpoint).
+    # Atomic via temp + rename so a crash never leaves a partial sidecar that
+    # could be misread as matching the soul.
+    meta_path = output_path + ".meta.json"
+    meta_fd, meta_tmp_path = tempfile.mkstemp(
+        dir=os.path.dirname(output_path) or ".", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(meta_fd, "w", encoding="utf-8") as f:
+            json.dump(
+                _soul_json_sanitize(soul_profile.to_dict()),
+                f,
+                indent=2,
+                default=str,
+                allow_nan=False,
+            )
+        os.rename(meta_tmp_path, meta_path)
+    except Exception:
+        try:
+            os.unlink(meta_tmp_path)
+        except OSError:
+            pass
+        raise
+
     tmp_fd, tmp_path = tempfile.mkstemp(
         dir=os.path.dirname(output_path) or ".", suffix=".tmp",
     )

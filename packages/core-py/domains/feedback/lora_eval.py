@@ -176,7 +176,7 @@ class LoRAEvaluator:
         self._warned_no_model = False
 
     def _load_inference_engine(self):
-        """Lazy-load a native SloNet model (torch-free).
+        """Lazy-load a native SloNet model.
 
         Loads ``base_model`` via the pure-numpy ``ModelLoader`` and extracts the
         character vocab from the embedded soul metadata. On any failure the

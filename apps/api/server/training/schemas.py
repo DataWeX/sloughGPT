@@ -3,7 +3,7 @@
 Optional-field defaults on ``TrainRequest`` / ``TrainingRequest`` should match the web UI
 constants in ``apps/web/lib/training-defaults.ts`` (``TRAINING_API_DEFAULTS``).
 
-Trainer ``step_*.soul`` files on disk include ``stoi`` / ``itos`` / ``chars`` so char-LM
+Trainer ``*.soul`` files on disk include ``stoi`` / ``itos`` / ``chars`` so char-LM
 eval can decode without vocab warnings; see ``docs/policies/CONTRIBUTING.md``
 (*Checkpoint vocabulary*).
 """
@@ -44,7 +44,7 @@ class TrainDataSourceBody(BaseModel):
 class _TrainHyperparameters(BaseModel):
     """SloughGPTTrainer keyword arguments shared by ``TrainRequest`` and ``TrainingRequest``.
 
-    On-disk ``checkpoint_step_*.soul`` bundles carry charset maps for fair ``cli.py eval``;
+    On-disk trainer ``*.soul`` bundles carry charset maps for fair ``cli.py eval``;
     vocabulary formats are documented under *Checkpoint vocabulary* in CONTRIBUTING.
     """
 
@@ -99,7 +99,7 @@ class _TrainHyperparameters(BaseModel):
 class TrainRequest(TrainDataSourceBody, _TrainHyperparameters):
     """Train char-level model from ``datasets/<name>/input.txt`` or from a v1 manifest.
 
-    Checkpoints under ``checkpoint_dir`` include charset maps on native ``step_*.soul``;
+    Checkpoints under ``checkpoint_dir`` include charset maps on native ``*.soul``;
     see *Checkpoint vocabulary* in CONTRIBUTING.
     """
 
@@ -109,7 +109,7 @@ class TrainRequest(TrainDataSourceBody, _TrainHyperparameters):
 class TrainResolveRequest(TrainDataSourceBody):
     """Preview resolved training file path without starting a job.
 
-    Training endpoints (not this one) write ``step_*.soul`` with ``stoi`` / ``itos`` /
+    Training endpoints (not this one) write ``*.soul`` with ``stoi`` / ``itos`` /
     ``chars``; see *Checkpoint vocabulary* in CONTRIBUTING.
     """
 
@@ -119,7 +119,7 @@ class TrainResolveRequest(TrainDataSourceBody):
 class TrainingRequest(TrainDataSourceBody, _TrainHyperparameters):
     """UI/orchestrator training job (metadata + same corpus selectors as ``TrainRequest``).
 
-    Tracked runs use the same trainer; ``step_*.soul`` on disk embed ``stoi`` / ``itos``
+    Tracked runs use the same trainer; ``*.soul`` on disk embed ``stoi`` / ``itos``
     / ``chars``. See *Checkpoint vocabulary* in CONTRIBUTING.
     """
 

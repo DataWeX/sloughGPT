@@ -28,13 +28,9 @@ vi.mock('@sloughgpt/strui', () => {
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ left, right }: any) => <div>{left}{right}</div>,
-  AppRouteHeaderLead: ({ title }: any) => <h1>{title}</h1>,
-}))
 
 vi.mock('@/lib/feedback-controller', () => ({
   feedbackController: {
@@ -359,9 +355,9 @@ describe('FeedbackPage — workflow actions', () => {
     )
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getByText('Aggregate')).toBeTruthy() })
+      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy() })
 
-      await act(async () => { fireEvent.click(screen.getByText('Aggregate')) })
+      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0]) })
       expect(mockTriggerWorkflowAction).toHaveBeenCalledWith('aggregate')
     }
   })
@@ -375,9 +371,9 @@ describe('FeedbackPage — workflow actions', () => {
     )
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getByText('Prune')).toBeTruthy() })
+      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Prune' })[0]).toBeTruthy() })
 
-      await act(async () => { fireEvent.click(screen.getByText('Prune')) })
+      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Prune' })[0]) })
       expect(mockTriggerWorkflowAction).toHaveBeenCalledWith('prune')
     }
   })
@@ -391,9 +387,9 @@ describe('FeedbackPage — workflow actions', () => {
     )
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getByText('Export')).toBeTruthy() })
+      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Export' })[0]).toBeTruthy() })
 
-      await act(async () => { fireEvent.click(screen.getByText('Export')) })
+      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Export' })[0]) })
       expect(mockTriggerWorkflowAction).toHaveBeenCalledWith('export')
     }
   })
@@ -407,9 +403,9 @@ describe('FeedbackPage — workflow actions', () => {
     )
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getByText('Aggregate')).toBeTruthy() })
+      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy() })
 
-      await act(async () => { fireEvent.click(screen.getByText('Aggregate')) })
+      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0]) })
       expect(mockAddToast).toHaveBeenCalledWith('Aggregation triggered', 'success')
     }
   })
@@ -424,9 +420,9 @@ describe('FeedbackPage — workflow actions', () => {
     )
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getByText('Aggregate')).toBeTruthy() })
+      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy() })
 
-      await act(async () => { fireEvent.click(screen.getByText('Aggregate')) })
+      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0]) })
       expect(mockAddToast).toHaveBeenCalledWith('Aggregation failed', 'error')
     }
   })

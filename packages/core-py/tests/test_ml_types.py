@@ -315,21 +315,16 @@ class TestPlatform:
         monkeypatch.setattr(mt.platform, "machine", lambda: "x86_64")
         assert mt._mps_available() is False
 
-    def test_mps_true_with_fake_torch(self, monkeypatch):
+    def test_mps_true_on_arm64(self, monkeypatch):
         monkeypatch.setattr(mt.sys, "platform", "darwin")
         monkeypatch.setattr(mt.platform, "machine", lambda: "arm64")
-        fake = type("M", (), {})()
-        fake.backends = type("B", (), {"mps": type("M2", (), {"is_available": staticmethod(lambda: True)})()})()
-        monkeypatch.setitem(sys.modules, "torch", fake)
         assert mt._mps_available() is True
 
-    def test_mps_false_when_torch_says_no(self, monkeypatch):
+    def test_mps_true_on_arm64_without_torch(self, monkeypatch):
         monkeypatch.setattr(mt.sys, "platform", "darwin")
         monkeypatch.setattr(mt.platform, "machine", lambda: "arm64")
-        fake = type("M", (), {})()
-        fake.backends = type("B", (), {"mps": type("M2", (), {"is_available": staticmethod(lambda: False)})()})()
-        monkeypatch.setitem(sys.modules, "torch", fake)
-        assert mt._mps_available() is False
+        monkeypatch.setitem(sys.modules, "torch", None)
+        assert mt._mps_available() is True
 
     def test_mps_fallback_arm64(self, monkeypatch):
         monkeypatch.setattr(mt.sys, "platform", "darwin")
@@ -359,10 +354,9 @@ class TestPlatform:
         monkeypatch.setitem(sys.modules, "torch", None)
         assert mt._cuda_available() is False
 
-    def test_cuda_available_with_fake_torch(self, monkeypatch):
+    def test_cuda_available_with_fake_cupy(self, monkeypatch):
         fake = type("M", (), {})()
-        fake.cuda = type("C", (), {"is_available": staticmethod(lambda: True)})()
-        monkeypatch.setitem(sys.modules, "torch", fake)
+        monkeypatch.setitem(sys.modules, "cupy", fake)
         assert mt._cuda_available() is True
 
     def test_auto_device_cpu(self, monkeypatch):

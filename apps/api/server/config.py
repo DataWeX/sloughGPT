@@ -83,6 +83,8 @@ class ServerConfig:
     process_guard_memory_limit_mb: float = 0.0  # 0 = auto-size from model file
     enable_web: bool = False
 
+    idle_timeout_seconds: float = 0.0  # 0 = disabled; 300 = unload model after 5 min idle
+
     jwt_secret: str = ""  # auto-generated if empty
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
@@ -114,6 +116,7 @@ class ServerConfig:
             enable_health_monitor=os.getenv("SLO_HEALTH_MONITOR", "true").lower() == "true",
             health_monitor_interval=int(os.getenv("SLO_HEALTH_INTERVAL", "300")),
             enable_web=os.getenv("SLO_WEB", "").lower() in ("1", "true", "yes"),
+            idle_timeout_seconds=float(os.getenv("SLO_IDLE_TIMEOUT", "0")),
             jwt_secret=os.getenv("SLO_JWT_SECRET") or os.getenv("JWT_SECRET") or secrets.token_urlsafe(64),
             jwt_algorithm=os.getenv("SLO_JWT_ALGORITHM", os.getenv("JWT_ALGORITHM", "HS256")),
             jwt_expiration_hours=int(os.getenv("SLO_JWT_EXPIRATION_HOURS", os.getenv("JWT_EXPIRATION_HOURS", "24"))),

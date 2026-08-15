@@ -307,12 +307,12 @@ def test_mov_byte_memory():
 
 
 def test_mov_word_dword_memory():
-    assert _hex("mov word [eax], bx") == "8900"
-    assert _hex("mov dword [ebx+4], eax") == "66894304"
-    assert _hex("mov eax, [ebx]") == "668b03"
-    assert _hex("mov eax, [ebx+4]") == "668b4304"
-    assert _hex("mov eax, [ebx+0x12345678]") == "668b8378563412"
-    assert _hex("mov [eax], ebx") == "668918"
+    assert _hex("mov word [eax], bx") == "668918"
+    assert _hex("mov dword [ebx+4], eax") == "894304"
+    assert _hex("mov eax, [ebx]") == "8b03"
+    assert _hex("mov eax, [ebx+4]") == "8b4304"
+    assert _hex("mov eax, [ebx+0x12345678]") == "8b8378563412"
+    assert _hex("mov [eax], ebx") == "8918"
 
 
 def test_mov_byte_word_dword_imm_memory():
@@ -325,37 +325,38 @@ def test_mov_byte_word_dword_imm_memory():
 
 
 def test_mov_accumulator_absolute_16bit():
-    assert _hex("mov ax, [0x1234]") == "a13412"
-    assert _hex("mov [0x1234], ax") == "a33412"
+    # 16-bit AX absolute: uses accumulator shortcut A1/A3 (shorter encoding)
+    assert _hex("mov ax, [0x1234]") == "66a134120000"
+    assert _hex("mov [0x1234], ax") == "66a334120000"
 
 
 def test_mov_direct_address_32bit():
-    assert _hex("mov eax, [0x1234]") == "668b0534120000"
-    assert _hex("mov eax, [0x1234]", 32) == "8b0534120000"
-    assert _hex("mov ax, [0x1234]", 32) == "a13412"
+    assert _hex("mov eax, [0x1234]") == "a134120000"
+    assert _hex("mov eax, [0x1234]", 32) == "a134120000"
+    # 16-bit AX with 32-bit absolute address
+    assert _hex("mov ax, [0x1234]", 32) == "66a134120000"
 
 
 def test_mov_label_memory_forms():
-    assert _hex("mov eax, [BUF]\nBUF equ 0x100") == "668b0500010000"
-    assert _hex("mov eax, [BUF+ebx]\nBUF equ 0x100") == "668b8300010000"
-    assert _hex("mov eax, [BUF+ebx]\nBUF equ 4") == "668b4304"
-    assert _hex("mov eax, [label+esi*4]") == "668b04b500000000"
-    assert _hex("mov eax, [label1+label2]") == "668b0500000000"
+    assert _hex("mov eax, [BUF]\nBUF equ 0x100") == "8b0500010000"
+    assert _hex("mov eax, [BUF+ebx]\nBUF equ 0x100") == "8b8300010000"
+    assert _hex("mov eax, [BUF+ebx]\nBUF equ 4") == "8b4304"
+    assert _hex("mov eax, [label+esi*4]") == "8b04b500000000"
+    assert _hex("mov eax, [label1+label2]") == "8b0500000000"
 
 
-def test_mov_esp_special_sib():
-    assert _hex("mov eax, [esp]") == "668b04"
-    assert _hex("mov eax, [esp+4]") == "668b4404"
-    assert _hex("mov eax, [esp+0x100]") == "668b8400010000"
+def test_mov_esp_based_sib():
+    assert _hex("mov eax, [esp]") == "8b04"
+    assert _hex("mov eax, [esp+4]") == "8b4404"
+    assert _hex("mov eax, [esp+0x100]") == "8b8400010000"
 
 
-def test_mov_indexed_addressing_drops_scale():
-    # Documented quirk: [base+idx*scale] where base is a reg ignores the index.
-    assert _hex("mov eax, [ebx+ecx*2]") == "668b03"
-    assert _hex("mov eax, [ebx+esi*4+8]") == "668b03"
-    assert _hex("mov eax, [esi+eax]") == "668b06"
-    assert _hex("mov eax, [ecx*4]") == "668b0500000000"
-    assert _hex("mov eax, [eax*8]") == "668b0500000000"
+def test_mov_scaled_index_sib():
+    assert _hex("mov eax, [ebx+ecx*2]") == "8b044b"
+    assert _hex("mov eax, [ebx+esi*4+8]") == "8b44b308"
+    assert _hex("mov eax, [esi+eax]") == "8b0406"
+    assert _hex("mov eax, [ecx*4]") == "8b048d00000000"
+    assert _hex("mov eax, [eax*8]") == "8b04c500000000"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -394,10 +395,10 @@ def test_alu_reg_imm():
     assert _hex("add bx, 5") == "83c305"
 
 
-def test_alu_reg8_large_imm_raises_typeerror():
-    # Documented bug: bytearray.append(bytes) in the REG8 imm>255 branch.
-    with pytest.raises(TypeError):
-        _hex("add al, 0x1234")
+def test_alu_reg8_large_imm_truncates():
+    # r/m8 has no imm16 form; the immediate is truncated to imm8 (80 /digit ib).
+    assert _hex("add al, 0x1234") == "80c034"
+    assert _hex("sub al, 0x1234") == "80e834"
 
 
 def test_test_forms():
@@ -414,7 +415,7 @@ def test_test_forms():
 
 def test_alu_memory_forms():
     assert _hex("add [ebx], eax") == "0103"
-    assert _hex("add [ebx+4], eax") == "010304"
+    assert _hex("add [ebx+4], eax") == "014304"
     assert _hex("add [0x1234], ax") == "66010534120000"
     assert _hex("or [ebx], bl") == "081b"
     assert _hex("and [ebx], bl") == "201b"
@@ -422,18 +423,35 @@ def test_alu_memory_forms():
     assert _hex("xor [ebx], bl") == "301b"
     assert _hex("cmp [ebx], bl") == "381b"
     assert _hex("add [ebx], 5") == "830305"
-    assert _hex("add byte [ebx], 5") == "830305"
-    assert _hex("add word [ebx], 5") == "830305"
+    assert _hex("add byte [ebx], 5") == "800305"
+    assert _hex("add word [ebx], 5") == "66830305"
     assert _hex("add dword [ebx], 5") == "830305"
     assert _hex("add [0x1234], 5") == "83053412000005"
-    assert _hex("test [ebx], eax") == "0103"
+    assert _hex("test [ebx], eax") == "8503"
+    assert _hex("test [ebx], ax") == "668503"
+    assert _hex("test [ebx], bl") == "841b"
+    assert _hex("test [ebx], eax", 32) == "8503"
     assert _hex("test dword [ebx], 5") == "f70305000000"
+    assert _hex("test byte [ebx], 5") == "f60305"
+    assert _hex("test word [ebx], 5") == "66f7030500"
+    assert _hex("test word [ebx], 0x1234") == "66f7033412"
+    assert _hex("not byte [ebx]") == "f613"
+    assert _hex("neg byte [ebx]") == "f61b"
+    assert _hex("not al") == "f6d0"
+    assert _hex("neg al") == "f6d8"
 
 
-def test_adc_sbb_emit_nop_placeholder():
-    # Documented quirk: adc/sbb are missing from the opcode dispatch tuple.
-    assert _hex("adc eax, 5") == "90"
-    assert _hex("sbb eax, 5") == "90"
+def test_adc_sbb_emitted():
+    # adc (2) and sbb (3) are in the ALU dispatch tuple and use 81/83 /digit.
+    assert _hex("adc eax, 5") == "6683d005"
+    assert _hex("sbb eax, 5") == "6683d805"
+    assert _hex("adc eax, 5", 32) == "83d005"
+    assert _hex("sbb eax, ebx", 32) == "19d8"
+    assert _hex("adc eax, 0x12345678") == "6681d078563412"
+    assert _hex("sbb ax, bx") == "19d8"
+    assert _hex("adc al, bl") == "10d8"
+    assert _hex("adc al, 5") == "80d005"
+    assert _hex("sbb bl, 3") == "80db03"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -447,13 +465,16 @@ def test_inc_dec_registers():
     assert _hex("dec ax") == "48"
     assert _hex("inc eax", 32) == "40"
     assert _hex("dec ebx", 32) == "4b"
+    assert _hex("inc bl") == "fec3"
+    assert _hex("dec dl") == "feca"
+    assert _hex("inc al", 32) == "fec0"
 
 
-def test_inc_dec_memory_uses_disp32_zero():
-    # Documented quirk: [mem] form always encodes modrm=05 with disp=0.
-    assert _hex("inc word [bx]") == "ff0500000000"
-    assert _hex("dec byte [eax]") == "ff0d00000000"
-    assert _hex("inc dword [ebx+4]") == "ff0500000000"
+def test_inc_dec_memory_uses_proper_modrm():
+    # [mem] form encodes the real base register via _mem_operand.
+    assert _hex("inc word [bx]") == "ff0500000000"  # 16-bit base reg unsupported -> disp32
+    assert _hex("dec byte [eax]") == "fe08"
+    assert _hex("inc dword [ebx+4]") == "66ff4304"
 
 
 def test_unary_ops():
@@ -467,8 +488,14 @@ def test_unary_ops():
     assert _hex("neg dl") == "f6da"
 
 
-def test_unary_memory_emits_nothing():
-    assert _hex("not byte [eax]") == ""
+def test_unary_memory_emitted():
+    # [mem] unary ops use F6 (byte) / F7 (word/dword) with proper ModR/M.
+    assert _hex("not byte [eax]") == "f610"
+    assert _hex("not dword [eax]") == "f710"
+    assert _hex("neg byte [eax]") == "f618"
+    assert _hex("not word [ebx+4]") == "66f75304"
+    assert _hex("div byte [ebx]", 32) == "f633"
+    assert _hex("idiv dword [eax]", 32) == "f738"
 
 
 def test_shift_imm_and_cl():
@@ -490,8 +517,8 @@ def test_shift_imm_and_cl():
 def test_shift_memory_forms():
     assert _hex("shl word [ebx], 1") == "c12301"
     assert _hex("shr byte [ebx], cl") == "d22b"
-    assert _hex("rol dword [ebx+4], 3") == "c1030403"
-    assert _hex("shl dword [ebx], cl") == "d323"
+    assert _hex("rol dword [ebx+4], 3") == "66c1430403"
+    assert _hex("shl dword [ebx], cl") == "66d323"
     assert _hex("rcr word [0x100], 2") == "c11d0001000002"
     assert _hex("sal byte [ebx], 1") == "c02301"
     assert _hex("shl byte [ebx], cl") == "d223"
@@ -512,8 +539,10 @@ def test_xchg_reg32_only():
     assert _hex("xchg ecx, edx", 32) == "87ca"
 
 
-def test_xchg_word_emits_nothing():
-    assert _hex("xchg ax, bx") == ""
+def test_xchg_word_and_byte():
+    assert _hex("xchg ax, bx") == "87c3"
+    assert _hex("xchg ax, bx", 32) == "6687c3"
+    assert _hex("xchg al, bl") == "86c3"
 
 
 def test_lgdt_lidt_16bit_prefix_and_32bit():
@@ -528,8 +557,11 @@ def test_ltr():
     assert _hex("ltr bx") == "0f00db"
 
 
-def test_ltr_memory_emits_nothing():
-    assert _hex("ltr [gdt]\ngdt: dw 0") == "0000"
+def test_ltr_memory_emitted():
+    # LTR [mem] — 0F 00 /3 with 0x67 prefix in 16-bit mode (like LGDT/LIDT).
+    assert _hex("ltr [gdt]\ngdt: dw 0") == "670f001d080000000000"
+    assert _hex("ltr [gdt]\ngdt: dw 0", 32) == "0f001d070000000000"
+    assert _hex("ltr [ebx]", 32) == "0f001b"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -868,3 +900,60 @@ def test_estimate_alu_size_reg_imm():
     asm = X86Assembler()
     assert asm._estimate_alu_size("eax, 5") == 3  # reg,imm → 3
     assert asm._estimate_alu_size("ax, 0x1234") == 3
+
+
+def test_imul_two_operand_register():
+    assert _hex("imul eax, ecx", 32) == "0fafc1"
+    assert _hex("imul edx, ebx", 32) == "0fafd3"
+
+
+def test_imul_two_operand_memory():
+    assert _hex("imul eax, [ebx+4]", 32) == "0faf4304"
+    assert _hex("imul edx, [eax]", 32) == "0faf10"
+
+
+def test_imul_three_operand_register_small_imm():
+    # IMUL r32, r/m32, imm8 (6B /r ib) — sign-extended imm8
+    assert _hex("imul eax, ecx, 5", 32) == "6bc105"
+    assert _hex("imul edx, ebx, -3", 32) == "6bd3fd"
+    assert _hex("imul ecx, eax, 1", 32) == "6bc801"
+
+
+def test_imul_three_operand_memory_small_imm():
+    assert _hex("imul eax, [ebx], 5", 32) == "6b0305"
+    assert _hex("imul eax, [ebx+4], -1", 32) == "6b4304ff"
+
+
+def test_imul_three_operand_large_imm():
+    # IMUL r32, r/m32, imm32 (69 /r id)
+    assert _hex("imul eax, ecx, 0x100", 32) == "69c100010000"
+    assert _hex("imul eax, [ebx+4], 0x12345678", 32) == "69430478563412"
+
+
+def test_mov_mem_imm_size_after_bracket():
+    # Size word after the bracket: mov [mem], dword imm (supported form)
+    assert _hex("mov [ebx], dword 5", 32) == "c70305000000"
+    assert _hex("mov [eax+4], byte 7", 32) == "c6400407"
+
+
+def test_alu_reg_mem_load_direction():
+    # CMP r32, r/m32 — 3B /r (previously encoded as cmp r32, imm)
+    assert _hex("cmp edx, [eax+4]", 32) == "3b5004"
+    assert _hex("cmp edx, [eax]", 32) == "3b10"
+    assert _hex("cmp bl, [eax]", 32) == "3a18"
+    assert _hex("add edx, [eax]", 32) == "0310"
+    assert _hex("sub eax, [ebx+4]", 32) == "2b4304"
+    assert _hex("test eax, [ebx]", 32) == "8503"
+
+
+def test_alu_mem_imm_displacement_encodes_mod_bits():
+    # Displacements now encode the mod field (previously hardcoded to mod=00,
+    # emitting corrupt streams like 83 39 06 00 10 00 01)
+    assert _hex("cmp byte [eax+4], 1", 32) == "80780401"
+    assert _hex("add dword [ebx+4], 5", 32) == "83430405"
+    assert _hex("cmp [ebx+8], eax", 32) == "394308"
+
+
+def test_alu_byte_mem_imm_uses_byte_opcode():
+    assert _hex("add byte [ebx], 5", 32) == "800305"
+    assert _hex("cmp byte [eax], 1", 32) == "803801"

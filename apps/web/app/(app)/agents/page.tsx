@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -447,24 +447,23 @@ export default function AgentsPage() {
     }
   }
 
-  return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Agents" />}
-        right={
-          <div className="flex items-center gap-2">
-            <input ref={importInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExport} disabled={agents.length === 0}>
-              Export
-            </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => importInputRef.current?.click()}>
-              Import
-            </Button>
-          </div>
-        }
-      />
+  const headerRight = (
+    <div className="flex items-center gap-2">
+      <input ref={importInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExport} disabled={agents.length === 0}>
+        Export
+      </Button>
+      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => importInputRef.current?.click()}>
+        Import
+      </Button>
+    </div>
+  )
 
-      <div className="space-y-4">
+  return (
+    <PageContainer
+      title="Agents"
+      headerRight={headerRight}
+    >
         {/* Stats */}
         <KpiGrid columns={3}>
           <StatCard label="Total Agents" value={agents.length} />
@@ -1077,7 +1076,6 @@ export default function AgentsPage() {
             )}
           </CardContent>
         </Card>
-      </div>
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>
         <AlertDialogContent>
@@ -1095,6 +1093,6 @@ export default function AgentsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageContainer>
   )
 }

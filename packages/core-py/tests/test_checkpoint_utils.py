@@ -90,17 +90,6 @@ class TestExtractStateDict:
 
 
 class TestToNumpyDict:
-    def test_tensor_like_converted(self):
-        class _T:
-            def cpu(self):
-                return self
-
-            def numpy(self):
-                return np.arange(3)
-
-        out = cu._to_numpy_dict({"w": _T()})
-        np.testing.assert_array_equal(out["w"], np.arange(3))
-
     def test_float32_passthrough_same_object(self):
         arr = np.arange(3, dtype=np.float32)
         assert cu._to_numpy_dict({"w": arr})["w"] is arr
@@ -164,44 +153,6 @@ class TestTokenizerMapsFromBundle:
 
     def test_without_maps(self):
         assert cu.tokenizer_maps_from_bundle({"model_state_dict": {}}) == (None, None)
-
-
-class TestTorchLoadCheckpoint:
-    def test_pt_loader_path(self, monkeypatch, tmp_path):
-        import domains.infrastructure.pt_loader as pt
-
-        class _T:
-            def cpu(self):
-                return self
-
-            def numpy(self):
-                return np.zeros(3)
-
-        def _fake_load(path, map_location="cpu"):
-            return {"w": _T()}
-
-        monkeypatch.setattr(pt, "load_pt_file", _fake_load)
-        p = tmp_path / "ckpt.pt"
-        p.write_bytes(b"\0")
-        out = cu.torch_load_checkpoint(str(p))
-        np.testing.assert_array_equal(out["w"], np.zeros(3))
-
-    def test_torch_load_via_pt_loader(self, tmp_path):
-        import numpy as np
-        from domains.infrastructure.pt_loader import load_pt_file
-
-        p = tmp_path / "ckpt.pt"
-        p.write_bytes(b"\0")
-        with pytest.raises(Exception):
-            load_pt_file(str(p))
-
-    def test_non_dict_result_raises(self, monkeypatch, tmp_path):
-        import domains.infrastructure.pt_loader as pt
-        monkeypatch.setattr(pt, "load_pt_file", lambda *a, **k: np.zeros(2))
-        p = tmp_path / "ckpt.pt"
-        p.write_bytes(b"\0")
-        with pytest.raises(TypeError):
-            cu.torch_load_checkpoint(str(p))
 
 
 class TestLoadSloughgptFromCheckpoint:

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, SearchInput } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-controller'
 import { SoulPersonalityCard } from '@/components/souls/SoulPersonalityCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -121,19 +121,24 @@ export default function SoulsPage() {
 
   if (loading) {
     return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader left={<AppRouteHeaderLead title="Souls" subtitle="Personality management" />} />
-        <div className="space-y-4">
-          <KpiGrid>
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-          </KpiGrid>
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-          <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        </div>
-      </div>
+      <PageContainer
+        title="Souls"
+        subtitle="Personality management"
+        loadingContent={
+          <div className="space-y-4">
+            <KpiGrid>
+              <StatCard label="Loading" value="..." />
+              <StatCard label="Loading" value="..." />
+              <StatCard label="Loading" value="..." />
+              <StatCard label="Loading" value="..." />
+            </KpiGrid>
+            <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+            <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+          </div>
+        }
+      >
+        <></>
+      </PageContainer>
     )
   }
 
@@ -143,23 +148,27 @@ export default function SoulsPage() {
     s.traits?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
+  const toolbar = (
+    <SearchInput
+      value={searchQuery}
+      onChange={setSearchQuery}
+      placeholder="Search personalities..."
+      className="max-w-sm"
+    />
+  )
+
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Souls" subtitle={`${souls.length} personalities · ${currentSoul ?? 'none'} active`} />} />
-      <div className="space-y-4">
+    <PageContainer
+      title="Souls"
+      subtitle={`${souls.length} personalities · ${currentSoul ?? 'none'} active`}
+      toolbar={toolbar}
+    >
         <KpiGrid>
           <StatCard label="Personalities" value={souls.length} />
           <StatCard label="Active Soul" value={currentSoul ?? 'None'} />
           <StatCard label="Checkpoints" value={checkpoints.length} />
           <StatCard label="Snapshots" value={snapshots.length || '—'} />
         </KpiGrid>
-
-        <SearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search personalities..."
-          className="max-w-sm"
-        />
 
         <div className="flex gap-1 border-b border-border/30 pb-0">
           {(['souls', 'checkpoints', 'weights', 'snapshots'] as Tab[]).map(t => (
@@ -360,7 +369,6 @@ export default function SoulsPage() {
             </CardContent>
           </Card>
         )}
-      </div>
-    </div>
+    </PageContainer>
   )
 }

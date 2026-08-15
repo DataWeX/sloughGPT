@@ -2,71 +2,21 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
+import { makeForm, makeDatasets } from './__test-helper'
 
 import { TrainStep } from './TrainStep'
 import type { TrainingFormState } from '@/hooks/useTrainingForm'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 
-const form: TrainingFormState = {
-  method: 'distill',
-  inputMode: 'dataset',
-  textInput: '',
-  showAdvanced: false,
+const form: TrainingFormState = makeForm({
   algo: 'bpe',
   trainingEpochs: 10,
-  trainingLR: 0.001,
   trainingBatchSize: 32,
-  availableModels: [],
-  selectedModel: '',
-  useLoRA: false,
-  visualVisionEncoder: '',
-  visualLLM: '',
-  visualStage1Epochs: 0,
-  visualStage2Epochs: 0,
   nativeEmbed: 128,
   nativeLayers: 2,
-  nativeHeads: 4,
-  nativeBlockSize: 128,
-  loadingFinetunedModel: false,
-  allJobs: [],
-  setMethod: vi.fn(),
-  setInputMode: vi.fn(),
-  setTextInput: vi.fn(),
-  setShowAdvanced: vi.fn(),
-  setAlgo: vi.fn(),
-  setTrainingEpochs: vi.fn(),
-  setTrainingLR: vi.fn(),
-  setTrainingBatchSize: vi.fn(),
-  setSelectedModel: vi.fn(),
-  setUseLoRA: vi.fn(),
-  setVlmVisionEncoder: vi.fn(),
-  setVlmLLM: vi.fn(),
-  setVlmStage1Epochs: vi.fn(),
-  setVlmStage2Epochs: vi.fn(),
-  setNativeEmbed: vi.fn(),
-  setNativeLayers: vi.fn(),
-  setNativeHeads: vi.fn(),
-  setNativeBlockSize: vi.fn(),
-  setLoadingFinetunedModel: vi.fn(),
-  applyPreset: vi.fn(),
-  customPresets: [],
-  saveCustomPreset: vi.fn(),
-  deleteCustomPreset: vi.fn(),
-  canStart: true,
-  startTraining: vi.fn(),
-}
+})
 
-const datasets: UseTrainingDatasetsReturn = {
-  datasets: [],
-  selectedDataset: 'shakespeare',
-  loadingDatasets: false,
-  importModalOpen: false,
-  datasetPreview: null,
-  setSelectedDataset: vi.fn(),
-  setImportModalOpen: vi.fn(),
-  setDatasetPreview: vi.fn(),
-  fetchDatasets: vi.fn(),
-}
+const datasets: UseTrainingDatasetsReturn = makeDatasets({ selectedDataset: 'shakespeare' })
 
 describe('TrainStep', () => {
   afterEach(cleanup)

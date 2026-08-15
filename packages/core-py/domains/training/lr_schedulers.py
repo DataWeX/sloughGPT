@@ -1,8 +1,8 @@
 """
-Learning Rate Schedulers — pure math, no torch dependency.
+Learning Rate Schedulers — pure math.
 
 All implementations use SloLRScheduler from slonet as base.
-Factory delegates to slonet.create_scheduler for torch-native types.
+Factory delegates to slonet.create_scheduler for native types.
 """
 
 from dataclasses import dataclass
