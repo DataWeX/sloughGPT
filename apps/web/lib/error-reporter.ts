@@ -9,21 +9,12 @@
  * Non-hydration runtime errors are batched and POSTed to /errors/log.
  */
 
-const BATCH_INTERVAL_MS = 5000
-const MAX_BATCH_SIZE = 10
-
 import { chatDB } from '@/lib/db'
 import { PUBLIC_API_URL } from '@/lib/config'
 
-const API_URL = PUBLIC_API_URL
-
-let _logger: { warn: (msg: string, ctx?: unknown) => void } | null = null
-function getLogger() {
-  if (!_logger) {
-    try { _logger = require('@/lib/dev-log').logger } catch { /* fallback: no-op */ }
-  }
-  return _logger
-}
+const BATCH_INTERVAL_MS = 5000
+const MAX_BATCH_SIZE = 10
+const DEDUP_WINDOW_MS = 5000
 
 interface ErrorReport {
   message: string
@@ -36,6 +27,11 @@ interface ErrorReport {
   metadata?: Record<string, unknown>
 }
 
+interface ErrorReporterDeps {
+  apiUrl?: string
+  persist?: (message: string, source: string) => Promise<unknown>
+}
+
 const EXTENSION_RE =
   /metamask|chrome-extension|moz-extension|safari-web-extension|webextension|extension.*inject|content.?script/i
 
@@ -43,119 +39,151 @@ function isExtensionError(message: string, url?: string): boolean {
   return EXTENSION_RE.test(message) || !!(url && EXTENSION_RE.test(url))
 }
 
-let batch: ErrorReport[] = []
-let timer: ReturnType<typeof setTimeout> | null = null
-const _recentMessages = new Map<string, number>() // message -> last-sent timestamp
-const DEDUP_WINDOW_MS = 5000
+/**
+ * Batches runtime errors and POSTs them to the backend, with per-instance
+ * state so it is testable without module-level resets. The default app
+ * singleton is exposed via {@link reportError} and {@link initErrorReporter}.
+ */
+export class ErrorReporter {
+  private _apiUrl: string
+  private _persist: (message: string, source: string) => Promise<unknown>
+  private _logger: { warn: (msg: string, ctx?: unknown) => void } | null = null
+  private _batch: ErrorReport[] = []
+  private _timer: ReturnType<typeof setTimeout> | null = null
+  private _recentMessages = new Map<string, number>() // message -> last-sent timestamp
+  private _initialized = false
 
-function flush() {
-  if (batch.length === 0) return
-  const payload = batch
-  batch = []
-  timer = null
+  constructor(deps: ErrorReporterDeps = {}) {
+    this._apiUrl = deps.apiUrl ?? PUBLIC_API_URL
+    this._persist = deps.persist ?? ((message, source) => chatDB.addError(message, source))
+  }
 
-  fetch(`${API_URL}/errors/log`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ errors: payload }),
-    keepalive: true,
-  }).catch(() => {
-    /* silent — don't loop on network errors */
-  })
-}
+  /** Queue a report; flushes immediately at MAX_BATCH_SIZE, else on timer. */
+  report(message: string, source: string = 'web', extra?: Partial<ErrorReport>): void {
+    this._push({
+      message,
+      source,
+      timestamp: new Date().toISOString(),
+      url: typeof window !== 'undefined' ? window.location.href : undefined,
+      ...extra,
+    })
+  }
 
-function schedule() {
-  if (timer) return
-  timer = setTimeout(flush, BATCH_INTERVAL_MS)
-}
+  /** Attach window listeners; no-op in non-browser environments or if already run. */
+  init(): void {
+    if (this._initialized || typeof window === 'undefined') return
+    this._initialized = true
 
-function push(report: ErrorReport) {
-  // Dedup: same message within window → skip
-  const now = Date.now()
-  const lastSent = _recentMessages.get(report.message)
-  if (lastSent !== undefined && now - lastSent < DEDUP_WINDOW_MS) return
-  _recentMessages.set(report.message, now)
-  // Prune old entries periodically
-  if (_recentMessages.size > 100) {
-    for (const [msg, ts] of _recentMessages) {
-      if (now - ts > DEDUP_WINDOW_MS * 2) _recentMessages.delete(msg)
+    window.addEventListener('error', this._handleOnError)
+    window.addEventListener('unhandledrejection', this._handleRejection)
+
+    // Persist critical unhandled errors to Dexie for crash recovery
+    // (hydration errors are handled separately by ErrorLifecycle)
+    window.addEventListener('error', (event) => {
+      try {
+        const msg = (event as ErrorEvent).message
+        if (!msg || msg.toLowerCase().includes('hydrat') || msg.includes('did not match')) return
+        this._persist(msg.slice(0, 500), 'unhandled').catch((e: unknown) => {
+          this._getLogger()?.warn('error-reporter: failed to persist error to IndexedDB', { error: e })
+        })
+      } catch {
+        this._getLogger()?.warn('error-reporter: failed to read error event', {})
+      }
+    })
+
+    // Flush remaining errors on page unload
+    window.addEventListener('beforeunload', () => this._flush())
+  }
+
+  private _getLogger(): { warn: (msg: string, ctx?: unknown) => void } | null {
+    if (!this._logger) {
+      try { this._logger = require('@/lib/dev-log').logger } catch { /* fallback: no-op */ }
+    }
+    return this._logger
+  }
+
+  private _flush(): void {
+    if (this._batch.length === 0) return
+    const payload = this._batch
+    this._batch = []
+    this._timer = null
+
+    fetch(`${this._apiUrl}/errors/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ errors: payload }),
+      keepalive: true,
+    }).catch(() => {
+      /* silent — don't loop on network errors */
+    })
+  }
+
+  private _schedule(): void {
+    if (this._timer) return
+    this._timer = setTimeout(() => this._flush(), BATCH_INTERVAL_MS)
+  }
+
+  private _push(report: ErrorReport): void {
+    // Dedup: same message within window → skip
+    const now = Date.now()
+    const lastSent = this._recentMessages.get(report.message)
+    if (lastSent !== undefined && now - lastSent < DEDUP_WINDOW_MS) return
+    this._recentMessages.set(report.message, now)
+    // Prune old entries periodically
+    if (this._recentMessages.size > 100) {
+      for (const [msg, ts] of this._recentMessages) {
+        if (now - ts > DEDUP_WINDOW_MS * 2) this._recentMessages.delete(msg)
+      }
+    }
+
+    this._batch.push(report)
+    if (this._batch.length >= MAX_BATCH_SIZE) {
+      if (this._timer) {
+        clearTimeout(this._timer)
+        this._timer = null
+      }
+      this._flush()
+    } else {
+      this._schedule()
     }
   }
 
-  batch.push(report)
-  if (batch.length >= MAX_BATCH_SIZE) {
-    if (timer) {
-      clearTimeout(timer)
-      timer = null
-    }
-    flush()
-  } else {
-    schedule()
+  private _handleOnError = (event: ErrorEvent): void => {
+    this._push({
+      message: event.message || event.type,
+      source: 'window.onerror',
+      stack: event.error?.stack || null,
+      url: event.filename || window.location.href,
+      line: event.lineno,
+      col: event.colno,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  private _handleRejection = (event: PromiseRejectionEvent): void => {
+    const reason = event.reason
+    const message =
+      reason?.message || reason?.toString?.() || 'Unhandled promise rejection'
+    this._push({
+      message,
+      source: 'unhandledrejection',
+      stack: reason?.stack || null,
+      url: window.location.href,
+      timestamp: new Date().toISOString(),
+    })
   }
 }
+
+const _defaultReporter = new ErrorReporter()
 
 export function reportError(
   message: string,
   source: string = 'web',
   extra?: Partial<ErrorReport>,
-) {
-  push({
-    message,
-    source,
-    timestamp: new Date().toISOString(),
-    url: typeof window !== 'undefined' ? window.location.href : undefined,
-    ...extra,
-  })
+): void {
+  _defaultReporter.report(message, source, extra)
 }
 
-function handleOnError(event: ErrorEvent) {
-  push({
-    message: event.message || event.type,
-    source: 'window.onerror',
-    stack: event.error?.stack || null,
-    url: event.filename || window.location.href,
-    line: event.lineno,
-    col: event.colno,
-    timestamp: new Date().toISOString(),
-  })
-}
-
-function handleRejection(event: PromiseRejectionEvent) {
-  const reason = event.reason
-  const message =
-    reason?.message || reason?.toString?.() || 'Unhandled promise rejection'
-  push({
-    message,
-    source: 'unhandledrejection',
-    stack: reason?.stack || null,
-    url: window.location.href,
-    timestamp: new Date().toISOString(),
-  })
-}
-
-let initialized = false
-
-export function initErrorReporter() {
-  if (initialized || typeof window === 'undefined') return
-  initialized = true
-
-  window.addEventListener('error', handleOnError)
-  window.addEventListener('unhandledrejection', handleRejection)
-
-  // Persist critical unhandled errors to Dexie for crash recovery
-  // (hydration errors are handled separately by ErrorLifecycle)
-  window.addEventListener('error', (event) => {
-    try {
-      const msg = (event as ErrorEvent).message
-      if (!msg || msg.toLowerCase().includes('hydrat') || msg.includes('did not match')) return
-      chatDB.addError(msg.slice(0, 500), 'unhandled').catch((e: unknown) => {
-        getLogger()?.warn('error-reporter: failed to persist error to IndexedDB', { error: e })
-      })
-    } catch {
-      getLogger()?.warn('error-reporter: failed to read error event', {})
-    }
-  })
-
-  // Flush remaining errors on page unload
-  window.addEventListener('beforeunload', flush)
+export function initErrorReporter(): void {
+  _defaultReporter.init()
 }

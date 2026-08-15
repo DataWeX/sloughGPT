@@ -50,12 +50,19 @@ def strip_ansi(text: str) -> str:
 
 
 def clip(text: str, width: int) -> str:
-    """Truncate ``text`` to ``width`` columns (no ANSI handling)."""
+    """Truncate ``text`` to ``width`` columns (no ANSI handling).
+
+    If the text exceeds ``width``, it is truncated with an ellipsis marker
+    so the user can see that content was clipped rather than silently losing
+    the tail.
+    """
     if width <= 0:
         return ""
     if len(text) <= width:
         return text
-    return text[:width]
+    if width <= 3:
+        return text[:width]
+    return text[: width - 1] + "\u2026"
 
 
 class Surface:

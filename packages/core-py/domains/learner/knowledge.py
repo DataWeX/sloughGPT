@@ -1119,6 +1119,7 @@ class KnowledgeIngestor:
         self._lock = threading.RLock()
         self._running = False
         self._feed_thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
 
     # ---- feeds -------------------------------------------------------------
 
@@ -1298,6 +1299,7 @@ class KnowledgeIngestor:
         """Start a daemon thread that polls feeds every `interval` seconds."""
         if self._running:
             return
+        self._stop_event.clear()
         self._running = True
         self._feed_thread = threading.Thread(
             target=self._poll_loop, args=(interval,), daemon=True
@@ -1307,6 +1309,7 @@ class KnowledgeIngestor:
 
     def stop_background_polling(self):
         self._running = False
+        self._stop_event.set()
         if self._feed_thread and self._feed_thread.is_alive():
             self._feed_thread.join(timeout=5)
 
@@ -1318,7 +1321,8 @@ class KnowledgeIngestor:
                     logger.info(f"Background poll: {new['new_articles']} new articles ingested", extra={"tag": "INF"})
             except Exception as e:
                 logger.warning(f"Background poll error: {e}", extra={"tag": "INF"})
-            time.sleep(interval)
+            if self._stop_event.wait(timeout=interval):
+                break
 
 
 # Global singleton
