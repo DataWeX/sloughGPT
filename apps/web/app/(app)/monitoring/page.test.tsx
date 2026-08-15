@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react'
 
-const { mockDetailedHealth } = vi.hoisted(() => ({
+const { mockDetailedHealth, mockUseLiveStatus } = vi.hoisted(() => ({
   mockDetailedHealth: {
     model_loaded: true, model_name: 'gpt2', cpu_percent: 45.2, memory_percent: 62.1,
     uptime: 3600, total_requests: 100, error_count: 2, active_connections: 1,
@@ -12,6 +12,7 @@ const { mockDetailedHealth } = vi.hoisted(() => ({
     training_pool: { active: 0, max: 2, tracked: 0 },
     kv_sessions: { enabled: true, cross_turn_enabled: true, active_sessions: 3, total_entries: 120, total_hit_bytes: 4096 },
   },
+  mockUseLiveStatus: { health: null as Record<string, unknown> | null, connectionStatus: 'disconnected' as string },
 }))
 
 vi.mock('@/lib/system-controller', () => ({
@@ -108,7 +109,7 @@ vi.mock('@/components/monitoring/SystemChart', () => ({ SystemChart: () => <div 
 vi.mock('@/components/monitoring/TrendChart', () => ({ TrendChart: () => <div data-testid="trend-chart" /> }))
 vi.mock('@/components/monitoring/WorkflowCard', () => ({ WorkflowCard: () => <div data-testid="workflow-card" /> }))
 vi.mock('@/hooks/useLiveStatus', () => ({
-  useLiveStatus: () => ({ health: null, connectionStatus: 'disconnected' }),
+  useLiveStatus: () => mockUseLiveStatus,
 }))
 
 import MonitoringPage from './page'
@@ -137,7 +138,7 @@ describe('MonitoringPage — initial load flow', () => {
 })
 
 describe('MonitoringPage — auto-refresh flow', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
   afterEach(() => { cleanup() })
 
   it('auto-refresh toggle present', async () => {
@@ -150,7 +151,7 @@ describe('MonitoringPage — auto-refresh flow', () => {
 })
 
 describe('MonitoringPage — refresh flow', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
   afterEach(() => { cleanup() })
 
   it('refresh button calls fetchAll', async () => {
@@ -167,7 +168,7 @@ describe('MonitoringPage — refresh flow', () => {
 })
 
 describe('MonitoringPage — essential cards always visible', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
   afterEach(() => { cleanup() })
 
   it('renders status card', async () => {
@@ -212,7 +213,7 @@ describe('MonitoringPage — essential cards always visible', () => {
 })
 
 describe('MonitoringPage — collapsed sections exist', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
   afterEach(() => { cleanup() })
 
   it('has Diagnostics section header', async () => {
@@ -249,7 +250,7 @@ describe('MonitoringPage — collapsed sections exist', () => {
 })
 
 describe('MonitoringPage — error handling flow', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
   afterEach(() => { cleanup() })
 
   it('handles health fetch failure gracefully', async () => {
@@ -274,7 +275,7 @@ describe('MonitoringPage — error handling flow', () => {
 })
 
 describe('MonitoringPage — data loading flow', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
   afterEach(() => { cleanup() })
 
   it('calls systemController on mount', async () => {
@@ -320,5 +321,61 @@ describe('MonitoringPage — data loading flow', () => {
       expect(trainingController.list).toHaveBeenCalled()
     })
     await act(async () => {})
+  })
+})
+
+describe('MonitoringPage — connection-status gating', () => {
+  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
+  afterEach(() => { cleanup() })
+
+  it('does not re-poll when connectionStatus is disconnected', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    vi.mocked(systemController.getDetailedHealth).mockClear()
+    render(<MonitoringPage />)
+    await waitFor(() => { expect(systemController.getDetailedHealth).toHaveBeenCalled() })
+    const countAfterInitial = vi.mocked(systemController.getDetailedHealth).mock.calls.length
+    await act(async () => { await new Promise(r => setTimeout(r, 12000)) })
+    expect(vi.mocked(systemController.getDetailedHealth).mock.calls.length).toBe(countAfterInitial)
+  })
+})
+
+describe('MonitoringPage — fetchAll failure handling', () => {
+  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
+  afterEach(() => { cleanup() })
+
+  it('handles individual endpoint failure gracefully', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    vi.mocked(systemController.getDetailedHealth).mockRejectedValue(new Error('Network down'))
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(systemController.getDetailedHealth).toHaveBeenCalled()
+    })
+    await act(async () => {})
+  })
+
+  it('renders page structure even when all endpoints fail', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    vi.mocked(systemController.getDetailedHealth).mockRejectedValue(new Error('fail'))
+    vi.mocked(systemController.getMetrics).mockRejectedValue(new Error('fail'))
+    vi.mocked(systemController.getInfo).mockRejectedValue(new Error('fail'))
+    vi.mocked(systemController.getDisk).mockRejectedValue(new Error('fail'))
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/system health/i).length).toBeGreaterThanOrEqual(1)
+    })
+    await act(async () => {})
+  })
+
+  it('continues to show previously fetched data on partial failure', async () => {
+    const { systemController } = await import('@/lib/system-controller')
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('status-card')).toBeTruthy()
+    })
+    vi.mocked(systemController.getDetailedHealth).mockRejectedValue(new Error('fail'))
+    await act(async () => { fireEvent.click(screen.getAllByText(/refresh/i)[0]) })
+    await waitFor(() => {
+      expect(screen.getByTestId('status-card')).toBeTruthy()
+    })
   })
 })

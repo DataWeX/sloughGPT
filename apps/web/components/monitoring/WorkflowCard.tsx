@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController, type WorkflowStatus } from '@/lib/workflow-controller'
@@ -13,7 +13,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
   const [status, setStatus] = useState<WorkflowStatus | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchStatus = async () => {
+  const refetch = useCallback(async () => {
     setLoading(true)
     try {
       const s = await workflowController.status()
@@ -23,18 +23,45 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    fetchStatus()
-    const interval = setInterval(fetchStatus, 10000)
-    return () => clearInterval(interval)
+    let failures = 0
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let generation = 0
+    let fetching = false
+
+    const run = async (gen: number) => {
+      if (fetching) return
+      fetching = true
+      try {
+        const s = await workflowController.status()
+        if (gen === generation) { setStatus(s); failures = 0 }
+      } catch {
+        if (gen === generation) failures++
+      } finally {
+        if (gen === generation) setLoading(false)
+        fetching = false
+      }
+      if (gen !== generation) return
+      const delay = Math.min(10_000 * Math.pow(2, failures), 60_000)
+      timer = setTimeout(() => tick(), delay)
+    }
+
+    const tick = () => {
+      const gen = ++generation
+      if (timer !== null) { clearTimeout(timer); timer = null }
+      run(gen)
+    }
+
+    run(0)
+    return () => { generation++; if (timer !== null) clearTimeout(timer) }
   }, [])
 
   const handleStart = async () => {
     try {
       await workflowController.start()
-      await fetchStatus()
+      await refetch()
       onRefresh?.()
     } catch {
       // silent
@@ -44,7 +71,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
   const handleStop = async () => {
     try {
       await workflowController.stop()
-      await fetchStatus()
+      await refetch()
       onRefresh?.()
     } catch {
       // silent
@@ -82,7 +109,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0"
-            onClick={fetchStatus}
+            onClick={refetch}
             aria-label="Refresh"
           >
             <IconRefresh className="h-3.5 w-3.5" />

@@ -42,6 +42,7 @@ import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
 const POLL_INTERVAL_MS = 5000
+const POLL_MAX_BACKOFF_MS = 60_000
 const MAX_ALERT_HISTORY = 20
 
 const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
@@ -96,7 +97,7 @@ export default function SystemHealthPage() {
     try { localStorage.setItem('sloughgpt-monitoring-thresholds', JSON.stringify({ cpu: cpuThreshold, mem: memThreshold })) } catch { /* ignore */ }
   }, [cpuThreshold, memThreshold])
 
-  const fetchAll = useCallback(async (showRefreshing = false) => {
+  const fetchAll = useCallback(async (showRefreshing = false): Promise<boolean> => {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
@@ -115,6 +116,7 @@ export default function SystemHealthPage() {
         trainingController.getAutoTrainStatus().catch(() => null),
         trainingController.list().catch(() => []),
       ])
+      const ok = [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex, at, tj].some(v => v != null)
       setDetailed(d)
       setMetrics(m)
       setInfo(i)
@@ -133,10 +135,13 @@ export default function SystemHealthPage() {
       setAutoTrainStatus(at)
       setTrainingJobs(Array.isArray(tj) ? tj : [])
       setLastUpdated(new Date().toLocaleTimeString())
+      return ok
     } catch (e: unknown) {
       setError(extractErrorMessage(e, 'Failed to load system health'))
+      return false
+    } finally {
+      if (showRefreshing) setRefreshing(false)
     }
-    if (showRefreshing) setRefreshing(false)
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
@@ -205,20 +210,45 @@ export default function SystemHealthPage() {
 
   useEffect(() => {
     if (!loaded || !autoRefresh) return
-    const poll = () => {
+    if (connectionStatus !== 'connected') return
+    let failures = 0
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let generation = 0
+    let fetching = false
+
+    const run = async (gen: number) => {
+      if (fetching) return
       if (document.hidden) return
-      fetchAll()
+      fetching = true
+      const ok = await fetchAll()
+      fetching = false
+      if (gen !== generation) return
+      failures = ok ? 0 : failures + 1
+      const delay = Math.min(POLL_INTERVAL_MS * Math.pow(2, failures), POLL_MAX_BACKOFF_MS)
+      timer = setTimeout(() => tick(), delay)
     }
-    const id = setInterval(poll, POLL_INTERVAL_MS)
-    const handleVisibility = () => {
-      if (!document.hidden && autoRefresh) fetchAll(true)
+
+    const tick = () => {
+      const gen = ++generation
+      if (timer !== null) { clearTimeout(timer); timer = null }
+      run(gen)
     }
-    document.addEventListener('visibilitychange', handleVisibility)
+
+    const onVisible = () => {
+      if (document.hidden || !autoRefresh) return
+      failures = 0
+      tick()
+    }
+
+    document.addEventListener('visibilitychange', onVisible)
+    run(0)
+
     return () => {
-      clearInterval(id)
-      document.removeEventListener('visibilitychange', handleVisibility)
+      generation++
+      if (timer !== null) clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [loaded, fetchAll, autoRefresh])
+  }, [loaded, fetchAll, autoRefresh, connectionStatus])
 
   const handleExportReport = () => {
     const report = {
