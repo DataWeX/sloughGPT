@@ -65,7 +65,9 @@ beforeEach(() => {
 describe('WorkflowPage — initial load flow', () => {
   it('renders page header', async () => {
     render(<WorkflowPage />)
-    expect(screen.getAllByText('Workflow').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText('Workflow').length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('fetches status on mount', async () => {
@@ -78,7 +80,7 @@ describe('WorkflowPage — initial load flow', () => {
   it('shows loading state', () => {
     mockStatus.mockReturnValue(new Promise(() => {}))
     render(<WorkflowPage />)
-    expect(screen.getAllByText('Workflow').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
   })
 })
 

@@ -64,7 +64,9 @@ beforeEach(() => {
 describe('ImagesPage — initial load flow', () => {
   it('renders page header', async () => {
     render(<ImagesPage />)
-    expect(screen.getAllByText('Images').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText('Images').length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('fetches gallery and styles on mount', async () => {
@@ -77,7 +79,7 @@ describe('ImagesPage — initial load flow', () => {
   it('shows loading state', () => {
     mockGet.mockReturnValue(new Promise(() => {}))
     render(<ImagesPage />)
-    expect(screen.getAllByText('Images').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
   })
 })
 

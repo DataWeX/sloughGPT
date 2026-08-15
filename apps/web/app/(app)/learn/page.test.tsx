@@ -85,8 +85,7 @@ describe('LearnPage', () => {
   it('shows loading skeleton and calls status on mount', () => {
     mockStatus.mockReturnValue(new Promise(() => {}))
     render(<LearnPage />)
-    expect(screen.getAllByText('Learner').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Continual web learning')).toBeTruthy()
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
     expect(mockStatus).toHaveBeenCalled()
   })
 

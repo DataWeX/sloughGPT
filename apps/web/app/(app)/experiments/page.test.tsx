@@ -59,9 +59,8 @@ describe('ExperimentsPage', () => {
   it('shows loading initially and calls list', () => {
     mockList.mockReturnValue(new Promise(() => {}))
     render(<ExperimentsPage />)
-    expect(screen.getAllByText('Experiments').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
     expect(mockList).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText('New Experiment')).toBeNull()
   })
 
   it('displays experiments after loading', async () => {

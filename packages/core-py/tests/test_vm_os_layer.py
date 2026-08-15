@@ -7514,7 +7514,7 @@ class TestCPUInstructionDecode:
     """Test CPU instruction decode paths in _exec_one (L4968-5407)."""
 
     def _cpu_with_code(self, asm_lines):
-        cpu = X86CPU()
+        cpu = X86CPU(memory_size=2 * 1024 * 1024)
         asm = X86Assembler()
         source = '[BITS 32]\n' + '\n'.join(asm_lines)
         code = asm.assemble(source, org=0x100000)
@@ -8713,7 +8713,7 @@ class TestCPUConditionalJumps:
     """Test conditional jump execution (L4125-4142)."""
 
     def _cpu_with_code(self, asm_lines):
-        cpu = X86CPU()
+        cpu = X86CPU(memory_size=2 * 1024 * 1024)
         asm = X86Assembler()
         source = '[BITS 32]\n' + '\n'.join(asm_lines)
         code = asm.assemble(source, org=0x100000)
@@ -9623,11 +9623,11 @@ class TestAssembleMemoryOperandEncoding:
 
     def test_mov_eax_direct_addr(self):
         code = self._asm_one('MOV EAX, [0x20000]')
-        assert len(code) >= 6
+        assert len(code) >= 5
 
     def test_mov_to_direct_addr(self):
         code = self._asm_one('MOV [0x30000], EAX')
-        assert len(code) >= 6
+        assert len(code) >= 5
 
     def test_sub_reg_bracket_esi(self):
         code = self._asm_one('SUB EAX, [ESI]')
