@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ── Mock Dexie with in-memory tables ─────────────────────────────────
 
-const { tables, FakeDexie } = vi.hoisted(() => {
+const { tables, fakeTables, FakeDexie } = vi.hoisted(() => {
   const tables = new Map<string, Map<string, any>>()
+  const fakeTables = new Map<string, FakeTable>()
 
   class FakeTable {
     private _key: string
@@ -53,16 +54,39 @@ const { tables, FakeDexie } = vi.hoisted(() => {
         }),
       }
     }
+
+    limit(_n: number) {
+      return {
+        toArray: () => [...this._data().values()].slice(0, _n),
+      }
+    }
   }
 
   class FakeDexie {
     sessions = new FakeTable('sessions')
     pendingMessages = new FakeTable('pending')
+    knowledge = new FakeTable('knowledge')
+    bookmarks = new FakeTable('bookmarks')
+    prompts = new FakeTable('prompts')
+    drafts = new FakeTable('drafts')
+    kv = new FakeTable('kv')
+    errors = new FakeTable('errors')
     version() { return { stores() {} } }
     on(_event: string, _handler: (...args: any[]) => void) { /* no-op */ }
+
+    constructor(_name: string) {
+      fakeTables.set('sessions', this.sessions)
+      fakeTables.set('pending', this.pendingMessages)
+      fakeTables.set('knowledge', this.knowledge)
+      fakeTables.set('bookmarks', this.bookmarks)
+      fakeTables.set('prompts', this.prompts)
+      fakeTables.set('drafts', this.drafts)
+      fakeTables.set('kv', this.kv)
+      fakeTables.set('errors', this.errors)
+    }
   }
 
-  return { tables, FakeDexie }
+  return { tables, fakeTables, FakeDexie }
 })
 
 vi.mock('dexie', () => ({ default: FakeDexie }))
@@ -271,25 +295,55 @@ describe('chatDB', () => {
 })
 
 describe('chatDB — circuit breaker (_dbDead)', () => {
-  it('addError silently returns when DB is dead', async () => {
+  let origPut: ((obj: any) => void) | undefined
+
+  beforeEach(() => {
+    const errorsTable = fakeTables.get('errors')
+    origPut = errorsTable?.put
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    const errorsTable = fakeTables.get('errors')
+    if (errorsTable && origPut) errorsTable.put = origPut
+  })
+
+  it('addError triggers circuit breaker on Dexie failure, then short-circuits', async () => {
     const { chatDB, isDBDead } = await import('./db')
-    if (isDBDead()) {
-      await chatDB.addError('test-when-dead')
-    }
+    expect(isDBDead()).toBe(false)
+
+    const errorsTable = fakeTables.get('errors')!
+    errorsTable.put = () => { throw new Error('IndexedDB unavailable') }
+
+    await chatDB.addError('test-trigger')
+    expect(isDBDead()).toBe(true)
+
+    const putSpy = vi.fn()
+    errorsTable.put = putSpy
+    await chatDB.addError('test-after-dead')
+    expect(putSpy).not.toHaveBeenCalled()
   })
 
   it('getErrors returns empty array when DB is dead', async () => {
     const { chatDB, isDBDead } = await import('./db')
-    if (isDBDead()) {
-      const errors = await chatDB.getErrors()
-      expect(errors).toEqual([])
-    }
+
+    const errorsTable = fakeTables.get('errors')!
+    errorsTable.put = () => { throw new Error('dead') }
+    await chatDB.addError('x')
+    expect(isDBDead()).toBe(true)
+
+    const errors = await chatDB.getErrors()
+    expect(errors).toEqual([])
   })
 
-  it('clearErrors silently returns when DB is dead', async () => {
+  it('clearErrors is a no-op when DB is dead', async () => {
     const { chatDB, isDBDead } = await import('./db')
-    if (isDBDead()) {
-      await chatDB.clearErrors()
-    }
+
+    const errorsTable = fakeTables.get('errors')!
+    errorsTable.put = () => { throw new Error('dead') }
+    await chatDB.addError('x')
+    expect(isDBDead()).toBe(true)
+
+    await chatDB.clearErrors()
   })
 })
