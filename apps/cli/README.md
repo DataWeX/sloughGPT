@@ -32,8 +32,6 @@ Beginner path: set **`--dataset`**, **`--max-steps`** (or **`--epochs`**), **`--
 
 **Dropout:** **`model.dropout`** in **`config.yaml`** is passed into **`SloughGPTTrainer`**; **`--dropout`** overrides after merge.
 
-**`--optimized`:** after merge, forces mixed precision **on** and **`fp16`** for local **`SloughGPTTrainer`** and for the **`--api`** JSON body.
-
 **Device:** local **`train`** uses **`get_device(config.device)`** when **`device.type`** is **`auto`**. For **`--api`**, only an explicit **`device.type`** (e.g. from **`--train-device`**) is sent so the server does not inherit the client’s resolved **`auto`**. **`--train-device`** overrides **`device.type`** from YAML before merge.
 
 Final exports use **`checkpoint.save_dir`** from **`config.yaml`**. Default basename is **`{model}-{dataset}-{YYYY-MM-DD-HHMMSS}`** (no overwrite on each run). Use **`--save-stem NAME`** for a fixed filename stem.

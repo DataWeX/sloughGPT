@@ -117,38 +117,39 @@ export const MessageBubble = memo(function MessageBubble({
         role === 'user' ? 'items-end' : 'items-start'
       )}
     >
+      {/* Role label — outside bubble for clear separation */}
+      <span className={cn(
+        "text-[10px] font-semibold tracking-wider uppercase mb-1 block",
+        role === 'user' ? 'text-primary/60 text-right' : 'text-muted-foreground/50'
+      )}>
+        {role === 'user' ? 'You' : 'Assistant'}
+        {isBookmarked && (
+          <span className="ml-1.5 text-warning" aria-label="Bookmarked">
+            <svg className="h-2.5 w-2.5 inline fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </span>
+        )}
+        {role === 'assistant' && model && !isError && (
+          <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
+            {model}
+          </span>
+        )}
+        {isError && (
+          <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
+            Interrupted
+          </span>
+        )}
+      </span>
+
       <div
         className={cn(
           "relative rounded-2xl px-4 py-2.5 sm:px-4 sm:py-3 max-w-[88%] sm:max-w-[75%] lg:max-w-[65%] transition-all duration-200 leading-relaxed",
           role === 'user'
             ? 'bg-primary text-primary-foreground rounded-br-md shadow-md'
-            : 'bg-card text-foreground rounded-bl-md border border-border/50 shadow-sm',
+            : 'bg-card text-foreground rounded-bl-md border border-border/40 shadow-sm',
           isStreaming && role === 'assistant' && "ring-1 ring-primary/20 animate-pulse",
           isError && role === 'assistant' && "ring-1 ring-destructive/40 border-destructive/30"
         )}
       >
-        <span className={cn(
-          "text-[10px] font-semibold tracking-wider uppercase mb-1.5 block",
-          role === 'user' ? 'text-primary-foreground/70 text-right' : 'text-muted-foreground/60'
-        )}>
-          {role === 'user' ? 'You' : 'Assistant'}
-          {isBookmarked && (
-            <span className="ml-1.5 text-warning" aria-label="Bookmarked">
-              <svg className="h-2.5 w-2.5 inline fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            </span>
-          )}
-          {role === 'assistant' && model && !isError && (
-            <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
-              {model}
-            </span>
-          )}
-          {isError && (
-            <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
-              Interrupted
-            </span>
-          )}
-        </span>
-
         {images && images.length > 0 && <MessageImages images={images} role={role} />}
 
         <MessageContent

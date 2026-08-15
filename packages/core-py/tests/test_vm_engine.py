@@ -1157,10 +1157,12 @@ class TestErrorHandlingEdgeCases:
     def test_breakpoint_then_fault(self):
         e = _engine("NOP\nHLT")
         e.set_breakpoint(0x1000)
-        e._cpu.load(bytes([0x62]), 0x1001)
+        # Write 0x62 directly to memory (don't use _cpu.load which resets EIP)
+        e._cpu._mem[0x1001] = 0x62
         # First, hit the breakpoint
         result = e.step()
         assert result is False  # breakpoint hit
+        assert e.cpu.eip == 0x1000  # EIP unchanged (not executed yet)
         # Step past breakpoint — executes NOP at 0x1000, advances to 0x1001
         e._skip_breakpoint_check = True
         try:
@@ -1318,13 +1320,14 @@ class TestErrorHandlingEdgeCases:
         assert faults[0].fault_type is InsFault
 
     def test_fault_callback_gets_all_fields(self):
-        e = _engine("[BITS 32]\nmov eax, 0x42\nxor eax, eax\nmov al, 0")
+        e = _engine("[BITS 32]\nmov eax, 0x42\nxor eax, eax")
         e.step()  # mov eax, 0x42
         e.step()  # xor eax, eax → eax=0
         faults = []
         e.on_fault(lambda f: faults.append(f))
-        # F6 F0 = DIV AL (AL=0 → division by zero)
-        e._cpu.load(bytes([0xF6, 0xF0]), 0x1002)
+        # Write DIV AL (F6 F0) directly to memory at current EIP
+        e._cpu._mem[e.cpu.eip] = 0xF6
+        e._cpu._mem[e.cpu.eip + 1] = 0xF0
         e.step()
         f = faults[0]
         assert f.fault_type is InsFault

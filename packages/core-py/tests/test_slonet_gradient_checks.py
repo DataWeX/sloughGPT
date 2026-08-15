@@ -119,6 +119,22 @@ class TestGradientChecks:
         ok, details = _check_grad("matmul_batched", f)
         assert ok, "\n".join(details)
 
+    def test_matmul_1d_3d(self):
+        def f():
+            a = Tensor(np.random.randn(4), **R)
+            b = Tensor(np.random.randn(2, 4, 3), **R)
+            return lambda: _matmul(a, b), [a, b]
+        ok, details = _check_grad("matmul_1d_3d", f)
+        assert ok, "\n".join(details)
+
+    def test_matmul_3d_2d(self):
+        def f():
+            a = Tensor(np.random.randn(2, 3, 4), **R)
+            b = Tensor(np.random.randn(4, 5), **R)
+            return lambda: _matmul(a, b), [a, b]
+        ok, details = _check_grad("matmul_3d_2d", f)
+        assert ok, "\n".join(details)
+
     def test_softmax(self):
         def f():
             x = Tensor(np.random.randn(2, 3), **R)

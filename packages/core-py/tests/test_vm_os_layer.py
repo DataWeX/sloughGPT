@@ -3623,7 +3623,7 @@ class TestX86REPExecution:
         # REP STOSB: F3 AA
         code = bytes([0xF3, 0xAA])
         cpu.load(code, org=0)
-        cpu.run(max_steps=100)
+        cpu.step()
         for i in range(4):
             assert cpu._read8(0x2000 + i) == 0xAA
         assert cpu._get32(1) == 0
@@ -3687,7 +3687,7 @@ class TestX86ShiftOps:
         # ROR EAX, 1: C1 C8 01
         code = bytes([0xC1, 0xC8, 0x01])
         cpu.load(code, org=0)
-        cpu.run(max_steps=10)
+        cpu.step()
         assert cpu._get32(0) == 0x80000001
 
     def test_sar_eax(self):
@@ -3696,7 +3696,7 @@ class TestX86ShiftOps:
         # SAR EAX, 4: C1 F8 04
         code = bytes([0xC1, 0xF8, 0x04])
         cpu.load(code, org=0)
-        cpu.run(max_steps=10)
+        cpu.step()
         result = cpu._get32(0)
         # SAR preserves sign: 0xF8000000
         assert result == 0xF8000000
@@ -3767,7 +3767,7 @@ class TestX86ShiftOps:
         # SHL AL, CL: D2 E0
         code = bytes([0xD2, 0xE0])
         cpu.load(code, org=0)
-        cpu.run(max_steps=10)
+        cpu.step()
         assert cpu._get8l(0) == 0x04
 
     def test_shr_8bit_cl(self):
@@ -7777,8 +7777,8 @@ class TestCPUInstructionDecode:
         cpu = self._cpu_with_code(['DIV CL'])
         cpu._regs[0] = 0x101  # EAX=257, so AX=257 > 0xFF → overflow
         cpu._set8l(1, 1)
-        result = cpu.step()
-        assert result is False  # InsFault caught by step(), returns False
+        with pytest.raises(InsFault):
+            cpu.step()
 
     def test_idiv_8(self):
         cpu = self._cpu_with_code(['IDIV CL'])

@@ -1452,6 +1452,173 @@ def test_alu_sbb_via_0x81():
     _steps(cpu, 1)
     assert cpu.eax == 99
 
+def test_alu_acc_imm8():
+    # ADD AL, imm8 (04) / OR (0C) / ADC (14) / SBB (1C)
+    # AND (24) / SUB (2C) / XOR (34) / CMP (3C)
+    cpu = _cpu("0405", regs={"eip": 0x1000})  # ADD AL, 5
+    cpu._set8l(0, 3)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 8
+    cpu = _cpu("0c0f", regs={"eip": 0x1000})  # OR AL, 0x0F
+    cpu._set8l(0, 0x30)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 0x3F
+    cpu = _cpu("14 05", regs={"eip": 0x1000})  # ADC AL, 5
+    cpu._set8l(0, 10)
+    cpu._set_flag(FLAG_CF, False)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 15
+    cpu = _cpu("1405", regs={"eip": 0x1000})  # ADC AL, 5 with carry
+    cpu._set8l(0, 10)
+    cpu._set_flag(FLAG_CF, True)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 16
+    cpu = _cpu("1c10", regs={"eip": 0x1000})  # SBB AL, 0x10
+    cpu._set8l(0, 0x34)
+    cpu._set_flag(FLAG_CF, False)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 0x24
+    cpu = _cpu("1c10", regs={"eip": 0x1000})  # SBB AL, 0x10 with borrow
+    cpu._set8l(0, 0x34)
+    cpu._set_flag(FLAG_CF, True)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 0x23
+    cpu = _cpu("240f", regs={"eip": 0x1000})  # AND AL, 0x0F
+    cpu._set8l(0, 0xFF)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 0x0F
+    cpu = _cpu("2c03", regs={"eip": 0x1000})  # SUB AL, 3
+    cpu._set8l(0, 0x10)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 0x0D
+    cpu = _cpu("34ff", regs={"eip": 0x1000})  # XOR AL, 0xFF
+    cpu._set8l(0, 0x0F)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 0xF0
+    cpu = _cpu("3c05", regs={"eip": 0x1000})  # CMP AL, 5 — no write
+    cpu._set8l(0, 5)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 5
+    assert cpu._flag(FLAG_ZF)
+
+
+def test_alu_acc_imm32():
+    # ADD EAX, imm32 (05) / OR (0D) / ADC (15) / SBB (1D)
+    # AND (25) / SUB (2D) / XOR (35) / CMP (3D)
+    cpu = _cpu("0505000000", regs={"eip": 0x1000})  # ADD EAX, 5
+    cpu.eax = 7
+    _steps(cpu, 1)
+    assert cpu.eax == 12
+    cpu = _cpu("0d00010000", regs={"eip": 0x1000})  # OR EAX, 0x100
+    cpu.eax = 0x10
+    _steps(cpu, 1)
+    assert cpu.eax == 0x110
+    cpu = _cpu("1505000000", regs={"eip": 0x1000})  # ADC EAX, 5
+    cpu.eax = 0x10
+    cpu._set_flag(FLAG_CF, True)
+    _steps(cpu, 1)
+    assert cpu.eax == 0x16
+    cpu = _cpu("1d01000000", regs={"eip": 0x1000})  # SBB EAX, 1
+    cpu.eax = 0x100
+    cpu._set_flag(FLAG_CF, False)
+    _steps(cpu, 1)
+    assert cpu.eax == 0xFF
+    cpu = _cpu("1d01000000", regs={"eip": 0x1000})  # SBB EAX, 1 with borrow
+    cpu.eax = 0x100
+    cpu._set_flag(FLAG_CF, True)
+    _steps(cpu, 1)
+    assert cpu.eax == 0xFE
+    cpu = _cpu("25ff000000", regs={"eip": 0x1000})  # AND EAX, 0xFF
+    cpu.eax = 0xFFFF
+    _steps(cpu, 1)
+    assert cpu.eax == 0xFF
+    cpu = _cpu("2d01000000", regs={"eip": 0x1000})  # SUB EAX, 1
+    cpu.eax = 0x100
+    _steps(cpu, 1)
+    assert cpu.eax == 0xFF
+    cpu = _cpu("35ffffffff", regs={"eip": 0x1000})  # XOR EAX, -1
+    cpu.eax = 0x0F0F0F0F
+    _steps(cpu, 1)
+    assert cpu.eax == 0xF0F0F0F0
+    cpu = _cpu("3d05000000", regs={"eip": 0x1000})  # CMP EAX, 5 — no write
+    cpu.eax = 5
+    _steps(cpu, 1)
+    assert cpu.eax == 5
+    assert cpu._flag(FLAG_ZF)
+
+
+def test_alu_acc_imm_16bit():
+    # 0x66-prefixed accumulator-immediate forms: AX, imm16
+    cpu = _cpu("66053412", regs={"eip": 0x1000})  # ADD AX, 0x1234
+    cpu.eax = 0x5
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0x1239
+    cpu = _cpu("660dff00", regs={"eip": 0x1000})  # OR AX, 0x00FF
+    cpu.eax = 0xF000
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0xF0FF
+    cpu = _cpu("66150400", regs={"eip": 0x1000})  # ADC AX, 4
+    cpu.eax = 0x20
+    cpu._set_flag(FLAG_CF, True)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0x25
+    cpu = _cpu("661d1000", regs={"eip": 0x1000})  # SBB AX, 0x10
+    cpu.eax = 0x1234
+    cpu._set_flag(FLAG_CF, False)
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0x1224
+    cpu = _cpu("6625ff00", regs={"eip": 0x1000})  # AND AX, 0x00FF
+    cpu.eax = 0xFF00
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0x0000
+    cpu = _cpu("662d0100", regs={"eip": 0x1000})  # SUB AX, 1
+    cpu.eax = 0x100
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0xFF
+    cpu = _cpu("6635ffff", regs={"eip": 0x1000})  # XOR AX, 0xFFFF
+    cpu.eax = 0x1234
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0xEDCB
+    cpu = _cpu("663d0001", regs={"eip": 0x1000})  # CMP AX, 0x100 — no write
+    cpu.eax = 0x100
+    _steps(cpu, 1)
+    assert cpu._get16(0) == 0x100
+    assert cpu._flag(FLAG_ZF)
+    # 8-bit form is unaffected by the 0x66 prefix
+    cpu = _cpu("660401", regs={"eip": 0x1000})  # ADD AL, 1
+    cpu.eax = 0x20
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 0x21
+
+
+def test_alu_test_acc_imm():
+    cpu = _cpu("a80f", regs={"eip": 0x1000})  # TEST AL, 0x0F — no write
+    cpu._set8l(0, 0x05)
+    _steps(cpu, 1)
+    assert cpu._get8l(0) == 0x05
+    assert not cpu._flag(FLAG_ZF)
+    cpu = _cpu("a810", regs={"eip": 0x1000})  # TEST AL, 0x10 — zero result
+    cpu._set8l(0, 0x0F)
+    _steps(cpu, 1)
+    assert cpu._flag(FLAG_ZF)
+    cpu = _cpu("a901000000", regs={"eip": 0x1000})  # TEST EAX, 1 — zero result
+    cpu.eax = 0x100
+    _steps(cpu, 1)
+    assert cpu.eax == 0x100
+    assert cpu._flag(FLAG_ZF)
+    cpu = _cpu("a901000000", regs={"eip": 0x1000})  # TEST EAX, 1 — zero result
+    cpu.eax = 0x2
+    _steps(cpu, 1)
+    assert cpu._flag(FLAG_ZF)
+    cpu = _cpu("66a90100", regs={"eip": 0x1000})  # TEST AX, 1
+    cpu.eax = 0x2
+    _steps(cpu, 1)
+    assert cpu._flag(FLAG_ZF)
+    cpu = _cpu("66a801", regs={"eip": 0x1000})  # TEST AL, 1
+    cpu.eax = 0x3
+    _steps(cpu, 1)
+    assert not cpu._flag(FLAG_ZF)
+
 def test_shift_rcl_fallback():
     cpu = _cpu("d0d2", regs={"eip": 0x1000})
     cpu._set8l(2, 0x80)

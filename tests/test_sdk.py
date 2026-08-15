@@ -279,14 +279,10 @@ class TestNewSDKMethods(unittest.TestCase):
             "m",
             "d",
             weight_decay=0.02,
-            use_mixed_precision=True,
-            mixed_precision_dtype="fp16",
             scheduler="linear",
             device="cpu",
         )
         self.assertEqual(payload["weight_decay"], 0.02)
-        self.assertTrue(payload["use_mixed_precision"])
-        self.assertEqual(payload["mixed_precision_dtype"], "fp16")
         self.assertEqual(payload["scheduler"], "linear")
         self.assertEqual(payload["device"], "cpu")
 

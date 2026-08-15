@@ -62,14 +62,6 @@ def local_soul_candidate_paths(models_dir: Path, *, default_name: str = "sloughg
     return out
 
 
-def apply_optimized_train_preset(config, args) -> bool:
-    if not getattr(args, "optimized", False):
-        return False
-    config.training.use_mixed_precision = True
-    config.training.mixed_precision_dtype = "fp16"
-    return True
-
-
 def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = True) -> tuple[str, object | None]:
     """Check if server is running, optionally auto-start it.
 

@@ -10,7 +10,7 @@ eval can decode without vocab warnings; see ``docs/policies/CONTRIBUTING.md``
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -62,8 +62,6 @@ class _TrainHyperparameters(BaseModel):
     weight_decay: float = Field(default=0.01, ge=0.0)
     gradient_accumulation_steps: int = Field(default=1, ge=1, le=10_000)
     max_grad_norm: float = Field(default=1.0, ge=0.0)
-    use_mixed_precision: bool = True
-    mixed_precision_dtype: Literal["bf16", "fp16"] = "bf16"
     warmup_steps: int = Field(default=100, ge=0, le=1_000_000)
     min_lr: float = Field(default=1e-5, ge=0.0)
     scheduler: str = "cosine"
@@ -76,16 +74,6 @@ class _TrainHyperparameters(BaseModel):
     max_checkpoints: int = Field(default=5, ge=1, le=100)
     device: Optional[str] = None
     use_compile: bool = False
-
-    @field_validator("mixed_precision_dtype", mode="before")
-    @classmethod
-    def _normalize_mixed_precision_dtype(cls, value: object) -> str:
-        if value is None or (isinstance(value, str) and value.strip() == ""):
-            return "bf16"
-        s = str(value).strip().lower()
-        if s in ("bf16", "fp16"):
-            return s
-        raise ValueError("mixed_precision_dtype must be 'bf16' or 'fp16'")
 
     @field_validator("device", mode="before")
     @classmethod

@@ -30,7 +30,6 @@ def test_sloughgpt_trainer_on_progress_receives_steps_and_loss(tmp_path: Path, m
         epochs=1,
         max_steps=5,
         device="cpu",
-        use_mixed_precision=False,
         checkpoint_dir=str(tmp_path / "ck"),
         checkpoint_interval=100_000,
         log_interval=1,

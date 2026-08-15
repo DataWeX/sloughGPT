@@ -586,34 +586,29 @@ select:focus-visible {
   border-color: rgb(var(--primary) / 0.5);
 }
 
-/* Accent chips — refined variants (RGB triples for Tailwind /opacity) */
+/* Accent themes — override --accent (decorative color), not --primary.
+   --primary always comes from the palette (Noir Violet = 124 82 196).
+   --accent provides a secondary color for badges, chips, decorative elements. */
 .theme-blue {
-  --primary: 90 130 220;
-  --ring: 140 176 240;
+  --accent: 90 130 220;
 }
 .theme-purple {
-  --primary: 155 108 214;
-  --ring: 192 162 238;
+  --accent: 155 108 214;
 }
 .theme-pink {
-  --primary: 218 130 170;
-  --ring: 238 178 206;
+  --accent: 218 130 170;
 }
 .theme-red {
-  --primary: 230 120 130;
-  --ring: 242 172 180;
+  --accent: 230 120 130;
 }
 .theme-orange {
-  --primary: 236 155 90;
-  --ring: 244 194 144;
+  --accent: 236 155 90;
 }
 .theme-green {
-  --primary: 72 178 130;
-  --ring: 134 210 174;
+  --accent: 72 178 130;
 }
 .theme-teal {
-  --primary: 72 166 200;
-  --ring: 134 202 228;
+  --accent: 72 166 200;
 }
 
 /* Palettes — full-spectrum overrides applied via html class */

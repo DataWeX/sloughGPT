@@ -673,10 +673,14 @@ def _matmul(a, b):
             g_out = g.reshape(_out_shape) if g.shape != _out_shape else g
             if _b_T is None:
                 # b is 1D (K,): C[..., m] = sum_k a[..., m, k] * b[k]
-                #   -> ga = g[..., :, newaxis] * b[newaxis, :]
+                #   ga = g[..., :, newaxis] * b[newaxis, :]
                 ga = g_out[..., np.newaxis] * b_data
+            elif a_data.ndim == 1 and b_data.ndim >= 3:
+                # a is 1D (K,), b is (B, K, N): ga[k] = sum_{b,n} g[b,n] * b[b,k,n]
+                #   broadcast g to (B,1,N), multiply by b (B,K,N), sum over batch+N
+                ga = (g_out[:, np.newaxis, :] * b_data).sum(axis=(0, 2))
             else:
-                # b is (..., K, N): ga = g @ b^T = g @ swapaxes(b, -2, -1)
+                # ga = g @ b^T
                 ga = np.matmul(g_out, _b_T)
             if ga.shape != _a_shape:
                 ga = ga.reshape(_a_shape)
@@ -686,12 +690,20 @@ def _matmul(a, b):
         if b_req or (isinstance(b, Tensor) and b._backward_fn):
             g_out = g.reshape(_out_shape) if g.shape != _out_shape else g
             if a_data.ndim == 1:
-                # a is 1D (K,): C[n] = sum_k a[k] * b[k, n]
-                #   -> gb = a[:, newaxis] * g[newaxis, :]
-                gb = a_data[..., np.newaxis] * g_out
+                # a is 1D (K,): C = a @ b (vector-matrix, matrix-vector, or dot)
+                #   gb = a[newaxis,:,newaxis] * g[:,newaxis,:] (broadcast to b's shape)
+                #   For 2D b: a[:,newaxis] * g[newaxis,:] -> (K,N)
+                #   For 3D b: (1,K,1) * (B,1,N) -> (B,K,N)
+                #   For 1D b (dot): scalar * a -> (K,) — handled by outer
+                if b_data.ndim == 1:
+                    gb = a_data * g_out
+                elif b_data.ndim == 2:
+                    gb = a_data[:, np.newaxis] * g_out[np.newaxis, :]
+                else:
+                    gb = a_data[np.newaxis, :, np.newaxis] * g_out[:, np.newaxis, :]
             elif b_data.ndim == 1:
                 # b is 1D (K,): gb = sum over batch of (a^T @ g)
-                #   Flatten a's batch dims so the matmul sums over them.
+                #   Flatten a's batch dims so the matmul sums over them
                 a_flat = a_data.reshape(-1, a_data.shape[-1])
                 gb = np.matmul(a_flat.T, g_out.ravel())
             elif _both_batched:

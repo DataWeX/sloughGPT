@@ -5237,6 +5237,47 @@ class X86CPU:
                         self._write_rm_mem(rm_val, width, r & ((1 << width) - 1))
             return
 
+        # ── Accumulator-immediate ALU (04/05/0C/0D/14/15/1C/1D/24/25/2C/2D/34/35/3C/3D) ──
+        _alu_acc_imm = {
+            0x04: (0, 8),  0x05: (0, 32),   # ADD AL,imm8 / EAX,imm32
+            0x0C: (1, 8),  0x0D: (1, 32),   # OR  AL,imm8 / EAX,imm32
+            0x14: (2, 8),  0x15: (2, 32),   # ADC AL,imm8 / EAX,imm32
+            0x1C: (3, 8),  0x1D: (3, 32),   # SBB AL,imm8 / EAX,imm32
+            0x24: (4, 8),  0x25: (4, 32),   # AND AL,imm8 / EAX,imm32
+            0x2C: (5, 8),  0x2D: (5, 32),   # SUB AL,imm8 / EAX,imm32
+            0x34: (6, 8),  0x35: (6, 32),   # XOR AL,imm8 / EAX,imm32
+            0x3C: (7, 8),  0x3D: (7, 32),   # CMP AL,imm8 / EAX,imm32
+        }
+        if opcode in _alu_acc_imm:
+            alu_op, width = _alu_acc_imm[opcode]
+            if width == 8:
+                a = self._get8l(0)
+                imm = self._fetch_byte()
+                r = self._alu(alu_op, a, imm, 8)
+                if alu_op != 7:
+                    self._set8l(0, r & 0xFF)
+            else:
+                a = self._get32(0)
+                imm = self._fetch_dword()
+                if imm & 0x80000000:
+                    imm -= 0x100000000
+                r = self._alu(alu_op, a, imm, 32)
+                if alu_op != 7:
+                    self._set32(0, r & 0xFFFFFFFF)
+            return
+
+        # ── TEST AL, imm8 (A8) / TEST EAX, imm32 (A9) ──
+        if opcode == 0xA8:
+            a = self._get8l(0)
+            imm = self._fetch_byte()
+            self._update_flags_logic(a & imm, 8)
+            return
+        if opcode == 0xA9:
+            a = self._get32(0)
+            imm = self._fetch_dword()
+            self._update_flags_logic(a & imm, 32)
+            return
+
         # ── TEST r/m32, r32 (85) / TEST r/m8, r8 (84) ──
         if opcode == 0x85:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
@@ -6051,6 +6092,51 @@ class X86CPU:
                     self._alu(alu_op, src_reg, src_rm, 8)
             return
 
+        # Accumulator-immediate ALU, 16-bit mode (0x66 04/05/0C/0D/14/15/1C/1D/24/25/2C/2D/34/35/3C/3D)
+        _alu_acc_imm16 = {
+            0x04: (0, 8),  0x05: (0, 16),   # ADD AL,imm8 / AX,imm16
+            0x0C: (1, 8),  0x0D: (1, 16),   # OR  AL,imm8 / AX,imm16
+            0x14: (2, 8),  0x15: (2, 16),   # ADC AL,imm8 / AX,imm16
+            0x1C: (3, 8),  0x1D: (3, 16),   # SBB AL,imm8 / AX,imm16
+            0x24: (4, 8),  0x25: (4, 16),   # AND AL,imm8 / AX,imm16
+            0x2C: (5, 8),  0x2D: (5, 16),   # SUB AL,imm8 / AX,imm16
+            0x34: (6, 8),  0x35: (6, 16),   # XOR AL,imm8 / AX,imm16
+            0x3C: (7, 8),  0x3D: (7, 16),   # CMP AL,imm8 / AX,imm16
+        }
+        if opcode in _alu_acc_imm16:
+            alu_op, width = _alu_acc_imm16[opcode]
+            if width == 8:
+                a = self._get8l(0)
+                imm = self._fetch_byte()
+                r = self._alu(alu_op, a, imm, 8)
+                if alu_op != 7:
+                    self._set8l(0, r & 0xFF)
+            else:
+                a = self._get16(0)
+                lo = self._fetch_byte()
+                hi = self._fetch_byte()
+                imm = lo | (hi << 8)
+                if imm & 0x8000:
+                    imm -= 0x10000
+                r = self._alu(alu_op, a, imm, 16)
+                if alu_op != 7:
+                    self._set16(0, r & 0xFFFF)
+            return
+
+        # TEST AL, imm8 (A8) / TEST AX, imm16 (A9), 16-bit mode
+        if opcode == 0xA8:
+            a = self._get8l(0)
+            imm = self._fetch_byte()
+            self._update_flags_logic(a & imm, 8)
+            return
+        if opcode == 0xA9:
+            a = self._get16(0)
+            lo = self._fetch_byte()
+            hi = self._fetch_byte()
+            imm = lo | (hi << 8)
+            self._update_flags_logic(a & imm, 16)
+            return
+
         # Group 1: ALU r/m16, imm16 (81) / ALU r/m16, imm8 (83)
         if opcode == 0x81:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
@@ -6275,8 +6361,7 @@ class X86CPU:
                 return
             return
 
-        logger.warning(f"CPU: unknown 16-bit opcode 0x66 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}")
-        self._eip = (self._eip + 1) & 0xFFFFFFFF
+        raise InsFault(f"unknown opcode 0x66 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}")
 
     # ── ALU operations ───────────────────────────────────────────────────
 

@@ -112,17 +112,6 @@ def _local_soul_candidate_paths(models_dir: Path, *, default_name: str = "slough
     return out
 
 
-def _apply_optimized_train_preset(config, args) -> bool:
-    if not getattr(args, "optimized", False):
-        return False
-    config.training.use_mixed_precision = True
-    config.training.mixed_precision_dtype = "fp16"
-    return True
-
-
-# ── Namespace marshaller ──────────────────────────────────────────────
-
-
 def _ns(**kwargs) -> SimpleNamespace:
     """Build a SimpleNamespace from keyword arguments."""
     return SimpleNamespace(**kwargs)
@@ -606,14 +595,13 @@ def train(ctx):
 @click.option("--resume", default=None, help="Resume from checkpoint")
 @click.option("--resume-latest", is_flag=True, help="Resume latest")
 @click.option("--save-stem", default=None, help="Output filename stem")
-@click.option("--optimized", is_flag=True, help="Apply fp16 optimizations")
 @click.pass_context
-def train_start(ctx, dataset, epochs, batch_size, lr, api, resume, resume_latest, save_stem, optimized):
+def train_start(ctx, dataset, epochs, batch_size, lr, api, resume, resume_latest, save_stem):
     from commands.train import cmd_train
     kwargs = dict(
         dataset=dataset, epochs=epochs, batch_size=batch_size, lr=lr,
         api=api, resume=resume, resume_latest=resume_latest,
-        save_stem=save_stem, optimized=optimized,
+        save_stem=save_stem,
         host=ctx.obj["host"], port=ctx.obj["port"], config=ctx.obj["config"],
     )
     cmd_train(_ns(**kwargs))

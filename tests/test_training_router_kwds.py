@@ -31,8 +31,6 @@ def test_maps_learning_rate_scheduler_and_device() -> None:
         "weight_decay": 0.05,
         "gradient_accumulation_steps": 2,
         "max_grad_norm": 2.0,
-        "use_mixed_precision": False,
-        "mixed_precision_dtype": "fp16",
         "warmup_steps": 0,
         "min_lr": 1e-6,
         "use_lora": True,
@@ -51,8 +49,8 @@ def test_maps_learning_rate_scheduler_and_device() -> None:
     assert k["weight_decay"] == 0.05
     assert k["gradient_accumulation_steps"] == 2
     assert k["max_grad_norm"] == 2.0
-    assert k["use_mixed_precision"] is False
-    assert k["mixed_precision_dtype"] == "fp16"
+    assert "use_mixed_precision" not in k
+    assert "mixed_precision_dtype" not in k
     assert k["warmup_steps"] == 0
     assert k["min_lr"] == 1e-6
     assert k["use_lora"] is True

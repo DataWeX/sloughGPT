@@ -27,7 +27,6 @@ def training_args_api() -> SimpleNamespace:
         soul_name="api-smoke-job",
         log_interval=7,
         eval_interval=99,
-        optimized=False,
     )
 
 
@@ -83,8 +82,6 @@ def test_train_api_posts_json_training_request_shape(training_args_api, tiny_con
     assert body["weight_decay"] == 0.01
     assert body["gradient_accumulation_steps"] == 1
     assert body["max_grad_norm"] == 1.0
-    assert body["use_mixed_precision"] is True
-    assert body["mixed_precision_dtype"] == "bf16"
     assert body["warmup_steps"] == 500
     assert body["min_lr"] == 1e-5
     assert body["scheduler"] == "cosine"
@@ -119,7 +116,6 @@ def test_train_api_omits_max_steps_when_none(tiny_config) -> None:
         soul_name=None,
         log_interval=None,
         eval_interval=None,
-        optimized=False,
     )
 
     mock_resp = MagicMock()
@@ -165,7 +161,6 @@ def test_train_api_max_steps_from_config_when_cli_omitted(tiny_config) -> None:
         soul_name="n",
         log_interval=None,
         eval_interval=None,
-        optimized=False,
     )
 
     mock_resp = MagicMock()
@@ -210,7 +205,6 @@ def test_train_api_epochs_batch_lr_from_merged_config_not_raw_zeros(tiny_config)
         soul_name="x",
         log_interval=None,
         eval_interval=None,
-        optimized=False,
     )
 
     mock_resp = MagicMock()
@@ -251,7 +245,6 @@ def test_train_api_job_name_from_model_soul_yaml(tiny_config) -> None:
         soul_name=None,
         log_interval=None,
         eval_interval=None,
-        optimized=False,
     )
 
     mock_resp = MagicMock()
@@ -292,7 +285,6 @@ def test_train_api_dataset_from_config_when_cli_dataset_empty(tiny_config) -> No
         soul_name=None,
         log_interval=None,
         eval_interval=None,
-        optimized=False,
     )
 
     mock_resp = MagicMock()
@@ -308,42 +300,6 @@ def test_train_api_dataset_from_config_when_cli_dataset_empty(tiny_config) -> No
                 cmd_train(args)
 
     assert post.call_args[1]["json"]["dataset"] == "from_yaml_only"
-
-
-def test_train_api_optimized_sets_fp16_in_json(tiny_config) -> None:
-    from apps.cli.src.commands.train import cmd_train
-
-    cfg = deepcopy(tiny_config)
-    args = SimpleNamespace(
-        api=True,
-        host="127.0.0.1",
-        port=8000,
-        config="config.yaml",
-        dataset="tiny",
-        epochs=1,
-        batch_size=4,
-        lr=1e-3,
-        max_steps=None,
-        soul_name=None,
-        log_interval=None,
-        eval_interval=None,
-        optimized=True,
-    )
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"id": "job_opt", "status": "running"}
-
-    with patch("config_loader.load_config", return_value=cfg):
-        with patch(
-            "config_loader.merge_args_with_config",
-            side_effect=merge_args_with_config,
-        ):
-            with patch("requests.post", return_value=mock_resp) as post:
-                cmd_train(args)
-
-    body = post.call_args[1]["json"]
-    assert body["use_mixed_precision"] is True
-    assert body["mixed_precision_dtype"] == "fp16"
 
 
 def test_train_api_includes_device_when_not_auto(tiny_config) -> None:
@@ -364,7 +320,6 @@ def test_train_api_includes_device_when_not_auto(tiny_config) -> None:
         soul_name=None,
         log_interval=None,
         eval_interval=None,
-        optimized=False,
     )
     mock_resp = MagicMock()
     mock_resp.status_code = 200

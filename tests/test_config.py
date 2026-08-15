@@ -87,8 +87,14 @@ class TestConfigLoader:
         assert cfg.gradient_accumulation_steps == 1
         assert cfg.min_lr == 1e-5
         assert cfg.gradient_clip == 1.0
-        assert cfg.use_mixed_precision is True
+        assert cfg.use_mixed_precision is False
         assert cfg.mixed_precision_dtype == "bf16"
+
+    def test_training_config_mixed_precision_deprecation_warns(self):
+        from config_loader import TrainingConfig
+
+        with pytest.warns(DeprecationWarning):
+            TrainingConfig(use_mixed_precision=True)
 
     def test_lora_config(self):
         """Test LoRA config defaults."""
@@ -257,35 +263,6 @@ class TestConfigLoader:
         assert cfg.lora.rank == 16
         assert cfg.lora.alpha == 32
 
-    def test_merge_mixed_precision_from_args(self):
-        from config_loader import Config, TrainingConfig, merge_args_with_config
-
-        cfg = Config(training=TrainingConfig(use_mixed_precision=True, mixed_precision_dtype="bf16"))
-        args = SimpleNamespace(
-            dataset=None,
-            epochs=None,
-            batch_size=None,
-            lr=None,
-            scheduler=None,
-            warmup_steps=None,
-            weight_decay=None,
-            min_lr=None,
-            max_grad_norm=None,
-            gradient_accumulation_steps=None,
-            lora_rank=None,
-            lora_alpha=None,
-            use_lora=False,
-            resume=None,
-            max_steps=None,
-            log_interval=None,
-            eval_interval=None,
-            use_mixed_precision=False,
-            precision="fp16",
-        )
-        merge_args_with_config(cfg, args)
-        assert cfg.training.use_mixed_precision is False
-        assert cfg.training.mixed_precision_dtype == "fp16"
-
     def test_checkpoint_config_defaults(self):
         from config_loader import CheckpointConfig
 
@@ -359,36 +336,6 @@ class TestConfigLoader:
         args = SimpleNamespace(train_device="cpu")
         merge_args_with_config(cfg, args)
         assert cfg.device.type == "cpu"
-
-
-class TestCliTrainOptimizedPreset:
-    def test_apply_optimized_sets_fp16(self):
-        from apps.cli.src.cli import _apply_optimized_train_preset
-        from config_loader import Config, TrainingConfig
-
-        cfg = Config(
-            training=TrainingConfig(
-                use_mixed_precision=False, mixed_precision_dtype="bf16"
-            )
-        )
-        args = SimpleNamespace(optimized=True)
-        assert _apply_optimized_train_preset(cfg, args) is True
-        assert cfg.training.use_mixed_precision is True
-        assert cfg.training.mixed_precision_dtype == "fp16"
-
-    def test_apply_optimized_false_noop(self):
-        from apps.cli.src.cli import _apply_optimized_train_preset
-        from config_loader import Config, TrainingConfig
-
-        cfg = Config(
-            training=TrainingConfig(
-                use_mixed_precision=False, mixed_precision_dtype="bf16"
-            )
-        )
-        args = SimpleNamespace(optimized=False)
-        assert _apply_optimized_train_preset(cfg, args) is False
-        assert cfg.training.use_mixed_precision is False
-        assert cfg.training.mixed_precision_dtype == "bf16"
 
 
 class TestGetDevice:

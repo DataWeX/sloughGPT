@@ -46,9 +46,23 @@ class TrainingConfig:
     eval_interval: int = 100
     #: Optional step cap from CLI merge; ``None`` means use epochs only.
     max_steps: Optional[int] = None
-    use_mixed_precision: bool = True
-    #: ``fp16`` or ``bf16`` (``SloughGPTTrainer``).
+    #: DEPRECATED — ignored by the pure-NumPy ``SloughGPTTrainer``, which
+    #: always trains in fp32. Kept only so existing YAML configs still load;
+    #: setting it to True emits a ``DeprecationWarning``.
+    use_mixed_precision: bool = False
+    #: DEPRECATED — see ``use_mixed_precision``; accepted for YAML compat only.
     mixed_precision_dtype: str = "bf16"
+
+    def __post_init__(self) -> None:
+        """Warn when a non-default (True) ``use_mixed_precision`` is set."""
+        if self.use_mixed_precision:
+            warnings.warn(
+                "training.use_mixed_precision is deprecated and ignored — "
+                "the pure-NumPy SloughGPTTrainer always trains in fp32 "
+                f"(got {self.use_mixed_precision!r})",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
 
 @dataclass
@@ -224,12 +238,6 @@ def merge_args_with_config(config: Config, args) -> Config:
         and getattr(args, "gradient_accumulation_steps", None) is not None
     ):
         config.training.gradient_accumulation_steps = int(args.gradient_accumulation_steps)
-
-    if hasattr(args, "use_mixed_precision"):
-        config.training.use_mixed_precision = bool(args.use_mixed_precision)
-
-    if hasattr(args, "precision") and getattr(args, "precision", None):
-        config.training.mixed_precision_dtype = str(args.precision)
 
     if hasattr(args, "soul_name") and getattr(args, "soul_name", None):
         _sn = str(args.soul_name).strip()

@@ -81,12 +81,12 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         )}
 
         {sessionLoading && (
-          <div className="mx-auto w-full max-w-2xl px-3 sm:px-4 py-8 space-y-4" role="status" aria-busy="true" aria-label="Loading messages">
+          <div className="mx-auto w-full max-w-2xl px-3 sm:px-4 py-6 space-y-3" role="status" aria-busy="true" aria-label="Loading messages">
             <span className="sr-only">Loading conversation...</span>
             {[1, 2, 3].map(i => (
-                <div key={i} className="animate-pulse space-y-2" aria-hidden="true">
-                <div className={cn("h-8 rounded-lg bg-muted", i % 2 === 0 ? "ml-12 w-3/4" : "mr-12 w-2/3 ml-auto")} />
-                <div className={cn("h-4 rounded bg-muted", i % 2 === 0 ? "ml-12 w-1/2" : "mr-12 w-1/3 ml-auto")} />
+                <div key={i} className="animate-pulse space-y-1.5" aria-hidden="true">
+                <div className={cn("h-6 rounded-lg bg-muted/40", i % 2 === 0 ? "ml-10 w-2/3" : "mr-10 w-1/2 ml-auto")} />
+                <div className={cn("h-3 rounded bg-muted/30", i % 2 === 0 ? "ml-10 w-1/3" : "mr-10 w-1/4 ml-auto")} />
               </div>
             ))}
           </div>
@@ -121,12 +121,12 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
             return (
               <React.Fragment key={message.id}>
               {showDateDivider && (
-                <div className="relative flex items-center py-2" role="separator" aria-label={formatDateLabel(new Date(message.timestamp))}>
-                  <div className="flex-1 border-t border-border/30" />
-                  <span className="mx-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted/30">
+                <div className="relative flex items-center py-3" role="separator" aria-label={formatDateLabel(new Date(message.timestamp))}>
+                  <div className="flex-1 border-t border-border/50" />
+                  <span className="mx-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2.5 py-1 rounded-full bg-muted/50 border border-border/30">
                     {formatDateLabel(new Date(message.timestamp))}
                   </span>
-                  <div className="flex-1 border-t border-border/30" />
+                  <div className="flex-1 border-t border-border/50" />
                 </div>
               )}
               <MessageBubble
@@ -189,7 +189,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
           })()}
 
           {loading && messages.length > 0 && messages[messages.length - 1].role !== 'assistant' && (
-            <ReasoningPanel isThinking={true} className="py-1" />
+            <ReasoningPanel isThinking={true} className="py-2" />
           )}
 
           <div ref={ref} />

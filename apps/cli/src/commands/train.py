@@ -220,7 +220,7 @@ def cmd_train(args):
 
     # Original train logic
     from utils.helpers import chat_repository_root
-    from utils.helpers import apply_optimized_train_preset, train_export_stem_slug, train_export_default_stem
+    from utils.helpers import train_export_stem_slug, train_export_default_stem
 
     if not args.api:
         sys.path.insert(0, ".")
@@ -235,7 +235,6 @@ def cmd_train(args):
         config = load_config(args.config)
         config = merge_args_with_config(config, args)
 
-        apply_optimized_train_preset(config, args)
         train_device = get_device(config.device)
 
         printer.header("SloughGPT Training")
@@ -376,7 +375,6 @@ def cmd_train(args):
         sys.exit(1)
 
     config = merge_args_with_config(load_config(args.config), args)
-    apply_optimized_train_preset(config, args)
     base_url = f"http://{args.host}:{args.port}"
 
     display_name = (config.model.soul_name or "").strip() or str(config.model.name)
