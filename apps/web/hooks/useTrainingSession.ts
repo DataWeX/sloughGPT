@@ -59,16 +59,6 @@ function useShellTraining(): TrainingShellState {
   return training
 }
 
-const IDLE_STATE: Partial<TrainingShellState> = {
-  phase: 'idle', method: null, loss: null, progress: 0,
-  epoch: 0, totalEpochs: 0, globalStep: 0, totalSteps: 0,
-  eta: null, stepsPerSec: null, elapsedSeconds: null,
-  message: '', lossHistory: [], evalResult: null,
-  checkpoint: null, finalLoss: null, modelPath: null,
-  error: null, jobId: null, startTime: null,
-  visualOutputDir: null, visualSouPath: null,
-}
-
 /**
  * Orchestrator hook for training. Composes useTrainingPolling + useTrainingStream.
  * Owns: shell subscription, reconciliation, control functions, backward-compat aliases.
@@ -146,7 +136,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [trainingRunning])
 
   const resetTraining = useCallback(() => {
-    writeTraining(IDLE_STATE)
+    appShellStore.getState().resetTraining()
     closeStream()
     clearAllPolls()
   }, [closeStream, clearAllPolls])
@@ -168,7 +158,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean },
     addToast: TrainingToastFn, onComplete?: () => void,
   ) => {
-    writeTraining({ ...IDLE_STATE, phase: 'TRAINING', method: 'hf' })
+    appShellStore.getState().resetTraining()
+    writeTraining({ phase: 'TRAINING', method: 'hf' })
     trainingJobsController.create({
       model: params.model, dataset: params.dataset, name: `${params.model}-${Date.now()}`,
       epochs: params.epochs, batch_size: params.batchSize, learning_rate: params.lr,
@@ -185,7 +176,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean },
     addToast: TrainingToastFn, onComplete?: () => void,
   ) => {
-    writeTraining({ ...IDLE_STATE, phase: 'TRAINING', method: 'hf' })
+    appShellStore.getState().resetTraining()
+    writeTraining({ phase: 'TRAINING', method: 'hf' })
     trainingJobsController.startVisualTrain({
       dataset: params.dataset, vision_encoder: params.visionEncoder, llm: params.llm,
       stage1_epochs: params.stage1Epochs, stage2_epochs: params.stage2Epochs,
@@ -212,7 +204,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     addToast: TrainingToastFn,
   ) => {
     clearAllPolls()
-    writeTraining({ ...IDLE_STATE, phase: 'TRAINING', method: 'turbo' })
+    appShellStore.getState().resetTraining()
+    writeTraining({ phase: 'TRAINING', method: 'turbo' })
     trainingJobsController.startTurboTrain({
       dataset_id: datasetId, epochs: config.epochs, learning_rate: config.lr,
       n_embed: config.embed, n_head: config.heads, n_layer: config.layers,
