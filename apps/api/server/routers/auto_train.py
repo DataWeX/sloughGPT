@@ -1432,30 +1432,7 @@ class AutoTrainRouter:
                    if k in meta and meta[k]},
             }
 
-        try:
-            if ckpt_file.suffix == ".soul":
-                from domains.inference import load_soul
-                soul, _ = load_soul(str(ckpt_file))
-                soul_meta = getattr(soul, 'metadata', {})
-                return {
-                    "name": ckpt_file.name,
-                    "download_url": f"/auto-train/checkpoints/{ckpt_file.name}/download",
-                    "soul": _get_soul_name(soul),
-                    "loss": getattr(soul, "final_train_loss", None) or soul_meta.get("avg_loss"),
-                    "steps": soul_meta.get("steps", 0),
-                    "epochs": getattr(soul, "epochs_trained", 0) or soul_meta.get("step", 0),
-                    "traits": _get_soul_traits(soul),
-                    "lineage": getattr(soul, "lineage", "slonet"),
-                    "model_type": "slonet",
-                    "size_mb": size_mb,
-                    "tokenizer_type": soul_meta.get("tokenizer_type", "char"),
-                    "vocab_size": soul_meta.get("vocab_size", 0),
-                }
-        except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="load_soul")
-            autotrain_logger.warning("Failed to load %s: %s", ckpt_file, e, extra={"tag": "TRAIN", "context": {"checkpoint": str(ckpt_file), "error": str(e)}})
+        return {"name": ckpt_file.name, "soul": "unknown", "size_mb": size_mb}
 
         return {"name": ckpt_file.name, "soul": "unknown", "size_mb": size_mb}
 
@@ -1478,39 +1455,32 @@ class AutoTrainRouter:
         if candidate is None:
             return None
 
-        try:
-            soul, _ = load_soul(str(candidate))
-            soul_meta = getattr(soul, 'metadata', {})
-            meta = _load_soul_meta(candidate)
-            size_mb = round(candidate.stat().st_size / (1024 * 1024), 2)
-            result = {
+        size_mb = round(candidate.stat().st_size / (1024 * 1024), 2)
+        meta = _load_soul_meta(candidate)
+
+        if meta:
+            m = meta.get("metadata", {})
+            raw_soul = (meta.get("soul_name") or meta.get("soul") or meta.get("name") or "unknown")
+            soul_name = raw_soul.replace("-soul", "")
+            return {
                 "name": candidate.name,
                 "download_url": f"/auto-train/checkpoints/{candidate.name}/download",
-                "soul": _get_soul_name(soul),
-                "loss": soul_meta.get("avg_loss"),
-                "steps": soul_meta.get("steps", 0),
+                "soul": soul_name,
+                "loss": m.get("avg_loss", meta.get("final_train_loss")),
+                "steps": m.get("steps", 0),
                 "epochs": 0,
-                "traits": _get_soul_traits(soul),
-                "lineage": getattr(soul, 'lineage', None) or "lora-feedback",
+                "traits": meta.get("personality_traits", meta.get("traits", {})),
+                "lineage": meta.get("lineage", "lora-feedback"),
                 "model_type": "lora",
-                "verdict": soul_meta.get("eval_verdict"),
-                "perplexity_delta": soul_meta.get("perplexity_delta"),
-                "bleu_delta": soul_meta.get("bleu_delta"),
+                "verdict": meta.get("eval_verdict"),
+                "perplexity_delta": meta.get("perplexity_delta"),
+                "bleu_delta": meta.get("bleu_delta"),
                 "size_mb": size_mb,
+                **{k: meta[k] for k in ("tagline", "description", "born_at", "system_prompt", "tags")
+                   if k in meta and meta[k]},
             }
-            if meta:
-                for k in ("tagline", "description", "born_at", "system_prompt", "tags"):
-                    v = meta.get(k)
-                    if v is not None and v != "":
-                        result[k] = v
-            return result
-        except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="load_lora_soul")
-            autotrain_logger.warning("Failed to load LoRA soul %s: %s", candidate, e, extra={"tag": "TRAIN", "context": {"candidate": str(candidate), "error": str(e)}})
 
-        return None
+        return {"name": candidate.name, "soul": "unknown", "model_type": "lora", "size_mb": size_mb}
 
 
 _auto_train_instance = AutoTrainRouter()

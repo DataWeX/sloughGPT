@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const {
   mockStartAutoTrain, mockStopAutoTrain, mockCreate, mockStartVisualTrain,
-  mockStartTurboTrain, mockGetTurboStatus, mockListJobs,
+  mockStartTurboTrain, mockGetTurboStatus, mockListJobs, mockGetJob,
 } = vi.hoisted(() => ({
   mockStartAutoTrain: vi.fn(),
   mockStopAutoTrain: vi.fn(() => Promise.resolve()),
@@ -12,6 +12,7 @@ const {
   mockStartTurboTrain: vi.fn(),
   mockGetTurboStatus: vi.fn(),
   mockListJobs: vi.fn(),
+  mockGetJob: vi.fn(),
 }))
 
 vi.mock('@/lib/controllers', () => ({
@@ -23,6 +24,7 @@ vi.mock('@/lib/controllers', () => ({
     startTurboTrain: mockStartTurboTrain,
     getTurboStatus: mockGetTurboStatus,
     list: mockListJobs,
+    get: mockGetJob,
     pauseTraining: vi.fn(),
     resumeTraining: vi.fn(),
   },
@@ -175,6 +177,7 @@ describe('useTrainingSession', () => {
     vi.useFakeTimers()
     mockStartTurboTrain.mockResolvedValue({ status: 'started', job_id: 't-1', message: 'Queued' })
     mockGetTurboStatus
+      .mockResolvedValueOnce({ status: 'idle' }) // reconcile on mount
       .mockResolvedValueOnce({
         status: 'running', job_id: 't-1', progress: 40, global_step: 40, total_steps: 100,
         steps_per_sec: 4.25, eta_s: 14, elapsed_s: 9, loss: 0.5,
@@ -212,7 +215,9 @@ describe('useTrainingSession', () => {
   it('startTurboTrain polls to error', async () => {
     vi.useFakeTimers()
     mockStartTurboTrain.mockResolvedValue({ status: 'started', job_id: 't-2' })
-    mockGetTurboStatus.mockResolvedValue({ status: 'error', job_id: 't-2', error: 'GPU out of memory' })
+    mockGetTurboStatus
+      .mockResolvedValueOnce({ status: 'idle' }) // reconcile on mount
+      .mockResolvedValue({ status: 'error', job_id: 't-2', error: 'GPU out of memory' })
 
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startTurboTrain('ds-1', { epochs: 5, lr: 1e-3, embed: 128, heads: 4, layers: 2 }, mockAddToast) })
@@ -264,5 +269,29 @@ describe('useTrainingSession', () => {
     expect(result.current.trainingRunning).toBe(true)
     act(() => { result.current.setPhase('complete') })
     expect(result.current.trainingRunning).toBe(false)
+  })
+
+  it('reconciles with standard training job on mount', async () => {
+    vi.useFakeTimers()
+    mockGetTurboStatus.mockResolvedValue({ status: 'idle' })
+    mockListJobs.mockResolvedValue([
+      { id: 'std-1', status: 'running', method: 'slnet', progress: 45, loss: 1.2, current_epoch: 2, epochs: 10, global_step: 450, total_steps: 1000, steps_per_sec: 3.5, eta_s: 160, elapsed_s: 120 },
+    ])
+    mockGetJob.mockResolvedValue({ id: 'std-1', status: 'running', progress: 50, loss: 1.1 })
+
+    const { result } = renderHook(() => useTrainingSession())
+    await act(async () => {})
+
+    expect(result.current.phase).toBe('TRAINING')
+    expect(result.current.method).toBe('slnet')
+    expect(result.current.progress).toBe(45)
+    expect(result.current.loss).toBe(1.2)
+    expect(result.current.jobId).toBe('std-1')
+
+    await act(async () => { vi.advanceTimersByTime(3000) })
+    expect(result.current.progress).toBe(50)
+    expect(result.current.loss).toBe(1.1)
+
+    vi.useRealTimers()
   })
 })
