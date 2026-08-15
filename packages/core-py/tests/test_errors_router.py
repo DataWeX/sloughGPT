@@ -139,7 +139,7 @@ class TestFingerprint:
 
     def test_hex_ids_normalized(self):
         er = ErrorsRouter()
-        assert er._fingerprint("id abcdef123456 failed") == er._fingerprint("id 123456abcdef failed")
+        assert er._fingerprint("id abcdefab failed") == er._fingerprint("id abcdefcd failed")
 
     def test_different_messages_different_fingerprints(self):
         er = ErrorsRouter()
