@@ -28,7 +28,7 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from schemas.common import error_response
+from schemas.common import error_response, set_correlation_id
 
 logger = logging.getLogger("slo.middleware")
 
@@ -58,10 +58,10 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
         try:
             return await asyncio.wait_for(call_next(request), timeout=self.timeout)
         except asyncio.TimeoutError:
+            corr_id = request.scope.get("correlation_id", "-")
             logger.warning(
                 "request timeout after %0.1fs on %s %s corr=%s",
-                self.timeout, request.method, request.url.path,
-                request.scope.get("correlation_id", "-"),
+                self.timeout, request.method, request.url.path, corr_id,
                 extra={"tag": "REQ", "context": {"status": 504, "timeout_s": self.timeout}},
             )
             return JSONResponse(
@@ -69,6 +69,7 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
                 content=error_response(
                     f"Request timed out after {self.timeout}s",
                     "E_INFRA_TIMEOUT",
+                    correlation_id=corr_id,
                 ),
             )
 
@@ -87,6 +88,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         corr_id = request.headers.get(self.HEADER) or request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
         request.scope["correlation_id"] = corr_id
+        set_correlation_id(corr_id)
         response = await call_next(request)
         response.headers[self.HEADER] = corr_id
         return response

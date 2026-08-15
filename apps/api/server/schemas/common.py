@@ -2,16 +2,40 @@
 Standard API response models.
 
 Every endpoint returns responses wrapped in StandardResponse for consistency.
-Frontend unwraps `data` to get the actual payload.
+Frontend unwraps ``data`` to get the actual payload.
+
+Error responses use the unified shape from ``error_response()``::
+
+    {"error": "...", "code": "...", "details": {...}, "correlation_id": "..."}
+
+``correlation_id`` is resolved automatically from request context when not
+passed explicitly — callers never need to thread it manually.
 """
 
 from __future__ import annotations
 
+import contextvars
 from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")
+
+# Per-request correlation ID, set by CorrelationIdMiddleware.
+# error_response() reads this automatically when correlation_id is not passed.
+_correlation_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_correlation_id", default=None,
+)
+
+
+def set_correlation_id(cid: str | None) -> None:
+    """Store the current request's correlation ID in context."""
+    _correlation_id.set(cid)
+
+
+def get_correlation_id() -> str | None:
+    """Return the current request's correlation ID, or ``None``."""
+    return _correlation_id.get()
 
 
 class StandardResponse(BaseModel, Generic[T]):
@@ -65,6 +89,9 @@ def error_response(
     Exception handlers in ``infrastructure.exception_handlers`` import
     and use this function directly.
 
+    ``correlation_id`` is resolved automatically from request context
+    (set by ``CorrelationIdMiddleware``) when not passed explicitly.
+
     Shape::
 
         {"error": "...", "code": "...", "details": {...}, "correlation_id": "..."}
@@ -73,16 +100,18 @@ def error_response(
         message: Human-readable error description.
         code: Machine-readable error code (e.g. ``E_NOT_FOUND``).
         details: Optional extra context (validation errors, etc.).
-        correlation_id: Optional request correlation ID.
+        correlation_id: Request correlation ID.  Falls back to the
+            value set by ``CorrelationIdMiddleware`` when omitted.
 
     Returns:
         dict with unified error response shape.
     """
+    cid = correlation_id or get_correlation_id()
     body: dict[str, Any] = {"error": message, "code": code}
     if details:
         body["details"] = details
-    if correlation_id:
-        body["correlation_id"] = correlation_id
+    if cid:
+        body["correlation_id"] = cid
     return body
 
 
