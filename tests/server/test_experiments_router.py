@@ -221,11 +221,10 @@ class TestExperimentData:
         resp = client.get("/experiments/invalid..id/data")
         assert resp.status_code == 400
 
-    def test_data_reads_logged_metrics_and_params(self, client):
+    def test_data_reads_logged_metrics_and_params(self, client, experiments_router):
         import os, json
-        from apps.api.server.routers import experiments as exp_mod
         e_id = "readback_123"
-        log_dir = os.path.join(os.path.dirname(exp_mod.__file__), "..", "data", "experiments")
+        log_dir = experiments_router.EXPERIMENTS_DIR
         metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
         params_file = os.path.join(log_dir, f"{e_id}_params.jsonl")
         os.makedirs(log_dir, exist_ok=True)

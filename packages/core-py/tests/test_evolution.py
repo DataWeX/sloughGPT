@@ -470,6 +470,7 @@ class TestWorldMemoryEvolution:
 
 # ── Emergence proof (Stage 5) ─────────────────────────────────────────────────
 
+@pytest.mark.slow
 class TestEmergenceBenchmark:
     """
     The emergence proof: in a fixed generated world with fixed food pools and
@@ -727,6 +728,7 @@ class TestSocialInteraction:
 
 # ── Social emergence benchmark (Stage 6) ─────────────────────────────────────
 
+@pytest.mark.slow
 class TestSocialBenchmark:
     """
     Two selection objectives on the same grouped world: individual fitness
@@ -1426,6 +1428,7 @@ class TestTeaching:
 
 # ── Cultural transmission benchmark (Stage 7) ────────────────────────────────
 
+@pytest.mark.slow
 class TestCultureBenchmark:
     """
     Stage 7 cultural transmission proof: both arms evolve on the same grouped
@@ -1479,6 +1482,7 @@ class TestCultureBenchmark:
 
 # ── Long-term memory benchmark (Stage 7) ──────────────────────────────────────
 
+@pytest.mark.slow
 class TestMemoryBenchmark:
     """
     Stage 7 long-term memory proof: both arms evolve on the same grouped

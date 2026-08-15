@@ -189,7 +189,7 @@ class TestAddData:
 class TestSearchDatasets:
     def test_search(self, repo_with_datasets):
         results = repo_with_datasets.search_datasets("shakes")
-        assert "shakespeare" in results
+        assert any(r["id"] == "shakespeare" for r in results)
 
     def test_search_no_match(self, repo_with_datasets):
         results = repo_with_datasets.search_datasets("xyz")

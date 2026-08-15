@@ -219,7 +219,7 @@ class TestPreviewDataset:
 
 class TestExportDataset:
     def test_export_invalid_format(self, client):
-        resp = client.post("/datasets/ds1/export?format=xml")
+        resp = client.post("/datasets/ds1/export", json={"format": "xml"})
         assert resp.status_code == 422
 
     @patch("apps.api.server.routers.datasets.get_datasets_controller")
@@ -231,7 +231,7 @@ class TestExportDataset:
         _app = FastAPI()
         _app.include_router(router.router)
         client = TestClient(_app, raise_server_exceptions=False)
-        resp = client.post("/datasets/ds1/export?format=jsonl")
+        resp = client.post("/datasets/ds1/export", json={"format": "jsonl"})
         assert resp.status_code == 200
         assert "jsonl" in resp.headers.get("content-disposition", "")
 
@@ -239,7 +239,7 @@ class TestExportDataset:
     def test_export_404_when_empty(self, mock_get_ctrl, client):
         ctrl = mock_get_ctrl.return_value
         ctrl.export_dataset.return_value = None
-        resp = client.post("/datasets/ds1/export?format=jsonl")
+        resp = client.post("/datasets/ds1/export", json={"format": "jsonl"})
         assert resp.status_code == 404
 
 
@@ -637,11 +637,11 @@ class TestExportValidation:
     """POST /datasets/{id}/export bounds."""
 
     def test_invalid_format_422(self, client):
-        resp = client.post("/datasets/ds1/export?format=xml")
+        resp = client.post("/datasets/ds1/export", json={"format": "xml"})
         assert resp.status_code == 422
 
     def test_format_case_sensitive_422(self, client):
-        resp = client.post("/datasets/ds1/export?format=CSV")
+        resp = client.post("/datasets/ds1/export", json={"format": "CSV"})
         assert resp.status_code == 422
 
     @patch("apps.api.server.routers.datasets.get_datasets_controller")
@@ -652,7 +652,7 @@ class TestExportValidation:
         _app = FastAPI()
         _app.include_router(router.router)
         client = TestClient(_app, raise_server_exceptions=False)
-        resp = client.post("/datasets/ds1/export?format=csv")
+        resp = client.post("/datasets/ds1/export", json={"format": "csv"})
         assert resp.status_code == 200
         assert "csv" in resp.headers.get("content-disposition", "")
 
