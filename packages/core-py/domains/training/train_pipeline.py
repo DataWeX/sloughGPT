@@ -270,6 +270,7 @@ def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
 def _build_training_state_metadata(
     optimizer=None, scheduler=None, step=0, epoch=0, completed_epochs=0,
     accumulation_step=0, params=None, include_optimizer_state=True,
+    initial_lr=None,
 ) -> dict:
     """Build a JSON-serializable dict of training state for embedding in .soul metadata.
 
@@ -286,7 +287,12 @@ def _build_training_state_metadata(
         include_optimizer_state: If False, the bulky per-parameter momentum
             buffers (``optimizer["state"]``) are dropped; optimizer
             hyperparameters are still embedded so a resume can rebuild a
-            fresh optimizer. Keeps checkpoint metadata small.
+            fresh-momentum optimizer. Keeps checkpoint metadata small.
+        initial_lr: The learning rate from config (before scheduler decay).
+            When provided, this is written into ``optimizer.hyperparameters.lr``
+            instead of the scheduler-decayed value — the decayed lr is useless
+            for metadata since it reflects the final (often near-zero) value,
+            not the lr used during training.
 
     Returns:
         Dict ready to embed in soul.metadata["training_state"].
@@ -303,12 +309,22 @@ def _build_training_state_metadata(
                 # alone let resume recreate a working (fresh-momentum) optimizer.
                 opt_state = dict(opt_state)
                 opt_state.pop("state", None)
+            # Override scheduler-decayed lr with the config lr so metadata
+            # records the lr used during training, not the near-zero tail.
+            if initial_lr is not None and isinstance(opt_state, dict):
+                hyper = opt_state.get("hyperparameters")
+                if isinstance(hyper, dict):
+                    hyper["lr"] = initial_lr
             state["optimizer"] = _make_json_safe(opt_state)
         except Exception:
             pass
     if scheduler is not None:
         try:
             sched_state = scheduler.state_dict()
+            # Persist initial_lr in scheduler state so resume can rebuild
+            # the warmup schedule from the correct starting point.
+            if initial_lr is not None and isinstance(sched_state, dict):
+                sched_state["initial_lr"] = initial_lr
             state["scheduler"] = _make_json_safe(sched_state)
         except Exception:
             pass
@@ -1487,6 +1503,7 @@ class SloughGPTTrainer:
             accumulation_step=getattr(self, "accumulation_step", 0),
             params=list(self.model.parameters()) if hasattr(self.model, "parameters") else None,
             include_optimizer_state=include_optimizer_state,
+            initial_lr=self.config.learning_rate,
         )
 
         output_path = path + ".soul"

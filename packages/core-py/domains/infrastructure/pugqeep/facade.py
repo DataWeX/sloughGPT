@@ -259,6 +259,87 @@ class PGQ:
         """Resume the task queue."""
         self._task_queue.resume()
 
+    # ── Core infra engine (Process/Tree/Stem) ──
+
+    def spawn(self, fn: Callable[..., Any], *args: Any,
+              name: str = "", **kwargs: Any) -> Process:
+        """Spawn a new process on the core engine.
+
+        Creates a Process wrapping ``fn(*args, **kwargs)`` and adds it
+        to the engine.  The process is in CREATED state — call
+        ``branch()`` to run it on a Tree.
+
+        Args:
+            fn: Callable to execute.
+            *args: Positional args forwarded to ``fn``.
+            name: Optional human-readable name.
+            **kwargs: Keyword args forwarded to ``fn``.
+
+        Returns:
+            A ``Process`` instance with a unique id.
+        """
+        return self._engine.spawn(fn, *args, name=name, **kwargs)
+
+    def tree(self, name: str, max_stems: int = 8,
+             pool_workers: int = 4) -> "EngineTree":
+        """Create a Tree on the core engine.
+
+        A Tree is a model instance that branches Stems of parallel tasks.
+
+        Args:
+            name: Tree identifier.
+            max_stems: Max concurrent Stems.
+            pool_workers: Thread pool size for this tree.
+
+        Returns:
+            A ``Tree`` instance.
+        """
+        return self._engine.tree(name, max_stems=max_stems,
+                                 pool_workers=pool_workers)
+
+    def branch(self, tree_name: str, processes: List[Process]) -> Stem:
+        """Branch a Stem of parallel processes on a Tree.
+
+        Submits all processes to the tree's thread pool and returns
+        a Stem tracking their execution.
+
+        Args:
+            tree_name: Name of the Tree to branch on.
+            processes: List of Process instances to run in parallel.
+
+        Returns:
+            A ``Stem`` tracking the parallel execution.
+        """
+        return self._engine.branch(tree_name, processes)
+
+    def run(self, poll_interval: float = 0.1) -> None:
+        """Run the core engine main loop.
+
+        Processes spawn/branch events from the queue and monitors
+        active trees.  Runs until ``stop()`` is called.
+        """
+        self._engine.run(poll_interval=poll_interval)
+
+    def stop(self) -> None:
+        """Stop the core engine and shutdown all trees."""
+        self._engine.stop()
+
+    def get_process(self, proc_id: str) -> Optional[Process]:
+        """Get a process by id."""
+        return self._engine.get_process(proc_id)
+
+    def get_engine_tree(self, name: str) -> Optional["EngineTree"]:
+        """Get a Tree by name."""
+        return self._engine.get_tree(name)
+
+    def list_processes(self, status: Optional[ProcessStatus] = None) -> List[Process]:
+        """List processes, optionally filtered by status."""
+        return self._engine.list_processes(status=status)
+
+    def engine_stats(self) -> dict:
+        """Core engine statistics."""
+        return self._engine.to_dict()
+
     # ── Training via executor (Point-Graph-Queue integration) ──
 
     def submit_training(
