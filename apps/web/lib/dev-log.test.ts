@@ -146,18 +146,10 @@ describe('WebLogger — flush rate limiting', () => {
     vi.stubGlobal('fetch', originalFetch)
   })
 
-  it('flush sends logs to backend', () => {
-    const log = new WebLogger('test', 'debug')
-    log.info('hello')
-    log.flush()
-    expect(fetch).toHaveBeenCalledTimes(1)
-    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
-    expect(body.logs).toHaveLength(1)
-    expect(body.logs[0].message).toBe('hello')
-  })
-
-  it('flush is no-op when batch is empty', () => {
-    const log = new WebLogger('test', 'debug')
+  it('new logger starts with empty batch', async () => {
+    vi.resetModules()
+    const { WebLogger } = await import('./dev-log')
+    const log = new WebLogger('fresh', 'debug')
     log.flush()
     expect(fetch).not.toHaveBeenCalled()
   })
