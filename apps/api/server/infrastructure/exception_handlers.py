@@ -10,39 +10,24 @@ Provides FastAPI exception handlers for:
 
 All handlers emit error events on the EventBus and use structured error codes.
 Register via ``register_all_handlers(app)``.
+
+All error responses use the unified shape from ``schemas.common.error_response()``:
+    {"error": "...", "code": "...", "details": {...}, "correlation_id": "..."}
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import traceback
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from schemas.common import error_response
+
 logger = logging.getLogger("slo.exception_handlers")
-
-
-def _error_response(
-    status_code: int,
-    message: str,
-    error_code: str,
-    details: dict | None = None,
-    correlation_id: str | None = None,
-) -> dict:
-    """Build a structured error response body."""
-    body = {
-        "error": message,
-        "code": error_code,
-    }
-    if details:
-        body["details"] = details
-    if correlation_id:
-        body["correlation_id"] = correlation_id
-    return body
 
 
 async def _domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -54,13 +39,9 @@ async def _domain_error_handler(request: Request, exc: Exception) -> JSONRespons
         msg, request.method, request.url.path,
         extra={"context": {"corr": corr_id, "status": status.HTTP_400_BAD_REQUEST}},
     )
-    # Attach tag via extra — BridgeHandler picks it up
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content=_error_response(
-            status.HTTP_400_BAD_REQUEST, msg, "E_DOMAIN",
-            correlation_id=corr_id,
-        ),
+        content=error_response(msg, "E_DOMAIN", correlation_id=corr_id),
     )
 
 
@@ -74,8 +55,7 @@ async def _validation_error_handler(request: Request, exc: ValidationError) -> J
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content=_error_response(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content=error_response(
             "Validation failed", "E_VAL_FIELD",
             details={"errors": errors},
             correlation_id=corr_id,
@@ -95,8 +75,7 @@ async def _request_validation_error_handler(request: Request, exc: RequestValida
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content=_error_response(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content=error_response(
             "Request validation failed", "E_VAL_REQUEST",
             details={"errors": _safe},
             correlation_id=corr_id,
@@ -116,7 +95,7 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
         403: "E_AUTH_FORBIDDEN",
         404: "E_NOT_FOUND",
         408: "E_INFRA_TIMEOUT",
-        429: "E_INFRA_TIMEOUT",
+        429: "E_INFRA_RATE_LIMIT",
         503: "E_INFRA_REGISTRY",
     }
     error_code = code_map.get(h.status_code, "E_DOMAIN")
@@ -128,10 +107,7 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
     )
     return JSONResponse(
         status_code=h.status_code,
-        content=_error_response(
-            h.status_code, str(h.detail), error_code,
-            correlation_id=corr_id,
-        ),
+        content=error_response(str(h.detail), error_code, correlation_id=corr_id),
     )
 
 
@@ -155,8 +131,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
     if classified is not None:
         return JSONResponse(
             status_code=classified.http_status,
-            content=_error_response(
-                classified.http_status,
+            content=error_response(
                 classified.user_message,
                 classified.code,
                 details=classified.details if logger.isEnabledFor(logging.DEBUG) else None,
@@ -166,8 +141,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=_error_response(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=error_response(
             "Internal server error", "E_INFRA_STARTUP",
             correlation_id=corr_id,
         ),
@@ -194,8 +168,7 @@ def register_all_handlers(app: FastAPI):
             )
             return JSONResponse(
                 status_code=exc.http_status,
-                content=_error_response(
-                    exc.http_status,
+                content=error_response(
                     exc.user_message,
                     exc.code,
                     details=exc.details if logger.isEnabledFor(logging.DEBUG) else None,

@@ -61,8 +61,11 @@ def error_response(
 ) -> dict:
     """Build a structured error response body.
 
-    Matches the shape produced by exception handlers in
-    ``infrastructure.exception_handlers._error_response()``:
+    This is the single source of truth for error response shape.
+    Exception handlers in ``infrastructure.exception_handlers`` import
+    and use this function directly.
+
+    Shape::
 
         {"error": "...", "code": "...", "details": {...}, "correlation_id": "..."}
 
