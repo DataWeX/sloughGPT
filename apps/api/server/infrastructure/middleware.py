@@ -58,10 +58,10 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
         try:
             return await asyncio.wait_for(call_next(request), timeout=self.timeout)
         except asyncio.TimeoutError:
-            corr_id = request.scope.get("correlation_id", "-")
             logger.warning(
                 "request timeout after %0.1fs on %s %s corr=%s",
-                self.timeout, request.method, request.url.path, corr_id,
+                self.timeout, request.method, request.url.path,
+                request.scope.get("correlation_id", "-"),
                 extra={"tag": "REQ", "context": {"status": 504, "timeout_s": self.timeout}},
             )
             return JSONResponse(
@@ -69,7 +69,6 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
                 content=error_response(
                     f"Request timed out after {self.timeout}s",
                     "E_INFRA_TIMEOUT",
-                    correlation_id=corr_id,
                 ),
             )
 

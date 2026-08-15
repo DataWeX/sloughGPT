@@ -13,6 +13,9 @@ Register via ``register_all_handlers(app)``.
 
 All error responses use the unified shape from ``schemas.common.error_response()``:
     {"error": "...", "code": "...", "details": {...}, "correlation_id": "..."}
+
+``correlation_id`` is resolved automatically from request context (set by
+``CorrelationIdMiddleware``) — handlers do not need to thread it manually.
 """
 
 from __future__ import annotations
@@ -25,40 +28,44 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from schemas.common import error_response
+from schemas.common import error_response, get_correlation_id
 
 logger = logging.getLogger("slo.exception_handlers")
+
+
+def _corr_id(request: Request) -> str:
+    """Return correlation ID: prefer contextvar, fall back to scope."""
+    return get_correlation_id() or request.scope.get("correlation_id", "-")
 
 
 async def _domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch domain-layer exceptions (SloughGPTDomainError subclasses)."""
     msg = str(exc) or "Domain error"
-    corr_id = request.scope.get("correlation_id", "-")
+    cid = _corr_id(request)
     logger.warning(
         "%s on %s %s",
         msg, request.method, request.url.path,
-        extra={"context": {"corr": corr_id, "status": status.HTTP_400_BAD_REQUEST}},
+        extra={"context": {"corr": cid, "status": status.HTTP_400_BAD_REQUEST}},
     )
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content=error_response(msg, "E_DOMAIN", correlation_id=corr_id),
+        content=error_response(msg, "E_DOMAIN"),
     )
 
 
 async def _validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
     """Catch Pydantic validation errors."""
     errors = exc.errors()
-    corr_id = request.scope.get("correlation_id", "-")
+    cid = _corr_id(request)
     logger.warning(
         "Validation failed on %s", request.url.path,
-        extra={"context": {"corr": corr_id, "fields": len(errors), "status": 422}},
+        extra={"context": {"corr": cid, "fields": len(errors), "status": 422}},
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=error_response(
             "Validation failed", "E_VAL_FIELD",
             details={"errors": errors},
-            correlation_id=corr_id,
         ),
     )
 
@@ -68,17 +75,16 @@ async def _request_validation_error_handler(request: Request, exc: RequestValida
     errors = exc.errors()
     # Pydantic v2 may include bytes in error detail (raw request body) — convert for JSON safety
     _safe = json.loads(json.dumps(errors, default=str))
-    corr_id = request.scope.get("correlation_id", "-")
+    cid = _corr_id(request)
     logger.warning(
         "Request validation failed on %s %s", request.method, request.url.path,
-        extra={"context": {"corr": corr_id, "errors": len(_safe), "status": 422}},
+        extra={"context": {"corr": cid, "errors": len(_safe), "status": 422}},
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=error_response(
             "Request validation failed", "E_VAL_REQUEST",
             details={"errors": _safe},
-            correlation_id=corr_id,
         ),
     )
 
@@ -86,7 +92,7 @@ async def _request_validation_error_handler(request: Request, exc: RequestValida
 async def _http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Re-raise HTTPExceptions as JSON."""
     h = exc  # type: HTTPException
-    corr_id = request.scope.get("correlation_id", "-")
+    cid = _corr_id(request)
 
     # Map status code to error code
     code_map = {
@@ -102,17 +108,17 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
     log_fn = logger.warning if h.status_code >= 500 else logger.info
     log_fn(
         "HTTP %d on %s %s", h.status_code, request.method, request.url.path,
-        extra={"context": {"corr": corr_id, "detail": str(h.detail)[:120], "status": h.status_code}},
+        extra={"context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code}},
     )
     return JSONResponse(
         status_code=h.status_code,
-        content=error_response(str(h.detail), error_code, correlation_id=corr_id),
+        content=error_response(str(h.detail), error_code),
     )
 
 
 async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all — classify raw exceptions into AppError, emit event, return structured response."""
-    corr_id = request.scope.get("correlation_id", "-")
+    cid = _corr_id(request)
 
     # Classify into the error taxonomy
     try:
@@ -123,8 +129,8 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
         classified = None
 
     logger.exception(
-        "Unhandled error on %s %s [%s]", request.method, request.url.path, corr_id,
-        extra={"context": {"corr": corr_id, "status": 500}},
+        "Unhandled error on %s %s [%s]", request.method, request.url.path, cid,
+        extra={"context": {"corr": cid, "status": 500}},
     )
 
     if classified is not None:
@@ -134,16 +140,12 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
                 classified.user_message,
                 classified.code,
                 details=classified.details if logger.isEnabledFor(logging.DEBUG) else None,
-                correlation_id=corr_id,
             ),
         )
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=error_response(
-            "Internal server error", "E_INFRA_STARTUP",
-            correlation_id=corr_id,
-        ),
+        content=error_response("Internal server error", "E_INFRA_STARTUP"),
     )
 
 
@@ -154,7 +156,7 @@ def register_all_handlers(app: FastAPI):
         from domains.infrastructure.errors import AppError
 
         async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-            corr_id = request.scope.get("correlation_id", "-")
+            cid = _corr_id(request)
             try:
                 from domains.infrastructure.errors import emit_error_event
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
@@ -163,7 +165,7 @@ def register_all_handlers(app: FastAPI):
             log_fn = logger.warning if exc.http_status >= 500 else logger.info
             log_fn(
                 "%s [%s] on %s %s", exc.code, exc.message, request.method, request.url.path,
-                extra={"context": {"corr": corr_id, "code": exc.code, "status": exc.http_status}},
+                extra={"context": {"corr": cid, "code": exc.code, "status": exc.http_status}},
             )
             return JSONResponse(
                 status_code=exc.http_status,
@@ -171,7 +173,6 @@ def register_all_handlers(app: FastAPI):
                     exc.user_message,
                     exc.code,
                     details=exc.details if logger.isEnabledFor(logging.DEBUG) else None,
-                    correlation_id=corr_id,
                 ),
             )
 
