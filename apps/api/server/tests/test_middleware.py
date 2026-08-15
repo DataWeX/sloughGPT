@@ -93,7 +93,7 @@ class TestCorrelationId:
         def run(cap):
             resp = client.get("/ok", headers={"X-Correlation-ID": "zz99"})
             assert resp.status_code == 200
-            req_logs = [r for r in cap.records if r.getMessage().startswith("zz99 ")]
+            req_logs = [r for r in cap.records if " corr=zz99" in r.getMessage()]
             assert len(req_logs) == 1
             ctx = req_logs[0].context
             assert ctx["corr"] == "zz99"
@@ -121,13 +121,13 @@ class TestLogLevels:
         app = _make_app()
         status, records = self._collect_for(app, "GET", "/fail")
         assert status == 404
-        assert any(r.levelno == logging.WARNING and "GET /fail 404" in r.getMessage() for r in records)
+        assert any(r.levelno == logging.WARNING and "404 on GET /fail" in r.getMessage() for r in records)
 
     def test_5xx_is_error(self):
         app = _make_app()
         status, records = self._collect_for(app, "POST", "/boom")
         assert status == 500
-        assert any(r.levelno == logging.ERROR and "POST /boom 500" in r.getMessage() for r in records)
+        assert any(r.levelno == logging.ERROR and "500 on POST /boom" in r.getMessage() for r in records)
 
 
 class TestTimeout:
