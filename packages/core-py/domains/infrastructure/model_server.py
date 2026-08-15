@@ -896,6 +896,7 @@ class LocalBackend(GenerateBackend):
         top_k: int,
         repetition_penalty: float,
         session_id: Optional[str] = None,
+        _skip_lock: bool = False,
         **kwargs: Any,
     ) -> dict:
         from domains.infrastructure.ml_types import no_grad as ml_no_grad
@@ -951,8 +952,11 @@ class LocalBackend(GenerateBackend):
             except Exception as e:
                 logger.debug("OOM-to-CPU fallback failed: %s", e)
 
-        with self._gen_lock:
+        if _skip_lock:
             output = _inference_mode_generate(self._model_ref, gen_kwargs)
+        else:
+            with self._gen_lock:
+                output = _inference_mode_generate(self._model_ref, gen_kwargs)
 
         if _cpu_fallback:
             try:
@@ -1408,23 +1412,28 @@ class ModelServer:
         Runs in a daemon thread so it never blocks startup. Warmup failures
         are logged but never raised — they don't prevent the model from serving.
 
-        Warmup deliberately bypasses the async priority queue: it runs on a
-        throwaway thread, and submitting to the queue there would bind the
-        queue to a loop that closes when warmup finishes, racing with live
-        requests from other threads and cancelling their in-flight futures.
-        Metrics are still recorded so warmup activity stays observable.
+        Warmup deliberately bypasses the async priority queue and the gen_lock:
+        it runs on a throwaway thread before any live requests arrive, so there
+        is no contention.  Skipping the lock lets the first real request proceed
+        immediately instead of blocking behind warmup.
         """
         with self._metrics_lock:
             self.metrics.requests_total += 1
         try:
             start = time.time()
-            result = self._generate_sync(
-                prompt=self._warmup_prompt,
+            # Direct call to LocalBackend.generate() — bypasses gen_lock
+            # because warmup is the first caller (no contention yet).
+            backend = self._local_backend
+            if backend is None:
+                raise RuntimeError("no local backend for warmup")
+            result = backend.generate(
+                self._warmup_prompt,
                 max_new_tokens=5,
                 temperature=0.7,
                 top_p=0.9,
                 top_k=50,
                 repetition_penalty=1.0,
+                _skip_lock=True,
             )
             elapsed_ms = (time.time() - start) * 1000
             tokens = result.get("tokens_generated", 0)
@@ -1432,7 +1441,7 @@ class ModelServer:
                 self.metrics.record_success(elapsed_ms, tokens)
             with self._warmup_lock:
                 self._warmup_completed = True
-            logger.info("ModelServer[%s]: warmup completed", self.model_id, extra={"tag": "MODEL"})
+            logger.info("ModelServer[%s]: warmup completed (%dms)", self.model_id, int(elapsed_ms), extra={"tag": "MODEL"})
             # Apply torch.compile after warmup (enhances JIT cache).  Re-validate
             # the model reference under the swap lock: a concurrent swap_model()
             # may have replaced it while compile was running, and clobbering the

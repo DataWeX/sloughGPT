@@ -111,6 +111,15 @@ LORA_DIR = REPO_ROOT / "data" / "user_adapters"
 CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 LORA_DIR.mkdir(parents=True, exist_ok=True)
 
+try:
+    from domains.infrastructure.pugqeep import PGQ
+    _auto_train_pgq = PGQ(
+        name="auto-train",
+        storage_dir=REPO_ROOT / "models" / "auto-training" / ".pgq",
+    )
+except Exception:
+    _auto_train_pgq = None
+
 MAX_CHECKPOINT_DISK_MB = 500
 
 autotrain_logger = logging.getLogger("slo.autotrain")
@@ -619,12 +628,23 @@ class AutoTrainRouter:
         get_training_runtime().register(
             job_id, runtime_job, _turbo_cancel_event, req.model_dump()
         )
-        threading.Thread(
-            target=self._run_turbo,
-            args=(req, data_path, str(output_dir), job_id),
-            name=f"turbo-train-{job_id}",
-            daemon=True,
-        ).start()
+
+        if _auto_train_pgq is not None:
+            _auto_train_pgq.submit_training(
+                self._run_turbo_pgq,
+                job_id,
+                tree_id="auto-train",
+                req=req,
+                data_path=data_path,
+                output_dir=str(output_dir),
+            )
+        else:
+            threading.Thread(
+                target=self._run_turbo,
+                args=(req, data_path, str(output_dir), job_id),
+                name=f"turbo-train-{job_id}",
+                daemon=True,
+            ).start()
 
         autotrain_logger.info(
             "Turbo training started in background: job_id=%s data=%s",
@@ -738,6 +758,22 @@ class AutoTrainRouter:
                 job["error"] = str(e)
                 get_training_runtime().sync(job_id)
 
+    def _run_turbo_pgq(
+        self, job_id: str, tree_id: str, point_library: Any,
+        is_cancelled: Any, *, req: Any, data_path: str, output_dir: str,
+    ) -> dict:
+        """PGQ-compatible training entry point.
+
+        Matches the ``PGQ.submit_training`` function signature:
+        ``fn(job_id, tree_id, point_library, is_cancelled, **kwargs)``.
+
+        Delegates to the existing ``_run_turbo`` logic.  Returns the
+        trainer result dict so ``TrainingExecutor`` can auto-compress
+        weights into Points.
+        """
+        self._run_turbo(req, data_path, output_dir, job_id)
+        return {}
+
     async def turbo_status(self):
         """Return the current turbo training job progress."""
         with _turbo_lock:
@@ -749,6 +785,13 @@ class AutoTrainRouter:
         if _auto_train_cancel_event is not None:
             _auto_train_cancel_event.set()
         _turbo_cancel_event.set()
+        if _auto_train_pgq is not None:
+            job_id = _turbo_state.get("job_id")
+            if job_id:
+                try:
+                    _auto_train_pgq.cancel_training(job_id)
+                except Exception:
+                    pass
         if _auto_train_cancel_event is not None:
             try:
                 from infrastructure.auth import get_audit_logger

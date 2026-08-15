@@ -78,4 +78,35 @@ describe('reportError', () => {
     vi.advanceTimersByTime(5000)
     expect(mockFetch).toHaveBeenCalledTimes(2)
   })
+
+  it('deduplicates same message within 5s window', () => {
+    reportError('duplicate')
+    reportError('duplicate')
+    reportError('duplicate')
+    vi.advanceTimersByTime(5000)
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    const dupes = body.errors.filter((e: { message: string }) => e.message === 'duplicate')
+    expect(dupes).toHaveLength(1)
+  })
+
+  it('allows same message after 5s window', () => {
+    reportError('repeated')
+    vi.advanceTimersByTime(5000)
+    reportError('repeated')
+    vi.advanceTimersByTime(5000)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    const body1 = JSON.parse(mockFetch.mock.calls[0][1].body)
+    const body2 = JSON.parse(mockFetch.mock.calls[1][1].body)
+    expect(body1.errors[0].message).toBe('repeated')
+    expect(body2.errors[0].message).toBe('repeated')
+  })
+
+  it('allows different messages within window', () => {
+    reportError('msg-a')
+    reportError('msg-b')
+    reportError('msg-c')
+    vi.advanceTimersByTime(5000)
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body.errors).toHaveLength(3)
+  })
 })

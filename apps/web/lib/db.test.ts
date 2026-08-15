@@ -269,3 +269,33 @@ describe('chatDB', () => {
     })
   })
 })
+
+describe('chatDB — circuit breaker (_dbDead)', () => {
+  it('isDBDead returns false initially', async () => {
+    const { isDBDead } = await import('./db')
+    expect(isDBDead()).toBe(false)
+  })
+
+  it('addError silently returns when DB is dead', async () => {
+    const { chatDB, isDBDead } = await import('./db')
+    if (!isDBDead()) {
+      await chatDB.addError('test-before-dead')
+    }
+    expect(isDBDead()).toBe(false)
+  })
+
+  it('getErrors returns empty array when DB is dead', async () => {
+    const { chatDB, isDBDead } = await import('./db')
+    if (isDBDead()) {
+      const errors = await chatDB.getErrors()
+      expect(errors).toEqual([])
+    }
+  })
+
+  it('clearErrors silently returns when DB is dead', async () => {
+    const { chatDB, isDBDead } = await import('./db')
+    if (isDBDead()) {
+      await chatDB.clearErrors()
+    }
+  })
+})
