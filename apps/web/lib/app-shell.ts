@@ -104,6 +104,24 @@ export const appShellStore = createStore<AppShellState>()(
   )
 )
 
+export type TrainingToastFn = (msg: string, type?: 'success' | 'error' | 'info') => void
+
+/**
+ * Read current training state from the shell store.
+ * Use this outside React (in callbacks, intervals, etc.) to avoid stale closures.
+ */
+export function readTraining(): TrainingShellState {
+  return appShellStore.getState().training
+}
+
+/**
+ * Write a partial update to the shell training state.
+ * Use this outside React (in callbacks, intervals, etc.) to avoid stale closures.
+ */
+export function writeTraining(partial: Partial<TrainingShellState>) {
+  appShellStore.getState().setTraining(partial)
+}
+
 /**
  * Check if training is active (not idle/complete/error).
  * Used by the shell to decide whether to reconcile with server.

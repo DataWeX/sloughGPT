@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const {
   mockStartAutoTrain, mockStopAutoTrain, mockCreate, mockStartVisualTrain,
@@ -33,6 +33,7 @@ vi.mock('@/lib/controllers', () => ({
 const mockAddToast = vi.fn()
 
 import { useTrainingSession } from './useTrainingSession'
+import { appShellStore } from '@/lib/app-shell'
 
 class MockEventSource {
   onmessage: ((e: MessageEvent) => void) | null = null
@@ -42,7 +43,9 @@ class MockEventSource {
   static CONNECTING = 0
   static OPEN = 1
   static CLOSED = 2
-  constructor(public url: string) {}
+  constructor(public url: string) {
+    ;(globalThis as any).__lastES = this
+  }
   dispatchMessage(data: string) { this.onmessage?.(new MessageEvent('message', { data })) }
   dispatchError() { this.onerror?.(new Event('error')) }
 }
@@ -50,10 +53,18 @@ class MockEventSource {
 describe('useTrainingSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     globalThis.EventSource = MockEventSource as any
+    ;(globalThis as any).__lastES = null
+    appShellStore.getState().resetTraining()
     mockStartAutoTrain.mockResolvedValue(undefined)
     mockCreate.mockRejectedValue(new Error('fail'))
     mockListJobs.mockResolvedValue([])
+    mockGetTurboStatus.mockResolvedValue({ status: 'idle' })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('returns default state', () => {
@@ -87,12 +98,13 @@ describe('useTrainingSession', () => {
   it('startSSETraining creates EventSource and processes SSE events', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingSession())
-    act(() => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast) })
+    await act(async () => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast) })
 
     expect(mockStartAutoTrain).toHaveBeenCalledWith({ soul: 'friendly' })
     const es = (globalThis as any).__lastES as MockEventSource | null
+    expect(es).toBeTruthy()
     if (es) {
-      es.dispatchMessage(JSON.stringify({ stream: 'auto-train', phase: 'TRAIN', data: { loss: 0.5, progress: 50 }, meta: { epoch: 1, total_epochs: 10 } }))
+      await act(async () => { es.dispatchMessage(JSON.stringify({ stream: 'auto-train', phase: 'TRAIN', data: { loss: 0.5, progress: 50 }, meta: { epoch: 1, total_epochs: 10 } })) })
       expect(result.current.phase).toBe('TRAIN')
       expect(result.current.loss).toBe(0.5)
       expect(result.current.progress).toBe(50)
@@ -104,15 +116,15 @@ describe('useTrainingSession', () => {
   it('startSSETraining captures step/ETA/speed/elapsed fields', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingSession())
-    act(() => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast) })
+    await act(async () => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast) })
 
     const es = (globalThis as any).__lastES as MockEventSource | null
+    expect(es).toBeTruthy()
     if (es) {
-      es.dispatchMessage(JSON.stringify({
-        stream: 'auto-train',
-        phase: 'TRAIN',
+      await act(async () => { es.dispatchMessage(JSON.stringify({
+        stream: 'auto-train', phase: 'TRAIN',
         data: { progress: 40, global_step: 80, total_steps: 200, steps_per_sec: 4.25, eta_s: 28, elapsed_s: 19 },
-      }))
+      })) })
       expect(result.current.progress).toBe(40)
       expect(result.current.globalStep).toBe(80)
       expect(result.current.totalSteps).toBe(200)
@@ -126,11 +138,12 @@ describe('useTrainingSession', () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const onCheckpointUpdate = vi.fn()
     const { result } = renderHook(() => useTrainingSession())
-    act(() => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast, onCheckpointUpdate) })
+    await act(async () => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast, onCheckpointUpdate) })
 
     const es = (globalThis as any).__lastES as MockEventSource | null
+    expect(es).toBeTruthy()
     if (es) {
-      es.dispatchMessage(JSON.stringify({ stream: 'auto-train', phase: 'COMPLETE', status: 'complete', data: { checkpoint: 'ckpt1', final_loss: 0.3, epochs: 5 } }))
+      await act(async () => { es.dispatchMessage(JSON.stringify({ stream: 'auto-train', phase: 'COMPLETE', status: 'complete', data: { checkpoint: 'ckpt1', final_loss: 0.3 }, meta: { total_epochs: 5 } })) })
       expect(result.current.phase).toBe('complete')
       expect(result.current.distillCheckpoint).toBe('ckpt1')
       expect(result.current.distillFinalLoss).toBe(0.3)
@@ -143,34 +156,32 @@ describe('useTrainingSession', () => {
   it('startFineTune polls for completion', async () => {
     vi.useFakeTimers()
     mockCreate.mockResolvedValue({ job_id: 'job-1', status: 'started' })
-    mockListJobs.mockResolvedValue([
-      { id: 'job-1', status: 'completed', result: { model_path: '/model/final', final_loss: 1.2 } },
-    ])
+    mockGetJob.mockResolvedValue({
+      id: 'job-1', status: 'completed', result: { model_path: '/model/final', final_loss: 1.2 },
+    })
 
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startFineTune({ model: 'gpt2', dataset: 'data', epochs: 3, batchSize: 4, lr: 0.001, useLoRA: false }, mockAddToast) })
-    await act(async () => { vi.advanceTimersByTime(3000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
 
     expect(result.current.phase).toBe('complete')
     expect(result.current.finetunedModelPath).toBe('/model/final')
     expect(result.current.finetunedModelLoss).toBe(1.2)
-    vi.useRealTimers()
   })
 
   it('startFineTune handles failure', async () => {
     vi.useFakeTimers()
     mockCreate.mockResolvedValue({ job_id: 'job-2', status: 'started' })
-    mockListJobs.mockResolvedValue([
-      { id: 'job-2', status: 'failed', error: 'OOM' },
-    ])
+    mockGetJob.mockResolvedValue({
+      id: 'job-2', status: 'failed', error: 'OOM',
+    })
 
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startFineTune({ model: 'gpt2', dataset: 'data', epochs: 3, batchSize: 4, lr: 0.001, useLoRA: false }, mockAddToast) })
-    await act(async () => { vi.advanceTimersByTime(3000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
 
     expect(result.current.phase).toBe('error')
     expect(mockAddToast).toHaveBeenCalledWith('OOM', 'error')
-    vi.useRealTimers()
   })
 
   it('startTurboTrain polls for completion with live telemetry', async () => {
@@ -193,7 +204,7 @@ describe('useTrainingSession', () => {
     expect(result.current.turboPhase).toBe('training')
     expect(mockAddToast).toHaveBeenCalledWith('Turbo training started', 'info')
 
-    await act(async () => { vi.advanceTimersByTime(3000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
     expect(result.current.turboPhase).toBe('training')
     expect(result.current.progress).toBe(40)
     expect(result.current.globalStep).toBe(40)
@@ -203,13 +214,12 @@ describe('useTrainingSession', () => {
     expect(result.current.elapsedSeconds).toBe(9)
     expect(result.current.loss).toBe(0.5)
 
-    await act(async () => { vi.advanceTimersByTime(3000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
     expect(result.current.turboPhase).toBe('complete')
     expect(result.current.turboResult?.final_loss).toBe(0.32)
     expect(result.current.turboResult?.total_steps).toBe(100)
     expect(result.current.progress).toBe(100)
     expect(mockAddToast).toHaveBeenCalledWith('Turbo training complete!', 'success')
-    vi.useRealTimers()
   })
 
   it('startTurboTrain polls to error', async () => {
@@ -221,12 +231,11 @@ describe('useTrainingSession', () => {
 
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startTurboTrain('ds-1', { epochs: 5, lr: 1e-3, embed: 128, heads: 4, layers: 2 }, mockAddToast) })
-    await act(async () => { vi.advanceTimersByTime(3000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
 
     expect(result.current.turboPhase).toBe('error')
     expect(result.current.turboError).toBe('GPU out of memory')
     expect(mockAddToast).toHaveBeenCalledWith('GPU out of memory', 'error')
-    vi.useRealTimers()
   })
 
   it('startTurboTrain handles api error', async () => {
@@ -247,19 +256,18 @@ describe('useTrainingSession', () => {
   it('startVisualTraining polls for completion', async () => {
     vi.useFakeTimers()
     mockStartVisualTrain.mockResolvedValue({ job_id: 'visual-1', message: 'Queued' })
-    mockListJobs.mockResolvedValue([
-      { id: 'visual-1', status: 'completed', model_path: '/visual/final', loss: 0.8, output_dir: '/out', sou_path: '/out/model.sou' },
-    ])
+    mockGetJob.mockResolvedValue({
+      id: 'visual-1', status: 'completed', model_path: '/visual/final', loss: 0.8, output_dir: '/out', sou_path: '/out/model.sou',
+    })
 
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startVisualTraining({ dataset: 'visual_data', visionEncoder: 'vit', llm: 'gpt2', stage1Epochs: 2, stage2Epochs: 2, useLoRA: true }, mockAddToast) })
-    await act(async () => { vi.advanceTimersByTime(3000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
 
     expect(result.current.phase).toBe('complete')
     expect(result.current.visualOutputDir).toBe('/out')
     expect(result.current.visualSouPath).toBe('/out/model.sou')
     expect(mockAddToast).toHaveBeenCalledWith('Image model training complete', 'success')
-    vi.useRealTimers()
   })
 
   it('trainingRunning is true during active training', () => {
@@ -280,7 +288,7 @@ describe('useTrainingSession', () => {
     mockGetJob.mockResolvedValue({ id: 'std-1', status: 'running', progress: 50, loss: 1.1 })
 
     const { result } = renderHook(() => useTrainingSession())
-    await act(async () => {})
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
     expect(result.current.phase).toBe('TRAINING')
     expect(result.current.method).toBe('slnet')
@@ -288,10 +296,8 @@ describe('useTrainingSession', () => {
     expect(result.current.loss).toBe(1.2)
     expect(result.current.jobId).toBe('std-1')
 
-    await act(async () => { vi.advanceTimersByTime(3000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
     expect(result.current.progress).toBe(50)
     expect(result.current.loss).toBe(1.1)
-
-    vi.useRealTimers()
   })
 })
