@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { WorkflowCard } from './WorkflowCard'
 import type { WorkflowStatus } from '@/lib/workflow-controller'
@@ -119,5 +119,38 @@ describe('WorkflowCard', () => {
     await waitFor(() => expect(screen.getAllByText('Stopped').length).toBeGreaterThanOrEqual(1))
     const nevers = screen.getAllByText('Never')
     expect(nevers.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('cleans up interval on unmount', async () => {
+    const { workflowController } = await import('@/lib/workflow-controller')
+    const spy = vi.mocked(workflowController.status)
+    const { unmount } = render(<WorkflowCard />)
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    const callsAfterMount = spy.mock.calls.length
+    unmount()
+    await new Promise(r => setTimeout(r, 2000))
+    expect(spy.mock.calls.length).toBe(callsAfterMount)
+  })
+
+  it('handles status fetch failure gracefully', async () => {
+    const { workflowController } = await import('@/lib/workflow-controller')
+    vi.mocked(workflowController.status).mockRejectedValue(new Error('Network error'))
+    render(<WorkflowCard />)
+    await waitFor(() => {
+      expect(vi.mocked(workflowController.status)).toHaveBeenCalled()
+    })
+    await act(async () => {})
+  })
+
+  it('refetch is called by start button', async () => {
+    const { workflowController } = await import('@/lib/workflow-controller')
+    vi.mocked(workflowController.status).mockResolvedValue(makeStatus())
+    render(<WorkflowCard />)
+    await waitFor(() => expect(screen.getAllByText('Start').length).toBeGreaterThanOrEqual(1))
+    fireEvent.click(screen.getAllByText('Start')[0])
+    await waitFor(() => {
+      expect(vi.mocked(workflowController.start)).toHaveBeenCalled()
+      expect(vi.mocked(workflowController.status).mock.calls.length).toBeGreaterThanOrEqual(2)
+    })
   })
 })
