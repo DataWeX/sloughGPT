@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { trainingJobsController, type TrainingJob } from '@/lib/controllers'
+import { trainingJobsController } from '@/lib/controllers'
 import { appShellStore, readTraining, writeTraining, isTrainingActive, type TrainingShellState, type TrainingToastFn } from '@/lib/app-shell'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -54,9 +54,19 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
 }
 
 function useShellTraining(): TrainingShellState {
-  const [training, setTraining] = useState<TrainingShellState>(() => appShellStore.getState().training)
+  const [training, setTraining] = useState<TrainingShellState>(() => readTraining())
   useEffect(() => appShellStore.subscribe((s) => setTraining(s.training)), [])
   return training
+}
+
+const IDLE_STATE: Partial<TrainingShellState> = {
+  phase: 'idle', method: null, loss: null, progress: 0,
+  epoch: 0, totalEpochs: 0, globalStep: 0, totalSteps: 0,
+  eta: null, stepsPerSec: null, elapsedSeconds: null,
+  message: '', lossHistory: [], evalResult: null,
+  checkpoint: null, finalLoss: null, modelPath: null,
+  error: null, jobId: null, startTime: null,
+  visualOutputDir: null, visualSouPath: null,
 }
 
 /**
@@ -75,8 +85,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   useEffect(() => {
     let cancelled = false
     const reconcile = async () => {
-      if (isTrainingActive(appShellStore.getState().training)) {
-        const shell = appShellStore.getState().training
+      const shell = readTraining()
+      if (isTrainingActive(shell)) {
         _log.info('Shell has active training, starting poll', { phase: shell.phase, method: shell.method })
         if (shell.method === 'turbo' && shell.jobId) startTurboPoll()
         else if (shell.jobId) startStandardPoll(shell.jobId)
@@ -136,23 +146,15 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [trainingRunning])
 
   const resetTraining = useCallback(() => {
-    writeTraining({
-      phase: 'idle', method: null, loss: null, progress: 0,
-      epoch: 0, totalEpochs: 0, globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null,
-      elapsedSeconds: null, message: '', lossHistory: [], evalResult: null, checkpoint: null,
-      finalLoss: null, modelPath: null, error: null, jobId: null,
-      visualOutputDir: null, visualSouPath: null, startTime: null,
-    })
+    writeTraining(IDLE_STATE)
     closeStream()
     clearAllPolls()
   }, [closeStream, clearAllPolls])
 
   const stopTraining = useCallback(() => {
-    closeStream()
-    clearAllPolls()
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
     resetTraining()
-  }, [closeStream, clearAllPolls, resetTraining])
+  }, [resetTraining])
 
   const pauseTraining = useCallback(async () => {
     try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch { /* */ }
@@ -211,8 +213,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   ) => {
     clearAllPolls()
     writeTraining({
-      phase: 'TRAINING', method: 'turbo', checkpoint: null, finalLoss: null, error: null,
-      progress: 0, globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null, elapsedSeconds: null, loss: null,
+      ...IDLE_STATE,
+      phase: 'TRAINING', method: 'turbo',
     })
     trainingJobsController.startTurboTrain({
       dataset_id: datasetId, epochs: config.epochs, learning_rate: config.lr,
@@ -225,10 +227,9 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [clearAllPolls, startTurboPoll])
 
   const stopTurboTrain = useCallback(() => {
-    clearAllPolls()
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop turbo training', e))
-    writeTraining({ phase: 'idle', method: null, checkpoint: null, finalLoss: null, error: null, progress: 0, globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null, elapsedSeconds: null, loss: null })
-  }, [clearAllPolls])
+    resetTraining()
+  }, [resetTraining])
 
   return {
     ...training,
@@ -250,8 +251,6 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     distillEpochs: training.totalEpochs || null,
     finetunedModelPath: training.modelPath,
     finetunedModelLoss: training.finalLoss,
-    visualOutputDir: training.visualOutputDir,
-    visualSouPath: training.visualSouPath,
     setPhase: (p: string) => writeTraining({ phase: p as TrainingShellState['phase'] }),
     setLoss: (l: number | null) => writeTraining({ loss: l }),
     setProgress: (p: number) => writeTraining({ progress: p }),
