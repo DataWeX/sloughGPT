@@ -2,15 +2,13 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { trainingJobsController, type TrainingJob } from '@/lib/controllers'
-import { appShellStore, isTrainingActive, type TrainingShellState } from '@/lib/app-shell'
+import { appShellStore, readTraining, writeTraining, isTrainingActive, type TrainingShellState, type TrainingToastFn } from '@/lib/app-shell'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useTrainingPolling } from './useTrainingPolling'
 import { useTrainingStream } from './useTrainingStream'
 
 const _log = logger.child('training-session')
-
-type ToastFn = (msg: string, type?: 'success' | 'error' | 'info') => void
 
 export interface UseTrainingSessionReturn extends TrainingShellState {
   trainingRunning: boolean
@@ -48,10 +46,10 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
   stopTraining: () => void
   pauseTraining: () => Promise<void>
   resumeTraining: () => Promise<void>
-  startSSETraining: (body: Record<string, unknown>, addToast: ToastFn, onCheckpointUpdate?: () => void) => void
-  startFineTune: (params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean }, addToast: ToastFn, onComplete?: () => void) => void
-  startVisualTraining: (params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean }, addToast: ToastFn, onComplete?: () => void) => void
-  startTurboTrain: (datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number }, addToast: ToastFn) => void
+  startSSETraining: (body: Record<string, unknown>, addToast: TrainingToastFn, onCheckpointUpdate?: () => void) => void
+  startFineTune: (params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean }, addToast: TrainingToastFn, onComplete?: () => void) => void
+  startVisualTraining: (params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean }, addToast: TrainingToastFn, onComplete?: () => void) => void
+  startTurboTrain: (datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number }, addToast: TrainingToastFn) => void
   stopTurboTrain: () => void
 }
 
@@ -59,10 +57,6 @@ function useShellTraining(): TrainingShellState {
   const [training, setTraining] = useState<TrainingShellState>(() => appShellStore.getState().training)
   useEffect(() => appShellStore.subscribe((s) => setTraining(s.training)), [])
   return training
-}
-
-function writeShell(partial: Partial<TrainingShellState>) {
-  appShellStore.getState().setTraining(partial)
 }
 
 /**
@@ -96,7 +90,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         if (cancelled) return
         if (turboStatus?.status === 'running') {
           _log.info('Server has active turbo training, restoring to shell')
-          writeShell({
+          writeTraining({
             phase: 'TRAINING', method: 'turbo', loss: turboStatus.loss ?? null,
             progress: turboStatus.progress ?? 0, globalStep: turboStatus.global_step ?? 0,
             totalSteps: turboStatus.total_steps ?? 0, stepsPerSec: turboStatus.steps_per_sec ?? null,
@@ -109,7 +103,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         const runningJob = jobs.find(j => j.status === 'running')
         if (runningJob) {
           _log.info('Server has active standard training, restoring to shell', { jobId: runningJob.id })
-          writeShell({
+          writeTraining({
             phase: 'TRAINING', method: (runningJob.method as TrainingShellState['method']) ?? 'slnet',
             loss: runningJob.loss ?? runningJob.train_loss ?? null, progress: runningJob.progress ?? 0,
             epoch: runningJob.current_epoch ?? 0, totalEpochs: runningJob.epochs ?? 0,
@@ -121,7 +115,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           return
         }
         if (turboStatus?.status === 'complete') {
-          writeShell({
+          writeTraining({
             phase: 'complete', method: 'turbo', progress: 100,
             checkpoint: (turboStatus.result?.checkpoint as string) ?? null,
             finalLoss: (turboStatus.result?.final_loss as number) ?? null,
@@ -141,23 +135,13 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     return () => window.removeEventListener('beforeunload', handler)
   }, [trainingRunning])
 
-  // Keyboard shortcuts for training page
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') e.preventDefault()
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') e.preventDefault()
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
-
   const resetTraining = useCallback(() => {
-    writeShell({
+    writeTraining({
       phase: 'idle', method: null, loss: null, progress: 0,
       epoch: 0, totalEpochs: 0, globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null,
       elapsedSeconds: null, message: '', lossHistory: [], evalResult: null, checkpoint: null,
       finalLoss: null, modelPath: null, error: null, jobId: null,
+      visualOutputDir: null, visualSouPath: null, startTime: null,
     })
     closeStream()
     clearAllPolls()
@@ -171,18 +155,18 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [closeStream, clearAllPolls, resetTraining])
 
   const pauseTraining = useCallback(async () => {
-    try { await trainingJobsController.pauseTraining(); writeShell({ message: 'Paused' }) } catch { /* */ }
+    try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch { /* */ }
   }, [])
 
   const resumeTraining = useCallback(async () => {
-    try { await trainingJobsController.resumeTraining(); writeShell({ message: '' }) } catch { /* */ }
+    try { await trainingJobsController.resumeTraining(); writeTraining({ message: '' }) } catch { /* */ }
   }, [])
 
   const startFineTune = useCallback((
     params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean },
-    addToast: ToastFn, onComplete?: () => void,
+    addToast: TrainingToastFn, onComplete?: () => void,
   ) => {
-    writeShell({ modelPath: null, finalLoss: null })
+    writeTraining({ modelPath: null, finalLoss: null })
     trainingJobsController.create({
       model: params.model, dataset: params.dataset, name: `${params.model}-${Date.now()}`,
       epochs: params.epochs, batch_size: params.batchSize, learning_rate: params.lr,
@@ -190,16 +174,16 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     }).then(resp => {
       const jobId = resp.job_id as string
       addToast('Training queued', 'info')
-      writeShell({ phase: 'TRAINING', method: 'hf', progress: 0, totalEpochs: params.epochs, jobId })
+      writeTraining({ phase: 'TRAINING', method: 'hf', progress: 0, totalEpochs: params.epochs, jobId })
       startStandardPoll(jobId, { addToast, onComplete })
     }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [startStandardPoll])
 
   const startVisualTraining = useCallback((
     params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean },
-    addToast: ToastFn, onComplete?: () => void,
+    addToast: TrainingToastFn, onComplete?: () => void,
   ) => {
-    writeShell({ modelPath: null, finalLoss: null })
+    writeTraining({ modelPath: null, finalLoss: null })
     trainingJobsController.startVisualTrain({
       dataset: params.dataset, vision_encoder: params.visionEncoder, llm: params.llm,
       stage1_epochs: params.stage1Epochs, stage2_epochs: params.stage2Epochs,
@@ -207,11 +191,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     }).then(resp => {
       const jobId = resp.job_id as string
       addToast(resp.message || 'Image model training queued', 'info')
-      writeShell({ phase: 'TRAINING', method: 'hf', progress: 0, totalEpochs: params.stage1Epochs + params.stage2Epochs, jobId })
+      writeTraining({ phase: 'TRAINING', method: 'hf', progress: 0, totalEpochs: params.stage1Epochs + params.stage2Epochs, jobId })
       startStandardPoll(jobId, {
         addToast, completeMessage: 'Image model training complete',
         onComplete: (job) => {
-          writeShell({
+          writeTraining({
             visualOutputDir: (job as unknown as Record<string, unknown>)?.output_dir as string ?? null,
             visualSouPath: (job as unknown as Record<string, unknown>)?.sou_path as string ?? null,
           })
@@ -223,10 +207,10 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const startTurboTrain = useCallback((
     datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number },
-    addToast: ToastFn,
+    addToast: TrainingToastFn,
   ) => {
     clearAllPolls()
-    writeShell({
+    writeTraining({
       phase: 'TRAINING', method: 'turbo', checkpoint: null, finalLoss: null, error: null,
       progress: 0, globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null, elapsedSeconds: null, loss: null,
     })
@@ -234,16 +218,16 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       dataset_id: datasetId, epochs: config.epochs, learning_rate: config.lr,
       n_embed: config.embed, n_head: config.heads, n_layer: config.layers,
     }).then(result => {
-      if (result.status === 'error') { writeShell({ error: result.message || 'Training failed', phase: 'error' }); return }
+      if (result.status === 'error') { writeTraining({ error: result.message || 'Training failed', phase: 'error' }); return }
       addToast('Turbo training started', 'info')
       startTurboPoll(addToast)
-    }).catch((e: unknown) => { writeShell({ error: extractErrorMessage(e, 'Training request failed'), phase: 'error' }) })
+    }).catch((e: unknown) => { writeTraining({ error: extractErrorMessage(e, 'Training request failed'), phase: 'error' }) })
   }, [clearAllPolls, startTurboPoll])
 
   const stopTurboTrain = useCallback(() => {
     clearAllPolls()
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop turbo training', e))
-    writeShell({ phase: 'idle', method: null, checkpoint: null, finalLoss: null, error: null, progress: 0, globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null, elapsedSeconds: null, loss: null })
+    writeTraining({ phase: 'idle', method: null, checkpoint: null, finalLoss: null, error: null, progress: 0, globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null, elapsedSeconds: null, loss: null })
   }, [clearAllPolls])
 
   return {
@@ -268,19 +252,19 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     finetunedModelLoss: training.finalLoss,
     visualOutputDir: training.visualOutputDir,
     visualSouPath: training.visualSouPath,
-    setPhase: (p: string) => writeShell({ phase: p as TrainingShellState['phase'] }),
-    setLoss: (l: number | null) => writeShell({ loss: l }),
-    setProgress: (p: number) => writeShell({ progress: p }),
-    setEpoch: (e: number) => writeShell({ epoch: e }),
-    setTotalEpochs: (t: number) => writeShell({ totalEpochs: t }),
-    setGlobalStep: (s: number) => writeShell({ globalStep: s }),
-    setTotalSteps: (s: number) => writeShell({ totalSteps: s }),
-    setEta: (e: number | null) => writeShell({ eta: e }),
-    setStepsPerSec: (s: number | null) => writeShell({ stepsPerSec: s }),
-    setElapsedSeconds: (e: number | null) => writeShell({ elapsedSeconds: e }),
-    setMessage: (m: string) => writeShell({ message: m }),
-    setLossHistory: (h: { step: number; loss: number }[]) => writeShell({ lossHistory: h }),
-    setEvalResult: (r: string | null) => writeShell({ evalResult: r }),
+    setPhase: (p: string) => writeTraining({ phase: p as TrainingShellState['phase'] }),
+    setLoss: (l: number | null) => writeTraining({ loss: l }),
+    setProgress: (p: number) => writeTraining({ progress: p }),
+    setEpoch: (e: number) => writeTraining({ epoch: e }),
+    setTotalEpochs: (t: number) => writeTraining({ totalEpochs: t }),
+    setGlobalStep: (s: number) => writeTraining({ globalStep: s }),
+    setTotalSteps: (s: number) => writeTraining({ totalSteps: s }),
+    setEta: (e: number | null) => writeTraining({ eta: e }),
+    setStepsPerSec: (s: number | null) => writeTraining({ stepsPerSec: s }),
+    setElapsedSeconds: (e: number | null) => writeTraining({ elapsedSeconds: e }),
+    setMessage: (m: string) => writeTraining({ message: m }),
+    setLossHistory: (h: { step: number; loss: number }[]) => writeTraining({ lossHistory: h }),
+    setEvalResult: (r: string | null) => writeTraining({ evalResult: r }),
     resetTraining,
     stopTraining,
     pauseTraining,

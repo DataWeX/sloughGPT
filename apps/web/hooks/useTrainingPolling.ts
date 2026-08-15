@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useEffect } from 'react'
 import { trainingJobsController, type TrainingJob } from '@/lib/controllers'
-import { appShellStore, readTraining, writeTraining, type TrainingShellState, type TrainingToastFn } from '@/lib/app-shell'
+import { readTraining, writeTraining, type TrainingShellState, type TrainingToastFn } from '@/lib/app-shell'
 
 export interface TrainingPolling {
   startStandardPoll: (jobId: string, opts?: { addToast?: TrainingToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string }) => void
@@ -29,7 +29,7 @@ export function useTrainingPolling(): TrainingPolling {
 
   const startStandardPoll = useCallback((
     jobId: string,
-    opts?: { addToast?: ToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string },
+    opts?: { addToast?: TrainingToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string },
   ) => {
     if (standardPollRef.current) { clearInterval(standardPollRef.current); standardPollRef.current = null }
     const pollId = setInterval(async () => {
@@ -82,7 +82,7 @@ export function useTrainingPolling(): TrainingPolling {
     standardPollRef.current = pollId
   }, [])
 
-  const startTurboPoll = useCallback((addToast?: ToastFn) => {
+  const startTurboPoll = useCallback((addToast?: TrainingToastFn) => {
     if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
     const pollId = setInterval(async () => {
       try {

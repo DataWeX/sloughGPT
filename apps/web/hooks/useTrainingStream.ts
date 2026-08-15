@@ -23,12 +23,12 @@ export function useTrainingStream() {
 
   const startSSETraining = useCallback((
     body: Record<string, unknown>,
-    addToast: ToastFn,
+    addToast: TrainingToastFn,
     onCheckpointUpdate?: () => void,
   ) => {
     closeStream()
     trainingJobsController.startAutoTrain(body).then(() => {
-      writeShell({
+      writeTraining({
         phase: 'TRAINING', method: 'slnet', progress: 0, loss: null,
         epoch: 0, totalEpochs: 0, globalStep: 0, totalSteps: 0,
         eta: null, stepsPerSec: null, elapsedSeconds: null,
@@ -44,7 +44,7 @@ export function useTrainingStream() {
           const env = JSON.parse(e.data)
           if (env.stream !== 'auto-train') return
 
-          writeShell({ phase: env.phase || 'TRAINING' })
+          writeTraining({ phase: env.phase || 'TRAINING' })
 
           if (env.data?.loss != null) {
             const current = readTraining()
@@ -52,7 +52,7 @@ export function useTrainingStream() {
               step: (current.lossHistory[current.lossHistory.length - 1]?.step ?? 0) + 1,
               loss: env.data.loss,
             }]
-            writeShell({ loss: env.data.loss, lossHistory: hist.length > 200 ? hist.slice(-200) : hist })
+            writeTraining({ loss: env.data.loss, lossHistory: hist.length > 200 ? hist.slice(-200) : hist })
           }
           if (env.data?.eval_loss != null) {
             const current = readTraining()
@@ -61,28 +61,28 @@ export function useTrainingStream() {
               loss: env.data.eval_loss,
               isEval: true,
             }]
-            writeShell({ lossHistory: hist.length > 200 ? hist.slice(-200) : hist })
+            writeTraining({ lossHistory: hist.length > 200 ? hist.slice(-200) : hist })
           }
-          if (env.data?.progress != null) writeShell({ progress: env.data.progress })
-          if (env.data?.global_step != null) writeShell({ globalStep: env.data.global_step })
-          if (env.data?.total_steps != null) writeShell({ totalSteps: env.data.total_steps })
-          if (env.data?.eta_s != null) writeShell({ eta: env.data.eta_s })
-          if (env.data?.steps_per_sec != null) writeShell({ stepsPerSec: env.data.steps_per_sec })
-          if (env.data?.elapsed_s != null) writeShell({ elapsedSeconds: env.data.elapsed_s })
-          if (env.meta?.epoch != null) writeShell({ epoch: env.meta.epoch })
-          if (env.meta?.total_epochs != null) writeShell({ totalEpochs: env.meta.total_epochs })
-          if (env.message) writeShell({ message: env.message })
-          if (env.data?.eval_report) writeShell({ evalResult: env.data.eval_report })
+          if (env.data?.progress != null) writeTraining({ progress: env.data.progress })
+          if (env.data?.global_step != null) writeTraining({ globalStep: env.data.global_step })
+          if (env.data?.total_steps != null) writeTraining({ totalSteps: env.data.total_steps })
+          if (env.data?.eta_s != null) writeTraining({ eta: env.data.eta_s })
+          if (env.data?.steps_per_sec != null) writeTraining({ stepsPerSec: env.data.steps_per_sec })
+          if (env.data?.elapsed_s != null) writeTraining({ elapsedSeconds: env.data.elapsed_s })
+          if (env.meta?.epoch != null) writeTraining({ epoch: env.meta.epoch })
+          if (env.meta?.total_epochs != null) writeTraining({ totalEpochs: env.meta.total_epochs })
+          if (env.message) writeTraining({ message: env.message })
+          if (env.data?.eval_report) writeTraining({ evalResult: env.data.eval_report })
 
           if (env.status === 'complete') {
             closeStream()
-            writeShell({ phase: 'complete', checkpoint: env.data?.checkpoint ?? null, finalLoss: env.data?.final_loss ?? null })
+            writeTraining({ phase: 'complete', checkpoint: env.data?.checkpoint ?? null, finalLoss: env.data?.final_loss ?? null })
             addToast('Training complete', 'success')
             onCheckpointUpdate?.()
           }
           if (env.status === 'error') {
             closeStream()
-            writeShell({ phase: 'error', error: 'Training failed' })
+            writeTraining({ phase: 'error', error: 'Training failed' })
             addToast('Training failed', 'error')
           }
         } catch (err) { _log.error('SSE parse error', { exception: String(err) }) }
@@ -92,7 +92,7 @@ export function useTrainingStream() {
       es.onerror = () => {
         if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
           closeStream()
-          writeShell({ phase: 'error', error: 'Connection lost' })
+          writeTraining({ phase: 'error', error: 'Connection lost' })
           addToast('Connection lost during training', 'error')
         } else { esRetries++ }
       }
