@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { SoulEngineWorker, createSoulEngine, createSoulEngineWorker } from './index'
+import { createWorkerHandler, registerWorker, type WorkerScope } from './worker'
 import { makeLstmSou, makeWebGPU, stubWorker } from './__test-helper'
 import type { SoulNetConfig } from './engine'
 
@@ -83,49 +84,59 @@ describe('worker.ts protocol', () => {
     makeWebGPU(new Float32Array([0, 0]))
     const sou = makeLstmSou({ e: 2, h: 2, v: 3, nl: 1 })
     vi.stubGlobal('fetch', vi.fn(async () => ({ arrayBuffer: async () => sou })))
-    const selfStub: {
-      postMessage: ReturnType<typeof vi.fn>
-      onmessage?: ((e: { data: Record<string, unknown> }) => void) | null
-    } = { postMessage: vi.fn() }
-    vi.stubGlobal('self', selfStub)
+    const post = vi.fn()
+    const onmessage = createWorkerHandler({ postMessage: post, onmessage: null })
+    const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
 
-    await import('./worker')
-    const onmessage = selfStub.onmessage as (e: { data: Record<string, unknown> }) => Promise<void>
-    const post = selfStub.postMessage as ReturnType<typeof vi.fn>
+    await onmessage(msg({ type: 'init' }))
+    expect(post).toHaveBeenCalledWith({ type: 'ready' })
 
-    onmessage({ data: { type: 'init' } })
-    await vi.waitFor(() => expect(post).toHaveBeenCalledWith({ type: 'ready' }))
-
-    onmessage({ data: { type: 'load', url: 'https://models.example/friendly.sou', config: CFG } })
-    await vi.waitFor(() =>
-      expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'loaded', metadata: expect.any(Object) })),
+    await onmessage(msg({ type: 'load', url: 'https://models.example/friendly.sou', config: CFG }))
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'loaded', metadata: expect.any(Object) }),
     )
 
-    onmessage({ data: { type: 'generate', prompt: '', maxTokens: 1, temperature: 0 } })
-    await vi.waitFor(() => expect(post).toHaveBeenCalledWith({ type: 'token', token: expect.any(String) }))
-    await vi.waitFor(() => expect(post).toHaveBeenCalledWith({ type: 'done' }))
+    await onmessage(msg({ type: 'generate', prompt: '', maxTokens: 1, temperature: 0 }))
+    expect(post).toHaveBeenCalledWith({ type: 'token', token: expect.any(String) })
+    expect(post).toHaveBeenCalledWith({ type: 'done' })
 
-    onmessage({ data: { type: 'reset' } })
-    await vi.waitFor(() => expect(post).toHaveBeenCalledWith({ type: 'reset-done' }))
+    await onmessage(msg({ type: 'reset' }))
+    expect(post).toHaveBeenCalledWith({ type: 'reset-done' })
 
-    onmessage({ data: { type: 'bogus' } })
-    await vi.waitFor(() =>
-      expect(post).toHaveBeenCalledWith({ type: 'error', message: expect.stringContaining('bogus') }),
-    )
+    await onmessage(msg({ type: 'bogus' }))
+    expect(post).toHaveBeenCalledWith({ type: 'error', message: expect.stringContaining('bogus') })
   })
 
   it('errors on generate before init', async () => {
-    makeWebGPU(new Float32Array([0, 0]))
-    vi.resetModules()
-    const selfStub: {
-      postMessage: ReturnType<typeof vi.fn>
-      onmessage?: ((e: { data: Record<string, unknown> }) => void) | null
-    } = { postMessage: vi.fn() }
-    vi.stubGlobal('self', selfStub)
-    await import('./worker')
-    const onmessage = selfStub.onmessage as (e: { data: Record<string, unknown> }) => Promise<void>
-    const post = selfStub.postMessage as ReturnType<typeof vi.fn>
-    onmessage({ data: { type: 'generate', prompt: 'x', maxTokens: 1, temperature: 0 } })
-    await vi.waitFor(() => expect(post).toHaveBeenCalledWith({ type: 'error', message: 'Not initialized' }))
+    const post = vi.fn()
+    const onmessage = createWorkerHandler({ postMessage: post, onmessage: null })
+    const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
+    await onmessage(msg({ type: 'generate', prompt: 'x', maxTokens: 1, temperature: 0 }))
+    expect(post).toHaveBeenCalledWith({ type: 'error', message: 'Not initialized' })
+  })
+
+  it('does not share engine state across handlers', async () => {
+    const aPost = vi.fn()
+    const a = createWorkerHandler({ postMessage: aPost, onmessage: null })
+    const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
+    await a(msg({ type: 'generate', prompt: 'x', maxTokens: 1, temperature: 0 }))
+    expect(aPost).toHaveBeenCalledWith({ type: 'error', message: 'Not initialized' })
+
+    const bPost = vi.fn()
+    const b = createWorkerHandler({ postMessage: bPost, onmessage: null })
+    expect(bPost).not.toHaveBeenCalled()
+    await b(msg({ type: 'generate', prompt: 'x', maxTokens: 1, temperature: 0 }))
+    expect(bPost).toHaveBeenCalledWith({ type: 'error', message: 'Not initialized' })
+  })
+
+  it('registerWorker installs the handler on the given scope', async () => {
+    const post = vi.fn()
+    const scope: WorkerScope = { postMessage: post, onmessage: null }
+    registerWorker(scope)
+    expect(scope.onmessage).toBeInstanceOf(Function)
+    await (scope.onmessage as (e: MessageEvent) => Promise<void>)({
+      data: { type: 'generate' },
+    } as unknown as MessageEvent)
+    expect(post).toHaveBeenCalledWith({ type: 'error', message: 'Not initialized' })
   })
 })
