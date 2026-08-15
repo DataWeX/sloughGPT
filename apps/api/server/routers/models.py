@@ -13,7 +13,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 from schemas.models import ModelInfo, LoadModelRequest, LoadModelResponse, ModelStatus
-from schemas.common import StandardResponse, success_response, error_response
+from schemas.common import StandardResponse, success_response, error_response, wrap_controller_result
 from controllers.models import get_models_controller
 from infrastructure.auth import require_auth_if_enabled
 
@@ -255,7 +255,7 @@ class ModelsRouter:
             )
         except Exception:
             pass
-        return success_response(data=result)
+        return wrap_controller_result(result)
 
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)):
         """Unload current model"""
@@ -284,7 +284,7 @@ class ModelsRouter:
             )
         except Exception:
             pass
-        return success_response(data=result)
+        return wrap_controller_result(result)
 
     async def current_model(self):
         """Get current model info"""
@@ -625,7 +625,7 @@ class ModelsRouter:
             result = ctrl.load_model(model_id)
         else:
             raise HTTPException(status_code=400, detail="Either model_dir or model_id required")
-        return success_response(data=result, message=result.get("status", "ok"))
+        return wrap_controller_result(result)
 
     async def quantize_model(self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)):
         """Apply int8/int4 quantization to the currently loaded model.
@@ -895,7 +895,7 @@ class ModelsRouter:
         except Exception:
             pass
 
-        return success_response(data=result)
+        return wrap_controller_result(result)
 
     async def get_catalog(self):
         """Get the persistent model catalog."""

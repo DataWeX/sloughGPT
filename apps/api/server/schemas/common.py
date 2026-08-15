@@ -84,3 +84,28 @@ def error_response(
     if correlation_id:
         body["correlation_id"] = correlation_id
     return body
+
+
+def wrap_controller_result(
+    result: dict,
+    error_code: str = "E_DOMAIN",
+) -> dict:
+    """Wrap a controller result dict into the correct response shape.
+
+    Controllers return ``{"status": "error", "error": "..."}`` on failure
+    and ``{"status": "loaded", ...}`` on success.  This helper detects the
+    error case and returns an ``error_response()`` instead of wrapping it
+    in ``success_response()``.
+
+    Args:
+        result: Dict returned by a controller method.
+        error_code: Error code to use when the result is an error.
+
+    Returns:
+        ``error_response()`` if result has ``status == "error"``,
+        otherwise ``success_response(data=result)``.
+    """
+    if isinstance(result, dict) and result.get("status") == "error":
+        msg = result.get("error") or result.get("message") or "Operation failed"
+        return error_response(msg, error_code, details=result)
+    return success_response(data=result)
