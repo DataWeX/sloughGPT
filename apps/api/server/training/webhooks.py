@@ -8,7 +8,6 @@ import hashlib
 import hmac
 import json
 import logging
-import sqlite3
 import threading
 import time
 import uuid
@@ -17,6 +16,8 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 import httpx
+
+from mogdb import MogDB
 
 logger = logging.getLogger("slo.webhooks")
 
@@ -52,9 +53,10 @@ class WebhookDelivery:
 
 class WebhookStore:
     """
-    SQLite-backed store for managing registered webhooks.
+    MogDB-backed store for managing registered webhooks.
 
-    Persists across server restarts.
+    Persists across server restarts. Delivery records are kept in memory
+    (matching the original SQLite behaviour, which never persisted them).
     """
 
     _max_log_size: int = 1000
@@ -64,38 +66,21 @@ class WebhookStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self.delivery_log: list = []
-        self._init_db()
+        self._db = MogDB(str(self.db_path))
+        self._webhooks = self._db.collection("webhooks")
 
-    def _init_db(self) -> None:
-        """Initialize database schema."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS webhooks (
-                    id TEXT PRIMARY KEY,
-                    url TEXT NOT NULL,
-                    events TEXT NOT NULL,
-                    secret TEXT NOT NULL,
-                    description TEXT DEFAULT '',
-                    is_active INTEGER DEFAULT 1,
-                    created_at TEXT NOT NULL,
-                    headers TEXT DEFAULT '{}'
-                )
-            """)
-            conn.commit()
-            conn.close()
-
-    def _row_to_webhook(self, row: sqlite3.Row) -> Webhook:
-        """Convert a database row to a Webhook object."""
+    @staticmethod
+    def _doc_to_webhook(doc: Dict[str, Any]) -> Webhook:
+        """Convert a stored MogDB document to a Webhook object."""
         return Webhook(
-            id=row["id"],
-            url=row["url"],
-            events=json.loads(row["events"]),
-            secret=row["secret"],
-            description=row["description"],
-            is_active=bool(row["is_active"]),
-            created_at=datetime.fromisoformat(row["created_at"]),
-            headers=json.loads(row["headers"]) if row["headers"] else {},
+            id=doc["_id"],
+            url=doc["url"],
+            events=doc["events"],
+            secret=doc["secret"],
+            description=doc.get("description", ""),
+            is_active=bool(doc.get("is_active", True)),
+            created_at=datetime.fromisoformat(doc["created_at"]),
+            headers=doc.get("headers") or {},
         )
 
     def register(
@@ -116,24 +101,18 @@ class WebhookStore:
         now = datetime.now().isoformat()
 
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.execute(
-                """
-                INSERT INTO webhooks (id, url, events, secret, description, is_active, created_at, headers)
-                VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-            """,
-                (
-                    webhook_id,
-                    url,
-                    json.dumps(events),
-                    secret,
-                    description,
-                    now,
-                    json.dumps(headers or {}),
-                ),
+            self._webhooks.insert_one(
+                {
+                    "_id": webhook_id,
+                    "url": url,
+                    "events": events,
+                    "secret": secret,
+                    "description": description,
+                    "is_active": True,
+                    "created_at": now,
+                    "headers": headers or {},
+                }
             )
-            conn.commit()
-            conn.close()
 
         logger.info("Registered webhook %s for %s", webhook_id, url, extra={"tag": "TRAIN"})
         return webhook_id
@@ -141,11 +120,7 @@ class WebhookStore:
     def unregister(self, webhook_id: str) -> bool:
         """Unregister a webhook."""
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            cursor = conn.execute("DELETE FROM webhooks WHERE id = ?", (webhook_id,))
-            conn.commit()
-            deleted = cursor.rowcount > 0
-            conn.close()
+            deleted = self._webhooks.delete_one({"_id": webhook_id}) > 0
 
         if deleted:
             logger.info("Unregistered webhook %s", webhook_id, extra={"tag": "TRAIN"})
@@ -153,29 +128,17 @@ class WebhookStore:
 
     def get(self, webhook_id: str) -> Optional[Webhook]:
         """Get a webhook by ID."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM webhooks WHERE id = ?", (webhook_id,))
-            row = cursor.fetchone()
-            conn.close()
-
-        if row:
-            return self._row_to_webhook(row)
-        return None
+        doc = self._webhooks.find_one({"_id": webhook_id})
+        return self._doc_to_webhook(doc) if doc else None
 
     def list(self, event_filter: Optional[str] = None) -> List[Webhook]:
         """List all webhooks, optionally filtered by event."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                "SELECT * FROM webhooks WHERE is_active = 1 ORDER BY created_at DESC"
-            )
-            rows = cursor.fetchall()
-            conn.close()
+        docs = self._webhooks.find(
+            {"is_active": True},
+            sort=[("created_at", -1)],
+        )
 
-        webhooks = [self._row_to_webhook(row) for row in rows]
+        webhooks = [self._doc_to_webhook(d) for d in docs]
 
         if event_filter:
             webhooks = [w for w in webhooks if event_filter in w.events]
@@ -309,13 +272,9 @@ class WebhookStore:
     def get_stats(self) -> Dict[str, Any]:
         """Get webhook statistics."""
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT COUNT(*) as cnt FROM webhooks")
-            total_webhooks = cursor.fetchone()["cnt"]
-            cursor = conn.execute("SELECT COUNT(*) as cnt FROM webhooks WHERE is_active = 1")
-            active_webhooks = cursor.fetchone()["cnt"]
-            conn.close()
+            docs = self._webhooks.find()
+            total_webhooks = len(docs)
+            active_webhooks = sum(1 for d in docs if d.get("is_active"))
 
         total_deliveries = len(self.delivery_log)
         successful = sum(1 for d in self.delivery_log if d.success)

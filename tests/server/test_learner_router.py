@@ -69,8 +69,7 @@ class TestLearnFeed:
         resp = client.post("/learn/feed?action=subscribe")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "error"
-        assert "url required" in body["message"]
+        assert "url required" in body["error"]
 
     @patch("domains.learner.get_learner")
     def test_feed_unknown_action(self, mock_get_learner, client):
@@ -78,8 +77,7 @@ class TestLearnFeed:
         resp = client.post("/learn/feed?action=invalid_action")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "error"
-        assert "unknown action" in body["message"]
+        assert "unknown action" in body["error"]
 
     @patch("domains.learner.get_learner")
     def test_feed_unsubscribe_missing_url(self, mock_get_learner, client):
@@ -87,8 +85,7 @@ class TestLearnFeed:
         resp = client.post("/learn/feed?action=unsubscribe")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "error"
-        assert "url required" in body["message"]
+        assert "url required" in body["error"]
 
 
 class TestLearnKnowledge:

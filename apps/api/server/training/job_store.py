@@ -1,137 +1,109 @@
 """Persistent Training Job Store
 
-Stores training jobs in SQLite for crash recovery.
-Jobs persist across server restarts.
+Stores training jobs in MogDB (the project's embedded document database)
+for crash recovery. Jobs persist across server restarts.
 """
 
 import json
-import sqlite3
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 import logging
 
+from mogdb import MogDB
+
 logger = logging.getLogger("slo.job_store")
 
 
 class JobStore:
     """
-    SQLite-backed persistent job store.
+    MogDB-backed persistent job store.
 
     Features:
     - Persists across server restarts
     - Tracks job state, progress, checkpoints
     - Detects crashed/interrupted jobs
     - Supports recovery/resume
+
+    The ``db_path`` argument is a directory in which MogDB keeps its
+    collection journals (``jobs`` and ``job_events``).
     """
 
     def __init__(self, db_path: str = "data/training_jobs.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._init_db()
+        self._db = MogDB(str(self.db_path))
+        self._jobs = self._db.collection("jobs")
+        self._events = self._db.collection("job_events")
 
-    def _init_db(self) -> None:
-        """Initialize database schema."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS jobs (
-                    id TEXT PRIMARY KEY,
-                    name TEXT,
-                    status TEXT DEFAULT 'pending',
-                    dataset TEXT,
-                    data_path TEXT,
-                    config TEXT,
-                    progress REAL DEFAULT 0,
-                    current_epoch INTEGER DEFAULT 0,
-                    total_epochs INTEGER DEFAULT 0,
-                    global_step INTEGER DEFAULT 0,
-                    loss REAL,
-                    train_loss REAL,
-                    eval_loss REAL,
-                    checkpoint_path TEXT,
-                    checkpoint_dir TEXT,
-                    error TEXT,
-                    created_at TEXT,
-                    started_at TEXT,
-                    updated_at TEXT,
-                    completed_at TEXT,
-                    last_heartbeat TEXT,
-                    crashed INTEGER DEFAULT 0
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS job_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    job_id TEXT,
-                    event TEXT,
-                    data TEXT,
-                    timestamp TEXT,
-                    FOREIGN KEY (job_id) REFERENCES jobs(id)
-                )
-            """)
-            conn.commit()
-            conn.close()
+    @staticmethod
+    def _new_job_doc(
+        job_id: str,
+        name: str,
+        config: Dict[str, Any],
+        dataset: str,
+        now: str,
+    ) -> Dict[str, Any]:
+        """Build the full stored document for a new job."""
+        return {
+            "_id": job_id,
+            "id": job_id,
+            "name": name,
+            "status": "pending",
+            "dataset": dataset,
+            "data_path": None,
+            "config": config,
+            "progress": 0.0,
+            "current_epoch": 0,
+            "total_epochs": 0,
+            "global_step": 0,
+            "loss": None,
+            "train_loss": None,
+            "eval_loss": None,
+            "checkpoint_path": None,
+            "checkpoint_dir": None,
+            "error": None,
+            "created_at": now,
+            "started_at": None,
+            "updated_at": now,
+            "completed_at": None,
+            "last_heartbeat": now,
+            "crashed": 0,
+        }
+
+    @staticmethod
+    def _doc_to_job(doc: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert a stored MogDB document to the job dict returned to callers."""
+        return {
+            k: v
+            for k, v in doc.items()
+            if k not in ("_id", "_created", "_updated")
+        }
 
     def create(self, job_id: str, name: str, config: Dict[str, Any], dataset: str = "") -> Dict:
         """Create a new job."""
         now = datetime.now().isoformat()
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.execute(
-                """
-                INSERT INTO jobs (id, name, status, dataset, config, created_at, updated_at, last_heartbeat)
-                VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)
-            """,
-                (job_id, name, dataset, json.dumps(config), now, now, now),
-            )
-            conn.commit()
-            conn.close()
-
+            self._jobs.insert_one(self._new_job_doc(job_id, name, config, dataset, now))
         return self.get(job_id)
 
     def get(self, job_id: str) -> Optional[Dict]:
         """Get a job by ID."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-            row = cursor.fetchone()
-            conn.close()
-
-            if not row:
-                return None
-
-            return self._row_to_dict(row)
+        doc = self._jobs.find_one({"_id": job_id})
+        return self._doc_to_job(doc) if doc else None
 
     def list(self, status: Optional[str] = None, include_crashed: bool = True) -> List[Dict]:
         """List all jobs, optionally filtered by status."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
+        query: Dict[str, Any] = {}
+        if status:
+            query["status"] = status
+        if not include_crashed:
+            query["crashed"] = 0
 
-            query = "SELECT * FROM jobs"
-            params = []
-
-            conditions = []
-            if status:
-                conditions.append("status = ?")
-                params.append(status)
-            if not include_crashed:
-                conditions.append("crashed = 0")
-
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-
-            query += " ORDER BY created_at DESC"
-
-            cursor = conn.execute(query, params)
-            rows = cursor.fetchall()
-            conn.close()
-
-            return [self._row_to_dict(row) for row in rows]
+        docs = self._jobs.find(query, sort=[("created_at", -1)])
+        return [self._doc_to_job(d) for d in docs]
 
     def update(self, job_id: str, **kwargs) -> Optional[Dict]:
         """Update job fields."""
@@ -141,14 +113,7 @@ class JobStore:
         kwargs.pop("id", None)
 
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-
-            set_clause = ", ".join([f"{k} = ?" for k in kwargs.keys()])
-            values = list(kwargs.values()) + [job_id]
-
-            conn.execute(f"UPDATE jobs SET {set_clause} WHERE id = ?", values)
-            conn.commit()
-            conn.close()
+            self._jobs.update_one({"_id": job_id}, {"$set": kwargs})
 
         return self.get(job_id)
 
@@ -234,12 +199,8 @@ class JobStore:
     def delete(self, job_id: str) -> bool:
         """Delete a job."""
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            cursor = conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
-            conn.execute("DELETE FROM job_events WHERE job_id = ?", (job_id,))
-            conn.commit()
-            deleted = cursor.rowcount > 0
-            conn.close()
+            deleted = self._jobs.delete_one({"_id": job_id}) > 0
+            self._events.delete_many({"job_id": job_id})
             return deleted
 
     def detect_crashed_jobs(self, timeout_seconds: int = 300) -> List[Dict]:
@@ -250,31 +211,18 @@ class JobStore:
         in timeout_seconds are considered potentially crashed.
 
         Note: heartbeats are persisted with ``datetime.now().isoformat()``
-        ('T' separator), so the cutoff must be built in the SAME format — an
-        SQLite ``datetime(?, 'unixepoch')`` (space separator) string compares
-        greater and the stale test would silently never fire.
+        ('T' separator), so the cutoff is built in the SAME format.
         """
         cutoff = datetime.fromtimestamp(datetime.now().timestamp() - timeout_seconds).isoformat()
 
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-
-            cursor = conn.execute(
-                """
-                SELECT * FROM jobs
-                WHERE status IN ('running', 'recovering')
-                AND last_heartbeat IS NOT NULL
-                AND last_heartbeat < ?
-                AND crashed = 0
-            """,
-                (cutoff,),
-            )
-
-            rows = cursor.fetchall()
-            conn.close()
-
-            return [self._row_to_dict(row) for row in rows]
+        docs = self._jobs.find(
+            {
+                "status": {"$in": ["running", "recovering"]},
+                "crashed": 0,
+                "last_heartbeat": {"$lt": cutoff},
+            }
+        )
+        return [self._doc_to_job(d) for d in docs]
 
     def get_recoverable_jobs(self) -> List[Dict]:
         """Get jobs that can be recovered.
@@ -286,97 +234,61 @@ class JobStore:
         """
         cutoff = datetime.fromtimestamp(datetime.now().timestamp() - 300).isoformat()
 
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                """
-                SELECT * FROM jobs
-                WHERE status IN ('interrupted', 'failed')
-                   OR (status = 'recovering'
-                       AND (last_heartbeat IS NULL OR last_heartbeat < ?))
-                ORDER BY created_at DESC
-            """,
-                (cutoff,),
-            )
-            rows = cursor.fetchall()
-            conn.close()
+        docs = self._jobs.find(sort=[("created_at", -1)])
+        recoverable = []
+        for doc in docs:
+            status = doc.get("status")
+            if status in ("interrupted", "failed"):
+                recoverable.append(doc)
+            elif status == "recovering":
+                hb = doc.get("last_heartbeat")
+                if hb is None or hb < cutoff:
+                    recoverable.append(doc)
 
-            return [self._row_to_dict(row) for row in rows]
+        return [self._doc_to_job(d) for d in recoverable]
 
     def log_event(self, job_id: str, event: str, data: Optional[Dict] = None) -> None:
         """Log a job event."""
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.execute(
-                """
-                INSERT INTO job_events (job_id, event, data, timestamp)
-                VALUES (?, ?, ?, ?)
-            """,
-                (job_id, event, json.dumps(data) if data else None, datetime.now().isoformat()),
+            self._events.insert_one(
+                {
+                    "job_id": job_id,
+                    "event": event,
+                    "data": json.dumps(data) if data else None,
+                    "timestamp": datetime.now().isoformat(),
+                }
             )
-            conn.commit()
-            conn.close()
 
     def get_events(self, job_id: str, limit: int = 50) -> List[Dict]:
         """Get events for a job."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                """
-                SELECT * FROM job_events
-                WHERE job_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """,
-                (job_id, limit),
-            )
-            rows = cursor.fetchall()
-            conn.close()
+        docs = self._events.find(
+            {"job_id": job_id},
+            sort=[("timestamp", -1)],
+            limit=limit,
+        )
 
-            return [
-                {
-                    "event": row["event"],
-                    "data": json.loads(row["data"]) if row["data"] else None,
-                    "timestamp": row["timestamp"],
-                }
-                for row in rows
-            ]
+        return [
+            {
+                "event": doc.get("event"),
+                "data": json.loads(doc["data"]) if doc.get("data") else None,
+                "timestamp": doc.get("timestamp"),
+            }
+            for doc in docs
+        ]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get job statistics."""
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
+            docs = self._jobs.find()
 
-            stats = {}
+            stats: Dict[str, Any] = {}
+            for doc in docs:
+                status = doc.get("status", "unknown")
+                stats[status] = stats.get(status, 0) + 1
 
-            cursor = conn.execute("SELECT status, COUNT(*) as count FROM jobs GROUP BY status")
-            for row in cursor:
-                stats[row["status"]] = row["count"]
-
-            cursor = conn.execute("SELECT COUNT(*) as total FROM jobs")
-            stats["total"] = cursor.fetchone()["total"]
-
-            cursor = conn.execute("SELECT COUNT(*) as count FROM jobs WHERE crashed = 1")
-            stats["crashed"] = cursor.fetchone()["count"]
-
-            conn.close()
+            stats["total"] = len(docs)
+            stats["crashed"] = sum(1 for d in docs if d.get("crashed"))
             return stats
-
-    def _row_to_dict(self, row: sqlite3.Row) -> Dict:
-        """Convert a row to a dictionary."""
-        result = dict(row)
-
-        # Parse JSON fields
-        if result.get("config") and isinstance(result["config"], str):
-            try:
-                result["config"] = json.loads(result["config"])
-            except Exception:
-                pass
-
-        return result
 
 
 # Global store instance

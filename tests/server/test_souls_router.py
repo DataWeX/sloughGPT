@@ -244,7 +244,7 @@ class TestSoulChat:
             "prompt": "Hello",
         })
         assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
+        assert resp.json()["error"] == "Invalid checkpoint name"
 
     def test_chat_missing_checkpoint_name(self, client):
         resp = client.post("/souls/chat", json={
@@ -282,7 +282,7 @@ class TestSaveTraitWeights:
         mock_get_config.side_effect = RuntimeError("boom")
         resp = client.post("/souls/weights", json={"personality": {"warmth": 0.5}})
         assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
+        assert resp.json()["error"] == "An unexpected error occurred."
 
 
 class TestWeightSnapshotLifecycle:
@@ -333,7 +333,7 @@ class TestWeightSnapshotLifecycle:
         mock_get_config.side_effect = RuntimeError("disk full")
         resp = client.post("/souls/weights/snapshot/x")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
+        assert resp.json()["error"] == "An unexpected error occurred."
 
 
 class TestListWeightSnapshotsPatched:
@@ -370,7 +370,7 @@ class TestGetTraitWeightsPatched:
         mock_get_mgr.side_effect = RuntimeError("boom")
         resp = client.get("/souls/weights")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
+        assert resp.json()["error"] == "An unexpected error occurred."
 
 
 class TestSwitchSoulCheckpoint:
@@ -425,7 +425,7 @@ class TestGetSoulStatsPatched:
         mock_get_mgr.side_effect = RuntimeError("boom")
         resp = client.get("/souls/stats")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
+        assert resp.json()["error"] == "An unexpected error occurred."
 
 
 class TestGetSoulErrorPath:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -80,13 +79,10 @@ class TestCreateAdapter:
 
     def test_creates_writes_to_db(self, store):
         store.create_adapter("user1")
-        conn = sqlite3.connect(store.db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM user_adapters WHERE user_id = 'user1'")
-        row = cursor.fetchone()
-        conn.close()
-        assert row is not None
-        assert row[1] == 4  # rank
+        adapters = store.get_all_adapters()
+        assert len(adapters) == 1
+        assert adapters[0]["user_id"] == "user1"
+        assert adapters[0]["rank"] == 4
 
     def test_cache_hit_skips_disk(self, store):
         a1 = store.create_adapter("user1")

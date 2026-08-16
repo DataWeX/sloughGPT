@@ -232,6 +232,7 @@ class ClientErrorFilterMiddleware(BaseHTTPMiddleware):
                 logger.debug(
                     "Extension error suppressed: %s %s %d",
                     request.method, request.url.path, response.status_code,
+                    extra={"tag": "REQ"},
                 )
         return response
 

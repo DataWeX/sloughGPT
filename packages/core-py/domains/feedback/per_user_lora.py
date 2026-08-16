@@ -8,7 +8,6 @@ Each user gets their own lightweight LoRA adapter that:
 - Allows personalization without retraining base model
 """
 
-import sqlite3
 import numpy as np
 import threading
 import time
@@ -16,6 +15,8 @@ from pathlib import Path
 from typing import Dict, Optional, Any, List
 from dataclasses import dataclass
 import logging
+
+from mogdb import MogDB
 
 logger = logging.getLogger("slo.feedback.per_user_lora")
 
@@ -81,27 +82,15 @@ class PerUserLoRAStore:
         self._init_db()
 
     def _init_db(self):
-        """Initialize metadata database."""
-        db_path = self.store_path / "adapters.db"
-        self.db_path = str(db_path)
+        """Initialize the MogDB metadata store.
 
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_adapters (
-                user_id TEXT PRIMARY KEY,
-                rank INTEGER,
-                alpha REAL,
-                model_dim INTEGER,
-                created_at TEXT,
-                updated_at TEXT,
-                feedback_count INTEGER DEFAULT 0
-            )
-        """)
-
-        conn.commit()
-        conn.close()
+        The store root directory holds both the ``.npz`` adapter weights and
+        the MogDB journal (``user_adapters.journal.jsonl`` + compacted
+        ``user_adapters.mogdb``) for adapter metadata.
+        """
+        self.db_path = str(self.store_path)
+        self._db = MogDB(self.db_path)
+        self._adapters_col = self._db.collection("user_adapters")
 
     def _get_adapter_path(self, user_id: str) -> Path:
         """Get path for user's adapter weights."""
@@ -275,29 +264,22 @@ class PerUserLoRAStore:
         )
 
     def _update_metadata(self, adapter: UserAdapter):
-        """Update adapter metadata in database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        """Update adapter metadata in the MogDB store (upsert by user_id)."""
+        meta = {
+            "user_id": adapter.user_id,
+            "rank": adapter.rank,
+            "alpha": adapter.alpha,
+            "model_dim": self.model_dim,
+            "created_at": adapter.created_at,
+            "updated_at": adapter.updated_at,
+            "feedback_count": adapter.feedback_count,
+        }
 
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO user_adapters
-            (user_id, rank, alpha, model_dim, created_at, updated_at, feedback_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                adapter.user_id,
-                adapter.rank,
-                adapter.alpha,
-                self.model_dim,
-                adapter.created_at,
-                adapter.updated_at,
-                adapter.feedback_count,
-            ),
-        )
-
-        conn.commit()
-        conn.close()
+        if self._adapters_col.find_one({"_id": adapter.user_id}):
+            self._adapters_col.update_one({"_id": adapter.user_id}, {"$set": meta})
+        else:
+            meta["_id"] = adapter.user_id
+            self._adapters_col.insert_one(meta)
 
     def apply_adapter_to_logits(
         self,
@@ -371,24 +353,20 @@ class PerUserLoRAStore:
         return self.merge_adapters(user_ids)
 
     def get_all_adapters(self) -> list:
-        """Get metadata for all user adapters."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM user_adapters ORDER BY updated_at DESC")
-        rows = cursor.fetchall()
-        conn.close()
+        """Get metadata for all user adapters (most recently updated first)."""
+        docs = self._adapters_col.find(sort=[("updated_at", -1)])
 
         return [
             {
-                "user_id": row[0],
-                "rank": row[1],
-                "alpha": row[2],
-                "model_dim": row[3],
-                "created_at": row[4],
-                "updated_at": row[5],
-                "feedback_count": row[6],
+                "user_id": d["_id"],
+                "rank": d["rank"],
+                "alpha": d["alpha"],
+                "model_dim": d["model_dim"],
+                "created_at": d["created_at"],
+                "updated_at": d["updated_at"],
+                "feedback_count": d["feedback_count"],
             }
-            for row in rows
+            for d in docs
         ]
 
     def get_stats(self) -> Dict[str, Any]:
@@ -428,11 +406,7 @@ class PerUserLoRAStore:
         if path.exists():
             path.unlink()
 
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM user_adapters WHERE user_id = ?", (user_id,))
-        conn.commit()
-        conn.close()
+        self._adapters_col.delete_one({"_id": user_id})
 
     def get_quality_adapters(
         self,

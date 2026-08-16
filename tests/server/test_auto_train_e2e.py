@@ -24,8 +24,8 @@ class TestAutoTrainStart:
         resp = client.post("/auto-train/start", json={})
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "error"
-        assert "Provide" in data["message"]
+        assert "error" in data
+        assert "Provide" in data["error"]
 
     def test_start_with_source_text(self):
         resp = client.post("/auto-train/start", json={
@@ -256,8 +256,8 @@ class TestAutoTrainStartTurbo:
     def test_turbo_requires_data_path(self):
         resp = client.post("/auto-train/start-turbo", json={"epochs": 1})
         assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
-        assert "No data_path or dataset_id" in resp.json()["message"]
+        assert "error" in resp.json()
+        assert "No data_path or dataset_id" in resp.json()["error"]
 
     def test_turbo_epochs_validation(self):
         resp = client.post("/auto-train/start-turbo", json={"epochs": 0, "data_path": "x.txt"})
@@ -283,7 +283,7 @@ class TestAutoTrainFromSessions:
         mod._auto_train_instance.state.running = True
         resp = client.post("/auto-train/from-sessions/start", json={"epochs": 3})
         assert resp.status_code == 200
-        assert "already" in resp.json()["message"].lower()
+        assert "already" in resp.json()["error"].lower()
 
     def test_start_epochs_validation(self):
         resp = client.post("/auto-train/from-sessions/start", json={"epochs": 0})
@@ -321,7 +321,7 @@ class TestAutoTrainCheckpointValidation:
     def test_load_missing_checkpoint(self):
         resp = client.post("/auto-train/checkpoints/definitely_missing_ckpt/load")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
+        assert "error" in resp.json()
 
     def test_export_mobile_missing_404(self):
         resp = client.get("/auto-train/checkpoints/definitely_missing_ckpt/export-mobile")

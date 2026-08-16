@@ -25,6 +25,7 @@ Quick start:
 """
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -339,6 +340,44 @@ class PGQ:
     def engine_stats(self) -> dict:
         """Core engine statistics."""
         return self._engine.to_dict()
+
+    def route(self, process_name: str, tree_name: str) -> None:
+        """Route processes by name to a specific tree.
+
+        Args:
+            process_name: Process name to match (exact match).
+            tree_name: Tree to dispatch matching processes to.
+        """
+        self._engine.route(process_name, tree_name)
+
+    def on_complete(self, callback: Callable[[Process], None]) -> None:
+        """Register a callback for when a process completes.
+
+        The callback receives the completed Process instance.
+        """
+        self._engine.on_complete(callback)
+
+    def dispatch(self) -> int:
+        """Dispatch pending processes to trees (one-shot).
+
+        Returns the number of processes dispatched.
+        """
+        return self._engine.dispatch()
+
+    def run_background(self, poll_interval: float = 0.1) -> threading.Thread:
+        """Start the engine dispatch loop in a background thread.
+
+        Non-blocking — returns immediately. Use stop() to stop.
+        """
+        return self._engine.run_background(poll_interval=poll_interval)
+
+    def wait(self, timeout: Optional[float] = None) -> None:
+        """Wait for all pending and running processes to complete.
+
+        Args:
+            timeout: Maximum seconds to wait. None = wait forever.
+        """
+        self._engine.wait(timeout=timeout)
 
     # ── Training via executor (Point-Graph-Queue integration) ──
 

@@ -145,12 +145,12 @@ class TestExecutor:
     def test_executor_job_not_found(self, client):
         resp = client.get("/system/executor/nonexistent")
         assert resp.status_code == 200
-        assert "error" in resp.json()["data"]
+        assert "error" in resp.json()
 
     def test_executor_job_result_not_found(self, client):
         resp = client.get("/system/executor/nonexistent/result")
         assert resp.status_code == 200
-        assert "error" in resp.json()["data"]
+        assert "error" in resp.json()
 
     def test_purge_when_uninitialized(self, client):
         resp = client.post("/system/executor/purge")
@@ -193,7 +193,7 @@ class TestExecutorInitialized:
         try:
             resp = client.get("/system/executor/ghost")
             assert resp.status_code == 200
-            assert "error" in resp.json()["data"]
+            assert "error" in resp.json()
         finally:
             self._restore()
 
@@ -202,7 +202,7 @@ class TestExecutorInitialized:
         try:
             resp = client.get("/system/executor/ghost/result")
             assert resp.status_code == 200
-            assert "error" in resp.json()["data"]
+            assert "error" in resp.json()
         finally:
             self._restore()
 

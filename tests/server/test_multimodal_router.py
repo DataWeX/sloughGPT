@@ -510,8 +510,9 @@ class TestProcessVideo:
             files={"file": ("clip.mp4", b"fake-mp4", "video/mp4")},
         )
         assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert data["status"] == "success"
+        body = resp.json()
+        assert body["status"] == "success"
+        data = body["data"]
         assert data["caption"] == "a car driving"
         assert data["num_frames"] == 2
 

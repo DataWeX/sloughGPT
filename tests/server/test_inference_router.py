@@ -393,7 +393,7 @@ class TestContextFactsQuery:
         mock_get_core.return_value = None
         resp = client.get("/context/facts")
         assert resp.status_code == 200
-        assert resp.json()["facts"] == []
+        assert resp.json()["error"] == "ContextCore not available"
 
 
 class TestSearchSessions:

@@ -206,7 +206,7 @@ class TestMobileKnowledgeCreate:
         resp = client.post("/mobile/knowledge", json={"content": ""})
         assert resp.status_code == 200
         body = resp.json()
-        assert body.get("status") == "error" or "content" in body
+        assert "error" in body
 
 
 # ── GET /mobile/sync/status ───────────────────────────────────────────────────
@@ -514,7 +514,7 @@ class TestMobileKnowledgeUpdate:
             mock_patch.return_value = None
             resp = client.patch("/mobile/knowledge/k1", json={"content": "x"})
             assert resp.status_code == 200
-            assert resp.json().get("status") == "error"
+            assert "error" in resp.json()
 
     def test_update_only_sends_provided_fields(self, client):
         with patch.object(MobileRouter, "_internal_patch", new_callable=AsyncMock) as mock_patch:

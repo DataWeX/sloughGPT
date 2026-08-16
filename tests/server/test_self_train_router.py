@@ -118,8 +118,8 @@ class TestSelfTrainDeterministic:
         proc.terminate.side_effect = OSError("timeout")
         server_state._self_train_proc = proc
         resp = client.post("/self-train/stop")
-        data = resp.json()["data"]
-        assert data["status"] == "killed"
+        body = resp.json()
+        assert body["details"]["status"] == "killed"
         proc.kill.assert_called_once()
         assert server_state._self_train_proc is None
 
@@ -247,9 +247,8 @@ class TestSelfTrainEdgePaths:
     def test_start_popen_failure_returns_error(self, mock_popen, client):
         mock_popen.side_effect = FileNotFoundError("no python")
         resp = client.post("/self-train/start", json={})
-        data = resp.json()["data"]
-        assert data["status"] == "error"
-        assert "no python" in data["error"]
+        body = resp.json()
+        assert body["error"] == "no python"
 
     def test_stop_when_proc_exited(self, client):
         import state as server_state

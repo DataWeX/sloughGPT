@@ -299,8 +299,7 @@ class TestExportModel:
             resp = client.post("/models/export", json={"output_path": "/tmp/x", "format": "sou"})
             assert resp.status_code == 200
             body = resp.json()
-            assert body["status"] == "error"
-            assert "No model loaded" in body["message"]
+            assert body["error"] == "No model loaded"
         finally:
             server_state.model = prev
 
@@ -335,7 +334,7 @@ class TestUnloadFailure:
         mock_get_ctrl.return_value = ctrl
         resp = client.post("/models/unload")
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == "error"
+        assert resp.json()["error"] == "model busy"
 
 
 class TestStartDownload:

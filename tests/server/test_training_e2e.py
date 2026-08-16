@@ -69,7 +69,7 @@ class TestAutoTrainStart:
     def test_start_requires_data(self):
         resp = auto_client.post("/auto-train/start", json={})
         assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
+        assert "error" in resp.json()
 
     def test_start_with_text(self):
         resp = auto_client.post("/auto-train/start", json={

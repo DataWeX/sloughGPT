@@ -45,7 +45,7 @@ async def _domain_error_handler(request: Request, exc: Exception) -> JSONRespons
     logger.warning(
         "%s on %s %s",
         msg, request.method, request.url.path,
-        extra={"context": {"corr": cid, "status": status.HTTP_400_BAD_REQUEST}},
+        extra={"tag": "REQ", "context": {"corr": cid, "status": status.HTTP_400_BAD_REQUEST}},
     )
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -59,7 +59,7 @@ async def _validation_error_handler(request: Request, exc: ValidationError) -> J
     cid = _corr_id(request)
     logger.warning(
         "Validation failed on %s", request.url.path,
-        extra={"context": {"corr": cid, "fields": len(errors), "status": 422}},
+        extra={"tag": "REQ", "context": {"corr": cid, "fields": len(errors), "status": 422}},
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -78,7 +78,7 @@ async def _request_validation_error_handler(request: Request, exc: RequestValida
     cid = _corr_id(request)
     logger.warning(
         "Request validation failed on %s %s", request.method, request.url.path,
-        extra={"context": {"corr": cid, "errors": len(_safe), "status": 422}},
+        extra={"tag": "REQ", "context": {"corr": cid, "errors": len(_safe), "status": 422}},
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -108,7 +108,7 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
     log_fn = logger.warning if h.status_code >= 500 else logger.info
     log_fn(
         "HTTP %d on %s %s", h.status_code, request.method, request.url.path,
-        extra={"context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code}},
+        extra={"tag": "REQ", "context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code}},
     )
     return JSONResponse(
         status_code=h.status_code,
@@ -130,7 +130,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
 
     logger.exception(
         "Unhandled error on %s %s [%s]", request.method, request.url.path, cid,
-        extra={"context": {"corr": cid, "status": 500}},
+        extra={"tag": "REQ", "context": {"corr": cid, "status": 500}},
     )
 
     if classified is not None:
@@ -165,7 +165,7 @@ def register_all_handlers(app: FastAPI):
             log_fn = logger.warning if exc.http_status >= 500 else logger.info
             log_fn(
                 "%s [%s] on %s %s", exc.code, exc.message, request.method, request.url.path,
-                extra={"context": {"corr": cid, "code": exc.code, "status": exc.http_status}},
+                extra={"tag": "REQ", "context": {"corr": cid, "code": exc.code, "status": exc.http_status}},
             )
             return JSONResponse(
                 status_code=exc.http_status,
