@@ -25,35 +25,100 @@ def populated(pipeline):
 
 
 class TestPipelineInit:
-    def test_creates_directories_and_dbs(self, tmp_path):
+    def test_creates_directories_and_db(self, tmp_path):
         data_dir = tmp_path / "data"
         p = tp.TrainingDataPipeline(data_dir=str(data_dir))
         assert (data_dir / "exports").is_dir()
         assert (data_dir / "backups").is_dir()
-        for name in ("conversations.db", "training_pairs.db", "training_runs.db"):
-            db = json.loads((data_dir / name).read_text())
-            assert db["version"] == "1.0"
-            assert db["records"] == []
+        assert (data_dir / "training_pipeline.db").is_dir()
+        assert p.get_conversations(limit=10) == []
+        assert p.get_training_pairs() == []
+        assert p.get_training_runs() == []
 
-    def test_existing_db_preserved(self, tmp_path):
+    def test_migrates_legacy_json_db(self, tmp_path):
         data_dir = tmp_path / "data"
-        (data_dir / "conversations.db").parent.mkdir(parents=True, exist_ok=True)
-        (data_dir / "conversations.db").write_text('{"version": "1.0", "records": [{"x": 1}]}')
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "conversations.db").write_text(
+            json.dumps(
+                {
+                    "version": "1.0",
+                    "records": [
+                        {
+                            "id": "conv_0_1",
+                            "session_id": "s9",
+                            "user_message": "u",
+                            "assistant_message": "a",
+                            "model": "m",
+                            "timestamp": "t",
+                            "tokens": None,
+                            "feedback": None,
+                            "metadata": {},
+                        }
+                    ],
+                }
+            )
+        )
         p = tp.TrainingDataPipeline(data_dir=str(data_dir))
-        db = json.loads((data_dir / "conversations.db").read_text())
-        assert len(db["records"]) == 1
+        convs = p.get_conversations(limit=10)
+        assert len(convs) == 1
+        assert convs[0].id == "conv_0_1"
+        assert convs[0].user_message == "u"
+        assert not (data_dir / "conversations.db").exists()
+
+    def test_migrates_all_three_json_dbs(self, tmp_path):
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "conversations.db").write_text(
+            json.dumps({"version": "1.0", "records": [{"id": "c1", "session_id": "s"}]})
+        )
+        (data_dir / "training_pairs.db").write_text(
+            json.dumps(
+                {
+                    "version": "1.0",
+                    "records": [{"id": "p1", "conversation_id": "c1", "prompt": "x"}],
+                }
+            )
+        )
+        (data_dir / "training_runs.db").write_text(
+            json.dumps({"version": "1.0", "records": [{"id": "r1", "status": "done"}]})
+        )
+        p = tp.TrainingDataPipeline(data_dir=str(data_dir))
+        assert len(p.get_conversations(limit=10)) == 1
+        assert len(p.get_training_pairs()) == 1
+        assert len(p.get_training_runs()) == 1
+        for name in ("conversations.db", "training_pairs.db", "training_runs.db"):
+            assert not (data_dir / name).exists()
 
     def test_corrupt_db_recovers(self, tmp_path):
         data_dir = tmp_path / "data"
-        (data_dir / "conversations.db").parent.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / "conversations.db").write_text("{ not valid json")
         p = tp.TrainingDataPipeline(data_dir=str(data_dir))
         assert p.get_conversations(limit=10) == []
+        assert not (data_dir / "conversations.db").exists()
 
-    def test_read_db_missing_file_returns_empty(self, tmp_path):
-        p = tp.TrainingDataPipeline(data_dir=str(tmp_path / "data"))
-        db = p._read_db(tmp_path / "no-such-file.db")
-        assert db == {"version": "1.0", "records": []}
+    def test_migration_preserves_existing_mogdb_data(self, tmp_path):
+        data_dir = tmp_path / "data"
+        p = tp.TrainingDataPipeline(data_dir=str(data_dir))
+        p.add_conversation("s", "u", "a", "m")
+        # Now a legacy JSON appears with a colliding id — must not clobber.
+        (data_dir / "conversations.db").write_text(
+            json.dumps(
+                {
+                    "version": "1.0",
+                    "records": [
+                        {
+                            "id": p.get_conversations(limit=10)[0].id,
+                            "session_id": "evil",
+                        }
+                    ],
+                }
+            )
+        )
+        p2 = tp.TrainingDataPipeline(data_dir=str(data_dir))
+        convs = p2.get_conversations(limit=10)
+        assert len(convs) == 1
+        assert convs[0].session_id == "s"
 
 
 class TestConversations:
@@ -64,6 +129,11 @@ class TestConversations:
         assert conv.user_message == "u"
         assert conv.tokens == 5
         assert conv.feedback is None
+
+    def test_add_with_feedback_sets_quality(self, pipeline):
+        conv = pipeline.add_conversation("s1", "u", "a", "qwen", feedback="up")
+        assert conv.feedback == "up"
+        assert pipeline.get_training_pairs()[0].quality_score == 1.0
 
     def test_add_persists_and_creates_pair(self, pipeline):
         conv = pipeline.add_conversation("s1", "u", "a", "qwen")
@@ -169,6 +239,13 @@ class TestTrainingRuns:
         assert runs[0].status == "completed"
         assert runs[0].metrics["loss"] == 0.9
 
+    def test_metrics_merge_across_updates(self, pipeline):
+        run = pipeline.create_training_run("v1", 10, "qwen")
+        pipeline.update_training_run(run.id, "running", {"loss": 1.5})
+        pipeline.update_training_run(run.id, "completed", {"accuracy": 0.8})
+        runs = pipeline.get_training_runs()
+        assert runs[0].metrics == {"loss": 1.5, "accuracy": 0.8}
+
     def test_get_training_runs_limit(self, pipeline):
         for i in range(5):
             pipeline.create_training_run(f"v{i}", 1, "m")
@@ -251,12 +328,17 @@ class TestStats:
 
 
 class TestBackup:
-    def test_create_backup_copies_dbs(self, populated):
+    def test_create_backup_copies_mogdb_journals(self, populated):
         pipeline, *_ = populated
+        pipeline.create_training_run("v1", 3, "qwen")
         backup = pipeline.create_backup()
         backup_path = Path(backup)
         assert backup_path.is_dir()
-        for name in ("conversations.db", "training_pairs.db", "training_runs.db"):
+        for name in (
+            "conversations.journal.jsonl",
+            "training_pairs.journal.jsonl",
+            "training_runs.journal.jsonl",
+        ):
             assert (backup_path / name).exists()
 
     def test_backup_includes_latest_export(self, populated):
@@ -277,7 +359,7 @@ class TestBackup:
 
         monkeypatch.setattr(shutil, "copy2", flaky)
         backup = Path(pipeline.create_backup())
-        assert (backup / "conversations.db").exists()
+        assert (backup / "conversations.journal.jsonl").exists()
 
 
 class TestSingleton:
