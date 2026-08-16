@@ -9,6 +9,7 @@ is tested end-to-end with a small real SloTransformer.
 
 import json
 import os
+import shutil
 import sqlite3
 import tempfile
 import unittest
@@ -17,6 +18,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from domains.feedback.hf_dpo import DEFAULT_EPOCHS, HFDPOTrainer
+
+
+def _remove_db_path(path):
+    """Remove a legacy SQLite file or the MogDB directory that replaced it."""
+    if os.path.isdir(path):
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
 
 
 @pytest.fixture
@@ -77,7 +89,7 @@ def feedback_db():
     conn.commit()
     conn.close()
     yield db_path
-    os.unlink(db_path)
+    _remove_db_path(db_path)
 
 
 @pytest.fixture
@@ -168,7 +180,7 @@ class TestHFDPOTrainer:
             trainer = HFDPOTrainer(model=MagicMock(), tokenizer=MagicMock())
             pairs = trainer.prepare_dpo_pairs()
         assert len(pairs) == 0
-        os.unlink(tmp.name)
+        _remove_db_path(tmp.name)
 
     def test_prepare_dpo_pairs_max_pairs_cap(self, real_db):
         """max_pairs caps the returned pair list."""
