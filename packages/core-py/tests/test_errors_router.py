@@ -168,7 +168,8 @@ class TestDedup:
         client = TestClient(_app(er))
 
         client.post("/errors/log", json={"errors": [_make_error("dup")]})
-        er._dedup_map["dup"] = er._dedup_map.get("dup", 0) - 20
+        fp = er._fingerprint("dup")
+        er._dedup_map[fp] = er._dedup_map.get(fp, 0) - 20
         client.post("/errors/log", json={"errors": [_make_error("dup")]})
 
         resp = client.get("/errors/recent")
@@ -221,7 +222,8 @@ class TestDedupPruning:
 
         client.post("/errors/log", json={"errors": [_make_error("fresh")]})
         now = time.time()
-        er._dedup_map["fresh"] = now - 15
+        fp = er._fingerprint("fresh")
+        er._dedup_map[fp] = now - 15
 
         for i in range(501):
             er._dedup_map[f"old-{i}"] = 0.0

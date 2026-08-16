@@ -154,32 +154,30 @@ class ErrorsRouter:
         client_host = request.client.host if request.client else "unknown"
 
         logged = 0
-        batch_messages: set = set()
+        batch_fps: set = set()
         for entry in batch.errors:
             message = entry.message or ""
             fp = self._fingerprint(message)
 
-            # Dedup: skip if the same exact message arrived in a PRIOR
-            # request within the window.  Never dedup within the current
-            # batch — each entry in a batch is a distinct error event.
-            last_seen = self._dedup_map.get(message)
-            if (message not in batch_messages
+            # Dedup: skip if the same fingerprint arrived in a PRIOR request
+            # within the window.  Never dedup within the current batch —
+            # each entry in a batch is a distinct error event.
+            last_seen = self._dedup_map.get(fp)
+            if (fp not in batch_fps
                     and last_seen is not None
                     and (now_epoch - last_seen) < self._DEDUP_WINDOW_S):
-                # Bump count on the existing record instead of creating a new one
                 for rec in reversed(self._error_buffer):
-                    if rec.get("message") == message:
+                    if rec.get("fingerprint") == fp:
                         rec["count"] = rec.get("count", 1) + 1
                         rec["timestamp"] = entry.timestamp or now_iso
                         break
                 continue
 
-            batch_messages.add(message)
-            self._dedup_map[message] = now_epoch
-            # Prune old dedup entries
+            batch_fps.add(fp)
+            self._dedup_map[fp] = now_epoch
             if len(self._dedup_map) > 500:
-                self._dedup_map = {k: v for k, v in self._dedup_map.items()
-                                   if (now_epoch - v) < self._DEDUP_WINDOW_S * 10}
+                cutoff = now_epoch - self._DEDUP_WINDOW_S * 10
+                self._dedup_map = {k: v for k, v in self._dedup_map.items() if v > cutoff}
 
             error_record = {
                 "id": uuid.uuid4().hex[:12],
