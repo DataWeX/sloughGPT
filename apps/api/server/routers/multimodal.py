@@ -505,7 +505,7 @@ class MultimodalRouter:
                 video_embedding = processor.encode_video(frames, engine.vision)
                 first_frame = frames[0].reshape(1, 224, 224, 3)
                 caption = engine.generate(first_frame, max_len=20, temperature=0.8)
-                return success_response(data={"status": "success", "caption": caption.text, "num_frames": len(frames),
+                return success_response(data={"caption": caption.text, "num_frames": len(frames),
                         "video_embedding_shape": list(video_embedding.data.shape)})
             finally:
                 os.unlink(tmp_path)
@@ -547,7 +547,7 @@ class MultimodalRouter:
                 wf.setsampwidth(2)
                 wf.setframerate(tts.sample_rate)
                 wf.writeframes((waveform * 32767).astype(np.int16).tobytes())
-            return success_response(data={"status": "success", "audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+            return success_response(data={"audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                     "text": text, "duration_sec": len(waveform) / tts.sample_rate})
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event
@@ -578,7 +578,7 @@ class MultimodalRouter:
             img = Image.fromarray(image_np)
             buffer = io.BytesIO()
             img.save(buffer, format="PNG")
-            return success_response(data={"status": "success", "image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+            return success_response(data={"image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                     "prompt": prompt, "steps": steps})
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event

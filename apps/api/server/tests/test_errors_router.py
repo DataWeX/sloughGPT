@@ -65,16 +65,17 @@ class TestRecentErrors:
         assert body["data"]["total"] == 0
 
     def test_recent_after_logging(self):
-        client.post("/errors/log", json={"errors": [{"message": "err1"}]})
-        client.post("/errors/log", json={"errors": [{"message": "err2"}]})
+        client.post("/errors/log", json={"errors": [{"message": "alpha error"}]})
+        client.post("/errors/log", json={"errors": [{"message": "bravo error"}]})
         resp = client.get("/errors/recent")
         body = resp.json()
         assert body["data"]["total"] == 2
         assert len(body["data"]["errors"]) == 2
 
     def test_recent_pagination(self):
-        for i in range(5):
-            client.post("/errors/log", json={"errors": [{"message": f"err{i}"}]})
+        msgs = ["alpha", "bravo", "charlie", "delta", "echo"]
+        for msg in msgs:
+            client.post("/errors/log", json={"errors": [{"message": msg}]})
         resp = client.get("/errors/recent?limit=2&offset=0")
         body = resp.json()
         assert len(body["data"]["errors"]) == 2

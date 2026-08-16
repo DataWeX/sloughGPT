@@ -148,7 +148,13 @@ class FeedbackController:
 
         with open(feedback_file) as f:
             for line in f:
-                fb = json.loads(line)
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    fb = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 if fb.get("message_id") == message_id:
                     return fb
         return None
@@ -165,7 +171,13 @@ class FeedbackController:
 
         with open(feedback_file) as f:
             for line in f:
-                fb = json.loads(line)
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    fb = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 total += 1
                 if fb.get("rating") == "thumbs_up":
                     thumbs_up += 1

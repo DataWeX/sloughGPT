@@ -246,7 +246,10 @@ class MobileRouter:
         soul = await self._internal_get(request, "/souls/current") or {}
         sessions_data = await self._internal_get(request, "/chat/sessions") or {}
         models_resp = await self._internal_get(request, "/models") or {}
-        models = models_resp.get("models", []) if isinstance(models_resp, dict) else []
+        if isinstance(models_resp, dict):
+            models = models_resp.get("data", models_resp.get("models", []))
+        else:
+            models = models_resp if isinstance(models_resp, list) else []
 
         sessions = sessions_data.get("sessions", []) if isinstance(sessions_data, dict) else []
 

@@ -9,11 +9,11 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from pathlib import Path
 
 from schemas.models import ModelInfo, LoadModelRequest, LoadModelResponse, ModelStatus
-from schemas.common import StandardResponse, success_response, error_response, wrap_controller_result
+from schemas.common import success_response, error_response, wrap_controller_result
 from controllers.models import get_models_controller
 from infrastructure.auth import require_auth_if_enabled
 
@@ -55,7 +55,7 @@ class ModelsRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route(path="", endpoint=self.list_models, methods=["GET"], response_model=StandardResponse[List[ModelInfo]])
+        self.router.add_api_route(path="", endpoint=self.list_models, methods=["GET"])
         self.router.add_api_route(path="/load", endpoint=self.load_model, methods=["POST"])
         self.router.add_api_route(path="/unload", endpoint=self.unload_model, methods=["POST"])
         self.router.add_api_route(path="/current", endpoint=self.current_model, methods=["GET"])
