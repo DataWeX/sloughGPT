@@ -41,6 +41,96 @@ def store(tmp_path):
     )
 
 
+class TestSqliteMigration:
+    def test_migrates_legacy_adapters_db(self, tmp_path):
+        """Legacy adapters.db rows land in the MogDB metadata store."""
+        import sqlite3
+
+        conn = sqlite3.connect(str(tmp_path / "adapters.db"))
+        conn.execute("""
+            CREATE TABLE user_adapters (
+                user_id TEXT PRIMARY KEY,
+                rank INTEGER,
+                alpha REAL,
+                model_dim INTEGER,
+                created_at TEXT,
+                updated_at TEXT,
+                feedback_count INTEGER
+            )
+        """)
+        conn.execute(
+            "INSERT INTO user_adapters VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("legacy_user", 4, 8.0, 16, "1.0", "2.0", 7),
+        )
+        conn.commit()
+        conn.close()
+
+        store = PerUserLoRAStore(
+            store_path=str(tmp_path),
+            adapter_rank=4,
+            adapter_alpha=8,
+            model_dim=16,
+            run_eval=False,
+        )
+
+        adapters = store.get_all_adapters()
+        assert len(adapters) == 1
+        assert adapters[0]["user_id"] == "legacy_user"
+        assert adapters[0]["feedback_count"] == 7
+        assert not (tmp_path / "adapters.db").exists()
+
+    def test_keeps_newer_mogdb_metadata(self, tmp_path):
+        """An existing MogDB record for a user is not overwritten."""
+        import sqlite3
+
+        conn = sqlite3.connect(str(tmp_path / "adapters.db"))
+        conn.execute("""
+            CREATE TABLE user_adapters (
+                user_id TEXT PRIMARY KEY,
+                rank INTEGER,
+                alpha REAL,
+                model_dim INTEGER,
+                created_at TEXT,
+                updated_at TEXT,
+                feedback_count INTEGER
+            )
+        """)
+        conn.execute(
+            "INSERT INTO user_adapters VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("u1", 4, 8.0, 16, "1.0", "2.0", 5),
+        )
+        conn.commit()
+        conn.close()
+
+        from mogdb import MogDB
+
+        db = MogDB(str(tmp_path))
+        col = db.collection("user_adapters")
+        col.insert_one(
+            {
+                "_id": "u1",
+                "user_id": "u1",
+                "rank": 8,
+                "alpha": 32.0,
+                "model_dim": 768,
+                "created_at": "3.0",
+                "updated_at": "4.0",
+                "feedback_count": 999,
+            }
+        )
+
+        store = PerUserLoRAStore(
+            store_path=str(tmp_path),
+            adapter_rank=4,
+            adapter_alpha=8,
+            model_dim=16,
+            run_eval=False,
+        )
+        adapters = store.get_all_adapters()
+        assert len(adapters) == 1
+        assert adapters[0]["feedback_count"] == 999
+
+
 class TestUserAdapterDataclass:
     def test_fields(self):
         a = UserAdapter(

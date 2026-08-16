@@ -86,11 +86,60 @@ class PerUserLoRAStore:
 
         The store root directory holds both the ``.npz`` adapter weights and
         the MogDB journal (``user_adapters.journal.jsonl`` + compacted
-        ``user_adapters.mogdb``) for adapter metadata.
+        ``user_adapters.mogdb``) for adapter metadata. A legacy SQLite
+        ``adapters.db`` is migrated automatically when present.
         """
         self.db_path = str(self.store_path)
+        legacy = self.store_path / "adapters.db"
+        if legacy.is_file():
+            self._migrate_from_sqlite(legacy)
         self._db = MogDB(self.db_path)
         self._adapters_col = self._db.collection("user_adapters")
+
+    def _migrate_from_sqlite(self, legacy: Path):
+        """Migrate adapter metadata from a legacy SQLite ``adapters.db``.
+
+        Rows are copied into the MogDB ``user_adapters`` collection keyed by
+        ``user_id``. Users already present in MogDB are kept as-is (the
+        journal is authoritative once written). The SQLite file is removed
+        afterwards.
+        """
+        import sqlite3
+
+        conn = sqlite3.connect(str(legacy))
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = [dict(r) for r in conn.execute("SELECT * FROM user_adapters")]
+        finally:
+            conn.close()
+
+        db = MogDB(self.db_path)
+        col = db.collection("user_adapters")
+        migrated = 0
+        for row in rows:
+            user_id = row["user_id"]
+            if col.find_one({"_id": user_id}) is not None:
+                continue
+            col.insert_one(
+                {
+                    "_id": user_id,
+                    "user_id": user_id,
+                    "rank": row.get("rank"),
+                    "alpha": row.get("alpha"),
+                    "model_dim": row.get("model_dim"),
+                    "created_at": row.get("created_at"),
+                    "updated_at": row.get("updated_at"),
+                    "feedback_count": row.get("feedback_count", 0),
+                }
+            )
+            migrated += 1
+
+        legacy.unlink()
+        if migrated:
+            logger.info(
+                "Migrated %d legacy adapter metadata rows from SQLite to MogDB",
+                migrated,
+            )
 
     def _get_adapter_path(self, user_id: str) -> Path:
         """Get path for user's adapter weights."""
