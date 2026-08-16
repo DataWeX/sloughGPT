@@ -32,13 +32,6 @@ interface ErrorReporterDeps {
   persist?: (message: string, source: string) => Promise<unknown>
 }
 
-const EXTENSION_RE =
-  /metamask|chrome-extension|moz-extension|safari-web-extension|webextension|extension.*inject|content.?script/i
-
-function isExtensionError(message: string, url?: string): boolean {
-  return EXTENSION_RE.test(message) || !!(url && EXTENSION_RE.test(url))
-}
-
 /**
  * Batches runtime errors and POSTs them to the backend, with per-instance
  * state so it is testable without module-level resets. The default app
@@ -50,7 +43,7 @@ export class ErrorReporter {
   private _logger: { warn: (msg: string, ctx?: unknown) => void } | null = null
   private _batch: ErrorReport[] = []
   private _timer: ReturnType<typeof setTimeout> | null = null
-  private _recentMessages = new Map<string, number>() // message -> last-sent timestamp
+  private _recentMessages = new Map<string, number>()
   private _initialized = false
 
   constructor(deps: ErrorReporterDeps = {}) {
@@ -58,7 +51,6 @@ export class ErrorReporter {
     this._persist = deps.persist ?? ((message, source) => chatDB.addError(message, source))
   }
 
-  /** Queue a report; flushes immediately at MAX_BATCH_SIZE, else on timer. */
   report(message: string, source: string = 'web', extra?: Partial<ErrorReport>): void {
     this._push({
       message,
@@ -69,29 +61,12 @@ export class ErrorReporter {
     })
   }
 
-  /** Attach window listeners; no-op in non-browser environments or if already run. */
   init(): void {
     if (this._initialized || typeof window === 'undefined') return
     this._initialized = true
 
     window.addEventListener('error', this._handleOnError)
     window.addEventListener('unhandledrejection', this._handleRejection)
-
-    // Persist critical unhandled errors to Dexie for crash recovery
-    // (hydration errors are handled separately by ErrorLifecycle)
-    window.addEventListener('error', (event) => {
-      try {
-        const msg = (event as ErrorEvent).message
-        if (!msg || msg.toLowerCase().includes('hydrat') || msg.includes('did not match')) return
-        this._persist(msg.slice(0, 500), 'unhandled').catch((e: unknown) => {
-          this._getLogger()?.warn('error-reporter: failed to persist error to IndexedDB', { error: e })
-        })
-      } catch {
-        this._getLogger()?.warn('error-reporter: failed to read error event', {})
-      }
-    })
-
-    // Flush remaining errors on page unload
     window.addEventListener('beforeunload', () => this._flush())
   }
 
@@ -124,12 +99,10 @@ export class ErrorReporter {
   }
 
   private _push(report: ErrorReport): void {
-    // Dedup: same message within window → skip
     const now = Date.now()
     const lastSent = this._recentMessages.get(report.message)
     if (lastSent !== undefined && now - lastSent < DEDUP_WINDOW_MS) return
     this._recentMessages.set(report.message, now)
-    // Prune old entries periodically
     if (this._recentMessages.size > 100) {
       for (const [msg, ts] of this._recentMessages) {
         if (now - ts > DEDUP_WINDOW_MS * 2) this._recentMessages.delete(msg)
@@ -145,6 +118,17 @@ export class ErrorReporter {
       this._flush()
     } else {
       this._schedule()
+    }
+
+    // Persist non-hydration unhandled errors to IndexedDB for crash recovery.
+    // Runs after dedup so the same error doesn't flood the DB.
+    if (report.source === 'window.onerror' && report.message) {
+      const msg = report.message
+      if (!msg.toLowerCase().includes('hydrat') && !msg.includes('did not match')) {
+        this._persist(msg.slice(0, 500), 'unhandled').catch((e: unknown) => {
+          this._getLogger()?.warn('error-reporter: failed to persist error to IndexedDB', { error: e })
+        })
+      }
     }
   }
 
