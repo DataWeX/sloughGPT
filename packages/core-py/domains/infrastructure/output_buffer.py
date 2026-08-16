@@ -18,6 +18,7 @@ Used by:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -201,21 +202,53 @@ class OutputBuffer:
 
 
 class _Subscriber:
-    """A cursor into OutputBuffer. Non-blocking read via event signal."""
+    """A cursor into OutputBuffer. Non-blocking read via event signal.
+
+    Supports both sync (threading.Event) and async (asyncio.Event) readers.
+    The async path avoids blocking the event loop in SSE streaming handlers.
+
+    Thread safety: ``_notify`` is called from background threads (logging,
+    stdout).  The threading.Event is inherently thread-safe.  The asyncio.Event
+    is woken via ``loop.call_soon_threadsafe`` so the event loop is never
+    accessed from a foreign thread.
+    """
 
     def __init__(self, name: str, buffer: OutputBuffer):
         self.name = name
         self._buffer = buffer
         self._pending: list[OutputLine] = []
         self._event = threading.Event()
+        self._async_event: asyncio.Event | None = None
+        self._async_loop: asyncio.AbstractEventLoop | None = None
 
     def _notify(self, line: OutputLine) -> None:
         self._pending.append(line)
         self._event.set()
+        if self._async_event is not None and self._async_loop is not None:
+            self._async_loop.call_soon_threadsafe(self._async_event.set)
 
     def read(self, timeout: float = 0.1) -> list[OutputLine]:
         self._event.wait(timeout=timeout)
         self._event.clear()
+        with self._buffer._lock:
+            lines = list(self._pending)
+            self._pending.clear()
+        return lines
+
+    async def async_read(self, timeout: float = 0.2) -> list[OutputLine]:
+        """Async read that yields to the event loop instead of blocking.
+
+        Creates the asyncio.Event lazily on first call and captures the
+        running loop so ``_notify`` can wake it thread-safely.
+        """
+        if self._async_event is None:
+            self._async_event = asyncio.Event()
+            self._async_loop = asyncio.get_running_loop()
+        try:
+            await asyncio.wait_for(self._async_event.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            pass
+        self._async_event.clear()
         with self._buffer._lock:
             lines = list(self._pending)
             self._pending.clear()

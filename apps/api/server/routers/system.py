@@ -119,10 +119,9 @@ class SystemRouter:
                 while True:
                     if await request.is_disconnected():
                         break
-                    lines = sub.read(timeout=0.2)
+                    lines = await sub.async_read(timeout=0.2)
                     for line in lines:
                         yield f"data: {line.to_sse()}\n\n"
-                    await asyncio.sleep(0)
             except (asyncio.CancelledError, GeneratorExit):
                 pass
             finally:

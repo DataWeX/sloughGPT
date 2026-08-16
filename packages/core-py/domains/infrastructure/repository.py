@@ -205,8 +205,10 @@ class FileRepository(Generic[T]):
         if not path.exists():
             return None
         try:
-            with open(path) as f:
-                data = json.load(f)
+            content = path.read_text()
+            if not content.strip():
+                return None
+            data = json.loads(content)
             data = self._migrations.run(data)
             data.pop("_schema_version", None)
             obj = self._resolve_serializer().deserialize(data)
@@ -230,8 +232,10 @@ class FileRepository(Generic[T]):
         try:
             data = self._resolve_serializer().serialize(obj)
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "w") as f:
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            with open(tmp, "w") as f:
                 json.dump(data, f, indent=2, default=str)
+            os.replace(tmp, path)
             self._cache_set(key, obj)
             return True
         except Exception:

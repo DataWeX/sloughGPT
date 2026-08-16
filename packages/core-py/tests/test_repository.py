@@ -271,6 +271,30 @@ class TestFileRepository:
         (tmp_path / "c.json").unlink()
         assert repo.get("c") is None
 
+    def test_save_atomic_no_tmp_residue(self, tmp_path):
+        repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
+        repo.save("a", _RepoItem(id="a", name="atomic"))
+        assert not (tmp_path / "a.json.tmp").exists()
+        loaded = repo.get("a")
+        assert loaded.name == "atomic"
+
+    def test_save_overwrite_existing(self, tmp_path):
+        repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
+        repo.save("x", _RepoItem(id="x", name="old"))
+        repo.save("x", _RepoItem(id="x", name="new"))
+        loaded = repo.get("x")
+        assert loaded.name == "new"
+
+    def test_get_empty_file_returns_none(self, tmp_path):
+        repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
+        (tmp_path / "empty.json").write_text("")
+        assert repo.get("empty") is None
+
+    def test_get_whitespace_only_file_returns_none(self, tmp_path):
+        repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
+        (tmp_path / "ws.json").write_text("   \n\t  ")
+        assert repo.get("ws") is None
+
     def test_get_corrupt_file_returns_none(self, tmp_path):
         repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
         (tmp_path / "bad.json").write_text("{not json")

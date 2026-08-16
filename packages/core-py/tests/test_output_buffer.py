@@ -1,8 +1,10 @@
 """Tests for output_buffer — structured log capture, ring buffer, subscribers."""
 
+import asyncio
 import json
 import logging
 import sys
+import threading
 
 import pytest
 
@@ -197,6 +199,83 @@ class TestSubscribers:
         s1 = buf.subscribe()
         s2 = buf.subscribe()
         assert s1.name != s2.name
+
+    def test_async_read_receives_lines(self):
+        buf = OutputBuffer()
+        sub = buf.subscribe("s1")
+        buf.append_text("a")
+        buf.append_text("b")
+
+        async def read():
+            return await sub.async_read(timeout=0.2)
+
+        got = asyncio.run(read())
+        assert [l.text for l in got] == ["a", "b"]
+
+    def test_async_read_timeout_returns_empty(self):
+        buf = OutputBuffer()
+        sub = buf.subscribe("s1")
+
+        async def read():
+            return await sub.async_read(timeout=0.05)
+
+        got = asyncio.run(read())
+        assert got == []
+
+    def test_async_read_wakes_on_new_line(self):
+        buf = OutputBuffer()
+        sub = buf.subscribe("s1")
+
+        async def scenario():
+            async def writer():
+                await asyncio.sleep(0.05)
+                buf.append_text("delayed")
+
+            asyncio.create_task(writer())
+            return await sub.async_read(timeout=2.0)
+
+        got = asyncio.run(scenario())
+        assert len(got) == 1
+        assert got[0].text == "delayed"
+
+    def test_async_read_thread_safe(self):
+        buf = OutputBuffer()
+        sub = buf.subscribe("s1")
+
+        async def scenario():
+            def bg():
+                import time
+                time.sleep(0.05)
+                buf.append_text("from-thread")
+
+            t = threading.Thread(target=bg)
+            t.start()
+            got = await sub.async_read(timeout=2.0)
+            t.join()
+            return got
+
+        got = asyncio.run(scenario())
+        assert len(got) == 1
+        assert got[0].text == "from-thread"
+
+    def test_async_read_clears_pending(self):
+        buf = OutputBuffer()
+        sub = buf.subscribe("s1")
+        buf.append_text("a")
+
+        async def read():
+            await sub.async_read(timeout=0.2)
+            return await sub.async_read(timeout=0.05)
+
+        got = asyncio.run(read())
+        assert got == []
+
+    def test_sync_read_still_works(self):
+        buf = OutputBuffer()
+        sub = buf.subscribe("s1")
+        buf.append_text("a")
+        got = sub.read(timeout=0.2)
+        assert [l.text for l in got] == ["a"]
 
 
 class TestBufferLogHandler:

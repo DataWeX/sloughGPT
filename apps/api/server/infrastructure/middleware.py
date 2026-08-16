@@ -40,7 +40,7 @@ REQUEST_TIMEOUT_SECONDS = 60.0
 SLOW_THRESHOLD_SECONDS = 1.0
 
 # Paths that are always slow during cold start — suppress SLOW log for these
-_COLD_START_PATHS = frozenset({"/health", "/health/stream", "/models", "/models/hf", "/souls", "/chat/sessions", "/training/jobs"})
+_COLD_START_PATHS = frozenset({"/health", "/health/stream", "/models", "/models/hf", "/souls", "/chat/sessions", "/training/jobs", "/system/stream"})
 
 
 class RequestTimeoutMiddleware(BaseHTTPMiddleware):
@@ -58,11 +58,12 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
         try:
             return await asyncio.wait_for(call_next(request), timeout=self.timeout)
         except asyncio.TimeoutError:
+            elapsed_str = f"{self.timeout:.3f}s"
             logger.warning(
-                "request timeout after %0.1fs on %s %s corr=%s",
-                self.timeout, request.method, request.url.path,
+                "504 on %s %s (%s) corr=%s",
+                request.method, request.url.path, elapsed_str,
                 request.scope.get("correlation_id", "-"),
-                extra={"tag": "REQ", "context": {"status": 504, "timeout_s": self.timeout}},
+                extra={"tag": "INFRA", "context": {"status": 504, "timeout_s": self.timeout}},
             )
             return JSONResponse(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -184,7 +185,7 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
                     extra={"tag": "SLOW", "context": ctx},
                 )
         else:
-            logger.debug(
+            logger.info(
                 "%s %s %d (%s) corr=%s",
                 method, path, sc, elapsed_str, corr_id,
                 extra={"tag": "REQ", "context": ctx},
