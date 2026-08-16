@@ -59,10 +59,6 @@ const BATCH_INTERVAL_MS = 5000
 const MAX_BATCH_SIZE = 20
 const MIN_FLUSH_INTERVAL_MS = 3000 // don't flush more than once per 3s
 
-function _getApiUrl(): string {
-  return PUBLIC_API_URL
-}
-
 /**
  * Batched, rate-limited HTTP transport for log records.
  *
@@ -80,7 +76,6 @@ export class LogTransport {
   private _timer: ReturnType<typeof setTimeout> | null = null
   private _lastFlushAt = 0
 
-  /** Buffer a record, auto-flushing once the batch is full. */
   enqueue(record: LogRecord): void {
     this._batch.push(record)
     if (this._batch.length >= MAX_BATCH_SIZE) {
@@ -94,12 +89,10 @@ export class LogTransport {
     }
   }
 
-  /** Send buffered logs to the backend immediately (rate-limited). */
   flush(): void {
     if (this._batch.length === 0) return
     const now = Date.now()
     if (now - this._lastFlushAt < MIN_FLUSH_INTERVAL_MS) {
-      // Too soon — re-schedule instead of flushing
       if (!this._timer) this._timer = setTimeout(() => this.flush(), MIN_FLUSH_INTERVAL_MS)
       return
     }
@@ -109,7 +102,7 @@ export class LogTransport {
     this._lastFlushAt = now
 
     try {
-      void fetch(`${_getApiUrl()}/errors/logs/ingest`, {
+      void fetch(`${PUBLIC_API_URL}/errors/logs/ingest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ logs: payload }),
@@ -128,11 +121,15 @@ export class LogTransport {
   }
 }
 
-const sharedTransport = new LogTransport()
-
-// Flush remaining logs on page unload
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => sharedTransport.flush())
+let _sharedTransport: LogTransport | null = null
+function _getSharedTransport(): LogTransport {
+  if (!_sharedTransport) {
+    _sharedTransport = new LogTransport()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', () => _sharedTransport!.flush())
+    }
+  }
+  return _sharedTransport
 }
 
 // ── WebLogger class ──────────────────────────────────────────────────
@@ -147,12 +144,12 @@ export class WebLogger {
     name = 'slo.web',
     level: LogLevel = 'info',
     context: LogContext = {},
-    transport: LogTransport = sharedTransport,
+    transport?: LogTransport,
   ) {
     this._name = name
     this._level = level
     this._context = context
-    this._transport = transport
+    this._transport = transport ?? _getSharedTransport()
   }
 
   get name() { return this._name }
