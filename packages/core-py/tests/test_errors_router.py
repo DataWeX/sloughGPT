@@ -211,6 +211,20 @@ class TestDedup:
         resp = client.get("/errors/recent")
         assert resp.json()["data"]["total"] == 1
 
+    def test_different_messages_same_fingerprint_deduped(self):
+        er = ErrorsRouter()
+        er._error_buffer.clear()
+        er._dedup_map.clear()
+        client = TestClient(_app(er))
+
+        client.post("/errors/log", json={"errors": [_make_error("error code 123")]})
+        client.post("/errors/log", json={"errors": [_make_error("error code 456")]})
+
+        resp = client.get("/errors/recent")
+        errors = resp.json()["data"]["errors"]
+        assert len(errors) == 1
+        assert errors[0]["count"] == 2
+
 
 class TestDedupPruning:
     def test_prunes_old_entries_when_map_exceeds_500(self):
