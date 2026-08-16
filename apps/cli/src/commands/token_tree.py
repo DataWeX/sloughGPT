@@ -11,7 +11,9 @@ from pathlib import Path
 
 import numpy as np
 
-from core.printer import printer
+from domains.logging import get_global
+
+log = get_global()
 
 from domains.training.token_tree import TokenTree
 from domains.training.token_tree_manager import get_token_tree_manager
@@ -39,7 +41,7 @@ def _resolve_corpus_file(path_or_name: str) -> Path:
             return candidate
     available = sorted(d.name for d in Path("datasets").glob("*") if d.is_dir())
     hint = f" Available datasets: {', '.join(available)}." if available else ""
-    printer.error(f"Corpus not found: {path_or_name}.{hint}")
+    log.error(f"Corpus not found: {path_or_name}.{hint}")
     sys.exit(2)
 
 
@@ -57,7 +59,7 @@ def _load_tree(tree_path: str) -> TokenTree:
     """
     meta = Path(str(tree_path) + ".meta.json")
     if not meta.exists():
-        printer.error(f"No token tree found at {tree_path} (missing {meta})")
+        log.error(f"No token tree found at {tree_path} (missing {meta})")
         sys.exit(2)
     return TokenTree.load(tree_path)
 
@@ -81,7 +83,7 @@ def _resolve_token(tree: TokenTree, token: str) -> int:
     try:
         return tree.resolve_token(token)
     except KeyError:
-        printer.error(f"Token not in vocabulary: {token!r}")
+        log.error(f"Token not in vocabulary: {token!r}")
         sys.exit(2)
 
 
@@ -95,13 +97,13 @@ def _print_stats(tree: TokenTree) -> None:
         None.
     """
     stats = tree.stats()
-    printer.header(f"TokenTree ({stats['vocab_size']} tokens)")
-    printer.status("trained", str(stats["trained"]), "ok" if stats["trained"] else "warn")
-    printer.key_value("Merges", str(stats["num_merges"]))
-    printer.key_value("Base tokens", str(stats["num_base_tokens"]))
-    printer.key_value("Embed dim", str(stats["embed_dim"]))
-    printer.key_value("Embedding points", str(stats["embedding_points"]))
-    printer.key_value("Embedding compression", f"{stats['embedding_compression_ratio']}x")
+    log.header(f"TokenTree ({stats['vocab_size']} tokens)")
+    log.status("trained", str(stats["trained"]), "ok" if stats["trained"] else "warn")
+    log.key_value("Merges", str(stats["num_merges"]))
+    log.key_value("Base tokens", str(stats["num_base_tokens"]))
+    log.key_value("Embed dim", str(stats["embed_dim"]))
+    log.key_value("Embedding points", str(stats["embedding_points"]))
+    log.key_value("Embedding compression", f"{stats['embedding_compression_ratio']}x")
 
 
 def cmd_token_tree_train(args) -> None:
@@ -117,7 +119,7 @@ def cmd_token_tree_train(args) -> None:
     """
     corpus = _resolve_corpus_file(args.corpus)
     text = corpus.read_text(encoding="utf-8", errors="replace")
-    printer.step(f"Training TokenTree on {corpus.name} ({len(text) / 1e6:.1f} MB)...")
+    log.step(f"Training TokenTree on {corpus.name} ({len(text) / 1e6:.1f} MB)...")
 
     tree = TokenTree().train(
         text,
@@ -128,7 +130,7 @@ def cmd_token_tree_train(args) -> None:
     _print_stats(tree)
 
     meta_path, points_path = tree.save(args.output)
-    printer.success(f"Saved {meta_path.name} + {points_path.name}")
+    log.success(f"Saved {meta_path.name} + {points_path.name}")
 
 
 def cmd_token_tree_encode(args) -> None:
@@ -148,9 +150,9 @@ def cmd_token_tree_encode(args) -> None:
         token = tree.itos.get(tid, "?")
         display = token.replace("</w>", "") if token not in ("<PAD>", "<UNK>", "<BOS>", "<EOS>") else token
         rows.append([str(i), str(tid), display])
-    printer.header(f"Encoding ({len(ids)} tokens)")
-    printer.table(["#", "id", "token"], rows)
-    printer.key_value("Round-trips", str(tree.decode(ids) == text.lower()))
+    log.header(f"Encoding ({len(ids)} tokens)")
+    log.table(["#", "id", "token"], rows)
+    log.key_value("Round-trips", str(tree.decode(ids) == text.lower()))
 
 
 def cmd_token_tree_decode(args) -> None:
@@ -164,8 +166,8 @@ def cmd_token_tree_decode(args) -> None:
     """
     tree = _load_tree(args.tree)
     ids = [int(x) for x in args.ids.replace(" ", "").split(",") if x != ""]
-    printer.header("Decoded")
-    printer.info(tree.decode(ids))
+    log.header("Decoded")
+    log.info(tree.decode(ids))
 
 
 def cmd_token_tree_stats(args) -> None:
@@ -192,16 +194,16 @@ def cmd_token_tree_similar(args) -> None:
     tree = _load_tree(args.tree)
     token_id = _resolve_token(tree, args.token)
     if not tree.embedding_points():
-        printer.error("No embedding points in this tree (trained with embed-dim 0)")
+        log.error("No embedding points in this tree (trained with embed-dim 0)")
         sys.exit(2)
     query = tree.itos.get(token_id, str(token_id)).replace("</w>", "")
     results = tree.similar(token_id, top_k=args.top_k)
-    printer.header(f"Nearest neighbors of {query!r}")
+    log.header(f"Nearest neighbors of {query!r}")
     rows = [
         [tree.itos.get(tid, "?").replace("</w>", ""), str(tid), f"{sim:.4f}"]
         for tid, sim in results
     ]
-    printer.table(["token", "id", "similarity"], rows)
+    log.table(["token", "id", "similarity"], rows)
 
 
 def cmd_token_tree_lineage(args) -> None:
@@ -215,9 +217,9 @@ def cmd_token_tree_lineage(args) -> None:
     """
     tree = _load_tree(args.tree)
     token_id = _resolve_token(tree, args.token)
-    printer.header(f"Merge lineage of {tree.itos.get(token_id, '?')!r}")
-    printer.info(tree.show_tree(token_id))
-    printer.key_value("Leaves", " ".join(tree.decompose(token_id)))
+    log.header(f"Merge lineage of {tree.itos.get(token_id, '?')!r}")
+    log.info(tree.show_tree(token_id))
+    log.key_value("Leaves", " ".join(tree.decompose(token_id)))
 
 
 def cmd_token_tree_vocab(args) -> None:
@@ -236,7 +238,7 @@ def cmd_token_tree_vocab(args) -> None:
     out = tree.vocab_entries(offset=args.offset, limit=args.limit)
     lo = args.offset + 1
     hi = min(args.offset + len(out["entries"]), out["total"])
-    printer.header(f"Vocabulary ({out['total']} tokens)")
+    log.header(f"Vocabulary ({out['total']} tokens)")
     rows = []
     for e in out["entries"]:
         flags = []
@@ -250,9 +252,9 @@ def cmd_token_tree_vocab(args) -> None:
             str(e["freq"]),
             "+".join(flags) if flags else "",
         ])
-    printer.table(["id", "token", "freq", "flags"], rows)
+    log.table(["id", "token", "freq", "flags"], rows)
     if out["entries"]:
-        printer.info(f"Showing {lo}–{hi} of {out['total']}")
+        log.info(f"Showing {lo}–{hi} of {out['total']}")
 
 
 def cmd_token_tree_embedding(args) -> None:
@@ -271,21 +273,21 @@ def cmd_token_tree_embedding(args) -> None:
     token_id = _resolve_token(tree, args.token)
     vec = tree.embedding(token_id)
     if vec is None:
-        printer.error("No embeddings in this tree (trained with embed-dim 0)")
+        log.error("No embeddings in this tree (trained with embed-dim 0)")
         sys.exit(2)
     top_idx = np.argsort(-np.abs(vec))[: max(args.top_k, 1)]
     query = tree.itos.get(token_id, str(token_id)).replace("</w>", "")
-    printer.header(f"Embedding of {query!r}")
-    printer.key_value("id", str(token_id))
-    printer.key_value("dim", str(vec.shape[0]))
-    printer.key_value("L2 norm", f"{float(np.linalg.norm(vec)):.4f}")
-    printer.key_value("Embedding points", str(tree.embedding_points()))
-    printer.key_value("Compression", f"{tree.embedding_compression_ratio():.2f}x")
+    log.header(f"Embedding of {query!r}")
+    log.key_value("id", str(token_id))
+    log.key_value("dim", str(vec.shape[0]))
+    log.key_value("L2 norm", f"{float(np.linalg.norm(vec)):.4f}")
+    log.key_value("Embedding points", str(tree.embedding_points()))
+    log.key_value("Compression", f"{tree.embedding_compression_ratio():.2f}x")
     rows = [
         [str(int(i)), f"{float(vec[i]):+.4f}"]
         for i in top_idx
     ]
-    printer.table(["dim", "value"], rows)
+    log.table(["dim", "value"], rows)
 
 
 def cmd_token_tree_path(args) -> None:
@@ -304,15 +306,15 @@ def cmd_token_tree_path(args) -> None:
     tree = _load_tree(args.tree)
     text = args.text if args.text is not None else sys.stdin.read()
     steps = tree.trace_path(text)
-    printer.header(f"Path ({len(steps)} steps)")
+    log.header(f"Path ({len(steps)} steps)")
     rows = []
     for s in steps:
         display = tree.itos.get(s["id"], "?").replace("</w>", "")
         rows.append([s["remaining"], display, str(s["id"]), str(s["consumed"])])
-    printer.table(["remaining", "token", "id", "consumed"], rows)
+    log.table(["remaining", "token", "id", "consumed"], rows)
     ids = [s["id"] for s in steps]
-    printer.key_value("Ids", " ".join(str(i) for i in ids))
-    printer.key_value("Round-trips", str(tree.decode(ids) == text.lower()))
+    log.key_value("Ids", " ".join(str(i) for i in ids))
+    log.key_value("Round-trips", str(tree.decode(ids) == text.lower()))
 
 
 def cmd_token_tree_matrix(args) -> None:
@@ -331,14 +333,14 @@ def cmd_token_tree_matrix(args) -> None:
     tree = _load_tree(args.tree)
     stats = tree.embedding_matrix_stats(top_n=args.top_k)
     if stats["matrix"] is None:
-        printer.error("No embeddings in this tree (trained with embed-dim 0)")
+        log.error("No embeddings in this tree (trained with embed-dim 0)")
         sys.exit(2)
     rows, cols = stats["matrix"]
-    printer.header(f"Embedding matrix ({rows} x {cols})")
-    printer.key_value("L2 norm min", f"{stats['norm_min']:.4f}")
-    printer.key_value("L2 norm mean", f"{stats['norm_mean']:.4f}")
-    printer.key_value("L2 norm max", f"{stats['norm_max']:.4f}")
-    printer.key_value(
+    log.header(f"Embedding matrix ({rows} x {cols})")
+    log.key_value("L2 norm min", f"{stats['norm_min']:.4f}")
+    log.key_value("L2 norm mean", f"{stats['norm_mean']:.4f}")
+    log.key_value("L2 norm max", f"{stats['norm_max']:.4f}")
+    log.key_value(
         "Tokens", f"{stats['live_tokens']} live, {stats['dead_tokens']} dead"
     )
 
@@ -348,12 +350,12 @@ def cmd_token_tree_matrix(args) -> None:
             for tok, tid, norm in stats[key]
         ]
 
-    printer.header("Most energetic")
-    printer.table(
+    log.header("Most energetic")
+    log.table(
         ["token", "id", "norm"], energy_rows("most_energetic")
     )
-    printer.header("Least energetic")
-    printer.table(
+    log.header("Least energetic")
+    log.table(
         ["token", "id", "norm"], energy_rows("least_energetic")
     )
 
@@ -374,11 +376,11 @@ def cmd_token_tree_compare(args) -> None:
     try:
         out = get_token_tree_manager().compare(args.a, args.b, top_n=args.top_n)
     except (FileNotFoundError, ValueError) as e:
-        printer.error(str(e))
+        log.error(str(e))
         sys.exit(2)
 
     a, b = out["a"], out["b"]
-    printer.header(f"Compare {a['name']!r} vs {b['name']!r}")
+    log.header(f"Compare {a['name']!r} vs {b['name']!r}")
 
     def stat_line(side: dict) -> str:
         s = side["stats"]
@@ -388,22 +390,22 @@ def cmd_token_tree_compare(args) -> None:
             f"points {s['embedding_points']}"
         )
 
-    printer.key_value("A", f"{a['name']} — {stat_line(a)}")
-    printer.key_value("B", f"{b['name']} — {stat_line(b)}")
+    log.key_value("A", f"{a['name']} — {stat_line(a)}")
+    log.key_value("B", f"{b['name']} — {stat_line(b)}")
 
-    printer.header("Vocabulary overlap")
-    printer.key_value("Shared tokens", str(out["shared_tokens"]))
-    printer.key_value("Only in A", str(out["only_a_tokens"]))
-    printer.key_value("Only in B", str(out["only_b_tokens"]))
-    printer.key_value("Shared merges", str(out["shared_merges"]))
-    printer.key_value("Only in A merges", str(out["only_a_merges"]))
-    printer.key_value("Only in B merges", str(out["only_b_merges"]))
+    log.header("Vocabulary overlap")
+    log.key_value("Shared tokens", str(out["shared_tokens"]))
+    log.key_value("Only in A", str(out["only_a_tokens"]))
+    log.key_value("Only in B", str(out["only_b_tokens"]))
+    log.key_value("Shared merges", str(out["shared_merges"]))
+    log.key_value("Only in A merges", str(out["only_a_merges"]))
+    log.key_value("Only in B merges", str(out["only_b_merges"]))
 
     def token_table(key: str, title: str) -> None:
         rows = [[t.replace("</w>", ""), str(f)] for t, f in out[key]]
         if rows:
-            printer.header(title)
-            printer.table(["token", "freq"], rows)
+            log.header(title)
+            log.table(["token", "freq"], rows)
 
     token_table("shared_examples", "Top shared tokens")
     token_table("only_a_examples", f"Top tokens only in {a['name']}")
@@ -436,8 +438,8 @@ def cmd_token_tree_merges(args) -> None:
         ]
         for m in data
     ]
-    printer.header(f"Merges ({len(data)} shown)")
-    printer.table(["rank", "pair", "token", "count"], rows)
+    log.header(f"Merges ({len(data)} shown)")
+    log.table(["rank", "pair", "token", "count"], rows)
 
 
 def cmd_token_tree_saved(args) -> None:
@@ -451,7 +453,7 @@ def cmd_token_tree_saved(args) -> None:
     """
     saved = get_token_tree_manager().list_saved()
     if not saved:
-        printer.info("No saved token trees.")
+        log.info("No saved token trees.")
         return
     rows = []
     for t in saved:
@@ -461,8 +463,8 @@ def cmd_token_tree_saved(args) -> None:
             str(t["num_merges"]),
             t["path"],
         ])
-    printer.header("Saved token trees")
-    printer.table(["name", "vocab", "merges", "path"], rows)
+    log.header("Saved token trees")
+    log.table(["name", "vocab", "merges", "path"], rows)
 
 
 def cmd_token_tree_save(args) -> None:
@@ -480,14 +482,14 @@ def cmd_token_tree_save(args) -> None:
         if args.tree:
             meta_path = Path(str(args.tree) + ".meta.json")
             if not meta_path.exists():
-                printer.error(f"No token tree found at {args.tree} (missing {meta_path})")
+                log.error(f"No token tree found at {args.tree} (missing {meta_path})")
                 sys.exit(2)
             mgr.adopt(TokenTree.load(args.tree))
         out = mgr.save(args.name)
     except ValueError as e:
-        printer.error(str(e))
+        log.error(str(e))
         sys.exit(2)
-    printer.success(f"Saved {out['name']!r} ({out['vocab_size']} vocab, {out['num_merges']} merges)")
+    log.success(f"Saved {out['name']!r} ({out['vocab_size']} vocab, {out['num_merges']} merges)")
 
 
 def cmd_token_tree_load(args) -> None:
@@ -503,9 +505,9 @@ def cmd_token_tree_load(args) -> None:
     try:
         out = mgr.load(args.name)
     except (FileNotFoundError, ValueError) as e:
-        printer.error(str(e))
+        log.error(str(e))
         sys.exit(2)
-    printer.success(
+    log.success(
         f"Loaded {out['name']!r} ({out['vocab_size']} vocab, {out['num_merges']} merges)"
     )
 
@@ -523,9 +525,9 @@ def cmd_token_tree_delete(args) -> None:
     try:
         deleted = mgr.delete_saved(args.name)
     except ValueError as e:
-        printer.error(str(e))
+        log.error(str(e))
         sys.exit(2)
     if not deleted:
-        printer.error(f"No saved token tree named {args.name!r}")
+        log.error(f"No saved token tree named {args.name!r}")
         sys.exit(2)
-    printer.success(f"Deleted {args.name!r}")
+    log.success(f"Deleted {args.name!r}")

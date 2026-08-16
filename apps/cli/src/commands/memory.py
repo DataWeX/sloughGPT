@@ -7,7 +7,9 @@ operators visibility and manual control over that store.
 import sys
 import time
 
-from core.printer import printer
+from domains.logging import get_global
+
+log = get_global()
 
 from domains.memory.consolidation import plan_consolidation
 from domains.memory.memory_config import MemoryConfig
@@ -24,7 +26,7 @@ def _service():
     try:
         return get_memory_service()
     except Exception as e:  # pragma: no cover - import environment dependent
-        printer.error(f"Memory layer unavailable: {e}")
+        log.error(f"Memory layer unavailable: {e}")
         sys.exit(2)
 
 
@@ -39,17 +41,17 @@ def cmd_memory_stats(args) -> None:
     """
     svc = _service()
     stats = svc.stats() or {}
-    printer.header("Memory")
-    printer.status(
+    log.header("Memory")
+    log.status(
         "enabled", "on" if svc.enabled else "off",
         "ok" if svc.enabled else "warn",
     )
-    printer.key_value("Facts", str(stats.get("total_facts", 0)))
+    log.key_value("Facts", str(stats.get("total_facts", 0)))
     topics = stats.get("topics")
     if isinstance(topics, (list, tuple)):
-        printer.key_value("Topics", ", ".join(str(t) for t in topics) if topics else "-")
+        log.key_value("Topics", ", ".join(str(t) for t in topics) if topics else "-")
     else:
-        printer.key_value("Topic buckets", str(topics or 0))
+        log.key_value("Topic buckets", str(topics or 0))
 
 
 def cmd_memory_enable(args) -> None:
@@ -64,7 +66,7 @@ def cmd_memory_enable(args) -> None:
     svc = _service()
     enabled = bool(getattr(args, "enabled", True))
     svc.set_enabled(enabled)
-    printer.success(f"Memory {'enabled' if enabled else 'disabled'}")
+    log.success(f"Memory {'enabled' if enabled else 'disabled'}")
 
 
 def cmd_memory_list(args) -> None:
@@ -80,16 +82,16 @@ def cmd_memory_list(args) -> None:
     limit = int(getattr(args, "limit", 50))
     items = svc.list_all(limit=limit)
     if not items:
-        printer.info("No memory stored yet. Chat turns auto-save after enough text.")
+        log.info("No memory stored yet. Chat turns auto-save after enough text.")
         return
-    printer.header(f"Memory ({len(items)} shown)")
+    log.header(f"Memory ({len(items)} shown)")
     rows = []
     for item in items:
         topic = item.get("topic") or ""
         source = item.get("source") or ""
         content = (item.get("content") or "").replace("\n", " ")[:90]
         rows.append([topic, source, content])
-    printer.table(["topic", "source", "content"], rows)
+    log.table(["topic", "source", "content"], rows)
 
 
 def cmd_memory_search(args) -> None:
@@ -104,19 +106,19 @@ def cmd_memory_search(args) -> None:
     svc = _service()
     query = getattr(args, "query", "")
     if not query:
-        printer.error("Query required: sloughgpt memory search <query>")
+        log.error("Query required: sloughgpt memory search <query>")
         sys.exit(2)
     limit = int(getattr(args, "limit", 5))
     results = svc.retrieve(query, limit=limit)
     if not results:
-        printer.info(f"No memory matches {query!r}")
+        log.info(f"No memory matches {query!r}")
         return
-    printer.header(f"Matches for {query!r} ({len(results)})")
+    log.header(f"Matches for {query!r} ({len(results)})")
     rows = []
     for r in results:
         content = (r.get("content") or "").replace("\n", " ")[:90]
         rows.append([f"{r.get('score', 0.0):.3f}", r.get("topic") or "", content])
-    printer.table(["score", "topic", "content"], rows)
+    log.table(["score", "topic", "content"], rows)
 
 
 def cmd_memory_store(args) -> None:
@@ -131,14 +133,14 @@ def cmd_memory_store(args) -> None:
     svc = _service()
     content = getattr(args, "content", "")
     if not content:
-        printer.error("Content required: sloughgpt memory store <content>")
+        log.error("Content required: sloughgpt memory store <content>")
         sys.exit(2)
     topic = getattr(args, "topic", "manual")
     source = getattr(args, "source", "cli")
     if svc.store(content, topic, source):
-        printer.success(f"Stored fact under topic {topic!r}")
+        log.success(f"Stored fact under topic {topic!r}")
     else:
-        printer.warning("Not stored (disabled, duplicate, or already present)")
+        log.warning("Not stored (disabled, duplicate, or already present)")
 
 
 def cmd_memory_remember(args) -> None:
@@ -154,12 +156,12 @@ def cmd_memory_remember(args) -> None:
     user_message = getattr(args, "user_message", "")
     assistant_response = getattr(args, "assistant_response", "")
     if not user_message or not assistant_response:
-        printer.error("Both a user message and assistant response are required")
+        log.error("Both a user message and assistant response are required")
         sys.exit(2)
     if svc.remember(user_message, assistant_response):
-        printer.success("Turn stored as memory")
+        log.success("Turn stored as memory")
     else:
-        printer.warning("Turn not stored (disabled, too short, or nothing new)")
+        log.warning("Turn not stored (disabled, too short, or nothing new)")
 
 
 def cmd_memory_clear(args) -> None:
@@ -177,7 +179,7 @@ def cmd_memory_clear(args) -> None:
         if not click.confirm("Delete all stored memory?", abort=True):
             return
     removed = svc.clear()
-    printer.success(f"Cleared {removed} memory items")
+    log.success(f"Cleared {removed} memory items")
 
 
 def cmd_memory_consolidate(args) -> None:
@@ -201,15 +203,15 @@ def cmd_memory_consolidate(args) -> None:
     threshold = float(threshold)
     facts = svc.list_all(limit=5000)
     if not facts:
-        printer.info("No memory to consolidate.")
+        log.info("No memory to consolidate.")
         return
     plan = plan_consolidation(facts, threshold=threshold)
     removed = svc.delete(plan["remove_ids"]) if plan["remove_ids"] else 0
     kept = len(plan["keep_ids"])
     if removed:
-        printer.success(f"Consolidated {removed} duplicate fact(s), kept {kept}")
+        log.success(f"Consolidated {removed} duplicate fact(s), kept {kept}")
     else:
-        printer.info(f"No near-duplicates found at threshold {threshold:.3f} "
+        log.info(f"No near-duplicates found at threshold {threshold:.3f} "
                      f"({kept} facts kept)")
 
 
@@ -252,29 +254,29 @@ def cmd_memory_archive(args) -> None:
             return
         removed = prune_archive(retain_days=float(prune_days))
         if removed:
-            printer.success(f"Pruned {removed} archive record(s)")
+            log.success(f"Pruned {removed} archive record(s)")
         else:
-            printer.info("Nothing to prune")
+            log.info("Nothing to prune")
         return
     stats = archive_stats()
-    printer.header("Memory archive")
-    printer.key_value("Path", stats.get("path") or "-")
-    printer.key_value("Records", str(stats.get("records", 0)))
-    printer.key_value("Size", f"{stats.get('bytes', 0)} bytes")
+    log.header("Memory archive")
+    log.key_value("Path", stats.get("path") or "-")
+    log.key_value("Records", str(stats.get("records", 0)))
+    log.key_value("Size", f"{stats.get('bytes', 0)} bytes")
     task_types = stats.get("task_types") or {}
     if task_types:
-        printer.key_value("Task types", ", ".join(
+        log.key_value("Task types", ", ".join(
             f"{k} ({v})" for k, v in sorted(task_types.items())
         ))
     limit = int(getattr(args, "limit", 10))
     if limit > 0:
         records = list_archive(limit=limit)
         if records:
-            printer.header(f"Recent archive ({len(records)})")
+            log.header(f"Recent archive ({len(records)})")
             rows = []
             for r in records:
                 ts = r.get("ts")
                 when = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else "-"
                 rows.append([when, r.get("task_type") or "-",
                              r.get("task_id") or "-", _archive_summary(r)])
-            printer.table(["when", "task", "task_id", "summary"], rows)
+            log.table(["when", "task", "task_id", "summary"], rows)

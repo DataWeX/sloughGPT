@@ -22,7 +22,9 @@ from typing import Optional
 
 import click
 
-from core.printer import printer
+from domains.logging import get_global
+
+log = get_global()
 from utils.formatting import format_size
 
 logger = logging.getLogger("slo.cli.permissions")
@@ -141,12 +143,12 @@ class PermissionsManager:
             return True
 
         # Estimate size
-        printer.step(f"Checking download size for {model_id}...")
+        log.step(f"Checking download size for {model_id}...")
         estimate = self.estimate_model_size(model_id)
 
         if estimate is None:
             # Can't determine size — ask with warning
-            printer.warning("Could not determine download size (network issue or private model)")
+            log.warning("Could not determine download size (network issue or private model)")
             return click.confirm(
                 f"Download '{model_id}'? (size unknown)",
                 default=True,
@@ -154,7 +156,7 @@ class PermissionsManager:
 
         # Auto-approve small downloads
         if estimate.total_mb < _AUTO_APPROVE_THRESHOLD_MB:
-            printer.info(f"Small download ({estimate.human_size}) — auto-approving")
+            log.info(f"Small download ({estimate.human_size}) — auto-approving")
             return True
 
         # Large download — show details and prompt

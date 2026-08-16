@@ -11,8 +11,10 @@ import webbrowser
 from pathlib import Path
 from collections import deque
 
-from core.printer import printer
+from domains.logging import get_global
 from utils.formatting import format_time
+
+log = get_global()
 
 
 _LOG_BUF = 500  # max lines kept per panel
@@ -115,8 +117,6 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
         stop: threading.Event to signal shutdown.
         echo: if True, print each line to stdout in real-time.
     """
-    from datetime import datetime
-
     try:
         for line in iter(stream.readline, ""):
             if stop.is_set():
@@ -125,12 +125,7 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
                 clean = line.rstrip("\n\r")
                 lines.append(clean)
                 if echo:
-                    # Skip adding timestamp if line already has one from the server
-                    import re
-                    has_ts = re.match(r"^\d{2}:\d{2}:\d{2}", clean)
-                    ts_prefix = "" if has_ts else f"{datetime.now().strftime('%H:%M:%S')} "
-                    sys.stdout.write(f"\r\033[2K\033[90m│\033[0m {ts_prefix}{clean}\n")
-                    sys.stdout.flush()
+                    log.info(clean)
             else:
                 break
     except ValueError:
@@ -160,13 +155,13 @@ def cmd_dev(args):
     web_lines: deque = deque(maxlen=_LOG_BUF)
 
     # Kill existing
-    printer.step("Stopping existing servers...")
+    log.step("Stopping existing servers...")
     for port in [api_port, web_port]:
         _kill_port(port)
     time.sleep(0.5)
 
     # ── Start API ────────────────────────────────────────
-    printer.step(f"Starting API on port {api_port}...")
+    log.step(f"Starting API on port {api_port}...")
     env = os.environ.copy()
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
@@ -189,7 +184,7 @@ def cmd_dev(args):
     api_thread.start()
 
     # ── Start Web ────────────────────────────────────────
-    printer.step(f"Starting Web on port {web_port}...")
+    log.step(f"Starting Web on port {web_port}...")
     web_cwd = root / "apps/web"
 
     if watch_web:
@@ -292,21 +287,21 @@ def _cleanup(api_proc, web_proc, api_port, web_port):
 
 def _print_summary(api_lines, web_lines, status, api_port=8000, web_port=3000):
     """Print a clean shutdown summary to the normal console."""
-    printer.blank()
-    printer.header("Dev Server Stopped")
+    log.blank()
+    log.header("Dev Server Stopped")
 
     st = status.get("api", "error")
     color = "green" if st == "ready" else "red"
-    printer.status("API Server", f"http://localhost:{api_port}", color if color == "green" else "error")
+    log.status("API Server", f"http://localhost:{api_port}", color if color == "green" else "error")
 
     st = status.get("web", "error")
     color = "green" if st == "ready" else "red"
-    printer.status("Web Server", f"http://localhost:{web_port}", color if color == "green" else "error")
+    log.status("Web Server", f"http://localhost:{web_port}", color if color == "green" else "error")
 
-    printer.blank()
-    printer.info(f"API logs: {len(api_lines)} lines")
-    printer.info(f"Web logs: {len(web_lines)} lines")
-    printer.success("Done")
+    log.blank()
+    log.info(f"API logs: {len(api_lines)} lines")
+    log.info(f"Web logs: {len(web_lines)} lines")
+    log.success("Done")
 
 
 def cmd_serve(args):
@@ -350,7 +345,7 @@ def _preflight_model_check(args):
 
         pm = PermissionsManager(auto_yes=getattr(args, "auto_download", False))
         if not pm.confirm_autoload_download(model_id):
-            printer.info("Server start cancelled")
+            log.info("Server start cancelled")
             raise SystemExit(0)
 
 
@@ -362,9 +357,9 @@ def _cmd_api_only(args):
     _kill_port(api_port)
     time.sleep(0.3)
 
-    printer.header("Starting SloughGPT API Server")
-    printer.key_value("API", f"http://{args.host}:{api_port}")
-    printer.key_value("Docs", f"http://{args.host}:{api_port}/docs")
+    log.header("Starting SloughGPT API Server")
+    log.key_value("API", f"http://{args.host}:{api_port}")
+    log.key_value("Docs", f"http://{args.host}:{api_port}/docs")
 
     env = os.environ.copy()
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
@@ -393,16 +388,16 @@ def _cmd_api_only(args):
     api_thread.start()
 
     if not _wait_for_api_with_progress(api_port):
-        printer.error("API failed to start within 90s")
-        printer.info("Last output:")
+        log.error("API failed to start within 90s")
+        log.info("Last output:")
         for line in list(api_lines)[-20:]:
-            printer.info(f"  | {line}")
+            log.info(f"  | {line}")
         stop_event.set()
         _kill_port(api_port)
         return
 
-    printer.success(f"API ready at http://{args.host}:{api_port}")
-    printer.info("Press Ctrl+C to stop")
+    log.success(f"API ready at http://{args.host}:{api_port}")
+    log.info("Press Ctrl+C to stop")
 
     shutdown = [False]
 
@@ -410,8 +405,8 @@ def _cmd_api_only(args):
         if shutdown[0]:
             return
         shutdown[0] = True
-        print()
-        printer.info("Shutting down...")
+        log.blank()
+        log.info("Shutting down...")
         stop_event.set()
         if api_proc.poll() is None:
             try:
@@ -420,7 +415,7 @@ def _cmd_api_only(args):
             except Exception:
                 api_proc.kill()
         _kill_port(api_port)
-        printer.success("Stopped")
+        log.success("Stopped")
 
     signal.signal(signal.SIGINT, _sig_handler)
     signal.signal(signal.SIGTERM, _sig_handler)
@@ -437,7 +432,7 @@ def _cmd_api_only(args):
             except Exception:
                 api_proc.kill()
             _kill_port(api_port)
-            printer.success("Stopped")
+            log.success("Stopped")
 
 
 def _cmd_api_and_web(args):
@@ -451,9 +446,9 @@ def _cmd_api_and_web(args):
     _kill_port(web_port)
     time.sleep(0.5)
 
-    printer.header("Starting SloughGPT — API + Web")
-    printer.key_value("API", f"http://{args.host}:{api_port}")
-    printer.key_value("Web", f"http://localhost:{web_port}")
+    log.header("Starting SloughGPT — API + Web")
+    log.key_value("API", f"http://{args.host}:{api_port}")
+    log.key_value("Web", f"http://localhost:{web_port}")
 
     # ── Build env with model overrides ──────────────────────────
     env = os.environ.copy()
@@ -509,7 +504,7 @@ def _cmd_api_and_web(args):
     server_js = standalone_dir / "server.js"
 
     if not server_js.is_file():
-        printer.step("Building Next.js standalone (first time)...")
+        log.step("Building Next.js standalone (first time)...")
         # Force-clean .next to avoid stale/locked artifacts on macOS
         next_cache = web_root / ".next"
         if next_cache.is_dir():
@@ -530,14 +525,14 @@ def _cmd_api_and_web(args):
         build_thread.start()
         build_proc.wait()
         if build_proc.returncode != 0:
-            printer.error("Next.js build failed")
-            printer.info("Build output (last 20 lines):")
+            log.error("Next.js build failed")
+            log.info("Build output (last 20 lines):")
             for line in list(build_lines)[-20:]:
-                printer.info(f"  | {line}")
+                log.info(f"  | {line}")
             stop_event.set()
             _kill_port(api_port)
             return
-        printer.success("Build complete")
+        log.success("Build complete")
 
     # ── Copy static assets for standalone ───────────────────────
     static_src = web_root / ".next" / "static"
@@ -570,7 +565,7 @@ def _cmd_api_and_web(args):
     }
 
     if server_js.is_file():
-        printer.step(f"Starting Web (standalone) on port {web_port}...")
+        log.step(f"Starting Web (standalone) on port {web_port}...")
         web_proc = subprocess.Popen(
             ["node", "server.js"],
             cwd=str(standalone_dir),
@@ -580,7 +575,7 @@ def _cmd_api_and_web(args):
             text=True,
         )
     else:
-        printer.step(f"Starting Web (dev) on port {web_port}...")
+        log.step(f"Starting Web (dev) on port {web_port}...")
         web_proc = subprocess.Popen(
             ["npm", "run", "dev"],
             cwd=str(web_root),
@@ -597,48 +592,48 @@ def _cmd_api_and_web(args):
 
     # ── Wait for API readiness ────────────────────────────────────
     if not _wait_for_api_with_progress(api_port):
-        printer.error("API failed to start within 90s")
-        printer.info("Last API output:")
+        log.error("API failed to start within 90s")
+        log.info("Last API output:")
         for line in list(api_lines)[-20:]:
-            printer.info(f"  | {line}")
+            log.info(f"  | {line}")
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
         return
 
-    printer.success("API ready")
+    log.success("API ready")
 
     # ── Wait for web readiness ────────────────────────────────────
-    printer.step("Waiting for web frontend...")
+    log.step("Waiting for web frontend...")
     for _ in range(60):
         if _check_port(web_port):
             break
         # Check if web process died
         if web_proc.poll() is not None:
-            printer.error(f"Web server exited with code {web_proc.returncode}")
-            printer.info("Last web output:")
+            log.error(f"Web server exited with code {web_proc.returncode}")
+            log.info("Last web output:")
             for line in list(web_lines)[-20:]:
-                printer.info(f"  | {line}")
+                log.info(f"  | {line}")
             stop_event.set()
             _cleanup(api_proc, web_proc, api_port, web_port)
             return
         time.sleep(1)
     else:
-        printer.warning("Web frontend did not respond within 60s")
-        printer.info("API is still running — web may need manual start")
+        log.warning("Web frontend did not respond within 60s")
+        log.info("API is still running — web may need manual start")
 
     # ── Ready ────────────────────────────────────────────────────
     web_url = f"http://localhost:{web_port}"
     api_url = f"http://{args.host}:{api_port}"
 
-    print()
-    printer.success("All services ready!")
-    print()
-    printer.info(f"  API:      {api_url}")
-    printer.info(f"  API Docs: {api_url}/docs")
-    printer.info(f"  Web UI:   {web_url}")
-    print()
-    printer.info("Press Ctrl+C to stop")
-    print()
+    log.blank()
+    log.success("All services ready!")
+    log.blank()
+    log.key_value("API", api_url)
+    log.key_value("API Docs", f"{api_url}/docs")
+    log.key_value("Web UI", web_url)
+    log.blank()
+    log.key_value("", "Press Ctrl+C to stop")
+    log.blank()
 
     # ── Auto-open browser ────────────────────────────────────────
     def _open_browser():
@@ -658,11 +653,11 @@ def _cmd_api_and_web(args):
         if shutdown[0]:
             return
         shutdown[0] = True
-        print()
-        printer.info("Shutting down...")
+        log.blank()
+        log.info("Shutting down...")
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
-        printer.success("Stopped")
+        log.success("Stopped")
 
     signal.signal(signal.SIGINT, _sig_handler)
     signal.signal(signal.SIGTERM, _sig_handler)
@@ -673,11 +668,11 @@ def _cmd_api_and_web(args):
             time.sleep(2)
             # API crashed
             if api_proc.poll() is not None:
-                printer.error(f"API server exited (code {api_proc.returncode})")
+                log.error(f"API server exited (code {api_proc.returncode})")
                 break
             # Web crashed — restart it
             if web_proc.poll() is not None:
-                printer.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
+                log.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
                 web_proc = subprocess.Popen(
                     ["node", "server.js"] if server_js.is_file() else ["npm", "run", "dev"],
                     cwd=str(standalone_dir if server_js.is_file() else web_root),
@@ -697,7 +692,7 @@ def _cmd_api_and_web(args):
             shutdown[0] = True
             stop_event.set()
             _cleanup(api_proc, web_proc, api_port, web_port)
-            printer.success("Stopped")
+            log.success("Stopped")
 
 
 def cmd_health(args):
@@ -706,8 +701,8 @@ def cmd_health(args):
 
     base_url = f"http://{args.host}:{args.port}"
 
-    printer.header("API Health Check")
-    printer.key_value("Endpoint", f"{base_url}/health")
+    log.header("API Health Check")
+    log.key_value("Endpoint", f"{base_url}/health")
 
     try:
         import time
@@ -717,19 +712,19 @@ def cmd_health(args):
 
         if response.status_code == 200:
             data = response.json()
-            printer.success(f"Healthy ({format_time(elapsed)})")
-            printer.blank()
+            log.success(f"Healthy ({format_time(elapsed)})")
+            log.blank()
 
             for key, value in data.items():
-                printer.key_value(key, str(value))
+                log.key_value(key, str(value))
         else:
-            printer.error(f"Unhealthy (HTTP {response.status_code})")
-            printer.info(response.text)
+            log.error(f"Unhealthy (HTTP {response.status_code})")
+            log.info(response.text)
     except requests.ConnectionError:
-        printer.error("API not reachable")
-        printer.info(f"Is the server running on {base_url}?")
+        log.error("API not reachable")
+        log.info(f"Is the server running on {base_url}?")
     except Exception as e:
-        printer.error(f"Health check failed: {e}")
+        log.error(f"Health check failed: {e}")
 
 
 def cmd_api_status(args):
@@ -738,7 +733,7 @@ def cmd_api_status(args):
 
     base_url = f"http://{args.host}:{args.port}"
 
-    printer.header("SloughGPT API Status")
+    log.header("SloughGPT API Status")
 
     endpoints = [
         ("Health", f"{base_url}/health"),
@@ -752,25 +747,25 @@ def cmd_api_status(args):
         try:
             r = requests.get(url, timeout=3)
             if r.status_code == 200:
-                printer.status(name, "OK", "ok")
+                log.status(name, "OK", "ok")
             else:
-                printer.status(name, f"HTTP {r.status_code}", "warn")
+                log.status(name, f"HTTP {r.status_code}", "warn")
         except Exception:
-            printer.status(name, "Not reachable", "error")
+            log.status(name, "Not reachable", "error")
 
     # Check metrics
     try:
         r = requests.get(f"{base_url}/metrics", timeout=5)
         if r.status_code == 200:
             data = r.json()
-            printer.blank()
-            printer.section("Metrics")
-            printer.key_value("WebSocket Connections", str(data.get("websocket_connections", "N/A")))
-            printer.key_value("Active Clients", str(data.get("active_clients", "N/A")))
-            printer.key_value("CPU", f"{data.get('system', {}).get('cpu_percent', 'N/A')}%")
-            printer.key_value("Memory", f"{data.get('system', {}).get('memory_percent', 'N/A')}%")
+            log.blank()
+            log.section("Metrics")
+            log.key_value("WebSocket Connections", str(data.get("websocket_connections", "N/A")))
+            log.key_value("Active Clients", str(data.get("active_clients", "N/A")))
+            log.key_value("CPU", f"{data.get('system', {}).get('cpu_percent', 'N/A')}%")
+            log.key_value("Memory", f"{data.get('system', {}).get('memory_percent', 'N/A')}%")
     except Exception:
-        printer.info("  (metrics endpoint not available)")
+        log.info("  (metrics endpoint not available)")
 
 
 def cmd_api_test(args):
@@ -780,10 +775,10 @@ def cmd_api_test(args):
 
     base_url = f"http://{args.host}:{args.port}"
 
-    printer.header("API Endpoint Tests")
+    log.header("API Endpoint Tests")
 
     # Test generation
-    printer.step("Testing /generate...")
+    log.step("Testing /generate...")
     try:
         start = time.time()
         r = requests.post(
@@ -793,22 +788,22 @@ def cmd_api_test(args):
         )
         elapsed = time.time() - start
         if r.status_code == 200:
-            printer.success(f"Generation OK ({format_time(elapsed)})")
+            log.success(f"Generation OK ({format_time(elapsed)})")
         else:
-            printer.error(f"Generation failed ({r.status_code})")
+            log.error(f"Generation failed ({r.status_code})")
     except Exception as e:
-        printer.error(f"Generation: {e}")
+        log.error(f"Generation: {e}")
 
     # Test health
-    printer.step("Testing /health...")
+    log.step("Testing /health...")
     try:
         r = requests.get(f"{base_url}/health", timeout=5)
         if r.status_code == 200:
-            printer.success("Health OK")
+            log.success("Health OK")
         else:
-            printer.error(f"Health failed ({r.status_code})")
+            log.error(f"Health failed ({r.status_code})")
     except Exception as e:
-        printer.error(f"Health: {e}")
+        log.error(f"Health: {e}")
 
 
 def cmd_api_auth(args):
@@ -817,36 +812,36 @@ def cmd_api_auth(args):
 
     base_url = f"http://{args.host}:{args.port}"
 
-    printer.header("API Authentication Test")
+    log.header("API Authentication Test")
 
-    printer.step("Testing generate without auth...")
+    log.step("Testing generate without auth...")
     try:
         r = requests.post(f"{base_url}/generate", json={"prompt": "Hello", "max_new_tokens": 5}, timeout=10)
         if r.status_code == 200:
-            printer.status("No Auth", "Open (200)", "ok")
+            log.status("No Auth", "Open (200)", "ok")
         else:
-            printer.status("No Auth", f"Protected ({r.status_code})", "warn")
+            log.status("No Auth", f"Protected ({r.status_code})", "warn")
     except Exception as e:
-        printer.error(str(e))
+        log.error(str(e))
 
-    printer.step("Testing token endpoint...")
+    log.step("Testing token endpoint...")
     try:
         r = requests.post(f"{base_url}/auth/token", json={"api_key": "test-key"}, timeout=10)
         if r.status_code == 401:
-            printer.status("Token", "Rejected bad key (401)", "ok")
+            log.status("Token", "Rejected bad key (401)", "ok")
         elif r.status_code == 200:
-            printer.status("Token", "Accepted", "info")
+            log.status("Token", "Accepted", "info")
         else:
-            printer.status("Token", f"HTTP {r.status_code}", "warn")
+            log.status("Token", f"HTTP {r.status_code}", "warn")
     except Exception as e:
-        printer.info(f"No auth endpoint: {e}")
+        log.info(f"No auth endpoint: {e}")
 
-    printer.step("Testing verify endpoint...")
+    log.step("Testing verify endpoint...")
     try:
         r = requests.post(f"{base_url}/auth/verify", headers={"Authorization": "Bearer invalid"}, timeout=10)
-        printer.status("Verify", f"HTTP {r.status_code}", "ok" if r.status_code in (401, 403) else "warn")
+        log.status("Verify", f"HTTP {r.status_code}", "ok" if r.status_code in (401, 403) else "warn")
     except Exception as e:
-        printer.info(f"No verify endpoint: {e}")
+        log.info(f"No verify endpoint: {e}")
 
 
 def cmd_hf_serve(args):
@@ -855,9 +850,9 @@ def cmd_hf_serve(args):
 
     base_url = f"http://{args.host}:{args.port}"
 
-    printer.header("Serving HuggingFace Model")
-    printer.key_value("Model", args.model)
-    printer.key_value("API", base_url)
+    log.header("Serving HuggingFace Model")
+    log.key_value("Model", args.model)
+    log.key_value("API", base_url)
 
     try:
         response = requests.post(
@@ -866,10 +861,10 @@ def cmd_hf_serve(args):
             timeout=120,
         )
         if response.ok:
-            printer.success(f"Model loaded: {response.json()}")
+            log.success(f"Model loaded: {response.json()}")
         else:
-            printer.error(f"Failed: {response.text}")
+            log.error(f"Failed: {response.text}")
     except Exception as e:
-        printer.error(f"API error: {e}")
-        printer.info("Make sure the API server is running: python3 cli.py dev")
+        log.error(f"API error: {e}")
+        log.info("Make sure the API server is running: python3 cli.py dev")
 

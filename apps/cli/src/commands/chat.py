@@ -7,7 +7,9 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from core.printer import printer
+from domains.logging import get_global
+
+log = get_global()
 from utils.formatting import truncate
 
 
@@ -44,41 +46,41 @@ def cmd_chat(args):
                 timeout=120,
             )
         except Exception as e:
-            printer.warning(f"Model load failed: {e}")
+            log.warning(f"Model load failed: {e}")
             return False
 
         if r.ok:
-            printer.success(f"Model ready: {model_id}")
+            log.success(f"Model ready: {model_id}")
             return True
 
-        printer.warning(f"Could not load '{model_id}' ({r.status_code})")
+        log.warning(f"Could not load '{model_id}' ({r.status_code})")
         return False
 
     if not api_reachable():
         if getattr(args, "no_serve", False):
-            printer.error("API not reachable and --no-serve set")
-            printer.info("Start server: python3 cli.py dev")
+            log.error("API not reachable and --no-serve set")
+            log.info("Start server: python3 cli.py dev")
             return
 
         repo = chat_repository_root()
         marker = repo / "apps" / "api" / "server" / "main.py"
         if not marker.is_file():
-            printer.error("Not inside SloughGPT repo")
+            log.error("Not inside SloughGPT repo")
             return
 
         bind_host = chat_uvicorn_bind_host(args.host)
         try:
             listen_port = chat_find_available_port(bind_host, args.port)
         except RuntimeError as e:
-            printer.error(str(e))
+            log.error(str(e))
             return
 
         if listen_port != args.port:
-            printer.warning(f"Port {args.port} busy, using {listen_port}")
+            log.warning(f"Port {args.port} busy, using {listen_port}")
 
         base_url = f"http://{args.host}:{listen_port}".rstrip("/")
 
-        printer.info("API not reachable, starting server...")
+        log.info("API not reachable, starting server...")
         log_f = tempfile.NamedTemporaryFile(prefix="sloughgpt-chat-", suffix=".log", delete=False)
         log_path = log_f.name
         log_f.close()
@@ -107,7 +109,7 @@ def cmd_chat(args):
                 )
             started_server_here = True
         except OSError as e:
-            printer.error(f"Failed to start server: {e}")
+            log.error(f"Failed to start server: {e}")
             try:
                 os.unlink(log_path)
             except OSError:
@@ -121,12 +123,12 @@ def cmd_chat(args):
                     server_proc.wait(timeout=8)
                 except subprocess.TimeoutExpired:
                     server_proc.kill()
-            printer.error("Server did not respond in time")
+            log.error("Server did not respond in time")
             try:
                 with open(log_path, encoding="utf-8", errors="replace") as lf:
                     tail = lf.read()[-4000:]
                 if tail.strip():
-                    print(tail)
+                    log.info(tail)
             except OSError:
                 pass
             try:
@@ -135,24 +137,24 @@ def cmd_chat(args):
                 pass
             return
 
-        printer.success("Server ready")
-        print()
+        log.success("Server ready")
+        log.blank()
 
-    printer.header("SloughGPT Chat")
-    printer.info(f"Connected to {base_url}")
-    printer.info("Type 'quit' to exit")
-    printer.info("Tip: --auto-model gpt2 to preload a model")
+    log.header("SloughGPT Chat")
+    log.info(f"Connected to {base_url}")
+    log.info("Type 'quit' to exit")
+    log.info("Tip: --auto-model gpt2 to preload a model")
 
     auto_model = getattr(args, "auto_model", None)
     legacy_model = getattr(args, "model", None)
     if auto_model and legacy_model:
-        printer.warning("Both --auto-model and --model provided, using --auto-model")
+        log.warning("Both --auto-model and --model provided, using --auto-model")
     model_to_autoload = auto_model or legacy_model
     if model_to_autoload:
-        printer.step(f"Loading: {model_to_autoload}")
+        log.step(f"Loading: {model_to_autoload}")
         try_load_model(model_to_autoload)
 
-    printer.blank()
+    log.blank()
 
     try:
         while True:
@@ -176,19 +178,19 @@ def cmd_chat(args):
                     text = data.get("text", data)
                     print(f"\nSloughGPT: {text}\n")
                     if isinstance(text, str) and "No model loaded" in text and not printed_no_model_hint:
-                        printer.info("Load a model first: --auto-model gpt2")
+                        log.info("Load a model first: --auto-model gpt2")
                         printed_no_model_hint = True
                 else:
-                    printer.error(f"HTTP {response.status_code}: {response.text}")
+                    log.error(f"HTTP {response.status_code}: {response.text}")
 
             except RequestsConnectionError:
-                printer.error("Lost connection to API")
+                log.error("Lost connection to API")
             except Exception as e:
-                printer.error(str(e))
+                log.error(str(e))
     finally:
         if started_server_here and server_proc is not None and server_proc.poll() is None:
-            print()
-            printer.info("Stopping server...")
+            log.blank()
+            log.info("Stopping server...")
             server_proc.terminate()
             try:
                 server_proc.wait(timeout=10)
@@ -209,11 +211,11 @@ def cmd_generate(args):
 
     models_dir = Path("models")
 
-    printer.header("Text Generation")
-    printer.key_value("Prompt", args.prompt)
-    printer.key_value("Max Tokens", str(args.max_tokens))
-    printer.key_value("Temperature", str(args.temperature))
-    printer.blank()
+    log.header("Text Generation")
+    log.key_value("Prompt", args.prompt)
+    log.key_value("Max Tokens", str(args.max_tokens))
+    log.key_value("Temperature", str(args.temperature))
+    log.blank()
 
     engine = SloEngine(device="cpu")
     loaded = False
@@ -222,7 +224,7 @@ def cmd_generate(args):
         nonlocal loaded
         try:
             soul = engine.load_soul(str(path))
-            printer.success(f"Loaded soul: {soul.name} from {path.name}")
+            log.success(f"Loaded soul: {soul.name} from {path.name}")
             loaded = True
             return True
         except Exception as e:
@@ -233,16 +235,16 @@ def cmd_generate(args):
             break
 
     if not loaded:
-        printer.warning("No model found, using demo mode")
+        log.warning("No model found, using demo mode")
 
-    printer.step("Generating...")
+    log.step("Generating...")
     result = engine.generate(
         args.prompt,
         max_new_tokens=args.max_tokens,
         temperature=args.temperature,
     )
-    printer.blank()
-    printer.key_value("Generated", truncate(result, 500))
+    log.blank()
+    log.key_value("Generated", truncate(result, 500))
 
 
 def register(subparsers):

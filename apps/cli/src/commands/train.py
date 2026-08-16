@@ -11,7 +11,9 @@ from typing import Optional, List
 
 import numpy as np
 
-from core.printer import printer
+from domains.logging import get_global
+
+log = get_global()
 from utils.progress import ProgressBar
 from utils.formatting import format_size, format_time, format_number
 
@@ -45,7 +47,7 @@ def _resolve_corpus_file(path_or_name: str) -> Path:
             return candidate
     available = sorted(d.name for d in Path("datasets").glob("*") if d.is_dir())
     hint = f" Available datasets: {', '.join(available)}." if available else ""
-    printer.error(f"Dataset not found: {path_or_name}.{hint}")
+    log.error(f"Dataset not found: {path_or_name}.{hint}")
     sys.exit(2)
 
 
@@ -69,16 +71,16 @@ def _print_train_result(result, model_path: str) -> None:
             return None
         return f"{f:.4f}"
 
-    printer.header("Results")
-    printer.key_value("Steps", str(getattr(result, "global_step", "?")))
-    printer.key_value("Epochs", str(getattr(result, "epochs_completed", "?")))
+    log.header("Results")
+    log.key_value("Steps", str(getattr(result, "global_step", "?")))
+    log.key_value("Epochs", str(getattr(result, "epochs_completed", "?")))
     best = _loss(getattr(result, "best_eval_loss", None))
     final = _loss(getattr(result, "final_loss", None))
     if best is not None:
-        printer.key_value("Best eval loss", best)
+        log.key_value("Best eval loss", best)
     if final is not None:
-        printer.key_value("Final loss", final)
-    printer.key_value("Model", str(model_path))
+        log.key_value("Final loss", final)
+    log.key_value("Model", str(model_path))
 
 
 def _print_native_next_steps(checkpoint_dir: str, saved: str) -> None:
@@ -91,12 +93,12 @@ def _print_native_next_steps(checkpoint_dir: str, saved: str) -> None:
     Returns:
         None.
     """
-    printer.blank()
-    printer.header("Next steps")
-    printer.info("Load this model in chat by pointing the server at it and restarting:")
-    printer.info(f"  SLO_NATIVE_SOUL_PATH={saved} python3 apps/api/server/main.py")
+    log.blank()
+    log.header("Next steps")
+    log.info("Load this model in chat by pointing the server at it and restarting:")
+    log.info(f"  SLO_NATIVE_SOUL_PATH={saved} python3 apps/api/server/main.py")
     if Path(checkpoint_dir).resolve() == Path("models/slonet-native").resolve():
-        printer.info("(Default dir — the server also auto-discovers .soul models under models/slonet-native/.)")
+        log.info("(Default dir — the server also auto-discovers .soul models under models/slonet-native/.)")
 
 
 def _gpt2_teacher_cached() -> bool:
@@ -167,34 +169,34 @@ def _embedder_retrieval_check(embedder, texts, query=None, top_k=3) -> None:
     """
     sample = [t for t in texts if isinstance(t, str) and t.strip()][:20]
     if len(sample) < 2:
-        printer.warning("Retrieval check skipped: need at least 2 corpus texts")
+        log.warning("Retrieval check skipped: need at least 2 corpus texts")
         return
     try:
         vecs = np.asarray(embedder.embed_batch(sample))
         query = query or sample[0]
         qvec = np.asarray(embedder.embed(query))
     except Exception as e:
-        printer.warning(f"Retrieval check failed: {e}")
+        log.warning(f"Retrieval check failed: {e}")
         return
 
     sims = vecs @ qvec
     order = np.argsort(-sims)
 
-    printer.blank()
-    printer.header("Retrieval check")
-    printer.key_value("Query", query[:70] + ("..." if len(query) > 70 else ""))
+    log.blank()
+    log.header("Retrieval check")
+    log.key_value("Query", query[:70] + ("..." if len(query) > 70 else ""))
     for rank in range(min(top_k, len(sample))):
         idx = int(order[rank])
         snippet = sample[idx][:70] + ("..." if len(sample[idx]) > 70 else "")
-        printer.key_value(f"Match {rank + 1}", f"{sims[idx]:.3f}  {snippet}")
+        log.key_value(f"Match {rank + 1}", f"{sims[idx]:.3f}  {snippet}")
 
     if query == sample[0]:
         self_rank = int(np.where(order == 0)[0][0])
         margin = float(sims[order[0]] - sims[order[1]]) if len(order) >= 2 else 0.0
         if self_rank == 0 and margin > 0.0:
-            printer.success(f"Self-retrieval OK (rank #1, margin {margin:.3f})")
+            log.success(f"Self-retrieval OK (rank #1, margin {margin:.3f})")
         else:
-            printer.warning(f"Self-retrieval rank #{self_rank + 1} (margin {margin:.3f}) — embeddings may be weak")
+            log.warning(f"Self-retrieval rank #{self_rank + 1} (margin {margin:.3f}) — embeddings may be weak")
 
 
 def cmd_train(args):
@@ -229,7 +231,7 @@ def cmd_train(args):
         try:
             from config_loader import get_device, load_config, merge_args_with_config
         except ImportError:
-            printer.error("config_loader not found")
+            log.error("config_loader not found")
             sys.exit(1)
 
         config = load_config(args.config)
@@ -237,14 +239,14 @@ def cmd_train(args):
 
         train_device = get_device(config.device)
 
-        printer.header("SloughGPT Training")
-        printer.key_value("Dataset", str(config.data.dataset))
-        printer.key_value("Device", f"{train_device} ({config.device.type})")
-        printer.key_value("Epochs", str(config.training.epochs))
-        printer.key_value("Batch Size", str(config.training.batch_size))
-        printer.key_value("Learning Rate", str(config.training.learning_rate))
-        printer.key_value("LoRA", f"{config.lora.enabled} (rank={config.lora.rank})")
-        printer.blank()
+        log.header("SloughGPT Training")
+        log.key_value("Dataset", str(config.data.dataset))
+        log.key_value("Device", f"{train_device} ({config.device.type})")
+        log.key_value("Epochs", str(config.training.epochs))
+        log.key_value("Batch Size", str(config.training.batch_size))
+        log.key_value("Learning Rate", str(config.training.learning_rate))
+        log.key_value("LoRA", f"{config.lora.enabled} (rank={config.lora.rank})")
+        log.blank()
 
         # Setup tracking
         tracker = None
@@ -271,7 +273,7 @@ def cmd_train(args):
             tracker = ExperimentTracker(config=tracking_config)
             tracker.start_run(run_name=run_name)
             tracker.log_params(flatten_for_wandb_config(asdict(config)))
-            printer.success(f"Tracking enabled: {config.tracking.backend}")
+            log.success(f"Tracking enabled: {config.tracking.backend}")
 
         from domains.training.train_pipeline import SloughGPTTrainer
 
@@ -281,7 +283,7 @@ def cmd_train(args):
             save_stem = train_export_default_stem(str(config.model.name), str(config.data.dataset))
         save_path = f"{config.checkpoint.save_dir}/{save_stem}"
 
-        printer.info(f"Export: {save_stem}")
+        log.info(f"Export: {save_stem}")
 
         trainer = SloughGPTTrainer(
             data_path=config.data.data_path,
@@ -315,18 +317,18 @@ def cmd_train(args):
             experiment_tracker=tracker,
         )
 
-        printer.info(f"Model: {trainer.model.num_parameters():,} params")
-        printer.blank()
+        log.info(f"Model: {trainer.model.num_parameters():,} params")
+        log.blank()
 
         # Train
         resume_path = None
         if args.resume and getattr(args, "resume_latest", False):
-            printer.error("Use either --resume PATH or --resume-latest, not both")
+            log.error("Use either --resume PATH or --resume-latest, not both")
             sys.exit(2)
         if getattr(args, "resume_latest", False):
-            printer.step(f"Resuming from latest under {config.checkpoint.trainer_dir}")
+            log.step(f"Resuming from latest under {config.checkpoint.trainer_dir}")
         elif args.resume:
-            printer.step(f"Resuming from: {args.resume}")
+            log.step(f"Resuming from: {args.resume}")
             resume_path = args.resume
 
         from utils.training_progress import TrainingProgressBar
@@ -344,21 +346,21 @@ def cmd_train(args):
                 on_progress=pbar.update,
             )
         except ValueError as e:
-            printer.error(str(e))
+            log.error(str(e))
             sys.exit(2)
         elapsed = time.time() - start_time
 
         pbar.finish()
-        printer.blank()
-        printer.success(f"Training complete ({format_time(elapsed)})")
+        log.blank()
+        log.success(f"Training complete ({format_time(elapsed)})")
         save_output_path = f"{save_path}.soul"
         if result is not None:
             _print_train_result(result, save_output_path)
 
         # Save
-        printer.step("Saving...")
+        log.step("Saving...")
         trainer.save(save_path)
-        printer.success(f"Saved: {save_output_path}")
+        log.success(f"Saved: {save_output_path}")
 
         if tracker:
             tracker.end_run()
@@ -371,7 +373,7 @@ def cmd_train(args):
     try:
         from config_loader import load_config, merge_args_with_config
     except ImportError:
-        printer.error("config_loader not found")
+        log.error("config_loader not found")
         sys.exit(1)
 
     config = merge_args_with_config(load_config(args.config), args)
@@ -423,14 +425,14 @@ def cmd_train(args):
         if response.status_code == 200:
             data = response.json()
             job_id = data.get("id")
-            printer.success(f"Training started: {job_id}")
+            log.success(f"Training started: {job_id}")
 
             # Stream progress via SSE
             _stream_api_progress(base_url, job_id)
         else:
-            printer.error(f"Failed ({response.status_code}): {response.text}")
+            log.error(f"Failed ({response.status_code}): {response.text}")
     except Exception as e:
-        printer.error(f"API error: {e}")
+        log.error(f"API error: {e}")
 
 
 def cmd_quick(args):
@@ -440,10 +442,10 @@ def cmd_quick(args):
     from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
     from domains.training.performance import get_optimal_device
 
-    printer.header("SloughGPT Quick Start")
+    log.header("SloughGPT Quick Start")
 
     device = get_optimal_device()
-    printer.key_value("Device", str(device))
+    log.key_value("Device", str(device))
 
     config = TrainerConfig(
         batch_size=args.batch,
@@ -464,13 +466,13 @@ def cmd_quick(args):
                 ratios = None
 
         if ratios:
-            printer.info(f"Loading {len(datasets)} datasets with ratios")
+            log.info(f"Loading {len(datasets)} datasets with ratios")
             data_path = list(zip(datasets, ratios))
         else:
-            printer.info(f"Loading {len(datasets)} datasets: {', '.join(datasets)}")
+            log.info(f"Loading {len(datasets)} datasets: {', '.join(datasets)}")
             data_path = datasets
     else:
-        printer.info(f"Loading: {args.dataset}")
+        log.info(f"Loading: {args.dataset}")
         data_path = args.dataset
 
     trainer = SloughGPTTrainer(
@@ -501,10 +503,10 @@ def cmd_quick(args):
         trainer.config.n_layer = p["layers"]
         trainer.config.n_head = p["heads"]
         trainer.config.block_size = p["block"]
-        printer.info(f"Preset: {args.preset}")
+        log.info(f"Preset: {args.preset}")
 
-    printer.info(f"Model: {trainer.model.num_parameters():,} params")
-    printer.blank()
+    log.info(f"Model: {trainer.model.num_parameters():,} params")
+    log.blank()
 
     from utils.training_progress import TrainingProgressBar
 
@@ -513,21 +515,21 @@ def cmd_quick(args):
         total_steps=args.steps if args.steps else 100,
     )
 
-    printer.step("Training...")
+    log.step("Training...")
     trainer.train(on_progress=pbar.update)
     pbar.finish()
 
-    printer.blank()
-    printer.step("Generating...")
+    log.blank()
+    log.step("Generating...")
     text = trainer.generate(args.prompt, max_tokens=args.max_tokens, temperature=args.temperature)
 
-    printer.blank()
-    printer.key_value("Prompt", args.prompt)
-    printer.key_value("Generated", f"{args.prompt}{text[:100]}...")
+    log.blank()
+    log.key_value("Prompt", args.prompt)
+    log.key_value("Generated", f"{args.prompt}{text[:100]}...")
 
     output_base = args.output.replace(".safetensors", "").replace(".soul", "")
     trainer.save(output_base)
-    printer.success(f"Saved: {output_base}.soul")
+    log.success(f"Saved: {output_base}.soul")
 
 
 def cmd_train_native(args):
@@ -589,21 +591,21 @@ def cmd_train_native(args):
 
     dataset_arg = getattr(args, "dataset", None)
     if not dataset_arg:
-        printer.error("--dataset (corpus file or name) is required")
+        log.error("--dataset (corpus file or name) is required")
         sys.exit(2)
     dataset = str(_resolve_corpus_file(dataset_arg))
 
     soul_name = getattr(args, "soul_name", "sloughgpt-native")
 
-    printer.header("SloNet Native Training")
-    printer.key_value("Dataset", str(dataset))
-    printer.key_value("Device", str(device))
-    printer.key_value("Steps", str(config.max_steps or "epoch-budget"))
-    printer.key_value("Arch", f"e{config.n_embed} l{config.n_layer} h{config.n_head} b{config.block_size}")
-    printer.key_value("Batch", str(config.batch_size))
-    printer.key_value("Learning Rate", str(config.learning_rate))
-    printer.key_value("Checkpoint Dir", str(checkpoint_dir))
-    printer.blank()
+    log.header("SloNet Native Training")
+    log.key_value("Dataset", str(dataset))
+    log.key_value("Device", str(device))
+    log.key_value("Steps", str(config.max_steps or "epoch-budget"))
+    log.key_value("Arch", f"e{config.n_embed} l{config.n_layer} h{config.n_head} b{config.block_size}")
+    log.key_value("Batch", str(config.batch_size))
+    log.key_value("Learning Rate", str(config.learning_rate))
+    log.key_value("Checkpoint Dir", str(checkpoint_dir))
+    log.blank()
 
     tokenizer = None
     tokenizer_kind = getattr(args, "tokenizer", "char") or "char"
@@ -612,17 +614,17 @@ def cmd_train_native(args):
 
         corpus_text = Path(dataset).read_text(encoding="utf-8")
         token_vocab_size = getattr(args, "token_vocab_size", 512) or 512
-        printer.step(f"Training token tree (vocab={token_vocab_size})...")
+        log.step(f"Training token tree (vocab={token_vocab_size})...")
         tokenizer = TokenTree().train(
             corpus_text,
             vocab_size=token_vocab_size,
             embed_dim=0,
             verbose=False,
         )
-        printer.key_value("Tokenizer", f"token-tree ({tokenizer.vocab_size} tokens, {len(tokenizer.merges)} merges)")
-        printer.blank()
+        log.key_value("Tokenizer", f"token-tree ({tokenizer.vocab_size} tokens, {len(tokenizer.merges)} merges)")
+        log.blank()
     else:
-        printer.key_value("Tokenizer", "char-level")
+        log.key_value("Tokenizer", "char-level")
 
     trainer = SloughGPTTrainer(
         data_path=dataset,
@@ -630,18 +632,18 @@ def cmd_train_native(args):
         soul_name=soul_name,
         tokenizer=tokenizer,
     )
-    printer.info(f"Model: {trainer.training_model.num_parameters():,} params")
-    printer.blank()
+    log.info(f"Model: {trainer.training_model.num_parameters():,} params")
+    log.blank()
 
     resume_path = None
     if getattr(args, "resume", None) and getattr(args, "resume_latest", False):
-        printer.error("Use either --resume PATH or --resume-latest, not both")
+        log.error("Use either --resume PATH or --resume-latest, not both")
         sys.exit(2)
     if getattr(args, "resume_latest", False):
-        printer.step(f"Resuming from latest under {checkpoint_dir}")
+        log.step(f"Resuming from latest under {checkpoint_dir}")
     elif getattr(args, "resume", None):
         resume_path = args.resume
-        printer.step(f"Resuming from: {resume_path}")
+        log.step(f"Resuming from: {resume_path}")
 
     from utils.training_progress import TrainingProgressBar
 
@@ -658,12 +660,12 @@ def cmd_train_native(args):
             on_progress=pbar.update,
         )
     except ValueError as e:
-        printer.error(str(e))
+        log.error(str(e))
         sys.exit(2)
     elapsed = time.time() - start_time
     pbar.finish()
-    printer.blank()
-    printer.success(f"Training complete ({format_time(elapsed)})")
+    log.blank()
+    log.success(f"Training complete ({format_time(elapsed)})")
 
     save_stem = getattr(args, "save_stem", None)
     if save_stem:
@@ -681,29 +683,29 @@ def cmd_train_native(args):
         p.unlink(missing_ok=True)
         meta = Path(str(p) + ".meta.json")
         meta.unlink(missing_ok=True)
-    printer.success(f"Saved: {saved}")
+    log.success(f"Saved: {saved}")
 
     if result is not None:
         _print_train_result(result, saved)
 
     prompt = getattr(args, "prompt", None)
     if prompt:
-        printer.blank()
-        printer.header("Sample generation")
-        printer.key_value("Prompt", prompt)
+        log.blank()
+        log.header("Sample generation")
+        log.key_value("Prompt", prompt)
         try:
             text = trainer.generate(prompt, max_tokens=150, temperature=0.8)
-            printer.key_value("Generated", f"{prompt}{text[:200]}...")
+            log.key_value("Generated", f"{prompt}{text[:200]}...")
         except Exception as e:  # pragma: no cover — best-effort sample
-            printer.warning(f"Sample generation failed: {e}")
+            log.warning(f"Sample generation failed: {e}")
 
     _print_native_next_steps(checkpoint_dir, saved)
 
 
 def cmd_eval(args):
     """Evaluate char-level model perplexity from a .soul checkpoint via SloNet."""
-    printer.header("Model Evaluation")
-    printer.key_value("Checkpoint", args.checkpoint)
+    log.header("Model Evaluation")
+    log.key_value("Checkpoint", args.checkpoint)
 
     checkpoint_path = str(args.checkpoint)
     data_path = getattr(args, "data", None) or "datasets/shakespeare/input.txt"
@@ -712,36 +714,36 @@ def cmd_eval(args):
         from domains.training.lm_eval_char import evaluate_soul_char_lm
 
         if not Path(data_path).is_file():
-            printer.warning(f"Data file not found: {data_path}")
+            log.warning(f"Data file not found: {data_path}")
             return
-        printer.info(f"Evaluating on: {data_path}")
+        log.info(f"Evaluating on: {data_path}")
         metrics = evaluate_soul_char_lm(checkpoint_path, data_path)
-        _print_char_lm_metrics(printer, metrics)
+        _print_char_lm_metrics(metrics)
 
         if getattr(args, "benchmark", False):
-            printer.blank()
-            printer.step("Running benchmark...")
+            log.blank()
+            log.step("Running benchmark...")
             start = time.time()
             for _ in range(10):
                 evaluate_soul_char_lm(checkpoint_path, data_path)
             elapsed = time.time() - start
-            printer.info(f"10 iterations: {format_time(elapsed)}")
+            log.info(f"10 iterations: {format_time(elapsed)}")
 
     except Exception as e:
-        printer.error(f"Evaluation failed: {e}")
+        log.error(f"Evaluation failed: {e}")
         sys.exit(1)
 
 
-def _print_char_lm_metrics(printer, metrics: dict) -> None:
-    """Render char-LM eval metrics through the CLI printer."""
-    printer.blank()
-    printer.key_value("Mean Loss", f"{metrics['mean_loss']:.4f}")
+def _print_char_lm_metrics(metrics: dict) -> None:
+    """Render char-LM eval metrics through the CLI log."""
+    log.blank()
+    log.key_value("Mean Loss", f"{metrics['mean_loss']:.4f}")
     ppl = metrics["perplexity"]
     ppl_s = f"{ppl:.4f}" if ppl != float("inf") else "inf"
-    printer.key_value("Perplexity", ppl_s)
-    printer.key_value("Tokens Scored", format_number(metrics["num_token_positions"]))
+    log.key_value("Perplexity", ppl_s)
+    log.key_value("Tokens Scored", format_number(metrics["num_token_positions"]))
     for w in metrics.get("warnings") or []:
-        printer.warning(w)
+        log.warning(w)
 
 
 # ── Sub-commands merged into `train` ──────────────────────────────
@@ -752,7 +754,7 @@ def _cmd_self_train(args):
 
     script = Path("scripts/self_train.py")
     if not script.exists():
-        printer.error("scripts/self_train.py not found")
+        log.error("scripts/self_train.py not found")
         sys.exit(1)
 
     forever = getattr(args, "self_forever", None) or getattr(args, "forever", False)
@@ -772,10 +774,10 @@ def _cmd_self_train(args):
     cmd.extend(["--max_tokens", str(max_tokens)])
     cmd.extend(["--seed", seed])
 
-    printer.header("Self-Training Loop")
-    printer.info(f"Running: {' '.join(cmd)}")
-    printer.info("Press Ctrl+C to stop")
-    printer.blank()
+    log.header("Self-Training Loop")
+    log.info(f"Running: {' '.join(cmd)}")
+    log.info("Press Ctrl+C to stop")
+    log.blank()
     subprocess.run(cmd)
 
 
@@ -788,7 +790,7 @@ def _cmd_autotrain(args):
     api_url = f"http://{host}:{port}"
     action = getattr(args, "auto_train_action", None) or getattr(args, "action", None)
 
-    printer.header(f"Auto-Train ({action})")
+    log.header(f"Auto-Train ({action})")
 
     if action == "start":
         resp = requests.post(
@@ -800,23 +802,23 @@ def _cmd_autotrain(args):
             },
         )
         if resp.ok:
-            printer.success(f"Started: {resp.json()}")
+            log.success(f"Started: {resp.json()}")
         else:
-            printer.error(f"Failed: {resp.json()}")
+            log.error(f"Failed: {resp.json()}")
     elif action == "stop":
         resp = requests.post(f"{api_url}/auto-train/stop")
         if resp.ok:
-            printer.success(f"Stopped: {resp.json()}")
+            log.success(f"Stopped: {resp.json()}")
         else:
-            printer.error(f"Failed: {resp.json()}")
+            log.error(f"Failed: {resp.json()}")
     elif action == "status":
         resp = requests.get(f"{api_url}/auto-train/status")
         if resp.ok:
             data = resp.json()
             for k, v in data.items():
-                printer.key_value(k, str(v))
+                log.key_value(k, str(v))
         else:
-            printer.error(f"Failed: {resp.json()}")
+            log.error(f"Failed: {resp.json()}")
 
 
 def _cmd_monitor(args):
@@ -826,7 +828,7 @@ def _cmd_monitor(args):
 
     base_url = f"http://{args.host}:{args.port}"
 
-    printer.header("Training Monitor")
+    log.header("Training Monitor")
 
     while True:
         try:
@@ -839,14 +841,14 @@ def _cmd_monitor(args):
                     rows = []
                     for job in jobs:
                         rows.append([job.get("name", "unknown"), job.get("status", "unknown")])
-                    printer.blank()
-                    printer.table(["Job", "Status"], rows)
+                    log.blank()
+                    log.table(["Job", "Status"], rows)
                 else:
-                    printer.info("No active training jobs")
+                    log.info("No active training jobs")
             else:
-                printer.error(f"HTTP {response.status_code}")
+                log.error(f"HTTP {response.status_code}")
         except Exception as e:
-            printer.error(str(e))
+            log.error(str(e))
 
         if not args.watch:
             break
@@ -858,7 +860,7 @@ def _cmd_user_adapters(args):
     import sys as _sys
     _sys.path.insert(0, ".")
 
-    printer.header("User Adapters")
+    log.header("User Adapters")
 
     action = getattr(args, "adapters_action", None) or getattr(args, "action", None)
     user_id = getattr(args, "adapters_user", None) or getattr(args, "user", None)
@@ -871,44 +873,44 @@ def _cmd_user_adapters(args):
         if action == "list":
             adapters = store.get_all_adapters()
             stats = store.get_stats()
-            printer.key_value("Total Users", str(stats["total_users"]))
-            printer.key_value("Total Size", f'{stats["total_size_mb"]:.2f} MB')
-            printer.key_value("Avg per User", f'{stats["avg_size_per_user_kb"]:.1f} KB')
+            log.key_value("Total Users", str(stats["total_users"]))
+            log.key_value("Total Size", f'{stats["total_size_mb"]:.2f} MB')
+            log.key_value("Avg per User", f'{stats["avg_size_per_user_kb"]:.1f} KB')
 
             if adapters:
-                printer.blank()
-                printer.section("Adapters")
+                log.blank()
+                log.section("Adapters")
                 rows = []
                 for a in adapters[:20]:
                     rows.append([a["user_id"][:28], str(a["feedback_count"]), a["updated_at"][:19]])
-                printer.table(["User ID", "Feedback", "Updated"], rows)
+                log.table(["User ID", "Feedback", "Updated"], rows)
             else:
-                printer.info("No adapters found")
+                log.info("No adapters found")
 
         elif action == "info":
             adapter = store.get_adapter(user_id)
             if adapter is None:
-                printer.error(f"No adapter for user: {user_id}")
+                log.error(f"No adapter for user: {user_id}")
             else:
-                printer.key_value("User", adapter.user_id)
-                printer.key_value("Feedback", str(adapter.feedback_count))
-                printer.key_value("W_a", str(adapter.W_a.shape))
-                printer.key_value("W_b", str(adapter.W_b.shape))
+                log.key_value("User", adapter.user_id)
+                log.key_value("Feedback", str(adapter.feedback_count))
+                log.key_value("W_a", str(adapter.W_a.shape))
+                log.key_value("W_b", str(adapter.W_b.shape))
 
         elif action == "delete":
             store.delete_adapter(user_id)
-            printer.success(f"Deleted adapter for {user_id}")
+            log.success(f"Deleted adapter for {user_id}")
 
         elif action == "merge":
             user_ids = users_str.split(",") if users_str else []
             if len(user_ids) < 2:
-                printer.error("Need at least 2 user IDs: --users user1,user2")
+                log.error("Need at least 2 user IDs: --users user1,user2")
                 return
             merged = store.merge_adapters(user_ids)
-            printer.success(f"Merged {merged['user_count']} adapters")
+            log.success(f"Merged {merged['user_count']} adapters")
 
     except ImportError as e:
-        printer.error(f"Feedback module: {e}")
+        log.error(f"Feedback module: {e}")
 
 
 def _cmd_feedback_train(args):
@@ -916,7 +918,7 @@ def _cmd_feedback_train(args):
     import sys as _sys
     _sys.path.insert(0, ".")
 
-    printer.header("Feedback Training Pipeline")
+    log.header("Feedback Training Pipeline")
 
     stats_only = getattr(args, "feedback_stats_only", None) or getattr(args, "stats_only", False)
     feedback_fmt = getattr(args, "feedback_format", None) or getattr(args, "format", "all")
@@ -927,12 +929,12 @@ def _cmd_feedback_train(args):
 
         trainer = create_training_pipeline()
         stats = trainer.get_training_stats()
-        printer.section("Available Data")
-        printer.key_value("Conversations", str(stats["total_conversations"]))
-        printer.key_value("Thumbs Up", str(stats["thumbs_up"]))
-        printer.key_value("Thumbs Down", str(stats["thumbs_down"]))
-        printer.key_value("DPO Pairs", str(stats["available_dpo_pairs"]))
-        printer.key_value("SFT Examples", str(stats["available_sft_examples"]))
+        log.section("Available Data")
+        log.key_value("Conversations", str(stats["total_conversations"]))
+        log.key_value("Thumbs Up", str(stats["thumbs_up"]))
+        log.key_value("Thumbs Down", str(stats["thumbs_down"]))
+        log.key_value("DPO Pairs", str(stats["available_dpo_pairs"]))
+        log.key_value("SFT Examples", str(stats["available_sft_examples"]))
 
         if stats_only:
             return
@@ -946,13 +948,13 @@ def _cmd_feedback_train(args):
         output_dir = output_dir or "data/training"
         results = trainer.export_for_alignment(output_dir=output_dir, formats=formats)
 
-        printer.blank()
-        printer.section("Exported Files")
+        log.blank()
+        log.section("Exported Files")
         for fmt, path in results.items():
-            printer.key_value(fmt, path)
+            log.key_value(fmt, path)
 
     except ImportError as e:
-        printer.error(f"Feedback module: {e}")
+        log.error(f"Feedback module: {e}")
 
 
 def _cmd_feedback_export(args):
@@ -960,7 +962,7 @@ def _cmd_feedback_export(args):
     import sys as _sys
     _sys.path.insert(0, ".")
 
-    printer.header("Feedback Export")
+    log.header("Feedback Export")
 
     output_path = getattr(args, "export_feedback_output", None) or getattr(args, "output", "data/training_feedback.jsonl")
     fmt = getattr(args, "export_feedback_format", None) or getattr(args, "format", "jsonl")
@@ -970,90 +972,90 @@ def _cmd_feedback_export(args):
 
         manager = get_meta_weight_manager()
         if manager is None:
-            printer.error("Meta-weight system not available")
+            log.error("Meta-weight system not available")
             return
 
         stats = manager.get_stats()
-        printer.section("Current Stats")
-        printer.key_value("Total Feedback", str(stats["db_stats"]["feedback_total"]))
-        printer.key_value("Thumbs Up", str(stats["db_stats"]["thumbs_up"]))
-        printer.key_value("Thumbs Down", str(stats["db_stats"]["thumbs_down"]))
+        log.section("Current Stats")
+        log.key_value("Total Feedback", str(stats["db_stats"]["feedback_total"]))
+        log.key_value("Thumbs Up", str(stats["db_stats"]["thumbs_up"]))
+        log.key_value("Thumbs Down", str(stats["db_stats"]["thumbs_down"]))
 
-        printer.blank()
-        printer.step(f"Exporting to {output_path}...")
+        log.blank()
+        log.step(f"Exporting to {output_path}...")
         manager.export_training_data(filepath=output_path, format=fmt)
 
         import os
         if os.path.exists(output_path):
             with open(output_path) as f:
                 lines = sum(1 for _ in f)
-            printer.success(f"Exported {lines} records")
+            log.success(f"Exported {lines} records")
         else:
-            printer.warning("File not created")
+            log.warning("File not created")
 
     except ImportError as e:
-        printer.error(f"Feedback module: {e}")
+        log.error(f"Feedback module: {e}")
 
 def _cmd_checkpoint_info(args):
     """Inspect a .soul checkpoint — show metadata, weight summary, training info."""
     from pathlib import Path
     from domains.training.slonet import import_from_sou
 
-    printer.header("Checkpoint Info")
+    log.header("Checkpoint Info")
 
     ckpt_path = Path(args.checkpoint)
 
     if not ckpt_path.exists():
-        printer.error(f"File not found: {ckpt_path}")
+        log.error(f"File not found: {ckpt_path}")
         sys.exit(1)
 
-    printer.key_value("Path", str(ckpt_path))
-    printer.key_value("Size", format_size(ckpt_path.stat().st_size))
+    log.key_value("Path", str(ckpt_path))
+    log.key_value("Size", format_size(ckpt_path.stat().st_size))
 
     try:
         net = import_from_sou(str(ckpt_path))
     except Exception as e:
-        printer.error(f"Failed to load: {e}")
+        log.error(f"Failed to load: {e}")
         sys.exit(1)
 
     meta = getattr(net, "metadata", None) or {}
 
     # Soul metadata
-    printer.section("Soul Metadata")
-    printer.key_value("Soul Name", getattr(net, "soul_name", "?"))
+    log.section("Soul Metadata")
+    log.key_value("Soul Name", getattr(net, "soul_name", "?"))
     if getattr(net, "soul_traits", None):
-        printer.key_value("Traits", str(net.soul_traits))
+        log.key_value("Traits", str(net.soul_traits))
     if getattr(net, "system_prompt", None):
-        printer.key_value("System Prompt", truncate(str(net.system_prompt), 80))
-    printer.key_value("Step", str(getattr(net, "_step", "?")))
-    printer.key_value("Created", str(getattr(net, "_created_at", "?")))
+        log.key_value("System Prompt", truncate(str(net.system_prompt), 80))
+    log.key_value("Step", str(getattr(net, "_step", "?")))
+    log.key_value("Created", str(getattr(net, "_created_at", "?")))
 
     arch_keys = ["vocab_size", "n_embed", "n_layer", "n_head", "block_size", "use_rope"]
     arch = {k: meta.get(k) for k in arch_keys if meta.get(k) is not None}
     if arch:
-        printer.section("Architecture")
+        log.section("Architecture")
         for k, v in arch.items():
-            printer.key_value(k, str(v))
+            log.key_value(k, str(v))
 
     # Model weights summary
     params = list(net.parameters())
-    printer.section("Model Weights")
+    log.section("Model Weights")
     total_params = sum(int(np.prod(p.shape)) for p in params)
     total_bytes = sum(int(p.data.nbytes) for p in params) if params else 0
-    printer.key_value("Parameters", format_number(total_params))
-    printer.key_value("Weight Groups", str(len(params)))
-    printer.key_value("Size (FP32)", format_size(total_bytes))
+    log.key_value("Parameters", format_number(total_params))
+    log.key_value("Weight Groups", str(len(params)))
+    log.key_value("Size (FP32)", format_size(total_bytes))
     for p in params[:10]:
-        printer.key_value("  weight", f"{list(p.shape)} float32")
+        log.key_value("  weight", f"{list(p.shape)} float32")
 
     # Training metadata
-    printer.section("Training Metadata")
+    log.section("Training Metadata")
     for k, v in (meta.get("training") or {}).items():
-        printer.key_value(f"  {k}", str(v))
+        log.key_value(f"  {k}", str(v))
     for k, v in (meta.get("metrics") or {}).items():
-        printer.key_value(f"  {k}", str(v))
+        log.key_value(f"  {k}", str(v))
     if not meta.get("training") and not meta.get("metrics"):
-        printer.info("No training info recorded in metadata")
+        log.info("No training info recorded in metadata")
 
 
 def cmd_demo(args):
@@ -1061,40 +1063,40 @@ def cmd_demo(args):
     import sys
     sys.path.insert(0, ".")
 
-    printer.header("SloughGPT Demo")
+    log.header("SloughGPT Demo")
 
     from domains.cognitive.rag import ProductionRAG
     from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph
     from domains.training.ewc import EwcContinualLearner
 
     if args.component in ("all", "rag"):
-        printer.section("RAG - Document Retrieval")
+        log.section("RAG - Document Retrieval")
         rag = ProductionRAG()
         rag.add_document("Python is a programming language created by Guido van Rossum in 1991.")
         results = rag.query("What is Python?")
-        printer.key_value("Retrieved", str(len(results)))
+        log.key_value("Retrieved", str(len(results)))
 
     if args.component in ("all", "kg"):
-        printer.section("Knowledge Graph - Fact Verification")
+        log.section("Knowledge Graph - Fact Verification")
         kg = KnowledgeGraph()
         kg.add_fact("python", "is_a", "programming_language")
         kg.add_fact("python", "created_by", "guido_van_rossum")
         facts = kg.query(subject="python")
-        printer.key_value("Facts", str(len(facts)))
+        log.key_value("Facts", str(len(facts)))
 
     if args.component in ("all", "ewc"):
-        printer.section("EWC - Catastrophic Forgetting Prevention")
+        log.section("EWC - Catastrophic Forgetting Prevention")
         from domains.models import SloughGPTModel
         model = SloughGPTModel(vocab_size=50, n_embed=32, n_layer=2, n_head=2, block_size=16)
         ewc = EwcContinualLearner(model)
-        printer.key_value("Fisher Params", str(len(ewc.fisher_estimator.fisher_accum)))
+        log.key_value("Fisher Params", str(len(ewc.fisher_estimator.fisher_accum)))
 
     if args.component in ("all", "inference"):
-        printer.section("Inference - KV Cache")
-        printer.key_value("Status", "KVCache removed — SloNet handles caching internally")
+        log.section("Inference - KV Cache")
+        log.key_value("Status", "KVCache removed — SloNet handles caching internally")
 
-    printer.blank()
-    printer.success("Demo complete!")
+    log.blank()
+    log.success("Demo complete!")
 
 
 def cmd_rlhf(args):
@@ -1103,23 +1105,23 @@ def cmd_rlhf(args):
 
     sys.path.insert(0, ".")
 
-    printer.header("RLHF Demo")
+    log.header("RLHF Demo")
     from domains.training.rlhf import RLHFConfig
     from domains.models import SloughGPTModel
 
     device = "cpu"
-    printer.key_value("Device", device)
+    log.key_value("Device", device)
 
     model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=4, block_size=32, dropout=0.0)
-    printer.key_value("Parameters", f"{model.num_parameters():,}")
+    log.key_value("Parameters", f"{model.num_parameters():,}")
 
     config = RLHFConfig(ppo_epochs=2, clip_epsilon=0.2, entropy_coef=0.01, gamma=1.0, lam=0.95)
-    printer.key_value("PPO Epochs", str(config.ppo_epochs))
-    printer.key_value("Clip Epsilon", str(config.clip_epsilon))
+    log.key_value("PPO Epochs", str(config.ppo_epochs))
+    log.key_value("Clip Epsilon", str(config.clip_epsilon))
 
     batch_size, seq_len, vocab_size = 4, 16, 100
     rng = np.random.default_rng(0)
-    printer.step("Running PPO steps...")
+    log.step("Running PPO steps...")
     for step in range(min(args.steps, 20)):
         input_ids = rng.integers(0, vocab_size, size=(batch_size, seq_len))
         logits, _ = model(input_ids)
@@ -1129,10 +1131,10 @@ def cmd_rlhf(args):
         probs = _softmax_np(last)
         reward = probs.max(axis=-1).mean()
         if step % 5 == 0 or step == min(args.steps, 20) - 1:
-            printer.key_value(f"Step {step}", f"reward={reward:.3f}")
+            log.key_value(f"Step {step}", f"reward={reward:.3f}")
 
-    printer.blank()
-    printer.success("RLHF demo complete!")
+    log.blank()
+    log.success("RLHF demo complete!")
 
 
 def cmd_cloud_setup(args):
@@ -1142,24 +1144,24 @@ def cmd_cloud_setup(args):
     import os
     sys.path.insert(0, ".")
 
-    printer.header("Cloud Setup")
+    log.header("Cloud Setup")
     from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
     from domains.inference.vector_store import VectorEntry, simple_embed
 
     api_key = args.api_key or os.getenv("PINECONE_API_KEY")
     if not api_key:
-        printer.error("Pinecone API key required (--api-key or PINECONE_API_KEY)")
+        log.error("Pinecone API key required (--api-key or PINECONE_API_KEY)")
         return
 
     async def setup():
-        printer.key_value("Index", args.index)
-        printer.key_value("Dimension", str(args.dimension))
+        log.key_value("Index", args.index)
+        log.key_value("Dimension", str(args.dimension))
         store = PineconeVectorStore(api_key=api_key, index_name=args.index, dimension=args.dimension, environment=args.environment)
         await store.connect()
         entries = [VectorEntry(id="test", vector=simple_embed("test document", dimension=args.dimension), text="test document", metadata={"created_by": "cli"})]
         await store.upsert(entries)
         count = await store.count()
-        printer.success(f"Pinecone: {count} documents indexed")
+        log.success(f"Pinecone: {count} documents indexed")
         await store.disconnect()
 
     asyncio.run(setup())
@@ -1316,7 +1318,7 @@ def cmd_train_embed(args):
                     except Exception:
                         pass
         else:
-            printer.error(f"Corpus not found: {corpus}")
+            log.error(f"Corpus not found: {corpus}")
             return
     else:
         # Auto-discover: knowledge files + chat history
@@ -1372,14 +1374,14 @@ def cmd_train_embed(args):
     texts = [t.strip() for t in texts if len(t.strip()) > 20]
 
     if len(texts) < 2:
-        printer.error("Not enough training data. Provide --corpus or add knowledge files.")
+        log.error("Not enough training data. Provide --corpus or add knowledge files.")
         return
 
-    printer.header("Training Text Embedder")
-    printer.key_value("Texts", str(len(texts)))
-    printer.key_value("Epochs", str(getattr(args, "epochs", 20)))
-    printer.key_value("Embed dim", str(getattr(args, "embed_dim", 384)))
-    printer.blank()
+    log.header("Training Text Embedder")
+    log.key_value("Texts", str(len(texts)))
+    log.key_value("Epochs", str(getattr(args, "epochs", 20)))
+    log.key_value("Embed dim", str(getattr(args, "embed_dim", 384)))
+    log.blank()
 
     # ── Test mode: retrieve against the collected corpus ─────────────
     test_query = getattr(args, "test", None)
@@ -1387,10 +1389,10 @@ def cmd_train_embed(args):
         from domains.inference.slo_embedder import SloTextEmbedder
         embedder = SloTextEmbedder.load()
         if embedder is None:
-            printer.error("No trained embedder found. Run training first: sloughgpt train embed")
+            log.error("No trained embedder found. Run training first: sloughgpt train embed")
             return
         vec = embedder.embed(test_query)
-        printer.success(f"Embedding for '{test_query}': dim={len(vec)}, norm={sum(x*x for x in vec)**0.5:.4f}")
+        log.success(f"Embedding for '{test_query}': dim={len(vec)}, norm={sum(x*x for x in vec)**0.5:.4f}")
         _embedder_retrieval_check(embedder, texts, query=test_query)
         return
 
@@ -1422,21 +1424,21 @@ def cmd_train_embed(args):
     )
     pbar.finish()
 
-    printer.blank()
-    printer.success("Embedder trained")
-    printer.key_value("Final loss", f"{result['final_loss']:.4f}")
-    printer.key_value("Vocab size", str(result["vocab_size"]))
-    printer.key_value("Parameters", f"{result['n_params']:,}")
-    printer.key_value("Saved to", result["save_path"])
-    printer.blank()
-    printer.info("The embedder is now used automatically by KnowledgeMemory and vector search.")
-    printer.info("No sentence-transformers download needed.")
+    log.blank()
+    log.success("Embedder trained")
+    log.key_value("Final loss", f"{result['final_loss']:.4f}")
+    log.key_value("Vocab size", str(result["vocab_size"]))
+    log.key_value("Parameters", f"{result['n_params']:,}")
+    log.key_value("Saved to", result["save_path"])
+    log.blank()
+    log.info("The embedder is now used automatically by KnowledgeMemory and vector search.")
+    log.info("No sentence-transformers download needed.")
 
     # ── Retrieval sanity check: prove the saved artifact works ───────
     from domains.inference.slo_embedder import SloTextEmbedder
     embedder = SloTextEmbedder.load(result["save_path"])
     if embedder is None:
-        printer.warning("Trained embedder could not be reloaded — verify --output path.")
+        log.warning("Trained embedder could not be reloaded — verify --output path.")
     else:
         _embedder_retrieval_check(embedder, texts)
         quality = getattr(embedder, "quality", None) or {}
@@ -1447,8 +1449,8 @@ def cmd_train_embed(args):
                 if acceptable
                 else "REJECTED — vector search will use the n-gram fallback"
             )
-            printer.key_value("Quality gate", verdict)
-            printer.key_value(
+            log.key_value("Quality gate", verdict)
+            log.key_value(
                 "Probe pairs",
                 f"degenerate={quality.get('degenerate_fraction', 1.0):.2%} "
                 f"mean_cos={quality.get('mean_cosine', 1.0):.2f} "
@@ -1457,7 +1459,7 @@ def cmd_train_embed(args):
             retrieval = quality.get("retrieval") or {}
             if retrieval:
                 better = retrieval.get("better", "n_gram")
-                printer.key_value(
+                log.key_value(
                     "Retrieval vs n-gram",
                     f"trained MRR={retrieval.get('trained_mrr', 0.0):.2f} "
                     f"vs n-gram MRR={retrieval.get('ngram_mrr', 0.0):.2f} "
@@ -1465,7 +1467,7 @@ def cmd_train_embed(args):
                     f"trained={retrieval.get('trained_hit', 0.0):.2f} / "
                     f"n-gram={retrieval.get('ngram_hit', 0.0):.2f})",
                 )
-                printer.key_value("Retrieval verdict", f"{better} embedder wins")
+                log.key_value("Retrieval verdict", f"{better} embedder wins")
 
 
 def cmd_distill(args):
@@ -1483,10 +1485,10 @@ def cmd_distill(args):
         from pathlib import Path
         p = Path(file_path)
         if not p.exists():
-            printer.error(f"File not found: {file_path}")
+            log.error(f"File not found: {file_path}")
             return
         text = p.read_text(encoding="utf-8")
-        printer.info(f"Loaded {len(text):,} chars from {file_path}")
+        log.info(f"Loaded {len(text):,} chars from {file_path}")
     elif text_source:
         from pathlib import Path
         p = Path(text_source)
@@ -1496,20 +1498,20 @@ def cmd_distill(args):
                 candidate = p / name
                 if candidate.exists():
                     text = candidate.read_text(encoding="utf-8")
-                    printer.info(f"Loaded {len(text):,} chars from {candidate}")
+                    log.info(f"Loaded {len(text):,} chars from {candidate}")
                     break
             if text is None:
-                printer.error(f"No training data found in {text_source}")
+                log.error(f"No training data found in {text_source}")
                 return
         elif p.is_file():
             text = p.read_text(encoding="utf-8")
-            printer.info(f"Loaded {len(text):,} chars from {text_source}")
+            log.info(f"Loaded {len(text):,} chars from {text_source}")
         else:
-            printer.error(f"Not found: {text_source}")
+            log.error(f"Not found: {text_source}")
             return
 
     if not text or not text.strip():
-        printer.error("No training text provided")
+        log.error("No training text provided")
         return
 
     # Apply preset
@@ -1526,13 +1528,13 @@ def cmd_distill(args):
     elif preset == "medium":
         n_embed, n_layer, n_head, block_size = 256, 6, 8, 256
 
-    printer.header("Knowledge Distillation (GPT-2 → Student)")
-    printer.key_value("Teacher", "gpt2")
-    printer.key_value("Student", f"{n_embed}d {n_layer}L {n_head}H")
-    printer.key_value("Context", str(block_size))
-    printer.key_value("Temperature", str(getattr(args, "temperature", 4.0)))
-    printer.key_value("Text", f"{len(text):,} chars")
-    printer.blank()
+    log.header("Knowledge Distillation (GPT-2 → Student)")
+    log.key_value("Teacher", "gpt2")
+    log.key_value("Student", f"{n_embed}d {n_layer}L {n_head}H")
+    log.key_value("Context", str(block_size))
+    log.key_value("Temperature", str(getattr(args, "temperature", 4.0)))
+    log.key_value("Text", f"{len(text):,} chars")
+    log.blank()
 
     # ── API mode ──────────────────────────────────────────────────────
     if api_mode:
@@ -1570,27 +1572,27 @@ def cmd_distill(args):
             if resp.status_code == 200:
                 data = resp.json()
                 job_id = data.get("job_id")
-                printer.success(f"Distillation started: {job_id}")
+                log.success(f"Distillation started: {job_id}")
                 _stream_api_progress(base_url, job_id)
             else:
-                printer.error(f"Failed ({resp.status_code}): {resp.text}")
+                log.error(f"Failed ({resp.status_code}): {resp.text}")
         except Exception as e:
-            printer.error(f"API error: {e}")
+            log.error(f"API error: {e}")
         return
 
     # ── Local mode ────────────────────────────────────────────────────
     if not _gpt2_teacher_cached():
-        printer.warning("GPT-2 teacher weights are not in the local HuggingFace cache.")
-        printer.warning("The first run downloads ~500MB from HuggingFace Hub.")
-        printer.error("Aborting — download the teacher first, then retry:")
-        printer.info("  huggingface-cli download gpt2 --include '*.safetensors' --include tokenizer.json")
+        log.warning("GPT-2 teacher weights are not in the local HuggingFace cache.")
+        log.warning("The first run downloads ~500MB from HuggingFace Hub.")
+        log.error("Aborting — download the teacher first, then retry:")
+        log.info("  huggingface-cli download gpt2 --include '*.safetensors' --include tokenizer.json")
         return
 
     from domains.training.distill_gpt2 import DistillConfig, distill_gpt2_to_slo
 
     resume_path = getattr(args, "resume", None)
     if resume_path:
-        printer.info(f"Resuming from checkpoint: {resume_path}")
+        log.info(f"Resuming from checkpoint: {resume_path}")
 
     config = DistillConfig(
         n_embed=n_embed,
@@ -1625,8 +1627,8 @@ def cmd_distill(args):
     cancel_event = threading.Event()
 
     def on_sigint(sig, frame):
-        printer.blank()
-        printer.warning("Cancelling distillation...")
+        log.blank()
+        log.warning("Cancelling distillation...")
         cancel_event.set()
 
     import signal
@@ -1642,31 +1644,31 @@ def cmd_distill(args):
         elapsed = time.time() - start_time
 
         pbar.finish()
-        printer.blank()
-        printer.success(f"Distillation complete ({format_time(elapsed)})")
-        printer.key_value("Checkpoint", metadata.get("checkpoint", "?"))
-        printer.key_value("Final loss", metadata.get("final_loss", "?"))
-        printer.key_value("Best loss", metadata.get("best_loss", "?"))
-        printer.key_value("Epochs", metadata.get("epochs", "?"))
-        printer.key_value("Steps", metadata.get("steps", "?"))
-        printer.key_value("Student params", f"{sum(p.data.size for p in student.parameters()):,}")
+        log.blank()
+        log.success(f"Distillation complete ({format_time(elapsed)})")
+        log.key_value("Checkpoint", metadata.get("checkpoint", "?"))
+        log.key_value("Final loss", metadata.get("final_loss", "?"))
+        log.key_value("Best loss", metadata.get("best_loss", "?"))
+        log.key_value("Epochs", metadata.get("epochs", "?"))
+        log.key_value("Steps", metadata.get("steps", "?"))
+        log.key_value("Student params", f"{sum(p.data.size for p in student.parameters()):,}")
         ppl = metadata.get("perplexity")
         bleu = metadata.get("bleu_vs_teacher")
         if ppl is not None:
-            printer.key_value("Perplexity", f"{float(ppl):.2f}")
+            log.key_value("Perplexity", f"{float(ppl):.2f}")
         if bleu is not None:
-            printer.key_value("BLEU vs teacher", f"{float(bleu):.1f}%")
+            log.key_value("BLEU vs teacher", f"{float(bleu):.1f}%")
 
-        printer.blank()
-        printer.header("Next steps")
+        log.blank()
+        log.header("Next steps")
         ckpt = metadata.get("checkpoint", "")
-        printer.info("Load this model in chat by pointing the server at it and restarting:")
-        printer.info(f"  SLO_NATIVE_SOUL_PATH={ckpt} python3 apps/api/server/main.py")
-        printer.info("The checkpoint also appears in the training-page checkpoint catalog.")
+        log.info("Load this model in chat by pointing the server at it and restarting:")
+        log.info(f"  SLO_NATIVE_SOUL_PATH={ckpt} python3 apps/api/server/main.py")
+        log.info("The checkpoint also appears in the training-page checkpoint catalog.")
 
     except Exception as e:
-        printer.blank()
-        printer.error(f"Distillation failed: {e}")
+        log.blank()
+        log.error(f"Distillation failed: {e}")
         raise
     finally:
         signal.signal(signal.SIGINT, old_handler)
@@ -1676,7 +1678,7 @@ def _stream_api_progress(base_url, job_id):
     """Stream training progress from API via polling `/training/jobs/{job_id}`."""
     import time
 
-    printer.info("Streaming progress... (Ctrl+C to detach)")
+    log.info("Streaming progress... (Ctrl+C to detach)")
 
     bar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
 
@@ -1686,7 +1688,7 @@ def _stream_api_progress(base_url, job_id):
             try:
                 resp = requests.get(f"{base_url}/training/jobs/{job_id}", timeout=5)
                 if resp.status_code != 200:
-                    printer.error(f"Poll failed: {resp.status_code}")
+                    log.error(f"Poll failed: {resp.status_code}")
                     return
 
                 job = resp.json()
@@ -1704,26 +1706,26 @@ def _stream_api_progress(base_url, job_id):
                 if status in ("completed", "failed", "error"):
                     bar.finish()
                     if status == "completed":
-                        printer.success("Training completed")
+                        log.success("Training completed")
                         if checkpoint:
-                            printer.key_value("Checkpoint", checkpoint)
+                            log.key_value("Checkpoint", checkpoint)
                         fl = job.get("train_loss") or job.get("loss")
                         if fl:
-                            printer.key_value("Final loss", str(fl))
+                            log.key_value("Final loss", str(fl))
                     else:
-                        printer.error(f"Training {status}: {job.get('error', 'unknown')}")
+                        log.error(f"Training {status}: {job.get('error', 'unknown')}")
                     return
 
             except KeyboardInterrupt:
                 bar.finish()
-                printer.info("Detached from training (job continues on server)")
+                log.info("Detached from training (job continues on server)")
                 return
             except Exception as e:
                 bar.finish()
-                printer.error(f"Poll error: {e}")
+                log.error(f"Poll error: {e}")
                 return
 
             time.sleep(3)
 
     except Exception as e:
-        printer.error(f"Progress stream error: {e}")
+        log.error(f"Progress stream error: {e}")

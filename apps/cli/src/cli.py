@@ -48,7 +48,9 @@ except Exception:
 logger = logging.getLogger("slo")
 
 from core.version import format_version_display  # noqa: E402
-from core.printer import printer  # noqa: E402
+from domains.logging import get_global  # noqa: E402
+
+log = get_global()
 from core.cli_group import SmartGroup  # noqa: E402
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -128,7 +130,7 @@ def _docker_action(action: str, a):
     import subprocess
     compose = _docker_compose_file()
     if not compose.is_file():
-        printer.error(f"Compose file not found: {compose}")
+        log.error(f"Compose file not found: {compose}")
         return
 
     if action == "start":
@@ -137,15 +139,15 @@ def _docker_action(action: str, a):
             profile = ["--profile", "dev"]
         elif getattr(a, "gpu", False):
             profile = ["--profile", "gpu"]
-        printer.step("Starting Docker services...")
+        log.step("Starting Docker services...")
         subprocess.run(["docker", "compose", "-f", str(compose), "up", "-d", *profile])
-        printer.success("Services started")
+        log.success("Services started")
         subprocess.run(["docker", "compose", "-f", str(compose), "ps"])
 
     elif action == "stop":
-        printer.step("Stopping Docker services...")
+        log.step("Stopping Docker services...")
         subprocess.run(["docker", "compose", "-f", str(compose), "down"])
-        printer.success("Services stopped")
+        log.success("Services stopped")
 
     elif action == "status":
         subprocess.run(["docker", "compose", "-f", str(compose), "ps"])
@@ -160,9 +162,9 @@ def _docker_action(action: str, a):
         cmd = ["docker", "compose", "-f", str(compose), "build"]
         if getattr(a, "no_cache", False):
             cmd.append("--no-cache")
-        printer.step("Building Docker images...")
+        log.step("Building Docker images...")
         subprocess.run(cmd)
-        printer.success("Build complete")
+        log.success("Build complete")
 
     elif action == "shell":
         service = getattr(a, "service", "api")
@@ -1017,18 +1019,18 @@ def checkpoint_list(ctx, sort, json_output):
     base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
     resp = requests.get(f"{base_url}/auto-train/checkpoints", timeout=10)
     if resp.status_code != 200:
-        printer.error(f"Failed to list checkpoints: {resp.text}")
+        log.error(f"Failed to list checkpoints: {resp.text}")
         return
     checkpoints = resp.json()
     if not checkpoints:
-        printer.info("No checkpoints found")
+        log.info("No checkpoints found")
         return
 
     if json_output:
-        printer.print_json(checkpoints)
+        log.json(checkpoints)
         return
 
-    printer.header(f"Training Checkpoints ({len(checkpoints)})")
+    log.header(f"Training Checkpoints ({len(checkpoints)})")
     rows = []
     for cp in checkpoints:
         name = cp.get("name", "unknown")
@@ -1036,7 +1038,7 @@ def checkpoint_list(ctx, sort, json_output):
         traits = cp.get("traits", {})
         trait_str = ", ".join(f"{k}={v:.2f}" for k, v in traits.items() if v != 0.5) if traits else ""
         rows.append([name, f"{size:.1f} MB", trait_str or "-"])
-    printer.table(["Name", "Size", "Traits"], rows)
+    log.table(["Name", "Size", "Traits"], rows)
 
 
 @checkpoint.command("load", help="Load a checkpoint into the model")
@@ -1054,12 +1056,12 @@ def checkpoint_load(ctx, name):
     resp = requests.post(f"{base_url}/auto-train/checkpoints/{name}/load", timeout=30)
     if resp.status_code == 200:
         data = resp.json()
-        printer.success(f"Loaded checkpoint: {name}")
+        log.success(f"Loaded checkpoint: {name}")
         for k, v in data.items():
             if k not in ("status",):
-                printer.key_value(k, str(v))
+                log.key_value(k, str(v))
     else:
-        printer.error(f"Failed to load: {resp.text}")
+        log.error(f"Failed to load: {resp.text}")
 
 
 @checkpoint.command("delete", help="Delete a training checkpoint")
@@ -1079,9 +1081,9 @@ def checkpoint_delete(ctx, name, yes):
     base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
     resp = requests.delete(f"{base_url}/auto-train/checkpoints/{name}", timeout=10)
     if resp.status_code == 200:
-        printer.success(f"Deleted: {name}")
+        log.success(f"Deleted: {name}")
     else:
-        printer.error(f"Failed to delete: {resp.text}")
+        log.error(f"Failed to delete: {resp.text}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1119,15 +1121,15 @@ def knowledge_search(ctx, query, path, top_k, extensions):
     r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/search-files",
                       json={"query": query, "path": path, "top_k": top_k, "extensions": exts})
     if r.status_code != 200:
-        printer.error(f"Search failed: {r.text}")
+        log.error(f"Search failed: {r.text}")
         return
     data = r.json()
-    printer.header(f"Found {len(data['results'])} results (indexed {data['indexed_files']} files)")
+    log.header(f"Found {len(data['results'])} results (indexed {data['indexed_files']} files)")
     for i, res in enumerate(data["results"], 1):
-        printer.info(f"[{res['score']:.3f}] {res['path']}:{res['line']}")
+        log.info(f"[{res['score']:.3f}] {res['path']}:{res['line']}")
         snippet = res['snippet'].replace('\n', ' ')[:100]
-        printer.info(f"  {snippet}")
-        print()
+        log.info(f"  {snippet}")
+        log.blank()
 
 
 @knowledge.command("dedup", help="Check for duplicate knowledge")
@@ -1145,14 +1147,14 @@ def knowledge_dedup(ctx, content, threshold):
     r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/check-duplicate",
                       json={"content": content, "threshold": threshold})
     if r.status_code != 200:
-        printer.error(f"Check failed: {r.text}")
+        log.error(f"Check failed: {r.text}")
         return
     data = r.json()
     if data["is_duplicate"]:
-        printer.warning(f"DUPLICATE (score: {data['score']:.3f})")
-        printer.info(f"  Existing: {data['best_match'][:100]}")
+        log.warning(f"DUPLICATE (score: {data['score']:.3f})")
+        log.info(f"  Existing: {data['best_match'][:100]}")
     else:
-        printer.success(f"Unique (best match score: {data['score']:.3f})")
+        log.success(f"Unique (best match score: {data['score']:.3f})")
 
 
 @knowledge.command("categorize", help="Auto-categorize content")
@@ -1169,14 +1171,14 @@ def knowledge_categorize(ctx, content):
     r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/categorize",
                       json={"content": content})
     if r.status_code != 200:
-        printer.error(f"Categorize failed: {r.text}")
+        log.error(f"Categorize failed: {r.text}")
         return
     data = r.json()
-    printer.success(f"Topic: {data['topic']}")
+    log.success(f"Topic: {data['topic']}")
     if data["suggestions"]:
-        printer.info("Suggestions:")
+        log.info("Suggestions:")
         for s in data["suggestions"]:
-            printer.info(f"  {s['topic']} ({s['score']:.3f})")
+            log.info(f"  {s['topic']} ({s['score']:.3f})")
 
 
 @knowledge.command("gaps", help="Find knowledge gaps")
@@ -1186,15 +1188,15 @@ def knowledge_gaps(ctx):
     import requests
     r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/gaps")
     if r.status_code != 200:
-        printer.error(f"Gaps failed: {r.text}")
+        log.error(f"Gaps failed: {r.text}")
         return
     data = r.json()
-    printer.header(f"Knowledge gaps ({data['total_facts']} facts, {len(data['topics'])} topics)")
+    log.header(f"Knowledge gaps ({data['total_facts']} facts, {len(data['topics'])} topics)")
     if data["gaps"]:
         for g in data["gaps"]:
-            printer.info(f"  {g['topic']}: {g['suggestion']}")
+            log.info(f"  {g['topic']}: {g['suggestion']}")
     else:
-        printer.success("No significant gaps found")
+        log.success("No significant gaps found")
 
 
 @knowledge.command("ingest", help="Bulk ingest texts with dedup")
@@ -1216,15 +1218,15 @@ def knowledge_ingest(ctx, texts, topic, file_path):
         with open(file_path) as f:
             items.extend(line.strip() for line in f if line.strip())
     if not items:
-        printer.error("No texts to ingest")
+        log.error("No texts to ingest")
         return
     r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/bulk-ingest",
                       json={"items": items, "topic": topic})
     if r.status_code != 200:
-        printer.error(f"Ingest failed: {r.text}")
+        log.error(f"Ingest failed: {r.text}")
         return
     data = r.json()
-    printer.success(f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors")
+    log.success(f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors")
 
 
 # ═══════════════════════════════════════════════════════════════════════

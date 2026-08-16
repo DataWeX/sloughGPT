@@ -222,3 +222,29 @@ class CLILogger(Logger):
         """Print a separator line."""
         with self._lock:
             _cli_print(f"[dim]{char * _console.width}[/]")
+
+    def key_value(self, key: str, value: str, indent: int = 2):
+        """Print a dim key: value pair."""
+        padding = " " * indent
+        if key:
+            with self._lock:
+                _cli_print(f"{padding}[dim]{key}:[/] {value}")
+        else:
+            with self._lock:
+                _cli_print(f"{padding}{value}")
+
+    def blank(self, count: int = 1):
+        """Print blank lines."""
+        with self._lock:
+            for _ in range(count):
+                _cli_print("")
+
+    def command(self, cmd: str, description: str = ""):
+        """Print a command with optional description."""
+        from rich.text import Text
+        parts = Text()
+        parts.append(f"  {cmd:<30}", style="cyan")
+        if description:
+            parts.append(f" {description}", style="dim")
+        with self._lock:
+            _cli_print(parts)

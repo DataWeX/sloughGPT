@@ -199,6 +199,57 @@ class TestCLILoggerDivider:
         mod._console.print.assert_called_once()
 
 
+class TestCLILoggerKeyValue:
+    def test_key_value_prints(self, logger):
+        import domains.logging.cli_logger as mod
+        mod._console = MagicMock()
+        logger.key_value("API", "http://localhost:8000")
+        mod._console.print.assert_called_once()
+
+    def test_key_value_empty_key_prints_value_only(self, logger):
+        import domains.logging.cli_logger as mod
+        mod._console = MagicMock()
+        logger.key_value("", "Press Ctrl+C to stop")
+        mod._console.print.assert_called_once()
+        args = mod._console.print.call_args[0][0]
+        assert "Press Ctrl+C to stop" in args
+        assert ": " not in args
+
+    def test_key_value_custom_indent(self, logger):
+        import domains.logging.cli_logger as mod
+        mod._console = MagicMock()
+        logger.key_value("K", "V", indent=4)
+        mod._console.print.assert_called_once()
+
+
+class TestCLILoggerBlank:
+    def test_blank_prints_empty_line(self, logger):
+        import domains.logging.cli_logger as mod
+        mod._console = MagicMock()
+        logger.blank()
+        mod._console.print.assert_called_once_with("")
+
+    def test_blank_multiple(self, logger):
+        import domains.logging.cli_logger as mod
+        mod._console = MagicMock()
+        logger.blank(count=3)
+        assert mod._console.print.call_count == 3
+
+
+class TestCLILoggerCommand:
+    def test_command_prints(self, logger):
+        import domains.logging.cli_logger as mod
+        mod._console = MagicMock()
+        logger.command("sloughgpt dev", "Start dev servers")
+        mod._console.print.assert_called_once()
+
+    def test_command_without_description(self, logger):
+        import domains.logging.cli_logger as mod
+        mod._console = MagicMock()
+        logger.command("sloughgpt shell")
+        mod._console.print.assert_called_once()
+
+
 class TestSetCliTerminal:
     def test_disable_and_reenable(self):
         import domains.logging.cli_logger as mod

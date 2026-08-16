@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from core.printer import printer
+from domains.logging import get_global
+
+log = get_global()
 from utils.formatting import format_size, format_number, truncate
 
 
@@ -17,46 +19,46 @@ def cmd_models(args):
 
     models_dir = Path("models")
 
-    printer.header("Available Models")
+    log.header("Available Models")
 
     # Slo files
-    printer.section("Soul Files (.soul)")
+    log.section("Soul Files (.soul)")
     soul_files = local_soul_candidate_paths(models_dir)
     if soul_files:
         rows = []
         for f in soul_files:
             size = f.stat().st_size
             rows.append([f.name, format_size(size)])
-        printer.table(["Name", "Size"], rows)
+        log.table(["Name", "Size"], rows)
     else:
-        printer.info("No soul files found")
+        log.info("No soul files found")
 
     # Compiled models (.slnc mmap format)
-    printer.section("Compiled Models (.slnc)")
+    log.section("Compiled Models (.slnc)")
     slnc_files = sorted(models_dir.rglob("*.slnc")) if models_dir.is_dir() else []
     if slnc_files:
         rows = []
         for f in slnc_files:
             size = f.stat().st_size
             rows.append([f.name, format_size(size)])
-        printer.table(["Name", "Size"], rows)
+        log.table(["Name", "Size"], rows)
     else:
-        printer.info("No .slnc files found")
+        log.info("No .slnc files found")
 
     # SafeTensors
-    printer.section("SafeTensors (.safetensors)")
+    log.section("SafeTensors (.safetensors)")
     st_files = list(models_dir.glob("*.safetensors"))
     if st_files:
         rows = []
         for f in sorted(st_files):
             size = f.stat().st_size
             rows.append([f.name, format_size(size)])
-        printer.table(["Name", "Size"], rows)
+        log.table(["Name", "Size"], rows)
     else:
-        printer.info("No .safetensors files found")
+        log.info("No .safetensors files found")
 
-    printer.blank()
-    printer.section("Available Architectures")
+    log.blank()
+    log.section("Available Architectures")
     architectures = [
         ("gpt2", "GPT-2", "124M params"),
         ("gpt2-medium", "GPT-2 Medium", "355M params"),
@@ -64,7 +66,7 @@ def cmd_models(args):
         ("llama", "LLaMA", "Meta model"),
         ("phi", "Phi", "Microsoft model"),
     ]
-    printer.table(["ID", "Name", "Info"], architectures)
+    log.table(["ID", "Name", "Info"], architectures)
 
 
 def _cmd_models_info(args):
@@ -74,33 +76,33 @@ def _cmd_models_info(args):
 
     model_path = Path(args.model)
     if not model_path.exists():
-        printer.error(f"Model not found: {model_path}")
+        log.error(f"Model not found: {model_path}")
         return
 
-    printer.header(f"Model: {model_path}")
+    log.header(f"Model: {model_path}")
 
     try:
         net = import_from_sou(str(model_path))
     except Exception as e:
-        printer.error(f"Failed to load: {e}")
+        log.error(f"Failed to load: {e}")
         return
 
-    printer.key_value("Soul Name", getattr(net, "soul_name", "?"))
+    log.key_value("Soul Name", getattr(net, "soul_name", "?"))
     if getattr(net, "soul_traits", None):
-        printer.key_value("Traits", str(net.soul_traits))
+        log.key_value("Traits", str(net.soul_traits))
     params = list(net.parameters())
     total_params = sum(int(np.prod(p.shape)) for p in params)
-    printer.key_value("Parameters", f"{total_params:,}")
+    log.key_value("Parameters", f"{total_params:,}")
 
     meta = getattr(net, "metadata", None) or {}
     for k in ("vocab_size", "n_embed", "n_layer", "n_head", "block_size"):
         if meta.get(k) is not None:
-            printer.key_value(k.replace("n_", "Num "), str(meta[k]))
+            log.key_value(k.replace("n_", "Num "), str(meta[k]))
     if meta.get("tokenizer"):
-        printer.key_value("Tokenizer", str(meta["tokenizer"].get("type", "?")))
+        log.key_value("Tokenizer", str(meta["tokenizer"].get("type", "?")))
     training = meta.get("training") or {}
     for k, v in training.items():
-        printer.key_value(str(k), str(v))
+        log.key_value(str(k), str(v))
 
 
 def _interactive_download_select():
@@ -116,7 +118,7 @@ def _interactive_download_select():
     import curses
     import requests
 
-    printer.step("Fetching popular models from HuggingFace Hub...")
+    log.step("Fetching popular models from HuggingFace Hub...")
 
     try:
         resp = requests.get(
@@ -130,11 +132,11 @@ def _interactive_download_select():
             timeout=15,
         )
         if resp.status_code != 200:
-            printer.error(f"Failed to fetch models: HTTP {resp.status_code}")
+            log.error(f"Failed to fetch models: HTTP {resp.status_code}")
             return None
         raw_models = resp.json()
     except Exception as e:
-        printer.error(f"Failed to fetch models: {e}")
+        log.error(f"Failed to fetch models: {e}")
         return None
 
     # Build list: (display_name, model_id, downloads)
@@ -150,7 +152,7 @@ def _interactive_download_select():
         model_list.append((f"{mid}  ({dl_str} downloads)", mid, downloads))
 
     if not model_list:
-        printer.info("No models found")
+        log.info("No models found")
         return None
 
     # Sort by downloads descending
@@ -233,15 +235,15 @@ def _interactive_download_select():
     try:
         result = curses.wrapper(_run_selector)
     except Exception as e:
-        printer.error(f"Selector error: {e}")
+        log.error(f"Selector error: {e}")
         return None
 
     if result is None:
-        printer.info("Selection cancelled")
+        log.info("Selection cancelled")
         return None
 
     name, model_id, _ = result
-    printer.success(f"Selected: {model_id}")
+    log.success(f"Selected: {model_id}")
     return model_id
 
 
@@ -282,9 +284,9 @@ def _cmd_models_download(args):
             return
         args.model_id = model_id
 
-    printer.header("Download Model")
-    printer.key_value("Model ID", args.model_id)
-    printer.blank()
+    log.header("Download Model")
+    log.key_value("Model ID", args.model_id)
+    log.blank()
 
     console = Console(highlight=False)
 
@@ -295,13 +297,13 @@ def _cmd_models_download(args):
         mgr = get_download_manager()
 
         if mgr.is_cached(args.model_id):
-            printer.success(f"Model already cached: {args.model_id}")
+            log.success(f"Model already cached: {args.model_id}")
             return
 
         # ── Confirmation gate ──────────────────────────────
         pm = PermissionsManager(auto_yes=getattr(args, "yes", False))
         if not pm.confirm_download(args.model_id):
-            printer.info("Download cancelled by user")
+            log.info("Download cancelled by user")
             return
 
         # ── Live progress bar ──────────────────────────────
@@ -350,23 +352,23 @@ def _cmd_models_download(args):
         result = asyncio.run(_do_download())
 
         if result.get("status") == "complete":
-            printer.success(
+            log.success(
                 f"Downloaded in {result.get('elapsed_seconds', '?')}s "
                 f"→ {result.get('cache_dir', '')}"
             )
         elif result.get("status") == "failed":
-            printer.error(f"Download failed: {result.get('error', 'unknown error')}")
+            log.error(f"Download failed: {result.get('error', 'unknown error')}")
         elif result.get("status") == "cancelled":
-            printer.warning("Download cancelled")
+            log.warning("Download cancelled")
     except KeyboardInterrupt:
-        printer.warning("Download interrupted by user")
+        log.warning("Download interrupted by user")
         try:
             mgr = get_download_manager()
             mgr.cancel(args.model_id)
         except Exception:
             pass
     except Exception as e:
-        printer.error(f"Download failed: {e}")
+        log.error(f"Download failed: {e}")
 
 
 def _cmd_models_status(args):
@@ -383,8 +385,8 @@ def _cmd_models_status(args):
 
     hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
     if not hf_cache.exists():
-        printer.info("No HuggingFace cache found")
-        printer.key_value("Cache path", str(hf_cache))
+        log.info("No HuggingFace cache found")
+        log.key_value("Cache path", str(hf_cache))
         return
 
     # Scan for model directories
@@ -436,8 +438,8 @@ def _cmd_models_status(args):
         })
 
     if not models:
-        printer.info("No cached models found")
-        printer.key_value("Cache path", str(hf_cache))
+        log.info("No cached models found")
+        log.key_value("Cache path", str(hf_cache))
         return
 
     # Sort by size descending
@@ -445,7 +447,7 @@ def _cmd_models_status(args):
 
     total_cache = sum(m["size"] for m in models)
 
-    printer.header(f"Cached Models ({len(models)} models, {format_size(total_cache)} total)")
+    log.header(f"Cached Models ({len(models)} models, {format_size(total_cache)} total)")
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("Model", style="cyan")
@@ -468,14 +470,14 @@ def _cmd_models_status(args):
 
 def _cmd_models_compare(args):
     """Compare benchmark results or models."""
-    printer.header("Model Comparison")
+    log.header("Model Comparison")
 
     # Compare benchmark results
     benchmarks_dir = Path("data/experiments/benchmarks")
     if benchmarks_dir.exists():
         benchmarks = list(benchmarks_dir.glob("*.json"))
         if benchmarks:
-            printer.section("Benchmark Results")
+            log.section("Benchmark Results")
             rows = []
             for bf in sorted(benchmarks)[:5]:
                 with open(bf) as f:
@@ -486,10 +488,10 @@ def _cmd_models_compare(args):
                     f'{data.get("latency_ms", 0):.1f}',
                     f'{data.get("memory_mb", 0):.1f}',
                 ])
-            printer.table(["Model", "Tokens/s", "Latency (ms)", "Memory (MB)"], rows, align=["l", "r", "r", "r"])
+            log.table(["Model", "Tokens/s", "Latency (ms)", "Memory (MB)"], rows, align=["l", "r", "r", "r"])
 
     # Compare models
-    printer.section("Model Specifications")
+    log.section("Model Specifications")
     model_specs = [
         ("gpt2", "124M", "~250MB", "Fast"),
         ("gpt2-medium", "355M", "~700MB", "Medium"),
@@ -498,10 +500,10 @@ def _cmd_models_compare(args):
         ("mistral-7b", "7.3B", "~14GB", "Slow"),
         ("llama-2-7b", "7B", "~13GB", "Slow"),
     ]
-    printer.table(["Model", "Params", "Size", "Speed"], model_specs)
+    log.table(["Model", "Params", "Size", "Speed"], model_specs)
 
-    printer.blank()
-    printer.info("Run benchmarks: cli.py eval --checkpoint <path> --benchmark")
+    log.blank()
+    log.info("Run benchmarks: cli.py eval --checkpoint <path> --benchmark")
 
 
 def _cmd_models_personalities(args):
@@ -509,14 +511,14 @@ def _cmd_models_personalities(args):
     try:
         from domains.ai_personality import PERSONALITIES
     except ImportError:
-        printer.error("Personalities module not found")
+        log.error("Personalities module not found")
         return
 
-    printer.header("Available Personalities")
+    log.header("Available Personalities")
     rows = []
     for ptype, personality in PERSONALITIES.items():
         rows.append([ptype.value.upper(), personality.name, personality.description[:50], ", ".join(personality.traits)])
-    printer.table(["Type", "Name", "Description", "Traits"], rows)
+    log.table(["Type", "Name", "Description", "Traits"], rows)
 
 
 def cmd_export_cli(args):
@@ -524,28 +526,28 @@ def cmd_export_cli(args):
     import numpy as np
     from domains.training.export import export_model, list_export_formats, ExportConfig
 
-    printer.header("Model Export")
+    log.header("Model Export")
 
     # List formats
-    printer.section("Supported Formats")
+    log.section("Supported Formats")
     formats = list_export_formats()
     for fmt, desc in formats.items():
-        printer.key_value(fmt, desc)
+        log.key_value(fmt, desc)
 
     model_path = Path(args.model)
     if not model_path.exists():
-        printer.error(f"Model not found: {args.model}")
+        log.error(f"Model not found: {args.model}")
         return
 
-    printer.blank()
-    printer.step(f"Loading: {args.model}")
+    log.blank()
+    log.step(f"Loading: {args.model}")
     from domains.training.slonet import import_from_sou
     net = import_from_sou(str(model_path))
     metadata = dict(getattr(net, "metadata", None) or {})
     metadata.setdefault("name", getattr(net, "soul_name", "SloughGPT"))
 
     total_params = sum(int(np.prod(p.shape)) for p in net.parameters())
-    printer.success(f"Loaded: {format_number(total_params)} parameters")
+    log.success(f"Loaded: {format_number(total_params)} parameters")
 
     output_path = args.output or str(model_path.with_suffix(""))
 
@@ -580,25 +582,25 @@ def cmd_export_cli(args):
         n_ctx=args.n_ctx if hasattr(args, "n_ctx") else 2048,
     )
 
-    printer.blank()
-    printer.section("Export Configuration")
-    printer.key_value("Format", args.format)
-    printer.key_value("Quantization", args.quantization or "N/A")
-    printer.key_value("Sequence Length", str(args.seq_len))
-    printer.key_value("Output", output_path)
+    log.blank()
+    log.section("Export Configuration")
+    log.key_value("Format", args.format)
+    log.key_value("Quantization", args.quantization or "N/A")
+    log.key_value("Sequence Length", str(args.seq_len))
+    log.key_value("Output", output_path)
 
-    printer.blank()
-    printer.step("Exporting...")
+    log.blank()
+    log.step("Exporting...")
     results = export_model(config, model=net)
 
     if results:
-        printer.blank()
-        printer.success("Export successful!")
+        log.blank()
+        log.success("Export successful!")
         for fmt, path in results.items():
             file_size = Path(path).stat().st_size if Path(path).exists() else 0
-            printer.key_value(fmt, f"{path} ({format_size(file_size)})")
+            log.key_value(fmt, f"{path} ({format_size(file_size)})")
     else:
-        printer.error("Export failed")
+        log.error("Export failed")
 
 
 def cmd_soul(args):
@@ -615,21 +617,21 @@ def cmd_soul(args):
             )
             if resp.status_code == 200:
                 data = resp.json()
-                printer.header("Slo Loaded")
-                printer.key_value("Name", data.get("soul_name", "unknown"))
-                printer.key_value("Lineage", data.get("lineage", "unknown"))
-                printer.key_value("Born", data.get("born_at", ""))
-                printer.blank()
-                printer.section("Generation Params")
+                log.header("Slo Loaded")
+                log.key_value("Name", data.get("soul_name", "unknown"))
+                log.key_value("Lineage", data.get("lineage", "unknown"))
+                log.key_value("Born", data.get("born_at", ""))
+                log.blank()
+                log.section("Generation Params")
                 for k, v in data.get("generation_params", {}).items():
-                    printer.key_value(k, str(v))
-                printer.section("Personality")
+                    log.key_value(k, str(v))
+                log.section("Personality")
                 for k, v in data.get("personality", {}).items():
-                    printer.key_value(k, str(v))
+                    log.key_value(k, str(v))
             else:
-                printer.error(f"Failed: {resp.json()}")
+                log.error(f"Failed: {resp.json()}")
         except Exception as e:
-            printer.error(str(e))
+            log.error(str(e))
         return
 
     if args.info:
@@ -637,22 +639,22 @@ def cmd_soul(args):
 
         try:
             soul = SouParser.load(args.info)
-            printer.header(f"Slo: {soul.name}")
-            printer.key_value("Version", soul.version)
-            printer.key_value("Lineage", soul.lineage)
-            printer.key_value("Born", soul.born_at)
-            printer.key_value("Tags", ", ".join(soul.tags))
-            printer.blank()
-            printer.section("Personality")
+            log.header(f"Slo: {soul.name}")
+            log.key_value("Version", soul.version)
+            log.key_value("Lineage", soul.lineage)
+            log.key_value("Born", soul.born_at)
+            log.key_value("Tags", ", ".join(soul.tags))
+            log.blank()
+            log.section("Personality")
             if soul.personality:
                 for k, v in soul.personality.to_dict().items():
-                    printer.key_value(k, str(v))
-            printer.section("Behavior")
+                    log.key_value(k, str(v))
+            log.section("Behavior")
             if soul.behavior:
                 for k, v in soul.behavior.to_dict().items():
-                    printer.key_value(k, str(v))
+                    log.key_value(k, str(v))
         except Exception as e:
-            printer.error(str(e))
+            log.error(str(e))
         return
 
     if args.create:
@@ -678,10 +680,10 @@ def cmd_soul(args):
                     "name": soul.name,
                 },
             )
-            printer.success(f"Created: {args.create}")
+            log.success(f"Created: {args.create}")
         else:
             SouParser.save(soul, args.create)
-            printer.success(f"Created: {args.create}")
+            log.success(f"Created: {args.create}")
 
 
 def cmd_benchmark(args):
@@ -695,28 +697,28 @@ def cmd_benchmark(args):
     acc = _get_accelerator()
     backend = acc.name if acc is not None else "cpu"
 
-    printer.header(f"Benchmark - {args.model}")
-    printer.key_value("Backend", backend)
-    printer.key_value("Device", getattr(acc, "device_name", "CPU") if acc is not None else "CPU")
+    log.header(f"Benchmark - {args.model}")
+    log.key_value("Backend", backend)
+    log.key_value("Device", getattr(acc, "device_name", "CPU") if acc is not None else "CPU")
 
     if not Path(args.model).exists():
-        printer.error(f"Checkpoint not found: {args.model}")
+        log.error(f"Checkpoint not found: {args.model}")
         return
 
-    printer.step("Loading checkpoint...")
+    log.step("Loading checkpoint...")
     start_time = time.time()
     provider = SloNetChatProvider.from_soul(args.model, model_id="bench")
     load_time = time.time() - start_time
     net = provider._get_model()
     params = sum(int(np.prod(p.shape)) for p in net.parameters())
-    printer.key_value("Load Time", f"{load_time:.1f}s")
-    printer.key_value("Parameters", f"{params:,}")
+    log.key_value("Load Time", f"{load_time:.1f}s")
+    log.key_value("Parameters", f"{params:,}")
 
-    printer.step("Warming up...")
+    log.step("Warming up...")
     provider.generate(args.prompt, max_new_tokens=10)
 
     if args.test in ("all", "latency"):
-        printer.section("Latency Test")
+        log.section("Latency Test")
         latencies = []
         for _ in range(args.runs):
             start = time.perf_counter()
@@ -727,12 +729,12 @@ def cmd_benchmark(args):
         p50 = latencies[int(len(latencies) * 0.50)]
         p95 = latencies[int(len(latencies) * 0.95)]
         avg = statistics.mean(latencies)
-        printer.key_value("P50", f"{p50:.1f}ms")
-        printer.key_value("P95", f"{p95:.1f}ms")
-        printer.key_value("Mean", f"{avg:.1f}ms")
+        log.key_value("P50", f"{p50:.1f}ms")
+        log.key_value("P95", f"{p95:.1f}ms")
+        log.key_value("Mean", f"{avg:.1f}ms")
 
     if args.test in ("all", "throughput"):
-        printer.section("Throughput Test")
+        log.section("Throughput Test")
         throughputs = []
         for _ in range(min(args.runs, 5)):
             start = time.perf_counter()
@@ -743,10 +745,10 @@ def cmd_benchmark(args):
             tps = n_tokens / elapsed if elapsed > 0 else 0.0
             throughputs.append(tps)
         if throughputs:
-            printer.key_value("Average", f"{statistics.mean(throughputs):.1f} tok/s")
+            log.key_value("Average", f"{statistics.mean(throughputs):.1f} tok/s")
 
-    printer.blank()
-    printer.success("Benchmark complete!")
+    log.blank()
+    log.success("Benchmark complete!")
 
 
 def _cmd_models_select(args):
@@ -757,19 +759,19 @@ def _cmd_models_select(args):
     base_url = f"http://{args.host}:{args.port}"
 
     # Fetch available models
-    printer.step("Fetching available models...")
+    log.step("Fetching available models...")
     try:
         resp = requests.get(f"{base_url}/models/hf", timeout=10)
         hf_models = resp.json() if resp.status_code == 200 else []
     except Exception as e:
-        printer.warn(f"HuggingFace models: {e}")
+        log.warning(f"HuggingFace models: {e}")
         hf_models = []
 
     try:
         resp = requests.get(f"{base_url}/models", timeout=10)
         local_models = resp.json() if resp.status_code == 200 else []
     except Exception as e:
-        printer.warn(f"Local models: {e}")
+        log.warning(f"Local models: {e}")
         local_models = []
 
     # Build model list: (display_name, model_id, source)
@@ -787,11 +789,11 @@ def _cmd_models_select(args):
             model_list.append((name, mid, "local"))
 
     if not model_list:
-        printer.info("No models available. Use 'model download <id>' to add one.")
+        log.info("No models available. Use 'model download <id>' to add one.")
         return
 
     model_list.sort(key=lambda x: x[0].lower())
-    printer.success(f"Found {len(model_list)} models")
+    log.success(f"Found {len(model_list)} models")
 
     # ── curses interactive selector ──
     def _run_selector(stdscr):
@@ -873,26 +875,26 @@ def _cmd_models_select(args):
     try:
         result = curses.wrapper(_run_selector)
     except Exception as e:
-        printer.error(f"Selector error: {e}")
+        log.error(f"Selector error: {e}")
         return
 
     if result is None:
-        printer.info("Selection cancelled")
+        log.info("Selection cancelled")
         return
 
     name, model_id, source = result
-    printer.success(f"Selected: {name} ({model_id})")
+    log.success(f"Selected: {name} ({model_id})")
 
     # Load the model
-    printer.step(f"Loading {model_id}...")
+    log.step(f"Loading {model_id}...")
     try:
         resp = requests.post(f"{base_url}/models/load", json={"model_id": model_id}, timeout=120)
         if resp.status_code == 200:
-            printer.success(f"Loaded {model_id}")
+            log.success(f"Loaded {model_id}")
         else:
-            printer.error(f"Load failed: {resp.json().get('detail', resp.text)}")
+            log.error(f"Load failed: {resp.json().get('detail', resp.text)}")
     except Exception as e:
-        printer.error(f"Load error: {e}")
+        log.error(f"Load error: {e}")
 
 
 def register(subparsers):
