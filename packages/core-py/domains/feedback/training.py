@@ -8,11 +8,12 @@ Uses collected feedback data to fine-tune the model using:
 """
 
 import json
-import sqlite3
+import logging
 from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-import logging
+
+from mogdb import MogDB
 
 logger = logging.getLogger("slo.feedback.training")
 
@@ -44,47 +45,87 @@ class FeedbackTrainer:
 
     def __init__(self, db_path: str = "data/feedback.db"):
         self.db_path = db_path
+        legacy = Path(db_path)
+        if legacy.is_file():
+            # Migrate a legacy SQLite feedback database into MogDB.
+            from domains.feedback.database import FeedbackDB
 
-    def _get_connection(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+            FeedbackDB(db_path=str(legacy))
+        self._db = MogDB(db_path)
+        self._messages = self._db.collection("messages")
+        self._feedback = self._db.collection("feedback")
+
+    def _message_by_id(self, message_id: str) -> Optional[Dict]:
+        """Return the message document with ``message_id``, or ``None``."""
+        return self._messages.find_one({"_id": message_id})
+
+    def _latest_prior_user_message(self, conversation_id: str, created_at: str) -> str:
+        """Return the content of the most recent user message before ``created_at``.
+
+        Mirrors the legacy SQL subquery: the newest user message in the same
+        conversation with ``created_at < message.created_at``.
+        """
+        docs = self._messages.find(
+            {
+                "conversation_id": conversation_id,
+                "role": "user",
+                "created_at": {"$lt": created_at},
+            },
+            sort=[("created_at", -1)],
+            limit=1,
+        )
+        return docs[0]["content"] if docs else ""
+
+    def _prompt_for(self, message: Dict) -> str:
+        """Prompt (latest prior user message) for an assistant message."""
+        return self._latest_prior_user_message(
+            message.get("conversation_id", ""), message.get("created_at", "")
+        )
 
     def get_training_examples(
         self, min_quality: float = 0.0, limit: int = 10000
     ) -> List[TrainingExample]:
-        """Get training examples from feedback database."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        """Get training examples from the feedback database.
 
-        cursor.execute(
-            """
-            SELECT m.content, f.rating, f.quality_score,
-                   (SELECT mm.content FROM messages mm
-                    WHERE mm.conversation_id = m.conversation_id
-                    AND mm.role = 'user'
-                    AND mm.created_at < m.created_at
-                    ORDER BY mm.created_at DESC LIMIT 1) as prompt
-            FROM messages m
-            JOIN feedback f ON m.id = f.message_id
-            WHERE m.role = 'assistant'
-            AND (f.quality_score IS NULL OR f.quality_score >= ?)
-            ORDER BY f.created_at DESC
-            LIMIT ?
-        """,
-            (min_quality, limit),
-        )
+        Joins feedback rows against their assistant messages (in Python —
+        MogDB has no SQL joins) and resolves each prompt as the latest prior
+        user message in the same conversation.
 
-        rows = cursor.fetchall()
-        conn.close()
+        Args:
+            min_quality: Minimum quality score; ``None`` scores pass always.
+            limit: Maximum number of examples to return.
 
-        examples = []
-        for row in rows:
-            examples.append(
-                TrainingExample(
-                    prompt=row[3] or "", response=row[0], rating=row[1], quality_score=row[2]
+        Returns:
+            List of :class:`TrainingExample`, newest feedback first.
+
+        Side effects:
+            - none (read-only)
+        """
+        examples: List[TrainingExample] = []
+        dated: List[tuple] = []
+        for fb in self._feedback.find():
+            if fb.get("rating") is None:
+                continue
+            quality = fb.get("quality_score")
+            if quality is not None and quality < min_quality:
+                continue
+            message = self._message_by_id(fb.get("message_id") or "")
+            if message is None or message.get("role") != "assistant":
+                continue
+            dated.append(
+                (
+                    fb.get("created_at", ""),
+                    TrainingExample(
+                        prompt=self._prompt_for(message),
+                        response=message.get("content", ""),
+                        rating=fb.get("rating", ""),
+                        quality_score=quality,
+                    ),
                 )
             )
 
-        return examples
+        dated.sort(key=lambda item: item[0], reverse=True)
+        return [ex for _, ex in dated[:limit]]
 
     def prepare_dpo_pairs(self, min_pairs: int = 10) -> List[DPOPair]:
         """
@@ -94,54 +135,41 @@ class FeedbackTrainer:
         - chosen = response with thumbs_up
         - rejected = response with thumbs_down in same conversation
         """
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        # Group assistant messages-with-feedback by conversation, in
+        # feedback order, to keep the first thumbs_up/thumbs_down semantics
+        # of the legacy query.
+        conv_groups: Dict[str, List[Dict]] = {}
+        fb_by_message: Dict[str, Dict] = {}
+        for fb in self._feedback.find():
+            fb_by_message[fb.get("message_id") or ""] = fb
 
-        cursor.execute("""
-            SELECT DISTINCT m.conversation_id
-            FROM feedback f
-            JOIN messages m ON f.message_id = m.id
-            GROUP BY m.conversation_id
-            HAVING COUNT(DISTINCT f.rating) > 1
-            LIMIT 1000
-        """)
-
-        conv_ids = [row[0] for row in cursor.fetchall()]
-        conn.close()
-
-        pairs = []
-        for conv_id in conv_ids:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-
-            cursor.execute(
-                """
-                SELECT m.content, f.rating,
-                       (SELECT mm.content FROM messages mm
-                        WHERE mm.conversation_id = m.conversation_id
-                        AND mm.role = 'user'
-                        AND mm.created_at < m.created_at
-                        ORDER BY mm.created_at DESC LIMIT 1) as prompt
-                FROM messages m
-                JOIN feedback f ON m.id = f.message_id
-                WHERE m.conversation_id = ? AND m.role = 'assistant'
-            """,
-                (conv_id,),
+        for message in self._messages.find():
+            if message.get("role") != "assistant":
+                continue
+            fb = fb_by_message.get(message.get("id") or message.get("_id") or "")
+            if fb is None:
+                continue
+            conv_groups.setdefault(message.get("conversation_id", ""), []).append(
+                {"message": message, "feedback": fb}
             )
 
-            rows = cursor.fetchall()
-            conn.close()
+        pairs: List[DPOPair] = []
+        for conv_id in sorted(conv_groups)[:1000]:
+            entries = conv_groups[conv_id]
+            ratings = {e["feedback"].get("rating") for e in entries if e["feedback"].get("rating")}
+            if len(ratings) <= 1:
+                continue
 
             chosen = None
             rejected = None
             prompt = ""
-
-            for content, rating, pr in rows:
+            for entry in entries:
+                rating = entry["feedback"].get("rating")
                 if rating == "thumbs_up" and chosen is None:
-                    chosen = content
-                    prompt = pr or ""
+                    chosen = entry["message"].get("content", "")
+                    prompt = self._prompt_for(entry["message"])
                 elif rating == "thumbs_down" and rejected is None:
-                    rejected = content
+                    rejected = entry["message"].get("content", "")
 
             if chosen and rejected:
                 pairs.append(DPOPair(chosen=chosen, rejected=rejected, prompt=prompt))
@@ -237,34 +265,27 @@ class FeedbackTrainer:
 
     def get_training_stats(self) -> Dict:
         """Get statistics about available training data."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        rating_counts: Dict[str, int] = {}
+        conversations: set = set()
+        total_responses = 0
 
-        cursor.execute("""
-            SELECT rating, COUNT(*) as count
-            FROM feedback f
-            JOIN messages m ON f.message_id = m.id
-            WHERE m.role = 'assistant'
-            GROUP BY rating
-        """)
-        rating_counts = dict(cursor.fetchall())
+        for fb in self._feedback.find():
+            message = self._message_by_id(fb.get("message_id") or "")
+            if message is None or message.get("role") != "assistant":
+                continue
+            rating = fb.get("rating") or ""
+            rating_counts[rating] = rating_counts.get(rating, 0) + 1
 
-        cursor.execute("""
-            SELECT COUNT(DISTINCT conversation_id)
-            FROM messages
-        """)
-        conv_count = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM messages WHERE role = 'assistant'")
-        total_responses = cursor.fetchone()[0]
-
-        conn.close()
+        for message in self._messages.find():
+            conversations.add(message.get("conversation_id", ""))
+            if message.get("role") == "assistant":
+                total_responses += 1
 
         pairs = self.prepare_dpo_pairs()
         sft_examples = self.prepare_sft_data()
 
         return {
-            "total_conversations": conv_count,
+            "total_conversations": len(conversations),
             "total_responses": total_responses,
             "thumbs_up": rating_counts.get("thumbs_up", 0),
             "thumbs_down": rating_counts.get("thumbs_down", 0),

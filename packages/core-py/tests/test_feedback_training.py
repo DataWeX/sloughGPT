@@ -1,7 +1,7 @@
 """Tests for feedback/training.py — TrainingExample, DPOPair, FeedbackTrainer."""
 
-import sqlite3
 import pytest
+from mogdb import MogDB
 from domains.feedback.training import TrainingExample, DPOPair, FeedbackTrainer
 
 
@@ -30,52 +30,67 @@ class TestDPOPair:
         assert pair.prompt == "q"
 
 
+def _seed(db_path, messages, feedback):
+    db = MogDB(str(db_path))
+    msgs = db.collection("messages")
+    fb = db.collection("feedback")
+    for m in messages:
+        doc = dict(m)
+        doc.setdefault("_id", m["id"])
+        msgs.insert_one(doc)
+    for f in feedback:
+        doc = dict(f)
+        doc.setdefault("_id", f["id"])
+        fb.insert_one(doc)
+    return FeedbackTrainer(db_path=str(db_path))
+
+
 class TestFeedbackTrainer:
     @pytest.fixture
     def trainer(self, tmp_path):
         db = tmp_path / "feedback.db"
-        conn = sqlite3.connect(str(db))
-        conn.execute("""
-            CREATE TABLE messages (
-                id TEXT PRIMARY KEY,
-                conversation_id TEXT,
-                role TEXT,
-                content TEXT,
-                created_at TIMESTAMP
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message_id TEXT,
-                rating TEXT,
-                quality_score REAL,
-                created_at TIMESTAMP
-            )
-        """)
-        conn.execute(
-            "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
-            ("m1", "c1", "user", "What is 2+2?", "2024-01-01 00:00:00"),
+        return _seed(
+            db,
+            [
+                {
+                    "id": "m1",
+                    "conversation_id": "c1",
+                    "role": "user",
+                    "content": "What is 2+2?",
+                    "created_at": "2024-01-01 00:00:00",
+                },
+                {
+                    "id": "m2",
+                    "conversation_id": "c1",
+                    "role": "assistant",
+                    "content": "4",
+                    "created_at": "2024-01-01 00:00:01",
+                },
+                {
+                    "id": "m3",
+                    "conversation_id": "c1",
+                    "role": "assistant",
+                    "content": "I don't know",
+                    "created_at": "2024-01-01 00:00:02",
+                },
+            ],
+            [
+                {
+                    "id": "f1",
+                    "message_id": "m2",
+                    "rating": "thumbs_up",
+                    "quality_score": 0.9,
+                    "created_at": "2024-01-01 00:00:03",
+                },
+                {
+                    "id": "f2",
+                    "message_id": "m3",
+                    "rating": "thumbs_down",
+                    "quality_score": 0.2,
+                    "created_at": "2024-01-01 00:00:04",
+                },
+            ],
         )
-        conn.execute(
-            "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
-            ("m2", "c1", "assistant", "4", "2024-01-01 00:00:01"),
-        )
-        conn.execute(
-            "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
-            ("m3", "c1", "assistant", "I don't know", "2024-01-01 00:00:02"),
-        )
-        conn.execute(
-            "INSERT INTO feedback (message_id, rating, quality_score, created_at) VALUES (?, ?, ?, ?)",
-            ("m2", "thumbs_up", 0.9, "2024-01-01 00:00:03"),
-        )
-        conn.execute(
-            "INSERT INTO feedback (message_id, rating, quality_score, created_at) VALUES (?, ?, ?, ?)",
-            ("m3", "thumbs_down", 0.2, "2024-01-01 00:00:04"),
-        )
-        conn.commit()
-        conn.close()
-        return FeedbackTrainer(db_path=str(db))
 
     def test_get_training_examples(self, trainer):
         examples = trainer.get_training_examples()
@@ -103,6 +118,18 @@ class TestFeedbackTrainer:
 
     def test_empty_db(self, tmp_path):
         db = tmp_path / "empty.db"
+        mog = MogDB(str(db))
+        mog.collection("messages")
+        mog.collection("feedback")
+        t = FeedbackTrainer(db_path=str(db))
+        assert t.get_training_examples() == []
+        assert t.prepare_dpo_pairs() == []
+        assert t.prepare_sft_data() == []
+
+    def test_sqlite_db_is_migrated_on_init(self, tmp_path):
+        import sqlite3
+
+        db = tmp_path / "feedback.db"
         conn = sqlite3.connect(str(db))
         conn.execute("""
             CREATE TABLE messages (
@@ -122,9 +149,23 @@ class TestFeedbackTrainer:
                 created_at TIMESTAMP
             )
         """)
+        conn.execute(
+            "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
+            ("m1", "c1", "user", "prompt text", "2024-01-01 00:00:00"),
+        )
+        conn.execute(
+            "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
+            ("m2", "c1", "assistant", "good answer", "2024-01-01 00:00:01"),
+        )
+        conn.execute(
+            "INSERT INTO feedback (message_id, rating, quality_score, created_at) VALUES (?, ?, ?, ?)",
+            ("m2", "thumbs_up", 0.9, "2024-01-01 00:00:02"),
+        )
         conn.commit()
         conn.close()
+
         t = FeedbackTrainer(db_path=str(db))
-        assert t.get_training_examples() == []
-        assert t.prepare_dpo_pairs() == []
-        assert t.prepare_sft_data() == []
+        examples = t.get_training_examples()
+        assert len(examples) == 1
+        assert examples[0].response == "good answer"
+        assert examples[0].prompt == "prompt text"

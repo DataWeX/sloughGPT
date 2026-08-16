@@ -11,6 +11,7 @@ Python lookups that preserve the original JOIN semantics.
 """
 
 import json
+import logging
 import uuid
 import threading
 from datetime import datetime, timezone
@@ -20,6 +21,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from mogdb import MogDB
+
+logger = logging.getLogger("slo.feedback.database")
 
 
 @dataclass
@@ -61,11 +64,126 @@ class FeedbackDB:
     def _init_db(self):
         """Initialize MogDB collections."""
         with self._lock:
+            legacy = Path(self.db_path)
+            if legacy.is_file():
+                self._migrate_from_sqlite(legacy)
             self._db = MogDB(self.db_path)
             self._conversations = self._db.collection("conversations")
             self._messages = self._db.collection("messages")
             self._feedback = self._db.collection("feedback")
             self._meta_weights = self._db.collection("user_meta_weights")
+
+    def _migrate_from_sqlite(self, legacy: Path):
+        """Migrate a legacy SQLite feedback database into MogDB.
+
+        Reads the old ``feedback.db`` file (conversations, messages,
+        feedback, user_meta_weights), copies every row into the matching
+        MogDB collection, then removes the SQLite file. Embedding blobs are
+        converted to JSON float lists.
+        """
+        import sqlite3
+
+        conn = sqlite3.connect(str(legacy))
+        conn.row_factory = sqlite3.Row
+        try:
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            conversations = (
+                [dict(r) for r in conn.execute("SELECT * FROM conversations")]
+                if "conversations" in tables
+                else []
+            )
+            messages = (
+                [dict(r) for r in conn.execute("SELECT * FROM messages")]
+                if "messages" in tables
+                else []
+            )
+            feedback = (
+                [dict(r) for r in conn.execute("SELECT * FROM feedback")]
+                if "feedback" in tables
+                else []
+            )
+            meta_weights = (
+                [dict(r) for r in conn.execute("SELECT * FROM user_meta_weights")]
+                if "user_meta_weights" in tables
+                else []
+            )
+        finally:
+            conn.close()
+
+        # Free the path so it can become the MogDB root directory.
+        legacy.unlink()
+
+        db = MogDB(str(self.db_path))
+        conv_col = db.collection("conversations")
+        msg_col = db.collection("messages")
+        fb_col = db.collection("feedback")
+        meta_col = db.collection("user_meta_weights")
+
+        for row in conversations:
+            conv_col.insert_one(
+                {
+                    "_id": row["id"],
+                    "id": row["id"],
+                    "user_id": row.get("user_id"),
+                    "title": row.get("title"),
+                    "created_at": row.get("created_at"),
+                    "updated_at": row.get("updated_at"),
+                }
+            )
+
+        for row in messages:
+            embedding = row.get("embedding")
+            msg_col.insert_one(
+                {
+                    "_id": row["id"],
+                    "id": row["id"],
+                    "conversation_id": row.get("conversation_id"),
+                    "role": row.get("role"),
+                    "content": row.get("content"),
+                    "embedding": (
+                        self._embedding_to_list(np.frombuffer(embedding, dtype=np.float32))
+                        if embedding
+                        else None
+                    ),
+                    "created_at": row.get("created_at"),
+                }
+            )
+
+        for row in feedback:
+            fb_col.insert_one(
+                {
+                    "_id": row["id"],
+                    "id": row["id"],
+                    "message_id": row.get("message_id"),
+                    "rating": row.get("rating"),
+                    "quality_score": row.get("quality_score"),
+                    "context_snippet": row.get("context_snippet"),
+                    "created_at": row.get("created_at"),
+                }
+            )
+
+        for row in meta_weights:
+            meta_col.insert_one(
+                {
+                    "_id": row["user_id"],
+                    "user_id": row["user_id"],
+                    "temperature_boost": row.get("temperature_boost"),
+                    "repetition_boost": row.get("repetition_boost"),
+                    "top_p_boost": row.get("top_p_boost"),
+                    "top_k_boost": row.get("top_k_boost"),
+                    "thumbs_up_count": row.get("thumbs_up_count"),
+                    "thumbs_down_count": row.get("thumbs_down_count"),
+                    "last_updated": row.get("last_updated"),
+                    "created_at": row.get("created_at"),
+                }
+            )
+
+        logger.info("Migrated legacy SQLite feedback DB to MogDB (%s)", self.db_path)
 
     def _embedding_to_list(self, embedding: np.ndarray) -> List[float]:
         """Convert a numpy embedding to a JSON-serialisable float list."""
