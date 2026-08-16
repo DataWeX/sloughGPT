@@ -1,4 +1,4 @@
-import Dexie, { type Table } from 'dexie'
+import { apiGet, apiPut, apiPatch, apiDelete, apiPost } from './http-client'
 
 export interface ChatMessage {
   id: string
@@ -91,21 +91,16 @@ interface ErrorEntry {
   timestamp: number
 }
 
-interface ManDB extends Dexie {
-  sessions: Table<StoredChatSession, string>
-  pendingMessages: Table<PendingMessage, string>
-  knowledge: Table<KnowledgeItem, string>
-  bookmarks: Table<BookmarkedMessage, string>
-  prompts: Table<QuickPrompt, string>
-  drafts: Table<Draft, string>
-  kv: Table<KVEntry, string>
-  errors: Table<ErrorEntry, string>
+const DOCSTORE = '/docstore'
+
+function docUrl(collection: string, id?: string): string {
+  const base = `${DOCSTORE}/${collection}`
+  return id ? `${base}/${encodeURIComponent(id)}` : base
 }
 
-// ── IndexedDB circuit breaker ────────────────────────────────────────
-// When IndexedDB dies (browser tab suspended, storage full, private
-// browsing cleanup), every failed Dexie write re-throws, which fires
-// window.onerror, which calls chatDB.addError(), which fails again —
+// ── Server circuit breaker ────────────────────────────────────────────
+// When the API server is unreachable every failed write re-throws, which
+// fires window.onerror, which calls chatDB.addError(), which fails again —
 // infinite cascade.  This flag breaks the cycle.
 
 /** Per-handle circuit breaker; a fresh instance isolates tests from shared state. */
@@ -120,43 +115,14 @@ export class DbCircuitBreaker {
     if (this._dead) return
     this._dead = true
     const msg = err instanceof Error ? err.message : String(err)
-    console.warn('[ManDB] IndexedDB marked dead — all further writes will be skipped:', msg)
+    console.warn('[ManDB] DocStore marked dead — all further error writes will be skipped:', msg)
   }
 }
 
 const _defaultBreaker = new DbCircuitBreaker()
 
-/** Returns true if IndexedDB is known to be unavailable. */
+/** Returns true if the DocStore is known to be unavailable. */
 export function isDBDead(): boolean { return _defaultBreaker.isDead() }
-
-const db = new Dexie('ManDB') as ManDB
-
-// Catch global Dexie errors (connection lost, blocked, etc.)
-;(db as any).on?.('error', (err: unknown) => { _defaultBreaker.markDead(err) })
-
-db.version(1).stores({
-  sessions: 'id, name, updatedAt, synced',
-  pendingMessages: 'id, sessionId, createdAt',
-})
-
-db.version(2).stores({
-  sessions: 'id, name, updatedAt, synced',
-  pendingMessages: 'id, sessionId, createdAt',
-  knowledge: 'id, timestamp',
-  bookmarks: 'id, timestamp, role',
-  prompts: 'id, name, category, createdAt',
-})
-
-db.version(3).stores({
-  sessions: 'id, name, updatedAt, synced',
-  pendingMessages: 'id, sessionId, createdAt',
-  knowledge: 'id, timestamp',
-  bookmarks: 'id, timestamp, role',
-  prompts: 'id, name, category, createdAt',
-  drafts: 'sessionId',
-  kv: 'key',
-  errors: 'id, timestamp',
-})
 
 function toStored(session: ChatSession): StoredChatSession {
   return {
@@ -178,80 +144,81 @@ function fromStored(session: StoredChatSession): ChatSession {
   }
 }
 
-/** Create a chatDB handle over the shared Dexie instance with an isolated breaker. */
+/** Create a chatDB handle over the shared DocStore REST API with an isolated breaker. */
 export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
   return {
     async saveSession(session: ChatSession): Promise<void> {
       const stored = toStored(session)
       stored.updatedAt = new Date().toISOString()
       stored.synced = false
-      await db.sessions.put(stored)
+      await apiPut(docUrl('sessions', session.id), stored)
     },
 
     async loadSessions(): Promise<ChatSession[]> {
-      const sessions = await db.sessions.orderBy('updatedAt').reverse().toArray()
-      return sessions.map(fromStored)
+      const sessions = await apiGet<StoredChatSession[]>(docUrl('sessions'))
+      return sessions
+        .slice()
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .map(fromStored)
     },
 
     async loadSession(id: string): Promise<ChatSession | undefined> {
-      const session = await db.sessions.get(id)
+      const session = await apiGet<StoredChatSession | null>(docUrl('sessions', id))
       return session ? fromStored(session) : undefined
     },
 
     async deleteSession(id: string): Promise<void> {
-      await db.sessions.delete(id)
+      await apiDelete(docUrl('sessions', id))
     },
 
     async updateSession(id: string, updates: { starred?: boolean; name?: string; pinned?: boolean; archived?: boolean }): Promise<void> {
-      const session = await db.sessions.get(id)
-      if (session) {
-        await db.sessions.update(id, {
-          ...(updates.starred !== undefined && { starred: updates.starred }),
-          ...(updates.name !== undefined && { name: updates.name }),
-          ...(updates.pinned !== undefined && { pinned: updates.pinned }),
-          ...(updates.archived !== undefined && { archived: updates.archived }),
-          updatedAt: new Date().toISOString(),
-        })
-      }
+      await apiPatch(docUrl('sessions', id), {
+        ...(updates.starred !== undefined && { starred: updates.starred }),
+        ...(updates.name !== undefined && { name: updates.name }),
+        ...(updates.pinned !== undefined && { pinned: updates.pinned }),
+        ...(updates.archived !== undefined && { archived: updates.archived }),
+        updatedAt: new Date().toISOString(),
+      })
     },
 
     async clearAllSessions(): Promise<void> {
-      await db.sessions.clear()
+      await apiDelete(docUrl('sessions'))
     },
 
     async getUnsyncedSessions(): Promise<ChatSession[]> {
-      const sessions = await db.sessions.where('synced').equals(0).toArray()
-      return sessions.map(fromStored)
+      const sessions = await apiGet<StoredChatSession[]>(docUrl('sessions'))
+      return sessions.filter(s => s.synced === false).map(fromStored)
     },
 
     async markSynced(id: string): Promise<void> {
-      await db.sessions.update(id, { synced: true })
+      await apiPatch(docUrl('sessions', id), { synced: true })
     },
 
     async markUnread(id: string, unread: boolean): Promise<void> {
-      await db.sessions.update(id, { unread })
+      await apiPatch(docUrl('sessions', id), { unread })
     },
 
     async savePendingMessage(msg: PendingMessage): Promise<void> {
-      await db.pendingMessages.put(msg)
+      await apiPut(docUrl('pendingMessages', msg.id), msg)
     },
 
     async getPendingMessages(): Promise<PendingMessage[]> {
-      return db.pendingMessages.orderBy('createdAt').toArray()
+      const msgs = await apiGet<PendingMessage[]>(docUrl('pendingMessages'))
+      return msgs.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     },
 
     async deletePendingMessage(id: string): Promise<void> {
-      await db.pendingMessages.delete(id)
+      await apiDelete(docUrl('pendingMessages', id))
     },
 
     async clearPendingMessages(): Promise<void> {
-      await db.pendingMessages.clear()
+      await apiDelete(docUrl('pendingMessages'))
     },
 
     async searchAllSessions(query: string): Promise<Array<{ session: ChatSession; matches: ChatMessage[] }>> {
       if (!query.trim()) return []
       const q = query.toLowerCase()
-      const all = await db.sessions.toArray()
+      const all = await apiGet<StoredChatSession[]>(docUrl('sessions'))
       const results: Array<{ session: ChatSession; matches: ChatMessage[] }> = []
       for (const stored of all) {
         const session = fromStored(stored)
@@ -264,99 +231,102 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     },
 
     async getKnowledge(): Promise<KnowledgeItem[]> {
-      return db.knowledge.orderBy('timestamp').reverse().toArray()
+      const items = await apiGet<KnowledgeItem[]>(docUrl('knowledge'))
+      return items.slice().sort((a, b) => b.timestamp - a.timestamp)
     },
 
     async addKnowledge(item: KnowledgeItem): Promise<void> {
-      await db.knowledge.put(item)
+      await apiPut(docUrl('knowledge', item.id), item)
     },
 
     async updateKnowledge(id: string, updates: { content?: string }): Promise<void> {
-      await db.knowledge.update(id, updates)
+      await apiPatch(docUrl('knowledge', id), updates)
     },
 
     async deleteKnowledge(id: string): Promise<void> {
-      await db.knowledge.delete(id)
+      await apiDelete(docUrl('knowledge', id))
     },
 
     async clearKnowledge(): Promise<void> {
-      await db.knowledge.clear()
+      await apiDelete(docUrl('knowledge'))
     },
 
     async importKnowledge(items: KnowledgeItem[]): Promise<void> {
-      await db.knowledge.bulkPut(items)
+      await apiPost(docUrl('knowledge', 'bulk'), { docs: items })
     },
 
     async getBookmarks(): Promise<BookmarkedMessage[]> {
-      return db.bookmarks.orderBy('timestamp').reverse().toArray()
+      const items = await apiGet<BookmarkedMessage[]>(docUrl('bookmarks'))
+      return items.slice().sort((a, b) => b.timestamp - a.timestamp)
     },
 
     async addBookmark(item: BookmarkedMessage): Promise<void> {
-      await db.bookmarks.put(item)
+      await apiPut(docUrl('bookmarks', item.id), item)
     },
 
     async removeBookmark(id: string): Promise<void> {
-      await db.bookmarks.delete(id)
+      await apiDelete(docUrl('bookmarks', id))
     },
 
     async clearBookmarks(): Promise<void> {
-      await db.bookmarks.clear()
+      await apiDelete(docUrl('bookmarks'))
     },
 
     async getPrompts(): Promise<QuickPrompt[]> {
-      return db.prompts.orderBy('createdAt').reverse().toArray()
+      const prompts = await apiGet<QuickPrompt[]>(docUrl('prompts'))
+      return prompts.slice().sort((a, b) => b.createdAt - a.createdAt)
     },
 
     async savePrompt(prompt: QuickPrompt): Promise<void> {
-      await db.prompts.put(prompt)
+      await apiPut(docUrl('prompts', prompt.id), prompt)
     },
 
     async deletePrompt(id: string): Promise<void> {
-      await db.prompts.delete(id)
+      await apiDelete(docUrl('prompts', id))
     },
 
     async clearPrompts(): Promise<void> {
-      await db.prompts.clear()
+      await apiDelete(docUrl('prompts'))
     },
 
     async importPrompts(prompts: QuickPrompt[]): Promise<void> {
-      await db.prompts.bulkPut(prompts)
+      await apiPost(docUrl('prompts', 'bulk'), { docs: prompts })
     },
 
     async getDraft(sessionId: string): Promise<string> {
-      const draft = await db.drafts.get(sessionId)
+      const draft = await apiGet<Draft | null>(docUrl('drafts', sessionId))
       return draft?.text ?? ''
     },
 
     async saveDraft(sessionId: string, text: string): Promise<void> {
       if (!text) {
-        await db.drafts.delete(sessionId)
+        await apiDelete(docUrl('drafts', sessionId))
       } else {
-        await db.drafts.put({ sessionId, text, updatedAt: Date.now() })
+        await apiPut(docUrl('drafts', sessionId), { sessionId, text, updatedAt: Date.now() })
       }
     },
 
     async deleteDraft(sessionId: string): Promise<void> {
-      await db.drafts.delete(sessionId)
+      await apiDelete(docUrl('drafts', sessionId))
     },
 
     async getKV<T = unknown>(key: string): Promise<T | undefined> {
-      const entry = await db.kv.get(key)
+      const entry = await apiGet<KVEntry | null>(docUrl('kv', key))
       return entry?.value as T | undefined
     },
 
     async setKV(key: string, value: unknown): Promise<void> {
-      await db.kv.put({ key, value })
+      await apiPut(docUrl('kv', key), { key, value })
     },
 
     async deleteKV(key: string): Promise<void> {
-      await db.kv.delete(key)
+      await apiDelete(docUrl('kv', key))
     },
 
     async addError(message: string, stack?: string): Promise<void> {
       if (breaker.isDead()) return // circuit breaker — don't cascade
       try {
-        await db.errors.put({
+        await apiPut(docUrl('errors', `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`), {
           id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           message,
           stack,
@@ -370,13 +340,13 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     async getErrors(limit = 20): Promise<ErrorEntry[]> {
       if (breaker.isDead()) return []
       try {
-        return await db.errors.orderBy('timestamp').reverse().limit(limit).toArray()
+        return await apiGet<ErrorEntry[]>(docUrl('errors'), { sort: 'timestamp', dir: '-1', limit: String(limit) })
       } catch { return [] }
     },
 
     async clearErrors(): Promise<void> {
       if (breaker.isDead()) return
-      try { await db.errors.clear() } catch { /* ignore */ }
+      try { await apiDelete(docUrl('errors')) } catch { /* ignore */ }
     },
   }
 }

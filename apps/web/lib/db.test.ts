@@ -1,98 +1,84 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ── Mock Dexie with in-memory tables ─────────────────────────────────
+// ── Mock the HTTP client with an in-memory DocStore ───────────────────
+// Mirrors the backend contract (/docstore/{collection}[/{id}]) so the
+// db.ts client can be tested end-to-end without a live server.
 
-const { tables, fakeTables, FakeDexie } = vi.hoisted(() => {
-  const tables = new Map<string, Map<string, any>>()
+const { store, apiGet, apiPut, apiPatch, apiDelete, apiPost } = vi.hoisted(() => {
+  const store = new Map<string, Map<string, unknown>>()
 
-  class FakeTable {
-    private _key: string
-    constructor(key: string) { this._key = key }
-
-    private _data() {
-      if (!tables.has(this._key)) tables.set(this._key, new Map())
-      return tables.get(this._key)!
-    }
-
-    put(obj: any) { this._data().set(obj.id, { ...obj }) }
-    get(id: string) { return this._data().get(id) }
-    delete(id: string) { this._data().delete(id) }
-    clear() { tables.delete(this._key) }
-
-    update(id: string, updates: any) {
-      const d = this._data()
-      const existing = d.get(id)
-      if (existing) d.set(id, { ...existing, ...updates })
-    }
-
-    toArray() { return [...this._data().values()] }
-
-    orderBy(field: string) {
-      return {
-        reverse: () => ({
-          toArray: () =>
-            [...this._data().values()].sort((a, b) => {
-              const av = a[field] ?? ''
-              const bv = b[field] ?? ''
-              return av < bv ? 1 : av > bv ? -1 : 0
-            }),
-        }),
-        toArray: () =>
-          [...this._data().values()].sort((a, b) => {
-            const av = a[field] ?? ''
-            const bv = b[field] ?? ''
-            return av < bv ? -1 : av > bv ? 1 : 0
-          }),
-      }
-    }
-
-    where(field: string) {
-      return {
-        equals: (val: any) => ({
-          toArray: () => [...this._data().values()].filter(v => v[field] == val),
-        }),
-      }
-    }
-
-    limit(_n: number) {
-      return {
-        toArray: () => [...this._data().values()].slice(0, _n),
-      }
-    }
+  function coll(url: string): Map<string, unknown> {
+    const name = url.split('?')[0].split('/').filter(Boolean)[1]
+    if (!store.has(name)) store.set(name, new Map())
+    return store.get(name)!
   }
 
-  const fakeTables = new Map<string, FakeTable>()
-
-  class FakeDexie {
-    sessions = new FakeTable('sessions')
-    pendingMessages = new FakeTable('pending')
-    knowledge = new FakeTable('knowledge')
-    bookmarks = new FakeTable('bookmarks')
-    prompts = new FakeTable('prompts')
-    drafts = new FakeTable('drafts')
-    kv = new FakeTable('kv')
-    errors = new FakeTable('errors')
-    version() { return { stores() {} } }
-    on(_event: string, _handler: (...args: any[]) => void) { /* no-op */ }
-
-    constructor(_name: string) {
-      fakeTables.set('sessions', this.sessions)
-      fakeTables.set('pending', this.pendingMessages)
-      fakeTables.set('knowledge', this.knowledge)
-      fakeTables.set('bookmarks', this.bookmarks)
-      fakeTables.set('prompts', this.prompts)
-      fakeTables.set('drafts', this.drafts)
-      fakeTables.set('kv', this.kv)
-      fakeTables.set('errors', this.errors)
+  const apiGet = vi.fn(async (url: string): Promise<any> => {
+    const parts = url.split('?')[0].split('/').filter(Boolean)
+    const id = parts[2]
+    if (id) return coll(url).get(id) ?? null
+    let list = [...coll(url).values()]
+    const qs = new URLSearchParams(url.split('?')[1] ?? '')
+    if (qs.get('sort')) {
+      const field = qs.get('sort')!
+      const dir = Number(qs.get('dir') ?? -1)
+      list = list.sort((a: any, b: any) => {
+        const av = a[field] ?? ''
+        const bv = b[field] ?? ''
+        return av < bv ? -dir : av > bv ? dir : 0
+      })
     }
-  }
+    if (qs.get('limit')) list = list.slice(0, Number(qs.get('limit')))
+    return list
+  })
 
-  return { tables, fakeTables, FakeDexie }
+  const apiPut = vi.fn(async (url: string, body?: any): Promise<any> => {
+    const parts = url.split('?')[0].split('/').filter(Boolean)
+    const id = decodeURIComponent(parts[2])
+    const m = coll(url)
+    const created = !m.has(id)
+    m.set(id, { ...body, id })
+    return { id, created }
+  })
+
+  const apiPatch = vi.fn(async (url: string, body?: any): Promise<any> => {
+    const parts = url.split('?')[0].split('/').filter(Boolean)
+    const id = decodeURIComponent(parts[2])
+    const m = coll(url)
+    const existing = m.get(id)
+    if (!existing) return { modified: 0 }
+    m.set(id, { ...(existing as object), ...(body ?? {}) })
+    return { modified: 1 }
+  })
+
+  const apiDelete = vi.fn(async (url: string): Promise<any> => {
+    const parts = url.split('?')[0].split('/').filter(Boolean)
+    if (parts.length === 2) {
+      coll(url).clear()
+      return { cleared: true }
+    }
+    const id = decodeURIComponent(parts[2])
+    const deleted = coll(url).delete(id)
+    return { deleted }
+  })
+
+  const apiPost = vi.fn(async (url: string, body?: any): Promise<any> => {
+    const m = coll(url)
+    let count = 0
+    for (const doc of body?.docs ?? []) {
+      if (!doc?.id) continue
+      m.set(doc.id, { ...doc })
+      count++
+    }
+    return { imported: count }
+  })
+
+  return { store, apiGet, apiPut, apiPatch, apiDelete, apiPost }
 })
 
-vi.mock('dexie', () => ({ default: FakeDexie }))
+vi.mock('@/lib/http-client', () => ({ apiGet, apiPut, apiPatch, apiDelete, apiPost }))
 
-// Override the global @/lib/db mock with the real module (which uses our FakeDexie)
+// Override the global @/lib/db mock with the real module (which uses the mocked http-client)
 vi.mock('@/lib/db', async () => {
   const actual = await vi.importActual<typeof import('./db')>('./db')
   return actual
@@ -100,8 +86,8 @@ vi.mock('@/lib/db', async () => {
 
 import { chatDB, createChatDB, DbCircuitBreaker, type ChatSession, type ChatMessage } from './db'
 
-beforeEach(() => { tables.clear() })
-afterEach(() => { tables.clear() })
+beforeEach(() => { store.clear() })
+afterEach(() => { store.clear() })
 
 const testMsg: ChatMessage = { id: 'm1', role: 'user', content: 'hello', timestamp: new Date('2024-01-01') }
 
@@ -293,9 +279,76 @@ describe('chatDB', () => {
       expect(results[1].session.id).toBe('one')
     })
   })
+
+  describe('knowledge', () => {
+    it('addKnowledge then getKnowledge sorted by timestamp desc', async () => {
+      await chatDB.addKnowledge({ id: 'k1', content: 'old', timestamp: 1 })
+      await chatDB.addKnowledge({ id: 'k2', content: 'new', timestamp: 2 })
+      const all = await chatDB.getKnowledge()
+      expect(all.map(k => k.id)).toEqual(['k2', 'k1'])
+    })
+
+    it('updateKnowledge merges content', async () => {
+      await chatDB.addKnowledge({ id: 'k1', content: 'a', timestamp: 1 })
+      await chatDB.updateKnowledge('k1', { content: 'b' })
+      const item = await chatDB.getKnowledge()
+      expect(item[0].content).toBe('b')
+    })
+
+    it('importKnowledge bulk upserts', async () => {
+      await chatDB.importKnowledge([{ id: 'k1', content: 'x', timestamp: 0 }])
+      expect(await chatDB.getKnowledge()).toHaveLength(1)
+    })
+
+    it('clearKnowledge removes all', async () => {
+      await chatDB.addKnowledge({ id: 'k1', content: 'x', timestamp: 1 })
+      await chatDB.clearKnowledge()
+      expect(await chatDB.getKnowledge()).toEqual([])
+    })
+  })
+
+  describe('bookmarks', () => {
+    it('addBookmark then removeBookmark', async () => {
+      await chatDB.addBookmark({ id: 'b1', content: 'c', role: 'user', timestamp: 1 })
+      expect(await chatDB.getBookmarks()).toHaveLength(1)
+      await chatDB.removeBookmark('b1')
+      expect(await chatDB.getBookmarks()).toEqual([])
+    })
+  })
+
+  describe('prompts', () => {
+    it('savePrompt then importPrompts then getPrompts', async () => {
+      await chatDB.savePrompt({ id: 'p1', name: 'n', description: 'd', prompt: 'p', icon: '', category: 'a', createdAt: 1, updatedAt: 1 })
+      await chatDB.importPrompts([{ id: 'p2', name: 'n2', description: 'd2', prompt: 'p2', icon: '', category: 'b', createdAt: 2, updatedAt: 2 }])
+      const all = await chatDB.getPrompts()
+      expect(all.map(p => p.id).sort()).toEqual(['p1', 'p2'])
+      await chatDB.deletePrompt('p1')
+      expect(await chatDB.getPrompts()).toHaveLength(1)
+    })
+  })
+
+  describe('drafts & kv', () => {
+    it('saveDraft, getDraft, deleteDraft', async () => {
+      expect(await chatDB.getDraft('s1')).toBe('')
+      await chatDB.saveDraft('s1', 'hello draft')
+      expect(await chatDB.getDraft('s1')).toBe('hello draft')
+      await chatDB.saveDraft('s1', '')
+      expect(await chatDB.getDraft('s1')).toBe('')
+    })
+
+    it('setKV/getKV/deleteKV round trip', async () => {
+      expect(await chatDB.getKV('theme')).toBeUndefined()
+      await chatDB.setKV('theme', 'dark')
+      expect(await chatDB.getKV('theme')).toBe('dark')
+      await chatDB.deleteKV('theme')
+      expect(await chatDB.getKV('theme')).toBeUndefined()
+    })
+  })
 })
 
 describe('chatDB — circuit breaker', () => {
+  const realPut = apiPut.getMockImplementation()!
+
   // Each test gets a fresh breaker + handle so the closed (false) state is
   // guaranteed without module-level resets.
   function freshHandle() {
@@ -303,26 +356,31 @@ describe('chatDB — circuit breaker', () => {
     return { breaker, chatDB: createChatDB(breaker) }
   }
 
-  it('addError triggers the circuit breaker on Dexie failure, then short-circuits', async () => {
+  function failErrorsPut() {
+    apiPut.mockImplementation(async (url: string, body?: any) => {
+      if (url.startsWith('/docstore/errors')) throw new Error('DocStore unavailable')
+      return realPut(url, body)
+    })
+  }
+
+  afterEach(() => { apiPut.mockImplementation(realPut) })
+
+  it('addError triggers the circuit breaker on server failure, then short-circuits', async () => {
     const { breaker, chatDB: fresh } = freshHandle()
     expect(breaker.isDead()).toBe(false)
-    const errorsTable = fakeTables.get('errors')!
-
-    errorsTable.put = () => { throw new Error('IndexedDB unavailable') }
+    failErrorsPut()
     await fresh.addError('test-trigger')
     expect(breaker.isDead()).toBe(true)
 
     const putSpy = vi.fn()
-    errorsTable.put = putSpy
+    apiPut.mockImplementation(putSpy)
     await fresh.addError('test-after-dead')
     expect(putSpy).not.toHaveBeenCalled()
   })
 
   it('getErrors returns empty when the DB is dead', async () => {
     const { breaker, chatDB: fresh } = freshHandle()
-    const errorsTable = fakeTables.get('errors')!
-
-    errorsTable.put = () => { throw new Error('dead') }
+    failErrorsPut()
     await fresh.addError('x')
     expect(breaker.isDead()).toBe(true)
 
@@ -331,29 +389,26 @@ describe('chatDB — circuit breaker', () => {
 
   it('clearErrors is a no-op when the DB is dead', async () => {
     const { breaker, chatDB: fresh } = freshHandle()
-    const errorsTable = fakeTables.get('errors')!
-
-    errorsTable.put = () => { throw new Error('dead') }
+    failErrorsPut()
     await fresh.addError('x')
     expect(breaker.isDead()).toBe(true)
 
-    const clearSpy = vi.fn()
-    errorsTable.clear = clearSpy
+    apiDelete.mockClear()
     await fresh.clearErrors()
-    expect(clearSpy).not.toHaveBeenCalled()
+    expect(apiDelete).not.toHaveBeenCalled()
   })
 
   it('does not leak dead state across handles', async () => {
     const a = freshHandle()
-    const errorsTable = fakeTables.get('errors')!
-    errorsTable.put = () => { throw new Error('dead') }
+    failErrorsPut()
     await a.chatDB.addError('x')
     expect(a.breaker.isDead()).toBe(true)
 
+    apiPut.mockImplementation(realPut)
+    apiPut.mockClear()
     const b = freshHandle()
-    errorsTable.put = vi.fn()
     expect(b.breaker.isDead()).toBe(false)
     await b.chatDB.addError('ok')
-    expect(errorsTable.put).toHaveBeenCalledTimes(1)
+    expect(apiPut).toHaveBeenCalledTimes(1)
   })
 })

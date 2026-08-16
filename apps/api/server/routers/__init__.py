@@ -65,6 +65,7 @@ def get_all_routers() -> List[APIRouter]:
     from . import infer
     from . import vm
     from . import memory
+    from . import docstore
     _cached_routers = [
         auth.router, auto_train.router, models.router, inference.router,
         feedback.router, knowledge.router, agents.router, system.router,
@@ -85,5 +86,6 @@ def get_all_routers() -> List[APIRouter]:
         infer.router,
         vm.router,
         memory.router,
+        docstore.router,
     ]
     return _cached_routers
