@@ -125,7 +125,7 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
                 clean = line.rstrip("\n\r")
                 lines.append(clean)
                 if echo:
-                    log.info(clean)
+                    print(clean, flush=True)
             else:
                 break
     except ValueError:
