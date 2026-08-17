@@ -831,16 +831,7 @@ class KBRouter:
             }
 
         result = await asyncio.to_thread(_train)
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "knowledge.train",
-                resource="embedder",
-                detail=result.get("status", "ok"),
-                extra={"texts_used": result.get("texts_used", 0)},
-            )
-        except Exception:
-            pass
+        safe_audit_log("knowledge.train", resource="embedder", detail=result.get("status", "ok"), texts_used=result.get("texts_used", 0))
         return result
 
     async def embedder_status(self):
