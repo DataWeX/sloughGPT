@@ -75,7 +75,8 @@ class TestProgressBar:
         from utils.progress import ProgressBar
         bar = ProgressBar(total=0)
         bar._render()
-        # Should not crash
+        # Should not crash — zero-total is a valid edge case
+        assert bar.total == 0
 
     def test_format_time_under_minute(self):
         from utils.progress import ProgressBar

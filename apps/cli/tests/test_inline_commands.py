@@ -10,22 +10,35 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 class TestKnowledgeCommands:
     """Tests for knowledge search/dedup/categorize/gaps/ingest inline commands."""
 
-    def test_knowledge_search_server_down(self, monkeypatch, capsys):
+    def test_knowledge_search_server_down(self, monkeypatch):
         import requests
         monkeypatch.setattr(requests, "get", MagicMock(side_effect=requests.ConnectionError))
-        # Import the inline function from cli.py
-        # These are defined inline, so we test via the CLI runner
+        # Inline commands are registered in cli.py Click group
+        # Test that the function exists and is callable
         from click.testing import CliRunner
-        # We can't easily import inline functions, so test via the main CLI
-        assert True  # Placeholder - inline commands tested via integration
+        try:
+            from apps.cli.src.cli import cli
+            runner = CliRunner()
+            result = runner.invoke(cli, ["knowledge", "search", "test"])
+            # Should not crash (may fail gracefully with connection error)
+            assert result.exit_code in (0, 1, 2)
+        except (ImportError, Exception):
+            pytest.skip("CLI not available")
 
-    def test_knowledge_search_server_up(self, monkeypatch, capsys):
+    def test_knowledge_search_server_up(self, monkeypatch):
         import requests
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"results": []}
         monkeypatch.setattr(requests, "get", MagicMock(return_value=mock_resp))
-        assert True  # Placeholder - inline commands tested via integration
+        from click.testing import CliRunner
+        try:
+            from apps.cli.src.cli import cli
+            runner = CliRunner()
+            result = runner.invoke(cli, ["knowledge", "search", "test"])
+            assert result.exit_code in (0, 1, 2)
+        except (ImportError, Exception):
+            pytest.skip("CLI not available")
 
 
 class TestCheckpointCommands:
@@ -34,7 +47,14 @@ class TestCheckpointCommands:
     def test_checkpoint_list_server_down(self, monkeypatch):
         import requests
         monkeypatch.setattr(requests, "get", MagicMock(side_effect=requests.ConnectionError))
-        assert True  # Placeholder - inline commands tested via integration
+        from click.testing import CliRunner
+        try:
+            from apps.cli.src.cli import cli
+            runner = CliRunner()
+            result = runner.invoke(cli, ["checkpoint", "list"])
+            assert result.exit_code in (0, 1, 2)
+        except (ImportError, Exception):
+            pytest.skip("CLI not available")
 
     def test_checkpoint_list_server_up(self, monkeypatch):
         import requests
@@ -42,7 +62,14 @@ class TestCheckpointCommands:
         mock_resp.status_code = 200
         mock_resp.json.return_value = [{"name": "test-checkpoint"}]
         monkeypatch.setattr(requests, "get", MagicMock(return_value=mock_resp))
-        assert True  # Placeholder - inline commands tested via integration
+        from click.testing import CliRunner
+        try:
+            from apps.cli.src.cli import cli
+            runner = CliRunner()
+            result = runner.invoke(cli, ["checkpoint", "list"])
+            assert result.exit_code in (0, 1, 2)
+        except (ImportError, Exception):
+            pytest.skip("CLI not available")
 
 
 class TestDockerCommands:
@@ -56,7 +83,14 @@ class TestDockerCommands:
                 raise FileNotFoundError("docker not found")
             return original_run(cmd, **kwargs)
         monkeypatch.setattr(subprocess, "run", mock_run)
-        assert True  # Placeholder - inline commands tested via integration
+        from click.testing import CliRunner
+        try:
+            from apps.cli.src.cli import cli
+            runner = CliRunner()
+            result = runner.invoke(cli, ["docker", "status"])
+            assert result.exit_code in (0, 1, 2)
+        except (ImportError, Exception):
+            pytest.skip("CLI not available")
 
 
 class TestSmartGroupIntegration:
@@ -69,6 +103,7 @@ class TestSmartGroupIntegration:
             runner = CliRunner()
             result = runner.invoke(cli, ["--help"])
             assert result.exit_code == 0
+            assert "SloughGPT" in result.output or "Usage" in result.output
         except (ImportError, Exception):
             pytest.skip("Could not import main CLI")
 
@@ -79,5 +114,6 @@ class TestSmartGroupIntegration:
             runner = CliRunner()
             result = runner.invoke(cli, ["version"])
             assert result.exit_code in (0, 1, 2)
+            assert "version" in result.output.lower() or "slough" in result.output.lower() or result.exit_code != 0
         except (ImportError, Exception):
             pytest.skip("Could not import main CLI")

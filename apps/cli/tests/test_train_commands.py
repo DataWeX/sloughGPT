@@ -9,6 +9,14 @@ from unittest.mock import patch, MagicMock, mock_open
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 
+@pytest.fixture(autouse=True)
+def mock_log(monkeypatch):
+    fake_log = MagicMock()
+    import commands.train as mod
+    monkeypatch.setattr(mod, "log", fake_log)
+    return fake_log
+
+
 class TestDistillConfig:
     def test_config_defaults(self):
         from domains.training.distill_gpt2 import DistillConfig
@@ -43,29 +51,32 @@ class TestDistillConfig:
 
 
 class TestCmdDistill:
-    def test_missing_text_returns_early(self):
+    def test_missing_text_returns_early(self, mock_log):
         from commands.train import cmd_distill
         args = MagicMock()
         args.text_source = None
         args.file = None
         args.api = False
         cmd_distill(args)
+        mock_log.error.assert_called()
 
-    def test_file_not_found_returns_early(self):
+    def test_file_not_found_returns_early(self, mock_log):
         from commands.train import cmd_distill
         args = MagicMock()
         args.text_source = None
         args.file = "/nonexistent/file.txt"
         args.api = False
         cmd_distill(args)
+        mock_log.error.assert_called()
 
-    def test_empty_text_returns_early(self):
+    def test_empty_text_returns_early(self, mock_log):
         from commands.train import cmd_distill
         args = MagicMock()
         args.text_source = ""
         args.file = None
         args.api = False
         cmd_distill(args)
+        mock_log.error.assert_called()
 
 
 class TestCmdTrainNative:
@@ -334,4 +345,6 @@ class TestCmdTrainEmbed:
     def test_retrieval_check_self_rank(self):
         from commands.train import _embedder_retrieval_check
         texts = ["alpha bravo charlie delta", "echo foxtrot golf hotel", "india juliet kilo lima"]
+        # Should not crash — verifies _FakeEmbedder works with retrieval check
         _embedder_retrieval_check(_FakeEmbedder(), texts)
+        assert True  # Smoke test: no exception thrown
