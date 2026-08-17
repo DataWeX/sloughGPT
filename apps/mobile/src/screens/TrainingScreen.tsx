@@ -15,7 +15,8 @@ import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
-import {triggerHaptic, type HapticType} from '../services/haptics';
+import {useHapticPress} from '../hooks/useHapticPress';
+import {triggerHaptic} from '../services/haptics';
 
 const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
   idle: {text: 'Ready', variant: 'default'},
@@ -120,14 +121,11 @@ export function TrainingScreen() {
   const [previewData, setPreviewData] = useState<string[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const prevPhaseRef = useRef(phase);
-
-  const hapticPress = (type: HapticType, fn: () => void) => () => {
-    triggerHaptic(type);
-    fn();
-  };
+  const hapticPress = useHapticPress();
 
   useEffect(() => {
     if (prevPhaseRef.current !== 'COMPLETE' && phase === 'COMPLETE') {
+      triggerHaptic('success');
       Alert.alert(
         'Training Complete',
         checkpoint
@@ -138,6 +136,14 @@ export function TrainingScreen() {
     }
     prevPhaseRef.current = phase;
   }, [phase, checkpoint]);
+
+  const prevErrorRef = useRef(error);
+  useEffect(() => {
+    if (error && error !== prevErrorRef.current) {
+      triggerHaptic('error');
+    }
+    prevErrorRef.current = error;
+  }, [error]);
 
   const fetchPreview = async (datasetId: string) => {
     try {
@@ -689,16 +695,14 @@ export function TrainingScreen() {
                 paddingHorizontal={16}
                 borderRadius={8}
                 alignItems="center"
-                onPress={async () => {
+                onPress={hapticPress('medium', async () => {
                   try {
                     await modelStore.loadModel(hfFinetunedPath);
-                    triggerHaptic('success');
                     Alert.alert('Loaded', `Fine-tuned model loaded for chat`);
                   } catch (err: any) {
-                    triggerHaptic('error');
                     Alert.alert('Error', err.message || 'Failed to load model');
                   }
-                }}
+                })}
                 pressStyle={{opacity: 0.7}}>
                 <Text fontSize={13} color="#FFFFFF" fontWeight="600" lineHeight={18}>Load Model for Chat</Text>
               </YStack>

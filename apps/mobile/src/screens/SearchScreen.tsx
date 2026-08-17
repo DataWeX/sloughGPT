@@ -5,7 +5,7 @@ import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
-import {triggerHaptic, type HapticType} from '../services/haptics';
+import {useHapticPress} from '../hooks/useHapticPress';
 
 interface SearchResult {
   sessionId: string;
@@ -22,11 +22,7 @@ export function SearchScreen() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const accent = theme.color9?.val || '#7C52C4';
-
-  const hapticPress = (type: HapticType, fn: () => void) => () => {
-    triggerHaptic(type);
-    fn();
-  };
+  const hapticPress = useHapticPress();
 
   const handleSearch = useCallback(async (text: string) => {
     setQuery(text);
@@ -63,7 +59,6 @@ export function SearchScreen() {
   }, []);
 
   const handleResultPress = async (result: SearchResult) => {
-    triggerHaptic('selection');
     Keyboard.dismiss();
     await loadSession(result.sessionId);
   };
@@ -126,7 +121,7 @@ export function SearchScreen() {
               padding={14}
               borderWidth={0.5}
               borderColor="$borderColor"
-              onPress={() => handleResultPress(item)}>
+              onPress={hapticPress('selection', () => handleResultPress(item))}>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={4}>
                 <Text fontSize={11} fontWeight="600" color="$color9" flex={1} numberOfLines={1}>
                   {item.sessionTitle || 'Untitled'}

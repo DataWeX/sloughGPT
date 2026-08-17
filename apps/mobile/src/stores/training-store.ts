@@ -14,7 +14,6 @@ import {
   type Checkpoint,
   type Dataset,
 } from '../services/training-service';
-import {triggerHaptic} from '../services/haptics';
 
 export type TrainPhase =
   | 'idle'
@@ -145,7 +144,6 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     try {
       await startTraining(cfg);
     } catch (err: any) {
-      triggerHaptic('error');
       set({phase: 'FAILED', error: err.message, running: false});
       return;
     }
@@ -200,14 +198,12 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
           if (rawData.checkpoint) {
             set({checkpoint: String(rawData.checkpoint)});
           }
-          triggerHaptic('success');
           set({phase: 'COMPLETE', running: false});
           break;
         }
 
         if (rawStatus === 'error') {
           const msg = event.message || rawData.error || 'Training failed';
-          triggerHaptic('error');
           set({phase: 'FAILED', error: String(msg), running: false});
           break;
         }
@@ -216,7 +212,6 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       get().refresh();
     } catch (err: any) {
       if (err.name !== 'AbortError') {
-        triggerHaptic('error');
         set({phase: 'FAILED', error: err.message, running: false});
       }
     } finally {
@@ -279,13 +274,11 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
           }
 
           if (jobStatus === 'completed' || jobPhase === 'complete') {
-            triggerHaptic('success');
             set({phase: 'COMPLETE', running: false, loss: job.final_loss ?? job.loss ?? get().loss});
             clearInterval(hfPollTimer!);
             hfPollTimer = null;
             get().refresh();
           } else if (jobStatus === 'failed' || jobPhase === 'failed') {
-            triggerHaptic('error');
             set({phase: 'FAILED', error: job.error || 'Fine-tuning failed', running: false});
             clearInterval(hfPollTimer!);
             hfPollTimer = null;
@@ -293,7 +286,6 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         } catch {}
       }, 3000);
     } catch (err: any) {
-      triggerHaptic('error');
       set({phase: 'FAILED', error: err.message, running: false});
     }
   },
@@ -334,10 +326,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   loadCheckpoint: async (name: string) => {
     try {
       await loadCheckpoint(name);
-      triggerHaptic('success');
       set({checkpoint: name});
     } catch (err: any) {
-      triggerHaptic('error');
       set({error: err.message});
     }
   },
@@ -345,10 +335,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   deleteCheckpoint: async (name: string) => {
     try {
       await deleteCheckpoint(name);
-      triggerHaptic('success');
       await get().refresh();
     } catch (err: any) {
-      triggerHaptic('error');
       set({error: err.message});
     }
   },
