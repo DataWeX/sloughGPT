@@ -396,6 +396,24 @@ class KBRouter:
             from domains.learner.knowledge import get_knowledge_ingestor
             ingestor = get_knowledge_ingestor()
             result = ingestor.ingest_url(req.url)
+
+            # Auto-ingest extracted content into production RAG
+            if result.get("new_facts", 0) > 0:
+                try:
+                    from domains.cognitive.rag_service import get_rag_service
+                    rag_svc = get_rag_service()
+                    # Re-fetch the facts we just stored to get their content
+                    memory = self._get_memory()
+                    recent = memory.list_all(top_k=result.get("new_facts", 5))
+                    for item in recent:
+                        if item.get("source", "").startswith("url:"):
+                            rag_svc.add_document(
+                                content=item.get("content", ""),
+                                metadata={"source": req.url, "topic": item.get("topic", "web")},
+                            )
+                except Exception:
+                    pass
+
             try:
                 from infrastructure.auth import get_audit_logger
                 get_audit_logger().log(
@@ -558,6 +576,18 @@ class KBRouter:
 
         import asyncio
         stored = await asyncio.to_thread(_store_chunks)
+
+        # Auto-ingest into production RAG
+        try:
+            from domains.cognitive.rag_service import get_rag_service
+            rag_svc = get_rag_service()
+            for chunk in chunks:
+                rag_svc.add_document(
+                    content=chunk,
+                    metadata={"source": f"file:{file.filename or 'unknown'}", "topic": topic},
+                )
+        except Exception:
+            pass
 
         return success_response(data={
             "status": "imported",
