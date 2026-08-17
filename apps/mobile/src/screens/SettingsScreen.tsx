@@ -72,6 +72,7 @@ export function SettingsScreen() {
   }, []);
 
   const handleToggleNotifications = async (val: boolean) => {
+    triggerHaptic('selection');
     if (val) {
       const token = await registerForPushNotifications();
       setNotificationsOn(!!token);
@@ -133,7 +134,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* System Health nav */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} onPress={() => navigation.navigate('Health')}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} onPress={() => { triggerHaptic('selection'); navigation.navigate('Health'); }}>
             <XStack justifyContent="space-between" alignItems="center">
               <YStack>
                 <Text fontSize={15} fontWeight="600" color="$color">System Health</Text>
@@ -396,7 +397,7 @@ export function SettingsScreen() {
                         backgroundColor={match ? '$color9' : '$backgroundHover'}
                         borderWidth={0.5}
                         borderColor={match ? '$color9' : '$borderColor'}
-                        onPress={() => settings.update({[key]: v})}>
+                        onPress={() => { triggerHaptic('selection'); settings.update({[key]: v}); }}>
                         <Text fontSize={11} fontWeight="500" color={match ? 'white' : '$color11'}>
                           {exact ? String(v) : v.toFixed(1)}
                         </Text>
@@ -469,7 +470,7 @@ export function SettingsScreen() {
             <YStack
               key={target}
               backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16}
-              onPress={() => navigation.navigate(target)}>
+              onPress={() => { triggerHaptic('selection'); navigation.navigate(target); }}>
               <XStack justifyContent="space-between" alignItems="center">
                 <YStack>
                   <Text fontSize={15} fontWeight="600" color="$color">{label}</Text>
@@ -487,12 +488,13 @@ export function SettingsScreen() {
               paddingVertical={10} paddingHorizontal={12} borderRadius={999}
               backgroundColor="#FEF2F2" alignItems="center"
               borderWidth={0.5} borderColor="#FEE2E2"
-              onPress={() =>
+              onPress={() => {
+                triggerHaptic('warning');
                 Alert.alert('Reset Settings', 'Reset all settings to defaults?', [
                   {text: 'Cancel', style: 'cancel'},
                   {text: 'Reset', style: 'destructive', onPress: settings.reset},
-                ])
-              }>
+                ]);
+              }}>
               <Text fontSize={11} fontWeight="600" color="$color10">Reset all settings</Text>
             </YStack>
           </YStack>

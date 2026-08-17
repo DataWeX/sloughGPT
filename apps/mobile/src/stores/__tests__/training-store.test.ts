@@ -121,8 +121,8 @@ describe('start (distill)', () => {
     mockService.startTraining.mockResolvedValue({status: 'started', data_path: '/tmp', epochs: 10});
     mockService.streamTraining.mockReturnValue(
       (async function* () {
-        yield {raw: {status: 'working', data: {loss: 0.5, step: 1}}};
-        yield {raw: {status: 'complete', data: {checkpoint: 'final'}}};
+        yield {phase: 'TRAIN', status: 'working', data: {loss: 0.5, step: 1}};
+        yield {phase: 'COMPLETE', status: 'complete', data: {checkpoint: 'final'}};
       })(),
     );
 
@@ -147,7 +147,7 @@ describe('start (distill)', () => {
     mockService.startTraining.mockResolvedValue({status: 'started', data_path: '/tmp', epochs: 10});
     mockService.streamTraining.mockReturnValue(
       (async function* () {
-        yield {raw: {status: 'error', message: 'OOM'}};
+        yield {phase: 'FAILED', status: 'error', message: 'OOM'};
       })(),
     );
 
@@ -170,7 +170,7 @@ describe('start (distill)', () => {
     mockService.startTraining.mockResolvedValue({status: 'started', data_path: '/tmp', epochs: 10});
     mockService.streamTraining.mockReturnValue(
       (async function* () {
-        yield {raw: {data: {cancelled: true}}};
+        yield {data: {cancelled: true}};
       })(),
     );
 

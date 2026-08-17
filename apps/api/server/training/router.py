@@ -1037,7 +1037,7 @@ async def start_distillation(request: DistillStartRequest):
 
 
 @router.post("/training/lora-finetune")
-async def start_lora_finetune(request: LoraFinetuneRequest):
+async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     """LoRA fine-tuning on .slnc models using SloNet numpy autograd (no PyTorch).
 
     Trains low-rank adapters on top of a .slnc model. The adapter is saved
@@ -1051,7 +1051,6 @@ async def start_lora_finetune(request: LoraFinetuneRequest):
     # Validate model path
     model_path = Path(request.model_path)
     if not model_path.is_file():
-        # Try relative to models/ directory
         repo_root = Path(__file__).resolve().parents[4]
         alt_path = repo_root / "models" / request.model_path
         if alt_path.is_file():
@@ -1079,41 +1078,117 @@ async def start_lora_finetune(request: LoraFinetuneRequest):
             detail=f"Dataset not found: {request.dataset}. Use POST /datasets/import/local first.",
         )
 
-    # Create job record
+    model_stem = model_path.stem
+    dataset_name = request.dataset.strip() if request.dataset else data_path.stem
+
+    # Create job record — matches TrainingJob interface
     job: dict[str, Any] = {
         "id": job_id,
-        "name": request.name or f"LoRA-{request.dataset}-{request.rank}",
-        "type": "lora-finetune",
-        "status": "queued",
+        "name": request.name or f"LoRA-{dataset_name}-r{request.rank}",
+        "model": model_stem,
+        "dataset": dataset_name,
+        "data_path": str(data_path),
+        "status": "running",
         "progress": 0,
-        "model_path": str(model_path),
-        "dataset": request.dataset,
+        "epochs": request.epochs,
+        "current_epoch": 0,
+        "global_step": 0,
+        "total_steps": 0,
+        "steps_per_sec": None,
+        "eta_s": None,
+        "elapsed_s": None,
+        "loss": None,
+        "train_loss": None,
+        "eval_loss": None,
+        "loss_history": [],
         "rank": request.rank,
         "alpha": request.alpha,
-        "epochs": request.epochs,
-        "loss": None,
         "error": None,
         "result": None,
-        "loss_history": [],
+        "checkpoint": None,
     }
     training_jobs[job_id] = job
+
+    # Update global training controller
+    controller = get_training_controller()
+    controller.start(job_id, request.name or f"LoRA-{dataset_name}")
+
+    # Audit trail
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log(
+            "training.start",
+            resource=dataset_name,
+            detail="lora",
+            extra={"job_id": job_id, "model": model_stem, "rank": request.rank, "epochs": request.epochs},
+        )
+    except Exception:
+        pass
+
+    # Webhook notification
+    try:
+        import asyncio
+
+        async def notify_async():
+            await notify_training_event(
+                "training.started",
+                {
+                    "job_id": job_id,
+                    "job_name": request.name or f"LoRA-{dataset_name}",
+                    "dataset": dataset_name,
+                    "epochs": request.epochs,
+                    "method": "lora",
+                    "rank": request.rank,
+                },
+            )
+
+        asyncio.create_task(notify_async())
+    except Exception as e:
+        logger.debug("LoRA training webhook notification failed: %s", e, extra={"tag": "TRAIN"})
+
+    # Cancel event for stop support
+    cancel_event = threading.Event()
+    training_jobs[job_id]["_cancel_event"] = cancel_event
+
+    # Register with runtime for consistency
+    try:
+        from training.runtime import get_training_runtime
+        get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, request.model_dump())
+    except Exception:
+        pass
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
             from domains.training.hf_lora_finetune import HFLoraTrainer, HFLoraConfig
 
+            start_time = time.time()
+
             def on_progress(info: dict[str, Any]) -> None:
                 rec = training_jobs.get(job_id)
                 if not rec:
                     return
-                rec["progress"] = info.get("progress", rec.get("progress", 0))
-                rec["current_epoch"] = info.get("epoch", 0)
+                elapsed = time.time() - start_time
+                rec["current_epoch"] = int(info.get("epoch", rec.get("current_epoch", 0)))
+                rec["global_step"] = int(info.get("step", rec.get("global_step", 0)))
                 loss = info.get("loss")
                 if loss is not None:
+                    rec["train_loss"] = float(loss)
                     rec["loss"] = float(loss)
-                    rec.setdefault("loss_history", []).append(
-                        {"step": info.get("step", 0), "value": float(loss)}
-                    )
+                    rec.setdefault("loss_history", []).append({
+                        "step": rec["global_step"],
+                        "value": float(loss),
+                        "type": "train",
+                    })
+                rec["elapsed_s"] = elapsed
+                step = rec["global_step"]
+                if step > 0 and elapsed > 0:
+                    rec["steps_per_sec"] = step / elapsed
+                    epochs_left = max(0, (rec.get("epochs", 1) - rec["current_epoch"]) / max(rec["current_epoch"], 1))
+                    rec["eta_s"] = elapsed * epochs_left
+                # Compute progress from epochs
+                total_epochs = rec.get("epochs", 1)
+                if total_epochs > 0:
+                    rec["progress"] = min(99, int((rec["current_epoch"] / total_epochs) * 100))
 
             config = HFLoraConfig(
                 model_path=str(model_path),
@@ -1125,22 +1200,29 @@ async def start_lora_finetune(request: LoraFinetuneRequest):
                 epochs=request.epochs,
                 batch_size=request.batch_size,
                 learning_rate=request.learning_rate,
-                max_seq_length=request.max_seq_length,
+                block_size=request.max_seq_length,
                 warmup_steps=request.warmup_steps,
                 weight_decay=request.weight_decay,
-                gradient_clip=request.gradient_clip,
+                grad_clip=request.gradient_clip,
                 log_interval=request.log_interval,
-                eval_interval=request.eval_interval,
-                device=request.device,
+                _cancel_event=cancel_event,
             )
 
             trainer = HFLoraTrainer(config)
             result = trainer.train(on_progress=on_progress)
 
+            if cancel_event.is_set():
+                training_jobs[job_id]["status"] = "cancelled"
+                training_jobs[job_id]["progress"] = 0
+                get_training_controller().complete()
+                return
+
             training_jobs[job_id].update({
                 "status": "completed",
                 "progress": 100,
+                "current_epoch": result.epochs_completed or request.epochs,
                 "loss": result.final_loss,
+                "train_loss": result.final_loss,
                 "result": {
                     "adapter_path": result.model_path,
                     "total_steps": result.total_steps,
@@ -1150,16 +1232,43 @@ async def start_lora_finetune(request: LoraFinetuneRequest):
                 "checkpoint": result.model_path,
             })
 
+            # Sync runtime
+            try:
+                from training.runtime import get_training_runtime
+                get_training_runtime().sync(job_id)
+            except Exception:
+                pass
+
+            get_training_controller().complete()
+
             logger.info(
                 "LoRA fine-tune complete: %s loss=%.4f",
                 result.model_path, result.final_loss or 0,
                 extra={"tag": "TRAIN"},
             )
 
+            # Webhook notification
+            try:
+                asyncio.run(
+                    notify_training_event(
+                        "training.completed",
+                        {
+                            "job_id": job_id,
+                            "job_name": request.name or f"LoRA-{dataset_name}",
+                            "dataset": dataset_name,
+                            "final_loss": result.final_loss,
+                            "adapter_path": result.model_path,
+                        },
+                    )
+                )
+            except Exception:
+                pass
+
         except Exception as exc:
             logger.exception("LoRA fine-tune job %s failed", job_id, extra={"tag": "TRAIN"})
             training_jobs[job_id]["status"] = "failed"
             training_jobs[job_id]["error"] = str(exc)
+            get_training_controller().complete()
 
     executor = get_training_executor()
     executor.submit(run_lora_finetune, job_id)
@@ -1167,7 +1276,7 @@ async def start_lora_finetune(request: LoraFinetuneRequest):
     return {
         "job_id": job_id,
         "status": "queued",
-        "message": f"LoRA fine-tune started: rank={request.rank} epochs={request.epochs} dataset={request.dataset}",
+        "message": f"LoRA fine-tune started: rank={request.rank} epochs={request.epochs} dataset={dataset_name}",
     }
 
 
