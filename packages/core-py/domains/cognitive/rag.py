@@ -290,8 +290,15 @@ class CitationTracker:
         self.claims: List[Dict[str, Any]] = []
 
     def extract_claims(self, text: str) -> List[Dict[str, Any]]:
-        """Extract factual claims from text."""
+        """Extract factual claims from text.
+
+        Splits on sentence boundaries first, then applies claim patterns
+        per sentence to avoid cross-sentence predicate captures.
+        """
         claims = []
+
+        # Split into sentences first (avoids cross-sentence captures)
+        sentences = re.split(r'(?<=[.!?])\s+', text)
 
         # Pattern-based claim extraction
         claim_patterns = [
@@ -301,16 +308,19 @@ class CitationTracker:
             r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+has\s+(.+)',
         ]
 
-        for pattern in claim_patterns:
-            matches = re.finditer(pattern, text)
-            for match in matches:
-                claims.append({
-                    "subject": match.group(1),
-                    "predicate": match.group(2),
-                    "text": match.group(0),
-                    "start": match.start(),
-                    "end": match.end(),
-                })
+        offset = 0
+        for sentence in sentences:
+            for pattern in claim_patterns:
+                matches = re.finditer(pattern, sentence)
+                for match in matches:
+                    claims.append({
+                        "subject": match.group(1),
+                        "predicate": match.group(2).rstrip('.'),
+                        "text": match.group(0),
+                        "start": offset + match.start(),
+                        "end": offset + match.end(),
+                    })
+            offset += len(sentence) + 1  # +1 for the space
 
         self.claims = claims
         return claims
@@ -384,12 +394,32 @@ class HallucinationDetector:
                     "confidence": 0.0,
                 })
             else:
-                avg_score = sum(s.combined_score for s in sources) / len(sources)
-                grounded.append({
-                    **claim,
-                    "confidence": avg_score,
-                    "sources": [s.chunk.id for s in sources],
-                })
+                # Check predicate overlap — high score alone isn't enough;
+                # the source must actually share predicate words with the claim.
+                claim_words = set(claim['predicate'].lower().split())
+                best_overlap = 0.0
+                best_source = None
+                for s in sources:
+                    source_words = set(s.chunk.content.lower().split())
+                    overlap = len(claim_words & source_words) / max(len(claim_words), 1)
+                    if overlap > best_overlap:
+                        best_overlap = overlap
+                        best_source = s
+
+                if best_overlap < 0.3:
+                    # Source matches subject but not predicate → likely hallucination
+                    hallucinations.append({
+                        **claim,
+                        "reason": f"Source mentions {claim['subject']} but not '{claim['predicate'][:50]}'",
+                        "confidence": best_source.combined_score if best_source else 0.0,
+                    })
+                else:
+                    avg_score = sum(s.combined_score for s in sources) / len(sources)
+                    grounded.append({
+                        **claim,
+                        "confidence": avg_score,
+                        "sources": [s.chunk.id for s in sources],
+                    })
 
         # Calculate overall confidence
         total_claims = len(claims)
