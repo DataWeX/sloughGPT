@@ -21,6 +21,7 @@ import {LoadingScreen} from './src/components/LoadingScreen';
 import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
 import {ToastContainer} from './src/components/ToastContainer';
 import {OnboardingScreen, isFirstLaunch} from './src/screens/OnboardingScreen';
+import {ToolsScreen} from './src/screens/ToolsScreen';
 import {ALL_TABS} from './src/navigation/tabs';
 import {registerForPushNotifications, onNotification} from './src/services/push-notifications';
 
@@ -30,6 +31,7 @@ const Stack = createNativeStackNavigator();
 const TAB_ICONS: Record<string, import('./src/components/Icon').IconName> = {
   Chat: 'message-circle',
   Models: 'brain',
+  Tools: 'dumbbell',
   Settings: 'settings',
 };
 
@@ -55,6 +57,19 @@ function SettingsStack() {
       <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="Providers" component={ProvidersScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function ToolsStack() {
+  return (
+    <Stack.Navigator screenOptions={{headerShown: false}}>
+      <Stack.Screen name="ToolsMain" component={ToolsScreen} />
+      <Stack.Screen name="Training" component={TrainingScreen} />
+      <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
+      <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="Health" component={HealthScreen} />
     </Stack.Navigator>
   );
 }
@@ -149,7 +164,7 @@ function AppInner() {
               <Tab.Screen
                 key={tab.name}
                 name={tab.name}
-                component={SettingsStack}
+                component={tab.name === 'Tools' ? ToolsStack : SettingsStack}
                 options={{headerShown: false}}
               />
             ) : (
