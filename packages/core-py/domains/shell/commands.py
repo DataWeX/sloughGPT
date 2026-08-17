@@ -232,11 +232,11 @@ class ShellCommands:
 
     @staticmethod
     def train_hf(model: str, dataset: str, name: str = "", epochs: int = 3,
-                 use_lora: bool = True) -> dict[str, Any]:
-        """Start HuggingFace fine-tuning."""
-        return _api_post("/training/hf-start", {
-            "model": model, "dataset": dataset, "name": name or None,
-            "epochs": epochs, "use_lora": use_lora,
+                 rank: int = 8) -> dict[str, Any]:
+        """Start LoRA fine-tuning on a .slnc model."""
+        return _api_post("/training/lora-finetune", {
+            "model_path": model, "dataset": dataset, "name": name or None,
+            "epochs": epochs, "rank": rank,
         })
 
     @staticmethod

@@ -3,8 +3,19 @@
  * Captures images from camera or gallery and sends to the backend for analysis.
  */
 
-import {Platform} from 'react-native';
+import {Platform, Alert, Linking} from 'react-native';
 import {api, getApiUrl} from './api-client';
+
+let _ImagePicker: any = null;
+function getImagePicker(): any {
+  if (_ImagePicker) return _ImagePicker;
+  try {
+    _ImagePicker = require('expo-image-picker');
+    return _ImagePicker;
+  } catch {
+    return null;
+  }
+}
 
 export interface ImageResult {
   uri: string;
@@ -19,20 +30,34 @@ export interface ImageAnalysis {
   caption: string;
 }
 
+function handlePermissionDenied(permission: string): null {
+  Alert.alert(
+    `${permission} permission required`,
+    `Please enable ${permission.toLowerCase()} access in your device settings to use this feature.`,
+    [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Open Settings',
+        onPress: () => Linking.openSettings().catch(() => {}),
+      },
+    ],
+  );
+  return null;
+}
+
 /**
  * Pick an image from the gallery.
  */
 export async function pickImage(): Promise<ImageResult | null> {
-  let ImagePicker: any;
-  try {
-    ImagePicker = require('expo-image-picker');
-  } catch {
-    throw new Error('Image picker not available. Install expo-image-picker.');
+  const ImagePicker = getImagePicker();
+  if (!ImagePicker) {
+    Alert.alert('Image picker unavailable', 'expo-image-picker is not installed.');
+    return null;
   }
 
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
-    throw new Error('Photo library permission required');
+    return handlePermissionDenied('Photo library');
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -57,16 +82,15 @@ export async function pickImage(): Promise<ImageResult | null> {
  * Take a photo with the camera.
  */
 export async function takePhoto(): Promise<ImageResult | null> {
-  let ImagePicker: any;
-  try {
-    ImagePicker = require('expo-image-picker');
-  } catch {
-    throw new Error('Camera not available. Install expo-image-picker.');
+  const ImagePicker = getImagePicker();
+  if (!ImagePicker) {
+    Alert.alert('Camera unavailable', 'expo-image-picker is not installed.');
+    return null;
   }
 
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
-    throw new Error('Camera permission required');
+    return handlePermissionDenied('Camera');
   }
 
   const result = await ImagePicker.launchCameraAsync({

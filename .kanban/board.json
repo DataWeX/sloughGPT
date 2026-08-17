@@ -24,6 +24,256 @@
   ],
   "cards": [
     {
+      "id": "20260817_112528_decompose-usetrainingsession-into-3-focused-hooks",
+      "title": "Decompose useTrainingSession into 3 focused hooks",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "hooks",
+        "training",
+        "refactor"
+      ],
+      "created_at": "2026-08-17T11:25:28.463380+00:00",
+      "updated_at": "2026-08-17T11:25:28.463380+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_monitoring-resilience-threads-pool-pollution-resolved",
+      "title": "Monitoring resilience + threads-pool pollution resolved",
+      "description": "Monitoring fetchAll previously nulled every data slice whenever an endpoint rejected (.catch(() => null) + unconditional set*), so a transient refresh failure blanked all cards and flipped loaded=false (status-card unmounts). Fixed (9824afe6): only overwrite a slice when its fetch succeeded (keep last-good data); show page-level error banner 'Failed to load system health' when the primary health call fails (banner is outside the loaded gate); visualStatus mapped from engine response with type-safe extraction. Test 'keeps previously fetched data on partial failure' asserts status-card stays + /error/i present after a failed refresh; mockResolvedValue(mockDetailedHealth) reset added because vi.clearAllMocks() does not undo a prior test's mockRejectedValue leak.\n\ndev-log.ts:87 (26ced581): the keepalive ingest flush ran fetch(...).catch(...) with no guard - when fetch is overridden to return undefined (test stubs) the .catch throws an unhandled TypeError. Wrapped in try/catch; the .catch still swallows async rejections.\n\nRoot cause of the remaining full-suite failures (CustomErrorHandler, OutputComparisonCard, api-monitor-store, and later Markdown copy / MessageImages lightbox): NOT code bugs - they are an artifact of running vitest with --pool=threads --poolOptions.threads.singleThread=true, which shares one worker and leaks global/navigator/DOM state across files (non-deterministic: a different test fails on each run). Under the configured pool: 'forks' (ModelDetailPage.test.tsx already excluded in vitest.config.ts), features/chat passes 901/901 and OutputComparisonCard passes. Correct full-suite invocation is `npx vitest run` (forks), not the threads override. ToastFn tsc errors in the training hooks were resolved by the concurrent actor mid-session (TrainingToastFn import). Verification: monitoring page 25/25, dev-log 17/17, features/chat 901/901, tsc clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "monitoring",
+        "dev-log",
+        "testing",
+        "bugfix"
+      ],
+      "created_at": "2026-08-17T11:25:28.451238+00:00",
+      "updated_at": "2026-08-17T11:25:28.451238+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_fix-cli-90s-startup-timeout-preload-router-registration-grap",
+      "title": "Fix CLI 90s startup timeout: preload router-registration graph",
+      "description": "ROOT CAUSE of 'API failed to start within 90s' (slo.cli): the level-2 routers hook imported the entire router graph COLD on the main thread while the background model-load thread and worker subprocess read the 2.5GB model.slnc from disk. On cold boot that I/O contention stretched first-time router imports to ~44s+ (measured 2.6s warm baseline, 4.18s under a concurrent 2.5GB read). The hook is an async def with a fully synchronous happy path, so asyncio.wait_for(timeout=30) can never preempt it; a slow cold import hung lifecycle.start() indefinitely and the CLI killed the process at 90s (dev.py _wait_for_api_with_progress). Eliminated suspects: STARTUP_PHASE is a plain dict, training.router (hf_finetune/transformers) is lazy and NOT in get_all_routers(), and _restore_training_runtime runs only after the routers hook. _PREWARM_MODEL_LOAD_IMPORTS preloaded only the model-load graph (state/config/safetensors/slonet/registry/provider/etc.) despite its docstring claiming to prevent exactly the concurrent-import race.\n\nFIX (apps/api/server/infrastructure/startup.py): _preload_model_imports() now also imports routers and calls get_all_routers() before the background task is created, serializing the router graph on the main thread and warming routers._cached_routers. Rejected alternative (making the hook preemptible): CancelledError (BaseException) would escape the retry loop, fail the critical hook, and bind the server WITHOUT routers ('continuing anyway').\n\nVERIFICATION: warm run - routers hook completed in 0.00s (was 84s+ cold), level-1 (model_load+model_registry incl. preload) 0.81s, 'Startup complete' logged, /health healthy at 3s, worker ready at +9s non-blocking. Tests: 62 lifecycle tests pass; new apps/api/server/tests/test_startup_preload.py (3 tests) passes; full API server suite identical WITH and WITHOUT the change (54 failed / 366 passed) - those failures are pre-existing order-dependent pollution from another actor's in-progress router work (memory/knowledge/mobile/souls), unrelated to startup.\n\nNOTE for next actor: cold-boot true repro still needs a cold-disk machine; on warm NVMe the preload adds ~0.7s warm to level 1 and the routers hook is a pure cache hit.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "startup",
+        "cli",
+        "lifecycle",
+        "bugfix",
+        "root-cause"
+      ],
+      "created_at": "2026-08-17T11:25:28.439169+00:00",
+      "updated_at": "2026-08-17T11:25:28.439169+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_error-reporter-db-circuit-breaker-done-via-di-no-resetmodule",
+      "title": "error-reporter + db circuit breaker done via DI, no resetModules",
+      "description": "CONTEXT: user repeated 'code it properly' after the dev-log LogTransport round (fd7d187a). Investigation found the vi.resetModules() test hack had spread: my own db.test.ts freshDB() helper still used it, and an in-flight error-reporter.test.ts (another actor) had been 'fixed' the same way (vi.resetModules() in beforeEach + dynamic import + vi.mock of @/lib/db and @/lib/config).\\n\\nFIX (proper DI, mirroring LogTransport): apps/web/lib/error-reporter.ts - module-level batch/timer/_recentMessages/_logger/initialized moved into exported class ErrorReporter with constructor-injected deps { apiUrl, persist } (defaults PUBLIC_API_URL + chatDB.addError). Module singleton _defaultReporter keeps the exact same public API: reportError() delegates to _defaultReporter.report(), initErrorReporter() to _defaultReporter.init(). Same behavior: MAX_BATCH_SIZE=10, BATCH_INTERVAL_MS=5000, DEDUP_WINDOW_MS=5000, POST {apiUrl}/errors/log, keepalive, silent catch, prune >100 map entries.\\n\\napps/web/lib/db.ts - module _dbDead/_markDBDead/isDBDead replaced by exported class DbCircuitBreaker (isDead()/markDead()); default breaker kept for isDBDead(); chatDB object literal wrapped in createChatDB(breaker = _defaultBreaker) factory with per-instance breaker; db.on('error') marks the default breaker. Public surface (chatDB, isDBDead, types) unchanged.\\n\\nTESTS: error-reporter.test.ts rewritten - static import of ErrorReporter, fresh new ErrorReporter({ apiUrl, persist }) per test, no vi.resetModules(), no dynamic import, no vi.mock('@/lib/config'); kept the @/lib/db stub for import isolation. Added 'does not share dedup state across instances'. db.test.ts - freshHandle() helper returns { breaker, chatDB: createChatDB(breaker) }, 3 original scenarios + new 'does not leak dead state across handles'; 4 tests. Both files: 57 tests in the 3-file targeted run pass; vitest lib/ 76 files / 865 tests pass; npx tsc --noEmit exit 0.\\n\\nNOTE: a concurrent actor swept these working-tree changes into commits 860d784d (OOP circuit breaker + error reporter) and 93129e3f (db.test circuit breaker isolation) minutes after I made them; verified HEAD state matches my refactor (DbCircuitBreaker db.ts:112, createChatDB db.ts:182, chatDB db.ts:384, ErrorReporter error-reporter.ts:47) and re-ran the 3 affected files green (57/57) plus consumer tests (ErrorLifecycle/PageErrorHandler/CustomErrorHandler/DatasetImportModal/route-fallbacks 111/111). Only remaining vi.resetModules() in lib/ is the legitimate worker.test.ts module re-import (self.onmessage re-registration).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "tests",
+        "error-reporter",
+        "db",
+        "refactor"
+      ],
+      "created_at": "2026-08-17T11:25:28.426412+00:00",
+      "updated_at": "2026-08-17T11:25:28.426412+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_workerts-di-handler-factory-last-viresetmodules-removed-from",
+      "title": "worker.ts DI handler factory \u2014 last vi.resetModules removed from lib/",
+      "description": "CONTEXT: user repeated 'code it properly' after the error-reporter/db DI round (committed 860d784d/93129e3f). The ONLY remaining vi.resetModules() in apps/web/lib was worker.test.ts:119.\\n\\nROOT CAUSE: worker.ts registered its message handler as an import-time side effect (self.onmessage = async (e) => {...}) with module-level 'let engine'. The 'errors on generate before init' test needed a fresh module so engine would be null again \u2014 hence vi.resetModules() + dynamic import + per-test vi.stubGlobal('self').\\n\\nFIX (apps/web/lib/soulnet-webgpu/worker.ts): extracted exported createWorkerHandler(workerScope: WorkerScope) which returns a per-instance async handler closing over its own 'let engine'; workerScope.postMessage replaces global self.postMessage. Exported registerWorker(workerScope = self) that installs createWorkerHandler(scope). Bottom-of-module guard 'if (typeof self !== undefined) registerWorker()' keeps the real bundler worker self-registering (index.ts:62 new Worker(new URL('./worker.ts', import.meta.url))). Production behavior identical.\\n\\nTESTS (worker.test.ts): static import of createWorkerHandler/registerWorker/WorkerScope; each test builds { postMessage: vi.fn(), onmessage: null } and awaits the handler directly (no vi.waitFor, no dynamic import, no self stub, no resetModules). Replaced 2 protocol tests + added 'does not share engine state across handlers' and 'registerWorker installs the handler on the given scope'. 8 worker tests, 36 soulnet-webgpu tests, lib/ 76 files / 867 tests all pass; npx tsc --noEmit exit 0. Committed 694786b7 (2 files, path-scoped).\\n\\nFINAL STATE: zero vi.resetModules() in apps/web/lib.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "tests",
+        "webgpu",
+        "worker",
+        "refactor"
+      ],
+      "created_at": "2026-08-17T11:25:28.413559+00:00",
+      "updated_at": "2026-08-17T11:25:28.413559+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_authoptions-env-factory-last-viresetmodules-in-appsweb-remov",
+      "title": "authOptions env factory \u2014 last vi.resetModules in apps/web removed",
+      "description": "CONTEXT: user repeated 'code it properly' after the worker.ts DI round (694786b7). A repo-wide grep found ONE remaining vi.resetModules() outside lib/: apps/web/app/api/auth/[...nextauth]/authOptions.test.ts:15.\\n\\nROOT CAUSE: authOptions.ts read process.env at module load (githubId/githubSecret/NEXTAUTH_SECRET consts). The test stubbed env per case (vi.stubEnv) then vi.resetModules() + dynamic import so the module would re-read the stubbed env.\\n\\nFIX (authOptions.ts): exported createAuthOptions(env: NodeJS.ProcessEnv = process.env) that resolves providers and secret from a passed env (resolveProviders/resolveSecret helpers); kept 'export const authOptions = createAuthOptions()' so app/api/auth/[...nextauth]/route.ts (NextAuth(authOptions)) is unchanged. Same behavior for empty-string secret fallback and dev secret.\\n\\nTESTS (authOptions.test.ts): static import of createAuthOptions; each test builds an env object via makeEnv({...overrides}) (NODE_ENV:'test' default) and calls the factory directly. Dropped vi.resetModules, vi.stubEnv, afterEach(unstubAllEnvs), dynamic import, and the unused mockNextAuth + next-auth mock (type-only import is erased; never asserted). Kept the two provider mocks (github/credentials) which are asserted. 8 tests, plus route.test.ts 2 tests, all pass; npx tsc --noEmit exit 0. Committed 333e923e (2 files, path-scoped).\\n\\nFINAL STATE: zero vi.resetModules() anywhere in apps/web.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "tests",
+        "auth",
+        "nextauth",
+        "refactor"
+      ],
+      "created_at": "2026-08-17T11:25:28.399257+00:00",
+      "updated_at": "2026-08-17T11:25:28.399257+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_tier-1-migrate-browser-chat-db-dexie-to-mogdb-backed-docstor",
+      "title": "Tier 1: migrate browser chat DB (Dexie) to MogDB-backed docstore",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "backend",
+        "mogdb",
+        "db"
+      ],
+      "created_at": "2026-08-17T11:25:28.384785+00:00",
+      "updated_at": "2026-08-17T11:25:28.384785+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_tier-2-migrate-per-user-lora-metadata-store-from-sqlite-adap",
+      "title": "Tier 2: migrate per-user LoRA metadata store from SQLite adapters.db to MogDB",
+      "description": "PerUserLoRAStore now auto-migrates a legacy SQLite adapters.db found inside the store root into the MogDB user_adapters collection (keyed by user_id). Existing MogDB records are preserved (journal authoritative); the SQLite file is removed afterwards. Added 2 tests: legacy row migration and keep-newer-MogDB-metadata. Verified live data/user_adapters journal intact (default user, feedback_count=299).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "migration",
+        "per-user-lora",
+        "feedback"
+      ],
+      "created_at": "2026-08-17T11:25:28.370742+00:00",
+      "updated_at": "2026-08-17T11:25:28.370742+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_tier-3-migrate-trainingdatapipeline-from-json-db-files-to-mo",
+      "title": "Tier 3: migrate TrainingDataPipeline from JSON .db files to MogDB collections",
+      "description": "Fifth code-quality pass (robustness/portability): export_training_data writes via temp file + os.replace (atomic, no corrupt partial exports on crash); create_backup now holds the pipeline lock and calls MogDB compact_all() first so backups are consistent snapshots (.mogdb) with no torn journals (docstring/side effects updated); get_pipeline raises ValueError if called with a different data_dir instead of silently returning the wrong pipeline; scripts/demo_training_pipeline.py no longer hardcodes /Users/mac/... path (resolves REPO_ROOT, normal imports) and clears its /tmp store so re-runs are deterministic. Tests updated: backup tests assert .mogdb snapshots + restore round-trip; singleton test asserts rebind raises. Suite: 50 pipeline + 10 root + 54 dependent all pass; demo verified deterministic across runs.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "migration",
+        "training-pipeline"
+      ],
+      "created_at": "2026-08-17T11:25:28.343171+00:00",
+      "updated_at": "2026-08-17T11:25:28.343171+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_test-suite-fix-torch-removal-test-compatibility",
+      "title": "Test suite fix: torch removal test compatibility",
+      "description": "Fixed torch removal test compatibility properly.\n\nRoot cause: onnx_export.py and hf_finetune.py stubs raised ImportError at import time, crashing any test file that imported from them.\n\nChanges:\n1. onnx_export.py \u2014 Rewrote as proper stub module: ONNXExportConfig is a pure dataclass (works without torch), SloughGPTONNXExport and export_sloughgpt_to_onnx raise ImportError when CALLED (not at import). _TORCH_AVAILABLE = False.\n2. hf_finetune.py \u2014 Same pattern: HFFineTuner and TextFileDataset raise ImportError when CALLED, merge_lora_adapter checks for peft first. _HF_FINETUNE_AVAILABLE = False.\n3. test_onnx_export.py \u2014 Rewrote: tests ONNXExportConfig (pure data), verifies _TORCH_AVAILABLE is False, verifies stubs raise ImportError when called.\n4. test_hf_finetune.py \u2014 Rewrote: tests _HF_FINETUNE_AVAILABLE, HFFineTuner/TextFileDataset/merge_lora_adapter stub behavior.\n5. test_export.py \u2014 Removed 5 skipped test classes (tested deleted ONNX/safetensors functions), removed unused fixtures/helpers (fake_torch, fake_safetensors, stub_exports, _cfg, _FakeTorch, etc.), cleaned imports. File went from 872 lines to ~270 lines.\n\nResults: 1090 passed, 39 skipped, 2 warnings. All compile checks pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "test",
+        "torch",
+        "status:done"
+      ],
+      "created_at": "2026-08-17T11:25:28.329482+00:00",
+      "updated_at": "2026-08-17T11:25:28.329482+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_mobile-responsiveness-pass-chrome-devtools-mcp-plugin",
+      "title": "Mobile responsiveness pass + chrome-devtools-mcp plugin",
+      "description": "Installed chrome-devtools-mcp MCP server (opencode.json mcp.chrome-devtools) + /devtools command so devtools can be opened against the web app (desktop Chrome --remote-debugging-port=9222, or Android via adb reverse tcp:9222). Ran a phone-viewport (375px) audit of apps/web and applied targeted fixes: vm Execution Trace table + QuantizationCard table + KeyboardShortcutsModal table get overflow-x-auto; ImageUpload remove button and ConversationSidebar pin/star/unread/export/duplicate/archive/delete buttons enlarged to h-7 w-7 and made always-visible on mobile (sm:opacity-0 hover reveal kept on desktop); ChatInputRow now flex-wrap so accessories wrap instead of squeezing the textarea to ~60px; ChatSendButton h-11; ChatSearchBar match buttons h-7 w-7; errors page header flex-wrap + search w-full sm:w-48; model/[id] and dataset/[id] primary CTAs h-8 to h-11; ConfigureStep/DataStep/benchmark Quality grid-cols-3 to grid-cols-1 sm:grid-cols-3; StatusBar h-7 sm:h-8. Verified: tsc 0 errors, 29 chat/component test files (365 tests) + 6 page files (131 tests) all pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "web",
+        "mobile",
+        "devtools",
+        "opencode"
+      ],
+      "created_at": "2026-08-17T11:25:28.315172+00:00",
+      "updated_at": "2026-08-17T11:25:28.315172+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_a7-chatscreen-split-phase-a-complete",
+      "title": "A7 ChatScreen split + Phase A complete",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "refactor"
+      ],
+      "created_at": "2026-08-17T11:25:28.298257+00:00",
+      "updated_at": "2026-08-17T11:25:28.298257+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_cli-test-coverage-plan",
+      "title": "CLI Test Coverage Plan",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "cli",
+        "testing",
+        "plan"
+      ],
+      "created_at": "2026-08-17T11:25:28.281991+00:00",
+      "updated_at": "2026-08-17T11:25:28.281991+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260817_112528_mobile-phase-c-completion-font-migration",
+      "title": "Mobile Phase C completion + font migration",
+      "description": "Completed all remaining Phase C work and font migration:\n\n1. **Font migration**: Replaced DMSans (4 files) with Outfit (4 weights) + JetBrains Mono (2 weights). Updated FontFamilyOption type ('dm-sans' \u2192 'outfit'), SettingsScreen picker, tamagui.config.ts (body/heading\u2192Outfit, mono\u2192JetBrainsMono-Regular), and all test assertions.\n\n2. **C2 Health**: Extended DetailedHealth type with inference stats (requests, tokens/sec, total tokens) and services status (training_pool, inference_pool). Added Inference stats card and Services status card to HealthScreen.\n\n3. **C3 Settings**: Added chat background picker (6 presets: Default/Warm/Cool/Violet/Mint/Peach) wired to existing chatBackground store. Added accent color picker (5 colors: Violet/Rose/Amber/Emerald/Sky) with new accentColor field in settings-store.ts.\n\n4. **C4 Knowledge**: Added file-based JSON import \u2014 'Pick JSON file instead' button, uses react-native-fs readFile + JSON.parse, supports arrays of strings or objects with content/topic fields.\n\n5. **C1/C5/C6**: Audited all remaining screens \u2014 all features already present (Models: catalog/load/unload/soul/checkpoints/badges; Training: distill/fine-tune/loss chart/checkpoints/job history; Bookmarks/Help/About/Onboarding: all exist). No work needed.\n\n6. **Slash commands (B10)**: Created SlashCommandPicker.tsx (bottom-sheet modal), chat-commands.ts (13 commands), / button in ChatInput toolbar. Wrote tests for both.\n\n7. **Tests**: 53 suites / 527 tests all pass. tsc --noEmit clean.\n\nPhases A, B, C are now complete. D and E remain blocked by native tooling (Android SDK / Xcode).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "phase-c",
+        "fonts",
+        "slash-commands"
+      ],
+      "created_at": "2026-08-17T11:25:28.261041+00:00",
+      "updated_at": "2026-08-17T11:25:28.261041+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260815_052916_chat-skeleton-stuck-after-knowledge-clear",
       "title": "Chat skeleton stuck after knowledge clear",
       "description": "",

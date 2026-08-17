@@ -23,6 +23,7 @@ import {
   onNotification,
 } from '../services/push-notifications';
 import {sounds} from '../services/sounds';
+import {triggerHaptic} from '../services/haptics';
 import type {HealthStatus} from '../types';
 import type {ThemeMode} from '../types';
 import type {AccentColor} from '../stores/settings-store';
@@ -127,7 +128,7 @@ export function SettingsScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              <Button size="$3" backgroundColor="$color9" color="white" fontWeight="600" onPress={handleSaveUrl}>Save</Button>
+              <Button size="$3" backgroundColor="$color9" color="white" fontWeight="600" onPress={() => { triggerHaptic('success'); handleSaveUrl(); }}>Save</Button>
             </XStack>
           </YStack>
 
@@ -252,7 +253,7 @@ export function SettingsScreen() {
                     borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
                     alignItems="center"
-                    onPress={() => settings.setTheme(t)}>
+                    onPress={() => { triggerHaptic('selection'); settings.setTheme(t); }}>
                     <Text fontSize={11} fontWeight="600" color={active ? 'white' : '$color11'}>
                       {t.charAt(0).toUpperCase() + t.slice(1)}
                     </Text>
@@ -280,7 +281,7 @@ export function SettingsScreen() {
                     borderColor={active ? opt.color : 'transparent'}
                     alignItems="center"
                     justifyContent="center"
-                    onPress={() => settings.update({accentColor: opt.key})}>
+                    onPress={() => { triggerHaptic('selection'); settings.update({accentColor: opt.key}); }}>
                     {active && (
                       <YStack width={12} height={12} borderRadius={6} backgroundColor="white" />
                     )}
@@ -307,7 +308,7 @@ export function SettingsScreen() {
                     borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
                     alignItems="center"
-                    onPress={() => settings.setFontFamily(opt.value)}>
+                    onPress={() => { triggerHaptic('selection'); settings.setFontFamily(opt.value); }}>
                     <Text fontSize={11} fontWeight="600" color={active ? 'white' : '$color11'}>{opt.label}</Text>
                   </YStack>
                 );
@@ -325,7 +326,7 @@ export function SettingsScreen() {
                     backgroundColor={active ? '$color9' : '$backgroundHover'}
                     borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
-                    onPress={() => settings.setFontSizeScale(p.value)}>
+                    onPress={() => { triggerHaptic('selection'); settings.setFontSizeScale(p.value); }}>
                     <Text fontSize={11} fontWeight="500" color={active ? 'white' : '$color11'}>{p.label}</Text>
                   </YStack>
                 );

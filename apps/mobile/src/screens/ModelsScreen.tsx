@@ -13,6 +13,7 @@ import {useModelStore} from '../stores/model-store';
 import {useHybridStore} from '../stores/hybrid-inference-store';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
+import {triggerHaptic} from '../services/haptics';
 import type {ModelInfo} from '../types';
 import type {ActiveEngine} from '../types/local-inference';
 
@@ -86,7 +87,7 @@ export function ModelsScreen() {
             <Text fontSize={13} color="#EF4444" flex={1}>
               {error}
             </Text>
-            <Pressable onPress={clearError}>
+            <Pressable onPress={() => { triggerHaptic('light'); clearError(); }}>
               <Icon name="x" size={14} color="#EF4444" />
             </Pressable>
           </XStack>
@@ -144,7 +145,7 @@ export function ModelsScreen() {
             </XStack>
           )}
           {isLoaded && (
-            <Pressable onPress={unloadModel}>
+            <Pressable onPress={() => { triggerHaptic('medium'); unloadModel(); }}>
               <YStack
                 marginTop={12}
                 paddingVertical={8}
@@ -177,7 +178,7 @@ export function ModelsScreen() {
               const label =
                 engine === 'slonet' ? 'SloNet' : engine === 'qwen' ? 'Qwen' : 'Server';
               return (
-                <Pressable key={engine} style={{flex: 1}} onPress={() => hybrid.setActiveEngine(engine)}>
+                <Pressable key={engine} style={{flex: 1}} onPress={() => { triggerHaptic('selection'); hybrid.setActiveEngine(engine); }}>
                   <YStack
                     paddingVertical={8}
                     borderRadius={8}
@@ -292,7 +293,7 @@ export function ModelsScreen() {
               {souls.map(soul => {
                 const isActive = currentSoul?.name === soul.name;
                 return (
-                  <Pressable key={soul.name} onPress={() => switchSoul(soul.name)}>
+                  <Pressable key={soul.name} onPress={() => { triggerHaptic('selection'); switchSoul(soul.name); }}>
                     <YStack
                       paddingHorizontal={12}
                       paddingVertical={8}
@@ -326,7 +327,7 @@ export function ModelsScreen() {
               Trained Versions
             </Text>
             {checkpoints.map(cp => (
-              <Pressable key={cp.name} onPress={() => switchSoul(cp.soul, cp.name)}>
+              <Pressable key={cp.name} onPress={() => { triggerHaptic('selection'); switchSoul(cp.soul, cp.name); }}>
                 <XStack
                   alignItems="center"
                   justifyContent="space-between"
@@ -411,7 +412,7 @@ export function ModelsScreen() {
                   ) : model.loaded ? (
                     <StatusBadge label="Loaded" variant="success" />
                   ) : (
-                    <Pressable onPress={(e) => { e.stopPropagation(); loadModel(model.id); }}>
+                    <Pressable onPress={(e) => { e.stopPropagation(); triggerHaptic('medium'); loadModel(model.id); }}>
                       <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor={accent}>
                         <Text fontSize={13} color="white" fontWeight="600">Load</Text>
                       </YStack>
@@ -503,13 +504,13 @@ export function ModelsScreen() {
               borderTopWidth={0.5}
               borderTopColor="$borderColor">
               {detailModel?.loaded ? (
-                <Pressable onPress={() => { unloadModel(); setDetailModel(null); }}>
+                <Pressable onPress={() => { triggerHaptic('medium'); unloadModel(); setDetailModel(null); }}>
                   <YStack backgroundColor="rgba(239, 68, 68, 0.08)" paddingVertical={12} borderRadius={10} alignItems="center">
                     <Text fontSize={15} color="#EF4444" fontWeight="600">Unload Model</Text>
                   </YStack>
                 </Pressable>
               ) : (
-                <Pressable onPress={() => { if (detailModel) loadModel(detailModel.id); setDetailModel(null); }}>
+                <Pressable onPress={() => { triggerHaptic('medium'); if (detailModel) loadModel(detailModel.id); setDetailModel(null); }}>
                   <YStack backgroundColor={accent} paddingVertical={12} borderRadius={10} alignItems="center">
                     <Text fontSize={15} color="white" fontWeight="600">Load Model</Text>
                   </YStack>

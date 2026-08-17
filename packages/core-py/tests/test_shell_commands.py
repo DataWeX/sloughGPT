@@ -340,12 +340,12 @@ class TestShellCommands:
 
     def test_train_hf(self, monkeypatch):
         calls = _stub_api(monkeypatch, post_res={})
-        ShellCommands.train_hf("qwen", "ds", "nm", 2, True)
+        ShellCommands.train_hf("models/gpt2.slnc", "ds", "nm", 2, 8)
         path, data = calls["post"][0]
-        assert path == "/training/hf-start"
-        assert data["model"] == "qwen"
+        assert path == "/training/lora-finetune"
+        assert data["model_path"] == "models/gpt2.slnc"
         assert data["epochs"] == 2
-        assert data["use_lora"] is True
+        assert data["rank"] == 8
 
     def test_train_status_list(self, monkeypatch):
         _stub_api(monkeypatch, get_res=[{"id": 1}])

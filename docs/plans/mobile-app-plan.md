@@ -142,43 +142,43 @@ not adopted.
 ## 2. Phased Plan
 
 ### Phase A — Foundation (design + toolchain)
+- [x] A1. `npm install` in `apps/mobile` (approved ~500-1000 MB) — restores jest/react-native/tsc
 
-- [ ] A1. `npm install` in `apps/mobile` (approved ~500-1000 MB) — restores jest/react-native/tsc
-- [ ] A2. Baseline: `npm test` green on existing ~50 test files; `npm run lint` (tsc) clean
-- [ ] A3. Generate native scaffolding: `react-native init`-style `android/` + `ios/` (or Expo prebuild), `app.json`
-- [ ] A4. `tamagui.config.ts` token rebuild (1.1) + remove hardcoded hex in `App.tsx`, StatusBar, nav themes
-- [ ] A5. Lucide tab icons + tab bar restyle (56pt + safe area)
-- [ ] A6. Design-token audit: zero hex literals in `src/` components
-- [ ] A7. Split `ChatScreen.tsx` (1440 lines) into feature hooks/components (chat-list, composer, drawer, toolbar) — no behavior change
+- [x] A2. Baseline: `npm test` green on existing ~50 test files; `npm run lint` (tsc) clean
+- [x] A3. Generate native scaffolding: `react-native init`-style `android/` + `ios/` (or Expo prebuild), `app.json`
+- [x] A4. `tamagui.config.ts` token rebuild (1.1) + remove hardcoded hex in `App.tsx`, StatusBar, nav themes
+- [x] A5. Lucide tab icons + tab bar restyle (56pt + safe area)
+- [x] A6. Design-token audit: zero hex literals in `src/` components
+- [x] A7. Split `ChatScreen.tsx` (1440 lines) into feature hooks/components (chat-list, composer, drawer, toolbar) — no behavior change
 
 Tests: A2 baseline suite; A4/A5 component tests updated to assert token-based styles; A6 grep-based guard test; A7 refactor verified by identical existing tests.
 
 ### Phase B — Chat parity with web
 
-- [ ] B1. Streaming SSE via `sse-client` — stream state, cancel, reconnect (exists in `chat-store`; verify/fix)
-- [ ] B2. Markdown rendering parity (code blocks + copy, headings, lists, quotes) — `Markdown.tsx`
-- [ ] B3. Message actions row: copy / regenerate / thumbs / bookmark / read-aloud
-- [ ] B4. Suggestion chips (post-response + empty state) from `quick-prompts` service
-- [ ] B5. Model + soul picker chip wired to `model-store` (list/switch soul/load checkpoint)
-- [ ] B6. Voice input + image upload flows (services exist) — permission, preview, failure states
-- [ ] B7. Regenerate with backend context (`storeSessionContext` parity) — `chat-store.regenerate`
-- [ ] B8. Offline mode: queue sends, retry on reconnect (`offline-cache`, `retryPendingSends`)
-- [ ] B9. Bookmarks / stars / pins / labels / reply / forward — verify against services, surface in UI
-- [ ] B10. Slash commands in composer (web has `SlashCommandMenu`) — add mobile equivalent
-- [ ] B11. Search sessions modal (exists) + global search screen parity
-- [ ] B12. Session management: create/rename/archive/delete, drafts per session
+- [x] B1. Streaming SSE via `sse-client` — stream state, cancel, reconnect (exists in `chat-store`; verify/fix)
+- [x] B2. Markdown rendering parity (code blocks + copy, headings, lists, quotes) — `Markdown.tsx`
+- [x] B3. Message actions row: copy / regenerate / thumbs / bookmark / read-aloud
+- [x] B4. Suggestion chips (post-response + empty state) from `quick-prompts` service
+- [x] B5. Model + soul picker chip wired to `model-store` (list/switch soul/load checkpoint)
+- [x] B6. Voice input + image upload flows (services exist) — permission, preview, failure states
+- [x] B7. Regenerate with backend context (`storeSessionContext` parity) — `chat-store.regenerate`
+- [x] B8. Offline mode: queue sends, retry on reconnect (`offline-cache`, `retryPendingSends`)
+- [x] B9. Bookmarks / stars / pins / labels / reply / forward — verify against services, surface in UI
+- [x] B10. Slash commands in composer (web has `SlashCommandMenu`) — add mobile equivalent
+- [x] B11. Search sessions modal (exists) + global search screen parity
+- [x] B12. Session management: create/rename/archive/delete, drafts per session
 
 Tests: store unit tests (streaming/cancel/reconnect, offline queue, regenerate), component tests
 (composer, bubble actions, chips, picker), integration tests (sse-client vs mocked server).
 
 ### Phase C — Server screens (parity with web pages)
 
-- [ ] C1. Models screen: catalog, load/unload, soul switcher + checkpoint submenu, status badges
-- [ ] C2. Health/Monitoring: live metrics, model status, inference stats (services + health store)
-- [ ] C3. Settings: theme (light/dark/brand), chat defaults (temp/max tokens), chat background, memory
-- [ ] C4. Knowledge: list/add/delete/search, batch ops, category chips (web `/knowledge` parity)
-- [ ] C5. Training: start distill/fine-tune, loss chart, checkpoint catalog with load/delete, job history
-- [ ] C6. Bookmarks screen, Help, About, Onboarding polish
+- [x] C1. Models screen: catalog, load/unload, soul switcher + checkpoint submenu, status badges
+- [x] C2. Health/Monitoring: live metrics, model status, inference stats (services + health store)
+- [x] C3. Settings: theme (light/dark/brand), chat defaults (temp/max tokens), chat background, memory
+- [x] C4. Knowledge: list/add/delete/search, batch ops, category chips (web `/knowledge` parity)
+- [x] C5. Training: start distill/fine-tune, loss chart, checkpoint catalog with load/delete, job history
+- [x] C6. Bookmarks screen, Help, About, Onboarding polish
 
 Tests: per-screen component tests (render/empty/error/loading states), store tests, controller
 (service) tests against mocked `api-client`.

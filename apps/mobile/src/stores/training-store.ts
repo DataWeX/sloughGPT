@@ -8,7 +8,7 @@ import {
   loadCheckpoint,
   listDatasets,
   streamTraining,
-  startHFFineTune,
+  startLoraFinetune,
   listTrainingJobs,
   type TrainConfig,
   type Checkpoint,
@@ -63,7 +63,7 @@ interface TrainingState {
   setHfOpts: (partial: Partial<HFTrainingOpts>) => void;
   setMethod: (m: TrainingMethod) => void;
   start: () => Promise<void>;
-  startHFFineTune: () => Promise<void>;
+  startLoraFinetune: () => Promise<void>;
   stop: () => Promise<void>;
   refresh: () => Promise<void>;
   loadCheckpoint: (name: string) => Promise<void>;
@@ -118,7 +118,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   start: async () => {
     const state = get();
     if (state.method === 'finetune') {
-      await get().startHFFineTune();
+      await get().startLoraFinetune();
       return;
     }
 
@@ -221,14 +221,14 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     }
   },
 
-  startHFFineTune: async () => {
+  startLoraFinetune: async () => {
     const {hfOpts, config} = get();
     const dataset = hfOpts.dataset || config.dataset_id;
     if (!dataset) {
       set({error: 'Select a dataset for fine-tuning'});
       return;
     }
-    const model = hfOpts.model || 'gpt2';
+    const modelPath = hfOpts.model || 'models/gpt2.slnc';
 
     set({
       phase: 'TRAINING',
@@ -242,14 +242,13 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     });
 
     try {
-      const result = await startHFFineTune({
-        model,
+      const result = await startLoraFinetune({
+        model_path: modelPath,
         dataset,
+        rank: hfOpts.lora_rank,
         epochs: hfOpts.epochs,
         batch_size: hfOpts.batch_size,
         learning_rate: hfOpts.learning_rate,
-        use_lora: hfOpts.use_lora,
-        lora_rank: hfOpts.lora_rank,
       });
       const jobId = result.job_id;
       set({hfJobId: jobId});

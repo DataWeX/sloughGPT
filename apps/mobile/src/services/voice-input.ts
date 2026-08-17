@@ -3,6 +3,8 @@
  * Records audio via expo-av and transcribes via backend.
  */
 
+import {Alert, Linking} from 'react-native';
+
 let Audio: any;
 try {
   Audio = require('expo-av');
@@ -20,11 +22,23 @@ export interface VoiceRecording {
  */
 export async function startRecording(): Promise<{stop: () => Promise<VoiceRecording | null>}> {
   if (!Audio) {
-    throw new Error('Audio recording not available. Install expo-av.');
+    Alert.alert('Audio unavailable', 'expo-av is not installed on this device.');
+    throw new Error('Audio recording not available.');
   }
 
   const permission = await Audio.Recording.requestPermissionsAsync();
   if (!permission.granted) {
+    Alert.alert(
+      'Microphone permission required',
+      'Please enable microphone access in your device settings to record voice.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Open Settings',
+          onPress: () => Linking.openSettings().catch(() => {}),
+        },
+      ],
+    );
     throw new Error('Microphone permission required');
   }
 

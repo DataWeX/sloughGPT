@@ -1,8 +1,9 @@
 import React, {useState, useCallback, useRef, useEffect} from 'react';
-import {Clipboard, Pressable, View} from 'react-native';
+import {Pressable, View} from 'react-native';
 import {Text, XStack, YStack, useTheme} from 'tamagui';
 import {Icon} from './Icon';
 import {toast} from '../services/toast';
+import {copyToClipboard} from '../services/clipboard';
 
 interface MarkdownProps {
   content: string;
@@ -166,11 +167,13 @@ function CodeBlock({language, code}: {language: string; code: string}) {
   const theme = useTheme();
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = useCallback(() => {
-    Clipboard.setString(code);
-    setCopied(true);
-    toast.success('Copied to clipboard');
-    setTimeout(() => setCopied(false), 1500);
+  const handleCopy = useCallback(async () => {
+    const ok = await copyToClipboard(code);
+    if (ok) {
+      setCopied(true);
+      toast.success('Copied to clipboard');
+      setTimeout(() => setCopied(false), 1500);
+    }
   }, [code]);
 
   return (

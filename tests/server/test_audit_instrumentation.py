@@ -437,8 +437,8 @@ class TestTrainingRouterAudit:
         text_file.write_text("hello world\n")
         mock_executor.return_value = MagicMock()
         resp = training_router_client.post(
-            "/training/hf-start",
-            json={"model": "gpt2", "manifest_uri": str(text_file), "epochs": 1},
+            "/training/lora-finetune",
+            json={"model_path": "gpt2", "dataset": str(tmp_path), "epochs": 1},
         )
         assert resp.status_code == 200
         job_id = resp.json()["job_id"]
@@ -446,7 +446,7 @@ class TestTrainingRouterAudit:
         logger.log.assert_called_once()
         args, kwargs = logger.log.call_args
         assert args[0] == "training.start"
-        assert kwargs["resource"] == str(text_file)
+        assert kwargs["resource"] == str(tmp_path)
         assert kwargs["detail"] == "hf"
         assert kwargs["extra"]["job_id"] == job_id
         assert kwargs["extra"]["model"] == "gpt2"

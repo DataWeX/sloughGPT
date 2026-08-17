@@ -73,16 +73,16 @@ export async function* streamTraining(
   yield* streamSSE('/auto-train/stream', {}, signal);
 }
 
-export async function startHFFineTune(opts: {
-  model: string;
+export async function startLoraFinetune(opts: {
+  model_path: string;
   dataset: string;
-  epochs: number;
-  batch_size: number;
-  learning_rate: number;
-  use_lora: boolean;
-  lora_rank: number;
+  rank?: number;
+  alpha?: number;
+  epochs?: number;
+  batch_size?: number;
+  learning_rate?: number;
 }) {
-  return api.post<{job_id: string}>('/training/hf-start', opts);
+  return api.post<{job_id: string}>('/training/lora-finetune', opts);
 }
 
 export async function listTrainingJobs() {

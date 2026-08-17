@@ -247,9 +247,9 @@ class TestShellCommands:
     def test_train_hf(self, monkeypatch):
         calls = []
         monkeypatch.setattr(commands, "_api_post", lambda p, d=None: calls.append(d) or {})
-        ShellCommands.train_hf("gpt2", "ds", use_lora=False)
-        assert calls[0]["model"] == "gpt2"
-        assert calls[0]["use_lora"] is False
+        ShellCommands.train_hf("models/gpt2.slnc", "ds", rank=16)
+        assert calls[0]["model_path"] == "models/gpt2.slnc"
+        assert calls[0]["rank"] == 16
 
     def test_train_status_list(self, monkeypatch):
         monkeypatch.setattr(commands, "_api_get", lambda p: [{"id": 1}])

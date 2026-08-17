@@ -185,28 +185,28 @@ describe('start (distill)', () => {
     expect(useTrainingStore.getState().running).toBe(false);
   });
 
-  it('delegates to startHFFineTune when method is finetune', async () => {
+  it('delegates to startLoraFinetune when method is finetune', async () => {
     useTrainingStore.setState({method: 'finetune', hfOpts: {...useTrainingStore.getState().hfOpts, dataset: 'ds-1'}});
-    mockService.startHFFineTune.mockResolvedValue({job_id: 'hf-1'});
+    mockService.startLoraFinetune.mockResolvedValue({job_id: 'hf-1'});
     mockService.listTrainingJobs.mockResolvedValue([]);
 
     await useTrainingStore.getState().start();
-    expect(mockService.startHFFineTune).toHaveBeenCalled();
+    expect(mockService.startLoraFinetune).toHaveBeenCalled();
   });
 });
 
-// ── startHFFineTune ────────────────────────────────────────────────────────
+// ── startLoraFinetune ────────────────────────────────────────────────────────
 
-describe('startHFFineTune', () => {
-  it('starts HF job and polls for completion', async () => {
+describe('startLoraFinetune', () => {
+  it('starts LoRA job and polls for completion', async () => {
     useTrainingStore.setState({hfOpts: {...useTrainingStore.getState().hfOpts, dataset: 'ds-1'}});
-    mockService.startHFFineTune.mockResolvedValue({job_id: 'hf-1'});
+    mockService.startLoraFinetune.mockResolvedValue({job_id: 'hf-1'});
 
     mockService.listTrainingJobs.mockResolvedValue([
       {job_id: 'hf-1', status: 'completed', steps: 50, epoch: 3, final_loss: 0.3, model_path: '/tmp/model'},
     ]);
 
-    await useTrainingStore.getState().startHFFineTune();
+    await useTrainingStore.getState().startLoraFinetune();
 
     jest.advanceTimersByTime(3100);
     await Promise.resolve();
@@ -219,26 +219,26 @@ describe('startHFFineTune', () => {
 
   it('sets error when no dataset', async () => {
     useTrainingStore.setState({hfOpts: {...useTrainingStore.getState().hfOpts, dataset: ''}, config: {...useTrainingStore.getState().config, dataset_id: undefined}});
-    await useTrainingStore.getState().startHFFineTune();
+    await useTrainingStore.getState().startLoraFinetune();
     expect(useTrainingStore.getState().error).toContain('dataset');
     expect(useTrainingStore.getState().running).toBe(false);
   });
 
-  it('handles HF start failure', async () => {
+  it('handles LoRA start failure', async () => {
     useTrainingStore.setState({hfOpts: {...useTrainingStore.getState().hfOpts, dataset: 'ds-1'}});
-    mockService.startHFFineTune.mockRejectedValue(new Error('quota exceeded'));
+    mockService.startLoraFinetune.mockRejectedValue(new Error('quota exceeded'));
 
-    await useTrainingStore.getState().startHFFineTune();
+    await useTrainingStore.getState().startLoraFinetune();
     expect(useTrainingStore.getState().phase).toBe('FAILED');
     expect(useTrainingStore.getState().error).toContain('quota exceeded');
   });
 
-  it('handles HF job failed status', async () => {
+  it('handles LoRA job failed status', async () => {
     useTrainingStore.setState({hfOpts: {...useTrainingStore.getState().hfOpts, dataset: 'ds-1'}});
-    mockService.startHFFineTune.mockResolvedValue({job_id: 'hf-1'});
+    mockService.startLoraFinetune.mockResolvedValue({job_id: 'hf-1'});
     mockService.listTrainingJobs.mockResolvedValue([{job_id: 'hf-1', status: 'failed', error: 'OOM'}]);
 
-    await useTrainingStore.getState().startHFFineTune();
+    await useTrainingStore.getState().startLoraFinetune();
 
     jest.advanceTimersByTime(3100);
     await Promise.resolve();
