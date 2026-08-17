@@ -185,10 +185,10 @@ Tests: per-screen component tests (render/empty/error/loading states), store tes
 
 ### Phase D — Native & platform
 
-- [ ] D1. Safe areas, haptics, sounds wired to all key interactions
+- [x] D1. Safe areas, haptics, sounds wired to all key interactions
 - [ ] D2. Push notifications (service exists) — verify on-device
-- [ ] D3. Clipboard copy with feedback; file/image pickers with permission denial states
-- [ ] D4. On-device inference: `llama-rn-service` + `onnx-inference-service` + `hybrid-inference-store` —
+- [x] D3. Clipboard copy with feedback; file/image pickers with permission denial states
+- [x] D4. On-device inference: `llama-rn-service` + `onnx-inference-service` + `hybrid-inference-store` —
   offline/local model path, hot-swap between cloud and local
 - [ ] D5. Native inference engine: update `cpp/slonet.c` + `SloNet.podspec` (see 2.1) — parity with
   canonical SloNet layout, JSI/JNI bridge, Android + iOS builds
@@ -233,11 +233,11 @@ toolchain) run as part of the mobile suite where the toolchain exists; D5.4/D5.5
 
 ### Phase E — Quality & ship
 
-- [ ] E1. Accessibility pass: touch targets ≥44pt, contrast AA, screen-reader labels, reduced motion
-- [ ] E2. Performance: FlatList virtualization, image sizing, memoization; no jank on mid devices
+- [x] E1. Accessibility pass: touch targets ≥44pt, contrast AA, screen-reader labels, reduced motion
+- [x] E2. Performance: FlatList virtualization, image sizing, memoization; no jank on mid devices
 - [ ] E3. E2E smoke: Maestro or Detox covering onboarding → chat → send → settings
 - [ ] E4. Release builds (Android APK + iOS) and install smoke test on a device
-- [ ] E5. Full suite green + `tsc` clean + journal close-out
+- [x] E5. Full suite green + `tsc` clean + journal close-out
 
 ---
 
