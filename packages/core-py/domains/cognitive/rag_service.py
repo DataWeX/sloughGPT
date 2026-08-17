@@ -120,6 +120,25 @@ class RAGService:
             "added_at": time.time(),
         })
         self._save_document(self._documents[-1])
+
+        # Auto-extract entities/facts into knowledge graph
+        try:
+            from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph
+            if not hasattr(self, '_kg'):
+                self._kg = KnowledgeGraph()
+            detector = self.rag.hallucination_detector
+            claims = detector.citation_tracker.extract_claims(content)
+            for claim in claims:
+                self._kg.add_fact(
+                    subject=claim["subject"],
+                    predicate=claim["predicate"],
+                    obj=content[claim["start"]:claim["end"]][:200],
+                    confidence=0.8,
+                    source=metadata.get("source", "rag"),
+                )
+        except Exception:
+            pass
+
         logger.info(
             "Ingested document (%d chars → %d chunks) into RAG index",
             len(content), len(chunk_ids),
@@ -244,6 +263,37 @@ class RAGService:
         if ingested > 0:
             logger.info("Auto-ingested %d files into RAG from %s", ingested, root_path)
         return ingested
+
+    def kg_stats(self) -> Dict[str, Any]:
+        """Return knowledge graph statistics."""
+        if not hasattr(self, '_kg'):
+            return {"entities": 0, "facts": 0}
+        return {
+            "entities": len(self._kg.entities),
+            "facts": len(self._kg.facts),
+            "stats": self._kg.stats,
+        }
+
+    def kg_query(self, subject: str = "", predicate: str = "", obj: str = "") -> List[Dict[str, Any]]:
+        """Query the knowledge graph for facts matching the given pattern."""
+        if not hasattr(self, '_kg'):
+            return []
+        results = []
+        for fact in self._kg.facts.values():
+            if subject and subject.lower() not in fact.subject.lower():
+                continue
+            if predicate and predicate.lower() not in fact.predicate.lower():
+                continue
+            if obj and obj.lower() not in fact.object.lower():
+                continue
+            results.append({
+                "subject": fact.subject,
+                "predicate": fact.predicate,
+                "object": fact.object,
+                "confidence": fact.confidence,
+                "source": fact.source,
+            })
+        return results
 
 
 # ---------------------------------------------------------------------------
