@@ -265,6 +265,26 @@ class ProcessGuard:
         """Register a callback invoked after worker restart (receives worker_id)."""
         self._restart_callbacks.append(cb)
 
+    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = 120.0) -> dict:
+        """Load a LoRA adapter into the worker's model.
+
+        Delegates to ModelWorkerProcess.load_adapter() which sends the command
+        to the subprocess.
+        """
+        if self._worker is None or not self._worker.alive:
+            raise RuntimeError("Worker is not alive — cannot load adapter.")
+        return self._worker.load_adapter(adapter_path, merge=merge, timeout=timeout)
+
+    def unload_adapter(self, timeout: float = 60.0) -> dict:
+        """Unload the LoRA adapter from the worker's model.
+
+        Delegates to ModelWorkerProcess.unload_adapter() which sends the command
+        to the subprocess.
+        """
+        if self._worker is None or not self._worker.alive:
+            raise RuntimeError("Worker is not alive — cannot unload adapter.")
+        return self._worker.unload_adapter(timeout=timeout)
+
     # ── Private ──────────────────────────────────────────────────────
 
     def _launch_worker(self) -> None:

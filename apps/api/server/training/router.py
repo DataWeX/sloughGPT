@@ -1289,151 +1289,268 @@ class LoadAdapterRequest(BaseModel):
     merge: bool = Field(default=False, description="Merge LoRA into base weights for faster inference")
 
 
+def _resolve_adapter_path(raw: str) -> Path:
+    """Resolve adapter path from user input, checking repo-relative paths."""
+    p = Path(raw)
+    if p.is_file():
+        return p
+    repo_root = Path(__file__).resolve().parents[4]
+    for base in [repo_root / "models", repo_root / "data" / "user_adapters"]:
+        alt = base / raw
+        if alt.is_file():
+            return alt
+    raise HTTPException(status_code=400, detail=f"Adapter not found: {raw}")
+
+
+def _is_slonet_model(model) -> bool:
+    """Check if a model is a SloNet SloTransformer."""
+    try:
+        from domains.models import SloughGPTModel
+        return isinstance(model, SloughGPTModel)
+    except Exception:
+        return hasattr(model, '__class__') and 'SloTransformer' in type(model).__name__
+
+
+def _is_hf_model(model) -> bool:
+    """Check if a model is a HuggingFace transformers model."""
+    try:
+        import torch.nn as nn
+        return isinstance(model, nn.Module) and not _is_slonet_model(model)
+    except ImportError:
+        return False
+
+
+def _is_per_layer_adapter(adapter) -> bool:
+    """Check if adapter has per-layer keys (from hf_lora_finetune) vs flat W_a/W_b."""
+    return any(k.startswith("layers.") for k in adapter.files)
+
+
 @router.post("/training/load-adapter")
 async def load_adapter(request: LoadAdapterRequest):
     """Load a LoRA adapter into the currently running model for inference.
 
-    Reads the adapter config (rank, alpha, target_modules), applies LoRA layers
-    to the model, loads the weights, and optionally merges for faster inference.
-
-    The adapter is the .npz file produced by POST /training/lora-finetune.
+    Sends the adapter to the worker subprocess which applies LoRA to the model
+    in-process. Supports SloNet models via domains.training.lora.
     """
-    adapter_path = Path(request.adapter_path)
-    if not adapter_path.is_file():
-        # Try relative to models/
-        repo_root = Path(__file__).resolve().parents[4]
-        alt = repo_root / "models" / request.adapter_path
-        if alt.is_file():
-            adapter_path = alt
-        else:
-            raise HTTPException(status_code=400, detail=f"Adapter not found: {request.adapter_path}")
+    adapter_path = _resolve_adapter_path(request.adapter_path)
 
-    # Get the running model's provider
-    from domains.infrastructure.model_server import get_model_registry
-    registry = get_model_registry()
-    models = registry.list_models()
-    if not models:
-        raise HTTPException(status_code=400, detail="No model loaded. Load a model first.")
+    # Find the ProcessGuard — stored in the models controller (adopted during autoload)
+    process_guard = None
+    try:
+        from controllers.models import get_models_controller
+        ctrl = get_models_controller()
+        process_guard = getattr(ctrl, '_process_guard', None)
+    except Exception:
+        pass
 
-    # Find a provider with a SloNetChatProvider._model
-    provider = None
-    for m in models:
-        server = registry._servers.get(m)
-        if server is not None:
-            model_ref = getattr(server, '_model_ref', None)
-            if model_ref is not None and hasattr(model_ref, 'layers'):
-                provider = server
-                break
-
-    if provider is None:
-        raise HTTPException(status_code=400, detail="No SloNet model loaded. Load a .slnc model first.")
-
-    model = provider._model_ref
-    if not hasattr(model, 'layers'):
-        raise HTTPException(status_code=400, detail="Loaded model is not a SloTransformer — cannot apply LoRA.")
+    if process_guard is None or not hasattr(process_guard, 'load_adapter'):
+        raise HTTPException(status_code=400,
+            detail="No subprocess worker found. Load adapter via direct model access instead.")
 
     try:
-        from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
-        from domains.training.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
-        import numpy as np
-
-        adapter = np.load(str(adapter_path))
-        rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
-        alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
-
-        target_modules = []
-        n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
-        for i in range(n_modules):
-            key = f"_config/target_module_{i}"
-            if key in adapter:
-                chars = adapter[key].tolist()
-                target_modules.append("".join(chr(c) for c in chars))
-        if not target_modules:
-            target_modules = ["W_q", "W_k", "W_v", "W_o"]
-
-        # Apply LoRA layers + load weights
-        lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
-        new_model = apply_lora_to_model(model, lora_config)
-        load_lora_adapter(new_model, str(adapter_path))
-        n_params = count_lora_parameters(new_model)
-
-        # Swap model in server
-        provider.swap_model(new_model)
-
-        result = {
-            "status": "loaded",
-            "adapter_path": str(adapter_path),
-            "rank": rank,
-            "alpha": alpha,
-            "target_modules": target_modules,
-            "n_params": n_params,
-            "merged": False,
-        }
-
-        # Optional merge
-        if request.merge:
-            merged_model = merge_lora_adapter(new_model)
-            provider.swap_model(merged_model)
-            result["merged"] = True
-
-        logger.info(
-            "Loaded LoRA adapter %s (rank=%d, alpha=%.1f, %d params, merged=%s)",
-            adapter_path, rank, alpha, n_params, result["merged"],
-            extra={"tag": "TRAIN"},
+        result = process_guard.load_adapter(
+            str(adapter_path), merge=request.merge, timeout=120.0
         )
+        logger.info("Loaded adapter via worker: %s", adapter_path.name, extra={"tag": "TRAIN"})
         return result
-
-    except HTTPException:
-        raise
     except Exception as exc:
         logger.exception("Failed to load adapter: %s", exc, extra={"tag": "TRAIN"})
         raise HTTPException(status_code=500, detail=f"Failed to load adapter: {exc}")
+
+
+def _load_adapter_slonet(model, adapter, adapter_path: Path, request) -> dict:
+    """Apply LoRA adapter to a SloNet model."""
+    rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
+    alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
+
+    target_modules = []
+    n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
+    for i in range(n_modules):
+        key = f"_config/target_module_{i}"
+        if key in adapter:
+            chars = adapter[key].tolist()
+            target_modules.append("".join(chr(c) for c in chars))
+    if not target_modules:
+        target_modules = ["W_q", "W_k", "W_v", "W_o"]
+
+    from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
+    from domains.training.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
+
+    lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
+    new_model = apply_lora_to_model(model, lora_config)
+    load_lora_adapter(new_model, str(adapter_path))
+    n_params = count_lora_parameters(new_model)
+
+    result = {
+        "status": "loaded",
+        "model_type": "slonet",
+        "adapter_path": str(adapter_path),
+        "rank": rank,
+        "alpha": alpha,
+        "target_modules": target_modules,
+        "n_params": n_params,
+        "merged": False,
+    }
+
+    if request.merge:
+        merged_model = merge_lora_adapter(new_model)
+        new_model = merged_model
+        result["merged"] = True
+
+    logger.info("Loaded SloNet LoRA adapter %s (rank=%d, alpha=%.1f, %d params)",
+        adapter_path, rank, alpha, n_params, extra={"tag": "TRAIN"})
+    return result
+
+
+def _load_adapter_hf(model, adapter, adapter_path: Path, request) -> dict:
+    """Apply LoRA adapter to a HuggingFace model via peft."""
+    rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
+    alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
+
+    target_modules = []
+    n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
+    for i in range(n_modules):
+        key = f"_config/target_module_{i}"
+        if key in adapter:
+            chars = adapter[key].tolist()
+            target_modules.append("".join(chr(c) for c in chars))
+    if not target_modules:
+        target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
+
+    try:
+        from peft import LoraConfig, get_peft_model, TaskType
+        import torch
+    except ImportError:
+        raise HTTPException(status_code=500,
+            detail="peft library not installed. Install with: pip install peft")
+
+    lora_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        r=rank,
+        lora_alpha=alpha,
+        target_modules=target_modules,
+        lora_dropout=0.0,
+        bias="none",
+    )
+
+    hf_model = get_peft_model(model, lora_config)
+
+    loaded_keys = 0
+    for name, param in hf_model.named_parameters():
+        if name in adapter:
+            param.data = torch.tensor(adapter[name], dtype=param.dtype)
+            loaded_keys += 1
+
+    n_params = sum(p.numel() for p in hf_model.parameters() if p.requires_grad)
+
+    import state as server_state
+    server_state.model = hf_model
+
+    result = {
+        "status": "loaded",
+        "model_type": "huggingface",
+        "adapter_path": str(adapter_path),
+        "rank": rank,
+        "alpha": alpha,
+        "target_modules": target_modules,
+        "n_params": n_params,
+        "loaded_keys": loaded_keys,
+        "merged": False,
+    }
+
+    if request.merge:
+        hf_model = hf_model.merge_and_unload()
+        server_state.model = hf_model
+        result["merged"] = True
+
+    logger.info("Loaded HF LoRA adapter %s (rank=%d, alpha=%.1f, %d params, %d keys)",
+        adapter_path, rank, alpha, n_params, loaded_keys, extra={"tag": "TRAIN"})
+    return result
 
 
 @router.post("/training/unload-adapter")
 async def unload_adapter():
     """Unload the current LoRA adapter and revert to base model weights.
 
-    Reloads the base .slnc model from disk, replacing the LoRA-augmented version.
+    Sends the unload command to the worker subprocess which reloads the base
+    model in-process.
     """
-    from domains.infrastructure.model_server import get_model_registry
-    registry = get_model_registry()
-    models = registry.list_models()
-    if not models:
-        raise HTTPException(status_code=400, detail="No model loaded.")
+    process_guard = None
+    try:
+        from controllers.models import get_models_controller
+        ctrl = get_models_controller()
+        process_guard = getattr(ctrl, '_process_guard', None)
+    except Exception:
+        pass
 
-    # Find the server and its base model path
-    for m in models:
-        server = registry._servers.get(m)
-        if server is None:
-            continue
-        model_ref = getattr(server, '_model_ref', None)
-        if model_ref is None or not hasattr(model_ref, 'layers'):
-            continue
+    if process_guard is None or not hasattr(process_guard, 'unload_adapter'):
+        raise HTTPException(status_code=400,
+            detail="No subprocess worker found. Unload adapter via direct model access instead.")
 
-        # Check if model has LoRA layers applied
-        has_lora = any(
-            hasattr(mod, 'lora_A') or hasattr(mod, 'lora_B')
-            for _, mod in model_ref.named_modules() if hasattr(mod, 'named_modules')
-        ) if hasattr(model_ref, 'named_modules') else False
+    try:
+        result = process_guard.unload_adapter(timeout=60.0)
+        logger.info("Unloaded adapter via worker", extra={"tag": "TRAIN"})
+        return result
+    except Exception as exc:
+        logger.exception("Failed to unload adapter: %s", exc, extra={"tag": "TRAIN"})
+        raise HTTPException(status_code=500, detail=f"Failed to unload adapter: {exc}")
 
-        if not has_lora:
-            return {"status": "no_adapter", "message": "No LoRA adapter loaded — model is already base weights."}
 
-        # Reload base model from .slnc
-        # The provider's _slnc_path was saved during initial load
-        slnc_path = getattr(model_ref, '_slnc_path', None)
-        if slnc_path is None:
-            raise HTTPException(status_code=400, detail="Cannot determine base model path — reload manually via POST /models/load.")
+def _unload_adapter_slonet(model, server=None) -> dict:
+    """Unload LoRA from a SloNet model by reloading base .slnc."""
+    has_lora = any(
+        hasattr(mod, 'lora_A') or hasattr(mod, 'lora_B')
+        for _, mod in model.named_modules() if hasattr(mod, 'named_modules')
+    ) if hasattr(model, 'named_modules') else False
 
-        from domains.inference.slonet_provider import SloNetChatProvider
-        base_provider = SloNetChatProvider.from_slnc(slnc_path, model_id=m)
+    if not has_lora:
+        return {"status": "no_adapter", "message": "No LoRA adapter loaded — model is already base weights."}
+
+    slnc_path = getattr(model, '_slnc_path', None)
+    if slnc_path is None:
+        raise HTTPException(status_code=400, detail="Cannot determine base model path — reload via POST /models/load.")
+
+    from domains.inference.slonet_provider import SloNetChatProvider
+    base_provider = SloNetChatProvider.from_slnc(slnc_path, model_id="base")
+
+    if server is not None:
         server.swap_model(base_provider._model)
+    else:
+        import state as server_state
+        server_state.model = base_provider._model
 
-        logger.info("Unloaded LoRA adapter, reverted to base model: %s", slnc_path, extra={"tag": "TRAIN"})
-        return {"status": "unloaded", "message": f"Reverted to base model: {Path(slnc_path).name}"}
+    logger.info("Unloaded SloNet LoRA adapter, reverted to: %s", slnc_path, extra={"tag": "TRAIN"})
+    return {"status": "unloaded", "model_type": "slonet", "message": f"Reverted to base: {Path(slnc_path).name}"}
 
-    raise HTTPException(status_code=400, detail="No SloNet model found.")
+
+def _unload_adapter_hf(model, server=None) -> dict:
+    """Unload LoRA from an HF model by reloading the original base model."""
+    model_path = getattr(model, '_slnc_path', None)
+    if model_path is None:
+        base_model_name = getattr(getattr(model, 'config', None), '_name_or_path', None)
+        if base_model_name:
+            model_path = base_model_name
+    if model_path is None:
+        raise HTTPException(status_code=400,
+            detail="Cannot determine base model path. Load base model via POST /models/load.")
+
+    try:
+        from transformers import AutoModelForCausalLM
+        import torch
+        base_model = AutoModelForCausalLM.from_pretrained(
+            str(model_path), torch_dtype=torch.float32, device_map="cpu"
+        )
+
+        if server is not None:
+            server.swap_model(base_model)
+        else:
+            import state as server_state
+            server_state.model = base_model
+
+        logger.info("Unloaded HF LoRA adapter, reverted to: %s", model_path, extra={"tag": "TRAIN"})
+        return {"status": "unloaded", "model_type": "huggingface", "message": f"Reverted to base: {model_path}"}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to reload base model: {exc}")
 
 
 @router.post("/training/from-feedback")

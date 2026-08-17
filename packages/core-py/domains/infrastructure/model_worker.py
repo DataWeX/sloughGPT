@@ -95,6 +95,8 @@ def _worker_loop(
     generate_fn,
     stream_fn,
     cleanup_fn=None,
+    adapter_fn=None,
+    unload_fn=None,
 ) -> None:  # pragma: no cover — child process only; coverage recorded in parent
     """Shared request loop for both HF and SloNet workers.
 
@@ -109,6 +111,8 @@ def _worker_loop(
         stream_fn: ``fn(prompt, resp_q, session_id=..., **kwargs)`` for
             streaming (puts tagged tokens directly)
         cleanup_fn: Optional cleanup callable on shutdown
+        adapter_fn: ``fn(adapter_path, merge) -> dict`` for loading LoRA adapters
+        unload_fn: ``fn() -> dict`` for unloading LoRA adapters
     """
     hb_q.put_nowait(("ready", os.getpid()))
     requests_served = 0
@@ -158,6 +162,42 @@ def _worker_loop(
             except Exception as e:
                 tb = traceback.format_exc()
                 logger.error("Worker[%s]: stream error: %s\n%s", worker_id, e, tb,
+                    extra={"tag": "INFRA"})
+                try:
+                    resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
+                except Exception:
+                    pass
+
+        if cmd == "load_adapter":
+            session_id = None
+            try:
+                session_id, adapter_path, merge = payload
+                if adapter_fn is None:
+                    resp_q.put_nowait(("error", session_id, "Adapter loading not supported by this worker."))
+                else:
+                    result = adapter_fn(adapter_path, merge)
+                    resp_q.put_nowait(("result", session_id, result))
+            except Exception as e:
+                tb = traceback.format_exc()
+                logger.error("Worker[%s]: load_adapter error: %s\n%s", worker_id, e, tb,
+                    extra={"tag": "INFRA"})
+                try:
+                    resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
+                except Exception:
+                    pass
+
+        if cmd == "unload_adapter":
+            session_id = None
+            try:
+                session_id, = payload
+                if unload_fn is None:
+                    resp_q.put_nowait(("error", session_id, "Adapter unloading not supported by this worker."))
+                else:
+                    result = unload_fn()
+                    resp_q.put_nowait(("result", session_id, result))
+            except Exception as e:
+                tb = traceback.format_exc()
+                logger.error("Worker[%s]: unload_adapter error: %s\n%s", worker_id, e, tb,
                     extra={"tag": "INFRA"})
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
@@ -328,7 +368,90 @@ def _slo_worker_main(
         nonlocal provider
         provider = None
 
-    _worker_loop(req_q, resp_q, hb_q, worker_id, _generate, _stream, _cleanup)
+    def _load_adapter(adapter_path: str, merge: bool = False) -> dict:
+        """Load a LoRA adapter into the running SloNet model (inside worker subprocess)."""
+        from pathlib import Path
+        import numpy as np
+
+        p = Path(adapter_path)
+        if not p.is_file():
+            raise FileNotFoundError(f"Adapter not found: {adapter_path}")
+
+        adapter = np.load(str(p), allow_pickle=True)
+
+        rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
+        alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
+
+        target_modules = []
+        n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
+        for i in range(n_modules):
+            key = f"_config/target_module_{i}"
+            if key in adapter:
+                chars = adapter[key].tolist()
+                target_modules.append("".join(chr(c) for c in chars))
+        if not target_modules:
+            target_modules = ["W_q", "W_k", "W_v", "W_o"]
+
+        from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
+        from domains.training.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
+
+        model = provider._model
+        lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
+        new_model = apply_lora_to_model(model, lora_config)
+        load_lora_adapter(new_model, str(p))
+        n_params = count_lora_parameters(new_model)
+
+        result = {
+            "status": "loaded",
+            "model_type": "slonet",
+            "adapter_path": str(p),
+            "rank": rank,
+            "alpha": alpha,
+            "target_modules": target_modules,
+            "n_params": n_params,
+            "merged": False,
+        }
+
+        if merge:
+            new_model = merge_lora_adapter(new_model)
+            result["merged"] = True
+
+        provider._model = new_model
+        logger.info("Worker loaded LoRA adapter %s (rank=%d, alpha=%.1f, %d params)",
+            p, rank, alpha, n_params, extra={"tag": "TRAIN"})
+        return result
+
+    def _unload_adapter() -> dict:
+        """Unload LoRA adapter and revert to base model (inside worker subprocess)."""
+        from pathlib import Path
+        model = provider._model
+
+        # SloNet named_modules() doesn't recurse — use _walk_slo_tree instead
+        from domains.training.lora import _walk_slo_tree
+        has_lora = False
+        try:
+            for _path, mod in _walk_slo_tree(model, []):
+                if hasattr(mod, 'lora_A') or hasattr(mod, 'lora_B'):
+                    has_lora = True
+                    break
+        except Exception:
+            pass
+
+        if not has_lora:
+            return {"status": "no_adapter", "message": "No LoRA adapter loaded."}
+
+        slnc_path = getattr(provider, '_slnc_path', None)
+        if slnc_path is None:
+            raise RuntimeError("Cannot determine base model path.")
+
+        from domains.inference.slonet_provider import SloNetChatProvider
+        base_provider = SloNetChatProvider.from_slnc(slnc_path, model_id="base")
+        provider._model = base_provider._model
+
+        logger.info("Worker unloaded LoRA adapter, reverted to: %s", slnc_path, extra={"tag": "TRAIN"})
+        return {"status": "unloaded", "model_type": "slonet", "message": f"Reverted to base: {Path(slnc_path).name}"}
+
+    _worker_loop(req_q, resp_q, hb_q, worker_id, _generate, _stream, _cleanup, _load_adapter, _unload_adapter)
 
 
 # ---------------------------------------------------------------------------
@@ -925,6 +1048,98 @@ class ModelWorkerProcess:
                 continue
 
         return final_result
+
+    # ── Adapter loading ──────────────────────────────────────────────────
+
+    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = 120.0) -> dict:
+        """Send load_adapter request to worker and wait for result.
+
+        Args:
+            adapter_path: Path to .npz adapter file.
+            merge: Whether to merge LoRA into base weights.
+            timeout: Maximum wait time in seconds.
+
+        Returns:
+            dict with status, rank, alpha, n_params, etc.
+        """
+        if not self.alive:
+            raise RuntimeError(f"Worker[{self.worker_id}] is not alive")
+
+        session_id = _new_session_id()
+        try:
+            self._req_q.put_nowait(("load_adapter", (session_id, adapter_path, merge)))
+        except Exception as e:
+            self._health.errors += 1
+            raise RuntimeError(f"Failed to send load_adapter request: {e}")
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not self.alive:
+                self._health.crashed = True
+                self._health.crash_count += 1
+                raise RuntimeError(f"Worker[{self.worker_id}] crashed during adapter load")
+
+            try:
+                msg, *rest = self._resp_q.get(timeout=0.5)
+            except queue.Empty:
+                continue
+
+            msg_session, data = self._split_resp(msg, rest)
+            if msg_session is not None and msg_session != session_id:
+                continue
+
+            if msg == "result":
+                self._health.requests_served += 1
+                return data
+            elif msg == "error":
+                self._health.errors += 1
+                raise RuntimeError(f"Worker load_adapter error: {data}")
+
+        raise TimeoutError(f"Worker[{self.worker_id}] adapter load timed out after {timeout}s")
+
+    def unload_adapter(self, timeout: float = 60.0) -> dict:
+        """Send unload_adapter request to worker and wait for result.
+
+        Args:
+            timeout: Maximum wait time in seconds.
+
+        Returns:
+            dict with status and message.
+        """
+        if not self.alive:
+            raise RuntimeError(f"Worker[{self.worker_id}] is not alive")
+
+        session_id = _new_session_id()
+        try:
+            self._req_q.put_nowait(("unload_adapter", (session_id,)))
+        except Exception as e:
+            self._health.errors += 1
+            raise RuntimeError(f"Failed to send unload_adapter request: {e}")
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not self.alive:
+                self._health.crashed = True
+                self._health.crash_count += 1
+                raise RuntimeError(f"Worker[{self.worker_id}] crashed during adapter unload")
+
+            try:
+                msg, *rest = self._resp_q.get(timeout=0.5)
+            except queue.Empty:
+                continue
+
+            msg_session, data = self._split_resp(msg, rest)
+            if msg_session is not None and msg_session != session_id:
+                continue
+
+            if msg == "result":
+                self._health.requests_served += 1
+                return data
+            elif msg == "error":
+                self._health.errors += 1
+                raise RuntimeError(f"Worker unload_adapter error: {data}")
+
+        raise TimeoutError(f"Worker[{self.worker_id}] adapter unload timed out after {timeout}s")
 
     # ── Context manager ────────────────────────────────────────────────
 
