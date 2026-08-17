@@ -15,6 +15,7 @@ import { Chip } from '@sloughgpt/strui'
 import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount } from '@/lib/knowledge-controller'
+import { getRAGStats, clearRAG, listRAGDocuments, type RAGStats, type RAGDocument } from '@/lib/rag-controller'
 import { KnowledgeCategoryChart } from '@/components/knowledge/KnowledgeCategoryChart'
 import { MemoryCard } from '@/components/knowledge/MemoryCard'
 import { LearnSection } from '@/components/learn/LearnSection'
@@ -46,6 +47,11 @@ export default function KnowledgePage() {
   const [editTopic, setEditTopic] = useState('')
   const [addErrors, setAddErrors] = useState<{ content?: string; topic?: string }>({})
   const [editErrors, setEditErrors] = useState<{ content?: string; topic?: string }>({})
+  const [ragStats, setRagStats] = useState<RAGStats | null>(null)
+  const [ragDocs, setRagDocs] = useState<RAGDocument[]>([])
+  const [ragClearing, setRagClearing] = useState(false)
+  const [ragSyncing, setRagSyncing] = useState(false)
+  const [showRagDocs, setShowRagDocs] = useState(false)
   const [editingImportanceId, setEditingImportanceId] = useState<string | null>(null)
   const [importanceValue, setImportanceValue] = useState(0)
   const [importing, setImporting] = useState(false)
@@ -87,6 +93,45 @@ export default function KnowledgePage() {
   }, [addToast])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  const fetchRAGData = useCallback(async () => {
+    try {
+      const [s, docs] = await Promise.all([getRAGStats(), listRAGDocuments()])
+      setRagStats(s)
+      setRagDocs(docs.documents || [])
+    } catch { /* RAG not available */ }
+  }, [])
+
+  useEffect(() => { fetchRAGData() }, [fetchRAGData])
+
+  const handleRAGClear = useCallback(async () => {
+    setRagClearing(true)
+    try {
+      await clearRAG()
+      setRagStats({ total_documents: 0, total_chunks: 0, index_size: 0 })
+      setRagDocs([])
+      addToast('RAG index cleared', 'success')
+    } catch {
+      addToast('Failed to clear RAG index', 'error')
+    } finally {
+      setRagClearing(false)
+    }
+  }, [addToast])
+
+  const handleRAGSync = useCallback(async () => {
+    setRagSyncing(true)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/knowledge/kg/sync`, { method: 'POST' })
+      const data = await res.json()
+      const synced = data?.data?.total_triples || 0
+      addToast(`Synced ${synced} KG triples to RAG`, 'success')
+      await fetchRAGData()
+    } catch {
+      addToast('Failed to sync KG to RAG', 'error')
+    } finally {
+      setRagSyncing(false)
+    }
+  }, [addToast, fetchRAGData])
 
   const handleTrainAdapter = useCallback(async () => {
     setAdapterTraining(true)
@@ -574,6 +619,78 @@ export default function KnowledgePage() {
                   <span>Loss {adapterStatus.post_training_loss.toFixed(3)}</span>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {ragStats && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">RAG Index</p>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">
+                    {ragStats.total_chunks} chunks
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs px-2.5"
+                    onClick={handleRAGSync}
+                    disabled={ragSyncing}
+                  >
+                    {ragSyncing ? (
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        Syncing…
+                      </span>
+                    ) : 'Sync KG'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setShowRagDocs(!showRagDocs)}
+                  >
+                    {showRagDocs ? 'Hide' : 'Documents'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs px-2.5 text-destructive hover:text-destructive"
+                    onClick={handleRAGClear}
+                    disabled={ragClearing}
+                  >
+                    {ragClearing ? 'Clearing…' : 'Clear'}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                <span>{ragStats.total_documents} documents</span>
+                <span>{ragStats.total_chunks} chunks indexed</span>
+                <span>{ragStats.index_size} embeddings</span>
+              </div>
+              {showRagDocs && ragDocs.length > 0 && (
+                <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
+                  {ragDocs.map((doc, i) => (
+                    <div key={i} className="flex items-center justify-between text-[11px] py-1 border-b border-border/40 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-foreground truncate block">
+                          {(doc.metadata?.source as string) || 'unknown'}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {doc.num_chunks} chunks · {doc.chunk_size} tokens
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showRagDocs && ragDocs.length === 0 && (
+                <p className="mt-3 text-[11px] text-muted-foreground">No documents in RAG index.</p>
+              )}
             </CardContent>
           </Card>
         )}

@@ -515,6 +515,23 @@ class KnowledgeGraph:
             "stats": self.stats,
         }
 
+    def export_triples(self) -> List[Dict[str, Any]]:
+        """Export all facts as (subject, predicate, object) triples for training.
+
+        Returns:
+            List of dicts with subject, predicate, object, confidence, source keys.
+        """
+        return [
+            {
+                "subject": f.subject,
+                "predicate": f.predicate,
+                "object": f.object,
+                "confidence": f.confidence,
+                "source": f.source,
+            }
+            for f in self.facts.values()
+        ]
+
     def summary(self) -> str:
         """Get human-readable summary."""
         lines = [

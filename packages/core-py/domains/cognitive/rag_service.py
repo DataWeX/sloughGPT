@@ -297,6 +297,148 @@ class RAGService:
 
 
 # ---------------------------------------------------------------------------
+# KG → Training Data Pipeline (via Pugqeep TaskQueue)
+# ---------------------------------------------------------------------------
+
+class KGTrainingPipeline:
+    """Pipeline that exports KG triples → embeds → stores in RAG index.
+
+    Uses Pugqeep TaskQueue for async batch processing. Each triple becomes
+    a task that gets embedded and indexed.
+    """
+
+    def __init__(self, rag_service: Optional[RAGService] = None):
+        self._rag = rag_service or get_rag_service()
+        self._queue = None
+
+    def _get_queue(self):
+        """Lazy-init Pugqeep TaskQueue."""
+        if self._queue is None:
+            try:
+                from domains.infrastructure.pugqeep.task_queue import TaskQueue
+                self._queue = TaskQueue(
+                    name="kg-training",
+                    storage_dir=Path("data/kg_pipeline"),
+                )
+            except Exception:
+                from domains.infrastructure.pugqeep.task_queue import TaskQueue
+                self._queue = TaskQueue(name="kg-training")
+        return self._queue
+
+    def submit_triples(self, triples: List[Dict[str, Any]]) -> int:
+        """Submit KG triples as batch tasks to the queue.
+
+        Args:
+            triples: List of {subject, predicate, object, confidence, source} dicts.
+
+        Returns:
+            Number of tasks submitted.
+        """
+        from domains.infrastructure.pugqeep.task_queue import Task, TaskPriority
+        queue = self._get_queue()
+        tasks = []
+        for t in triples:
+            content = f"{t['subject']} {t['predicate']} {t['object']}"
+            task = Task(
+                name="kg_embed_index",
+                data={
+                    "content": content,
+                    "subject": t["subject"],
+                    "predicate": t["predicate"],
+                    "object": t["object"],
+                    "confidence": t.get("confidence", 0.8),
+                    "source": t.get("source", "kg"),
+                },
+                priority=TaskPriority.NORMAL,
+            )
+            tasks.append(task)
+        queue.submit_many(tasks)
+        logger.info("KG pipeline: submitted %d triples for embedding", len(tasks))
+        return len(tasks)
+
+    def process_batch(self, max_tasks: int = 50) -> Dict[str, Any]:
+        """Process pending tasks from the queue — embed and index into RAG.
+
+        Args:
+            max_tasks: Maximum tasks to process in this batch.
+
+        Returns:
+            Stats dict with processed/failed/remaining counts.
+        """
+        queue = self._get_queue()
+        processed = 0
+        failed = 0
+
+        while processed < max_tasks:
+            task = queue.next()
+            if task is None:
+                break
+
+            try:
+                data = task.data
+                content = data["content"]
+                metadata = {
+                    "source": data.get("source", "kg"),
+                    "subject": data["subject"],
+                    "predicate": data["predicate"],
+                    "object": data["object"],
+                    "confidence": data.get("confidence", 0.8),
+                    "kg_triple": True,
+                }
+                self._rag.add_document(content=content, metadata=metadata)
+                queue.complete(task.id, result={"indexed": True})
+                processed += 1
+            except Exception as e:
+                queue.fail(task.id, error=str(e))
+                failed += 1
+                logger.warning("KG pipeline task failed: %s", e)
+
+        remaining = len(queue._pending)
+        logger.info(
+            "KG pipeline batch: processed=%d failed=%d remaining=%d",
+            processed, failed, remaining,
+        )
+        return {
+            "processed": processed,
+            "failed": failed,
+            "remaining": remaining,
+        }
+
+    def sync_kg_to_rag(self, kg=None) -> Dict[str, Any]:
+        """Full pipeline: export all KG triples → submit → process → RAG index.
+
+        Args:
+            kg: KnowledgeGraph instance. Uses RAG service's internal KG if None.
+
+        Returns:
+            Stats dict with total_triples, processed, failed.
+        """
+        if kg is None:
+            svc = self._rag
+            if not hasattr(svc, '_kg'):
+                return {"total_triples": 0, "processed": 0, "failed": 0}
+            kg = svc._kg
+
+        triples = kg.export_triples()
+        if not triples:
+            return {"total_triples": 0, "processed": 0, "failed": 0}
+
+        self.submit_triples(triples)
+        result = self.process_batch(max_tasks=len(triples))
+        result["total_triples"] = len(triples)
+        return result
+
+    def stats(self) -> Dict[str, Any]:
+        """Return pipeline queue stats."""
+        queue = self._get_queue()
+        return {
+            "pending": len(queue._pending),
+            "running": len(queue._running),
+            "completed": len(queue._completed),
+        }
+
+
+# ---------------------------------------------------------------------------
 # Singleton
 # ---------------------------------------------------------------------------
 
