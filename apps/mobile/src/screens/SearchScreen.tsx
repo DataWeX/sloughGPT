@@ -91,7 +91,7 @@ export function SearchScreen() {
             returnKeyType="search"
           />
           {query.length > 0 && (
-            <Pressable onPress={() => handleSearch('')}>
+            <Pressable onPress={() => { triggerHaptic('light'); handleSearch(''); }}>
               <Icon name="x" size={16} color={(theme.color10?.val || '#827A96')} />
             </Pressable>
           )}
