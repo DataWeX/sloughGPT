@@ -30,7 +30,7 @@ import type {FontFamilyOption, FontSizeScale} from '../stores/settings-store';
 
 const FONT_FAMILY_OPTIONS: {label: string; value: FontFamilyOption}[] = [
   {label: 'System Default', value: 'system'},
-  {label: 'DM Sans', value: 'dm-sans'},
+  {label: 'Outfit', value: 'outfit'},
 ];
 
 const FONT_SCALE_PRESETS: {label: string; value: FontSizeScale}[] = [

@@ -4848,11 +4848,11 @@ class SloTransformer(SloNet):
         kv_len = [0] * n_blocks
 
         # Prefill: process full prompt
-        h = self.layers[0].forward(Tensor(input_ids.astype(np.int64))).data  # tok_emb
+        h = self.layers[0].forward_numpy(input_ids.astype(np.int64))  # tok_emb
         if self.pos_emb is not None:
             seq_len = h.shape[1]
-            pos = Tensor(np.arange(seq_len, dtype=np.int64).reshape(1, -1))
-            h = h + self.pos_emb.forward(pos).data
+            pos_indices = np.arange(seq_len, dtype=np.int64).reshape(1, -1)
+            h = h + self.pos_emb.forward_numpy(pos_indices)
 
         block_idx = 0
         for l in self.layers[1:-2]:
@@ -4869,7 +4869,7 @@ class SloTransformer(SloNet):
                 block_idx += 1
 
         h = self.layers[-2].forward_numpy(h)  # final norm
-        logits = h @ self.layers[-1].weight.data.T  # lm_head
+        logits = self.layers[-1].forward_numpy(h)  # lm_head
         next_token = self._sample_token(logits[:, -1], temperature, top_k, top_p, repetition_penalty, set())
         out_buf[:, prompt_len] = next_token
         cur_len = prompt_len + 1
@@ -4877,7 +4877,7 @@ class SloTransformer(SloNet):
         # Decode loop
         for step in range(max_gen - 1):
             tok = np.array([[next_token]], dtype=np.int64)
-            h = self.layers[0].forward(Tensor(tok)).data
+            h = self.layers[0].forward_numpy(tok)
 
             block_idx = 0
             for l in self.layers[1:-2]:
@@ -4890,7 +4890,7 @@ class SloTransformer(SloNet):
                     block_idx += 1
 
             h = self.layers[-2].forward_numpy(h)
-            logits = h @ self.layers[-1].weight.data.T
+            logits = self.layers[-1].forward_numpy(h)
 
             generated = set(int(out_buf[0, i]) for i in range(cur_len))
             next_token = self._sample_token(logits[:, -1], temperature, top_k, top_p, repetition_penalty, generated)

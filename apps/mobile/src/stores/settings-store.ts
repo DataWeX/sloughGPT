@@ -2,7 +2,7 @@ import {create} from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {ThemeMode} from '../types';
 
-export type FontFamilyOption = 'system' | 'dm-sans';
+export type FontFamilyOption = 'system' | 'outfit';
 export type FontSizeScale = 0.85 | 0.925 | 1.0 | 1.1 | 1.2;
 export type AccentColor = 'violet' | 'rose' | 'amber' | 'emerald' | 'sky';
 
@@ -30,7 +30,7 @@ const STORAGE_KEY = '@sloughgpt/settings';
 
 const defaults: Omit<SettingsState, 'setTheme' | 'setFontFamily' | 'setFontSizeScale' | 'update' | 'reset'> = {
   theme: 'system',
-  fontFamily: 'dm-sans',
+  fontFamily: 'outfit',
   fontSizeScale: 1.0,
   accentColor: 'violet',
   temperature: 0.8,

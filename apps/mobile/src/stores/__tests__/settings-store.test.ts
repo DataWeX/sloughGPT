@@ -8,8 +8,9 @@ const STORAGE_KEY = '@sloughgpt/settings';
 
 const DEFAULTS = {
   theme: 'system',
-  fontFamily: 'dm-sans',
+  fontFamily: 'outfit',
   fontSizeScale: 1.0,
+  accentColor: 'violet',
   temperature: 0.8,
   maxTokens: 256,
   topP: 0.9,
@@ -39,7 +40,7 @@ describe('initial state', () => {
   it('has correct default values', () => {
     const s = useSettingsStore.getState();
     expect(s.theme).toBe('system');
-    expect(s.fontFamily).toBe('dm-sans');
+    expect(s.fontFamily).toBe('outfit');
     expect(s.fontSizeScale).toBe(1.0);
     expect(s.temperature).toBe(0.8);
     expect(s.maxTokens).toBe(256);
@@ -60,7 +61,7 @@ describe('hydration', () => {
     expect(s.theme).toBe('dark');
     expect(s.temperature).toBe(0.5);
     // Non-overridden fields remain at defaults
-    expect(s.fontFamily).toBe('dm-sans');
+    expect(s.fontFamily).toBe('outfit');
   });
 });
 
@@ -99,7 +100,7 @@ describe('update', () => {
     expect(s.topK).toBe(20);
     // Unchanged
     expect(s.theme).toBe('system');
-    expect(s.fontFamily).toBe('dm-sans');
+    expect(s.fontFamily).toBe('outfit');
   });
 
   it('persists merged state to AsyncStorage', () => {
@@ -118,7 +119,7 @@ describe('reset', () => {
     const s = useSettingsStore.getState();
     expect(s.temperature).toBe(0.8);
     expect(s.theme).toBe('system');
-    expect(s.fontFamily).toBe('dm-sans');
+    expect(s.fontFamily).toBe('outfit');
   });
 
   it('removes saved settings from AsyncStorage', () => {
