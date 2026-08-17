@@ -261,14 +261,15 @@ export const trainingJobsController = {
     target_modules?: string[]
     epochs?: number
     batch_size?: number
+    block_size?: number
     learning_rate?: number
-    max_seq_length?: number
     warmup_steps?: number
     weight_decay?: number
-    gradient_clip?: number
+    grad_clip?: number
+    grad_accumulation_steps?: number
     log_interval?: number
-    eval_interval?: number
-    device?: string
+    output_dir?: string
+    adapter_name?: string
   }): Promise<{ job_id: string; status: string; message: string }> {
     return apiPost('/training/lora-finetune', params)
   },

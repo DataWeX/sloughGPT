@@ -156,14 +156,15 @@ describe('trainingJobsController.startLoraFinetune', () => {
       target_modules: undefined,
       epochs: undefined,
       batch_size: undefined,
+      block_size: undefined,
       learning_rate: undefined,
-      max_seq_length: undefined,
       warmup_steps: undefined,
       weight_decay: undefined,
-      gradient_clip: undefined,
+      grad_clip: undefined,
+      grad_accumulation_steps: undefined,
       log_interval: undefined,
-      eval_interval: undefined,
-      device: undefined,
+      output_dir: undefined,
+      adapter_name: undefined,
     })
     expect(result.job_id).toBe('lora1')
   })

@@ -1199,12 +1199,15 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
                 target_modules=request.target_modules,
                 epochs=request.epochs,
                 batch_size=request.batch_size,
+                block_size=request.block_size,
                 learning_rate=request.learning_rate,
-                block_size=request.max_seq_length,
                 warmup_steps=request.warmup_steps,
                 weight_decay=request.weight_decay,
-                grad_clip=request.gradient_clip,
+                grad_clip=request.grad_clip,
+                grad_accumulation_steps=request.grad_accumulation_steps,
                 log_interval=request.log_interval,
+                output_dir=request.output_dir,
+                adapter_name=request.adapter_name,
                 _cancel_event=cancel_event,
             )
 
