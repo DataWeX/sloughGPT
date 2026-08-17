@@ -78,11 +78,12 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Quantization precision">
                 <span className="text-xs text-muted-foreground">Precision:</span>
                 <button
                   type="button"
                   onClick={() => setBits(8)}
+                  aria-pressed={bits === 8}
                   className={`px-2 py-1 text-xs rounded border transition-colors ${bits === 8 ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
                 >
                   int8
@@ -90,16 +91,18 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                 <button
                   type="button"
                   onClick={() => setBits(4)}
+                  aria-pressed={bits === 4}
                   className={`px-2 py-1 text-xs rounded border transition-colors ${bits === 4 ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
                 >
                   int4
                 </button>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Quantization mode">
                 <span className="text-xs text-muted-foreground">Mode:</span>
                 <button
                   type="button"
                   onClick={() => setMode('symmetric')}
+                  aria-pressed={mode === 'symmetric'}
                   className={`px-2 py-1 text-xs rounded border transition-colors ${mode === 'symmetric' ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
                 >
                   Sym
@@ -107,6 +110,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                 <button
                   type="button"
                   onClick={() => setMode('asymmetric')}
+                  aria-pressed={mode === 'asymmetric'}
                   className={`px-2 py-1 text-xs rounded border transition-colors ${mode === 'asymmetric' ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
                 >
                   Asym

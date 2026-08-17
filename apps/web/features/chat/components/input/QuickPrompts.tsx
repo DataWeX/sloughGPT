@@ -117,6 +117,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
             value={newPrompt}
             onChange={e => setNewPrompt(e.target.value)}
             className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+            aria-label="New prompt template"
           />
           <div className="flex gap-1">
             <Button size="sm" className="h-6 text-[10px] flex-1" onClick={handleCreate}>Save</Button>
@@ -140,7 +141,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                     <div className="space-y-1">
                       <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-7 text-xs" />
                       <Input value={editDesc} onChange={e => setEditDesc(e.target.value)} className="h-7 text-xs" />
-                      <textarea value={editPrompt} onChange={e => setEditPrompt(e.target.value)} className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40" />
+                      <textarea value={editPrompt} onChange={e => setEditPrompt(e.target.value)} className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40" aria-label="Edit prompt template" />
                       <div className="flex gap-1">
                         <Button size="sm" className="h-5 text-[10px] px-2 flex-1" onClick={() => handleEdit(p.id)}>Save</Button>
                         <Button variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={() => setEditingId(null)}>Cancel</Button>

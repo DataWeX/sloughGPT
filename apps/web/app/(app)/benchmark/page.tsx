@@ -37,7 +37,7 @@ export default function BenchmarkPage() {
 
   useEffect(() => {
     Promise.all([
-      benchmarkController.run({ model: 'gpt2' }).catch(() => null),
+      benchmarkController.history(1).then(r => r[0] ?? null).catch(() => null),
       benchmarkController.quality().catch(() => null),
       benchmarkController.stats().catch(() => null),
     ]).then(([m, q, s]) => {

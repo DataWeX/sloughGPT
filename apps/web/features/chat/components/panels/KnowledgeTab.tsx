@@ -165,6 +165,7 @@ export function KnowledgeTab({
             value={newKnowledge}
             onChange={e => setNewKnowledge(e.target.value)}
             autoFocus
+            aria-label="New knowledge fact"
           />
           <div className="flex gap-1">
             <Button size="sm" className="h-6 text-[10px] flex-1" onClick={addKnowledge}>Save</Button>

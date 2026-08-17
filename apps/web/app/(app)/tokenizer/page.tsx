@@ -26,6 +26,7 @@ export default function TokenizerPage() {
   const [stats, setStats] = useState<TokenizerStats | null>(null)
   const [tab, setTab] = useState<Tab>('playground')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const [inputText, setInputText] = useState('')
   const [tokenResult, setTokenResult] = useState<{ tokens: string[]; ids: number[] } | null>(null)
@@ -47,7 +48,10 @@ export default function TokenizerPage() {
     tokenizerController.getStats().then(s => {
       setStats(s)
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch(() => {
+      setLoadError('Could not load tokenizer data. Is the server running?')
+      setLoading(false)
+    })
   }, [])
 
   const handleTokenize = async () => {
@@ -122,6 +126,8 @@ export default function TokenizerPage() {
       title="Tokenizer"
       subtitle={stats ? `Vocab: ${stats.vocab_size} · Merges: ${stats.total_merges}` : 'BPE tokenizer'}
       loading={loading}
+      error={loadError}
+      onRetry={() => window.location.reload()}
       toolbar={toolbar}
     >
       {stats && (
@@ -131,6 +137,12 @@ export default function TokenizerPage() {
           <StatCard label="Merges" value={String(stats.total_merges)} />
           <StatCard label="Special Tokens" value={String(stats.special_tokens)} />
         </KpiGrid>
+      )}
+
+      {!loading && !loadError && !stats && (
+        <div className="text-center py-8 text-sm text-muted-foreground">
+          No tokenizer data available. Train a tokenizer or check server status.
+        </div>
       )}
 
       <TokenizerEfficiencyCard stats={stats} samples={samples} />

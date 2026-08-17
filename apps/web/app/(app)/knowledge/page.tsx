@@ -694,6 +694,7 @@ export default function KnowledgePage() {
                               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(item.id) } if (e.key === 'Escape') setEditingId(null) }}
                               aria-invalid={!!editErrors.content}
                               aria-describedby={editErrors.content ? 'edit-content-error' : undefined}
+                              aria-label="Edit knowledge content"
                             />
                             {editErrors.content && (
                               <p id="edit-content-error" className="text-[10px] text-destructive mt-1" role="alert">{editErrors.content}</p>
@@ -888,6 +889,7 @@ export default function KnowledgePage() {
                 autoFocus
                 aria-invalid={!!addErrors.content}
                 aria-describedby={addErrors.content ? 'add-content-error' : undefined}
+                aria-label="New knowledge content"
               />
               {addErrors.content && (
                 <p id="add-content-error" className="text-[10px] text-destructive mt-1" role="alert">{addErrors.content}</p>

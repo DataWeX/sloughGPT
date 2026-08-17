@@ -509,6 +509,7 @@ export default function AgentsPage() {
               placeholder="Instructions — how the agent should behave"
               value={newInstructions}
               onChange={e => setNewInstructions(e.target.value)}
+              aria-label="Agent instructions"
             />
             <div className="flex flex-wrap gap-1">
               {AVAILABLE_TOOLS.map(t => (
@@ -623,6 +624,7 @@ export default function AgentsPage() {
                         className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
                         value={editInstructions}
                         onChange={e => setEditInstructions(e.target.value)}
+                        aria-label="Edit agent instructions"
                       />
                       <div className="flex flex-wrap gap-1">
                         {AVAILABLE_TOOLS.map(t => (
@@ -759,6 +761,7 @@ export default function AgentsPage() {
               placeholder="Additional context (optional)"
               value={orchContext}
               onChange={e => setOrchContext(e.target.value)}
+              aria-label="Orchestration context"
             />
             {agents.length > 0 && (
               <div>
