@@ -5,6 +5,7 @@ import {
   Dimensions,
   Pressable,
 } from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {triggerHaptic} from '../services/haptics';
@@ -98,7 +99,8 @@ export function OnboardingScreen({onComplete}: Props) {
   };
 
   return (
-    <YStack flex={1} backgroundColor={bgBase}>
+    <SafeAreaView style={{flex: 1}} edges={['top', 'bottom']}>
+      <YStack flex={1} backgroundColor={bgBase}>
       <Pressable
         style={{position: 'absolute', top: 56, right: 20, zIndex: 10, padding: 8}}
         onPress={handleSkip}>
@@ -162,6 +164,7 @@ export function OnboardingScreen({onComplete}: Props) {
           {step < STEPS.length - 1 ? 'Next' : 'Get Started'}
         </Text>
       </Pressable>
-    </YStack>
+      </YStack>
+    </SafeAreaView>
   );
 }
