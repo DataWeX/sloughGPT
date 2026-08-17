@@ -83,6 +83,15 @@ export interface DetailedHealth {
     disk_total_gb: number;
     uptime: number;
   };
+  inference?: {
+    inference_count: number;
+    avg_tokens_per_sec: number;
+    total_tokens: number;
+  };
+  services?: {
+    training_pool: {active: number; max: number; tracked: number};
+    inference_pool: {workers: number; active: number; queue_timeout: number};
+  };
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';

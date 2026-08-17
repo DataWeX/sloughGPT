@@ -4,13 +4,15 @@ import {
   Pressable,
   Keyboard,
 } from 'react-native';
-import {YStack, XStack, useTheme} from 'tamagui';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {triggerHaptic} from '../services/haptics';
 import {QuickPromptPicker} from './QuickPromptPicker';
+import {SlashCommandPicker} from './SlashCommandPicker';
 import {pickDocument, isTextFile, formatFileSize} from '../services/file-upload';
 import {getDraft, saveDraft, clearDraft} from '../services/drafts';
 import {toast} from '../services/toast';
 import {Icon} from './Icon';
+import type {ChatCommand} from '../services/chat-commands';
 
 interface Props {
   onSend: (text: string) => void;
@@ -25,12 +27,14 @@ interface Props {
   onCancelEdit?: () => void;
   voiceMessageMode?: boolean;
   onVoiceMessageToggle?: () => void;
+  onExecuteCommand?: (command: ChatCommand, args: string[]) => void;
 }
 
-export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit, voiceMessageMode, onVoiceMessageToggle}: Props) {
+export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit, voiceMessageMode, onVoiceMessageToggle, onExecuteCommand}: Props) {
   const theme = useTheme();
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
+  const [showSlash, setShowSlash] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const draftTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -49,11 +53,27 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
 
   const handleChangeText = (newText: string) => {
     setText(newText);
+    setShowSlash(newText.startsWith('/') && newText.length > 0);
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     if (sessionId) {
       draftTimerRef.current = setTimeout(() => {
         saveDraft(sessionId, newText);
       }, 500);
+    }
+  };
+
+  const handleSlashSelect = (command: string) => {
+    setText(command + ' ');
+    setShowSlash(false);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleSlashExecute = (command: ChatCommand, args: string[]) => {
+    setShowSlash(false);
+    setText('');
+    if (sessionId) clearDraft(sessionId);
+    if (onExecuteCommand) {
+      onExecuteCommand(command, args);
     }
   };
 
@@ -150,6 +170,18 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
       <XStack alignItems="flex-end" gap={8}>
         <Pressable onPress={handlePlus} disabled={disabled} style={iconBtnStyle}>
           <Icon name="plus" size={18} color={textSecondary} />
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            triggerHaptic('light');
+            setText('/');
+            setShowSlash(true);
+            setTimeout(() => inputRef.current?.focus(), 100);
+          }}
+          disabled={disabled}
+          style={iconBtnStyle}>
+          <Text fontSize={16} fontWeight="600" color={textSecondary} fontFamily="JetBrainsMono-Regular">/</Text>
         </Pressable>
 
         <Pressable
@@ -267,6 +299,14 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
         visible={showPrompts}
         onClose={() => setShowPrompts(false)}
         onSelect={handlePromptSelect}
+      />
+
+      <SlashCommandPicker
+        visible={showSlash}
+        query={text}
+        onSelect={handleSlashSelect}
+        onExecute={handleSlashExecute}
+        onClose={() => setShowSlash(false)}
       />
     </YStack>
   );

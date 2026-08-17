@@ -4,11 +4,13 @@ import type {ThemeMode} from '../types';
 
 export type FontFamilyOption = 'system' | 'dm-sans';
 export type FontSizeScale = 0.85 | 0.925 | 1.0 | 1.1 | 1.2;
+export type AccentColor = 'violet' | 'rose' | 'amber' | 'emerald' | 'sky';
 
 interface SettingsState {
   theme: ThemeMode;
   fontFamily: FontFamilyOption;
   fontSizeScale: FontSizeScale;
+  accentColor: AccentColor;
   temperature: number;
   maxTokens: number;
   topP: number;
@@ -30,6 +32,7 @@ const defaults: Omit<SettingsState, 'setTheme' | 'setFontFamily' | 'setFontSizeS
   theme: 'system',
   fontFamily: 'dm-sans',
   fontSizeScale: 1.0,
+  accentColor: 'violet',
   temperature: 0.8,
   maxTokens: 256,
   topP: 0.9,

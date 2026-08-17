@@ -25,6 +25,7 @@ import {
 import {sounds} from '../services/sounds';
 import type {HealthStatus} from '../types';
 import type {ThemeMode} from '../types';
+import type {AccentColor} from '../stores/settings-store';
 import type {FontFamilyOption, FontSizeScale} from '../stores/settings-store';
 
 const FONT_FAMILY_OPTIONS: {label: string; value: FontFamilyOption}[] = [
@@ -259,6 +260,34 @@ export function SettingsScreen() {
                 );
               })}
             </XStack>
+            <XStack gap={8} marginTop={4}>
+              {([
+                {key: 'violet', color: '#7C52C4', label: 'Violet'},
+                {key: 'rose', color: '#E11D48', label: 'Rose'},
+                {key: 'amber', color: '#D97706', label: 'Amber'},
+                {key: 'emerald', color: '#059669', label: 'Emerald'},
+                {key: 'sky', color: '#0284C7', label: 'Sky'},
+              ] as const).map(opt => {
+                const active = settings.accentColor === opt.key;
+                return (
+                  <YStack
+                    key={opt.key}
+                    width={36}
+                    height={36}
+                    borderRadius={999}
+                    backgroundColor={opt.color}
+                    borderWidth={2}
+                    borderColor={active ? opt.color : 'transparent'}
+                    alignItems="center"
+                    justifyContent="center"
+                    onPress={() => settings.update({accentColor: opt.key})}>
+                    {active && (
+                      <YStack width={12} height={12} borderRadius={6} backgroundColor="white" />
+                    )}
+                  </YStack>
+                );
+              })}
+            </XStack>
           </YStack>
 
           {/* Font */}
@@ -376,6 +405,69 @@ export function SettingsScreen() {
                 </XStack>
               </YStack>
             ))}
+          </YStack>
+
+          {/* Chat Background */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Chat Background</Text>
+            <Text fontSize={12} color="$color11">Custom tint behind messages</Text>
+            <XStack gap={6} flexWrap="wrap" marginTop={4}>
+              {[
+                {label: 'Default', value: ''},
+                {label: 'Warm', value: 'warm'},
+                {label: 'Cool', value: 'cool'},
+                {label: 'Lavender', value: 'lavender'},
+                {label: 'Peach', value: 'peach'},
+              ].map(({label, value}) => {
+                const active = settings.chatBackground === value;
+                return (
+                  <YStack
+                    key={value}
+                    paddingHorizontal={14} paddingVertical={7}
+                    borderRadius={999}
+                    backgroundColor={active ? '$color9' : '$backgroundHover'}
+                    borderWidth={0.5}
+                    borderColor={active ? '$color9' : '$borderColor'}
+                    onPress={() => settings.update({chatBackground: value})}>
+                    <Text fontSize={12} fontWeight="500" color={active ? 'white' : '$color11'}>
+                      {label}
+                    </Text>
+                  </YStack>
+                );
+              })}
+            </XStack>
+          </YStack>
+
+          {/* Chat Background */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Chat Background</Text>
+            <Text fontSize={12} color="$color11">Customize the chat area tint</Text>
+            <XStack gap={8} flexWrap="wrap" marginTop={4}>
+              {([
+                {label: 'Default', value: ''},
+                {label: 'Warm', value: 'rgba(252, 248, 240, 0.6)'},
+                {label: 'Cool', value: 'rgba(240, 242, 252, 0.6)'},
+                {label: 'Violet', value: 'rgba(244, 240, 252, 0.6)'},
+                {label: 'Mint', value: 'rgba(240, 250, 244, 0.6)'},
+                {label: 'Peach', value: 'rgba(252, 244, 240, 0.6)'},
+              ] as const).map(opt => {
+                const active = settings.chatBackground === opt.value;
+                return (
+                  <YStack
+                    key={opt.label}
+                    paddingHorizontal={14} paddingVertical={8}
+                    borderRadius={999}
+                    backgroundColor={active ? '$color9' : '$backgroundHover'}
+                    borderWidth={0.5}
+                    borderColor={active ? '$color9' : '$borderColor'}
+                    onPress={() => settings.update({chatBackground: opt.value})}>
+                    <Text fontSize={12} fontWeight="500" color={active ? 'white' : '$color11'}>
+                      {opt.label}
+                    </Text>
+                  </YStack>
+                );
+              })}
+            </XStack>
           </YStack>
 
           {/* Memory Context */}

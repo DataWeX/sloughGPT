@@ -165,19 +165,26 @@ class HFLoraTrainer:
 
             # Prepare data
             data = self._prepare_data()
+            dataset = _LoRADataset(data, self.config.block_size)
+            if len(dataset) == 0:
+                self._is_training = False
+                return TrainResult(
+                    success=False,
+                    status="failed",
+                    error=f"Data too short for block_size={self.config.block_size} "
+                          f"(data={len(data)} chars, need >={self.config.block_size})",
+                )
 
             # Create optimizer (only LoRA params)
             from domains.training.slonet import SloAdam
             lora_tensors = [p for p in self.lora_params.values()
                            if hasattr(p, 'data') and hasattr(p, 'requires_grad')]
-            optimizer = SloAdam(lora_tensors, lr=self.config.learning_rate)
+            optimizer = SloAdam(lr=self.config.learning_rate)
 
             # Training loop
             best_loss = float('inf')
             total_steps = 0
             loss_history = []
-
-            dataset = _LoRADataset(data, self.config.block_size)
 
             for epoch in range(self.config.epochs):
                 if self._cancel_event and self._cancel_event.is_set():
@@ -229,7 +236,7 @@ class HFLoraTrainer:
 
                     # Optimizer step
                     if (total_steps + 1) % self.config.grad_accumulation_steps == 0:
-                        optimizer.step()
+                        optimizer.step(lora_tensors)
                         for p in lora_tensors:
                             if hasattr(p, 'grad') and p.grad is not None:
                                 p.grad.data[:] = 0.0

@@ -12,6 +12,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
+import {pickDocument} from '../services/file-upload';
 import type {KnowledgeItem} from '../types';
 
 export function KnowledgeScreen() {
@@ -172,6 +173,33 @@ export function KnowledgeScreen() {
       await fetchItems();
       await fetchTopics();
     } catch {}
+    setImporting(false);
+  };
+
+  const handleImportFile = async () => {
+    try {
+      const file = await pickDocument();
+      if (!file) return;
+      setImporting(true);
+      const RNFS = require('react-native-fs');
+      const content = await RNFS.readFile(decodeURIComponent(file.uri.replace('file://', '')));
+      const data = JSON.parse(content);
+      const entries = Array.isArray(data) ? data : [data];
+      await Promise.all(
+        entries.map((entry: any) => {
+          const text = typeof entry === 'string' ? entry : entry.content || entry.text || entry.knowledge || '';
+          const topic = typeof entry === 'object' ? (entry.topic || entry.category || formTopic.trim() || undefined) : (formTopic.trim() || undefined);
+          return text.trim() ? api.post('/knowledge', {content: text.trim(), topic}) : Promise.resolve();
+        }),
+      );
+      setImportModalVisible(false);
+      setImportText('');
+      setFormTopic('');
+      await fetchItems();
+      await fetchTopics();
+    } catch (e: any) {
+      // JSON parse or file read error — silently handled
+    }
     setImporting(false);
   };
 
@@ -535,6 +563,19 @@ export function KnowledgeScreen() {
             placeholderTextColor="#9B95A8"
             returnKeyType="done"
           />
+          <Pressable onPress={handleImportFile} disabled={importing}>
+            <XStack
+              alignItems="center" gap={8}
+              paddingHorizontal={14} paddingVertical={12}
+              borderRadius={10}
+              backgroundColor="rgba(124, 82, 196, 0.06)"
+              borderWidth={0.5} borderColor="rgba(124, 82, 196, 0.12)">
+              <Icon name="upload" size={16} color={accent} />
+              <Text fontSize={13} fontWeight="500" color="$color11">
+                Pick JSON file instead
+              </Text>
+            </XStack>
+          </Pressable>
           <XStack gap={8} justifyContent="flex-end">
             <Pressable onPress={() => setImportModalVisible(false)}>
               <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>

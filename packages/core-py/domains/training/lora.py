@@ -320,23 +320,37 @@ def _set_nested(obj, path_parts, value):
     """Set an attribute through a chain of attribute/list-index access.
 
     path_parts like ["layers[2]", "attn", "W_q"] means obj.layers[2].attn.W_q = value
+
+    For a single-element list-index like ["layers[0]"], sets obj.layers[0] = value.
     """
-    for part in path_parts:
+    if len(path_parts) <= 1:
+        last = path_parts[-1]
+        if last.endswith("]") and "[" in last:
+            attr = last[:last.index("[")]
+            idx = int(last[last.index("[") + 1 : last.index("]")])
+            getattr(obj, attr)[idx] = value
+        else:
+            setattr(obj, last, value)
+        return
+
+    # Multi-element path: traverse to the parent of the last element
+    current = obj
+    for part in path_parts[:-1]:
         if part.endswith("]") and "[" in part:
             attr = part[:part.index("[")]
             idx = int(part[part.index("[") + 1 : part.index("]")])
-            obj = getattr(obj, attr)[idx]
+            current = getattr(current, attr)[idx]
         else:
-            parent = obj
-            obj = getattr(obj, part)
-    # Set on the actual parent
+            current = getattr(current, part)
+
+    # Set on the parent
     last = path_parts[-1]
     if last.endswith("]") and "[" in last:
         attr = last[:last.index("[")]
         idx = int(last[last.index("[") + 1 : last.index("]")])
-        getattr(parent, attr)[idx] = value
+        getattr(current, attr)[idx] = value
     else:
-        setattr(parent, last, value)
+        setattr(current, last, value)
 
 
 def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
@@ -429,7 +443,7 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
             applied += 1
             logger.info(f"Applied LoRA to {name}", extra={"tag": "TRAIN"})
 
-    model._has_lora = True
+    model._has_lora = applied > 0
     logger.info(f"LoRA applied: {applied} layers, rank={config.rank}, alpha={config.alpha}")
     return model
 
@@ -437,7 +451,7 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
 def get_lora_parameters(model):
     """Get only LoRA parameters from a model."""
     params = {}
-    if hasattr(model, '_walk_slo_tree') or hasattr(model, 'layers'):
+    if hasattr(model, 'layers'):
         for path, module in _walk_slo_tree(model, []):
             if isinstance(module, LoRALinear):
                 for attr in ('lora_A', 'lora_B', 'lora_s'):

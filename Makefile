@@ -1,4 +1,4 @@
-.PHONY: api api-daemon api-stop web tsc lint test-py test-py-training test-web test dev install build precommit test-repo-root colab-smoke colab-test
+.PHONY: api api-daemon api-stop web tsc lint test-py test-py-training test-web test dev install build precommit test-repo-root colab-smoke colab-test setup-git
 
 # ── Dev Servers ──────────────────────────────────────────
 api:
@@ -76,11 +76,15 @@ quant-core:
 		|| echo "  ⚠  matmul_int4.c — gcc/AVX2 unavailable"
 
 # ── Install ──────────────────────────────────────────────
-install: build
+install: build setup-git
 	cd apps/web && npm ci
 	.venv/bin/pip install -e packages/core-py/
 
 # ── Tooling Setup ───────────────────────────────────────
+setup-git:
+	git config core.sshCommand "ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3"
+	@echo "Git SSH keepalive configured for this repo."
+
 precommit:
 	.venv/bin/pre-commit install
 	.venv/bin/pre-commit install-hooks

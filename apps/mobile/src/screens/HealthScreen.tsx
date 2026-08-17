@@ -139,6 +139,56 @@ export function HealthScreen() {
           </YStack>
         </>
       )}
+
+      {health?.inference && (
+        <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
+          <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={8}>
+            Inference
+          </Text>
+          <XStack gap={16}>
+            <YStack flex={1}>
+              <Text fontSize={12} color="$color10">Requests</Text>
+              <Text fontSize={16} fontWeight="600" color="$color">{health.inference.inference_count}</Text>
+            </YStack>
+            <YStack flex={1}>
+              <Text fontSize={12} color="$color10">Tokens/sec</Text>
+              <Text fontSize={16} fontWeight="600" color="$color">{health.inference.avg_tokens_per_sec.toFixed(1)}</Text>
+            </YStack>
+            <YStack flex={1}>
+              <Text fontSize={12} color="$color10">Total tokens</Text>
+              <Text fontSize={16} fontWeight="600" color="$color">{health.inference.total_tokens.toLocaleString()}</Text>
+            </YStack>
+          </XStack>
+        </YStack>
+      )}
+
+      {health?.services && (
+        <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
+          <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={8}>
+            Services
+          </Text>
+          <YStack gap={10}>
+            {health.services.training_pool && (
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text fontSize={14} color="$color">Training Pool</Text>
+                <StatusBadge
+                  label={`${health.services.training_pool.active}/${health.services.training_pool.max} active`}
+                  variant={health.services.training_pool.active > 0 ? 'warning' : 'success'}
+                />
+              </XStack>
+            )}
+            {health.services.inference_pool && (
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text fontSize={14} color="$color">Inference Pool</Text>
+                <StatusBadge
+                  label={`${health.services.inference_pool.workers} workers`}
+                  variant={health.services.inference_pool.active > 0 ? 'warning' : 'success'}
+                />
+              </XStack>
+            )}
+          </YStack>
+        </YStack>
+      )}
     </ScreenShell>
   );
 }

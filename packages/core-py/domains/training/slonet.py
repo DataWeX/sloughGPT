@@ -4922,7 +4922,7 @@ class SloTransformer(SloNet):
             logits_full = np.full_like(logits, -np.inf)
             logits_full[indices] = logits[indices]
             logits = logits_full
-        if top_p is not None and top_p < 1.0:
+        if top_p is not None and 0.0 < top_p < 1.0:
             sorted_idx = np.argsort(logits)[::-1]
             sorted_logits = logits[sorted_idx]
             cumsum = np.cumsum(np.exp(sorted_logits - sorted_logits.max()))
