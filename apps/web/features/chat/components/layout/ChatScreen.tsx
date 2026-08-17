@@ -35,6 +35,14 @@ interface ChatScreenProps {
   health: ApiHealthSnapshot
   suggestions?: { text: string; icon: string }[]
   toolEvents?: ToolCallEvent[]
+  ragVerification?: {
+    confidence: number
+    is_verified: boolean
+    hallucination_rate: number
+    citations: string
+    grounded_claims: number
+    hallucinated_claims: number
+  } | null
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: (fromMessageId?: string) => void
@@ -53,7 +61,7 @@ interface ChatScreenProps {
 }
 
 export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -101,6 +109,31 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         {toolEvents && toolEvents.length > 0 && (
           <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 pb-1">
             <ToolCallPanel events={toolEvents} />
+          </div>
+        )}
+
+        {ragVerification && (
+          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 pb-1">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground rounded-md border border-border/40 bg-muted/30 px-3 py-1.5">
+              <span className={cn(
+                "inline-block h-1.5 w-1.5 rounded-full",
+                ragVerification.is_verified ? "bg-success" : ragVerification.confidence > 0.5 ? "bg-warning" : "bg-destructive"
+              )} />
+              <span>
+                RAG: {ragVerification.is_verified ? 'Verified' : 'Unverified'} ({(ragVerification.confidence * 100).toFixed(0)}% confidence)
+              </span>
+              {ragVerification.grounded_claims > 0 && (
+                <span className="text-success">{ragVerification.grounded_claims} grounded</span>
+              )}
+              {ragVerification.hallucinated_claims > 0 && (
+                <span className="text-destructive">{ragVerification.hallucinated_claims} hallucinated</span>
+              )}
+              {ragVerification.citations && (
+                <span className="truncate max-w-[200px] opacity-60" title={ragVerification.citations}>
+                  {ragVerification.citations.slice(0, 60)}{ragVerification.citations.length > 60 ? '...' : ''}
+                </span>
+              )}
+            </div>
           </div>
         )}
 

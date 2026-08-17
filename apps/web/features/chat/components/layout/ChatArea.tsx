@@ -16,6 +16,14 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   health: ApiHealthSnapshot
   suggestions?: { text: string; icon: string }[]
   toolEvents?: ToolCallEvent[]
+  ragVerification?: {
+    confidence: number
+    is_verified: boolean
+    hallucination_rate: number
+    citations: string
+    grounded_claims: number
+    hallucinated_claims: number
+  } | null
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: () => void
@@ -49,6 +57,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     health,
     suggestions,
     toolEvents,
+    ragVerification,
     onRefreshHealth,
     onCopy,
     onRegenerate,
@@ -139,6 +148,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             searchQuery={searchQuery}
             onSuggestionClick={onSuggestionClick}
             toolEvents={toolEvents}
+            ragVerification={ragVerification}
             isBookmarked={isBookmarked}
             onBookmark={onBookmark}
             onDelete={onDelete}

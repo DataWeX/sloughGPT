@@ -68,6 +68,14 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const [sessionSaved, setSessionSaved] = useState(false)
   const [currentError, setCurrentError] = useState<ReturnType<typeof getErrorInfo> | null>(null)
   const [toolEvents, setToolEvents] = useState<ToolCallEvent[]>([])
+  const [ragVerification, setRagVerification] = useState<{
+    confidence: number
+    is_verified: boolean
+    hallucination_rate: number
+    citations: string
+    grounded_claims: number
+    hallucinated_claims: number
+  } | null>(null)
 
   // ── Refs for callback access (read-only, never mutated inside setState) ──
   const messagesRef = useRef<ChatMessage[]>([])
@@ -312,6 +320,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setImages([])
     setCurrentError(null)
     setToolEvents([])
+    setRagVerification(null)
     setLoading(true)
 
     const parts: string[] = []
@@ -429,6 +438,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
           },
           onToolCall: (event) => {
             setToolEvents(prev => [...prev, event])
+          },
+          onRagVerification: (info) => {
+            setRagVerification(info)
           },
         })
         if (streamComplete) {
@@ -576,6 +588,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     sessionSaved,
     currentError, setCurrentError,
     toolEvents,
+    ragVerification,
     messagesRef,
     loadingRef,
     sessionIdRef,

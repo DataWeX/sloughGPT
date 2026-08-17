@@ -161,6 +161,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           searchQuery={ui.searchQuery}
           onSuggestionClick={chat.handleSuggestionClick}
           toolEvents={chat.toolEvents}
+          ragVerification={chat.ragVerification}
           value={chat.input}
           onChange={chat.setInput}
           onSend={handleWriteSend}
