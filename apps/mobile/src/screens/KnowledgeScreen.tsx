@@ -12,6 +12,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
+import {triggerHaptic} from '../services/haptics';
 import {pickDocument} from '../services/file-upload';
 import type {KnowledgeItem} from '../types';
 
@@ -82,6 +83,7 @@ export function KnowledgeScreen() {
   const handleAdd = async () => {
     if (!formContent.trim()) return;
     try {
+      triggerHaptic('success');
       await api.post('/knowledge', {
         content: formContent.trim(),
         topic: formTopic.trim() || undefined,
@@ -110,6 +112,7 @@ export function KnowledgeScreen() {
 
   const handleDelete = async (id: string) => {
     try {
+      triggerHaptic('light');
       await api.delete(`/knowledge/${id}`);
       await fetchItems();
     } catch {}
@@ -119,6 +122,7 @@ export function KnowledgeScreen() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     try {
+      triggerHaptic('medium');
       await Promise.all(ids.map(id => api.delete(`/knowledge/${id}`)));
       setSelectedIds(new Set());
       setSelectMode(false);
@@ -137,6 +141,7 @@ export function KnowledgeScreen() {
 
   const handleExport = async () => {
     try {
+      triggerHaptic('light');
       const data = items.map(item => ({
         content: item.content,
         topic: item.topic,
@@ -161,6 +166,7 @@ export function KnowledgeScreen() {
     if (!importText.trim()) return;
     setImporting(true);
     try {
+      triggerHaptic('success');
       const lines = importText.split('\n').filter(l => l.trim().length > 2);
       await Promise.all(
         lines.map(line =>

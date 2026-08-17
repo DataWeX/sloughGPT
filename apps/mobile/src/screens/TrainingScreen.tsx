@@ -15,6 +15,7 @@ import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
+import {triggerHaptic} from '../services/haptics';
 
 const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
   idle: {text: 'Ready', variant: 'default'},

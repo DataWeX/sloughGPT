@@ -152,10 +152,9 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
     try {
       for await (const event of streamTraining(abortController.signal)) {
-        const raw = event.raw || {};
-        const rawPhase = raw.phase as string | undefined;
-        const rawStatus = raw.status as string | undefined;
-        const rawData = (raw.data || {}) as Record<string, any>;
+        const rawPhase = event.phase;
+        const rawStatus = event.status;
+        const rawData = (event.data || {}) as Record<string, any>;
 
         if (rawPhase) {
           set({phase: rawPhase as TrainPhase});
@@ -204,7 +203,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
 
         if (rawStatus === 'error') {
-          const msg = raw.message || rawData.error || 'Training failed';
+          const msg = event.message || rawData.error || 'Training failed';
           set({phase: 'FAILED', error: String(msg), running: false});
           break;
         }

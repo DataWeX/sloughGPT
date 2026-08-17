@@ -41,6 +41,26 @@ function unwrap<T>(raw: unknown): T {
   return raw as T;
 }
 
+const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+const MAX_RETRIES = 1;
+const BASE_DELAY = 500;
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+function parseErrorDetail(text: string, resStatus: number): string {
+  try {
+    const j = JSON.parse(text);
+    const detail = j.detail ?? j.message ?? j.error;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((d: any) => (typeof d === 'string' ? d : d.msg ?? ''))
+        .join('; ');
+    }
+    return detail || `Request failed (${resStatus})`;
+  } catch {
+    return text || `Request failed (${resStatus})`;
+  }
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -51,34 +71,76 @@ async function request<T>(
     'Content-Type': 'application/json',
   };
 
-  const config: RequestInit = {method, headers};
-  if (body && method !== 'GET') {
-    config.body = JSON.stringify(body);
-  }
+  let retries = 0;
 
-  let lastError: Error | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  while (true) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), DEFAULT_TIMEOUT_MS);
+
     try {
-      const res = await fetch(`${baseUrl}${path}`, config);
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const msg =
-          (data as any)?.detail || (data as any)?.error || res.statusText;
-        throw new ApiError(res.status, msg, data);
+      const config: RequestInit = {method, headers, signal: ac.signal};
+      if (body && method !== 'GET') {
+        config.body = JSON.stringify(body);
       }
+
+      const res = await fetch(`${baseUrl}${path}`, config);
+      clearTimeout(timer);
+
+      if (!res.ok) {
+        const status = res.status;
+        const isRetryable = RETRYABLE_STATUSES.has(status);
+
+        if (isRetryable && retries < MAX_RETRIES) {
+          retries++;
+          const retryAfter = Number(res.headers.get('Retry-After')) || 0;
+          const delay =
+            retryAfter > 0
+              ? retryAfter * 1000
+              : BASE_DELAY * Math.pow(2, retries - 1);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+
+        const text = await res.text();
+        throw new ApiError(status, parseErrorDetail(text, status), text);
+      }
+
       const text = await res.text();
       if (!text) return undefined as T;
       const raw = JSON.parse(text);
       return unwrap<T>(raw);
     } catch (err) {
-      if (err instanceof ApiError && err.status < 500) throw err;
-      lastError = err as Error;
-      if (attempt === 0) {
-        await new Promise(r => setTimeout(r, 500));
+      clearTimeout(timer);
+
+      if (err instanceof ApiError) throw err;
+
+      // Caller-initiated abort is terminal — never retry
+      if (ac.signal.aborted && err instanceof Error && err.name === 'AbortError') {
+        throw new ApiError(0, 'Request timed out');
       }
+
+      const isConnRefused =
+        err instanceof Error &&
+        (err.message === 'Failed to fetch' ||
+          (err as any).cause?.code === 'ECONNREFUSED');
+
+      if (retries < MAX_RETRIES) {
+        retries++;
+        await new Promise(r =>
+          setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)),
+        );
+        continue;
+      }
+
+      const message = isConnRefused
+        ? 'Connection unavailable — server may be starting up'
+        : err instanceof Error
+          ? err.message
+          : 'Request failed';
+
+      throw new ApiError(0, message);
     }
   }
-  throw lastError;
 }
 
 export const api = {
@@ -119,7 +181,9 @@ export const api = {
 
   /** Search across all sessions. */
   searchSessions: (q: string, limit?: number) =>
-    api.get<SearchResult[]>(`/chat/sessions/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`),
+    api.get<SearchResult[]>(
+      `/chat/sessions/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`,
+    ),
 
   /** Send a voice message (audio upload) to a session. */
   sendVoiceMessage: (sessionId: string, audioUri: string, durationMs: number) => {
@@ -152,6 +216,7 @@ export const api = {
 
   /** Pull latest weights from a trained checkpoint. */
   pullWeights: (checkpoint: string) =>
-    fetch(`${'' /* resolved at call site */}/auto-train/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`)
-      .then(r => r.json()),
+    fetch(
+      `${'' /* resolved at call site */}/auto-train/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
+    ).then(r => r.json()),
 };

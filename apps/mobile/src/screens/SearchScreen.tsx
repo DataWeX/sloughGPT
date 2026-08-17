@@ -5,6 +5,7 @@ import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
+import {triggerHaptic} from '../services/haptics';
 
 interface SearchResult {
   sessionId: string;

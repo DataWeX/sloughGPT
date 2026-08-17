@@ -54,36 +54,38 @@ describe('streamSSE', () => {
 
     const tokens: string[] = [];
     for await (const event of streamSSE('/chat/stream', {messages: []})) {
-      if (event.token) tokens.push(event.token);
+      if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['Hel', 'lo']);
   });
 
-  it('sets done flag on complete event', async () => {
+  it('yields complete status', async () => {
     const events = [
       'data: {"data":{"token":"ok"}}',
       'data: {"status":"complete"}',
     ];
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
-    const results: boolean[] = [];
+    const statuses: string[] = [];
     for await (const event of streamSSE('/chat/stream', {messages: []})) {
-      if (event.done) results.push(event.done);
+      if (event.status === 'complete') statuses.push('complete');
     }
-    expect(results).toEqual([true]);
+    expect(statuses).toEqual(['complete']);
   });
 
-  it('sets error on error status', async () => {
+  it('yields error status with message', async () => {
     const events = [
       'data: {"status":"error","message":"Server error"}',
     ];
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
-    const errors: string[] = [];
+    const errors: Array<{status: string; message?: string}> = [];
     for await (const event of streamSSE('/chat/stream', {messages: []})) {
-      if (event.error) errors.push(event.error);
+      if (event.status === 'error') {
+        errors.push({status: event.status, message: event.message});
+      }
     }
-    expect(errors).toEqual(['Server error']);
+    expect(errors).toEqual([{status: 'error', message: 'Server error'}]);
   });
 
   it('passes meta from event', async () => {
@@ -110,7 +112,7 @@ describe('streamSSE', () => {
 
     const tokens: string[] = [];
     for await (const event of streamSSE('/chat/stream', {messages: []})) {
-      if (event.token) tokens.push(event.token);
+      if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['hi']);
   });
@@ -125,7 +127,7 @@ describe('streamSSE', () => {
 
     const tokens: string[] = [];
     for await (const event of streamSSE('/chat/stream', {messages: []})) {
-      if (event.token) tokens.push(event.token);
+      if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['ok']);
   });
@@ -153,7 +155,7 @@ describe('streamSSE', () => {
 
     const tokens: string[] = [];
     for await (const event of streamSSE('/chat/stream', {messages: []})) {
-      if (event.token) tokens.push(event.token);
+      if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['Hello']);
   });
@@ -193,19 +195,22 @@ describe('streamSSE', () => {
     expect(releaseLock).toHaveBeenCalled();
   });
 
-  it('includes raw event data', async () => {
+  it('yields raw envelope objects', async () => {
     const events = [
-      'data: {"data":{"token":"a"},"status":"working"}',
-      'data: {"status":"complete"}',
+      'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"a"}}',
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete"}',
     ];
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
-    const raws: unknown[] = [];
+    const envelopes: unknown[] = [];
     for await (const event of streamSSE('/chat/stream', {messages: []})) {
-      if (event.raw) raws.push(event.raw);
+      envelopes.push(event);
     }
-    expect(raws).toHaveLength(2);
-    expect((raws[0] as any).data?.token).toBe('a');
+    expect(envelopes).toHaveLength(2);
+    expect((envelopes[0] as any).stream).toBe('chat');
+    expect((envelopes[0] as any).phase).toBe('STREAMING');
+    expect((envelopes[0] as any).status).toBe('working');
+    expect((envelopes[0] as any).data?.token).toBe('a');
   });
 
   it('includes error detail from data.error field', async () => {
@@ -215,7 +220,21 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     for await (const event of streamSSE('/chat/stream', {messages: []})) {
-      expect(event.error).toBe('Token limit exceeded');
+      expect(event.status).toBe('error');
+      expect(event.data?.error).toBe('Token limit exceeded');
     }
+  });
+
+  it('passes Accept and Cache-Control headers', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
+
+    for await (const _ of streamSSE('/chat/stream', {messages: []})) {}
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(init.headers).toMatchObject({
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Content-Type': 'application/json',
+    });
   });
 });

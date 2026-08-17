@@ -2,12 +2,13 @@ import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const {
-  mockStartAutoTrain, mockStopAutoTrain, mockCreate, mockStartVisualTrain,
-  mockStartTurboTrain, mockGetTurboStatus, mockListJobs, mockGetJob,
+  mockStartAutoTrain, mockStopAutoTrain, mockCreate, mockStartLoraFinetune,
+  mockStartVisualTrain, mockStartTurboTrain, mockGetTurboStatus, mockListJobs, mockGetJob,
 } = vi.hoisted(() => ({
   mockStartAutoTrain: vi.fn(),
   mockStopAutoTrain: vi.fn(() => Promise.resolve()),
   mockCreate: vi.fn(),
+  mockStartLoraFinetune: vi.fn(),
   mockStartVisualTrain: vi.fn(),
   mockStartTurboTrain: vi.fn(),
   mockGetTurboStatus: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('@/lib/controllers', () => ({
     startAutoTrain: mockStartAutoTrain,
     stopAutoTrain: mockStopAutoTrain,
     create: mockCreate,
+    startLoraFinetune: mockStartLoraFinetune,
     startVisualTrain: mockStartVisualTrain,
     startTurboTrain: mockStartTurboTrain,
     getTurboStatus: mockGetTurboStatus,
@@ -155,7 +157,7 @@ describe('useTrainingSession', () => {
 
   it('startFineTune polls for completion', async () => {
     vi.useFakeTimers()
-    mockCreate.mockResolvedValue({ job_id: 'job-1', status: 'started' })
+    mockStartLoraFinetune.mockResolvedValue({ job_id: 'job-1', status: 'started' })
     mockGetJob.mockResolvedValue({
       id: 'job-1', status: 'completed', result: { model_path: '/model/final', final_loss: 1.2 },
     })
@@ -171,7 +173,7 @@ describe('useTrainingSession', () => {
 
   it('startFineTune handles failure', async () => {
     vi.useFakeTimers()
-    mockCreate.mockResolvedValue({ job_id: 'job-2', status: 'started' })
+    mockStartLoraFinetune.mockResolvedValue({ job_id: 'job-2', status: 'started' })
     mockGetJob.mockResolvedValue({
       id: 'job-2', status: 'failed', error: 'OOM',
     })

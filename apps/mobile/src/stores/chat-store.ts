@@ -47,7 +47,10 @@ function genId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function saveSessionContext(sessionId: string, messages: {role: string; content: string}[]) {
+async function saveSessionContext(
+  sessionId: string,
+  messages: {role: string; content: string}[],
+) {
   try {
     await api.post(`/session/${sessionId}/context`, {
       messages: messages.map(m => ({role: m.role, content: m.content})),
@@ -150,9 +153,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       // Fetch existing session, append message, save back
-      const session = await api.get<{id: string; messages: any[]}>(`/chat/sessions/${targetSessionId}`);
+      const session = await api.get<{id: string; messages: any[]}>(
+        `/chat/sessions/${targetSessionId}`,
+      );
       const updatedMessages = [...(session.messages || []), userMsg];
-      await api.put(`/chat/sessions/${targetSessionId}`, {messages: updatedMessages});
+      await api.put(`/chat/sessions/${targetSessionId}`, {
+        messages: updatedMessages,
+      });
 
       // If forwarding to current session, also update local state
       if (get().activeSessionId === targetSessionId) {
@@ -229,7 +236,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const currentContent = localAccumulated;
             set(s => ({
               messages: s.messages.map(m =>
-                m.id === assistantMsg.id ? {...m, content: currentContent} : m,
+                m.id === assistantMsg.id
+                  ? {...m, content: currentContent}
+                  : m,
               ),
             }));
           },
@@ -260,7 +269,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Offline-only mode: block remote fallback
     if (useHybridStore.getState().offlineOnly) {
-      set({error: 'Offline mode: load a local engine in Settings', streaming: false});
+      set({
+        error: 'Offline mode: load a local engine in Settings',
+        streaming: false,
+      });
       toast.warn('Enable offline mode only when a local engine is loaded');
       await triggerHaptic('medium');
       return;
@@ -298,28 +310,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
             m.id === assistantMsg.id ? {...m, content: ''} : m,
           ),
         }));
-        for await (const event of streamSSE('/chat/stream', body, controller.signal)) {
-          if (event.token) {
-            accumulated += event.token;
+        for await (const event of streamSSE(
+          '/chat/stream',
+          body,
+          controller.signal,
+        )) {
+          // Token received
+          if (event.data?.token) {
+            accumulated += event.data.token as string;
             set(s => ({
               messages: s.messages.map(m =>
-                m.id === assistantMsg.id ? {...m, content: accumulated} : m,
+                m.id === assistantMsg.id
+                  ? {...m, content: accumulated}
+                  : m,
               ),
             }));
           }
-          if (event.error) {
+
+          // Error from server
+          if (event.status === 'error') {
+            const errorMsg =
+              (event.data?.error as string) ||
+              event.message ||
+              'Stream error';
             if (retries < maxRetries) {
               retries++;
               await new Promise(r => setTimeout(r, 500 * retries));
               return false;
             }
-            set({error: event.error, streaming: false});
-            toast.error(event.error);
+            set({error: errorMsg, streaming: false});
+            toast.error(errorMsg);
             sounds.error();
             await triggerHaptic('error');
             return true;
           }
-          if (event.done) return true;
+
+          // Stream complete
+          if (event.status === 'complete') return true;
         }
         return true;
       } catch (err: any) {
@@ -347,7 +374,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return false;
         }
         toast.warn('Offline — message queued for retry');
-        set({error: 'Offline — message queued for retry', streaming: false});
+        set({
+          error: 'Offline — message queued for retry',
+          streaming: false,
+        });
         await triggerHaptic('error');
         return true;
       }
@@ -360,14 +390,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       if (accumulated) {
-        await appendCachedMessage(sessionId, {...assistantMsg, content: accumulated});
+        await appendCachedMessage(sessionId, {
+          ...assistantMsg,
+          content: accumulated,
+        });
         await removePendingSend(userMsg.id);
         await triggerHaptic('success');
         sounds.receive();
         collectPair(content, accumulated, sessionId);
       }
 
-      saveSessionContext(sessionId, [...state.messages, userMsg, {...assistantMsg, content: accumulated}]);
+      await saveSessionContext(sessionId, [
+        ...state.messages,
+        userMsg,
+        {...assistantMsg, content: accumulated},
+      ]);
       await get().refreshSessions();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -407,7 +444,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // ── Try local inference first ──────────────────────────────────────
     const hybridState = useHybridStore.getState();
-    const route = hybridState.decideRoute(contextMessages[contextMessages.length - 1]?.content ?? '');
+    const route = hybridState.decideRoute(
+      contextMessages[contextMessages.length - 1]?.content ?? '',
+    );
 
     if (route.target === 'local') {
       try {
@@ -420,7 +459,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const currentContent = localAccumulated;
             set(s => ({
               messages: s.messages.map(m =>
-                m.id === assistantMsg.id ? {...m, content: currentContent} : m,
+                m.id === assistantMsg.id
+                  ? {...m, content: currentContent}
+                  : m,
               ),
             }));
           },
@@ -431,7 +472,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
               m.id === assistantMsg.id ? {...m, content: result.text} : m,
             ),
           }));
-          await appendCachedMessage(sessionId, {...assistantMsg, content: result.text});
+          await appendCachedMessage(sessionId, {
+            ...assistantMsg,
+            content: result.text,
+          });
           await triggerHaptic('success');
           sounds.receive();
           set({streaming: false});
@@ -444,7 +488,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Offline-only mode: block remote fallback
     if (useHybridStore.getState().offlineOnly) {
-      set({error: 'Offline mode: load a local engine in Settings', streaming: false});
+      set({
+        error: 'Offline mode: load a local engine in Settings',
+        streaming: false,
+      });
       toast.warn('Enable offline mode only when a local engine is loaded');
       await triggerHaptic('medium');
       return;
@@ -461,30 +508,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
         {messages: contextMessages},
         controller.signal,
       )) {
-        if (event.token) {
-          accumulated += event.token;
+        if (event.data?.token) {
+          accumulated += event.data.token as string;
           set(s => ({
             messages: s.messages.map(m =>
-              m.id === assistantMsg.id ? {...m, content: accumulated} : m,
+              m.id === assistantMsg.id
+                ? {...m, content: accumulated}
+                : m,
             ),
           }));
         }
-        if (event.error) {
-          toast.error(event.error);
+        if (event.status === 'error') {
+          const errorMsg =
+            (event.data?.error as string) ||
+            event.message ||
+            'Regeneration failed';
+          toast.error(errorMsg);
           sounds.error();
-          set({error: event.error, streaming: false});
+          set({error: errorMsg, streaming: false});
           await triggerHaptic('error');
           return;
         }
-        if (event.done) break;
+        if (event.status === 'complete') break;
       }
       if (accumulated) {
-        await appendCachedMessage(sessionId, {...assistantMsg, content: accumulated});
+        await appendCachedMessage(sessionId, {
+          ...assistantMsg,
+          content: accumulated,
+        });
         const lastUserMsg = contextMessages[contextMessages.length - 1];
         if (lastUserMsg) {
           collectPair(lastUserMsg.content, accumulated, sessionId);
         }
-        saveSessionContext(sessionId, [...contextMessages, {...assistantMsg, content: accumulated}]);
+        await saveSessionContext(sessionId, [
+          ...contextMessages,
+          {...assistantMsg, content: accumulated},
+        ]);
       }
       await get().refreshSessions();
     } catch (err: any) {
@@ -523,7 +582,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const pending = await getPendingSends();
     if (pending.length === 0) return;
 
-    toast.info(`Retrying ${pending.length} queued message${pending.length > 1 ? 's' : ''}...`);
+    toast.info(
+      `Retrying ${pending.length} queued message${pending.length > 1 ? 's' : ''}...`,
+    );
     for (const send of pending) {
       set({activeSessionId: send.sessionId});
       await get().sendMessage(send.content);

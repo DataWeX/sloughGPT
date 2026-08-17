@@ -162,7 +162,7 @@ export function SettingsScreen() {
                     borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
                     alignItems="center"
-                    onPress={() => hybrid.setActiveEngine(engine)}>
+                    onPress={() => { triggerHaptic('selection'); hybrid.setActiveEngine(engine); }}>
                     <Text fontSize={11} fontWeight="600" color={active ? 'white' : '$color11'}>{label}</Text>
                   </YStack>
                 );
@@ -178,11 +178,11 @@ export function SettingsScreen() {
                 </Text>
               </YStack>
               {hybrid.slonet.loaded ? (
-                <Button size="$2" backgroundColor="$backgroundHover" color="$color11" fontWeight="600" borderRadius={999} onPress={hybrid.unloadSloNet}>Unload</Button>
+                <Button size="$2" backgroundColor="$backgroundHover" color="$color11" fontWeight="600" borderRadius={999} onPress={() => { triggerHaptic('medium'); hybrid.unloadSloNet(); }}>Unload</Button>
               ) : hybrid.slonet.downloadProgress !== null && hybrid.slonet.downloadProgress < 1 ? (
                 <ActivityIndicator size="small" color="$color9" />
               ) : (
-                <Button size="$2" backgroundColor="$color9" color="white" fontWeight="600" borderRadius={999} onPress={() => hybrid.loadSloNet()}>Load</Button>
+                <Button size="$2" backgroundColor="$color9" color="white" fontWeight="600" borderRadius={999} onPress={() => { triggerHaptic('medium'); hybrid.loadSloNet(); }}>Load</Button>
               )}
             </XStack>
 
@@ -199,13 +199,13 @@ export function SettingsScreen() {
                 </Text>
               </YStack>
               {hybrid.qwen.loaded ? (
-                <Button size="$2" backgroundColor="$backgroundHover" color="$color11" fontWeight="600" borderRadius={999} onPress={() => hybrid.unloadQwen()}>Unload</Button>
+                <Button size="$2" backgroundColor="$backgroundHover" color="$color11" fontWeight="600" borderRadius={999} onPress={() => { triggerHaptic('medium'); hybrid.unloadQwen(); }}>Unload</Button>
               ) : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1 ? (
                 <YStack width={60} height={4} borderRadius={2} backgroundColor="$borderColor" overflow="hidden">
                   <YStack height="100%" backgroundColor="$color9" borderRadius={2} width={`${hybrid.qwen.downloadProgress * 100}%`} />
                 </YStack>
               ) : (
-                <Button size="$2" backgroundColor="$color9" color="white" fontWeight="600" borderRadius={999} onPress={() => hybrid.loadQwen()}>Download</Button>
+                <Button size="$2" backgroundColor="$color9" color="white" fontWeight="600" borderRadius={999} onPress={() => { triggerHaptic('medium'); hybrid.loadQwen(); }}>Download</Button>
               )}
             </XStack>
 
@@ -229,7 +229,7 @@ export function SettingsScreen() {
                 borderWidth={0.5}
                 borderColor={hybrid.offlineOnly ? '$color9' : '$borderColor'}
                 minWidth={56} alignItems="center"
-                onPress={() => hybrid.setOfflineOnly(!hybrid.offlineOnly)}>
+                onPress={() => { triggerHaptic('selection'); hybrid.setOfflineOnly(!hybrid.offlineOnly); }}>
                 <Text fontSize={11} fontWeight="600" color={hybrid.offlineOnly ? '$color9' : '$color11'}>
                   {hybrid.offlineOnly ? 'ON' : 'OFF'}
                 </Text>
@@ -364,7 +364,7 @@ export function SettingsScreen() {
               </YStack>
               <Switch
                 value={soundsOn}
-                onValueChange={(val) => { setSoundsOn(val); sounds.setEnabled(val); }}
+                onValueChange={(val) => { triggerHaptic('selection'); setSoundsOn(val); sounds.setEnabled(val); }}
                 trackColor={{false: theme.borderColor?.val || '#E4E0F2', true: (theme.color9?.val || '#7C52C4') + '60'}}
                 thumbColor={soundsOn ? (theme.color9?.val || '#7C52C4') : (theme.color10?.val || '#827A96')}
               />
@@ -411,37 +411,6 @@ export function SettingsScreen() {
           {/* Chat Background */}
           <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
             <Text fontSize={15} fontWeight="600" color="$color">Chat Background</Text>
-            <Text fontSize={12} color="$color11">Custom tint behind messages</Text>
-            <XStack gap={6} flexWrap="wrap" marginTop={4}>
-              {[
-                {label: 'Default', value: ''},
-                {label: 'Warm', value: 'warm'},
-                {label: 'Cool', value: 'cool'},
-                {label: 'Lavender', value: 'lavender'},
-                {label: 'Peach', value: 'peach'},
-              ].map(({label, value}) => {
-                const active = settings.chatBackground === value;
-                return (
-                  <YStack
-                    key={value}
-                    paddingHorizontal={14} paddingVertical={7}
-                    borderRadius={999}
-                    backgroundColor={active ? '$color9' : '$backgroundHover'}
-                    borderWidth={0.5}
-                    borderColor={active ? '$color9' : '$borderColor'}
-                    onPress={() => settings.update({chatBackground: value})}>
-                    <Text fontSize={12} fontWeight="500" color={active ? 'white' : '$color11'}>
-                      {label}
-                    </Text>
-                  </YStack>
-                );
-              })}
-            </XStack>
-          </YStack>
-
-          {/* Chat Background */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-            <Text fontSize={15} fontWeight="600" color="$color">Chat Background</Text>
             <Text fontSize={12} color="$color11">Customize the chat area tint</Text>
             <XStack gap={8} flexWrap="wrap" marginTop={4}>
               {([
@@ -461,7 +430,7 @@ export function SettingsScreen() {
                     backgroundColor={active ? '$color9' : '$backgroundHover'}
                     borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
-                    onPress={() => settings.update({chatBackground: opt.value})}>
+                    onPress={() => { triggerHaptic('selection'); settings.update({chatBackground: opt.value}); }}>
                     <Text fontSize={12} fontWeight="500" color={active ? 'white' : '$color11'}>
                       {opt.label}
                     </Text>

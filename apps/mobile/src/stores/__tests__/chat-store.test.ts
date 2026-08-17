@@ -260,7 +260,7 @@ describe('sendMessage', () => {
     mockApi.post.mockResolvedValue({session_id: 'new-session'});
     mockApi.get.mockResolvedValue([]);
     mockStreamSSE.mockReturnValue(
-      (async function* () { yield {done: true}; })(),
+      (async function* () { yield {status: 'complete'}; })(),
     );
 
     await useChatStore.getState().sendMessage('hello');
@@ -271,7 +271,7 @@ describe('sendMessage', () => {
   it('adds user and assistant messages to state', async () => {
     useChatStore.setState({activeSessionId: 's1'});
     mockStreamSSE.mockReturnValue(
-      (async function* () { yield {done: true}; })(),
+      (async function* () { yield {status: 'complete'}; })(),
     );
     mockApi.post.mockResolvedValue(undefined);
     mockApi.get.mockResolvedValue([]);
@@ -323,7 +323,7 @@ describe('sendMessage', () => {
     Store2.setState({activeSessionId: 's1', messages: [], streaming: false, error: null});
 
     mockStreamSSE.mockReturnValue(
-      (async function* () { yield {done: true}; })(),
+      (async function* () { yield {status: 'complete'}; })(),
     );
     mockApi.post.mockResolvedValue(undefined);
     mockApi.get.mockResolvedValue([]);

@@ -1,11 +1,12 @@
 import {getApiUrl} from './api-client';
 
 export interface SSEEvent {
-  token?: string;
-  done?: boolean;
-  error?: string;
+  stream?: string;
+  phase?: string;
+  status?: string;
+  data?: Record<string, unknown>;
   meta?: Record<string, unknown>;
-  raw?: Record<string, unknown>;
+  message?: string;
 }
 
 /** HTTP error from SSE (server is reachable but returned an error status). */
@@ -27,7 +28,11 @@ export async function* streamSSE(
   const baseUrl = await getApiUrl();
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    },
     body: JSON.stringify(body),
     signal,
   });
@@ -53,32 +58,27 @@ export async function* streamSSE(
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith(':')) continue;
+        const trimmed = line.trimEnd();
+        if (!trimmed.startsWith('data:')) continue;
 
-        if (trimmed.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(trimmed.slice(6));
-            const event: SSEEvent = {raw: data};
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
 
-            if (data.data?.token !== undefined) {
-              event.token = data.data.token;
-            }
-            if (data.status === 'complete' || data.status === 'error') {
-              event.done = true;
-              if (data.status === 'error') {
-                event.error = data.message || data.data?.error || 'Stream error';
-              }
-            }
-            if (data.meta) {
-              event.meta = data.meta;
-            }
-
-            yield event;
-          } catch {
-            // skip malformed JSON lines
-          }
+        try {
+          yield JSON.parse(payload) as SSEEvent;
+        } catch {
+          // skip malformed JSON lines
         }
+      }
+    }
+
+    // Drain remaining buffer
+    if (buffer.startsWith('data:')) {
+      const payload = buffer.slice(5).trim();
+      if (payload && payload !== '[DONE]') {
+        try {
+          yield JSON.parse(payload) as SSEEvent;
+        } catch {}
       }
     }
   } finally {

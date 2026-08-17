@@ -160,13 +160,16 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   ) => {
     appShellStore.getState().resetTraining()
     writeTraining({ phase: 'TRAINING', method: 'hf' })
-    trainingJobsController.create({
-      model: params.model, dataset: params.dataset, name: `${params.model}-${Date.now()}`,
-      epochs: params.epochs, batch_size: params.batchSize, learning_rate: params.lr,
-      use_lora: params.useLoRA, lora_rank: 8,
+    trainingJobsController.startLoraFinetune({
+      model_path: params.model,
+      dataset: params.dataset,
+      epochs: params.epochs,
+      batch_size: params.batchSize,
+      learning_rate: params.lr,
+      rank: 8,
     }).then(resp => {
       const jobId = resp.job_id as string
-      addToast('Training queued', 'info')
+      addToast('LoRA training queued', 'info')
       writeTraining({ totalEpochs: params.epochs, jobId })
       startStandardPoll(jobId, { addToast, onComplete })
     }).catch(() => addToast('Something went wrong starting training', 'error'))
