@@ -15,7 +15,7 @@ import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
-import {triggerHaptic} from '../services/haptics';
+import {triggerHaptic, type HapticType} from '../services/haptics';
 
 const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
   idle: {text: 'Ready', variant: 'default'},
@@ -121,6 +121,11 @@ export function TrainingScreen() {
   const [previewVisible, setPreviewVisible] = useState(false);
   const prevPhaseRef = useRef(phase);
 
+  const hapticPress = (type: HapticType, fn: () => void) => () => {
+    triggerHaptic(type);
+    fn();
+  };
+
   useEffect(() => {
     if (prevPhaseRef.current !== 'COMPLETE' && phase === 'COMPLETE') {
       Alert.alert(
@@ -211,7 +216,7 @@ export function TrainingScreen() {
           {error && (
             <XStack alignItems="center" justifyContent="space-between" backgroundColor="rgba(239, 68, 68, 0.08)" padding={12} borderRadius={10}>
               <Text fontSize={13} color="#EF4444" lineHeight={18} flex={1}>{error}</Text>
-              <Pressable onPress={() => { triggerHaptic('light'); clearError(); }}>
+              <Pressable onPress={hapticPress('light', clearError)}>
                 <Icon name="x" size={16} color="#EF4444" />
               </Pressable>
             </XStack>
@@ -229,7 +234,7 @@ export function TrainingScreen() {
                   alignItems="center"
                   borderWidth={0.5}
                   borderColor={method === 'distill' ? accent : '$borderColor'}
-                  onPress={() => { triggerHaptic('selection'); setMethod('distill'); }}
+                  onPress={hapticPress('selection', () => setMethod('distill'))}
                   pressStyle={{opacity: 0.7}}>
                   <Text fontSize={13} color={method === 'distill' ? '#FFFFFF' : '$color10'} fontWeight="500">
                     Distill
@@ -243,7 +248,7 @@ export function TrainingScreen() {
                   alignItems="center"
                   borderWidth={0.5}
                   borderColor={method === 'finetune' ? '#7C52C4' : '$borderColor'}
-                  onPress={() => { triggerHaptic('selection'); setMethod('finetune'); }}
+                  onPress={hapticPress('selection', () => setMethod('finetune'))}
                   pressStyle={{opacity: 0.7}}>
                   <Text fontSize={13} color={method === 'finetune' ? '#FFFFFF' : '$color10'} fontWeight="500">
                     Fine-tune
@@ -295,7 +300,7 @@ export function TrainingScreen() {
                         borderWidth={0.5}
                         borderColor={hfOpts.dataset === ds.id ? '#7C52C4' : '$borderColor'}
                         style={hfOpts.dataset === ds.id ? {backgroundColor: 'rgba(124, 82, 196, 0.1)'} : undefined}
-                        onPress={() => { triggerHaptic('selection'); setHfOpts({dataset: ds.id}); }}
+                        onPress={hapticPress('selection', () => setHfOpts({dataset: ds.id}))}
                         pressStyle={{opacity: 0.7}}>
                         <YStack flex={1}>
                           <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{ds.name}</Text>
@@ -308,7 +313,7 @@ export function TrainingScreen() {
                           paddingVertical={2}
                           borderRadius={4}
                           style={{backgroundColor: 'rgba(124, 82, 196, 0.15)'}}
-                          onPress={() => { triggerHaptic('light'); fetchPreview(ds.id); }}
+                          onPress={hapticPress('light', () => fetchPreview(ds.id))}
                           pressStyle={{opacity: 0.7}}>
                           <Text fontSize={11} color="#7C52C4" fontWeight="500" letterSpacing={0.2}>Preview</Text>
                         </YStack>
@@ -330,7 +335,7 @@ export function TrainingScreen() {
                       backgroundColor={hfOpts.epochs === v ? '#7C52C4' : '$background'}
                       borderWidth={0.5}
                       borderColor={hfOpts.epochs === v ? '#7C52C4' : '$borderColor'}
-                      onPress={() => { triggerHaptic('selection'); setHfOpts({epochs: v}); }}
+                      onPress={hapticPress('selection', () => setHfOpts({epochs: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={hfOpts.epochs === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
                     </YStack>
@@ -349,7 +354,7 @@ export function TrainingScreen() {
                       backgroundColor={hfOpts.batch_size === v ? '#7C52C4' : '$background'}
                       borderWidth={0.5}
                       borderColor={hfOpts.batch_size === v ? '#7C52C4' : '$borderColor'}
-                      onPress={() => { triggerHaptic('selection'); setHfOpts({batch_size: v}); }}
+                      onPress={hapticPress('selection', () => setHfOpts({batch_size: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={hfOpts.batch_size === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
                     </YStack>
@@ -368,7 +373,7 @@ export function TrainingScreen() {
                       backgroundColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#7C52C4' : '$background'}
                       borderWidth={0.5}
                       borderColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#7C52C4' : '$borderColor'}
-                      onPress={() => { triggerHaptic('selection'); setHfOpts({learning_rate: v}); }}
+                      onPress={hapticPress('selection', () => setHfOpts({learning_rate: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v.toExponential()}</Text>
                     </YStack>
@@ -385,7 +390,7 @@ export function TrainingScreen() {
                     backgroundColor={hfOpts.use_lora ? '#7C52C4' : '$borderColor'}
                     justifyContent="center"
                     paddingHorizontal={2}
-                    onPress={() => { triggerHaptic('selection'); setHfOpts({use_lora: !hfOpts.use_lora}); }}
+                    onPress={hapticPress('selection', () => setHfOpts({use_lora: !hfOpts.use_lora}))}
                     pressStyle={{opacity: 0.7}}>
                     <YStack
                       width={20}
@@ -410,7 +415,7 @@ export function TrainingScreen() {
                         backgroundColor={hfOpts.lora_rank === v ? '#7C52C4' : '$background'}
                         borderWidth={0.5}
                         borderColor={hfOpts.lora_rank === v ? '#7C52C4' : '$borderColor'}
-                        onPress={() => { triggerHaptic('selection'); setHfOpts({lora_rank: v}); }}
+                        onPress={hapticPress('selection', () => setHfOpts({lora_rank: v}))}
                         pressStyle={{opacity: 0.7}}>
                         <Text fontSize={11} color={hfOpts.lora_rank === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
                       </YStack>
@@ -433,7 +438,7 @@ export function TrainingScreen() {
                   alignItems="center"
                   borderWidth={0.5}
                   borderColor={inputMode === 'text' ? '#7C52C4' : '$borderColor'}
-                  onPress={() => { triggerHaptic('selection'); setInputMode('text'); }}
+                  onPress={hapticPress('selection', () => setInputMode('text'))}
                   pressStyle={{opacity: 0.7}}>
                   <Text fontSize={13} color={inputMode === 'text' ? '#FFFFFF' : '$color10'} fontWeight="500">
                     Paste Text
@@ -447,7 +452,7 @@ export function TrainingScreen() {
                   alignItems="center"
                   borderWidth={0.5}
                   borderColor={inputMode === 'dataset' ? '#7C52C4' : '$borderColor'}
-                  onPress={() => { triggerHaptic('selection'); setInputMode('dataset'); }}
+                  onPress={hapticPress('selection', () => setInputMode('dataset'))}
                   pressStyle={{opacity: 0.7}}>
                   <Text fontSize={13} color={inputMode === 'dataset' ? '#FFFFFF' : '$color10'} fontWeight="500">
                     Dataset
@@ -490,7 +495,7 @@ export function TrainingScreen() {
                         borderWidth={0.5}
                         borderColor={selectedDataset === ds.id ? '#7C52C4' : '$borderColor'}
                         style={selectedDataset === ds.id ? {backgroundColor: 'rgba(124, 82, 196, 0.1)'} : undefined}
-                        onPress={() => { triggerHaptic('selection'); setSelectedDataset(ds.id); }}
+                        onPress={hapticPress('selection', () => setSelectedDataset(ds.id))}
                         pressStyle={{opacity: 0.7}}>
                         <YStack flex={1}>
                           <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{ds.name}</Text>
@@ -503,7 +508,7 @@ export function TrainingScreen() {
                           paddingVertical={2}
                           borderRadius={4}
                           style={{backgroundColor: 'rgba(124, 82, 196, 0.15)'}}
-                          onPress={() => { triggerHaptic('light'); fetchPreview(ds.id); }}
+                          onPress={hapticPress('light', () => fetchPreview(ds.id))}
                           pressStyle={{opacity: 0.7}}>
                           <Text fontSize={11} color="#7C52C4" fontWeight="500" letterSpacing={0.2}>Preview</Text>
                         </YStack>
@@ -531,7 +536,7 @@ export function TrainingScreen() {
                       backgroundColor={config.epochs === v ? '#7C52C4' : '$background'}
                       borderWidth={0.5}
                       borderColor={config.epochs === v ? '#7C52C4' : '$borderColor'}
-                      onPress={() => { triggerHaptic('selection'); setConfig({epochs: v}); }}
+                      onPress={hapticPress('selection', () => setConfig({epochs: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={config.epochs === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
                     </YStack>
@@ -550,7 +555,7 @@ export function TrainingScreen() {
                       backgroundColor={config.learning_rate === v ? '#7C52C4' : '$background'}
                       borderWidth={0.5}
                       borderColor={config.learning_rate === v ? '#7C52C4' : '$borderColor'}
-                      onPress={() => { triggerHaptic('selection'); setConfig({learning_rate: v}); }}
+                      onPress={hapticPress('selection', () => setConfig({learning_rate: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={config.learning_rate === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
                     </YStack>
@@ -569,7 +574,7 @@ export function TrainingScreen() {
                       backgroundColor={config.soul_name === v ? '#7C52C4' : '$background'}
                       borderWidth={0.5}
                       borderColor={config.soul_name === v ? '#7C52C4' : '$borderColor'}
-                      onPress={() => { triggerHaptic('selection'); setConfig({soul_name: v}); }}
+                      onPress={hapticPress('selection', () => setConfig({soul_name: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={config.soul_name === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
                     </YStack>
@@ -648,7 +653,7 @@ export function TrainingScreen() {
                 paddingVertical={12}
                 borderRadius={8}
                 alignItems="center"
-                onPress={() => { triggerHaptic('medium'); stop(); }}
+                onPress={hapticPress('medium', stop)}
                 pressStyle={{opacity: 0.7}}>
                 <Text fontSize={15} color="#FFFFFF" fontWeight="600" lineHeight={22}>Stop Training</Text>
               </YStack>
@@ -770,13 +775,12 @@ export function TrainingScreen() {
                       style={{backgroundColor: 'rgba(212, 76, 86, 0.15)'}}
                       alignItems="center"
                       justifyContent="center"
-                      onPress={() => {
-                        triggerHaptic('light');
+                      onPress={hapticPress('light', () => {
                         Alert.alert('Delete', `Delete ${cp.name}?`, [
                           {text: 'Cancel', style: 'cancel'},
                           {text: 'Delete', style: 'destructive', onPress: () => deleteCheckpoint(cp.name)},
                         ]);
-                      }}
+                      })}
                       pressStyle={{opacity: 0.7}}>
                       <Icon name="x" size={16} color="#D44C56" />
                     </YStack>
@@ -793,7 +797,7 @@ export function TrainingScreen() {
           <YStack backgroundColor="$background" borderTopLeftRadius={24} borderTopRightRadius={24} maxHeight="70%">
             <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20} paddingVertical={16} borderBottomWidth={1} borderBottomColor="$borderColor">
               <Text fontSize={16} fontWeight="600" color="$color">Dataset Preview</Text>
-              <Pressable onPress={() => { triggerHaptic('light'); setPreviewVisible(false); }}>
+              <Pressable onPress={hapticPress('light', () => setPreviewVisible(false))}>
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
                   <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
                 </YStack>

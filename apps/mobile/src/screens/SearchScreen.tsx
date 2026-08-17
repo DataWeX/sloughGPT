@@ -5,7 +5,7 @@ import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
-import {triggerHaptic} from '../services/haptics';
+import {triggerHaptic, type HapticType} from '../services/haptics';
 
 interface SearchResult {
   sessionId: string;
@@ -22,6 +22,11 @@ export function SearchScreen() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const accent = theme.color9?.val || '#7C52C4';
+
+  const hapticPress = (type: HapticType, fn: () => void) => () => {
+    triggerHaptic(type);
+    fn();
+  };
 
   const handleSearch = useCallback(async (text: string) => {
     setQuery(text);
@@ -91,7 +96,7 @@ export function SearchScreen() {
             returnKeyType="search"
           />
           {query.length > 0 && (
-            <Pressable onPress={() => { triggerHaptic('light'); handleSearch(''); }}>
+            <Pressable onPress={hapticPress('light', () => handleSearch(''))}>
               <Icon name="x" size={16} color={(theme.color10?.val || '#827A96')} />
             </Pressable>
           )}
