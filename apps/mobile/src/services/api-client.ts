@@ -92,7 +92,7 @@ async function request<T>(
 
         if (isRetryable && retries < MAX_RETRIES) {
           retries++;
-          const retryAfter = Number(res.headers.get('Retry-After')) || 0;
+          const retryAfter = Number(res.headers?.get?.('Retry-After')) || 0;
           const delay =
             retryAfter > 0
               ? retryAfter * 1000

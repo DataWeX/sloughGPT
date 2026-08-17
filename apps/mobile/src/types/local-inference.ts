@@ -36,12 +36,13 @@ export interface LocalGenerateResult {
 export type OnTokenCallback = (token: string) => void;
 
 /** Which inference engine the user wants to use. */
-export type ActiveEngine = 'slonet' | 'qwen' | 'remote';
+export type ActiveEngine = 'slonet' | 'qwen' | 'remote' | import('./providers').ProviderId;
 
 /** Direction given to the hybrid router. */
 export type RoutingDecision =
   | { target: 'local'; engine: 'slonet' | 'qwen' }
-  | { target: 'remote'; reason: string };
+  | { target: 'remote'; reason: string }
+  | { target: import('./providers').ProviderId; reason: string };
 
 export interface HybridState {
   slonet: LocalModelState;

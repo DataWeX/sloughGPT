@@ -3,6 +3,8 @@ import {api} from '../services/api-client';
 import {streamSSE} from '../services/sse-client';
 import {useSettingsStore} from './settings-store';
 import {useHybridStore} from './hybrid-inference-store';
+import {useProvidersStore} from './providers-store';
+import {streamProviderChat, ProviderError} from '../services/providers-client';
 import {
   cacheMessages,
   getCachedMessages,
@@ -217,6 +219,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Cache user message immediately
     await appendCachedMessage(sessionId, userMsg);
 
+    // ── Shared state for all remote paths ───────────────────────────────
+    const controller = new AbortController();
+    _abortController = controller;
+    let accumulated = '';
+
+    const finalizeSuccess = async (text: string) => {
+      set(s => ({
+        messages: s.messages.map(m =>
+          m.id === assistantMsg.id ? {...m, content: text} : m,
+        ),
+      }));
+      await appendCachedMessage(sessionId, {...assistantMsg, content: text});
+      await removePendingSend(userMsg.id);
+      await triggerHaptic('success');
+      sounds.receive();
+      collectPair(content, text, sessionId);
+      await saveSessionContext(sessionId, [
+        ...state.messages,
+        userMsg,
+        {...assistantMsg, content: text},
+      ]);
+      await get().refreshSessions();
+      set({streaming: false});
+    };
+
+    const handleError = async (err: any) => {
+      if (err.name === 'AbortError') return;
+      const msg = err instanceof ProviderError
+        ? err.message
+        : err.name === 'SSEHttpError'
+          ? err.message
+          : err.message || 'Request failed';
+      toast.error(msg);
+      set({error: msg, streaming: false});
+      await triggerHaptic('error');
+    };
+
     // ── Try local inference first ──────────────────────────────────────
     const hybridState = useHybridStore.getState();
     const route = hybridState.decideRoute(content);
@@ -245,22 +284,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         );
 
         if (result && result.text) {
-          set(s => ({
-            messages: s.messages.map(m =>
-              m.id === assistantMsg.id ? {...m, content: result.text} : m,
-            ),
-          }));
-
-          await appendCachedMessage(sessionId, {
-            ...assistantMsg,
-            content: result.text,
-          });
-          await removePendingSend(userMsg.id);
-          await triggerHaptic('success');
-          sounds.receive();
-          collectPair(content, result.text, sessionId);
-          set({streaming: false});
-          await get().refreshSessions();
+          await finalizeSuccess(result.text);
           return;
         }
       } catch {}
@@ -278,10 +302,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    // ── Remote server (SSE streaming) ──────────────────────────────────
-    const controller = new AbortController();
-    _abortController = controller;
-    let accumulated = '';
+    // ── Third-party provider ────────────────────────────────────────────
+    if (route.target !== 'local' && route.target !== 'remote') {
+      const providerId = route.target as string;
+      const providers = useProvidersStore.getState().providers;
+      const providerConfig = providers[providerId as keyof typeof providers];
+      if (providerConfig?.apiKey) {
+        try {
+          const allMessages = [...state.messages, userMsg];
+          const chatMessages = allMessages.map(m => ({
+            role: m.role as 'user' | 'assistant' | 'system',
+            content: m.content,
+          }));
+          const settings = useSettingsStore.getState();
+
+          const result = await streamProviderChat(providerConfig, chatMessages, {
+            maxTokens: settings.maxTokens,
+            temperature: settings.temperature,
+            topP: settings.topP,
+            onToken: (token: string) => {
+              accumulated += token;
+              set(s => ({
+                messages: s.messages.map(m =>
+                  m.id === assistantMsg.id ? {...m, content: accumulated} : m,
+                ),
+              }));
+            },
+            signal: controller.signal,
+          });
+
+          await finalizeSuccess(result.text);
+          return;
+        } catch (err: any) {
+          await handleError(err);
+          return;
+        }
+      }
+      // Provider not configured — fall through to self-hosted remote
+    }
+
+    // ── Self-hosted remote (SSE streaming) ──────────────────────────────
     const settings = useSettingsStore.getState();
     const allMessages = [...state.messages, userMsg];
     const allImages = allMessages.flatMap(m => m.images || []);
@@ -390,22 +450,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       if (accumulated) {
-        await appendCachedMessage(sessionId, {
-          ...assistantMsg,
-          content: accumulated,
-        });
-        await removePendingSend(userMsg.id);
-        await triggerHaptic('success');
-        sounds.receive();
-        collectPair(content, accumulated, sessionId);
+        await finalizeSuccess(accumulated);
       }
-
-      await saveSessionContext(sessionId, [
-        ...state.messages,
-        userMsg,
-        {...assistantMsg, content: accumulated},
-      ]);
-      await get().refreshSessions();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       set({error: err.message});
@@ -442,6 +488,45 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
     });
 
+    // ── Shared state for all remote paths ───────────────────────────────
+    const controller = new AbortController();
+    _abortController = controller;
+    let accumulated = '';
+
+    const finalizeSuccess = async (text: string) => {
+      set(s => ({
+        messages: s.messages.map(m =>
+          m.id === assistantMsg.id ? {...m, content: text} : m,
+        ),
+      }));
+      await appendCachedMessage(sessionId, {...assistantMsg, content: text});
+      await triggerHaptic('success');
+      sounds.receive();
+      const lastUserMsg = contextMessages[contextMessages.length - 1];
+      if (lastUserMsg) {
+        collectPair(lastUserMsg.content, text, sessionId);
+      }
+      await saveSessionContext(sessionId, [
+        ...contextMessages,
+        {...assistantMsg, content: text},
+      ]);
+      await get().refreshSessions();
+      set({streaming: false});
+    };
+
+    const handleError = async (err: any) => {
+      if (err.name === 'AbortError') return;
+      const msg = err instanceof ProviderError
+        ? err.message
+        : err.name === 'SSEHttpError'
+          ? err.message
+          : err.message || 'Regeneration failed';
+      toast.error(msg);
+      sounds.error();
+      set({error: msg, streaming: false});
+      await triggerHaptic('error');
+    };
+
     // ── Try local inference first ──────────────────────────────────────
     const hybridState = useHybridStore.getState();
     const route = hybridState.decideRoute(
@@ -467,18 +552,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         );
         if (result?.text) {
-          set(s => ({
-            messages: s.messages.map(m =>
-              m.id === assistantMsg.id ? {...m, content: result.text} : m,
-            ),
-          }));
-          await appendCachedMessage(sessionId, {
-            ...assistantMsg,
-            content: result.text,
-          });
-          await triggerHaptic('success');
-          sounds.receive();
-          set({streaming: false});
+          await finalizeSuccess(result.text);
           return;
         }
       } catch {
@@ -497,11 +571,45 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    // ── Remote server (SSE streaming) ──────────────────────────────────
-    const controller = new AbortController();
-    _abortController = controller;
-    let accumulated = '';
+    // ── Third-party provider ────────────────────────────────────────────
+    if (route.target !== 'local' && route.target !== 'remote') {
+      const providerId = route.target as string;
+      const providers = useProvidersStore.getState().providers;
+      const providerConfig = providers[providerId as keyof typeof providers];
+      if (providerConfig?.apiKey) {
+        try {
+          const chatMessages = contextMessages.map(m => ({
+            role: m.role as 'user' | 'assistant' | 'system',
+            content: m.content,
+          }));
+          const settings = useSettingsStore.getState();
 
+          const result = await streamProviderChat(providerConfig, chatMessages, {
+            maxTokens: settings.maxTokens,
+            temperature: settings.temperature,
+            topP: settings.topP,
+            onToken: (token: string) => {
+              accumulated += token;
+              set(s => ({
+                messages: s.messages.map(m =>
+                  m.id === assistantMsg.id ? {...m, content: accumulated} : m,
+                ),
+              }));
+            },
+            signal: controller.signal,
+          });
+
+          await finalizeSuccess(result.text);
+          return;
+        } catch (err: any) {
+          await handleError(err);
+          return;
+        }
+      }
+      // Provider not configured — fall through to self-hosted remote
+    }
+
+    // ── Self-hosted remote (SSE streaming) ──────────────────────────────
     try {
       for await (const event of streamSSE(
         `/session/${sessionId}/regenerate`,
@@ -532,26 +640,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (event.status === 'complete') break;
       }
       if (accumulated) {
-        await appendCachedMessage(sessionId, {
-          ...assistantMsg,
-          content: accumulated,
-        });
-        const lastUserMsg = contextMessages[contextMessages.length - 1];
-        if (lastUserMsg) {
-          collectPair(lastUserMsg.content, accumulated, sessionId);
-        }
-        await saveSessionContext(sessionId, [
-          ...contextMessages,
-          {...assistantMsg, content: accumulated},
-        ]);
+        await finalizeSuccess(accumulated);
       }
-      await get().refreshSessions();
     } catch (err: any) {
-      if (err.name === 'AbortError') return;
-      toast.error('Regeneration failed');
-      sounds.error();
-      set({error: err.message});
-      await triggerHaptic('error');
+      await handleError(err);
     } finally {
       set({streaming: false});
       _abortController = null;

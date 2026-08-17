@@ -15,6 +15,7 @@ import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
 import {StatusBadge} from '../components/StatusBadge';
 import {useHybridStore} from '../stores/hybrid-inference-store';
+import {useProvidersStore} from '../stores/providers-store';
 import {api, getApiUrl, setApiUrl} from '../services/api-client';
 import {
   registerForPushNotifications,
@@ -54,6 +55,8 @@ export function SettingsScreen() {
   const [lastNotification, setLastNotification] = useState<string | null>(null);
   const [soundsOn, setSoundsOn] = useState(sounds.isEnabled());
   const hybrid = useHybridStore();
+  const activeProviderId = useProvidersStore(s => s.activeProviderId);
+  const providers = useProvidersStore(s => s.providers);
 
   useEffect(() => {
     getApiUrl().then(url => {
@@ -169,6 +172,65 @@ export function SettingsScreen() {
                 );
               })}
             </XStack>
+
+            {/* Provider selector (when remote is active) */}
+            {hybrid.activeEngine === 'remote' && (
+              <YStack gap={4}>
+                <Text fontSize={11} fontWeight="500" color="$color11" textTransform="uppercase" letterSpacing={0.5}>
+                  Remote Provider
+                </Text>
+                <XStack gap={6} flexWrap="wrap">
+                  {[
+                    {id: 'remote' as const, label: 'Self-Hosted'},
+                    ...Object.entries(providers)
+                      .filter(([_, p]) => p.apiKey && p.enabled)
+                      .map(([id, p]) => ({id: id as any, label: p.name})),
+                  ].map(({id, label}) => {
+                    const active = id === 'remote'
+                      ? !activeProviderId
+                      : activeProviderId === id;
+                    return (
+                      <YStack
+                        key={id}
+                        paddingVertical={6}
+                        paddingHorizontal={10}
+                        borderRadius={999}
+                        backgroundColor={active ? '$color9' : '$backgroundHover'}
+                        borderWidth={0.5}
+                        borderColor={active ? '$color9' : '$borderColor'}
+                        onPress={() => {
+                          triggerHaptic('selection');
+                          if (id === 'remote') {
+                            useProvidersStore.getState().setActiveProvider(null);
+                            hybrid.setActiveEngine('remote');
+                          } else {
+                            useProvidersStore.getState().setActiveProvider(id);
+                            hybrid.setActiveEngine(id);
+                          }
+                        }}>
+                        <Text fontSize={10} fontWeight="600" color={active ? 'white' : '$color11'}>
+                          {label}
+                        </Text>
+                      </YStack>
+                    );
+                  })}
+                  {/* Link to providers settings */}
+                  <YStack
+                    paddingVertical={6}
+                    paddingHorizontal={10}
+                    borderRadius={999}
+                    backgroundColor="$backgroundHover"
+                    borderWidth={0.5}
+                    borderColor="$borderColor"
+                    onPress={() => {
+                      triggerHaptic('light');
+                      navigation.navigate('Providers');
+                    }}>
+                    <Text fontSize={10} fontWeight="500" color="$color9">+ Add</Text>
+                  </YStack>
+                </XStack>
+              </YStack>
+            )}
 
             {/* SloNet */}
             <XStack justifyContent="space-between" alignItems="center" paddingVertical={4}>
@@ -461,6 +523,7 @@ export function SettingsScreen() {
           {/* Nav cards */}
           {[
             {label: 'Bookmarks', desc: 'Saved messages for quick access', target: 'Bookmarks'},
+            {label: 'Providers', desc: 'Connect OpenAI, Anthropic, Google, and more', target: 'Providers'},
             {label: 'About SloughGPT', desc: 'Version, features, architecture', target: 'About'},
             {label: 'Training', desc: 'Fine-tune models by chatting and interacting', target: 'Training'},
             {label: 'What AI Knows About Me', desc: "View and manage the AI's knowledge about you", target: 'Knowledge'},
@@ -489,7 +552,7 @@ export function SettingsScreen() {
               backgroundColor="#FEF2F2" alignItems="center"
               borderWidth={0.5} borderColor="#FEE2E2"
               onPress={() => {
-                triggerHaptic('warning');
+                triggerHaptic('medium');
                 Alert.alert('Reset Settings', 'Reset all settings to defaults?', [
                   {text: 'Cancel', style: 'cancel'},
                   {text: 'Reset', style: 'destructive', onPress: settings.reset},

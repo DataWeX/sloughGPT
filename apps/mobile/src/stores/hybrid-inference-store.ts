@@ -13,18 +13,34 @@ import {create} from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as slonet from '../services/onnx-inference-service';
 import * as llamaRn from '../services/llama-rn-service';
+import {useProvidersStore} from './providers-store';
 import type {LocalGenerateResult, HybridState, RoutingDecision, ActiveEngine, OnTokenCallback} from '../types/local-inference';
+import type {ProviderId, InferenceTarget} from '../types/providers';
 
 const STORAGE_KEY = '@sloughgpt/hybrid_config';
+
+/** Known local/remote engines (not third-party provider IDs). */
+const KNOWN_ENGINES = new Set(['slonet', 'qwen', 'remote']);
 
 // ── Pure routing (O(1), no string scanning at all) ─────────────────────
 
 function _route(_content: string, state: HybridState): RoutingDecision {
-  // Offline-only mode: never route to remote
+  // Offline-only mode: never route to remote or third-party
   if (state.offlineOnly) {
     if (state.slonet.loaded) return {target: 'local', engine: 'slonet'};
     if (state.qwen.loaded) return {target: 'local', engine: 'qwen'};
     return {target: 'remote', reason: 'offline-only — load a local engine in Settings'};
+  }
+
+  // Third-party provider selected
+  if (!KNOWN_ENGINES.has(state.activeEngine)) {
+    const providerId = state.activeEngine as ProviderId;
+    const providerConfig = useProvidersStore.getState().providers[providerId];
+    if (providerConfig?.enabled && providerConfig.apiKey) {
+      return {target: providerId, reason: `third-party provider: ${providerConfig.name}`};
+    }
+    // Provider not configured — fall through to self-hosted remote
+    return {target: 'remote', reason: `${providerId} not configured — using self-hosted`};
   }
 
   if (state.activeEngine === 'remote') {

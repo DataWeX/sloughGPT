@@ -12,6 +12,7 @@ import {HelpScreen} from './src/screens/HelpScreen';
 import {TrainingScreen} from './src/screens/TrainingScreen';
 import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
 import {SearchScreen} from './src/screens/SearchScreen';
+import {ProvidersScreen} from './src/screens/ProvidersScreen';
 import {useSettingsStore} from './src/stores/settings-store';
 import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
@@ -53,6 +54,7 @@ function SettingsStack() {
       <Stack.Screen name="Training" component={TrainingScreen} />
       <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
       <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="Providers" component={ProvidersScreen} />
     </Stack.Navigator>
   );
 }
