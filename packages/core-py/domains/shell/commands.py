@@ -240,6 +240,18 @@ class ShellCommands:
         })
 
     @staticmethod
+    def load_adapter(adapter_path: str, merge: bool = False) -> dict[str, Any]:
+        """Load a LoRA adapter into the running model for inference."""
+        return _api_post("/training/load-adapter", {
+            "adapter_path": adapter_path, "merge": merge,
+        })
+
+    @staticmethod
+    def unload_adapter() -> dict[str, Any]:
+        """Unload the current LoRA adapter and revert to base model weights."""
+        return _api_post("/training/unload-adapter")
+
+    @staticmethod
     def train_status() -> list[dict[str, Any]]:
         """List all training jobs with status."""
         result = _api_get("/training/jobs")

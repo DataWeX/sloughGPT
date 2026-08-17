@@ -548,6 +548,7 @@ class SloNetChatProvider:
         instance._model = model
         instance._parser = parser  # keep mmap alive
         instance._quant_engine = None
+        instance._slnc_path = slnc_path  # stored for unload/reload
 
         # Apply quantization if requested.
         #

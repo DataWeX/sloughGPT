@@ -187,6 +187,10 @@ export const trainingJobsController = {
     return apiPost('/training/load-adapter', { adapter_path: adapterPath, merge })
   },
 
+  async unloadAdapter(): Promise<{ status: string; message: string }> {
+    return apiPost('/training/unload-adapter')
+  },
+
   async pauseTraining(): Promise<{ success: boolean }> {
     return apiPost('/auto-train/pause')
   },

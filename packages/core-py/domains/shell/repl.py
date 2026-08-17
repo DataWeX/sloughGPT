@@ -3997,11 +3997,11 @@ Examples:
             self._print(f"  Error: {e}")
 
     def _cmd_train(self, args: str = "") -> None:
-        """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset>"""
+        """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset> | train load-adapter <path> | train unload-adapter"""
         parts = args.strip().split()
         sub = parts[0] if parts else ""
 
-        if not sub or sub in ("status", "follow", "stop", "distill", "hf", "auto"):
+        if not sub or sub in ("status", "follow", "stop", "distill", "hf", "auto", "load-adapter", "unload-adapter"):
             if not self._require_api("train"):
                 return
 
@@ -4068,6 +4068,30 @@ Examples:
                 self._print(f"  Fine-tuning started: {r.get('status', r)}")
                 if job_id:
                     self._stream_train_progress(job_id)
+            return
+
+        if sub == "load-adapter":
+            path = parts[1] if len(parts) > 1 else ""
+            if not path:
+                self._print("  Usage: train load-adapter <adapter.npz> [--merge]")
+                return
+            merge = "--merge" in parts
+            r = self._spinner_call("Loading adapter", lambda: self.cmds.load_adapter(path, merge=merge))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                rank = r.get("rank", "?")
+                n_params = r.get("n_params", 0)
+                merged = " (merged)" if r.get("merged") else ""
+                self._print(f"  Loaded adapter: rank={rank}, {n_params:,} params{merged}")
+            return
+
+        if sub == "unload-adapter":
+            r = self._spinner_call("Unloading adapter", lambda: self.cmds.unload_adapter())
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  {r.get('message', 'Adapter unloaded')}")
             return
 
         if sub == "auto":

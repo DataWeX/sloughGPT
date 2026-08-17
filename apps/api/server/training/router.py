@@ -1388,6 +1388,55 @@ async def load_adapter(request: LoadAdapterRequest):
     except Exception as exc:
         logger.exception("Failed to load adapter: %s", exc, extra={"tag": "TRAIN"})
         raise HTTPException(status_code=500, detail=f"Failed to load adapter: {exc}")
+
+
+@router.post("/training/unload-adapter")
+async def unload_adapter():
+    """Unload the current LoRA adapter and revert to base model weights.
+
+    Reloads the base .slnc model from disk, replacing the LoRA-augmented version.
+    """
+    from domains.infrastructure.model_server import get_model_registry
+    registry = get_model_registry()
+    models = registry.list_models()
+    if not models:
+        raise HTTPException(status_code=400, detail="No model loaded.")
+
+    # Find the server and its base model path
+    for m in models:
+        server = registry._servers.get(m)
+        if server is None:
+            continue
+        model_ref = getattr(server, '_model_ref', None)
+        if model_ref is None or not hasattr(model_ref, 'layers'):
+            continue
+
+        # Check if model has LoRA layers applied
+        has_lora = any(
+            hasattr(mod, 'lora_A') or hasattr(mod, 'lora_B')
+            for _, mod in model_ref.named_modules() if hasattr(mod, 'named_modules')
+        ) if hasattr(model_ref, 'named_modules') else False
+
+        if not has_lora:
+            return {"status": "no_adapter", "message": "No LoRA adapter loaded — model is already base weights."}
+
+        # Reload base model from .slnc
+        # The provider's _slnc_path was saved during initial load
+        slnc_path = getattr(model_ref, '_slnc_path', None)
+        if slnc_path is None:
+            raise HTTPException(status_code=400, detail="Cannot determine base model path — reload manually via POST /models/load.")
+
+        from domains.inference.slonet_provider import SloNetChatProvider
+        base_provider = SloNetChatProvider.from_slnc(slnc_path, model_id=m)
+        server.swap_model(base_provider._model)
+
+        logger.info("Unloaded LoRA adapter, reverted to base model: %s", slnc_path, extra={"tag": "TRAIN"})
+        return {"status": "unloaded", "message": f"Reverted to base model: {Path(slnc_path).name}"}
+
+    raise HTTPException(status_code=400, detail="No SloNet model found.")
+
+
+@router.post("/training/from-feedback")
 async def train_from_feedback():
     """Train a model from collected feedback data.
 
