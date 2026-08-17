@@ -252,6 +252,19 @@ class KBRouter:
         import hashlib
         content_hash = hashlib.md5(req.content.encode()).hexdigest()
         item_id = f"fact_{memory._fact_counter}_{content_hash[:8]}"
+
+        # Auto-ingest into production RAG for grounding verification
+        if is_new:
+            try:
+                from domains.cognitive.rag_service import get_rag_service
+                rag_svc = get_rag_service()
+                rag_svc.add_document(
+                    content=req.content,
+                    metadata={"source": req.source or "knowledge", "topic": topic or "general", "item_id": item_id},
+                )
+            except Exception:
+                pass
+
         try:
             from infrastructure.auth import get_audit_logger
             get_audit_logger().log(
