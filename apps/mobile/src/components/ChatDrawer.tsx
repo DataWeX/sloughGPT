@@ -3,6 +3,7 @@ import {FlatList, Alert, TextInput as RNTextInput, Modal} from 'react-native';
 import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
 import {triggerHaptic} from '../services/haptics';
+import {toast} from '../services/toast';
 import * as starsService from '../services/stars';
 import * as labelsService from '../services/labels';
 import {Icon} from './Icon';
@@ -140,14 +141,18 @@ export function ChatDrawer({
                     width={28} height={28} borderRadius={8}
                     alignItems="center" justifyContent="center"
                     onPress={async () => {
-                      if (isStarred) {
-                        await starsService.unstarSession(session.id);
-                        setStarredIds(prev => prev.filter(id => id !== session.id));
-                      } else {
-                        await starsService.starSession(session.id);
-                        setStarredIds(prev => [session.id, ...prev]);
+                      try {
+                        if (isStarred) {
+                          await starsService.unstarSession(session.id);
+                          setStarredIds(prev => prev.filter(id => id !== session.id));
+                        } else {
+                          await starsService.starSession(session.id);
+                          setStarredIds(prev => [session.id, ...prev]);
+                        }
+                        triggerHaptic('light');
+                      } catch (e) {
+                        toast.error('Failed to update star');
                       }
-                      triggerHaptic('light');
                     }}
                     pressStyle={{opacity: 0.6}}>
                     <Icon name={isStarred ? 'star' : 'star-outline'} size={14} color={'#F59E0B'} />

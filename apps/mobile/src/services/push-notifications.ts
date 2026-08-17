@@ -68,7 +68,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     return token;
   } catch (err) {
-    console.error('Failed to register for notifications:', err);
+    if (__DEV__) console.warn('[push-notifications] registration failed:', err);
     return null;
   }
 }
@@ -82,7 +82,9 @@ export async function unregisterPushNotifications(): Promise<void> {
   if (token) {
     try {
       await api.post('/mobile/notifications/unregister', {token});
-    } catch {}
+    } catch (e) {
+      if (__DEV__) console.warn('[push-notifications] unregister failed:', e);
+    }
     await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
     await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
   }
@@ -163,6 +165,8 @@ export async function subscribeToTopic(topic: string): Promise<void> {
         platform: Platform.OS,
         topics: ['chat', 'training', topic],
       });
-    } catch {}
+    } catch (e) {
+      if (__DEV__) console.warn('[push-notifications] topic subscribe failed:', e);
+    }
   }
 }

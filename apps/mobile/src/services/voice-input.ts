@@ -55,7 +55,8 @@ export async function startRecording(): Promise<{stop: () => Promise<VoiceRecord
         const uri = recording.getURI();
         const duration = Math.round((Date.now() - startTime) / 1000);
         return uri ? {uri, duration} : null;
-      } catch {
+      } catch (e) {
+        if (__DEV__) console.warn('[voice-input] stop recording failed:', e);
         return null;
       }
     },
@@ -86,7 +87,8 @@ export async function transcribeAudio(uri: string): Promise<string> {
       const data = await res.json();
       return data.text || '';
     }
-  } catch {
+  } catch (e) {
+    if (__DEV__) console.warn('[voice-input] transcription failed:', e);
     // backend unavailable
   }
 

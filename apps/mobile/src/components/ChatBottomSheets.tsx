@@ -2,6 +2,7 @@ import React from 'react';
 import {Modal, FlatList, TextInput as RNTextInput, Platform} from 'react-native';
 import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
+import {toast} from '../services/toast';
 import * as labelsService from '../services/labels';
 import {Icon} from './Icon';
 import {SearchSessionsModal} from './SearchSessionsModal';
@@ -203,11 +204,15 @@ export function ChatBottomSheets({
                       paddingHorizontal={10} paddingVertical={5} borderRadius={999}
                       onPress={async () => {
                         if (activeSessionId) {
-                          await labelsService.removeLabel(activeSessionId, label);
-                          const labels = await labelsService.getLabels(activeSessionId);
-                          setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
-                          const distinct = await labelsService.getAllDistinctLabels();
-                          setAllLabels(distinct);
+                          try {
+                            await labelsService.removeLabel(activeSessionId, label);
+                            const labels = await labelsService.getLabels(activeSessionId);
+                            setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
+                            const distinct = await labelsService.getAllDistinctLabels();
+                            setAllLabels(distinct);
+                          } catch {
+                            toast.error('Failed to remove label');
+                          }
                         }
                       }}>
                       <Text fontSize={12} fontWeight="500" color="$color9">{label}</Text>
@@ -233,12 +238,16 @@ export function ChatBottomSheets({
                   returnKeyType="done"
                   onSubmitEditing={async () => {
                     if (labelInput.trim() && activeSessionId) {
-                      await labelsService.addLabel(activeSessionId, labelInput.trim());
-                      setLabelInput('');
-                      const labels = await labelsService.getLabels(activeSessionId);
-                      setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
-                      const distinct = await labelsService.getAllDistinctLabels();
-                      setAllLabels(distinct);
+                      try {
+                        await labelsService.addLabel(activeSessionId, labelInput.trim());
+                        setLabelInput('');
+                        const labels = await labelsService.getLabels(activeSessionId);
+                        setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
+                        const distinct = await labelsService.getAllDistinctLabels();
+                        setAllLabels(distinct);
+                      } catch {
+                        toast.error('Failed to add label');
+                      }
                     }
                   }}
                 />
