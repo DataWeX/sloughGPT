@@ -2,6 +2,8 @@ import React from 'react';
 import {Modal, FlatList, TextInput as RNTextInput, Platform} from 'react-native';
 import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
+import {useSettingsStore} from '../stores/settings-store';
+import {useModelStore} from '../stores/model-store';
 import {toast} from '../services/toast';
 import * as labelsService from '../services/labels';
 import {Icon} from './Icon';
@@ -32,6 +34,10 @@ interface ChatBottomSheetsProps {
   setShowSoulPicker: (v: boolean) => void;
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
+  showChatSettings: boolean;
+  setShowChatSettings: (v: boolean) => void;
+  showSystemPrompt: boolean;
+  setShowSystemPrompt: (v: boolean) => void;
   forwardTo: Message | null;
   setForwardTo: (m: Message | null) => void;
   safeSessions: Session[];
@@ -66,6 +72,10 @@ export function ChatBottomSheets({
   setShowSoulPicker,
   showSettings,
   setShowSettings,
+  showChatSettings,
+  setShowChatSettings,
+  showSystemPrompt,
+  setShowSystemPrompt,
   forwardTo,
   setForwardTo,
   safeSessions,
@@ -477,6 +487,38 @@ export function ChatBottomSheets({
 
             <YStack
               paddingVertical={14} paddingHorizontal={20}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              onPress={() => { setShowSettings(false); setShowChatSettings(true); }}
+              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              <XStack alignItems="center" gap={14}>
+                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name="settings" size={18} color="$color9" />
+                </YStack>
+                <YStack>
+                  <Text fontSize={15} fontWeight="600" color="$color">Generation Settings</Text>
+                  <Text fontSize={12} color="$color10">Temperature, tokens, and sampling</Text>
+                </YStack>
+              </XStack>
+            </YStack>
+
+            <YStack
+              paddingVertical={14} paddingHorizontal={20}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              onPress={() => { setShowSettings(false); setShowSystemPrompt(true); }}
+              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              <XStack alignItems="center" gap={14}>
+                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name="info" size={18} color="$color9" />
+                </YStack>
+                <YStack>
+                  <Text fontSize={15} fontWeight="600" color="$color">System Prompt</Text>
+                  <Text fontSize={12} color="$color10">View the active personality prompt</Text>
+                </YStack>
+              </XStack>
+            </YStack>
+
+            <YStack
+              paddingVertical={14} paddingHorizontal={20}
               onPress={() => { setShowSettings(false); handleExportChat(); }}
               pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
               <XStack alignItems="center" gap={14}>
@@ -577,6 +619,192 @@ export function ChatBottomSheets({
           </YStack>
         </YStack>
       </Modal>
+
+      <Modal visible={showChatSettings} animationType="slide" transparent onRequestClose={() => setShowChatSettings(false)}>
+        <YStack flex={1} justifyContent="flex-end">
+          <YStack
+            flex={1}
+            backgroundColor="rgba(0,0,0,0.3)"
+            onPress={() => setShowChatSettings(false)}
+          />
+          <YStack
+            backgroundColor="$background"
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
+            overflow="hidden">
+            <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
+              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+            </YStack>
+
+            <XStack
+              paddingHorizontal={20} paddingVertical={16}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              alignItems="center" justifyContent="space-between">
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Generation Settings</Text>
+              <YStack
+                width={28} height={28} borderRadius={9}
+                alignItems="center" justifyContent="center"
+                onPress={() => setShowChatSettings(false)}
+                pressStyle={{opacity: 0.6}}>
+                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
+            </XStack>
+
+            <YStack paddingVertical={14} paddingHorizontal={20}>
+              <ChatSettingsContent />
+            </YStack>
+
+            <YStack height={Platform.OS === 'ios' ? 34 : 16} />
+          </YStack>
+        </YStack>
+      </Modal>
+
+      <Modal visible={showSystemPrompt} animationType="slide" transparent onRequestClose={() => setShowSystemPrompt(false)}>
+        <YStack flex={1} justifyContent="flex-end">
+          <YStack
+            flex={1}
+            backgroundColor="rgba(0,0,0,0.3)"
+            onPress={() => setShowSystemPrompt(false)}
+          />
+          <YStack
+            backgroundColor="$background"
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
+            overflow="hidden">
+            <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
+              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+            </YStack>
+
+            <XStack
+              paddingHorizontal={20} paddingVertical={16}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              alignItems="center" justifyContent="space-between">
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">System Prompt</Text>
+              <YStack
+                width={28} height={28} borderRadius={9}
+                alignItems="center" justifyContent="center"
+                onPress={() => setShowSystemPrompt(false)}
+                pressStyle={{opacity: 0.6}}>
+                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
+            </XStack>
+
+            <YStack paddingVertical={14} paddingHorizontal={20}>
+              <SystemPromptContent />
+            </YStack>
+
+            <YStack height={Platform.OS === 'ios' ? 34 : 16} />
+          </YStack>
+        </YStack>
+      </Modal>
     </>
+  );
+}
+
+function ChatSettingsContent() {
+  const theme = useTheme();
+  const settings = useSettingsStore();
+  const update = useSettingsStore(s => s.update);
+
+  const sliders = [
+    {key: 'temperature' as const, label: 'Temperature', min: 0, max: 2, step: 0.1},
+    {key: 'topP' as const, label: 'Top P', min: 0, max: 1, step: 0.05},
+    {key: 'topK' as const, label: 'Top K', min: 1, max: 100, step: 1},
+    {key: 'maxTokens' as const, label: 'Max Tokens', min: 32, max: 4096, step: 32},
+  ];
+
+  return (
+    <YStack gap={20}>
+      {sliders.map(s => (
+        <YStack key={s.key}>
+          <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
+            <Text fontSize={13} fontWeight="500" color="$color">{s.label}</Text>
+            <Text fontSize={13} fontWeight="600" color="$color9">
+              {s.key === 'maxTokens' ? Math.round(settings[s.key]) : settings[s.key].toFixed(2)}
+            </Text>
+          </XStack>
+          <YStack
+            height={44}
+            backgroundColor="rgba(124, 82, 196, 0.04)"
+            borderRadius={10}
+            paddingHorizontal={12}
+            alignItems="center"
+            justifyContent="center">
+            <RNTextInput
+              style={{
+                width: '100%',
+                height: 44,
+                fontSize: 14,
+                color: theme.color?.val || '#1A1625',
+                textAlign: 'center',
+              }}
+              keyboardType="numeric"
+              value={String(settings[s.key])}
+              onEndEditing={(e) => {
+                const val = parseFloat(e.nativeEvent.text);
+                if (!isNaN(val)) {
+                  const clamped = Math.max(s.min, Math.min(s.max, val));
+                  update({[s.key]: clamped});
+                }
+              }}
+            />
+          </YStack>
+        </YStack>
+      ))}
+
+      <YStack
+        paddingVertical={12}
+        borderRadius={10}
+        alignItems="center"
+        backgroundColor="rgba(124, 82, 196, 0.08)"
+        onPress={() => update({temperature: 0.8, maxTokens: 256, topP: 0.9, topK: 50})}
+        pressStyle={{opacity: 0.7, scale: 0.98}}>
+        <Text fontSize={13} fontWeight="600" color="$color9">Reset to Defaults</Text>
+      </YStack>
+    </YStack>
+  );
+}
+
+function SystemPromptContent() {
+  const currentSoul = useModelStore(s => s.currentSoul);
+  const [prompt, setPrompt] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchPrompt = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/souls/current');
+        if (res.ok) {
+          const data = await res.json();
+          setPrompt(data.system_prompt || data.description || 'No system prompt available for this soul.');
+        }
+      } catch {
+        setPrompt('Unable to load system prompt.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPrompt();
+  }, []);
+
+  if (loading) {
+    return <Text fontSize={13} color="$color10" padding={20}>Loading...</Text>;
+  }
+
+  return (
+    <YStack gap={12}>
+      <XStack alignItems="center" gap={8}>
+        <Text fontSize={13} fontWeight="600" color="$color9">Active Soul:</Text>
+        <Text fontSize={13} color="$color">{currentSoul?.name || 'None'}</Text>
+      </XStack>
+      <YStack
+        backgroundColor="rgba(124, 82, 196, 0.04)"
+        borderRadius={10}
+        padding={14}>
+        <Text fontSize={13} lineHeight={20} color="$color" selectable>
+          {prompt || 'No system prompt available.'}
+        </Text>
+      </YStack>
+    </YStack>
   );
 }

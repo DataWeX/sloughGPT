@@ -86,6 +86,17 @@ export function ChatScreen() {
                     <Text fontSize={11} fontWeight="600" color="$color9">{a.currentSoul.name}</Text>
                   </YStack>
                 )}
+                {a.health?.model_name && (
+                  <YStack
+                    backgroundColor="rgba(52, 176, 125, 0.1)"
+                    paddingHorizontal={8}
+                    paddingVertical={3}
+                    borderRadius={999}
+                    borderWidth={0.5}
+                    borderColor="rgba(52, 176, 125, 0.18)">
+                    <Text fontSize={10} fontWeight="600" color="#34B07D">{a.health.model_name}</Text>
+                  </YStack>
+                )}
               </XStack>
             </YStack>
           </XStack>
@@ -405,6 +416,10 @@ export function ChatScreen() {
         setShowSoulPicker={a.setShowSoulPicker}
         showSettings={a.showSettings}
         setShowSettings={a.setShowSettings}
+        showChatSettings={a.showChatSettings}
+        setShowChatSettings={a.setShowChatSettings}
+        showSystemPrompt={a.showSystemPrompt}
+        setShowSystemPrompt={a.setShowSystemPrompt}
         forwardTo={a.forwardTo}
         setForwardTo={a.setForwardTo}
         safeSessions={a.safeSessions}

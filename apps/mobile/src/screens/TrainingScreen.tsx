@@ -120,6 +120,10 @@ export function TrainingScreen() {
   const [loadingCheckpoint, setLoadingCheckpoint] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<string[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importName, setImportName] = useState('');
+  const [importing, setImporting] = useState(false);
   const prevPhaseRef = useRef(phase);
   const hapticPress = useHapticPress();
 
@@ -151,6 +155,30 @@ export function TrainingScreen() {
       setPreviewData(result.rows || []);
       setPreviewVisible(true);
     } catch {}
+  };
+
+  const handleImport = async () => {
+    if (!importUrl.trim()) {
+      Alert.alert('Import', 'Enter a URL or file path');
+      return;
+    }
+    setImporting(true);
+    try {
+      await api.post('/datasets/import/url', {
+        url: importUrl.trim(),
+        name: importName.trim() || undefined,
+      });
+      triggerHaptic('success');
+      Alert.alert('Imported', 'Dataset imported successfully');
+      setShowImportModal(false);
+      setImportUrl('');
+      setImportName('');
+      refresh();
+    } catch (err: any) {
+      Alert.alert('Import Failed', err.message || 'Failed to import dataset');
+    } finally {
+      setImporting(false);
+    }
   };
 
   useEffect(() => {
@@ -522,6 +550,17 @@ export function TrainingScreen() {
                       </XStack>
                     ))
                   )}
+                  <YStack
+                    paddingVertical={10}
+                    borderRadius={8}
+                    borderWidth={1}
+                    borderStyle="dashed"
+                    borderColor="$borderColor"
+                    alignItems="center"
+                    onPress={hapticPress('light', () => setShowImportModal(true))}
+                    pressStyle={{opacity: 0.7}}>
+                    <Text fontSize={13} color="$color9" fontWeight="500">+ Import Dataset</Text>
+                  </YStack>
                 </YStack>
               )}
             </YStack>
@@ -819,6 +858,74 @@ export function TrainingScreen() {
                 <Text fontSize={13} color="$color10" lineHeight={18} textAlign="center" padding={24}>No preview available</Text>
               )}
             </ScrollView>
+          </YStack>
+        </YStack>
+      </Modal>
+
+      <Modal visible={showImportModal} animationType="slide" transparent>
+        <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
+          <YStack backgroundColor="$background" borderTopLeftRadius={24} borderTopRightRadius={24}>
+            <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20} paddingVertical={16} borderBottomWidth={1} borderBottomColor="$borderColor">
+              <Text fontSize={16} fontWeight="600" color="$color">Import Dataset</Text>
+              <Pressable onPress={hapticPress('light', () => setShowImportModal(false))} accessibilityLabel="Close import">
+                <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
+                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                </YStack>
+              </Pressable>
+            </XStack>
+            <YStack padding={20} gap={16}>
+              <YStack gap={4}>
+                <Text fontSize={13} color="$color10">URL or File Path</Text>
+                <TextInput
+                  value={importUrl}
+                  onChangeText={setImportUrl}
+                  placeholder="https://example.com/data.txt or /path/to/file"
+                  placeholderTextColor="#827A96"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    fontSize: 15,
+                    color: '#1A1625',
+                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                  }}
+                />
+              </YStack>
+              <YStack gap={4}>
+                <Text fontSize={13} color="$color10">Name (optional)</Text>
+                <TextInput
+                  value={importName}
+                  onChangeText={setImportName}
+                  placeholder="my-dataset"
+                  placeholderTextColor="#827A96"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    fontSize: 15,
+                    color: '#1A1625',
+                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                  }}
+                />
+              </YStack>
+              <YStack
+                paddingVertical={12}
+                borderRadius={10}
+                alignItems="center"
+                backgroundColor={importing ? 'rgba(124, 82, 196, 0.3)' : '#7C52C4'}
+                onPress={hapticPress('light', handleImport)}
+                pressStyle={{opacity: 0.7}}>
+                {importing ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text fontSize={14} fontWeight="600" color="#FFFFFF">Import</Text>
+                )}
+              </YStack>
+            </YStack>
           </YStack>
         </YStack>
       </Modal>
