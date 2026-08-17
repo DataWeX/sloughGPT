@@ -10,25 +10,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 @pytest.fixture(autouse=True)
 def mock_log(monkeypatch):
     fake_log = MagicMock()
-    fake_log.header = MagicMock()
-    fake_log.section = MagicMock()
-    fake_log.info = MagicMock()
-    fake_log.warning = MagicMock()
-    fake_log.error = MagicMock()
-    fake_log.success = MagicMock()
-    fake_log.step = MagicMock()
-    fake_log.key_value = MagicMock()
-    fake_log.blank = MagicMock()
-    fake_log.table = MagicMock()
-    fake_log.status = MagicMock()
-    fake_log.command = MagicMock()
     import commands.chat as mod
     monkeypatch.setattr(mod, "log", fake_log)
     return fake_log
 
 
 class TestCmdGenerate:
-    def test_generate_calls_engine(self, monkeypatch):
+    def test_runs_without_error(self, monkeypatch):
         from commands.chat import cmd_generate
         args = MagicMock()
         args.prompt = "Hello"
@@ -47,15 +35,15 @@ class TestCmdGenerate:
         cmd_generate(args)
         mock_engine.generate.assert_called_once()
 
-    def test_generate_no_model_demo_mode(self, monkeypatch):
+    def test_generate_no_soul_files(self, monkeypatch):
         from commands.chat import cmd_generate
         args = MagicMock()
-        args.prompt = "Hello"
-        args.max_tokens = 50
-        args.temperature = 0.8
+        args.prompt = "Test"
+        args.max_tokens = 10
+        args.temperature = 0.5
 
         mock_engine = MagicMock()
-        mock_engine.generate.return_value = "Demo output"
+        mock_engine.generate.return_value = "Demo"
 
         import domains.core
         monkeypatch.setattr(domains.core, "SloEngine", lambda **kw: mock_engine)
@@ -63,10 +51,13 @@ class TestCmdGenerate:
         monkeypatch.setattr(utils.helpers, "local_soul_candidate_paths", lambda x: [])
 
         cmd_generate(args)
+        mock_engine.generate.assert_called_once_with(
+            "Test", max_new_tokens=10, temperature=0.5
+        )
 
 
 class TestCmdChat:
-    def test_chat_no_serve_flag(self, monkeypatch):
+    def test_no_serve_flag_when_api_down(self, monkeypatch):
         from commands.chat import cmd_chat
         args = MagicMock()
         args.host = "localhost"
@@ -74,15 +65,13 @@ class TestCmdChat:
         args.no_serve = True
         args.auto_model = None
         args.model = None
-        args.max_tokens = 100
-        args.temperature = 0.8
 
         import requests
         monkeypatch.setattr(requests, "get", MagicMock(side_effect=requests.ConnectionError))
 
         cmd_chat(args)
 
-    def test_chat_quit_exits(self, monkeypatch):
+    def test_quit_exits_loop(self, monkeypatch):
         from commands.chat import cmd_chat
         args = MagicMock()
         args.host = "localhost"

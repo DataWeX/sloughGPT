@@ -4848,8 +4848,7 @@ class SloTransformer(SloNet):
         kv_len = [0] * n_blocks
 
         # Prefill: process full prompt
-        x = input_ids.astype(np.float32)
-        h = self.layers[0].forward(Tensor(x)).data  # tok_emb
+        h = self.layers[0].forward(Tensor(input_ids.astype(np.int64))).data  # tok_emb
         if self.pos_emb is not None:
             seq_len = h.shape[1]
             pos = Tensor(np.arange(seq_len, dtype=np.int64).reshape(1, -1))
@@ -4877,7 +4876,7 @@ class SloTransformer(SloNet):
 
         # Decode loop
         for step in range(max_gen - 1):
-            tok = np.array([[next_token]], dtype=np.float64)
+            tok = np.array([[next_token]], dtype=np.int64)
             h = self.layers[0].forward(Tensor(tok)).data
 
             block_idx = 0

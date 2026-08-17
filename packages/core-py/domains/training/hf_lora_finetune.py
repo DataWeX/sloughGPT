@@ -380,14 +380,14 @@ def load_lora_adapter(model: SloTransformer, adapter_path: str) -> SloTransforme
 
 
 def merge_lora_adapter(model: SloTransformer) -> SloTransformer:
-    """Merge LoRA weights into base weights and replace LoRALinear with SloLinear.
+    """Merge LoRA weights into base weights and replace LoRA layers with plain layers.
 
     After merging, the model runs at full inference speed with no LoRA overhead.
     The inlined fast path in generate_numpy requires SloLinear (with
     _get_weight_T_contig), so merged layers must be replaced.
     """
-    from domains.training.lora import _walk_slo_tree, _set_nested
-    from domains.training.slonet import SloLinear
+    from domains.training.lora import _walk_slo_tree, _set_nested, LoRAEmbedding
+    from domains.training.slonet import SloLinear, SloEmbedding
 
     for path, module in _walk_slo_tree(model, []):
         if isinstance(module, LoRALinear):
@@ -407,6 +407,18 @@ def merge_lora_adapter(model: SloTransformer) -> SloTransformer:
             # Replace in the tree
             _set_nested(model, path.split("."), new_linear)
             logger.info(f"Merged LoRA into {path}")
+
+        elif isinstance(module, LoRAEmbedding):
+            # Fold LoRA delta into base embedding weight
+            module.merge_weights()
+
+            # The SloEmbedding inside LoRAEmbedding now holds the merged weight
+            base_embedding = module.weight
+            base_embedding.name = f"merged_{path.replace('.', '_')}"
+
+            # Replace in the tree
+            _set_nested(model, path.split("."), base_embedding)
+            logger.info(f"Merged LoRA embedding into {path}")
 
     # Clear the LoRA flag
     model._has_lora = False
