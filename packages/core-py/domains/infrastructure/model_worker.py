@@ -436,7 +436,7 @@ def _hf_worker_main(
         repetition_penalty: float = 1.0,
         **gen_kwargs: Any,
     ) -> None:
-        from transformers import TextIteratorStreamer
+        from domains.infrastructure.model_server import _TokenStreamer
 
         inputs = tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"]
@@ -448,8 +448,8 @@ def _hf_worker_main(
             if attention_mask is not None:
                 attention_mask = attention_mask.to(device)
 
-        streamer = TextIteratorStreamer(
-            tokenizer, skip_prompt=True, skip_special_tokens=True
+        streamer = _TokenStreamer(
+            tokenizer, skip_prompt=True
         )
 
         gen_kwargs.update(

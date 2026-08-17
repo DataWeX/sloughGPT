@@ -618,7 +618,7 @@ function ConvRow({
         <div className="flex items-center gap-1">
           <button
             onClick={onPin}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             aria-label={c.pinned ? 'Unpin' : 'Pin'}
           >
             <IconPin className={cn("h-2.5 w-2.5", c.pinned ? "text-primary" : "text-muted-foreground/40")} />
@@ -626,8 +626,8 @@ function ConvRow({
           <button
             onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e) }}
             className={cn(
-              "h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
-              c.unread ? "opacity-100 text-primary" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground/40"
+              "h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
+              c.unread ? "opacity-100 text-primary" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground/40"
             )}
             aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
           >
@@ -639,7 +639,7 @@ function ConvRow({
           </button>
           <button
             onClick={onStar}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             aria-label={c.starred ? 'Unstar' : 'Star'}
           >
             <IconStar className={cn("h-2.5 w-2.5", c.starred ? "text-warning" : "text-muted-foreground/40")} filled={c.starred} />
@@ -686,12 +686,12 @@ function ConvRow({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-0.5 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+      <div className="hidden sm:flex items-center gap-0.5 shrink-0 mt-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
         {onExport && !editing && (
           <>
             <button
               onClick={(e) => onExport(e, 'json')}
-              className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
               aria-label="Export as JSON"
               title="Export as JSON"
             >
@@ -699,7 +699,7 @@ function ConvRow({
             </button>
             <button
               onClick={(e) => onExport(e, 'markdown')}
-              className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
               aria-label="Export as Markdown"
               title="Export as Markdown"
             >
@@ -720,7 +720,7 @@ function ConvRow({
         {onArchive && !editing && (
           <button
             onClick={onArchive}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
+            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
             aria-label="Archive"
           >
             <IconFolder className="h-2.5 w-2.5" />
@@ -729,7 +729,7 @@ function ConvRow({
         {onDelete && !editing && (
           <button
             onClick={onDelete}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
+            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
             aria-label={`Delete ${c.name}`}
           >
             <IconX className="h-2.5 w-2.5" />

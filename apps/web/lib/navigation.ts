@@ -9,10 +9,8 @@ import {
   IconAgents,
   IconVision,
   IconSearch,
-  IconCompare,
   IconActivity,
   IconDownload,
-  IconBenchmark,
 } from '@/components/icons/NavIcons'
 import type { ComponentType } from 'react'
 
@@ -48,31 +46,25 @@ export const NAV_SECTIONS: NavSectionDef[] = [
   {
     labelKey: 'nav.section.ai',
     routes: [
-      { path: '/models', labelKey: 'nav.models', shortcut: '4', icon: '🧠', description: 'Manage personalities' },
+      { path: '/models', labelKey: 'nav.models', shortcut: '4', icon: '🧠', description: 'Models & adapters' },
       { path: '/agents', labelKey: 'nav.agents', shortcut: '5', icon: '🤖', description: 'Manage agents' },
       { path: '/multimodal', labelKey: 'nav.multimodal', shortcut: '9', icon: '🎨', description: 'Vision & speech' },
-      { path: '/compare', labelKey: 'nav.compare', shortcut: '6', icon: '⚖️', description: 'Compare models' },
-      { path: '/souls', labelKey: 'nav.souls', icon: '👻', description: 'Personality management' },
+      { path: '/souls', labelKey: 'nav.souls', shortcut: '6', icon: '👻', description: 'Personalities & voice' },
     ],
   },
   {
     labelKey: 'nav.section.system',
     routes: [
       { path: '/monitoring', labelKey: 'nav.monitoring', shortcut: '7', icon: '💓', description: 'System status' },
-      { path: '/benchmark', labelKey: 'nav.benchmark', icon: '📏', description: 'Model evaluation' },
-      { path: '/tokenizer', labelKey: 'nav.tokenizer', icon: '🔤', description: 'BPE tokenizer' },
       { path: '/settings', labelKey: 'nav.settings', shortcut: 'shift+A', icon: '⚙️', description: 'App settings' },
+      { path: '/export', labelKey: 'nav.export', icon: '📦', description: 'Export models & data' },
     ],
   },
   {
     labelKey: 'nav.section.tools',
     routes: [
-      { path: '/adapters', labelKey: 'nav.adapters', icon: '🔧', description: 'LoRA adapter management' },
       { path: '/feedback', labelKey: 'nav.feedback', icon: '💬', description: 'Feedback analytics' },
-      { path: '/companion', labelKey: 'nav.companion', icon: '🧠', description: 'AI personality' },
-      { path: '/voice', labelKey: 'nav.voice', icon: '🔊', description: 'Text-to-speech' },
-      { path: '/learn', labelKey: 'nav.learn', icon: '🔍', description: 'Continual web learning' },
-      { path: '/export', labelKey: 'nav.export', icon: '📦', description: 'Export models & data' },
+      { path: '/adapters', labelKey: 'nav.adapters', icon: '🔧', description: 'LoRA adapter management' },
     ],
   },
 ]
@@ -97,16 +89,10 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/models': IconModels,
   '/agents': IconAgents,
   '/multimodal': IconVision,
-  '/compare': IconCompare,
   '/souls': IconBrain,
   '/monitoring': IconActivity,
-  '/benchmark': IconBenchmark,
-  '/tokenizer': IconSettings,
   '/settings': IconSettings,
-  '/adapters': IconSettings,
-  '/feedback': IconActivity,
-  '/companion': IconBrain,
-  '/voice': IconActivity,
-  '/learn': IconSearch,
   '/export': IconDownload,
+  '/feedback': IconActivity,
+  '/adapters': IconSettings,
 }

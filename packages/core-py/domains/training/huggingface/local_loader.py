@@ -14,7 +14,9 @@ import logging
 
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM
+    _HAS_TRANSFORMERS = True
 except ImportError:
+    _HAS_TRANSFORMERS = False
     AutoTokenizer = None  # type: ignore
     AutoModelForCausalLM = None  # type: ignore
 

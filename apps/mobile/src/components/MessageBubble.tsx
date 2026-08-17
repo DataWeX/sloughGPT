@@ -19,6 +19,7 @@ import {sounds} from '../services/sounds';
 import {addBookmark, removeBookmark, isBookmarked} from '../services/bookmarks';
 import {pinMessage, unpinMessage, isPinned} from '../services/pins';
 import {getMessageReactions, toggleReaction, REACTION_EMOJIS, type ReactionEmoji} from '../services/reactions';
+import {saveToKnowledge, getKnowledgeForMessage} from '../services/knowledge-store';
 import {toast} from '../services/toast';
 import {AudioPlayer} from './AudioPlayer';
 import {Icon, type IconName} from './Icon';
@@ -60,6 +61,7 @@ interface Props {
   message: Message;
   sessionId?: string;
   highlight?: boolean;
+  streaming?: boolean;
   onRegenerate?: () => void;
   onFeedback?: (positive: boolean) => void;
   onDelete?: () => void;
@@ -73,13 +75,13 @@ interface Props {
   onLongPressSelect?: () => void;
 }
 
-export function MessageBubble({message, sessionId, highlight, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
+export function MessageBubble({message, sessionId, highlight, streaming, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
   const theme = useTheme();
   const bg = theme.background?.val || '#FFFFFF';
-  const border = theme.borderColor?.val || '#E5E7EB';
-  const textColor = theme.color?.val || '#111827';
-  const textMuted = theme.color10?.val || '#9CA3AF';
-  const primary = theme.color9?.val || '#007AFF';
+  const border = theme.borderColor?.val || '#E4E0F2';
+  const textColor = theme.color?.val || '#1A1625';
+  const textMuted = theme.color10?.val || '#827A96';
+  const primary = theme.color9?.val || '#7C52C4';
 
   const styles = useMemo(() => StyleSheet.create({
     row: {
@@ -310,6 +312,8 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
   const [reactions, setReactions] = useState<ReactionEmoji[]>([]);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showFullDate, setShowFullDate] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [savedToKnowledge, setSavedToKnowledge] = useState(false);
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
@@ -322,6 +326,7 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
     isBookmarked(message.content, message.id).then(setBookmarked);
     if (sessionId) isPinned(sessionId, message.id).then(setPinned);
     getMessageReactions(message.id).then(setReactions);
+    getKnowledgeForMessage(message.id).then(f => setSavedToKnowledge(!!f));
   }, []);
   const isSwipeOpen = useRef(false);
 
@@ -423,6 +428,18 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
     triggerHaptic('light');
   };
 
+  const handleSaveToKnowledge = async () => {
+    setShowContextMenu(false);
+    const ok = await saveToKnowledge(message.content, message.role as 'user' | 'assistant', message.id);
+    if (ok) {
+      setSavedToKnowledge(true);
+      triggerHaptic('success');
+      toast.success('Saved to knowledge base');
+    } else {
+      toast.info('Already in knowledge base');
+    }
+  };
+
   const contextActions: ContextAction[] = [
     {icon: 'copy', label: 'Copy', onPress: handleCopy},
     {icon: 'external-link', label: 'Share', onPress: async () => {
@@ -443,6 +460,7 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
     }}] : []),
     {icon: (pinned ? 'pin' as IconName : 'pin-off' as IconName), label: pinned ? 'Unpin' : 'Pin', onPress: handleTogglePin},
     {icon: (bookmarked ? 'star' as IconName : 'star-outline' as IconName), label: bookmarked ? 'Remove bookmark' : 'Bookmark', onPress: handleToggleBookmark},
+    {icon: (savedToKnowledge ? 'check' as IconName : 'book-open' as IconName), label: savedToKnowledge ? 'In knowledge base' : 'Save to knowledge', onPress: handleSaveToKnowledge},
     {icon: 'smile-plus' as IconName, label: 'React', onPress: () => { setShowContextMenu(false); setShowReactionPicker(true); }},
     ...(isUser ? [] : [
       {icon: 'thumbs-up' as IconName, label: 'Good response', onPress: () => { setShowContextMenu(false); onFeedback?.(true); }},
@@ -517,9 +535,23 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
             />
           )}
           {isUser ? (
-            <Markdown content={message.content} style={styles.userText} />
+            <Markdown content={message.content} />
           ) : (
-            <Markdown content={message.content || 'Thinking...'} style={styles.assistantText} />
+            <Markdown
+              content={collapsed && message.content.length > 500
+                ? message.content.slice(0, 500) + '...'
+                : message.content || 'Thinking...'}
+              streaming={streaming}
+            />
+          )}
+          {!isUser && !streaming && message.content && message.content.length > 500 && (
+            <View style={{marginTop: 4}}>
+              <Pressable onPress={() => setCollapsed(c => !c)} hitSlop={8}>
+                <Text style={[styles.timestamp, {color: primary}]}>
+                  {collapsed ? 'Show full response' : 'Show less'}
+                </Text>
+              </Pressable>
+            </View>
           )}
         </Pressable>
       </Animated.View>
@@ -536,6 +568,21 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
           )}
         </Text>
       </Pressable>
+
+      {message.status === 'failed' && (
+        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4}}>
+          <Icon name="triangle-alert" size={14} color={COL.error} />
+          <Text style={[styles.timestamp, {color: COL.error}]}>Failed to send</Text>
+          {onRetry && (
+            <Pressable onPress={onRetry} hitSlop={8}>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 3}}>
+                <Icon name="refresh-cw" size={12} color={primary} />
+                <Text style={[styles.timestamp, {color: primary}]}>Retry</Text>
+              </View>
+            </Pressable>
+          )}
+        </View>
+      )}
 
       {reactions.length > 0 && (
         <View style={[styles.reactionRow, isUser && styles.reactionRowUser]}>

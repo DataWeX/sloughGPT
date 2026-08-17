@@ -75,7 +75,7 @@ export function BookmarksScreen() {
           )}
           ListEmptyComponent={
             <YStack alignItems="center" paddingTop={96} paddingHorizontal={32}>
-              <Icon name="star" size={48} color={(theme.color10?.val || '#9B95A8')} />
+              <Icon name="star" size={48} color={(theme.color10?.val || '#827A96')} />
               <Text fontSize={20} fontWeight="600" color="$color" marginBottom={8} textAlign="center">
                 No bookmarks yet
               </Text>

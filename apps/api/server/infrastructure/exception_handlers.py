@@ -145,7 +145,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=error_response("Internal server error", "E_INFRA_STARTUP"),
+        content=error_response("Internal server error", "E_INFRA_UNHANDLED"),
     )
 
 

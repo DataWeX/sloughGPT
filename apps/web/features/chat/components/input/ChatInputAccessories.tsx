@@ -77,7 +77,7 @@ export function ChatInputAccessories({
   }
 
   return (
-    <div className="flex items-center">
+    <div className="flex items-center shrink-0">
       <ImageUpload onImage={onImage} disabled={disabled} />
       {onTranscript && <VoiceInput onTranscript={onTranscript} disabled={disabled} />}
       {onPDFAnalysis && onPDFError && (

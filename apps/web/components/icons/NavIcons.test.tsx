@@ -10,7 +10,6 @@ const EXPECTED_EXPORTS = [
   'IconSun',
   'IconMenu',
   'IconActivity',
-  'IconCompare',
   'IconX',
   'IconSearch',
   'IconPlus',
@@ -19,16 +18,11 @@ const EXPECTED_EXPORTS = [
   'IconAlert',
   'IconUpload',
   'IconTraining',
-  'IconBenchmark',
-  'IconTokenizer',
   'IconExport',
-  'IconLabs',
   'IconAgents',
   'IconLogin',
   'IconBrain',
   'IconVision',
-  'IconFile',
-  'IconChangelog',
   'IconClock',
   'IconClose',
 ]
@@ -50,7 +44,7 @@ describe('NavIcons barrel', () => {
     expect(NavIcons.IconClose).toBe(NavIcons.IconX)
   })
 
-  it('exports exactly 28 icons', () => {
-    expect(EXPECTED_EXPORTS).toHaveLength(28)
+  it('exports exactly 22 icons', () => {
+    expect(EXPECTED_EXPORTS).toHaveLength(22)
   })
 })

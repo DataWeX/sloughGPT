@@ -24,6 +24,7 @@ import asyncio
 import heapq
 import inspect
 import logging
+import queue
 import time
 import gc
 import os
@@ -31,13 +32,6 @@ import functools
 from threading import Lock, Thread, Event
 from typing import Generator as GeneratorType
 
-def _ensure_torch() -> bool:
-    """Check if real PyTorch is available (needed for HF model inference)."""
-    try:
-        import torch as _real_torch  # noqa: F401
-        return True
-    except ImportError:
-        return False
 from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
@@ -405,39 +399,6 @@ def _optimize_cpu_threads() -> None:
         "Compute threads: %d  I/O threads: %d  (topology: %s)",
         rm.compute_threads, rm.io_threads, rm.topology.summary(),
     )
-
-
-def _torch_compile_model(model, model_id: str) -> Any:
-    """Apply ``torch.compile`` to the model.  Returns compiled model or original."""
-    if not _ensure_torch():
-        return model
-    import torch
-    if not hasattr(torch, "compile") or not callable(torch.compile):
-        return model
-    # Skip models too small to benefit (compile overhead > gain)
-    try:
-        n_params = sum(p.numel() for p in model.parameters())
-        if n_params < 10_000_000:  # <10M params — not worth it
-            logger.debug("Skipping torch.compile for %s (%d params)", model_id, n_params)
-            return model
-    except Exception:
-        pass
-    try:
-        compiled = torch.compile(model, backend="aot_eager" if _is_intel_mac() else "inductor")
-        logger.info("torch.compile applied to %s", model_id, extra={"tag": "MODEL"})
-        return compiled
-    except Exception as e:
-        logger.warning("torch.compile failed for %s: %s", model_id, e, extra={"tag": "MODEL"})
-        return model
-
-
-def _inference_mode_generate(model, gen_kwargs: dict) -> Any:
-    """Generate under ``torch.inference_mode()`` for ~5-15% speedup over no_grad."""
-    if not _ensure_torch():
-        return model.generate(**gen_kwargs)
-    import torch
-    with torch.inference_mode():
-        return model.generate(**gen_kwargs)
 
 
 def _is_intel_mac() -> bool:
@@ -864,6 +825,42 @@ class GuardBackend(GenerateBackend):
         return gen
 
 
+class _TokenStreamer:
+    """Minimal TextIteratorStreamer replacement that doesn't require transformers.
+
+    Provides the same text_queue / stop_signal interface used by generate_stream_sync.
+    """
+
+    def __init__(self, tokenizer, skip_prompt: bool = False, timeout: float = 120.0):
+        self._tokenizer = tokenizer
+        self._skip_prompt = skip_prompt
+        self._timeout = timeout
+        self.text_queue = queue.Queue()
+        self.stop_signal = object()
+        self._prompt_length = 0
+
+    def put(self, value):
+        if value is None:
+            self.text_queue.put(self.stop_signal)
+            return
+        if self._skip_prompt and self._prompt_length == 0 and hasattr(value, "shape"):
+            self._prompt_length = value.shape[-1] if hasattr(value, "shape") else 0
+            return
+        if isinstance(value, str):
+            self.text_queue.put(value)
+        elif hasattr(value, "tolist"):
+            for token_id in value[0] if value.ndim > 1 else value:
+                decoded = self._tokenizer.decode([token_id], skip_special_tokens=True)
+                if decoded:
+                    self.text_queue.put(decoded)
+
+    def end(self):
+        self.text_queue.put(self.stop_signal)
+
+
+import queue as queue
+
+
 class LocalBackend(GenerateBackend):
     """Direct in-process model.generate()."""
 
@@ -901,7 +898,7 @@ class LocalBackend(GenerateBackend):
     ) -> dict:
         from domains.infrastructure.ml_types import no_grad as ml_no_grad
 
-        inputs = _tokenize_cached(self._tokenizer, prompt, self._tokenize_cache)
+        inputs = self._tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"].to(self._device)
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
@@ -953,10 +950,10 @@ class LocalBackend(GenerateBackend):
                 logger.debug("OOM-to-CPU fallback failed: %s", e)
 
         if _skip_lock:
-            output = _inference_mode_generate(self._model_ref, gen_kwargs)
+            output = self._model_ref.generate(**gen_kwargs)
         else:
             with self._gen_lock:
-                output = _inference_mode_generate(self._model_ref, gen_kwargs)
+                output = self._model_ref.generate(**gen_kwargs)
 
         if _cpu_fallback:
             try:
@@ -964,8 +961,6 @@ class LocalBackend(GenerateBackend):
                     self._model_ref = self._model_ref.to(self._device)
             except Exception as e:
                 logger.debug("Model restore to device failed: %s", e)
-
-        _mps_empty_cache()
 
         tokens_generated = output.shape[1] - input_ids.shape[1]
         text = self._tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True)
@@ -1013,13 +1008,12 @@ class LocalBackend(GenerateBackend):
                 async thread pool. If provided, skips the synchronous
                 tokenization step (saves 5-20ms on CPU).
         """
-        from transformers import TextIteratorStreamer, StoppingCriteria
         import queue
 
         if _pre_tokenized is not None:
             inputs = _pre_tokenized
         else:
-            inputs = _tokenize_cached(self._tokenizer, prompt, self._tokenize_cache)
+            inputs = self._tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"].to(self._device)
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
@@ -1035,7 +1029,7 @@ class LocalBackend(GenerateBackend):
                     session_id, prefix_len, input_ids.shape[1],
                 )
 
-        streamer = TextIteratorStreamer(self._tokenizer, skip_prompt=True, timeout=120.0)
+        streamer = _TokenStreamer(self._tokenizer, skip_prompt=True, timeout=120.0)
 
         gen_kwargs = dict(
             input_ids=input_ids,
@@ -1055,7 +1049,7 @@ class LocalBackend(GenerateBackend):
         gen_kwargs.update(kwargs)
 
         if cancel_event is not None:
-            class _CancelCriteria(StoppingCriteria):
+            class _CancelCriteria:
                 def __call__(self, input_ids_, scores_, **kwargs):
                     return cancel_event.is_set()
             gen_kwargs.setdefault("stopping_criteria", [])
@@ -1067,7 +1061,7 @@ class LocalBackend(GenerateBackend):
         def _generate_inner():
             try:
                 with self._gen_lock:
-                    _inference_mode_generate(self._model_ref, gen_kwargs)
+                    self._model_ref.generate(**gen_kwargs)
             except Exception as e:
                 _error.append(e)
 
@@ -1083,8 +1077,6 @@ class LocalBackend(GenerateBackend):
             try:
                 text = streamer.text_queue.get(timeout=0.02)
             except queue.Empty:
-                # Yield control briefly; the caller (ModelServer) bridges
-                # this sync generator to async via call_soon_threadsafe.
                 time.sleep(0.005)
                 continue
             if text == streamer.stop_signal:
@@ -1106,45 +1098,10 @@ class LocalBackend(GenerateBackend):
         return {"text": "", "tokens_generated": token_count, "elapsed_ms": elapsed_ms}
 
 
-def _tokenize_cached(tokenizer, prompt: str, cache: dict) -> dict:
-    """Tokenize with LRU cache (64 entries)."""
-    if prompt in cache:
-        ids, attn = cache[prompt]
-        import torch
-        result = {"input_ids": torch.tensor([ids])}
-        if attn is not None:
-            result["attention_mask"] = torch.tensor([attn])
-        return result
-    import torch
-    inputs = tokenizer(prompt, return_tensors="pt")
-    attn_list = None
-    if inputs.get("attention_mask") is not None:
-        attn_list = inputs["attention_mask"][0].tolist()
-    cache[prompt] = (inputs["input_ids"][0].tolist(), attn_list)
-    if len(cache) > 64:
-        cache.pop(next(iter(cache)))
-    return inputs
-
 
 # Module-level session KV cache singleton
 SESSION_KV_CACHE = SessionKVCache()
 
-
-def _mps_empty_cache() -> None:
-    """Free MPS cached memory if available.
-
-    Gated on the platform check so torch is never imported on non-Apple
-    platforms; the torch call is only for live torch MPS models.
-    """
-    try:
-        from domains.infrastructure.ml_types import _mps_available
-        if not _mps_available():
-            return
-        import torch
-        if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
-            torch.mps.empty_cache()
-    except Exception:
-        pass
 
 
 def _cancelable_gen(gen, cancel_event):
@@ -1417,8 +1374,6 @@ class ModelServer:
         is no contention.  Skipping the lock lets the first real request proceed
         immediately instead of blocking behind warmup.
         """
-        with self._metrics_lock:
-            self.metrics.requests_total += 1
         try:
             start = time.time()
             # Direct call to LocalBackend.generate() — bypasses gen_lock
@@ -1442,21 +1397,6 @@ class ModelServer:
             with self._warmup_lock:
                 self._warmup_completed = True
             logger.info("ModelServer[%s]: warmup completed (%dms)", self.model_id, int(elapsed_ms), extra={"tag": "MODEL"})
-            # Apply torch.compile after warmup (enhances JIT cache).  Re-validate
-            # the model reference under the swap lock: a concurrent swap_model()
-            # may have replaced it while compile was running, and clobbering the
-            # new model with a stale compiled ref would silently revert the swap.
-            if not self._compiled:
-                ref = self._model_ref
-                if ref is not None:
-                    compiled = _torch_compile_model(ref, self.model_id)
-                    if compiled is not ref:
-                        with self._lock:
-                            if self._model_ref is ref:
-                                self._compiled = True
-                                self._model_ref = compiled
-                                if self._local_backend is not None:
-                                    self._local_backend._model_ref = compiled
         except Exception as e:
             with self._warmup_lock:
                 self._warmup_error = f"{type(e).__name__}: {e}"
@@ -1468,13 +1408,11 @@ class ModelServer:
                 logger.debug("ModelServer[%s]: warmup skipped: %s", self.model_id, e)
             else:
                 logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e, extra={"tag": "MODEL"})
+            return
 
     def _check_device(self) -> None:
         if self._model_ref is None:
             self._device = "guard"
-            return
-        if not _ensure_torch():
-            self._device = "unknown"
             return
         try:
             if hasattr(self._model_ref, "device"):
@@ -1962,7 +1900,7 @@ class ModelServer:
         if is_local and self._tokenizer is not None:
             try:
                 _pre_tokenized = await asyncio.to_thread(
-                    _tokenize_cached, self._tokenizer, prompt, self._tokenize_cache
+                    self._tokenizer, prompt, return_tensors="pt"
                 )
             except Exception:
                 _pre_tokenized = None

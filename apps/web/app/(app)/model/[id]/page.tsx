@@ -219,15 +219,15 @@ export default function ModelDetailPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   {isLoaded ? (
                     <>
-                      <Button size="sm" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+                      <Button size="sm" className="h-11 text-xs" onClick={() => router.push('/chat')}>
                         Chat with this model
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleUnload}>
+                      <Button size="sm" variant="outline" className="h-11 text-xs" onClick={handleUnload}>
                          <IconTrash className="h-4 w-4 mr-1" /> Remove
                       </Button>
                     </>
                   ) : (
-                    <Button size="sm" className="h-8 text-xs" onClick={handleLoad} disabled={loadState === 'loading'}>
+                    <Button size="sm" className="h-11 text-xs" onClick={handleLoad} disabled={loadState === 'loading'}>
                       {loadState === 'loading' ? 'Loading…' : 'Load model'}
                     </Button>
                   )}
@@ -255,7 +255,7 @@ export default function ModelDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Metrics</CardTitle>
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={runBenchmark} disabled={benchmarking || !isLoaded}>
+                <Button size="sm" variant="outline" className="h-11 text-xs" onClick={runBenchmark} disabled={benchmarking || !isLoaded}>
                   <IconRefresh className={cn("h-4 w-4 mr-1", benchmarking && "animate-spin")} />
                   {benchmarking ? 'Benchmarking…' : benchmark ? 'Rerun' : 'Run benchmark'}
                 </Button>

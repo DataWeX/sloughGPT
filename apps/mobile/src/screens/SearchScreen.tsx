@@ -78,19 +78,19 @@ export function SearchScreen() {
           borderWidth={0.5}
           borderColor="rgba(124, 82, 196, 0.12)"
           alignItems="center">
-          <Icon name="search" size={16} color={(theme.color10?.val || '#9B95A8')} />
+          <Icon name="search" size={16} color={(theme.color10?.val || '#827A96')} />
           <TextInput
             style={{flex: 1, fontSize: 14, color: '#1A1625', paddingVertical: 10, marginLeft: 8}}
             value={query}
             onChangeText={handleSearch}
             placeholder="Search across all conversations..."
-            placeholderTextColor="#9B95A8"
+            placeholderTextColor="#827A96"
             autoFocus
             returnKeyType="search"
           />
           {query.length > 0 && (
             <Pressable onPress={() => handleSearch('')}>
-              <Icon name="x" size={16} color={(theme.color10?.val || '#9B95A8')} />
+              <Icon name="x" size={16} color={(theme.color10?.val || '#827A96')} />
             </Pressable>
           )}
         </YStack>

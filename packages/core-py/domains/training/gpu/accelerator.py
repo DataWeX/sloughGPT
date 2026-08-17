@@ -33,7 +33,7 @@ class _MetalAccelerator:
 
     Detects MPS availability but uses numpy for all compute operations.
     The torch shim handles its own autograd — for real MPS speed,
-    use hf_finetune.py with real PyTorch.
+    use a torch-based training pipeline.
     """
 
     name = "metal"

@@ -109,7 +109,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="train-epochs" variant="uppercase">Epochs</Label>
                 <Input id="train-epochs" type="number" min={1} max={500} value={form.trainingEpochs}

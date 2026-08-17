@@ -2,24 +2,22 @@
 Demo: How to use training pipeline and train the model.
 """
 
-import json
+import shutil
 import sys
 from pathlib import Path
-from importlib.util import spec_from_file_location, module_from_spec
 
 
-# Load modules
-def load_module(name, path):
-    spec = spec_from_file_location(name, path)
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "packages/core-py"))
+sys.path.insert(0, str(REPO_ROOT / "packages/mogdb/src"))
 
+from domains.infrastructure.training_pipeline import TrainingDataPipeline
 
-pipeline = load_module(
-    "pipeline",
-    Path("/Users/mac/sloughGPT/packages/core-py/domains/infrastructure/training_pipeline.py"),
-).TrainingDataPipeline(data_dir="/tmp/demo_training")
+# Start from a clean store so re-runs are deterministic
+DATA_DIR = Path("/tmp/demo_training")
+if DATA_DIR.exists():
+    shutil.rmtree(DATA_DIR)
+pipeline = TrainingDataPipeline(data_dir=str(DATA_DIR))
 
 print("=" * 60)
 print("DEMO: Training Pipeline for Model Fine-tuning")
@@ -52,8 +50,8 @@ conv3 = pipeline.add_conversation(
 
 # 2. Add feedback (simulating user rating)
 print("\n2. Adding feedback (quality scores)...")
-pipeline.add_feedback(conv1.id, "up")  # Good response
-pipeline.add_feedback(conv2.id, "up")  # Good response
+pipeline.add_feedback(conv1.id, "thumbs_up")  # Good response
+pipeline.add_feedback(conv2.id, "thumbs_up")  # Good response
 # conv3 has no feedback = neutral (0.5 quality)
 
 # 3. Check training pairs with quality scores

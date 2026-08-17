@@ -364,7 +364,7 @@ export function ModelsScreen() {
               value={search}
               onChangeText={setSearch}
               placeholder="Search models..."
-              placeholderTextColor="#9B95A8"
+              placeholderTextColor="#827A96"
               returnKeyType="search"
               style={{
                 fontSize: 14,
@@ -444,7 +444,7 @@ export function ModelsScreen() {
               </Text>
               <Pressable onPress={() => setDetailModel(null)}>
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                  <Icon name="x" size={16} color={(theme.color11?.val || '#827A96')} />
                 </YStack>
               </Pressable>
             </XStack>

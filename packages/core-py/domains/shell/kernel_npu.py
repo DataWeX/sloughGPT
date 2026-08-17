@@ -70,32 +70,11 @@ class _HuggingFaceProvider:
         }
 
     def __call__(self, inputs: dict) -> Any:
-        import torch
-        input_ids = inputs.get("input_ids", None)
-        if input_ids is None:
-            raise ValueError("inputs must contain 'input_ids'")
-        if isinstance(input_ids, np.ndarray):
-            input_ids = torch.from_numpy(input_ids).long()
-        with torch.no_grad():
-            output = self._model(input_ids)
-        logits = output.logits if hasattr(output, "logits") else output
-        if isinstance(logits, torch.Tensor):
-            return logits.cpu().numpy()
-        return logits
+        raise RuntimeError("HuggingFace torch backend is not supported — use numpy or .slnc providers")
 
     def generate_numpy(self, prompt: str, max_tokens: int = 20,
                        temperature: float = 1.0, **kwargs) -> list[int]:
-        import torch
-        inputs = self._tokenizer(prompt, return_tensors="pt")
-        input_ids = inputs["input_ids"].to(self._device)
-        with torch.no_grad():
-            output = self._model.generate(
-                input_ids, max_new_tokens=max_tokens,
-                temperature=temperature, do_sample=temperature > 0,
-                pad_token_id=self._tokenizer.eos_token_id,
-            )
-        new_tokens = output[0, input_ids.shape[1]:]
-        return new_tokens.cpu().tolist()
+        raise RuntimeError("HuggingFace torch backend is not supported — use numpy or .slnc providers")
 
     def tokenize(self, text: str) -> list[int]:
         return self._tokenizer.encode(text)
@@ -226,26 +205,11 @@ class NPUDevice(DeviceDriver):
 
     def _load_huggingface_provider(self, name: str, source: str,
                                    kwargs: dict) -> Any:
-        """Load a HuggingFace model via transformers + tokenizer."""
-        model_id = source.replace("huggingface:", "")
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-        except ImportError:
-            raise ValueError("transformers not installed — cannot load HuggingFace models")
-
-        device = kwargs.get("device", "cpu")
-        dtype = kwargs.get("dtype", None)
-
-        logger.info("Loading HuggingFace model %s on %s", model_id, device)
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=dtype, device_map=None,
+        """Load a HuggingFace model — torch is not supported."""
+        raise ValueError(
+            "HuggingFace torch models are not supported. "
+            "Use a .slnc or .soul checkpoint instead."
         )
-        model.to(device)
-        model.eval()
-
-        return _HuggingFaceProvider(model=model, tokenizer=tokenizer,
-                                    model_id=model_id, device=device)
 
     def _load_c_provider(self, name: str, source: str, path: str) -> Any:
         if not source.endswith(".slnc"):

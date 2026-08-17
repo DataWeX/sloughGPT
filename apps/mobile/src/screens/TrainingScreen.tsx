@@ -260,7 +260,7 @@ borderWidth={0.5}
                   value={hfOpts.model}
                   onChangeText={v => setHfOpts({model: v})}
                   placeholder="gpt2, Qwen/Qwen2.5-0.5B, ..."
-                  placeholderTextColor="#9B95A8"
+                  placeholderTextColor="#827A96"
                   autoCapitalize="none"
                   autoCorrect={false}
                   style={{
@@ -271,7 +271,7 @@ borderWidth={0.5}
                     paddingHorizontal: 12,
                     paddingVertical: 8,
                     borderWidth: 1,
-                    borderColor: '#E0DCE8',
+                    borderColor: '#E4E0F2',
                     lineHeight: 22,
                   }}
                 />
@@ -458,7 +458,7 @@ borderWidth={0.5}
                   value={sourceText}
                   onChangeText={setSourceText}
                   placeholder="Paste training text here (SRT, plain text, or lines)..."
-                  placeholderTextColor="#9B95A8"
+                  placeholderTextColor="#827A96"
                   multiline
                   textAlignVertical="top"
                   style={{

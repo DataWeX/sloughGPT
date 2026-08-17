@@ -18,7 +18,7 @@ export function ChatSendButton({ loading, hasContent, onSend, onStop, disabled }
       onClick={loading ? onStop : onSend}
       disabled={isDisabled}
       className={cn(
-        "h-10 w-10 shrink-0 p-0 flex items-center justify-center transition-all duration-200 rounded-xl",
+        "h-11 w-11 shrink-0 p-0 flex items-center justify-center transition-all duration-200 rounded-xl",
         loading
           ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
           : hasContent

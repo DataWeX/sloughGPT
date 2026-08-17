@@ -124,12 +124,6 @@ class MultimodalRouter:
         mgr = get_multimodal_manager()
         if not getattr(mgr, "_initialized", False):
             speech_server = False
-            try:
-                import transformers  # noqa: F401
-                from transformers import WhisperForConditionalGeneration, WhisperProcessor  # noqa: F401
-                speech_server = True
-            except ImportError:
-                pass
             mgr.initialize(vision_model="slonet", speech_server=speech_server)
         return mgr
 

@@ -35,7 +35,7 @@ export function DataStep({ form, datasets, onNext }: StepProps) {
         {datasets.datasetPreview && datasets.datasetPreview.samples.length > 0 && (
           <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs">
             <div className="font-medium text-muted-foreground mb-2">Preview</div>
-            <div className="grid grid-cols-3 gap-2 mb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
               <div>
                 <span className="text-muted-foreground/60">Samples: </span>
                 <span className="font-numeric">{(datasets.datasetPreview.total_samples ?? 0).toLocaleString()}</span>

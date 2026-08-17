@@ -203,7 +203,7 @@ function ToastItem({ toast: t, onDismiss }: { toast: ToastState; onDismiss: (id:
         type="button"
         aria-label="Dismiss"
         onClick={() => onDismiss(t.id)}
-        className="ml-auto shrink-0 rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+        className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
       >
         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -270,7 +270,7 @@ export function ToastClose({ className, onClick, ...props }: React.HTMLAttribute
       type="button"
       aria-label="Close"
       className={cn(
-        'ml-auto shrink-0 rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/40',
+        'ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/40',
         className,
       )}
       onClick={onClick}

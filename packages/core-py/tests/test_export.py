@@ -1,106 +1,25 @@
-"""Tests for domains/training/export.py (model export utilities)."""
+"""Tests for domains/training/export.py (model export utilities).
+
+Tests ModelMetadata, configs, GGUF wrappers, SOU export, and format listing.
+"""
 
 import json
-import sys
-import types
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-import domains.training.onnx_export as onnx_mod
-from domains.training import export as export_mod
 from domains.training.export import (
     ExportConfig,
     GGUFExportOptions,
     ModelMetadata,
-    ONNXExportOptions,
-    _gguf_path,
-    _replace_ext,
     create_model_metadata,
-    export_all_formats,
-    export_model,
     export_to_gguf,
     export_to_gguf_fp16,
     export_to_gguf_q4_k_m,
-    export_to_onnx,
-    export_to_safetensors,
-    export_to_safetensors_bf16,
     export_to_sou,
     list_export_formats,
 )
-
-
-class _FakeTensor:
-    def __init__(self, arr):
-        self.arr = np.asarray(arr)
-        self.cast_to = None
-
-    def to(self, **kwargs):
-        self.cast_to = kwargs.get("dtype")
-        return self
-
-    def cpu(self):
-        return self
-
-    def numpy(self):
-        return self.arr
-
-
-class _FakeScripted:
-    def __init__(self, tag):
-        self.tag = tag
-
-    def save(self, path):
-        Path(path).write_bytes(self.tag)
-
-
-class _FakeJit:
-    def __init__(self, torchref):
-        self._torch = torchref
-
-    def trace(self, model, example):
-        self._torch.traced.append((model, example))
-        return _FakeScripted(b"ts")
-
-    def script(self, model):
-        self._torch.scripted.append(model)
-        return _FakeScripted(b"ts2")
-
-
-class _FakeOnnx:
-    def __init__(self, torchref):
-        self._torch = torchref
-
-    def export(self, *args, **kwargs):
-        self._torch.onnx_exports.append((args, kwargs))
-
-
-class _FakeTorch:
-    __version__ = "9.9.9"
-    long = "torch.long"
-
-    def __init__(self):
-        self.traced = []
-        self.scripted = []
-        self.onnx_exports = []
-        self.saved = []
-        self.zeros_calls = []
-        self.from_numpy_calls = []
-        self.jit = _FakeJit(self)
-        self.onnx = _FakeOnnx(self)
-
-    def from_numpy(self, arr):
-        self.from_numpy_calls.append(arr)
-        return _FakeTensor(arr)
-
-    def save(self, obj, path):
-        self.saved.append((obj, path))
-        Path(path).write_bytes(b"pt")
-
-    def zeros(self, *shape, dtype=None):
-        self.zeros_calls.append((shape, dtype))
-        return _FakeTensor(np.zeros(shape))
 
 
 class FakeModel:
@@ -116,79 +35,6 @@ class FakeModel:
 
     def eval(self):
         self.eval_calls.append(1)
-
-
-class _FakeTokenizer:
-    def __init__(self):
-        self.saved_to = []
-
-    def save_pretrained(self, path):
-        self.saved_to.append(path)
-
-
-class _Rec:
-    def __init__(self):
-        self.calls = []
-
-    def __call__(self, *args, **kwargs):
-        self.calls.append((args, kwargs))
-        if "output_path" in kwargs:
-            return kwargs["output_path"]
-        return args[1] if len(args) > 1 else "out"
-
-
-@pytest.fixture
-def fake_torch(monkeypatch):
-    t = _FakeTorch()
-    monkeypatch.setitem(sys.modules, "torch", t)
-    return t
-
-
-@pytest.fixture
-def fake_safetensors(monkeypatch):
-    calls = []
-
-    def save_file(state_dict, filename, metadata=None):
-        Path(filename).write_bytes(b"st")
-        calls.append((state_dict, str(filename), metadata))
-
-    st = types.ModuleType("safetensors.torch")
-    st.save_file = save_file
-    top = types.ModuleType("safetensors")
-    top.torch = st
-    monkeypatch.setitem(sys.modules, "safetensors", top)
-    monkeypatch.setitem(sys.modules, "safetensors.torch", st)
-    return calls
-
-
-@pytest.fixture
-def stub_exports(monkeypatch):
-    recs = {}
-    for name in [
-        "export_to_safetensors",
-        "export_to_safetensors_bf16",
-        "export_to_gguf",
-        "export_to_gguf_fp16",
-        "export_to_gguf_q4_k_m",
-        "export_to_onnx",
-        "export_to_sou",
-        "export_all_formats",
-    ]:
-        rec = _Rec()
-        recs[name] = rec
-        monkeypatch.setattr(export_mod, name, rec)
-    return recs
-
-
-def _cfg(fmt, output="models/out", metadata=None, tokenizer=True, **kw):
-    return ExportConfig(
-        input_path="in.pt",
-        output_path=output,
-        format=fmt,
-        metadata=metadata,
-        include_tokenizer=tokenizer,
-        **kw,
-    )
 
 
 class TestModelMetadata:
@@ -244,12 +90,7 @@ class TestModelMetadata:
         assert md.vocab_size == 256
         assert md.n_embed == 256
 
-    def test_from_model_torch_version(self, fake_torch):
-        md = ModelMetadata.from_model(FakeModel())
-        assert md.torch_version == "9.9.9"
-
-    def test_from_model_no_torch(self, monkeypatch):
-        monkeypatch.delitem(sys.modules, "torch", raising=False)
+    def test_from_model_torch_version_always_empty(self):
         md = ModelMetadata.from_model(FakeModel())
         assert md.torch_version == ""
 
@@ -367,28 +208,6 @@ class TestConfigs:
         assert c.seq_len == 256
         assert c.n_ctx == 4096
 
-    def test_onnx_options_defaults(self):
-        o = ONNXExportOptions()
-        assert o.input_names == ["input_ids"]
-        assert o.output_names == ["logits"]
-        assert o.dynamic_axes is None
-        assert o.opset_version == 17
-        assert o.optimize is True
-        assert o.verbose is False
-        assert o.external_data is True
-        assert o.dynamo_export is True
-
-    def test_onnx_options_custom(self):
-        o = ONNXExportOptions(input_names=["ids"], output_names=["out"], dynamic_axes={}, opset_version=14, optimize=False, verbose=True, external_data=False, dynamo_export=False)
-        assert o.input_names == ["ids"]
-        assert o.output_names == ["out"]
-        assert o.dynamic_axes == {}
-        assert o.opset_version == 14
-        assert o.optimize is False
-        assert o.verbose is True
-        assert o.external_data is False
-        assert o.dynamo_export is False
-
     def test_gguf_options_defaults(self):
         g = GGUFExportOptions()
         assert g.model_name == "sloughgpt"
@@ -407,211 +226,6 @@ class TestConfigs:
         assert g.rope_freq_base == 50000.0
         assert g.rope_freq_scale == 0.5
         assert g.use_gpu is True
-
-
-class TestExportToOnnx:
-    def test_success(self, monkeypatch, fake_torch):
-        rec = {}
-
-        def stub(model, output_path, example_input=None, config=None, seq_len=128):
-            rec["model"] = model
-            rec["output_path"] = output_path
-            rec["example_input"] = example_input
-            rec["config"] = config
-            rec["seq_len"] = seq_len
-            return output_path
-
-        monkeypatch.setattr(onnx_mod, "export_sloughgpt_to_onnx", stub)
-        model = FakeModel()
-        r = export_to_onnx(model, "out.onnx")
-        assert r == "out.onnx"
-        assert rec["model"] is model
-        assert rec["seq_len"] == 128
-        assert rec["config"].input_names == ["input_ids"]
-        assert rec["config"].output_names == ["logits"]
-        assert rec["config"].dynamic_axes == {
-            "input_ids": {0: "batch_size", 1: "seq_len"},
-            "logits": {0: "batch_size", 1: "seq_len"},
-        }
-        assert rec["config"].opset_version == 17
-        assert fake_torch.onnx_exports == []
-
-    def test_success_custom_names(self, monkeypatch, fake_torch):
-        rec = {}
-
-        def stub(model, output_path, example_input=None, config=None, seq_len=128):
-            rec["config"] = config
-            rec["seq_len"] = seq_len
-            return "custom.onnx"
-
-        monkeypatch.setattr(onnx_mod, "export_sloughgpt_to_onnx", stub)
-        r = export_to_onnx(
-            FakeModel(), "out.onnx",
-            input_names=["ids"], output_names=["out"],
-            dynamic_axes={"ids": {0: "b"}}, seq_len=256, opset_version=14,
-        )
-        assert r == "custom.onnx"
-        assert rec["config"].input_names == ["ids"]
-        assert rec["config"].output_names == ["out"]
-        assert rec["config"].dynamic_axes == {"ids": {0: "b"}}
-        assert rec["config"].opset_version == 14
-        assert rec["seq_len"] == 256
-
-    def test_fallback_no_example(self, monkeypatch, tmp_path, fake_torch):
-        def boom(*a, **k):
-            raise RuntimeError("advanced failed")
-
-        monkeypatch.setattr(onnx_mod, "export_sloughgpt_to_onnx", boom)
-        model = FakeModel()
-        out = str(tmp_path / "m.onnx")
-        r = export_to_onnx(model, out, seq_len=32)
-        assert r == out
-        assert model.eval_calls == [1]
-        assert fake_torch.zeros_calls == [((1, 32), "torch.long")]
-        assert len(fake_torch.onnx_exports) == 1
-        args, kwargs = fake_torch.onnx_exports[0]
-        assert args[0] is model
-        assert isinstance(args[1], _FakeTensor)
-        assert args[2] == out
-        assert kwargs["input_names"] == ["input_ids"]
-        assert kwargs["output_names"] == ["logits"]
-        assert kwargs["dynamic_axes"] == {}
-        assert kwargs["opset_version"] == 17
-        assert kwargs["do_constant_folding"] is True
-
-    def test_fallback_with_example(self, monkeypatch, tmp_path, fake_torch):
-        def boom(*a, **k):
-            raise RuntimeError("advanced failed")
-
-        monkeypatch.setattr(onnx_mod, "export_sloughgpt_to_onnx", boom)
-        example = object()
-        out = str(tmp_path / "m.onnx")
-        r = export_to_onnx(FakeModel(), out, example_input=example)
-        assert r == out
-        assert fake_torch.zeros_calls == []
-        args, _ = fake_torch.onnx_exports[0]
-        assert args[1] is example
-
-
-class TestExportToSafetensors:
-    def test_default_fp32(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(
-            state={"w": np.ones((2, 2)), "config": {"a": 1}},
-            vocab_size=10, n_embed=8, n_layer=2, n_head=2, block_size=4,
-        )
-        out = str(tmp_path / "m.safetensors")
-        r = export_to_safetensors(model, out)
-        assert r == out
-        assert (tmp_path / "m.safetensors").exists()
-        assert (tmp_path / "m.meta.json").exists()
-        sd, fname, meta = fake_safetensors[0]
-        assert "w" in sd
-        assert "config" not in sd
-        assert isinstance(sd["w"], _FakeTensor)
-        assert meta["format"] == "safetensors"
-        assert meta["format_version"] == "1.0"
-        assert meta["precision"] == "fp32"
-        assert "vocab_size" in meta
-        assert "n_embed" in meta
-        assert "n_layer" in meta
-        assert "n_head" in meta
-        assert "block_size" in meta
-        assert "exported_at" in meta
-        raw = json.loads((tmp_path / "m.meta.json").read_text())
-        assert raw["precision"] == "fp32"
-
-    def test_bf16(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(state={"w": np.ones((2, 2))})
-        out = str(tmp_path / "m.safetensors")
-        r = export_to_safetensors(model, out, dtype="bf16")
-        assert r == out
-        _, _, meta = fake_safetensors[0]
-        assert meta["precision"] == "bf16"
-        assert fake_safetensors[0][0]["w"].cast_to == "bfloat16"
-
-    def test_fp16(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(state={"w": np.ones((2, 2))})
-        r = export_to_safetensors(model, out := str(tmp_path / "m.safetensors"), dtype="fp16")
-        assert r == out
-        _, _, meta = fake_safetensors[0]
-        assert meta["precision"] == "fp16"
-
-    def test_metadata_modelmetadata(self, tmp_path, fake_torch, fake_safetensors):
-        md = ModelMetadata(name="meta-name", vocab_size=777)
-        model = FakeModel(state={"w": np.ones((1,))})
-        export_to_safetensors(model, str(tmp_path / "m.safetensors"), metadata=md)
-        _, _, meta = fake_safetensors[0]
-        assert meta["name"] == "meta-name"
-        assert meta["vocab_size"] == "777"
-        assert meta["precision"] == "fp32"
-        assert meta["export_format"] == "safetensors"
-        assert "exported_at" in meta
-
-    def test_metadata_dict_prefers_existing(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(
-            config={"n_embed": 5},
-            vocab_size=10, n_layer=3,
-        )
-        export_to_safetensors(
-            model, str(tmp_path / "m.safetensors"),
-            metadata={"vocab_size": 999, "custom": "x"},
-        )
-        _, _, meta = fake_safetensors[0]
-        assert meta["vocab_size"] == "999"
-        assert meta["custom"] == "x"
-        assert meta["n_embed"] == "5"
-        assert meta["n_layer"] == "3"
-
-    def test_metadata_dict_extracts_config(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(config={"vocab_size": 42, "block_size": 8})
-        export_to_safetensors(model, str(tmp_path / "m.safetensors"))
-        _, _, meta = fake_safetensors[0]
-        assert meta["vocab_size"] == "42"
-        assert meta["block_size"] == "8"
-
-    def test_to_str_all_types(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(state={"w": np.ones((1,))})
-        export_to_safetensors(
-            model, str(tmp_path / "m.safetensors"),
-            metadata={
-                "s": "str",
-                "i": 7,
-                "f": 1.5,
-                "b": True,
-                "lst": [1, 2],
-                "tup": (3, 4),
-                "dct": {"k": "v"},
-                "none": None,
-            },
-        )
-        _, _, meta = fake_safetensors[0]
-        assert meta["s"] == "str"
-        assert meta["i"] == "7"
-        assert meta["f"] == "1.5"
-        assert meta["b"] == "True"
-        assert meta["lst"] == "[1, 2]"
-        assert meta["tup"] == "(3, 4)"
-        assert meta["dct"] == '{"k": "v"}'
-        assert meta["none"] == "None"
-
-    def test_parent_dir_creation(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(state={"w": np.ones((1,))})
-        out = str(tmp_path / "nested" / "dir" / "m.safetensors")
-        r = export_to_safetensors(model, out)
-        assert r == out
-        assert Path(out).exists()
-        assert Path(out.replace(".safetensors", ".meta.json")).exists()
-
-
-class TestExportToSafetensorsBf16:
-    def test_wrapper(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(state={"w": np.ones((1,))})
-        out = str(tmp_path / "m.safetensors")
-        r = export_to_safetensors_bf16(model, out, metadata={"k": "v"})
-        assert r == out
-        _, _, meta = fake_safetensors[0]
-        assert meta["precision"] == "bf16"
-        assert meta["k"] == "v"
 
 
 class TestGGUFWrappers:
@@ -698,186 +312,9 @@ class TestExportToSou:
         assert meta["lineage"] == "base"
 
 
-class TestHelpers:
-    def test_replace_ext(self):
-        assert _replace_ext("model.pt", ".safetensors") == "model.safetensors"
-        assert _replace_ext("path/to/model.tar.gz", ".onnx") == "path/to/model.tar.onnx"
-        assert _replace_ext("model", ".soul") == "model.soul"
-        assert _replace_ext("dir/model.bin", "-Q4_K_M.gguf") == "dir/model-Q4_K_M.gguf"
-
-    def test_gguf_path(self):
-        assert _gguf_path("model.pt", None) == "model-Q4_K_M.gguf"
-        assert _gguf_path("model", "Q8_0") == "model-Q8_0.gguf"
-        assert _gguf_path("dir/model.pt", "f16") == "dir/model-F16.gguf"
-
-
-class TestExportAllFormats:
-    def test_full(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(state={"w": np.ones((1,))}, vocab_size=5)
-        config = _cfg("all", output=str(tmp_path / "model"))
-        results = {}
-        export_all_formats(config, model, tokenizer=None, example_input=object(), results=results)
-        assert "safetensors" in results
-        assert "onnx" in results
-        assert "sou" in results
-        assert "gguf_q4_k_m" not in results
-        assert Path(results["safetensors"]).exists()
-        assert Path(results["sou"]).exists()
-
-    def test_gguf_success(self, tmp_path, fake_torch, fake_safetensors, monkeypatch):
-        def stub_gguf(model, output_path, tokenizer=None, config=None):
-            Path(output_path).write_bytes(b"gguf")
-            return output_path
-
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf", stub_gguf)
-        model = FakeModel(state={"w": np.ones((1,))})
-        config = _cfg("all", output=str(tmp_path / "model"))
-        results = {}
-        export_all_formats(config, model, tokenizer=None, example_input=None, results=results)
-        assert results["gguf_q4_k_m"].endswith("-Q4_K_M.gguf")
-        assert Path(results["gguf_q4_k_m"]).exists()
-        assert "safetensors" in results
-
-    def test_no_example_skips_onnx(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(state={"w": np.ones((1,))})
-        config = _cfg("all", output=str(tmp_path / "model"))
-        results = {}
-        export_all_formats(config, model, tokenizer=None, example_input=None, results=results)
-        assert "onnx" not in results
-        assert "safetensors" in results
-
-    def test_with_dict_metadata_soul(self, tmp_path, fake_torch, fake_safetensors):
-        model = FakeModel(state={"w": np.ones((1,))})
-        config = _cfg(
-            "all",
-            output=str(tmp_path / "model"),
-            metadata={"name": "named-soul", "training_dataset": "d", "epochs_trained": 2, "lineage": "chain"},
-        )
-        results = {}
-        export_all_formats(config, model, tokenizer=None, example_input=object(), results=results)
-        meta = json.loads(Path(results["sou"] + ".meta.json").read_text())
-        assert meta["name"] == "named-soul"
-        assert meta["training_dataset"] == "d"
-        assert meta["epochs_trained"] == 2
-        assert meta["lineage"] == "chain"
-
-
-class TestExportModel:
-    def test_safetensors(self, stub_exports):
-        r = export_model(_cfg("safetensors"), model=object())
-        assert r == {"safetensors": "models/out.safetensors"}
-        calls = stub_exports["export_to_safetensors"].calls
-        assert len(calls) == 1
-        assert calls[0][0][2] is None
-
-    def test_safetensors_bf16(self, stub_exports):
-        r = export_model(_cfg("safetensors_bf16"), model=object())
-        assert r == {"safetensors_bf16": "models/out-bf16.safetensors"}
-
-    def test_gguf_default(self, stub_exports):
-        r = export_model(_cfg("gguf"), model=object())
-        assert r == {"gguf": "models/out-Q4_K_M.gguf"}
-        calls = stub_exports["export_to_gguf"].calls
-        assert calls[0][0][2] == "Q4_K_M"
-
-    def test_gguf_custom_quant(self, stub_exports):
-        r = export_model(_cfg("gguf", quantization="Q5_K_M"), model=object())
-        assert r == {"gguf": "models/out-Q5_K_M.gguf"}
-        assert stub_exports["export_to_gguf"].calls[0][0][2] == "Q5_K_M"
-
-    def test_gguf_q4_k_m(self, stub_exports):
-        r = export_model(_cfg("gguf_q4_k_m"), model=object())
-        assert r == {"gguf_q4_k_m": "models/out-Q4_K_M.gguf"}
-
-    def test_gguf_fp16(self, stub_exports):
-        r = export_model(_cfg("gguf_fp16"), model=object())
-        assert r == {"gguf_fp16": "models/out-F16.gguf"}
-        assert len(stub_exports["export_to_gguf_fp16"].calls) == 1
-
-    def test_gguf_q8_0(self, stub_exports):
-        r = export_model(_cfg("gguf_q8_0"), model=object())
-        assert r == {"gguf_q8_0": "models/out-Q8_0.gguf"}
-
-    def test_gguf_q5_k_m(self, stub_exports):
-        r = export_model(_cfg("gguf_q5_k_m"), model=object())
-        assert r == {"gguf_q5_k_m": "models/out-Q5_K_M.gguf"}
-
-    def test_gguf_f16(self, stub_exports):
-        r = export_model(_cfg("gguf_f16"), model=object())
-        assert r == {"gguf_f16": "models/out-F16.gguf"}
-
-    def test_gguf_f32(self, stub_exports):
-        r = export_model(_cfg("gguf_f32"), model=object())
-        assert r == {"gguf_f32": "models/out-F32.gguf"}
-
-    def test_onnx(self, stub_exports):
-        r = export_model(_cfg("onnx", seq_len=64, opset_version=14), model=object(), example_input=object())
-        assert r == {"onnx": "models/out.onnx"}
-        calls = stub_exports["export_to_onnx"].calls
-        assert calls[0][1]["seq_len"] == 64
-        assert calls[0][1]["opset_version"] == 14
-
-    def test_sou_no_metadata(self, stub_exports):
-        r = export_model(_cfg("sou"), model=object())
-        assert r == {"sou": "models/out.soul"}
-        calls = stub_exports["export_to_sou"].calls
-        profile = calls[0][1]["soul_profile"]
-        assert profile.name == "out"
-        assert profile.lineage == "sloughgpt"
-
-    def test_sou_with_metadata_lineage(self, stub_exports):
-        metadata = {"name": "my-soul", "training_dataset": "d", "epochs_trained": 4, "final_train_loss": 0.1, "final_val_loss": 0.2, "lineage": "chain"}
-        r = export_model(_cfg("sou", metadata=metadata), model=object())
-        assert r == {"sou": "models/out.soul"}
-        profile = stub_exports["export_to_sou"].calls[0][1]["soul_profile"]
-        assert profile.name == "my-soul"
-        assert profile.training_dataset == "d"
-        assert profile.epochs_trained == 4
-        assert profile.final_train_loss == 0.1
-        assert profile.final_val_loss == 0.2
-        assert profile.lineage == "chain"
-
-    def test_all(self, stub_exports):
-        r = export_model(_cfg("all"), model=object(), example_input=object(), tokenizer=None)
-        assert r == {}
-        assert len(stub_exports["export_all_formats"].calls) == 1
-
-    def test_error_logged_and_continues(self, stub_exports, monkeypatch, caplog):
-        def boom(*a, **k):
-            raise ValueError("bad weights")
-
-        monkeypatch.setattr(export_mod, "export_to_safetensors", boom)
-        r = export_model(_cfg("safetensors,onnx"), model=object())
-        assert "safetensors" not in r
-        assert r == {"onnx": "models/out.onnx"}
-        assert "Export failed for format 'safetensors'" in caplog.text
-        assert "bad weights" in caplog.text
-
-    def test_comma_separated(self, stub_exports):
-        r = export_model(_cfg("onnx,gguf_f16"), model=object())
-        assert r == {"onnx": "models/out.onnx", "gguf_f16": "models/out-F16.gguf"}
-
-    def test_uppercase_stripped(self, stub_exports):
-        r = export_model(_cfg("  ONNX  "), model=object())
-        assert r == {"onnx": "models/out.onnx"}
-
-    def test_tokenizer_saved(self, stub_exports):
-        tok = _FakeTokenizer()
-        r = export_model(_cfg("sou", output="models/named"), model=object(), tokenizer=tok)
-        assert r["tokenizer"] == "models/tokenizer"
-        assert tok.saved_to == ["models/tokenizer"]
-
-    def test_tokenizer_not_saved_when_disabled(self, stub_exports):
-        tok = _FakeTokenizer()
-        r = export_model(_cfg("sou", tokenizer=False), model=object(), tokenizer=tok)
-        assert "tokenizer" not in r
-        assert tok.saved_to == []
-
-
 class TestListExportFormats:
     def test_returns_formats(self):
         fmts = list_export_formats()
         assert isinstance(fmts, dict)
-        for key in ["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "sou", "all"]:
+        for key in ["gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "sou"]:
             assert key in fmts
-        assert "SafeTensors" in fmts["safetensors"]

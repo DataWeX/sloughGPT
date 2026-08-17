@@ -1333,7 +1333,7 @@ export default function VMPage() {
               <CardTitle className="text-base">Execution Trace (first {result.trace.length} steps)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="max-h-64 overflow-y-auto">
+              <div className="max-h-64 overflow-x-auto overflow-y-auto">
                 <table className="w-full text-xs font-mono">
                   <thead>
                     <tr className="text-muted-foreground">

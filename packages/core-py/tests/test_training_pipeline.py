@@ -19,8 +19,8 @@ def populated(pipeline):
     c1 = pipeline.add_conversation("s1", "hello", "hi there", "qwen")
     c2 = pipeline.add_conversation("s1", "2+2?", "", "qwen")
     c3 = pipeline.add_conversation("s2", "what is ai", "machine learning", "gpt2")
-    pipeline.add_feedback(c1.id, "up")
-    pipeline.add_feedback(c3.id, "down")
+    pipeline.add_feedback(c1.id, tp.FEEDBACK_UP)
+    pipeline.add_feedback(c3.id, tp.FEEDBACK_DOWN)
     return pipeline, c1, c2, c3
 
 
@@ -83,11 +83,40 @@ class TestPipelineInit:
             json.dumps({"version": "1.0", "records": [{"id": "r1", "status": "done"}]})
         )
         p = tp.TrainingDataPipeline(data_dir=str(data_dir))
-        assert len(p.get_conversations(limit=10)) == 1
+        convs = p.get_conversations(limit=10)
+        assert len(convs) == 1
+        assert convs[0].id == "c1"
+        assert convs[0].session_id == "s"
+        assert convs[0].metadata == {}
+        assert convs[0].tokens is None
         assert len(p.get_training_pairs()) == 1
+        assert p.get_training_pairs()[0].used_in_training is False
         assert len(p.get_training_runs()) == 1
+        assert p.get_training_runs()[0].metrics == {}
         for name in ("conversations.db", "training_pairs.db", "training_runs.db"):
             assert not (data_dir / name).exists()
+
+    def test_migration_skips_non_dict_records(self, tmp_path):
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "conversations.db").write_text(
+            json.dumps(
+                {
+                    "version": "1.0",
+                    "records": [
+                        {"id": "ok", "session_id": "s"},
+                        "not-a-dict",
+                        42,
+                        None,
+                    ],
+                }
+            )
+        )
+        p = tp.TrainingDataPipeline(data_dir=str(data_dir))
+        convs = p.get_conversations(limit=10)
+        assert len(convs) == 1
+        assert convs[0].id == "ok"
+        assert not (data_dir / "conversations.db").exists()
 
     def test_corrupt_db_recovers(self, tmp_path):
         data_dir = tmp_path / "data"
@@ -131,8 +160,8 @@ class TestConversations:
         assert conv.feedback is None
 
     def test_add_with_feedback_sets_quality(self, pipeline):
-        conv = pipeline.add_conversation("s1", "u", "a", "qwen", feedback="up")
-        assert conv.feedback == "up"
+        conv = pipeline.add_conversation("s1", "u", "a", "qwen", feedback=tp.FEEDBACK_UP)
+        assert conv.feedback == tp.FEEDBACK_UP
         assert pipeline.get_training_pairs()[0].quality_score == 1.0
 
     def test_add_persists_and_creates_pair(self, pipeline):
@@ -150,9 +179,9 @@ class TestConversations:
 
     def test_get_by_feedback(self, pipeline):
         c = pipeline.add_conversation("a", "u", "r", "m")
-        pipeline.add_feedback(c.id, "up")
-        assert len(pipeline.get_conversations(feedback="up")) == 1
-        assert len(pipeline.get_conversations(feedback="down")) == 0
+        pipeline.add_feedback(c.id, tp.FEEDBACK_UP)
+        assert len(pipeline.get_conversations(feedback=tp.FEEDBACK_UP)) == 1
+        assert len(pipeline.get_conversations(feedback=tp.FEEDBACK_DOWN)) == 0
 
     def test_limit_applies_to_latest(self, pipeline):
         for i in range(5):
@@ -161,20 +190,41 @@ class TestConversations:
         assert [c.user_message for c in convs] == ["u3", "u4"]
 
     def test_add_feedback_unknown_id(self, pipeline):
-        assert pipeline.add_feedback("ghost", "up") is False
+        assert pipeline.add_feedback("ghost", tp.FEEDBACK_UP) is False
+
+    def test_add_conversation_invalid_feedback_raises(self, pipeline):
+        with pytest.raises(ValueError):
+            pipeline.add_conversation("s", "u", "a", "m", feedback="up")
+        assert pipeline.get_conversations(limit=10) == []
+
+    def test_add_feedback_invalid_rating_raises(self, pipeline):
+        conv = pipeline.add_conversation("s", "u", "a", "m")
+        with pytest.raises(ValueError):
+            pipeline.add_feedback(conv.id, "down")
+        assert pipeline.get_conversations(limit=10)[0].feedback is None
+
+    def test_add_with_neutral_feedback(self, pipeline):
+        conv = pipeline.add_conversation("s", "u", "a", "m", feedback=tp.FEEDBACK_NEUTRAL)
+        assert conv.feedback == tp.FEEDBACK_NEUTRAL
+        assert pipeline.get_training_pairs()[0].quality_score == tp.NEUTRAL_QUALITY
+
+    def test_add_conversation_non_dict_metadata_raises(self, pipeline):
+        with pytest.raises(TypeError):
+            pipeline.add_conversation("s", "u", "a", "m", metadata="bogus")
+        assert pipeline.get_conversations(limit=10) == []
 
 
 class TestTrainingPairs:
     def test_quality_up(self, pipeline):
         c = pipeline.add_conversation("s", "u", "r", "m")
-        pipeline.add_feedback(c.id, "up")
+        pipeline.add_feedback(c.id, tp.FEEDBACK_UP)
         pair = pipeline.get_training_pairs()[0]
         assert pair.quality_score == 1.0
-        assert pair.feedback == "up"
+        assert pair.feedback == tp.FEEDBACK_UP
 
     def test_quality_down(self, pipeline):
         c = pipeline.add_conversation("s", "u", "r", "m")
-        pipeline.add_feedback(c.id, "down")
+        pipeline.add_feedback(c.id, tp.FEEDBACK_DOWN)
         pair = pipeline.get_training_pairs()[0]
         assert pair.quality_score == 0.0
 
@@ -182,15 +232,39 @@ class TestTrainingPairs:
         pipeline.add_conversation("s", "u", "", "m")
         assert pipeline.get_training_pairs()[0].quality_score == 0.0
 
+    def test_empty_response_stays_zero_even_with_feedback(self, pipeline):
+        conv = pipeline.add_conversation("s", "u", "", "m")
+        pipeline.add_feedback(conv.id, tp.FEEDBACK_UP)
+        assert pipeline.get_training_pairs()[0].quality_score == 0.0
+
+    def test_feedback_neutral_rescores_pair(self, pipeline):
+        conv = pipeline.add_conversation("s", "u", "a", "m")
+        pipeline.add_feedback(conv.id, tp.FEEDBACK_UP)
+        assert pipeline.get_training_pairs()[0].quality_score == 1.0
+        pipeline.add_feedback(conv.id, tp.FEEDBACK_NEUTRAL)
+        pair = pipeline.get_training_pairs()[0]
+        assert pair.feedback == tp.FEEDBACK_NEUTRAL
+        assert pair.quality_score == tp.NEUTRAL_QUALITY
+
     def test_pair_quality_up_direct(self, pipeline):
         pipeline._create_training_pair(
-            {"id": "conv_x", "user_message": "u", "assistant_message": "a", "feedback": "up"}
+            {
+                "id": "conv_x",
+                "user_message": "u",
+                "assistant_message": "a",
+                "feedback": tp.FEEDBACK_UP,
+            }
         )
         assert pipeline.get_training_pairs()[0].quality_score == 1.0
 
     def test_pair_quality_down_direct(self, pipeline):
         pipeline._create_training_pair(
-            {"id": "conv_y", "user_message": "u", "assistant_message": "a", "feedback": "down"}
+            {
+                "id": "conv_y",
+                "user_message": "u",
+                "assistant_message": "a",
+                "feedback": tp.FEEDBACK_DOWN,
+            }
         )
         assert pipeline.get_training_pairs()[0].quality_score == 0.0
 
@@ -221,7 +295,7 @@ class TestTrainingPairs:
             pipeline.add_conversation("s", f"u{i}", f"r{i}", "m")
         pairs = pipeline.get_training_pairs(limit=2)
         assert len(pairs) == 2
-        assert pairs[-1].conversation_id.endswith("4") or True
+        assert [p.prompt for p in pairs] == ["u3", "u4"]
 
 
 class TestTrainingRuns:
@@ -250,6 +324,16 @@ class TestTrainingRuns:
         for i in range(5):
             pipeline.create_training_run(f"v{i}", 1, "m")
         assert len(pipeline.get_training_runs(limit=2)) == 2
+
+    def test_get_training_runs_no_limit(self, pipeline):
+        for i in range(5):
+            pipeline.create_training_run(f"v{i}", 1, "m")
+        assert len(pipeline.get_training_runs(limit=None)) == 5
+
+    def test_get_conversations_no_limit(self, pipeline):
+        for i in range(5):
+            pipeline.add_conversation("s", f"u{i}", f"r{i}", "m")
+        assert len(pipeline.get_conversations(limit=None)) == 5
 
 
 class TestExport:
@@ -306,6 +390,31 @@ class TestExport:
         with pytest.raises(ValueError):
             pipeline.export_training_data(format="csv")
 
+    def test_concurrent_exports_do_not_double_export(self, pipeline):
+        import threading
+
+        for i in range(6):
+            pipeline.add_conversation("s", f"u{i}", f"r{i}", "m")
+        results = []
+
+        def do_export():
+            try:
+                results.append(pipeline.export_training_data(min_quality=0.5, version="v"))
+            except ValueError as exc:
+                results.append(exc)
+
+        threads = [threading.Thread(target=do_export) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        successes = [r for r in results if not isinstance(r, Exception)]
+        assert len(successes) >= 1
+        assert sum(r.pairs_count for r in pipeline.get_training_runs()) == 6
+        used = pipeline.get_training_pairs(include_used=True)
+        assert len([p for p in used if p.used_in_training]) == 6
+
 
 class TestStats:
     def test_stats_empty(self, pipeline):
@@ -324,22 +433,47 @@ class TestStats:
         assert s["training_pairs_good"] == 1
         assert s["training_pairs_bad"] == 2
         assert s["training_runs"] == 1
+        assert s["exports_count"] == 1
+
+    def test_stats_exports_count_excludes_latest_copy(self, pipeline):
+        for i in range(3):
+            pipeline.add_conversation("s", f"u{i}", f"r{i}", "m")
+        pipeline.export_training_data(min_quality=0.5, version="a")
+        for i in range(3):
+            pipeline.add_conversation("s", f"v{i}", f"r{i}", "m")
+        pipeline.export_training_data(min_quality=0.5, version="b")
+        s = pipeline.get_stats()
         assert s["exports_count"] == 2
 
 
 class TestBackup:
-    def test_create_backup_copies_mogdb_journals(self, populated):
+    def test_create_backup_copies_compacted_snapshots(self, populated):
         pipeline, *_ = populated
         pipeline.create_training_run("v1", 3, "qwen")
-        backup = pipeline.create_backup()
-        backup_path = Path(backup)
-        assert backup_path.is_dir()
+        backup = Path(pipeline.create_backup())
+        assert backup.is_dir()
         for name in (
-            "conversations.journal.jsonl",
-            "training_pairs.journal.jsonl",
-            "training_runs.journal.jsonl",
+            "conversations.mogdb",
+            "training_pairs.mogdb",
+            "training_runs.mogdb",
         ):
-            assert (backup_path / name).exists()
+            assert (backup / name).exists()
+        assert not (backup / "conversations.journal.jsonl").exists()
+
+    def test_backup_round_trip_restores_data(self, populated):
+        pipeline, c1, c2, c3 = populated
+        backup = Path(pipeline.create_backup())
+        restored_data = backup / "restore" / "training_pipeline.db"
+        restored_data.mkdir(parents=True)
+        for f in backup.glob("*.mogdb"):
+            shutil.copy2(f, restored_data / f.name)
+        restored = tp.TrainingDataPipeline(data_dir=str(backup / "restore"))
+        convs = restored.get_conversations(limit=10)
+        assert len(convs) == 3
+        assert {c.id for c in convs} == {c1.id, c2.id, c3.id}
+        stats = restored.get_stats()
+        assert stats["training_pairs_total"] == 3
+        assert stats["training_runs"] == 0
 
     def test_backup_includes_latest_export(self, populated):
         pipeline, *_ = populated
@@ -359,7 +493,8 @@ class TestBackup:
 
         monkeypatch.setattr(shutil, "copy2", flaky)
         backup = Path(pipeline.create_backup())
-        assert (backup / "conversations.journal.jsonl").exists()
+        assert (backup / "conversations.mogdb").exists()
+        assert not (backup / "latest.jsonl").exists()
 
 
 class TestSingleton:
@@ -368,6 +503,15 @@ class TestSingleton:
 
         monkeypatch.setattr(mod, "_pipeline", None)
         a = mod.get_pipeline(str(tmp_path / "a"))
-        b = mod.get_pipeline()
+        b = mod.get_pipeline(str(tmp_path / "a"))
         assert a is b
+        monkeypatch.setattr(mod, "_pipeline", None)
+
+    def test_get_pipeline_rejects_second_data_dir(self, tmp_path, monkeypatch):
+        from domains.infrastructure import training_pipeline as mod
+
+        monkeypatch.setattr(mod, "_pipeline", None)
+        mod.get_pipeline(str(tmp_path / "a"))
+        with pytest.raises(ValueError):
+            mod.get_pipeline(str(tmp_path / "b"))
         monkeypatch.setattr(mod, "_pipeline", None)

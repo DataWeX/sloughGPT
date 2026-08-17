@@ -110,6 +110,27 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      {/* Mobile header — full-width top bar on < lg */}
+      <header className="sl-app-mobile-header">
+        <Button
+          variant="menu"
+          size="icon"
+          aria-expanded={mobileNavOpen}
+          aria-controls="mobile-navigation-drawer"
+          aria-haspopup="dialog"
+          onClick={() => setMobileNavOpen((open) => !open)}
+        >
+          <IconMenu className="h-4 w-4" aria-hidden />
+          <span className="sr-only">Open menu</span>
+        </Button>
+        <Link
+          href="/"
+          className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
+        >
+          sloughGPT
+        </Link>
+      </header>
+
       {/* Main horizontal split: sidebar + content */}
       <div className="sl-app-body">
         {/* Skip link */}
@@ -119,27 +140,6 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         >
           Skip to main content
         </a>
-
-        {/* Mobile header */}
-        <header className="sl-app-mobile-header">
-          <Button
-            variant="menu"
-            size="icon"
-            aria-expanded={mobileNavOpen}
-            aria-controls="mobile-navigation-drawer"
-            aria-haspopup="dialog"
-            onClick={() => setMobileNavOpen((open) => !open)}
-          >
-            <IconMenu className="h-4 w-4" aria-hidden />
-            <span className="sr-only">Open menu</span>
-          </Button>
-          <Link
-            href="/"
-            className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
-          >
-            sloughGPT
-          </Link>
-        </header>
 
         {/* Desktop sidebar */}
         <div className="sl-app-sidebar-desktop relative" data-collapsed={navCollapsed ? 'true' : undefined}>

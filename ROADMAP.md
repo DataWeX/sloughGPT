@@ -23,7 +23,7 @@ A fast, lightweight local AI inference engine that runs on any device, with a un
 |------|--------|-------|
 | Char-level LSTM trainer (SloughGPTTrainer) | ✅ | SloNet native |
 | GPT-2 → SloTransformer distillation | ✅ | `distill_gpt2.py` module + CLI + API endpoint |
-| HuggingFace fine-tune (Trainer + LoRA) | ✅ | `hf_finetune.py` with peft |
+| HuggingFace fine-tune (Trainer + LoRA) | ❌ | Removed — torch is not supported |
 | Auto-train SSE streaming | ✅ | TrainingSequence phases |
 | Online LoRA adapter updates | ✅ | Per-user feedback-driven |
 | Activity classifier (CNN) | ✅ | Sensor data, 87.5% accuracy |

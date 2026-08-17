@@ -41,7 +41,7 @@ export function ImagePreview({ image, onRemove }: ImagePreviewProps) {
         variant="ghost"
         size="icon"
         onClick={() => onRemove(image.id)}
-        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100"
+        className="absolute -top-1.5 -right-1.5 h-7 w-7 rounded-full bg-destructive/80 text-destructive-foreground opacity-100 transition-opacity hover:bg-destructive sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100"
         aria-label={`Remove ${image.name}`}
       >
             <IconX className="h-3 w-3" />

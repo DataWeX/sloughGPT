@@ -229,8 +229,8 @@ def _register_defaults():
     )
     FeatureFlags.register(
         "hf_finetune",
-        description="HuggingFace model fine-tuning with optional LoRA",
-        status=FlagStatus.ENABLED,
+        description="HuggingFace model fine-tuning with optional LoRA (requires torch)",
+        status=FlagStatus.DISABLED,
     )
     FeatureFlags.register(
         "vlm",

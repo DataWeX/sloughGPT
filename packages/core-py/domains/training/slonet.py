@@ -4811,6 +4811,129 @@ class SloTransformer(SloNet):
         return (state.kv_buf_k, state.kv_buf_v, state.kv_scale_k,
                 state.kv_scale_v, state.kv_len, start)
 
+    def _generate_numpy_lora(
+        self,
+        input_ids: np.ndarray,
+        max_new_tokens: int = 50,
+        temperature: float = 1.0,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+        repetition_penalty: float = 1.0,
+        eos_token: Optional[int] = None,
+        extra_stop_ids: Optional[Sequence[int]] = None,
+        kv_state: Optional[NumpyKVState] = None,
+    ) -> np.ndarray:
+        """Generation path for LoRA-active models — uses non-inlined forward.
+
+        Falls back to SloTransformerBlock.forward_numpy() which goes through
+        SloLinear.forward_numpy() -> LoRALinear.forward_numpy().
+        """
+        if input_ids.ndim == 1:
+            input_ids = input_ids.reshape(1, -1)
+        prompt_len = input_ids.shape[1]
+        total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
+        max_gen = total_len - prompt_len
+
+        out_buf = np.empty((1, total_len), dtype=np.int64)
+        out_buf[:, :prompt_len] = input_ids
+
+        _stop_ids = {eos_token} if eos_token is not None else set()
+        if extra_stop_ids:
+            _stop_ids.update(extra_stop_ids)
+
+        # KV cache init
+        n_blocks = sum(1 for l in self.layers[1:-2] if isinstance(l, SloTransformerBlock))
+        kv_buf_k = [None] * n_blocks
+        kv_buf_v = [None] * n_blocks
+        kv_len = [0] * n_blocks
+
+        # Prefill: process full prompt
+        x = input_ids.astype(np.float32)
+        h = self.layers[0].forward(Tensor(x)).data  # tok_emb
+        if self.pos_emb is not None:
+            seq_len = h.shape[1]
+            pos = Tensor(np.arange(seq_len, dtype=np.int64).reshape(1, -1))
+            h = h + self.pos_emb.forward(pos).data
+
+        block_idx = 0
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                kv_cache = (kv_buf_k[block_idx], kv_buf_v[block_idx]) if kv_buf_k[block_idx] is not None else None
+                h, (new_k, new_v) = l.forward_numpy(h, kv_cache=kv_cache)
+                if kv_buf_k[block_idx] is None:
+                    kv_buf_k[block_idx] = new_k
+                    kv_buf_v[block_idx] = new_v
+                else:
+                    kv_buf_k[block_idx] = np.concatenate([kv_buf_k[block_idx], new_k], axis=1)
+                    kv_buf_v[block_idx] = np.concatenate([kv_buf_v[block_idx], new_v], axis=1)
+                kv_len[block_idx] = kv_buf_k[block_idx].shape[1]
+                block_idx += 1
+
+        h = self.layers[-2].forward_numpy(h)  # final norm
+        logits = h @ self.layers[-1].weight.data.T  # lm_head
+        next_token = self._sample_token(logits[:, -1], temperature, top_k, top_p, repetition_penalty, set())
+        out_buf[:, prompt_len] = next_token
+        cur_len = prompt_len + 1
+
+        # Decode loop
+        for step in range(max_gen - 1):
+            tok = np.array([[next_token]], dtype=np.float64)
+            h = self.layers[0].forward(Tensor(tok)).data
+
+            block_idx = 0
+            for l in self.layers[1:-2]:
+                if isinstance(l, SloTransformerBlock):
+                    kv_cache = (kv_buf_k[block_idx], kv_buf_v[block_idx])
+                    h, (new_k, new_v) = l.forward_numpy(h, kv_cache=kv_cache)
+                    kv_buf_k[block_idx] = np.concatenate([kv_buf_k[block_idx], new_k], axis=1)
+                    kv_buf_v[block_idx] = np.concatenate([kv_buf_v[block_idx], new_v], axis=1)
+                    kv_len[block_idx] = kv_buf_k[block_idx].shape[1]
+                    block_idx += 1
+
+            h = self.layers[-2].forward_numpy(h)
+            logits = h @ self.layers[-1].weight.data.T
+
+            generated = set(int(out_buf[0, i]) for i in range(cur_len))
+            next_token = self._sample_token(logits[:, -1], temperature, top_k, top_p, repetition_penalty, generated)
+
+            if next_token in _stop_ids:
+                break
+            out_buf[:, cur_len] = next_token
+            cur_len += 1
+
+        return out_buf[:, :cur_len]
+
+    def _sample_token(self, logits, temperature, top_k, top_p, repetition_penalty, generated):
+        """Sample next token from logits."""
+        if logits.ndim > 1:
+            logits = logits[0]
+        if repetition_penalty != 1.0:
+            for t in generated:
+                if logits[t] > 0:
+                    logits[t] /= repetition_penalty
+                else:
+                    logits[t] *= repetition_penalty
+        if temperature < 1e-6:
+            return int(np.argmax(logits))
+        logits = logits / max(temperature, 1e-8)
+        if top_k is not None and top_k > 0:
+            top_k = min(top_k, len(logits))
+            indices = np.argpartition(logits, -top_k)[-top_k:]
+            logits_full = np.full_like(logits, -np.inf)
+            logits_full[indices] = logits[indices]
+            logits = logits_full
+        if top_p is not None and top_p < 1.0:
+            sorted_idx = np.argsort(logits)[::-1]
+            sorted_logits = logits[sorted_idx]
+            cumsum = np.cumsum(np.exp(sorted_logits - sorted_logits.max()))
+            cutoff = cumsum > top_p * cumsum[-1]
+            sorted_logits[cutoff] = -np.inf
+            logits = np.full_like(logits, -np.inf)
+            logits[sorted_idx] = sorted_logits
+        probs = np.exp(logits - logits.max())
+        probs = probs / probs.sum()
+        return int(np.random.choice(len(probs), p=probs))
+
     def generate_numpy(
         self,
         input_ids: np.ndarray,
@@ -4870,6 +4993,13 @@ class SloTransformer(SloNet):
         prompt_len = input_ids.shape[1]
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
+
+        # LoRA active: fall back to non-inlined path (through forward_numpy())
+        if getattr(self, '_has_lora', False):
+            return self._generate_numpy_lora(
+                input_ids, max_new_tokens, temperature, top_k, top_p,
+                repetition_penalty, eos_token, extra_stop_ids, kv_state,
+            )
 
         out_buf = np.empty((1, total_len), dtype=np.int64)
         out_buf[:, :prompt_len] = input_ids

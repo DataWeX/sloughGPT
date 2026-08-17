@@ -175,7 +175,7 @@ export default function BenchmarkPage() {
           </CardHeader>
           <CardContent>
             {quality ? (
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: 'Coherence', value: `${(quality.coherence_score * 100).toFixed(1)}%`, color: 'text-success' },
                   { label: 'Quality', value: `${(quality.quality_score * 100).toFixed(1)}%`, color: 'text-primary' },
@@ -243,7 +243,7 @@ export default function BenchmarkPage() {
               {pplxLoading ? 'Calculating...' : 'Calculate'}
             </Button>
             {pplxResult && (
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">Perplexity</div>
                   <div className="text-lg font-mono font-medium">{pplxResult.perplexity}</div>

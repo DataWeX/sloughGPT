@@ -42,7 +42,7 @@ class TestTrainingDataPipeline(unittest.TestCase):
         """Test adding feedback updates quality score."""
         conv = self.pipeline.add_conversation("s1", "Hello", "Hi", "gpt2")
 
-        result = self.pipeline.add_feedback(conv.id, "up")
+        result = self.pipeline.add_feedback(conv.id, "thumbs_up")
         self.assertTrue(result)
 
         pairs = self.pipeline.get_training_pairs()
@@ -51,7 +51,7 @@ class TestTrainingDataPipeline(unittest.TestCase):
 
         # Test down feedback
         conv2 = self.pipeline.add_conversation("s1", "Test", "Response", "gpt2")
-        self.pipeline.add_feedback(conv2.id, "down")
+        self.pipeline.add_feedback(conv2.id, "thumbs_down")
 
         pairs = self.pipeline.get_training_pairs()
         pair2 = next(p for p in pairs if p.conversation_id == conv2.id)
@@ -72,7 +72,7 @@ class TestTrainingDataPipeline(unittest.TestCase):
 
         # Up feedback = 1.0 quality
         conv = self.pipeline.add_conversation("s1", "Test", "Response", "gpt2")
-        self.pipeline.add_feedback(conv.id, "up")
+        self.pipeline.add_feedback(conv.id, "thumbs_up")
 
         # Get only high quality
         good_pairs = self.pipeline.get_training_pairs(min_quality=0.8)
@@ -137,7 +137,9 @@ class TestTrainingDataPipeline(unittest.TestCase):
         backup_path = self.pipeline.create_backup()
 
         self.assertTrue(os.path.exists(backup_path))
-        self.assertTrue(os.path.exists(Path(backup_path) / "conversations.db"))
+        self.assertTrue(
+            os.path.exists(Path(backup_path) / "conversations.mogdb")
+        )
 
     def test_export_latest(self):
         """Test that latest.jsonl is created."""

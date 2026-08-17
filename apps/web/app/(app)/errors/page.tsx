@@ -192,13 +192,13 @@ export default function ErrorsPage() {
         )}
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base">Grouped Errors ({grouped.length})</CardTitle>
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search errors..."
-              className="h-9 w-48 text-sm"
+              className="h-9 w-full sm:w-48 text-sm"
             />
           </CardHeader>
           <CardContent>

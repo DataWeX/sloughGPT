@@ -139,6 +139,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
           {Object.entries(categories).map(([category, shortcuts]) => (
             <fieldset key={category}>
               <legend className="mb-2 text-sm font-medium text-muted-foreground">{category}</legend>
+              <div className="overflow-x-auto">
               <table className="w-full">
                 <tbody>
                   {shortcuts.map((shortcut, index) => (
@@ -162,6 +163,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
                   ))}
                 </tbody>
               </table>
+              </div>
             </fieldset>
           ))}
         </div>

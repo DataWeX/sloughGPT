@@ -27,6 +27,7 @@ describe('navigation', () => {
   it('SHORTCUT_TO_PATH maps shortcuts to correct paths', () => {
     expect(SHORTCUT_TO_PATH['1']).toBe('/chat')
     expect(SHORTCUT_TO_PATH['4']).toBe('/models')
+    expect(SHORTCUT_TO_PATH['6']).toBe('/souls')
     expect(SHORTCUT_TO_PATH['shift+A']).toBe('/settings')
   })
 

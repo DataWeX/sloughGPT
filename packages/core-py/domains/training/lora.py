@@ -127,6 +127,8 @@ class LoRALinear(SloLayer):
             self.bias = None
 
         self._original_forward = None
+        self.use_bias = bias
+        self._quant_info = None
 
     def train(self, mode=True):
         self.training = mode
@@ -135,6 +137,27 @@ class LoRALinear(SloLayer):
 
     def eval(self):
         self.train(False)
+
+    def forward_numpy(self, x: np.ndarray) -> np.ndarray:
+        """Numpy forward pass — applies LoRA delta to base weight.
+
+        Used by the non-inlined generation path when LoRA is active.
+        Math: out = x @ (W + alpha/rank * B @ A)^T + bias
+        """
+        w = self.weight.data
+        b = self.bias.data if self.bias is not None else None
+
+        if self.lora_type == LoRAType.IA3:
+            out = x @ w.T
+            if b is not None:
+                out = out + b
+            return out * self.lora_s.data
+
+        lora_w = self.lora_B.data @ self.lora_A.data * (self.alpha / self.rank)
+        out = x @ (w + lora_w).T
+        if b is not None:
+            out = out + b
+        return out
 
     def forward(self, x):
         x_t = _to_tensor(_to_np(x), requires_grad=True)
@@ -215,6 +238,12 @@ class LoRAEmbedding(SloLayer):
         self.lora_B = Tensor(
             np.zeros((embedding_dim, rank), dtype=np.float32), requires_grad=True)
 
+    def forward_numpy(self, x: np.ndarray) -> np.ndarray:
+        """Numpy forward pass — LoRA-augmented embedding lookup."""
+        original = self.weight.weight.data[x] if isinstance(x, (list, np.ndarray)) else self.weight.weight.data[x]
+        lora_w = self.lora_B.data @ self.lora_A.data * (self.alpha / self.rank)
+        return original + original @ lora_w.T
+
     def forward(self, x):
         x_t = _to_tensor(_to_np(x), requires_grad=True)
         original = self.weight.forward(x_t)
@@ -239,17 +268,90 @@ class LoRAEmbedding(SloLayer):
 # =============================================================================
 
 
+def _walk_slo_tree(node, path_parts):
+    """Recursively walk a SloNet module tree, yielding (path, module) pairs.
+
+    Traverses:
+      - SloNet/SloTransformer → self.layers[i] (list of SloLayer)
+      - SloTransformerBlock → .attn, .ff, .attn_norm, .ff_norm
+      - SloMultiHeadAttention → .W_q, .W_k, .W_v, .W_o
+      - SloFeedForward → .w1, .w2, .w3
+
+    Yields:
+        (dotted_path, module) for every leaf module
+    """
+    from domains.training.slonet import (
+        SloTransformer, SloTransformerBlock, SloMultiHeadAttention,
+        SloFeedForward, SloLinear, SloEmbedding,
+    )
+
+    if isinstance(node, (SloLinear, SloEmbedding, LoRALinear, LoRAEmbedding)):
+        yield (".".join(path_parts), node)
+        return
+
+    # SloNet / SloTransformer — walk layers list by index
+    if hasattr(node, 'layers') and isinstance(node.layers, list):
+        for i, layer in enumerate(node.layers):
+            yield from _walk_slo_tree(layer, path_parts + [f"layers[{i}]"])
+
+    # SloTransformerBlock — walk attention, feed-forward, norms
+    if isinstance(node, SloTransformerBlock):
+        for child_name in ('attn', 'ff', 'attn_norm', 'ff_norm'):
+            child = getattr(node, child_name, None)
+            if child is not None:
+                yield from _walk_slo_tree(child, path_parts + [child_name])
+
+    # SloMultiHeadAttention — walk projection layers
+    if isinstance(node, SloMultiHeadAttention):
+        for child_name in ('W_q', 'W_k', 'W_v', 'W_o'):
+            child = getattr(node, child_name, None)
+            if child is not None:
+                yield from _walk_slo_tree(child, path_parts + [child_name])
+
+    # SloFeedForward — walk projection layers
+    if isinstance(node, SloFeedForward):
+        for child_name in ('w1', 'w2', 'w3'):
+            child = getattr(node, child_name, None)
+            if child is not None:
+                yield from _walk_slo_tree(child, path_parts + [child_name])
+
+
+def _set_nested(obj, path_parts, value):
+    """Set an attribute through a chain of attribute/list-index access.
+
+    path_parts like ["layers[2]", "attn", "W_q"] means obj.layers[2].attn.W_q = value
+    """
+    for part in path_parts:
+        if part.endswith("]") and "[" in part:
+            attr = part[:part.index("[")]
+            idx = int(part[part.index("[") + 1 : part.index("]")])
+            obj = getattr(obj, attr)[idx]
+        else:
+            parent = obj
+            obj = getattr(obj, part)
+    # Set on the actual parent
+    last = path_parts[-1]
+    if last.endswith("]") and "[" in last:
+        attr = last[:last.index("[")]
+        idx = int(last[last.index("[") + 1 : last.index("]")])
+        getattr(parent, attr)[idx] = value
+    else:
+        setattr(parent, last, value)
+
+
 def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
                          rank: int = 8, alpha: float = 16.0,
                          target_modules: Optional[List[str]] = None):
     """
     Apply LoRA to a model.
 
-    Works with both SloLayer-based models and torch nn.Module models.
-    Torch Linear/Embedding layers are replaced with LoRA versions that use SloNet ops.
+    For SloNet models: walks the module tree via _walk_slo_tree, replaces
+    matching SloLinear / SloEmbedding layers with LoRA-augmented equivalents.
+
+    For generic models: falls back to named_modules() traversal.
 
     Args:
-        model: Model with named_modules/named_children
+        model: SloNet / SloTransformer or generic model with named_modules
         config: LoRAConfig (preferred)
         rank: LoRA rank (if no config)
         alpha: LoRA alpha (if no config)
@@ -262,25 +364,26 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
         config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
     target_modules = config.target_modules or []
 
-    named_items = model.named_modules() if hasattr(model, 'named_modules') else model.named_children()
+    applied = 0
+    is_slonet = hasattr(model, 'layers') and isinstance(model.layers, list)
 
-    for name, module in named_items:
-        module_name = name.split(".")[-1]
-        if module_name in target_modules or any(t in name for t in target_modules):
+    if is_slonet:
+        for path, module in _walk_slo_tree(model, []):
+            leaf_name = path.split(".")[-1]
+            if leaf_name not in target_modules and not any(t in path for t in target_modules):
+                continue
+
             in_f = getattr(module, 'in_features', getattr(module, 'in_f', None))
             out_f = getattr(module, 'out_features', getattr(module, 'out_f', None))
             if in_f is None or out_f is None:
                 continue
 
-            is_linear = (hasattr(module, 'weight') and hasattr(module, 'bias'))
-            is_embedding = (hasattr(module, 'num_embeddings') and hasattr(module, 'embedding_dim'))
-
-            if is_embedding:
+            if isinstance(module, SloEmbedding):
                 new_lora = LoRAEmbedding(
-                    num_embeddings=in_f if in_f else module.num_embeddings,
-                    embedding_dim=out_f if out_f else module.embedding_dim,
+                    num_embeddings=in_f,
+                    embedding_dim=out_f,
                     rank=config.rank, alpha=config.alpha,
-                    original_weight=getattr(module, 'weight', None),
+                    original_weight=module.weight,
                 )
             else:
                 module_bias = getattr(module, 'bias', None) is not None
@@ -293,24 +396,64 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
                     original_bias=getattr(module, 'bias', None),
                 )
 
+            _set_nested(model, path.split("."), new_lora)
+            applied += 1
+            logger.info(f"Applied LoRA to {path}", extra={"tag": "TRAIN"})
+    else:
+        named_items = model.named_modules() if hasattr(model, 'named_modules') else model.named_children()
+        for name, module in named_items:
+            module_name = name.split(".")[-1]
+            if module_name not in target_modules and not any(t in name for t in target_modules):
+                continue
+
+            in_f = getattr(module, 'in_features', getattr(module, 'in_f', None))
+            out_f = getattr(module, 'out_features', getattr(module, 'out_f', None))
+            if in_f is None or out_f is None:
+                continue
+
+            module_bias = getattr(module, 'bias', None) is not None
+            new_lora = LoRALinear(
+                in_features=in_f, out_features=out_f,
+                bias=module_bias,
+                rank=config.rank, alpha=config.alpha, dropout=config.dropout,
+                lora_type=config.lora_type,
+                original_weight=getattr(module, 'weight', None),
+                original_bias=getattr(module, 'bias', None),
+            )
+
             parts = name.split(".")
             parent = model
             for part in parts[:-1]:
                 parent = getattr(parent, part)
             setattr(parent, parts[-1], new_lora)
-            logger.info(f"Applied LoRA to {name}",
-                extra={"tag": "TRAIN"},)
+            applied += 1
+            logger.info(f"Applied LoRA to {name}", extra={"tag": "TRAIN"})
 
+    model._has_lora = True
+    logger.info(f"LoRA applied: {applied} layers, rank={config.rank}, alpha={config.alpha}")
     return model
 
 
 def get_lora_parameters(model):
     """Get only LoRA parameters from a model."""
     params = {}
-    named = model.named_parameters() if hasattr(model, 'named_parameters') else []
-    for name, param in named:
-        if "lora_" in name:
-            params[name] = param
+    if hasattr(model, '_walk_slo_tree') or hasattr(model, 'layers'):
+        for path, module in _walk_slo_tree(model, []):
+            if isinstance(module, LoRALinear):
+                for attr in ('lora_A', 'lora_B', 'lora_s'):
+                    t = getattr(module, attr, None)
+                    if t is not None and hasattr(t, 'data'):
+                        params[f"{path}.{attr}"] = t
+            elif isinstance(module, LoRAEmbedding):
+                for attr in ('lora_A', 'lora_B'):
+                    t = getattr(module, attr, None)
+                    if t is not None and hasattr(t, 'data'):
+                        params[f"{path}.{attr}"] = t
+    else:
+        named = model.named_parameters() if hasattr(model, 'named_parameters') else []
+        for name, param in named:
+            if "lora_" in name:
+                params[name] = param
     return params
 
 

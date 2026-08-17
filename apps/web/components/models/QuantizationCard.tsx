@@ -144,7 +144,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                 )}
 
                 {showLayers && (
-                  <div className="max-h-64 overflow-y-auto rounded border border-border/40">
+                  <div className="max-h-64 overflow-x-auto overflow-y-auto rounded border border-border/40">
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 bg-muted/50">
                         <tr className="text-left text-muted-foreground">

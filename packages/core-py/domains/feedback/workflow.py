@@ -170,15 +170,13 @@ class FeedbackWorkflowManager:
         try:
             if self._pipeline is None:
                 self._pipeline = get_pipeline()
-            conv_id = self._pipeline.add_conversation(
+            self._pipeline.add_conversation(
                 session_id=conversation_id or "unknown",
                 user_message=user_message,
                 assistant_message=assistant_response,
                 model="unknown",
                 feedback=rating,
             )
-            if conv_id:
-                self._pipeline.add_feedback(conv_id, rating)
         except Exception as e:
             logger.debug("Training pipeline record failed: %s", e)
 

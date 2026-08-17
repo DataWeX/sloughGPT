@@ -3,7 +3,19 @@
   "skills": {
     "paths": [".opencode/skills"]
   },
+  "mcp": {
+    "chrome-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "chrome-devtools-mcp"],
+      "enabled": true
+    }
+  },
   "command": {
+    "devtools": {
+      "template": "Attach browser devtools to the web app via the chrome-devtools MCP. Desktop: launch Chrome with --remote-debugging-port=9222 and point chrome-devtools at http://localhost:9222. Phone (Android): enable USB debugging, run `adb reverse tcp:9222 tcp:9222`, open the app in Chrome on the phone, then use the chrome-devtools tools to inspect the live page (viewport, console, elements, network).",
+      "description": "Open devtools on the app, including on a phone via CDP",
+      "agent": "build"
+    },
     "fix": {
       "template": "Diagnose and fix the most recent CLI error. Read ~/.opencode-autofix-log.json, identify root cause, and apply the fix.",
       "description": "Diagnose and fix the most recent CLI error",

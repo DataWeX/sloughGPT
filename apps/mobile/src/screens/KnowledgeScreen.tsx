@@ -230,7 +230,7 @@ export function KnowledgeScreen() {
             <XStack gap={6}>
               <Pressable onPress={() => openEdit(item)}>
                 <YStack width={28} height={28} borderRadius={8} backgroundColor={bgMuted} alignItems="center" justifyContent="center">
-                  <Icon name="edit-3" size={12} color={accent} />
+                  <Icon name="edit" size={12} color={accent} />
                 </YStack>
               </Pressable>
               <Pressable onPress={() => handleDelete(item.id)}>
@@ -264,7 +264,7 @@ export function KnowledgeScreen() {
             <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">{title}</Text>
             <Pressable onPress={onClose}>
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={14} color={(theme.color11?.val || '#827A96')} />
               </YStack>
             </Pressable>
           </XStack>
@@ -333,7 +333,7 @@ export function KnowledgeScreen() {
               value={search}
               onChangeText={debouncedSearch}
               placeholder="Search knowledge..."
-              placeholderTextColor="#9B95A8"
+              placeholderTextColor="#827A96"
               returnKeyType="search"
               onSubmitEditing={() => Keyboard.dismiss()}
             />
@@ -377,7 +377,7 @@ export function KnowledgeScreen() {
           }
           ListEmptyComponent={
             <YStack alignItems="center" paddingVertical={64}>
-              <Icon name="book-open" size={48} color={(theme.color10?.val || '#9B95A8')} />
+              <Icon name="book-open" size={48} color={(theme.color10?.val || '#827A96')} />
               <Text fontSize={14} color="$color10">No knowledge items yet</Text>
             </YStack>
           }

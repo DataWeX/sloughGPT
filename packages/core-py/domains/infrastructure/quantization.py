@@ -1370,29 +1370,6 @@ class QuantizedLinear:
             result = result + self.bias
         return result
 
-    def make_torch_forward(self):
-        """Create a torch-compatible forward function for monkey-patching.
-
-        Returns a closure that accepts a torch.Tensor, dequantizes via numpy,
-        and returns a torch.Tensor.  The closure captures ``self`` so the
-        quantized weights and bias are available without module registration.
-        """
-        ql = self
-
-        def _quantized_forward(x):
-            import torch
-            x_np = x.detach().cpu().numpy().astype(np.float32)
-            result = ql.forward_numpy(x_np)
-            return torch.from_numpy(result.astype(np.float32))
-
-        return _quantized_forward
-
     def __call__(self, x):
-        """Forward pass — auto-detects torch vs numpy input."""
-        try:
-            import torch
-            if isinstance(x, torch.Tensor):
-                return self.make_torch_forward()(x)
-        except ImportError:
-            pass
+        """Forward pass — delegates to numpy implementation."""
         return self.forward_numpy(x)

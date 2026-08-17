@@ -41,10 +41,18 @@ interface ChatState {
   retryPendingSends: () => Promise<void>;
 }
 
-let abortController: AbortController | null = null;
+let _abortController: AbortController | null = null;
 
 function genId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function saveSessionContext(sessionId: string, messages: {role: string; content: string}[]) {
+  try {
+    await api.post(`/session/${sessionId}/context`, {
+      messages: messages.map(m => ({role: m.role, content: m.content})),
+    });
+  } catch {}
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -259,7 +267,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     // ── Remote server (SSE streaming) ──────────────────────────────────
-    abortController = new AbortController();
+    const controller = new AbortController();
+    _abortController = controller;
     let accumulated = '';
     const settings = useSettingsStore.getState();
     const allMessages = [...state.messages, userMsg];
@@ -289,7 +298,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             m.id === assistantMsg.id ? {...m, content: ''} : m,
           ),
         }));
-        for await (const event of streamSSE('/chat/stream', body, abortController!.signal)) {
+        for await (const event of streamSSE('/chat/stream', body, controller.signal)) {
           if (event.token) {
             accumulated += event.token;
             set(s => ({
@@ -358,15 +367,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         collectPair(content, accumulated, sessionId);
       }
 
-      api
-        .post(`/session/${sessionId}/context`, {
-          messages: [...state.messages, userMsg, {...assistantMsg, content: accumulated}].map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-        })
-        .catch(() => {});
-
+      saveSessionContext(sessionId, [...state.messages, userMsg, {...assistantMsg, content: accumulated}]);
       await get().refreshSessions();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -374,7 +375,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await triggerHaptic('error');
     } finally {
       set({streaming: false});
-      abortController = null;
+      _abortController = null;
     }
   },
 
@@ -450,14 +451,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     // ── Remote server (SSE streaming) ──────────────────────────────────
-    abortController = new AbortController();
+    const controller = new AbortController();
+    _abortController = controller;
     let accumulated = '';
 
     try {
       for await (const event of streamSSE(
         `/session/${sessionId}/regenerate`,
         {messages: contextMessages},
-        abortController.signal,
+        controller.signal,
       )) {
         if (event.token) {
           accumulated += event.token;
@@ -467,11 +469,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ),
           }));
         }
+        if (event.error) {
+          toast.error(event.error);
+          sounds.error();
+          set({error: event.error, streaming: false});
+          await triggerHaptic('error');
+          return;
+        }
         if (event.done) break;
       }
       if (accumulated) {
         await appendCachedMessage(sessionId, {...assistantMsg, content: accumulated});
+        const lastUserMsg = contextMessages[contextMessages.length - 1];
+        if (lastUserMsg) {
+          collectPair(lastUserMsg.content, accumulated, sessionId);
+        }
+        saveSessionContext(sessionId, [...contextMessages, {...assistantMsg, content: accumulated}]);
       }
+      await get().refreshSessions();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       toast.error('Regeneration failed');
@@ -480,12 +495,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await triggerHaptic('error');
     } finally {
       set({streaming: false});
-      abortController = null;
+      _abortController = null;
     }
   },
 
   cancelStream: () => {
-    abortController?.abort();
+    _abortController?.abort();
     set({streaming: false});
   },
 

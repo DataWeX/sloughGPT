@@ -230,7 +230,7 @@ export default function DatasetDetailPage() {
 
   const headerRight = (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setImportOpen(true)}>
+      <Button variant="outline" size="sm" className="h-11 text-xs" onClick={() => setImportOpen(true)}>
         Import Data
       </Button>
       <Button variant="secondary" size="sm" onClick={fetchDataset} disabled={loading}>
@@ -302,7 +302,7 @@ export default function DatasetDetailPage() {
                       </div>
                     )}
                   </div>
-                  <Button size="sm" variant="outline" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => setShowDelete(true)}>
+                  <Button size="sm" variant="outline" className="h-11 text-xs text-destructive hover:text-destructive" onClick={() => setShowDelete(true)}>
                     <IconTrash className="h-4 w-4 mr-1" /> Delete
                   </Button>
                 </div>
@@ -411,7 +411,7 @@ export default function DatasetDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Versions</CardTitle>
-                <Button size="sm" className="h-8 text-xs" onClick={handleCreateVersion} disabled={snapshotting}>
+                <Button size="sm" className="h-11 text-xs" onClick={handleCreateVersion} disabled={snapshotting}>
                   <IconClock className="h-4 w-4 mr-1" />
                   {snapshotting ? 'Snapshotting…' : 'Create snapshot'}
                 </Button>
@@ -462,7 +462,7 @@ export default function DatasetDetailPage() {
                   aria-label="System prompt"
                   className="h-8 text-xs max-w-sm"
                 />
-                <Button size="sm" className="h-8 text-xs" onClick={handleConvert} disabled={converting}>
+                <Button size="sm" className="h-11 text-xs" onClick={handleConvert} disabled={converting}>
                   <IconClock className="h-4 w-4 mr-1" />
                   {converting ? 'Converting…' : 'Convert to chat format'}
                 </Button>

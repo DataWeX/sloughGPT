@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {StatusBar, Text, StyleSheet, useColorScheme} from 'react-native';
+import {StatusBar, StyleSheet, useColorScheme} from 'react-native';
 import {NavigationContainer, DefaultTheme, DarkTheme} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
@@ -15,6 +15,7 @@ import {SearchScreen} from './src/screens/SearchScreen';
 import {useSettingsStore} from './src/stores/settings-store';
 import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
+import {Icon} from './src/components/Icon';
 import {LoadingScreen} from './src/components/LoadingScreen';
 import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
 import {ToastContainer} from './src/components/ToastContainer';
@@ -25,17 +26,19 @@ import {registerForPushNotifications, onNotification} from './src/services/push-
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const TAB_ICONS: Record<string, string> = {
-  Chat: '💬',
-  Models: '🧠',
-  Settings: '⚙️',
+const TAB_ICONS: Record<string, import('./src/components/Icon').IconName> = {
+  Chat: 'message-circle',
+  Models: 'brain',
+  Settings: 'settings',
 };
 
 function TabIcon({name, focused}: {name: string; focused: boolean}) {
   return (
-    <Text style={{fontSize: 20, opacity: focused ? 1 : 0.5}}>
-      {TAB_ICONS[name] || '•'}
-    </Text>
+    <Icon
+      name={TAB_ICONS[name] || 'square'}
+      size={24}
+      color={focused ? (useColorScheme() === 'dark' ? '#C0AAF4' : '#7C52C4') : (useColorScheme() === 'dark' ? '#6B6580' : '#9B95A8')}
+    />
   );
 }
 
@@ -74,7 +77,7 @@ function AppInner() {
   if (!ready) {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D18' : '#F5F0FF'} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
         <LoadingScreen />
       </SafeAreaProvider>
     );
@@ -83,7 +86,7 @@ function AppInner() {
   if (needsOnboarding) {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D18' : '#F5F0FF'} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
         <OnboardingScreen onComplete={() => setNeedsOnboarding(false)} />
       </SafeAreaProvider>
     );
@@ -94,10 +97,10 @@ function AppInner() {
         ...DarkTheme,
         colors: {
           ...DarkTheme.colors,
-          background: '#0F0D18',
-          card: '#1A1730',
+          background: '#110F18',
+          card: '#1C1926',
           text: '#F0ECF5',
-          border: '#2D2A3A',
+          border: '#342E48',
           primary: '#C0AAF4',
         },
       }
@@ -105,18 +108,18 @@ function AppInner() {
         ...DefaultTheme,
         colors: {
           ...DefaultTheme.colors,
-          background: '#F5F0FF',
+          background: '#F8F6FC',
           card: '#FFFFFF',
           text: '#1A1625',
-          border: '#E0DCE8',
+          border: '#E4E0F2',
           primary: '#7C52C4',
         },
       };
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D18' : '#F5F0FF'} />
-      <NavigationContainer theme={navTheme}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
+        <NavigationContainer theme={navTheme}>
         <ConnectionStatusBar />
         <ToastContainer />
         <Tab.Navigator
@@ -126,12 +129,12 @@ function AppInner() {
               <TabIcon name={route.name} focused={focused} />
             ),
             tabBarActiveTintColor: isDark ? '#C0AAF4' : '#7C52C4',
-            tabBarInactiveTintColor: isDark ? '#6B6580' : '#9B95A8',
+            tabBarInactiveTintColor: isDark ? '#968CAC' : '#827A96',
             tabBarStyle: {
-              backgroundColor: isDark ? '#1A1730' : '#FFFFFF',
-              borderTopColor: isDark ? '#2D2A3A' : '#E0DCE8',
-              height: 60,
-              paddingBottom: 8,
+              backgroundColor: isDark ? '#1C1926' : '#FFFFFF',
+              borderTopColor: isDark ? '#342E48' : '#E4E0F2',
+              height: 56,
+              paddingBottom: 6,
               paddingTop: 4,
             },
             tabBarLabelStyle: {

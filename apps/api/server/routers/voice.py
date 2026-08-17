@@ -28,26 +28,9 @@ class _TTSBackend:
     def load(self):
         if self._loaded:
             return True
-        try:
-            from transformers import pipeline
-            model_id = "suno/bark-small"
-            self._pipeline = pipeline(
-                "text-to-speech",
-                model=model_id,
-                device=-1,
-            )
-            self._model_id = model_id
-            self._loaded = True
-            logger.info(f"TTS model loaded: {model_id}", extra={"tag": "MODEL"})
-            return True
-        except ImportError:
-            self._error = "transformers not available"
-            logger.warning("TTS: transformers not installed", extra={"tag": "MODEL"})
-            return False
-        except Exception as e:
-            self._error = str(e)
-            logger.warning(f"TTS: failed to load model: {e}", extra={"tag": "MODEL"})
-            return False
+        self._error = "Text-to-speech requires transformers, which is not supported"
+        logger.warning("TTS: transformers not available", extra={"tag": "MODEL"})
+        return False
 
     def generate(self, text: str) -> bytes:
         if not self._loaded:

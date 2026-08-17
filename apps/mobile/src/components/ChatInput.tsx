@@ -99,10 +99,10 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
 
   const hasText = text.trim().length > 0;
   const bg = theme.background?.val || '#FFFFFF';
-  const border = theme.borderColor?.val || '#E5E7EB';
-  const textColor = theme.color?.val || '#111827';
-  const textSecondary = theme.color11?.val || '#6B7280';
-  const textMuted = theme.color10?.val || '#9CA3AF';
+  const border = theme.borderColor?.val || '#E4E0F2';
+  const textColor = theme.color?.val || '#1A1625';
+  const textSecondary = theme.color11?.val || '#827A96';
+  const textMuted = theme.color10?.val || '#827A96';
   const primary = theme.color9?.val || '#7C52C4';
 
   const iconBtnStyle = {

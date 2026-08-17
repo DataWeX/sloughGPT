@@ -61,7 +61,7 @@ export function ChatInputField({ value, onChange, onSend, placeholder, disabled,
         onKeyDown={handleKeyDown}
         placeholder={activePlaceholder}
         disabled={disabled}
-        className="flex-1 min-w-0 resize-none min-h-[40px] max-h-[160px] bg-transparent border-0 shadow-none focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/50 py-2"
+        className="flex-1 min-w-0 basis-full sm:basis-auto resize-none min-h-[40px] max-h-[160px] bg-transparent border-0 shadow-none focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/50 py-2"
         rows={1}
         aria-label="Message input"
         aria-describedby="chat-input-hint"

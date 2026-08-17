@@ -314,8 +314,8 @@ export function SettingsScreen() {
               <Switch
                 value={notificationsOn}
                 onValueChange={handleToggleNotifications}
-                trackColor={{false: theme.borderColor?.val || '#E5E7EB', true: (theme.color9?.val || '#6366F1') + '60'}}
-                thumbColor={notificationsOn ? (theme.color9?.val || '#6366F1') : (theme.color10?.val || '#9CA3AF')}
+                trackColor={{false: theme.borderColor?.val || '#E4E0F2', true: (theme.color9?.val || '#7C52C4') + '60'}}
+                thumbColor={notificationsOn ? (theme.color9?.val || '#7C52C4') : (theme.color10?.val || '#827A96')}
               />
             </XStack>
             {lastNotification && (
@@ -335,8 +335,8 @@ export function SettingsScreen() {
               <Switch
                 value={soundsOn}
                 onValueChange={(val) => { setSoundsOn(val); sounds.setEnabled(val); }}
-                trackColor={{false: theme.borderColor?.val || '#E5E7EB', true: (theme.color9?.val || '#6366F1') + '60'}}
-                thumbColor={soundsOn ? (theme.color9?.val || '#6366F1') : (theme.color10?.val || '#9CA3AF')}
+                trackColor={{false: theme.borderColor?.val || '#E4E0F2', true: (theme.color9?.val || '#7C52C4') + '60'}}
+                thumbColor={soundsOn ? (theme.color9?.val || '#7C52C4') : (theme.color10?.val || '#827A96')}
               />
             </XStack>
           </YStack>
@@ -383,14 +383,14 @@ export function SettingsScreen() {
             <Text fontSize={15} fontWeight="600" color="$color">Memory Context</Text>
             <RNTextInput
               style={{
-                fontSize: 14, color: theme.color?.val || '#111827', backgroundColor: theme.background?.val || '#FFFFFF',
+                fontSize: 14, color: theme.color?.val || '#1A1625', backgroundColor: theme.background?.val || '#FFFFFF',
                 borderRadius: 8, padding: 12, minHeight: 80,
-                borderWidth: 1, borderColor: theme.borderColor?.val || '#E5E7EB', textAlignVertical: 'top',
+                borderWidth: 1, borderColor: theme.borderColor?.val || '#E4E0F2', textAlignVertical: 'top',
               }}
               value={settings.memoryContext}
               onChangeText={v => settings.update({memoryContext: v})}
               placeholder="Custom context the AI always remembers..."
-              placeholderTextColor={theme.color10?.val || '#9CA3AF'}
+              placeholderTextColor={theme.color10?.val || '#827A96'}
               multiline
             />
           </YStack>

@@ -8,7 +8,7 @@ interface ScreenShellProps {
   children: React.ReactNode;
   scroll?: boolean;
   refreshing?: boolean;
-  onRefresh?: void;
+  onRefresh?: () => void | Promise<void>;
 }
 
 export function ScreenShell({

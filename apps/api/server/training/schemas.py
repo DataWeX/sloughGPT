@@ -115,53 +115,6 @@ class TrainingRequest(TrainDataSourceBody, _TrainHyperparameters):
     model: str
 
 
-class HFTrainingRequest(BaseModel):
-    """Fine-tune a HuggingFace model (causal LM) on a text dataset with optional LoRA.
-
-    Uses transformers.Trainer + peft under the hood. The ``dataset`` field must
-    match a folder under ``datasets/`` containing ``input.txt``.
-    """
-
-    model: str
-    dataset: str = ""
-    manifest_uri: str = ""
-    name: str = "hf-finetune-job"
-    epochs: int = 3
-    batch_size: int = 4
-    learning_rate: float = 2e-4
-    use_lora: bool = False
-    lora_rank: int = 8
-    lora_alpha: int = 16
-    max_seq_length: int = 512
-    warmup_steps: int = 100
-    weight_decay: float = 0.01
-    gradient_accumulation_steps: int = 1
-    save_steps: int = 500
-    device: Optional[str] = None
-    # RL post-training (GRPO)
-    rl_post_train: bool = False
-    rl_num_generations: int = 4
-    rl_learning_rate: float = 1e-6
-    rl_kl_coef: float = 0.1
-    rl_clip_range: float = 0.2
-    rl_max_new_tokens: int = 128
-    rl_reward_mode: str = "length"
-    rl_reward_keywords: List[str] = Field(default_factory=list)
-
-
-class QuickTrainRequest(BaseModel):
-    """One-click training: just pick a dataset, we handle the rest.
-
-    The backend analyses the dataset, picks the right method, model,
-    epochs, and learning rate.  Optional overrides for power users.
-    """
-
-    dataset: str
-    name: str = ""
-    model: Optional[str] = None  # auto-pick if omitted
-    device: Optional[str] = None
-
-
 class DistillStartRequest(BaseModel):
     """Knowledge distillation: teach a compact student from a larger teacher model.
 

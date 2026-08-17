@@ -171,7 +171,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             <YStack paddingHorizontal={16} paddingTop={8} gap={8}>
               <TextInput
                 placeholder="Title"
-                placeholderTextColor="#9B95A8"
+                placeholderTextColor="#827A96"
                 value={newTitle}
                 onChangeText={setNewTitle}
                 style={{
@@ -187,7 +187,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
               />
               <TextInput
                 placeholder="Prompt text (use {variable} for placeholders)"
-                placeholderTextColor="#9B95A8"
+                placeholderTextColor="#827A96"
                 value={newPrompt}
                 onChangeText={setNewPrompt}
                 multiline
