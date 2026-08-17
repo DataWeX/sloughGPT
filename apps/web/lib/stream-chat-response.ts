@@ -30,13 +30,21 @@ interface StreamChatParams {
   onThinking?: () => void
   onToolCall?: (event: ToolCallEvent) => void
   onMemory?: (info: { stored: boolean; fact?: string; facts?: string[] }) => void
+  onRagVerification?: (info: {
+    confidence: number
+    is_verified: boolean
+    hallucination_rate: number
+    citations: string
+    grounded_claims: number
+    hallucinated_claims: number
+  }) => void
 }
 
 export async function streamChatResponse(params: StreamChatParams): Promise<void> {
   const {
     messages, model, systemPrompt, maxTokens, temperature,
     userId, sessionId, images, signal,
-    onToken, onComplete, onError, onKnowledge, onThinking, onToolCall, onMemory,
+    onToken, onComplete, onError, onKnowledge, onThinking, onToolCall, onMemory, onRagVerification,
   } = params
 
   const response = await fetch(`${PUBLIC_API_URL}/chat/stream`, {
@@ -53,6 +61,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
       images,
       knowledge: params.knowledge,
       agent_id: params.agentId || undefined,
+      use_rag: true,
     }),
     signal,
   })
@@ -107,6 +116,19 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
             facts: Array.isArray(d.facts)
               ? d.facts.filter((f): f is string => typeof f === 'string')
               : undefined,
+          })
+          continue
+        }
+
+        // ── RAG grounding verification event ──
+        if (envelope.phase === 'RAG_VERIFICATION') {
+          onRagVerification?.({
+            confidence: typeof d.confidence === 'number' ? d.confidence : 0,
+            is_verified: d.is_verified === true,
+            hallucination_rate: typeof d.hallucination_rate === 'number' ? d.hallucination_rate : 0,
+            citations: typeof d.citations === 'string' ? d.citations : '',
+            grounded_claims: typeof d.grounded_claims === 'number' ? d.grounded_claims : 0,
+            hallucinated_claims: typeof d.hallucinated_claims === 'number' ? d.hallucinated_claims : 0,
           })
           continue
         }

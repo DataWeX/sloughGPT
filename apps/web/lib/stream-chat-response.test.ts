@@ -13,10 +13,11 @@ describe('streamChatResponse', () => {
     onToken: vi.fn(),
     onComplete: vi.fn(),
     onError: vi.fn(),
-    onToolCall: vi.fn(),
-    onThinking: vi.fn(),
     onKnowledge: vi.fn(),
+    onThinking: vi.fn(),
+    onToolCall: vi.fn(),
     onMemory: vi.fn(),
+    onRagVerification: vi.fn(),
   }
 
   beforeEach(() => {
@@ -135,6 +136,36 @@ describe('streamChatResponse', () => {
     ])
     await streamChatResponse(mockParams)
     expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: false, fact: undefined })
+  })
+
+  it('dispatches RAG verification event', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"RAG_VERIFICATION","status":"success","data":{"confidence":0.92,"is_verified":true,"hallucination_rate":0.05,"citations":"[1] Source A","grounded_claims":3,"hallucinated_claims":0},"message":"RAG grounding verification complete"}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onRagVerification).toHaveBeenCalledWith({
+      confidence: 0.92,
+      is_verified: true,
+      hallucination_rate: 0.05,
+      citations: '[1] Source A',
+      grounded_claims: 3,
+      hallucinated_claims: 0,
+    })
+  })
+
+  it('dispatches RAG verification with defaults on missing fields', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"RAG_VERIFICATION","status":"success","data":{},"message":""}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onRagVerification).toHaveBeenCalledWith({
+      confidence: 0,
+      is_verified: false,
+      hallucination_rate: 0,
+      citations: '',
+      grounded_claims: 0,
+      hallucinated_claims: 0,
+    })
   })
 
   it('dispatches all stored facts when the payload carries a facts array', async () => {

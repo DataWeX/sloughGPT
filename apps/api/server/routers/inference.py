@@ -140,8 +140,8 @@ def _count_tokens(text: str, server_state) -> int:
         tokenizer = getattr(server_state, "tokenizer", None)
         if tokenizer is not None and hasattr(tokenizer, "encode"):
             return len(tokenizer.encode(text))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("tokenizer encode fallback failed: %s", e)
     return len(text.split())
 
 
@@ -948,6 +948,19 @@ class InferenceRouter:
                 tokens = len(full_response.split())
                 _post_gen_tasks = []
 
+                # Production RAG: verify response against knowledge base
+                rag_verification = None
+                if req.use_rag and full_response.strip():
+                    try:
+                        from domains.cognitive.rag_service import get_rag_service
+                        rag_svc = get_rag_service()
+                        if rag_svc.stats().get("total_chunks", 0) > 0:
+                            rag_verification = await asyncio.to_thread(
+                                rag_svc.verify_and_ground, full_response, user_msg or "",
+                            )
+                    except Exception as e:
+                        logger.debug("RAG verification skipped: %s", e)
+
                 try:
                     from domains.infrastructure.conversation_log import capture
                     capture(
@@ -1002,6 +1015,21 @@ class InferenceRouter:
 
                 if _post_gen_tasks:
                     await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
+
+                # Send RAG verification results as a separate SSE event
+                if rag_verification is not None:
+                    yield _sse_event(
+                        "chat", "RAG_VERIFICATION", "success",
+                        data={
+                            "confidence": rag_verification.get("confidence", 0),
+                            "is_verified": rag_verification.get("is_verified", False),
+                            "hallucination_rate": rag_verification.get("verification", {}).get("hallucination_rate", 0),
+                            "citations": rag_verification.get("citations", ""),
+                            "grounded_claims": len(rag_verification.get("verification", {}).get("grounded_claims", [])),
+                            "hallucinated_claims": len(rag_verification.get("verification", {}).get("hallucinations", [])),
+                        },
+                        message="RAG grounding verification complete",
+                    )
 
                 try:
                     from domains.learner.entity_extractor import extract_and_store
