@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button, Progress } from '@sloughgpt/strui'
 import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
 import dynamic from 'next/dynamic'
+import { trainingJobsController } from '@/lib/controllers'
 import type { TrainingFormState } from '@/hooks/useTrainingForm'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
@@ -164,6 +165,16 @@ export function TrainingPipeline({
                   <Button size="sm" variant="outline" onClick={() => {
                     checkpoints.handleLoadCheckpoint(session.distillCheckpoint!, addToast)
                   }}>Load checkpoint</Button>
+                )}
+                {session.method === 'hf' && session.checkpoint && session.checkpoint.endsWith('.npz') && (
+                  <Button size="sm" variant="outline" onClick={async () => {
+                    try {
+                      await trainingJobsController.loadAdapter(session.checkpoint!, false)
+                      addToast('LoRA adapter loaded into model', 'success')
+                    } catch (e) {
+                      addToast('Failed to load adapter: ' + (e instanceof Error ? e.message : String(e)), 'error')
+                    }
+                  }}>Load LoRA adapter</Button>
                 )}
                 <Button size="sm" variant="ghost" onClick={() => {
                   session.resetTraining()

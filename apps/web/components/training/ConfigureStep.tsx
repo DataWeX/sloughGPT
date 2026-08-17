@@ -143,11 +143,29 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
             )}
 
             {form.method === 'finetune' && (
-              <label className="flex items-center gap-2 text-xs">
-                <input type="checkbox" checked={form.useLoRA} onChange={e => form.setUseLoRA(e.target.checked)}
-                  className="rounded border-border" />
-                Use LoRA (parameter-efficient fine-tuning)
-              </label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={form.useLoRA} onChange={e => form.setUseLoRA(e.target.checked)}
+                    className="rounded border-border" />
+                  Use LoRA (parameter-efficient fine-tuning)
+                </label>
+                {form.useLoRA && (
+                  <div className="grid grid-cols-2 gap-3 pl-5">
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="lora-rank" variant="uppercase">Rank</Label>
+                      <Input id="lora-rank" type="number" min={1} max={128} value={form.loraRank}
+                        onChange={e => form.setLoraRank(Number(e.target.value) || 8)}
+                        className="h-8 text-xs font-mono" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="lora-alpha" variant="uppercase">Alpha</Label>
+                      <Input id="lora-alpha" type="number" min={1} max={256} value={form.loraAlpha}
+                        onChange={e => form.setLoraAlpha(Number(e.target.value) || 16)}
+                        className="h-8 text-xs font-mono" />
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </>
         ) : (

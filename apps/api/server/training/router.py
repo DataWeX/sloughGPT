@@ -1283,7 +1283,111 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
     }
 
 
-@router.post("/training/from-feedback")
+class LoadAdapterRequest(BaseModel):
+    """Request to load a LoRA adapter into the running model."""
+    adapter_path: str = Field(description="Path to .npz adapter file")
+    merge: bool = Field(default=False, description="Merge LoRA into base weights for faster inference")
+
+
+@router.post("/training/load-adapter")
+async def load_adapter(request: LoadAdapterRequest):
+    """Load a LoRA adapter into the currently running model for inference.
+
+    Reads the adapter config (rank, alpha, target_modules), applies LoRA layers
+    to the model, loads the weights, and optionally merges for faster inference.
+
+    The adapter is the .npz file produced by POST /training/lora-finetune.
+    """
+    adapter_path = Path(request.adapter_path)
+    if not adapter_path.is_file():
+        # Try relative to models/
+        repo_root = Path(__file__).resolve().parents[4]
+        alt = repo_root / "models" / request.adapter_path
+        if alt.is_file():
+            adapter_path = alt
+        else:
+            raise HTTPException(status_code=400, detail=f"Adapter not found: {request.adapter_path}")
+
+    # Get the running model's provider
+    from domains.infrastructure.model_server import get_model_registry
+    registry = get_model_registry()
+    models = registry.list_models()
+    if not models:
+        raise HTTPException(status_code=400, detail="No model loaded. Load a model first.")
+
+    # Find a provider with a SloNetChatProvider._model
+    provider = None
+    for m in models:
+        server = registry._servers.get(m)
+        if server is not None:
+            model_ref = getattr(server, '_model_ref', None)
+            if model_ref is not None and hasattr(model_ref, 'layers'):
+                provider = server
+                break
+
+    if provider is None:
+        raise HTTPException(status_code=400, detail="No SloNet model loaded. Load a .slnc model first.")
+
+    model = provider._model_ref
+    if not hasattr(model, 'layers'):
+        raise HTTPException(status_code=400, detail="Loaded model is not a SloTransformer — cannot apply LoRA.")
+
+    try:
+        from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
+        from domains.training.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
+        import numpy as np
+
+        adapter = np.load(str(adapter_path))
+        rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
+        alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
+
+        target_modules = []
+        n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
+        for i in range(n_modules):
+            key = f"_config/target_module_{i}"
+            if key in adapter:
+                chars = adapter[key].tolist()
+                target_modules.append("".join(chr(c) for c in chars))
+        if not target_modules:
+            target_modules = ["W_q", "W_k", "W_v", "W_o"]
+
+        # Apply LoRA layers + load weights
+        lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
+        new_model = apply_lora_to_model(model, lora_config)
+        load_lora_adapter(new_model, str(adapter_path))
+        n_params = count_lora_parameters(new_model)
+
+        # Swap model in server
+        provider.swap_model(new_model)
+
+        result = {
+            "status": "loaded",
+            "adapter_path": str(adapter_path),
+            "rank": rank,
+            "alpha": alpha,
+            "target_modules": target_modules,
+            "n_params": n_params,
+            "merged": False,
+        }
+
+        # Optional merge
+        if request.merge:
+            merged_model = merge_lora_adapter(new_model)
+            provider.swap_model(merged_model)
+            result["merged"] = True
+
+        logger.info(
+            "Loaded LoRA adapter %s (rank=%d, alpha=%.1f, %d params, merged=%s)",
+            adapter_path, rank, alpha, n_params, result["merged"],
+            extra={"tag": "TRAIN"},
+        )
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to load adapter: %s", exc, extra={"tag": "TRAIN"})
+        raise HTTPException(status_code=500, detail=f"Failed to load adapter: {exc}")
 async def train_from_feedback():
     """Train a model from collected feedback data.
 

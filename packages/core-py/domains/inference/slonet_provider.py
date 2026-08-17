@@ -930,6 +930,81 @@ class SloNetChatProvider:
 
         return instance
 
+    def apply_adapter(self, adapter_path: str, merge: bool = False) -> dict:
+        """Apply a LoRA adapter (.npz) to the loaded model.
+
+        Reads rank/alpha/target_modules from the adapter's _config/* keys,
+        applies LoRA layers to the model, then loads the adapter weights.
+        Optionally merges LoRA into base weights for faster inference.
+
+        Args:
+            adapter_path: Path to .npz adapter file (from HFLoraTrainer)
+            merge: If True, merge LoRA weights into base and remove LoRA overhead
+
+        Returns:
+            Dict with adapter metadata: rank, alpha, n_params, merged
+        """
+        import numpy as np
+        from pathlib import Path as PathlibPath
+
+        adapter_file = PathlibPath(adapter_path)
+        if not adapter_file.exists():
+            raise FileNotFoundError(f"Adapter not found: {adapter_path}")
+
+        adapter = np.load(adapter_path)
+
+        # Read adapter config
+        rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
+        alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
+
+        # Decode target modules from _config/target_module_N keys
+        target_modules = []
+        n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
+        for i in range(n_modules):
+            key = f"_config/target_module_{i}"
+            if key in adapter:
+                chars = adapter[key].tolist()
+                target_modules.append("".join(chr(c) for c in chars))
+
+        if not target_modules:
+            target_modules = ["W_q", "W_k", "W_v", "W_o"]
+
+        # Apply LoRA layers
+        from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
+        from domains.training.hf_lora_finetune import load_lora_adapter
+
+        lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
+        self._model = apply_lora_to_model(self._model, lora_config)
+
+        # Load adapter weights
+        load_lora_adapter(self._model, adapter_path)
+        n_params = count_lora_parameters(self._model)
+
+        logger.info(
+            "SloNetChatProvider.apply_adapter: loaded %s (rank=%d, alpha=%.1f, %d params)",
+            adapter_path, rank, alpha, n_params, extra={"tag": "INF"},
+        )
+
+        result = {
+            "rank": rank,
+            "alpha": alpha,
+            "target_modules": target_modules,
+            "n_params": n_params,
+            "merged": False,
+        }
+
+        # Optionally merge for faster inference
+        if merge:
+            from domains.training.hf_lora_finetune import merge_lora_adapter
+            self._model = merge_lora_adapter(self._model)
+            result["merged"] = True
+            logger.info(
+                "SloNetChatProvider.apply_adapter: merged LoRA into base weights",
+                extra={"tag": "INF"},
+            )
+
+        return result
+
     def quantization_report(self) -> dict:
         """Get quantization error report (if quantized).
 

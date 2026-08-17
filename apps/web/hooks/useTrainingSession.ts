@@ -47,7 +47,7 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
   pauseTraining: () => Promise<void>
   resumeTraining: () => Promise<void>
   startSSETraining: (body: Record<string, unknown>, addToast: TrainingToastFn, onCheckpointUpdate?: () => void) => void
-  startFineTune: (params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean }, addToast: TrainingToastFn, onComplete?: () => void) => void
+  startFineTune: (params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean; loraRank?: number; loraAlpha?: number }, addToast: TrainingToastFn, onComplete?: () => void) => void
   startVisualTraining: (params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean }, addToast: TrainingToastFn, onComplete?: () => void) => void
   startTurboTrain: (datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number }, addToast: TrainingToastFn) => void
   stopTurboTrain: () => void
@@ -155,7 +155,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [])
 
   const startFineTune = useCallback((
-    params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean },
+    params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean; loraRank?: number; loraAlpha?: number },
     addToast: TrainingToastFn, onComplete?: () => void,
   ) => {
     appShellStore.getState().resetTraining()
@@ -166,7 +166,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       epochs: params.epochs,
       batch_size: params.batchSize,
       learning_rate: params.lr,
-      rank: 8,
+      rank: params.loraRank ?? 8,
+      alpha: params.loraAlpha ?? 16.0,
     }).then(resp => {
       const jobId = resp.job_id as string
       addToast('LoRA training queued', 'info')

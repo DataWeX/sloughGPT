@@ -43,6 +43,17 @@ describe('trainingJobsController.stopAutoTrain', () => {
   })
 })
 
+describe('trainingJobsController.loadAdapter', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs to /training/load-adapter with adapter_path and merge', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', rank: 8, merged: false })
+    const result = await trainingJobsController.loadAdapter('/path/to/adapter.npz', false)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/load-adapter', { adapter_path: '/path/to/adapter.npz', merge: false })
+    expect(result.status).toBe('loaded')
+  })
+})
+
 describe('trainingJobsController.startTurboTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 

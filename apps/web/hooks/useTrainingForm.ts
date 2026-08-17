@@ -45,6 +45,8 @@ export interface TrainingFormState {
   availableModels: string[]
   selectedModel: string
   useLoRA: boolean
+  loraRank: number
+  loraAlpha: number
   visualVisionEncoder: string
   visualLLM: string
   visualStage1Epochs: number
@@ -65,6 +67,8 @@ export interface TrainingFormState {
   setTrainingBatchSize: (n: number) => void
   setSelectedModel: (s: string) => void
   setUseLoRA: (v: boolean) => void
+  setLoraRank: (n: number) => void
+  setLoraAlpha: (n: number) => void
   setVlmVisionEncoder: (s: string) => void
   setVlmLLM: (s: string) => void
   setVlmStage1Epochs: (n: number) => void
@@ -93,6 +97,8 @@ interface SavedConfig {
   trainingBatchSize?: number
   selectedModel?: string
   useLoRA?: boolean
+  loraRank?: number
+  loraAlpha?: number
 }
 
 export function useTrainingForm(
@@ -111,6 +117,8 @@ export function useTrainingForm(
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [selectedModel, setSelectedModel] = useState('')
   const [useLoRA, setUseLoRA] = useState(true)
+  const [loraRank, setLoraRank] = useState(8)
+  const [loraAlpha, setLoraAlpha] = useState(16)
   const [textInput, setTextInput] = useState('')
   const [configLoaded, setConfigLoaded] = useState(false)
 
@@ -125,6 +133,8 @@ export function useTrainingForm(
         if (saved.trainingBatchSize) setTrainingBatchSize(saved.trainingBatchSize)
         if (saved.selectedModel) setSelectedModel(saved.selectedModel)
         if (saved.useLoRA !== undefined) setUseLoRA(saved.useLoRA)
+        if (saved.loraRank) setLoraRank(saved.loraRank)
+        if (saved.loraAlpha) setLoraAlpha(saved.loraAlpha)
       }
       setConfigLoaded(true)
     })
@@ -255,6 +265,8 @@ export function useTrainingForm(
         batchSize: trainingBatchSize,
         lr: trainingLR,
         useLoRA,
+        loraRank,
+        loraAlpha,
       }, addToast, () => { checkpoints.fetchJobs() })
     } else if (method === 'vlm') {
       session.startVisualTraining({
@@ -277,12 +289,14 @@ export function useTrainingForm(
   return {
     method, inputMode, textInput, showAdvanced, algo,
     trainingEpochs, trainingLR, trainingBatchSize, availableModels, selectedModel, useLoRA,
+    loraRank, loraAlpha,
     visualVisionEncoder, visualLLM, visualStage1Epochs, visualStage2Epochs,
     nativeEmbed, nativeLayers, nativeHeads, nativeBlockSize,
     loadingFinetunedModel,
     allJobs,
     setMethod, setInputMode, setTextInput, setShowAdvanced, setAlgo,
     setTrainingEpochs, setTrainingLR, setTrainingBatchSize, setSelectedModel, setUseLoRA,
+    setLoraRank, setLoraAlpha,
     setVlmVisionEncoder, setVlmLLM, setVlmStage1Epochs, setVlmStage2Epochs,
     setNativeEmbed, setNativeLayers, setNativeHeads, setNativeBlockSize,
     setLoadingFinetunedModel,

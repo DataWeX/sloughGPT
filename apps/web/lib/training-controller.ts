@@ -176,6 +176,17 @@ export const trainingJobsController = {
     await apiPost('/auto-train/stop')
   },
 
+  async loadAdapter(adapterPath: string, merge: boolean = false): Promise<{
+    status: string
+    adapter_path: string
+    rank: number
+    alpha: number
+    n_params: number
+    merged: boolean
+  }> {
+    return apiPost('/training/load-adapter', { adapter_path: adapterPath, merge })
+  },
+
   async pauseTraining(): Promise<{ success: boolean }> {
     return apiPost('/auto-train/pause')
   },
