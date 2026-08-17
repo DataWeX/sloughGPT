@@ -174,11 +174,9 @@ export function TrainingScreen() {
     setLoadingCheckpoint(name);
     try {
       await loadCheckpoint(name);
-      triggerHaptic('success');
       await modelStore.refresh();
       Alert.alert('Loaded', `Checkpoint ${name} loaded into model`);
     } catch (err: any) {
-      triggerHaptic('error');
       Alert.alert('Error', err.message || 'Failed to load checkpoint');
     } finally {
       setLoadingCheckpoint(null);
