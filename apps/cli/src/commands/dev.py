@@ -308,7 +308,8 @@ def cmd_serve(args):
     """Start HTTP inference server.
 
     With --web: starts full FastAPI server + Next.js web UI and opens browser.
-    Without --web: starts the full FastAPI server only (API-only mode).
+    With --mobile: starts FastAPI server + React Native metro bundler.
+    Without flags: starts the full FastAPI server only (API-only mode).
 
     Before starting, checks if the autoload model needs downloading and
     prompts the user for confirmation if it's over 50 MB.
@@ -317,6 +318,15 @@ def cmd_serve(args):
     _preflight_model_check(args)
 
     web = getattr(args, "web", False)
+    mobile = getattr(args, "mobile", False)
+
+    if web and mobile:
+        log.error("Cannot use --web and --mobile together. Pick one.")
+        return
+
+    if mobile:
+        _cmd_api_and_mobile(args)
+        return
 
     if web:
         _cmd_api_and_web(args)
@@ -433,6 +443,168 @@ def _cmd_api_only(args):
                 api_proc.kill()
             _kill_port(api_port)
             log.success("Stopped")
+
+
+def _cmd_api_and_mobile(args):
+    """Start FastAPI server + React Native metro bundler."""
+    root = _repo_root()
+    api_port = getattr(args, "port", 8000)
+    mobile_root = root / "apps" / "mobile"
+
+    if not (mobile_root / "package.json").is_file():
+        log.error(f"Mobile app not found at {mobile_root}")
+        return
+
+    _kill_port(api_port)
+    time.sleep(0.3)
+
+    log.header("Starting SloughGPT — API + Mobile")
+    log.key_value("API", f"http://{args.host}:{api_port}")
+    log.key_value("Mobile", "React Native (metro bundler)")
+
+    # ── Build env ─────────────────────────────────────────
+    env = os.environ.copy()
+    env["GIO_USE_PORTAL"] = "0"
+
+    nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
+    nvm_bin = os.path.join(nvm_dir, "versions", "node")
+    if os.path.isdir(nvm_bin):
+        for entry in os.listdir(nvm_bin):
+            candidate = os.path.join(nvm_bin, entry, "bin")
+            if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
+                env["PATH"] = candidate + os.pathsep + env.get("PATH", "")
+
+    model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
+    if model:
+        env["SLOUGHGT_MODEL_PATH"] = model
+    for k in ("SLO_AUTOLOAD_MODEL", "SLO_API_PORT", "HF_TOKEN"):
+        if k in os.environ:
+            env[k] = os.environ[k]
+
+    env["API_BASE_URL"] = f"http://{args.host}:{api_port}"
+
+    # ── Start FastAPI server ──────────────────────────────
+    api_lines: deque = deque(maxlen=_LOG_BUF)
+    mobile_lines: deque = deque(maxlen=_LOG_BUF)
+    stop_event = threading.Event()
+
+    python = Path(sys.executable)
+    api_proc = subprocess.Popen(
+        [str(python), "-m", "uvicorn", "apps.api.server.main:app",
+         "--host", args.host, "--port", str(api_port)],
+        cwd=str(root),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    api_thread = threading.Thread(
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+    )
+    api_thread.start()
+
+    # ── Start React Native metro bundler ──────────────────
+    log.step("Starting React Native metro bundler...")
+    mobile_env = {**env, "PORT": "8081"}
+    mobile_proc = subprocess.Popen(
+        ["npx", "react-native", "start"],
+        cwd=str(mobile_root),
+        env=mobile_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    mobile_thread = threading.Thread(
+        target=_read_stream, args=(mobile_proc.stdout, mobile_lines, stop_event), daemon=True
+    )
+    mobile_thread.start()
+
+    # ── Wait for API readiness ────────────────────────────
+    if not _wait_for_api_with_progress(api_port):
+        log.error("API failed to start within 90s")
+        log.info("Last API output:")
+        for line in list(api_lines)[-20:]:
+            log.info(f"  | {line}")
+        stop_event.set()
+        _cleanup(api_proc, mobile_proc, api_port, 8081)
+        return
+
+    log.success("API ready")
+
+    # ── Wait for metro bundler ────────────────────────────
+    log.step("Waiting for metro bundler...")
+    for _ in range(30):
+        if _check_port(8081):
+            break
+        if mobile_proc.poll() is not None:
+            log.error(f"Metro bundler exited with code {mobile_proc.returncode}")
+            log.info("Last metro output:")
+            for line in list(mobile_lines)[-20:]:
+                log.info(f"  | {line}")
+            stop_event.set()
+            _cleanup(api_proc, mobile_proc, api_port, 8081)
+            return
+        time.sleep(1)
+    else:
+        log.warning("Metro bundler did not respond within 30s")
+        log.info("API is still running — run 'npx react-native start' manually in apps/mobile/")
+
+    # ── Ready ─────────────────────────────────────────────
+    api_url = f"http://{args.host}:{api_port}"
+
+    log.blank()
+    log.success("All services ready!")
+    log.blank()
+    log.key_value("API", api_url)
+    log.key_value("API Docs", f"{api_url}/docs")
+    log.key_value("Mobile", "react-native start (port 8081)")
+    log.blank()
+    log.key_value("", "Press Ctrl+C to stop")
+    log.blank()
+
+    # ── Signal handlers ───────────────────────────────────
+    shutdown = [False]
+
+    def _sig_handler(sig, frame):
+        if shutdown[0]:
+            return
+        shutdown[0] = True
+        log.blank()
+        log.info("Shutting down...")
+        stop_event.set()
+        _cleanup(api_proc, mobile_proc, api_port, 8081)
+        log.success("Stopped")
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
+
+    # ── Monitor loop ──────────────────────────────────────
+    try:
+        while not shutdown[0]:
+            time.sleep(2)
+            if api_proc.poll() is not None:
+                log.error(f"API server exited (code {api_proc.returncode})")
+                break
+            if mobile_proc.poll() is not None:
+                log.warning(f"Metro bundler exited (code {mobile_proc.returncode}), restarting...")
+                mobile_proc = subprocess.Popen(
+                    ["npx", "react-native", "start"],
+                    cwd=str(mobile_root),
+                    env=mobile_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                mobile_thread = threading.Thread(
+                    target=_read_stream, args=(mobile_proc.stdout, mobile_lines, stop_event), daemon=True
+                )
+                mobile_thread.start()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if not shutdown[0]:
+            stop_event.set()
+            _cleanup(api_proc, mobile_proc, api_port, 8081)
 
 
 def _cmd_api_and_web(args):

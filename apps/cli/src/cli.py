@@ -400,16 +400,17 @@ def dev(ctx, model, web_port, watch_web, auto_download):
     cmd_dev(args)
 
 
-@cli.command(help="Start HTTP inference server (with --web: full FastAPI + frontend)")
+@cli.command(help="Start HTTP inference server (with --web: full FastAPI + frontend, --mobile: API + React Native)")
 @click.option("--host", default="localhost", help="Bind address", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
 @click.option("--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and opens browser")
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
+@click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")
 @click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
-def serve(host, port, model, web, web_port, auto_download):
+def serve(host, port, model, web, mobile, web_port, auto_download):
     from commands.dev import cmd_serve
-    args = _ns(host=host, port=port, model=model, web=web, web_port=web_port, auto_download=auto_download)
+    args = _ns(host=host, port=port, model=model, web=web, mobile=mobile, web_port=web_port, auto_download=auto_download)
     cmd_serve(args)
 
 
