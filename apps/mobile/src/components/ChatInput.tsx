@@ -168,7 +168,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
   return (
     <YStack paddingHorizontal={16} paddingVertical={8} backgroundColor={bg} borderTopWidth={1} borderTopColor={border}>
       <XStack alignItems="flex-end" gap={8}>
-        <Pressable onPress={handlePlus} disabled={disabled} style={iconBtnStyle}>
+        <Pressable onPress={handlePlus} disabled={disabled} style={iconBtnStyle} accessibilityLabel="Add attachment">
           <Icon name="plus" size={18} color={textSecondary} />
         </Pressable>
 
@@ -180,7 +180,8 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
             setTimeout(() => inputRef.current?.focus(), 100);
           }}
           disabled={disabled}
-          style={iconBtnStyle}>
+          style={iconBtnStyle}
+          accessible accessibilityRole="button" accessibilityLabel="Slash commands">
           <Text fontSize={16} fontWeight="600" color={textSecondary} fontFamily="JetBrainsMono-Regular">/</Text>
         </Pressable>
 
@@ -190,7 +191,10 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
             setShowPrompts(true);
           }}
           disabled={disabled}
-          style={iconBtnStyle}>
+          style={iconBtnStyle}
+          accessibilityLabel="Open quick prompts"
+          accessibilityRole="button"
+          accessible={true}>
           <Icon name="zap" size={18} color={textSecondary} />
         </Pressable>
 
@@ -224,17 +228,20 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
               justifyContent: 'center',
               borderWidth: 0.5,
               borderColor: border,
-            }}>
+            }}
+            accessibilityLabel="Cancel edit"
+            accessibilityRole="button"
+            accessible={true}>
             <Icon name="x" size={14} color={textMuted} />
           </Pressable>
         )}
 
         {disabled ? (
-          <Pressable onPress={onStop} style={circleBtn(40, '#EF4444')}>
+          <Pressable onPress={onStop} style={circleBtn(40, '#EF4444')} accessibilityLabel="Stop" accessibilityRole="button" accessible={true}>
             <Icon name="stop-circle" size={16} color="white" />
           </Pressable>
         ) : hasText ? (
-          <Pressable onPress={handleSend} style={circleBtn(40, primary)}>
+          <Pressable onPress={handleSend} style={circleBtn(40, primary)} accessibilityLabel="Send message" accessibilityRole="button" accessible={true}>
             <Icon name="arrow-up" size={20} color="white" />
           </Pressable>
         ) : (
@@ -251,7 +258,10 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
                   justifyContent: 'center',
                   borderWidth: 0.5,
                   borderColor: border,
-                }}>
+                }}
+                accessibilityLabel="Toggle voice message"
+                accessibilityRole="button"
+                accessible={true}>
                 <Icon name="mic" size={12} color={textSecondary} />
               </Pressable>
             )}
@@ -272,7 +282,10 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
                   backgroundColor: '#FDE8E8',
                   borderColor: '#EF4444',
                 },
-              ]}>
+              ]}
+              accessibilityLabel={isRecording ? 'Stop recording' : 'Start voice input'}
+              accessibilityRole="button"
+              accessible={true}>
               <Icon name={isRecording ? 'stop-circle' : voiceMessageMode ? 'music' : 'mic'} size={18} color={textSecondary} />
             </Pressable>
           </XStack>

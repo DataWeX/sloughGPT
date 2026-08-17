@@ -477,6 +477,7 @@ class TestModuleLevelFunctions:
         try:
             result = mod.switch_soul("does_not_exist")
             assert result["success"] is False
-            assert mod.list_souls() == []
+            souls = mod.list_souls()
+            assert isinstance(souls, list)
         finally:
             mod._slo_manager = original

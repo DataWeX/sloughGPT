@@ -198,7 +198,7 @@ export function ProvidersScreen() {
                           paddingVertical={2}
                           borderRadius={4}
                         >
-                          <Text fontSize={10} fontWeight="600" color="$green10">
+                           <Text fontSize={10} fontWeight="600" color="$color1">
                             ACTIVE
                           </Text>
                         </YStack>

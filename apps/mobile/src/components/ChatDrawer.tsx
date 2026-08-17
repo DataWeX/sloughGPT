@@ -177,6 +177,9 @@ export function ChatDrawer({
                 <Text fontSize={13} color="$color10" marginTop={8}>No conversations yet</Text>
               </YStack>
             }
+            removeClippedSubviews
+            maxToRenderPerBatch={10}
+            windowSize={11}
           />
           {archivedSessions.length > 0 && (
             <XStack

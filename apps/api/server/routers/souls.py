@@ -434,6 +434,19 @@ Be yourself — let your personality shape how you respond."""
                     "description": s.description,
                     "personality": getattr(s, "personality", {}),
                     "traits": getattr(s, "traits", []),
+                    "born_at": getattr(s, "born_at", ""),
+                    "training_dataset": getattr(s, "training_dataset", ""),
+                    "epochs_trained": getattr(s, "epochs_trained", 0),
+                    "final_train_loss": getattr(s, "final_train_loss", None),
+                    "final_val_loss": getattr(s, "final_val_loss", None),
+                    "lineage": getattr(s, "lineage", ""),
+                    "base_model": getattr(s, "base_model", ""),
+                    "version": getattr(s, "version", ""),
+                    "size_mb": getattr(s, "size_mb", 0.0),
+                    "behavior": getattr(s, "behavior", {}),
+                    "cognition": getattr(s, "cognition", {}),
+                    "emotion": getattr(s, "emotion", {}),
+                    "generation_params": getattr(s, "generation_params", {}),
                 }
                 for s in souls
             ], meta={"current_soul": current.name if current else None})
@@ -454,6 +467,19 @@ Be yourself — let your personality shape how you respond."""
                         "description": s.description,
                         "personality": getattr(s, "personality", {}),
                         "traits": getattr(s, "traits", []),
+                        "born_at": getattr(s, "born_at", ""),
+                        "training_dataset": getattr(s, "training_dataset", ""),
+                        "epochs_trained": getattr(s, "epochs_trained", 0),
+                        "final_train_loss": getattr(s, "final_train_loss", None),
+                        "final_val_loss": getattr(s, "final_val_loss", None),
+                        "lineage": getattr(s, "lineage", ""),
+                        "base_model": getattr(s, "base_model", ""),
+                        "version": getattr(s, "version", ""),
+                        "size_mb": getattr(s, "size_mb", 0.0),
+                        "behavior": getattr(s, "behavior", {}),
+                        "cognition": getattr(s, "cognition", {}),
+                        "emotion": getattr(s, "emotion", {}),
+                        "generation_params": getattr(s, "generation_params", {}),
                     })
             raise HTTPException(status_code=404, detail=f"Soul '{soul_name}' not found")
         except HTTPException:

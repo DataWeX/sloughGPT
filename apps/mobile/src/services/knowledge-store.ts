@@ -65,3 +65,7 @@ export async function getKnowledgeForMessage(messageId: string): Promise<Knowled
   const all = await load();
   return all.find(f => f.messageId === messageId) ?? null;
 }
+
+export function _resetCache(): void {
+  cached = null;
+}

@@ -91,7 +91,7 @@ export function SearchScreen() {
             returnKeyType="search"
           />
           {query.length > 0 && (
-            <Pressable onPress={hapticPress('light', () => handleSearch(''))}>
+            <Pressable onPress={hapticPress('light', () => handleSearch(''))} accessible={true} accessibilityRole="button" accessibilityLabel="Clear search">
               <Icon name="x" size={16} color={(theme.color10?.val || '#827A96')} />
             </Pressable>
           )}
@@ -114,6 +114,9 @@ export function SearchScreen() {
           keyExtractor={(item, i) => `${item.sessionId}-${item.role}-${i}`}
           keyboardDismissMode="on-drag"
           contentContainerStyle={{paddingHorizontal: 16, paddingTop: 12, gap: 8}}
+          removeClippedSubviews
+          maxToRenderPerBatch={10}
+          windowSize={11}
           renderItem={({item}) => (
             <YStack
               backgroundColor="$background"

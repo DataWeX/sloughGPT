@@ -222,7 +222,7 @@ export function TrainingScreen() {
           {error && (
             <XStack alignItems="center" justifyContent="space-between" backgroundColor="rgba(239, 68, 68, 0.08)" padding={12} borderRadius={10}>
               <Text fontSize={13} color="#EF4444" lineHeight={18} flex={1}>{error}</Text>
-              <Pressable onPress={hapticPress('light', clearError)}>
+              <Pressable onPress={hapticPress('light', clearError)} accessibilityLabel="Clear error">
                 <Icon name="x" size={16} color="#EF4444" />
               </Pressable>
             </XStack>
@@ -785,7 +785,8 @@ export function TrainingScreen() {
                           {text: 'Delete', style: 'destructive', onPress: () => deleteCheckpoint(cp.name)},
                         ]);
                       })}
-                      pressStyle={{opacity: 0.7}}>
+                      pressStyle={{opacity: 0.7}}
+                      accessible accessibilityRole="button" accessibilityLabel={`Delete checkpoint ${cp.name}`}>
                       <Icon name="x" size={16} color="#D44C56" />
                     </YStack>
                   </XStack>
@@ -801,7 +802,7 @@ export function TrainingScreen() {
           <YStack backgroundColor="$background" borderTopLeftRadius={24} borderTopRightRadius={24} maxHeight="70%">
             <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20} paddingVertical={16} borderBottomWidth={1} borderBottomColor="$borderColor">
               <Text fontSize={16} fontWeight="600" color="$color">Dataset Preview</Text>
-              <Pressable onPress={hapticPress('light', () => setPreviewVisible(false))}>
+              <Pressable onPress={hapticPress('light', () => setPreviewVisible(false))} accessibilityLabel="Close preview">
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
                   <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
                 </YStack>

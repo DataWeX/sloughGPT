@@ -262,12 +262,12 @@ export function KnowledgeScreen() {
           </XStack>
           {!selectMode && (
             <XStack gap={6}>
-              <Pressable onPress={() => openEdit(item)}>
+              <Pressable onPress={() => openEdit(item)} accessibilityLabel="Edit knowledge item">
                 <YStack width={28} height={28} borderRadius={8} backgroundColor={bgMuted} alignItems="center" justifyContent="center">
                   <Icon name="edit" size={12} color={accent} />
                 </YStack>
               </Pressable>
-              <Pressable onPress={() => handleDelete(item.id)}>
+              <Pressable onPress={() => handleDelete(item.id)} accessibilityLabel="Delete knowledge item">
                 <YStack width={28} height={28} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)" alignItems="center" justifyContent="center">
                   <Icon name="trash-2" size={12} color="#EF4444" />
                 </YStack>
@@ -296,7 +296,7 @@ export function KnowledgeScreen() {
           gap={14}>
           <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
             <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">{title}</Text>
-            <Pressable onPress={onClose}>
+            <Pressable onPress={onClose} accessibilityLabel="Close">
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
                 <Icon name="x" size={14} color={(theme.color11?.val || '#827A96')} />
               </YStack>
@@ -402,6 +402,9 @@ export function KnowledgeScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={{padding: 16, gap: 8}}
           keyboardDismissMode="on-drag"
+          removeClippedSubviews
+          maxToRenderPerBatch={10}
+          windowSize={11}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

@@ -6,9 +6,23 @@ import { apiGet, apiPost, apiDelete } from './http-client'
 
 export interface Soul {
   name: string
+  path?: string
   description: string
   traits: string[]
   personality: Record<string, number>
+  born_at?: string
+  training_dataset?: string
+  epochs_trained?: number
+  final_train_loss?: number | null
+  final_val_loss?: number | null
+  lineage?: string
+  base_model?: string
+  version?: string
+  size_mb?: number
+  behavior?: Record<string, unknown>
+  cognition?: Record<string, number>
+  emotion?: Record<string, number>
+  generation_params?: Record<string, unknown>
 }
 
 export interface Checkpoint {
@@ -134,5 +148,9 @@ export const soulsController = {
 
   async saveTraitWeights(weights: Record<string, Record<string, number>>): Promise<{ status: string }> {
     return apiPost<{ status: string }>('/souls/weights', weights)
+  },
+
+  async deleteCheckpoint(name: string): Promise<{ status: string }> {
+    return apiDelete<{ status: string }>(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
   },
 }

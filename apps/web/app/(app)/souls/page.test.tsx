@@ -11,6 +11,9 @@ const mockListWeightSnapshots = vi.fn()
 const mockSaveWeightSnapshot = vi.fn()
 const mockLoadWeightSnapshot = vi.fn()
 const mockDeleteWeightSnapshot = vi.fn()
+const mockGetModes = vi.fn()
+const mockSaveTraitWeights = vi.fn()
+const mockDeleteCheckpoint = vi.fn()
 
 vi.mock('@/lib/souls-controller', () => ({
   soulsController: {
@@ -23,6 +26,9 @@ vi.mock('@/lib/souls-controller', () => ({
     saveWeightSnapshot: (...args: unknown[]) => mockSaveWeightSnapshot(...args),
     loadWeightSnapshot: (...args: unknown[]) => mockLoadWeightSnapshot(...args),
     deleteWeightSnapshot: (...args: unknown[]) => mockDeleteWeightSnapshot(...args),
+    getModes: (...args: unknown[]) => mockGetModes(...args),
+    saveTraitWeights: (...args: unknown[]) => mockSaveTraitWeights(...args),
+    deleteCheckpoint: (...args: unknown[]) => mockDeleteCheckpoint(...args),
   },
 }))
 
@@ -37,9 +43,9 @@ vi.mock('@/components/souls/SoulPersonalityCard', () => ({
 import SoulsPage from './page'
 
 const SAMPLE_SOULS = [
-  { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'] },
-  { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'] },
-  { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'] },
+  { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7 } },
+  { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8 } },
+  { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6 } },
 ]
 
 const SAMPLE_CHECKPOINTS = [
@@ -49,12 +55,11 @@ const SAMPLE_CHECKPOINTS = [
 
 async function clickTab(name: string) {
   await waitFor(() => {
-    const buttons = screen.getAllByRole('button')
-    const tab = buttons.find(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())
-    expect(tab).toBeTruthy()
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())).toBeTruthy()
   })
-  const buttons = screen.getAllByRole('button')
-  const tab = buttons.find(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())
+  const tabs = screen.getAllByRole('tab')
+  const tab = tabs.find(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())
   if (tab) act(() => { fireEvent.click(tab) })
 }
 
@@ -110,11 +115,11 @@ describe('SoulsPage — tab switching flow', () => {
   it('renders all four tabs', async () => {
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    const buttons = screen.getAllByRole('button')
-    expect(buttons.some(b => b.textContent?.trim().toLowerCase() === 'souls')).toBeTruthy()
-    expect(buttons.some(b => b.textContent?.trim().toLowerCase() === 'checkpoints')).toBeTruthy()
-    expect(buttons.some(b => b.textContent?.trim().toLowerCase() === 'weights')).toBeTruthy()
-    expect(buttons.some(b => b.textContent?.trim().toLowerCase() === 'snapshots')).toBeTruthy()
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === 'souls')).toBeTruthy()
+    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === 'checkpoints')).toBeTruthy()
+    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === 'weights')).toBeTruthy()
+    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === 'snapshots')).toBeTruthy()
   })
 
   it('souls tab active by default', async () => {
@@ -133,13 +138,20 @@ describe('SoulsPage — tab switching flow', () => {
     })
   })
 
-  it('switching to weights tab loads weights', async () => {
+  it('switching to weights tab loads weights and modes', async () => {
     mockGetTraitWeights.mockResolvedValue({ personality: { warmth: 0.8, humor: 0.5 } })
+    mockGetModes.mockResolvedValue({
+      personality: { label: 'Friendly', confidence: 0.85 },
+      memory: { label: 'Balanced', confidence: 0.6 },
+      style: { label: 'Casual', confidence: 0.7 },
+      task: { label: 'Thorough', confidence: 0.75 },
+    })
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
     await clickTab('Weights')
     await waitFor(() => {
       expect(mockGetTraitWeights).toHaveBeenCalled()
+      expect(mockGetModes).toHaveBeenCalled()
     })
   })
 
@@ -178,8 +190,14 @@ describe('SoulsPage — soul list display flow', () => {
     expect(screen.getAllByText(/active/i).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows soul descriptions', async () => {
+  it('shows soul descriptions in detail dialog', async () => {
     render(<SoulsPage />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1)
+    })
+    // Click on a soul card to open detail dialog
+    const soulCard = screen.getAllByText('Friendly')[0].closest('[class*="cursor-pointer"]')!
+    fireEvent.click(soulCard)
     await waitFor(() => {
       expect(screen.getByText('A warm companion')).toBeTruthy()
     })
@@ -255,6 +273,7 @@ describe('SoulsPage — checkpoints tab flow', () => {
     mockListCheckpoints.mockResolvedValue({ checkpoints: SAMPLE_CHECKPOINTS })
     mockListWeightSnapshots.mockResolvedValue([])
     mockLoadCheckpoint.mockResolvedValue(undefined)
+    mockDeleteCheckpoint.mockResolvedValue(undefined)
   })
   afterEach(() => { cleanup() })
 
@@ -315,6 +334,13 @@ describe('SoulsPage — weights tab flow', () => {
       personality: { warmth: 0.80, humor: 0.50, curiosity: 0.65 },
       cognition: { reasoning: 0.70, memory: 0.55 },
     })
+    mockGetModes.mockResolvedValue({
+      personality: { label: 'Friendly', confidence: 0.85 },
+      memory: { label: 'Balanced', confidence: 0.6 },
+      style: { label: 'Casual', confidence: 0.7 },
+      task: { label: 'Thorough', confidence: 0.75 },
+    })
+    mockSaveTraitWeights.mockResolvedValue({ status: 'saved' })
   })
   afterEach(() => { cleanup() })
 
@@ -332,39 +358,28 @@ describe('SoulsPage — weights tab flow', () => {
     await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
     await clickTab('Weights')
     await waitFor(() => {
-      expect(screen.getByText('personality')).toBeTruthy()
+      expect(screen.getByText('Trait Weights')).toBeTruthy()
     })
   })
 
-  it('displays weight values', async () => {
+  it('shows context modes', async () => {
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
     await clickTab('Weights')
     await waitFor(() => {
-      expect(screen.getByText('0.80')).toBeTruthy()
+      expect(screen.getByText('Context Modes')).toBeTruthy()
+      expect(screen.getByText('Friendly')).toBeTruthy()
     })
   })
 
-  it('shows placeholder when weights not loaded', async () => {
-    mockGetTraitWeights.mockResolvedValue(null)
+  it('save button enabled when weights changed', async () => {
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
     await clickTab('Weights')
-    await waitFor(() => {
-      expect(screen.getAllByText(/click refresh/i).length).toBeGreaterThanOrEqual(1)
-    })
-  })
-
-  it('refresh reloads weights', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Weights')
-    await waitFor(() => { expect(screen.getByText('personality')).toBeTruthy() })
-    const refreshBtn = screen.getAllByRole('button').find(b => b.querySelector('svg'))
-    if (refreshBtn) {
-      await act(async () => { fireEvent.click(refreshBtn) })
-      expect(mockGetTraitWeights).toHaveBeenCalledTimes(2)
-    }
+    await waitFor(() => { expect(screen.getByText('Trait Weights')).toBeTruthy() })
+    // Initially disabled (no changes)
+    const saveBtn = screen.getByText('Save')
+    expect(saveBtn).toBeDisabled()
   })
 })
 
@@ -406,7 +421,7 @@ describe('SoulsPage — snapshots tab flow', () => {
     await waitFor(() => { expect(screen.getByText('v1-baseline')).toBeTruthy() })
     const input = screen.getByPlaceholderText(/snapshot name/i)
     act(() => { fireEvent.change(input, { target: { value: 'new-snap' } }) })
-    const saveBtn = screen.getByText('Save')
+    const saveBtn = screen.getByText(/save/i)
     await act(async () => { fireEvent.click(saveBtn) })
     expect(mockSaveWeightSnapshot).toHaveBeenCalledWith('new-snap')
   })
@@ -415,8 +430,8 @@ describe('SoulsPage — snapshots tab flow', () => {
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
     await clickTab('Snapshots')
-    await waitFor(() => { expect(screen.getByText('Save')).toBeTruthy() })
-    const saveBtn = screen.getByText('Save')
+    await waitFor(() => { expect(screen.getByText(/save/i)).toBeTruthy() })
+    const saveBtn = screen.getByText(/save/i)
     expect(saveBtn).toBeDisabled()
   })
 

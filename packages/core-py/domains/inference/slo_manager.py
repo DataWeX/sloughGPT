@@ -26,6 +26,19 @@ class SloInfo:
     personality: Dict[str, float] = field(default_factory=dict)
     traits: List[str] = field(default_factory=list)
     loaded_at: Optional[float] = None
+    born_at: str = ""
+    training_dataset: str = ""
+    epochs_trained: int = 0
+    final_train_loss: Optional[float] = None
+    final_val_loss: Optional[float] = None
+    lineage: str = ""
+    base_model: str = ""
+    version: str = ""
+    size_mb: float = 0.0
+    behavior: Dict[str, Any] = field(default_factory=dict)
+    cognition: Dict[str, float] = field(default_factory=dict)
+    emotion: Dict[str, float] = field(default_factory=dict)
+    generation_params: Dict[str, Any] = field(default_factory=dict)
 
 
 class SloManager:
@@ -65,9 +78,9 @@ class SloManager:
             logger.warning(f"Slos directory not found: {self.slos_dir}", extra={"tag": "SOUL"})
             return
 
-        # Find personality profiles (.slo) and checkpoint files (.soul)
-        for ext in ("*.slo", "*.soul"):
-            for sou_path in glob.glob(str(self.slos_dir / ext)):
+        # Find personality profiles (.slo) and checkpoint files (.soul) — recursive
+        for ext in ("**/*.slo", "**/*.soul"):
+            for sou_path in glob.glob(str(self.slos_dir / ext), recursive=True):
                 try:
                     soul_info = self._parse_soul_info(sou_path)
                     if soul_info:
@@ -127,12 +140,29 @@ class SloManager:
                                 if isinstance(v, (int, float)) and v > 0.6
                             )
                     personality = config.get("personality", config.get("personality_traits", {}))
+                    try:
+                        size_mb = os.path.getsize(sou_path) / (1024 * 1024)
+                    except OSError:
+                        size_mb = 0.0
                     return SloInfo(
                         name=name,
                         path=sou_path,
                         description=description,
                         personality=personality,
                         traits=list(traits) if isinstance(traits, (list, tuple)) else [],
+                        born_at=config.get("born_at", ""),
+                        training_dataset=config.get("training_dataset", ""),
+                        epochs_trained=config.get("epochs_trained", 0) or 0,
+                        final_train_loss=config.get("final_train_loss"),
+                        final_val_loss=config.get("final_val_loss"),
+                        lineage=config.get("lineage", ""),
+                        base_model=config.get("base_model", ""),
+                        version=config.get("version", ""),
+                        size_mb=size_mb,
+                        behavior=config.get("behavior", {}),
+                        cognition=config.get("cognition", {}),
+                        emotion=config.get("emotion", {}),
+                        generation_params=config.get("generation", {}),
                     )
         except Exception:
             pass  # Not a binary .soul file, try text format below

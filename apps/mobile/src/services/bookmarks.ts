@@ -71,3 +71,7 @@ export async function isBookmarked(content: string, messageId: string): Promise<
   const all = await load();
   return all.some(b => b.content === content && b.sessionId === messageId);
 }
+
+export function _resetCache(): void {
+  cached = null;
+}

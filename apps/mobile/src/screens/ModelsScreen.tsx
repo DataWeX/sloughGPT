@@ -87,7 +87,7 @@ export function ModelsScreen() {
             <Text fontSize={13} color="#EF4444" flex={1}>
               {error}
             </Text>
-            <Pressable onPress={() => { triggerHaptic('light'); clearError(); }}>
+            <Pressable onPress={() => { triggerHaptic('light'); clearError(); }} accessible={true} accessibilityRole="button" accessibilityLabel="Clear error">
               <Icon name="x" size={14} color="#EF4444" />
             </Pressable>
           </XStack>
@@ -145,7 +145,7 @@ export function ModelsScreen() {
             </XStack>
           )}
           {isLoaded && (
-            <Pressable onPress={() => { triggerHaptic('medium'); unloadModel(); }}>
+            <Pressable onPress={() => { triggerHaptic('medium'); unloadModel(); }} accessible={true} accessibilityRole="button">
               <YStack
                 marginTop={12}
                 paddingVertical={8}
@@ -178,7 +178,7 @@ export function ModelsScreen() {
               const label =
                 engine === 'slonet' ? 'SloNet' : engine === 'qwen' ? 'Qwen' : 'Server';
               return (
-                <Pressable key={engine} style={{flex: 1}} onPress={() => { triggerHaptic('selection'); hybrid.setActiveEngine(engine); }}>
+                <Pressable key={engine} style={{flex: 1}} onPress={() => { triggerHaptic('selection'); hybrid.setActiveEngine(engine); }} accessible={true} accessibilityRole="button">
                   <YStack
                     paddingVertical={8}
                     borderRadius={8}
@@ -215,7 +215,7 @@ export function ModelsScreen() {
               </Text>
             </YStack>
             {hybrid.slonet.loaded ? (
-              <Pressable onPress={hybrid.unloadSloNet}>
+              <Pressable onPress={hybrid.unloadSloNet} accessible={true} accessibilityRole="button">
                 <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)">
                   <Text fontSize={13} color="#EF4444" fontWeight="600">Unload</Text>
                 </YStack>
@@ -223,7 +223,7 @@ export function ModelsScreen() {
             ) : hybrid.slonet.downloadProgress !== null && hybrid.slonet.downloadProgress < 1 ? (
               <ActivityIndicator size="small" color={accent} />
             ) : (
-              <Pressable onPress={() => hybrid.loadSloNet()}>
+              <Pressable onPress={() => hybrid.loadSloNet()} accessible={true} accessibilityRole="button">
                 <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor={accent}>
                   <Text fontSize={13} color="white" fontWeight="600">Load</Text>
                 </YStack>
@@ -250,7 +250,7 @@ export function ModelsScreen() {
               </Text>
             </YStack>
             {hybrid.qwen.loaded ? (
-              <Pressable onPress={async () => hybrid.unloadQwen()}>
+              <Pressable onPress={async () => hybrid.unloadQwen()} accessible={true} accessibilityRole="button">
                 <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)">
                   <Text fontSize={13} color="#EF4444" fontWeight="600">Unload</Text>
                 </YStack>
@@ -260,7 +260,7 @@ export function ModelsScreen() {
                 <YStack height="100%" backgroundColor={accent} borderRadius={3} width={`${hybrid.qwen.downloadProgress * 100}%`} />
               </YStack>
             ) : (
-              <Pressable onPress={() => hybrid.loadQwen()}>
+              <Pressable onPress={() => hybrid.loadQwen()} accessible={true} accessibilityRole="button">
                 <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor={accent}>
                   <Text fontSize={13} color="white" fontWeight="600">Download</Text>
                 </YStack>
@@ -293,7 +293,7 @@ export function ModelsScreen() {
               {souls.map(soul => {
                 const isActive = currentSoul?.name === soul.name;
                 return (
-                  <Pressable key={soul.name} onPress={() => { triggerHaptic('selection'); switchSoul(soul.name); }}>
+                  <Pressable key={soul.name} onPress={() => { triggerHaptic('selection'); switchSoul(soul.name); }} accessible={true} accessibilityRole="button">
                     <YStack
                       paddingHorizontal={12}
                       paddingVertical={8}
@@ -327,7 +327,7 @@ export function ModelsScreen() {
               Trained Versions
             </Text>
             {checkpoints.map(cp => (
-              <Pressable key={cp.name} onPress={() => { triggerHaptic('selection'); switchSoul(cp.soul, cp.name); }}>
+              <Pressable key={cp.name} onPress={() => { triggerHaptic('selection'); switchSoul(cp.soul, cp.name); }} accessible={true} accessibilityRole="button">
                 <XStack
                   alignItems="center"
                   justifyContent="space-between"
@@ -388,7 +388,7 @@ export function ModelsScreen() {
           {filteredModels.map(model => {
             const isLoading = loadingModelId === model.id;
             return (
-              <Pressable key={model.id} onPress={() => setDetailModel(model)}>
+              <Pressable key={model.id} onPress={() => setDetailModel(model)} accessible={true} accessibilityRole="button">
                 <XStack
                   alignItems="center"
                   justifyContent="space-between"
@@ -443,7 +443,7 @@ export function ModelsScreen() {
               <Text fontSize={20} fontWeight="600" color="$color" flex={1}>
                 {detailModel?.name}
               </Text>
-              <Pressable onPress={() => setDetailModel(null)}>
+              <Pressable onPress={() => setDetailModel(null)} accessible={true} accessibilityRole="button" accessibilityLabel="Close modal">
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
                   <Icon name="x" size={16} color={(theme.color11?.val || '#827A96')} />
                 </YStack>
@@ -504,13 +504,13 @@ export function ModelsScreen() {
               borderTopWidth={0.5}
               borderTopColor="$borderColor">
               {detailModel?.loaded ? (
-                <Pressable onPress={() => { triggerHaptic('medium'); unloadModel(); setDetailModel(null); }}>
+                <Pressable onPress={() => { triggerHaptic('medium'); unloadModel(); setDetailModel(null); }} accessible={true} accessibilityRole="button">
                   <YStack backgroundColor="rgba(239, 68, 68, 0.08)" paddingVertical={12} borderRadius={10} alignItems="center">
                     <Text fontSize={15} color="#EF4444" fontWeight="600">Unload Model</Text>
                   </YStack>
                 </Pressable>
               ) : (
-                <Pressable onPress={() => { triggerHaptic('medium'); if (detailModel) loadModel(detailModel.id); setDetailModel(null); }}>
+                <Pressable onPress={() => { triggerHaptic('medium'); if (detailModel) loadModel(detailModel.id); setDetailModel(null); }} accessible={true} accessibilityRole="button">
                   <YStack backgroundColor={accent} paddingVertical={12} borderRadius={10} alignItems="center">
                     <Text fontSize={15} color="white" fontWeight="600">Load Model</Text>
                   </YStack>

@@ -15,7 +15,7 @@ import {
   Music, Headphones, Target, Save,
   HelpCircle, User, Book, Square,
   ArchiveX, MessageSquare,
-  SmilePlus,
+  SmilePlus, HeartPulse,
 } from 'lucide-react-native';
 import type {LucideIcon} from 'lucide-react-native';
 export type IconName =
@@ -35,6 +35,7 @@ export type IconName =
   | 'music' | 'headphones' | 'target' | 'save'
   | 'help' | 'user' | 'book' | 'square'
   | 'archive-x' | 'message-square'
+  | 'heart-pulse'
   ;
 
 interface IconProps {
@@ -100,6 +101,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'square': Square,
   'archive-x': ArchiveX,
   'message-square': MessageSquare,
+  'heart-pulse': HeartPulse,
 };
 
 export function Icon({name, size = 20, color = '$color'}: IconProps) {

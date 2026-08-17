@@ -84,7 +84,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">
               Quick Prompts
             </Text>
-            <Pressable onPress={onClose}>
+            <Pressable onPress={onClose} accessible accessibilityRole="button" accessibilityLabel="Close quick prompts">
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
                 <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
               </YStack>
