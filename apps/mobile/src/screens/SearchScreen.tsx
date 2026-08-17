@@ -58,6 +58,7 @@ export function SearchScreen() {
   }, []);
 
   const handleResultPress = async (result: SearchResult) => {
+    triggerHaptic('selection');
     Keyboard.dismiss();
     await loadSession(result.sessionId);
   };

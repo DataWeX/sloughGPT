@@ -166,12 +166,14 @@ export function TrainingScreen() {
       }
       setConfig({dataset_id: selectedDataset, source_text: undefined});
     }
+    triggerHaptic('medium');
     start();
   };
 
   const handleLoadCheckpoint = async (name: string) => {
     setLoadingCheckpoint(name);
     try {
+      triggerHaptic('success');
       await loadCheckpoint(name);
       await modelStore.refresh();
       Alert.alert('Loaded', `Checkpoint ${name} loaded into model`);
@@ -210,7 +212,7 @@ export function TrainingScreen() {
           {error && (
             <XStack alignItems="center" justifyContent="space-between" backgroundColor="rgba(239, 68, 68, 0.08)" padding={12} borderRadius={10}>
               <Text fontSize={13} color="#EF4444" lineHeight={18} flex={1}>{error}</Text>
-              <Pressable onPress={clearError}>
+              <Pressable onPress={() => { triggerHaptic('light'); clearError(); }}>
                 <Icon name="x" size={16} color="#EF4444" />
               </Pressable>
             </XStack>
@@ -647,7 +649,7 @@ borderWidth={0.5}
                 paddingVertical={12}
                 borderRadius={8}
                 alignItems="center"
-                onPress={stop}
+                onPress={() => { triggerHaptic('medium'); stop(); }}
                 pressStyle={{opacity: 0.7}}>
                 <Text fontSize={15} color="#FFFFFF" fontWeight="600" lineHeight={22}>Stop Training</Text>
               </YStack>
