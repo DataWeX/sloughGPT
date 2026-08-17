@@ -195,6 +195,56 @@ class RAGService:
             "index_size": len(self.rag.retriever.bm25.inverted_index),
         }
 
+    def auto_ingest_directory(self, root_path: str, max_files: int = 200) -> int:
+        """Scan a directory and ingest code/docs into RAG.
+
+        Args:
+            root_path: Directory to scan (e.g. the repo root).
+            max_files: Maximum files to ingest (prevents runaway on large repos).
+
+        Returns:
+            Number of files successfully ingested.
+        """
+        try:
+            from domains.infrastructure.auto_ingest import RepoScanner
+        except ImportError:
+            logger.debug("RepoScanner unavailable, skipping auto-ingest")
+            return 0
+
+        scanner = RepoScanner(root_path=root_path)
+        ingested = 0
+        root_resolved = Path(root_path).resolve()
+
+        try:
+            for path, content in scanner.iter_files():
+                if ingested >= max_files:
+                    break
+                try:
+                    if len(content.strip()) < 50:
+                        continue
+                    try:
+                        rel = str(path.relative_to(root_resolved))
+                    except ValueError:
+                        rel = str(path)
+                    self.add_document(
+                        content=content[:8000],
+                        metadata={
+                            "source": "auto-ingest",
+                            "file_path": rel,
+                            "file_type": scanner.get_file_type(path),
+                        },
+                    )
+                    ingested += 1
+                except Exception as e:
+                    logger.debug("auto-ingest file %s failed: %s", path, e)
+                    continue
+        except Exception as e:
+            logger.debug("auto-ingest scan failed: %s", e)
+
+        if ingested > 0:
+            logger.info("Auto-ingested %d files into RAG from %s", ingested, root_path)
+        return ingested
+
 
 # ---------------------------------------------------------------------------
 # Singleton
