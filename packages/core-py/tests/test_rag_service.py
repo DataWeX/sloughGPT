@@ -267,6 +267,8 @@ class TestKBRouterRAGEndpoints:
     def _setup_client(self):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server"))
         from routers.kb import KBRouter
         self.app = FastAPI()
         kb = KBRouter()

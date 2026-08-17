@@ -13,6 +13,7 @@ the chat pipeline by:
 import json
 import hashlib
 import logging
+from pathlib import Path
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional

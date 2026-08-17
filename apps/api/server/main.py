@@ -146,6 +146,21 @@ async def lifespan(app_inst: FastAPI):
         except Exception as e:
             logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
 
+        # Auto-ingest repo docs into production RAG (if empty)
+        try:
+            from domains.cognitive.rag_service import get_rag_service
+            _rag = get_rag_service()
+            if _rag.stats().get("total_chunks", 0) == 0:
+                import threading
+                def _rag_auto_ingest():
+                    try:
+                        _rag.auto_ingest_directory(str(Path(__file__).resolve().parents[3]), max_files=150)
+                    except Exception as e:
+                        logger.debug("RAG auto-ingest failed: %s", e)
+                threading.Thread(target=_rag_auto_ingest, daemon=True).start()
+        except Exception as e:
+            logger.debug("RAG auto-ingest skipped: %s", e)
+
         # Start background daemons (moved from pre-uvicorn to post-startup)
         _start_feedback_workflow()
         _start_health_monitor()
