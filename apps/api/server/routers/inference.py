@@ -88,6 +88,7 @@ class ChatRequest(BaseModel):
     knowledge: Optional[List[str]] = None
     images: Optional[List[str]] = Field(default=None, description="Base64 encoded images")
     use_context_core: bool = Field(default=True, description="Use ContextCore for multi-layer context")
+    use_rag: bool = Field(default=True, description="Use production RAG for document-grounded responses")
     agent_id: Optional[str] = Field(default=None, description="Agent ID for role-based system instructions")
 
 
@@ -727,6 +728,32 @@ class InferenceRouter:
                             break
                     else:
                         provider_messages.insert(0, {"role": "system", "content": frame.system_prompt})
+
+            # Production RAG: query for relevant context from ingested documents
+            rag_context = ""
+            rag_info = {}
+            if req.use_rag:
+                try:
+                    from domains.cognitive.rag_service import get_rag_service
+                    rag_svc = get_rag_service()
+                    if rag_svc.stats().get("total_chunks", 0) > 0:
+                        rag_result = await asyncio.to_thread(rag_svc.query, user_msg, 5)
+                        if rag_result.get("num_results", 0) > 0:
+                            rag_context = rag_result["context"]
+                            rag_info = {
+                                "num_results": rag_result["num_results"],
+                                "results": [
+                                    {"score": r["score"], "rank": r["rank"], "source": r["metadata"].get("source", "unknown")}
+                                    for r in rag_result.get("results", [])
+                                ],
+                            }
+                            # Inject RAG context into system prompt or as a user context message
+                            rag_block = f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{rag_context}"
+                            # Prepend as user context before the conversation
+                            provider_messages.insert(0, {"role": "system", "content": rag_block})
+                            logger.debug("RAG injected %d passages into chat context", rag_result["num_results"])
+                except Exception as e:
+                    logger.debug("RAG query skipped: %s", e)
 
             if req.agent_id:
                 try:

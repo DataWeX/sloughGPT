@@ -48,7 +48,10 @@ class TestRunBenchmark:
         mock_ctrl._last_inference_time = 100.0
         mock_ctrl._total_tokens_generated = 500
         mock_ctrl._inference_count = 10
-        with patch("controllers.models.get_models_controller", return_value=mock_ctrl):
+        mock_state = MagicMock()
+        mock_state.model.get.return_value = MagicMock()
+        with patch("controllers.models.get_models_controller", return_value=mock_ctrl), \
+             patch("domains.infrastructure.server_state.get_server_state", return_value=mock_state):
             client = TestClient(_app(br))
             resp = client.post("/benchmark/run?model=gpt2")
         assert resp.status_code == 200

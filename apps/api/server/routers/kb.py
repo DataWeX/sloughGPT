@@ -88,6 +88,23 @@ class BulkIngestRequest(BaseModel):
     dedup_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
 
 
+class RAGIngestRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=100000)
+    source: str = Field(default="user", max_length=200)
+    topic: str = Field(default="general", max_length=100)
+    chunk_size: int = Field(default=512, ge=64, le=4096)
+
+
+class RAGQueryRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=2000)
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class RAGVerifyRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=50000)
+    question: str = Field(..., min_length=1, max_length=2000)
+
+
 class KBRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -123,6 +140,14 @@ class KBRouter:
         self.router.add_api_route("/reviews/due", self.get_due_reviews, methods=["GET"])
         self.router.add_api_route("/reviews/{item_id}/schedule", self.schedule_review, methods=["POST"])
         self.router.add_api_route("/label", self.label_text, methods=["GET"])
+
+        # Production RAG endpoints
+        self.router.add_api_route("/rag/ingest", self.rag_ingest, methods=["POST"])
+        self.router.add_api_route("/rag/query", self.rag_query, methods=["POST"])
+        self.router.add_api_route("/rag/verify", self.rag_verify, methods=["POST"])
+        self.router.add_api_route("/rag/documents", self.rag_list_documents, methods=["GET"])
+        self.router.add_api_route("/rag/clear", self.rag_clear, methods=["POST"])
+        self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
 
     def _get_memory(self):
         from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
@@ -820,6 +845,69 @@ class KBRouter:
         labeler = get_truth_labeler()
         result = labeler.label(text)
         return success_response(data=result.to_dict())
+
+    # ── Production RAG Endpoints ───────────────────────────────────────────
+
+    def rag_ingest(self, req: RAGIngestRequest):
+        """Ingest a document into the production RAG index.
+
+        The document is chunked with overlap, embedded via n-gram TF-IDF,
+        and indexed for hybrid (BM25 + dense) retrieval.
+        """
+        from domains.cognitive.rag_service import get_rag_service
+        rag_svc = get_rag_service()
+        chunk_ids = rag_svc.add_document(
+            content=req.content,
+            metadata={"source": req.source, "topic": req.topic},
+            chunk_size=req.chunk_size,
+        )
+        return success_response(data={
+            "chunk_ids": chunk_ids,
+            "num_chunks": len(chunk_ids),
+            "stats": rag_svc.stats(),
+        })
+
+    def rag_query(self, req: RAGQueryRequest):
+        """Query the production RAG index for relevant context.
+
+        Returns ranked results with BM25 + dense scores and combined ranking.
+        """
+        from domains.cognitive.rag_service import get_rag_service
+        rag_svc = get_rag_service()
+        result = rag_svc.query(req.question, top_k=req.top_k)
+        return success_response(data=result)
+
+    def rag_verify(self, req: RAGVerifyRequest):
+        """Verify generated text against the RAG index for hallucinations.
+
+        Returns grounded claims, hallucination rate, and citations.
+        """
+        from domains.cognitive.rag_service import get_rag_service
+        rag_svc = get_rag_service()
+        result = rag_svc.verify_and_ground(req.text, req.question)
+        return success_response(data=result)
+
+    def rag_list_documents(self):
+        """List all documents in the RAG index (metadata only)."""
+        from domains.cognitive.rag_service import get_rag_service
+        rag_svc = get_rag_service()
+        return success_response(data={
+            "documents": rag_svc.list_documents(),
+            "stats": rag_svc.stats(),
+        })
+
+    def rag_clear(self):
+        """Clear the entire RAG index and persisted documents."""
+        from domains.cognitive.rag_service import get_rag_service
+        rag_svc = get_rag_service()
+        count = rag_svc.clear()
+        return success_response(data={"cleared": count})
+
+    def rag_stats(self):
+        """Return RAG index statistics."""
+        from domains.cognitive.rag_service import get_rag_service
+        rag_svc = get_rag_service()
+        return success_response(data=rag_svc.stats())
 
 
 router = KBRouter().router

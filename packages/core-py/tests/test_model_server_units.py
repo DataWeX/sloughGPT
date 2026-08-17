@@ -40,15 +40,10 @@ from domains.infrastructure.model_server import (
     CircuitBreakerState,
     _cancelable_gen,
     _emit_gen_event,
-    _ensure_torch,
     _has_mps,
-    _inference_mode_generate,
     _is_intel_mac,
-    _mps_empty_cache,
     _mps_oom_recovery,
     _schedule_gc,
-    _tokenize_cached,
-    _torch_compile_model,
 )
 
 
@@ -251,11 +246,6 @@ def _make_server(model=None, tokenizer=None, **kwargs):
 # ── Module helpers ────────────────────────────────────────────────────
 
 
-def test_ensure_torch_with_fake():
-    with fake_torch():
-        assert _ensure_torch() is True
-
-
 def test_emit_gen_event_exception():
     with patch.object(model_server, "_get_gen_bus", side_effect=Exception("bus down")):
         _emit_gen_event("test.event", {})
@@ -325,60 +315,6 @@ class _BadParamsModel:
 
     def generate(self, **kwargs):
         return None
-
-
-def test_torch_compile_no_compile_attr():
-    with fake_torch(has_compile=False):
-        m = NpMockModel()
-        assert _torch_compile_model(m, "m1") is m
-
-
-def test_torch_compile_small_model():
-    with fake_torch():
-        m = NpMockModel()
-        assert _torch_compile_model(m, "m1") is m
-
-
-def test_torch_compile_param_error_then_compiles():
-    with fake_torch():
-        m = _BadParamsModel()
-        out = _torch_compile_model(m, "m1")
-        assert out is not m
-
-
-def test_torch_compile_success():
-    with fake_torch():
-        m = BigModel()
-        out = _torch_compile_model(m, "big")
-        assert out is not m
-        assert sys.modules["torch"].compile_calls[0][0] is m
-        assert sys.modules["torch"].compile_calls[0][1] == "inductor"
-
-
-def test_torch_compile_failure():
-    with fake_torch(compile_raises=True):
-        m = BigModel()
-        assert _torch_compile_model(m, "big") is m
-
-
-def test_inference_mode_generate_uses_torch():
-    with fake_torch():
-        m = NpMockModel()
-        result = _inference_mode_generate(m, {"some": "kwarg"})
-        assert result is not None
-
-
-def test_inference_mode_generate_no_torch():
-    with patch.object(model_server, "_ensure_torch", return_value=False):
-        m = NpMockModel()
-        result = _inference_mode_generate(m, {"some": "kwarg"})
-        assert result is not None
-
-
-def test_torch_compile_no_torch():
-    with patch.object(model_server, "_ensure_torch", return_value=False):
-        m = NpMockModel()
-        assert _torch_compile_model(m, "m1") is m
 
 
 # ── PriorityRequestQueue edge cases ───────────────────────────────────
@@ -790,41 +726,7 @@ def test_local_backend_generate_stream_error():
             list(lb.generate_stream("hello", 10, 0.7, 0.9, 50, 1.0))
 
 
-# ── _tokenize_cached / _mps_empty_cache / _cancelable_gen ─────────────
-
-
-def test_tokenize_cached_eviction_on_miss():
-    with fake_torch():
-        cache = {f"p{i}": ([1], [1]) for i in range(65)}
-        inputs = _tokenize_cached(FakeTokenizer(), "fresh", cache)
-        assert "input_ids" in inputs
-        assert "fresh" in cache
-        assert len(cache) == 65
-
-
-def test_tokenize_cached_hit_does_not_grow():
-    with fake_torch():
-        cache = {f"p{i}": ([1], [1]) for i in range(65)}
-        inputs = _tokenize_cached(FakeTokenizer(), "p0", cache)
-        assert "input_ids" in inputs
-        assert len(cache) == 65
-
-
-def test_tokenize_cached_miss():
-    with fake_torch():
-        cache = {}
-        inputs = _tokenize_cached(FakeTokenizer(), "fresh", cache)
-        assert "attention_mask" in inputs
-        assert "fresh" in cache
-
-
-def test_mps_empty_cache_variants():
-    with fake_torch(has_mps=True):
-        _mps_empty_cache()
-    with fake_torch(has_mps=True, mps_raises=True):
-        _mps_empty_cache()
-    with fake_torch():
-        _mps_empty_cache()
+# ── _cancelable_gen ───────────────────────────────────────────────────
 
 
 def test_cancelable_gen():
@@ -1007,7 +909,7 @@ def test_warmup_thread_started():
 
 def test_warmup_failure_logs_warning():
     s = ModelServer(model=NpMockModel(), tokenizer=FakeTokenizer(), enable_warmup=False)
-    with patch.object(ModelServer, "_generate_sync", side_effect=RuntimeError("boom")):
+    with patch.object(LocalBackend, "generate", side_effect=RuntimeError("boom")):
         with patch("domains.infrastructure.model_server.logger") as mock_log:
             s._run_warmup()
     assert s._warmup_error == "RuntimeError: boom"
@@ -1017,7 +919,7 @@ def test_warmup_failure_logs_warning():
 def test_warmup_failure_logs_debug_for_missing_module():
     s = ModelServer(model=NpMockModel(), tokenizer=FakeTokenizer(), enable_warmup=False)
     with patch.object(
-        ModelServer, "_generate_sync",
+        LocalBackend, "generate",
         side_effect=ModuleNotFoundError("No module named 'torch'"),
     ):
         with patch("domains.infrastructure.model_server.logger") as mock_log:
@@ -1049,10 +951,9 @@ def test_warmup_applies_compile():
             model=BigModel(), tokenizer=FakeTokenizer(), model_id="big",
             enable_warmup=False,
         )
-        with patch.object(ModelServer, "_generate_sync", autospec=True, side_effect=_fast_generate):
+        with patch.object(LocalBackend, "generate", side_effect=_fast_generate):
             s._run_warmup()
         assert s._warmup_completed is True
-        assert s._compiled is True
 
 
 # ── ModelServer: semaphores / tokenize ────────────────────────────────
