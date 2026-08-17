@@ -251,18 +251,26 @@ export const trainingJobsController = {
     return apiPost<TrainingStatus>('/training/start', params)
   },
 
-  async startHFFineTune(params: {
-    model: string
+  async startLoraFinetune(params: {
+    model_path: string
     dataset: string
     name?: string
+    rank?: number
+    alpha?: number
+    dropout?: number
+    target_modules?: string[]
     epochs?: number
     batch_size?: number
     learning_rate?: number
-    use_lora?: boolean
-    lora_rank?: number
     max_seq_length?: number
+    warmup_steps?: number
+    weight_decay?: number
+    gradient_clip?: number
+    log_interval?: number
+    eval_interval?: number
+    device?: string
   }): Promise<{ job_id: string; status: string; message: string }> {
-    return apiPost('/training/hf-start', params)
+    return apiPost('/training/lora-finetune', params)
   },
 
   async startQuick(params: {

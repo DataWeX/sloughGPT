@@ -213,6 +213,61 @@ class TestGenerateNumpyLora:
 
         np.testing.assert_array_equal(out1, out2)
 
+    def test_generate_numpy_lora_with_temperature(self):
+        """LoRA generation should work with temperature sampling."""
+        model = _make_tiny_model(vocab_size=64, n_embed=32, n_layer=2, n_head=2)
+        config = LoRAConfig(rank=4, alpha=8.0, target_modules=["W_q", "W_v"])
+        model = apply_lora_to_model(model, config)
+
+        input_ids = np.array([[1, 2, 3]], dtype=np.int64)
+        output = model.generate_numpy(input_ids, max_new_tokens=5, temperature=0.8)
+
+        assert output.shape == (1, 8)
+        assert np.all(output[:, :3] == input_ids)
+        assert np.isfinite(output).all()
+
+    def test_generate_numpy_lora_with_top_k(self):
+        """LoRA generation should work with top-k sampling."""
+        model = _make_tiny_model(vocab_size=64, n_embed=32, n_layer=2, n_head=2)
+        config = LoRAConfig(rank=4, alpha=8.0, target_modules=["W_q", "W_v"])
+        model = apply_lora_to_model(model, config)
+
+        input_ids = np.array([[1, 2, 3]], dtype=np.int64)
+        output = model.generate_numpy(input_ids, max_new_tokens=5, temperature=0.5, top_k=10)
+
+        assert output.shape == (1, 8)
+        assert np.all(output[:, :3] == input_ids)
+        assert np.isfinite(output).all()
+
+    def test_generate_numpy_lora_with_top_p(self):
+        """LoRA generation should work with nucleus sampling."""
+        model = _make_tiny_model(vocab_size=64, n_embed=32, n_layer=2, n_head=2)
+        config = LoRAConfig(rank=4, alpha=8.0, target_modules=["W_q", "W_v"])
+        model = apply_lora_to_model(model, config)
+
+        input_ids = np.array([[1, 2, 3]], dtype=np.int64)
+        output = model.generate_numpy(input_ids, max_new_tokens=5, temperature=0.5, top_p=0.9)
+
+        assert output.shape == (1, 8)
+        assert np.all(output[:, :3] == input_ids)
+        assert np.isfinite(output).all()
+
+    def test_generate_numpy_lora_with_repetition_penalty(self):
+        """LoRA generation should work with repetition penalty."""
+        model = _make_tiny_model(vocab_size=64, n_embed=32, n_layer=2, n_head=2)
+        config = LoRAConfig(rank=4, alpha=8.0, target_modules=["W_q", "W_v"])
+        model = apply_lora_to_model(model, config)
+
+        input_ids = np.array([[1, 2, 3]], dtype=np.int64)
+        output = model.generate_numpy(
+            input_ids, max_new_tokens=5, temperature=0.5,
+            repetition_penalty=1.2,
+        )
+
+        assert output.shape == (1, 8)
+        assert np.all(output[:, :3] == input_ids)
+        assert np.isfinite(output).all()
+
 
 # ============================================================================
 # LoRA parameter extraction tests

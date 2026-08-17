@@ -37,7 +37,7 @@ except ImportError:
 
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
-from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, DistillStartRequest
+from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, DistillStartRequest, LoraFinetuneRequest
 from .controller import get_training_controller, TrainingState
 from .webhooks import (
     get_webhook_store,
@@ -1030,6 +1030,144 @@ async def start_distillation(request: DistillStartRequest):
         "job_id": job_id,
         "status": "queued",
         "message": f"Distillation started: teacher={request.teacher_model} epochs={request.epochs}",
+    }
+
+
+# ── LoRA Fine-tuning ──────────────────────────────────────────────
+
+
+@router.post("/training/lora-finetune")
+async def start_lora_finetune(request: LoraFinetuneRequest):
+    """LoRA fine-tuning on .slnc models using SloNet numpy autograd (no PyTorch).
+
+    Trains low-rank adapters on top of a .slnc model. The adapter is saved
+    as a .npz file alongside the base model. Uses HFLoraTrainer from
+    domains.training.hf_lora_finetune.
+    """
+    import uuid
+
+    job_id = f"lora_{uuid.uuid4().hex[:8]}"
+
+    # Validate model path
+    model_path = Path(request.model_path)
+    if not model_path.is_file():
+        # Try relative to models/ directory
+        repo_root = Path(__file__).resolve().parents[4]
+        alt_path = repo_root / "models" / request.model_path
+        if alt_path.is_file():
+            model_path = alt_path
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model not found: {request.model_path}. Provide a .slnc file path.",
+            )
+
+    # Validate dataset
+    repo_root = Path(__file__).resolve().parents[4]
+    datasets_dir = repo_root / "datasets"
+    data_dir = datasets_dir / request.dataset
+    data_path = None
+    if data_dir.is_dir():
+        for candidate in ["input.txt", "corpus.jsonl", "train.txt"]:
+            p = data_dir / candidate
+            if p.is_file():
+                data_path = p
+                break
+    if data_path is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dataset not found: {request.dataset}. Use POST /datasets/import/local first.",
+        )
+
+    # Create job record
+    job: dict[str, Any] = {
+        "id": job_id,
+        "name": request.name or f"LoRA-{request.dataset}-{request.rank}",
+        "type": "lora-finetune",
+        "status": "queued",
+        "progress": 0,
+        "model_path": str(model_path),
+        "dataset": request.dataset,
+        "rank": request.rank,
+        "alpha": request.alpha,
+        "epochs": request.epochs,
+        "loss": None,
+        "error": None,
+        "result": None,
+        "loss_history": [],
+    }
+    training_jobs[job_id] = job
+
+    def run_lora_finetune(job_id_: str = job_id):
+        try:
+            from domains.training.hf_lora_finetune import HFLoraTrainer, HFLoraConfig
+
+            def on_progress(info: dict[str, Any]) -> None:
+                rec = training_jobs.get(job_id)
+                if not rec:
+                    return
+                rec["progress"] = info.get("progress", rec.get("progress", 0))
+                rec["current_epoch"] = info.get("epoch", 0)
+                loss = info.get("loss")
+                if loss is not None:
+                    rec["loss"] = float(loss)
+                    rec.setdefault("loss_history", []).append(
+                        {"step": info.get("step", 0), "value": float(loss)}
+                    )
+
+            config = HFLoraConfig(
+                model_path=str(model_path),
+                data_path=str(data_path),
+                rank=request.rank,
+                alpha=request.alpha,
+                dropout=request.dropout,
+                target_modules=request.target_modules,
+                epochs=request.epochs,
+                batch_size=request.batch_size,
+                learning_rate=request.learning_rate,
+                max_seq_length=request.max_seq_length,
+                warmup_steps=request.warmup_steps,
+                weight_decay=request.weight_decay,
+                gradient_clip=request.gradient_clip,
+                log_interval=request.log_interval,
+                eval_interval=request.eval_interval,
+                device=request.device,
+            )
+
+            trainer = HFLoraTrainer(config)
+            result = trainer.train(on_progress=on_progress)
+
+            training_jobs[job_id].update({
+                "status": "completed",
+                "progress": 100,
+                "loss": result.final_loss,
+                "result": {
+                    "adapter_path": result.model_path,
+                    "total_steps": result.total_steps,
+                    "final_loss": result.final_loss,
+                    "epochs_completed": result.epochs_completed,
+                },
+                "checkpoint": result.model_path,
+            })
+
+            logger.info(
+                "LoRA fine-tune complete: %s loss=%.4f",
+                result.model_path, result.final_loss or 0,
+                extra={"tag": "TRAIN"},
+            )
+
+        except Exception as exc:
+            logger.exception("LoRA fine-tune job %s failed", job_id, extra={"tag": "TRAIN"})
+            training_jobs[job_id]["status"] = "failed"
+            training_jobs[job_id]["error"] = str(exc)
+
+    executor = get_training_executor()
+    executor.submit(run_lora_finetune, job_id)
+
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "message": f"LoRA fine-tune started: rank={request.rank} epochs={request.epochs} dataset={request.dataset}",
     }
 
 

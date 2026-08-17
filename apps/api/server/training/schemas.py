@@ -132,3 +132,28 @@ class DistillStartRequest(BaseModel):
     n_layers: int = 2
     n_heads: int = 4
     block_size: int = 64
+
+
+class LoraFinetuneRequest(BaseModel):
+    """LoRA fine-tuning on .slnc models using SloNet numpy autograd (no PyTorch).
+
+    Trains low-rank adapters on top of any model loaded via SloNetChatProvider.
+    Adapter is saved as a .npz file alongside the base model.
+    """
+    model_path: str = Field(description="Path to .slnc model file")
+    dataset: str = Field(description="Dataset folder under datasets/")
+    name: Optional[str] = None
+    rank: int = Field(default=8, ge=1, le=256)
+    alpha: float = Field(default=16.0, ge=0.1)
+    dropout: float = Field(default=0.0, ge=0.0, le=0.5)
+    target_modules: Optional[List[str]] = Field(default=None, description="Modules to apply LoRA to (default: W_q, W_k, W_v, W_o)")
+    epochs: int = Field(default=3, ge=1, le=100)
+    batch_size: int = Field(default=8, ge=1, le=256)
+    learning_rate: float = Field(default=1e-4, gt=0)
+    max_seq_length: int = Field(default=128, ge=16, le=2048)
+    warmup_steps: int = Field(default=10, ge=0)
+    weight_decay: float = Field(default=0.01, ge=0.0)
+    gradient_clip: float = Field(default=1.0, ge=0.0)
+    log_interval: int = Field(default=10, ge=1)
+    eval_interval: int = Field(default=50, ge=1)
+    device: Optional[str] = None

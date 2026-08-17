@@ -137,27 +137,35 @@ describe('trainingJobsController.create', () => {
   })
 })
 
-describe('trainingJobsController.startHFFineTune', () => {
+describe('trainingJobsController.startLoraFinetune', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /training/hf-start', async () => {
-    apiClient.apiPost.mockResolvedValue({ job_id: 'hf1', status: 'started', message: 'ok' })
-    const result = await trainingJobsController.startHFFineTune({
-      model: 'gpt2',
+  it('POSTs to /training/lora-finetune', async () => {
+    apiClient.apiPost.mockResolvedValue({ job_id: 'lora1', status: 'queued', message: 'ok' })
+    const result = await trainingJobsController.startLoraFinetune({
+      model_path: 'models/gpt2.slnc',
       dataset: 'shakespeare',
     })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/hf-start', {
-      model: 'gpt2',
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/lora-finetune', {
+      model_path: 'models/gpt2.slnc',
       dataset: 'shakespeare',
       name: undefined,
+      rank: undefined,
+      alpha: undefined,
+      dropout: undefined,
+      target_modules: undefined,
       epochs: undefined,
       batch_size: undefined,
       learning_rate: undefined,
-      use_lora: undefined,
-      lora_rank: undefined,
       max_seq_length: undefined,
+      warmup_steps: undefined,
+      weight_decay: undefined,
+      gradient_clip: undefined,
+      log_interval: undefined,
+      eval_interval: undefined,
+      device: undefined,
     })
-    expect(result.job_id).toBe('hf1')
+    expect(result.job_id).toBe('lora1')
   })
 })
 
