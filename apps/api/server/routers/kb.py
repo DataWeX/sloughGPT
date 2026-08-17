@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import time
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response, error_response, safe_audit_log
 
 import urllib.parse
 
@@ -148,6 +148,8 @@ class KBRouter:
         self.router.add_api_route("/rag/documents", self.rag_list_documents, methods=["GET"])
         self.router.add_api_route("/rag/clear", self.rag_clear, methods=["POST"])
         self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
+        self.router.add_api_route("/kg/sync", self.kg_sync_to_rag, methods=["POST"])
+        self.router.add_api_route("/kg/pipeline-stats", self.kg_pipeline_stats, methods=["GET"])
 
     def _get_memory(self):
         from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
@@ -265,16 +267,12 @@ class KBRouter:
             except Exception:
                 pass
 
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "knowledge.add",
-                resource=topic or "general",
-                detail="stored" if is_new else "duplicate",
-                extra={"source": req.source or ""},
-            )
-        except Exception:
-            pass
+        safe_audit_log(
+            "knowledge.add",
+            resource=topic or "general",
+            detail="stored" if is_new else "duplicate",
+            source=req.source or "",
+        )
         return success_response(data={"status": "stored" if is_new else "duplicate", "id": item_id, "content": req.content, "topic": topic, "label": label})
 
     def update_knowledge(self, item_id: str, req: KnowledgeUpdate):
@@ -303,11 +301,7 @@ class KBRouter:
         # Delete old, add new
         memory.delete_by_id(item_id)
         ok = memory.add_fact(new_fact)
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("knowledge.update", resource=item_id, detail="updated" if ok else "stored")
-        except Exception:
-            pass
+        safe_audit_log("knowledge.update", resource=item_id, detail="updated" if ok else "stored")
         return success_response(data={"status": "updated" if ok else "stored"})
 
     def batch_ingest(self, req: KnowledgeBatchRequest):
@@ -325,11 +319,7 @@ class KBRouter:
             )
             if memory.add_fact(fact):
                 stored += 1
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("knowledge.add", resource="batch", detail=f"stored={stored}")
-        except Exception:
-            pass
+        safe_audit_log("knowledge.add", resource="batch", detail=f"stored={stored}")
         return success_response(data={"stored": stored})
 
     def search_knowledge(self, query: str = ""):
@@ -414,16 +404,12 @@ class KBRouter:
                 except Exception:
                     pass
 
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "knowledge.add",
-                    resource=req.url,
-                    detail="url",
-                    extra={"new_facts": result.get("new_facts", 0), "rejected": result.get("rejected", False)},
-                )
-            except Exception:
-                pass
+            safe_audit_log(
+                "knowledge.add",
+                resource=req.url,
+                detail="url",
+                new_facts=result.get("new_facts", 0), rejected=result.get("rejected", False),
+            )
             return success_response(data={
                 "status": result.get("status", "ok"),
                 "new_facts": result.get("new_facts", 0),
@@ -447,11 +433,7 @@ class KBRouter:
         for item_id in req.ids:
             if memory.delete_by_id(item_id):
                 deleted += 1
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("knowledge.batch.delete", resource="batch", detail=f"deleted={deleted}")
-        except Exception:
-            pass
+        safe_audit_log("knowledge.batch.delete", resource="batch", detail=f"deleted={deleted}")
         return success_response(data={"deleted": deleted})
 
     def suggest_topic(self, req: SuggestTopicRequest):
@@ -462,11 +444,7 @@ class KBRouter:
     def delete_knowledge(self, item_id: str):
         memory = self._get_memory()
         if memory.delete_by_id(item_id):
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log("knowledge.delete", resource=item_id)
-            except Exception:
-                pass
+            safe_audit_log("knowledge.delete", resource=item_id)
             return success_response(data={"status": "deleted"})
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -482,15 +460,11 @@ class KBRouter:
         )
 
         status = get_adapter_status()
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "knowledge.train",
-                resource="adapter",
-                extra={"facts": len(facts), "status": result.get("status", "")},
-            )
-        except Exception:
-            pass
+        safe_audit_log(
+            "knowledge.train",
+            resource="adapter",
+            facts=len(facts), status=result.get("status", ""),
+        )
         return success_response(data={**result, "adapter_status": status})
 
     def knowledge_adapter_status(self):
@@ -747,16 +721,12 @@ class KBRouter:
             dedup_threshold=req.dedup_threshold,
         )
 
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "knowledge.add",
-                resource=req.topic or "bulk",
-                detail="bulk",
-                extra={"added": report.get("added", 0), "skipped": report.get("skipped", 0)},
-            )
-        except Exception:
-            pass
+        safe_audit_log(
+            "knowledge.add",
+            resource=req.topic or "bulk",
+            detail="bulk",
+            added=report.get("added", 0), skipped=report.get("skipped", 0),
+        )
         return {
             "status": "completed",
             **report,
@@ -942,6 +912,20 @@ class KBRouter:
         from domains.cognitive.rag_service import get_rag_service
         rag_svc = get_rag_service()
         return success_response(data=rag_svc.stats())
+
+    def kg_sync_to_rag(self):
+        """Sync all KG triples into the RAG index via the training pipeline."""
+        from domains.cognitive.rag_service import KGTrainingPipeline, get_rag_service
+        rag_svc = get_rag_service()
+        pipeline = KGTrainingPipeline(rag_service=rag_svc)
+        result = pipeline.sync_kg_to_rag()
+        return success_response(data=result)
+
+    def kg_pipeline_stats(self):
+        """Return KG → RAG pipeline queue stats."""
+        from domains.cognitive.rag_service import KGTrainingPipeline
+        pipeline = KGTrainingPipeline()
+        return success_response(data=pipeline.stats())
 
 
 router = KBRouter().router

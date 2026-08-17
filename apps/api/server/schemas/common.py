@@ -138,3 +138,24 @@ def wrap_controller_result(
         msg = result.get("error") or result.get("message") or "Operation failed"
         return error_response(msg, error_code, details=result)
     return success_response(data=result)
+
+
+def safe_audit_log(
+    action: str,
+    resource: str = "",
+    detail: str = "",
+    **kwargs: Any,
+) -> None:
+    """Log an audit event without crashing on failure.
+
+    Args:
+        action: The action being logged (e.g. 'knowledge.add').
+        resource: The resource being acted upon.
+        detail: Human-readable detail string.
+        **kwargs: Extra fields forwarded to the audit logger.
+    """
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log(action, resource=resource, detail=detail, **kwargs)
+    except Exception:
+        pass
