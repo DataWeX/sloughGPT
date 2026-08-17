@@ -58,7 +58,8 @@ export function ChatScreen() {
               width={36} height={36} borderRadius={12}
               alignItems="center" justifyContent="center"
               onPress={() => a.setShowDrawer(true)}
-              pressStyle={{opacity: 0.6, scale: 0.95}}>
+              pressStyle={{opacity: 0.6, scale: 0.95}}
+              accessible accessibilityRole="button" accessibilityLabel="Open menu">
               <Icon name="menu" size={18} color={(theme.color11?.val || '#6B7280')} />
             </YStack>
             <YStack
@@ -89,13 +90,26 @@ export function ChatScreen() {
             </YStack>
           </XStack>
 
-          <YStack
-            width={36} height={36} borderRadius={12}
-            alignItems="center" justifyContent="center"
-            onPress={() => a.setShowSettings(true)}
-            pressStyle={{opacity: 0.6, scale: 0.95}}>
-            <Icon name="more-vertical" size={18} color={(theme.color11?.val || '#6B7280')} />
-          </YStack>
+          <XStack alignItems="center" gap={4}>
+            {a.messages.length > 0 && (
+              <YStack
+                width={36} height={36} borderRadius={12}
+                alignItems="center" justifyContent="center"
+                onPress={a.handleExportChat}
+                pressStyle={{opacity: 0.6, scale: 0.95}}
+                accessible accessibilityRole="button" accessibilityLabel="Export conversation">
+                <Icon name="share-2" size={18} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
+            )}
+            <YStack
+              width={36} height={36} borderRadius={12}
+              alignItems="center" justifyContent="center"
+              onPress={() => a.setShowSettings(true)}
+              pressStyle={{opacity: 0.6, scale: 0.95}}
+              accessible accessibilityRole="button" accessibilityLabel="Settings">
+              <Icon name="more-vertical" size={18} color={(theme.color11?.val || '#6B7280')} />
+            </YStack>
+          </XStack>
         </XStack>
 
         {a.error && (
@@ -150,7 +164,8 @@ export function ChatScreen() {
               alignItems="center" justifyContent="center"
               backgroundColor="rgba(124, 82, 196, 0.06)"
               onPress={() => { a.setShowSearch(false); a.setSearchQuery(''); }}
-              pressStyle={{opacity: 0.6}}>
+              pressStyle={{opacity: 0.6}}
+              accessible accessibilityRole="button" accessibilityLabel="Close search">
               <Icon name="x" size={14} color={(theme.color10?.val || '#9CA3AF')} />
             </YStack>
           </XStack>
@@ -218,6 +233,9 @@ export function ChatScreen() {
               contentContainerStyle={{paddingTop: 8, paddingBottom: 8}}
               onScroll={a.onScroll}
               scrollEventThrottle={16}
+              removeClippedSubviews
+              maxToRenderPerBatch={10}
+              windowSize={11}
               refreshControl={
                 <RefreshControl
                   refreshing={a.refreshing}
@@ -351,7 +369,8 @@ export function ChatScreen() {
             shadowRadius={12}
             elevation={6}
             onPress={() => flatListRef.current?.scrollToEnd({animated: true})}
-            pressStyle={{opacity: 0.7, scale: 0.9}}>
+            pressStyle={{opacity: 0.7, scale: 0.9}}
+            accessible accessibilityRole="button" accessibilityLabel="Jump to bottom">
             <Icon name="arrow-down" size={18} color="$color9" />
           </YStack>
         )}

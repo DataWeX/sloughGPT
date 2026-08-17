@@ -1,5 +1,5 @@
 import {useEffect, useState, useCallback, useRef} from 'react';
-import {FlatList, Alert, Share} from 'react-native';
+import {FlatList, Alert} from 'react-native';
 import {useChatStore} from '../stores/chat-store';
 import {useModelStore} from '../stores/model-store';
 import {useOnlineStatus} from './useOnlineStatus';
@@ -10,6 +10,7 @@ import {pickImage, imageDataUrl} from '../services/image-upload';
 import {startRecording, transcribeAudio} from '../services/voice-input';
 import {toast} from '../services/toast';
 import {useSettingsStore} from '../stores/settings-store';
+import {shareConversation} from '../services/conversation-export';
 import * as pinsService from '../services/pins';
 import * as starsService from '../services/stars';
 import * as labelsService from '../services/labels';
@@ -280,16 +281,13 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
       toast.info('Nothing to export');
       return;
     }
-    const lines = messages.map(m => {
-      const role = m.role === 'user' ? 'You' : 'Assistant';
-      return `**${role}:** ${m.content}`;
-    });
-    const md = `# Conversation\n\n${lines.join('\n\n')}`;
-    try {
-      await Share.share({message: md, title: 'Conversation'});
-      toast.success('Exported');
-    } catch {}
-  }, [activeSessionId, messages]);
+    const session = sessions.find(s => s.id === activeSessionId);
+    const shared = await shareConversation(messages, session?.name);
+    if (shared) {
+      triggerHaptic('success');
+      toast.success('Conversation exported');
+    }
+  }, [activeSessionId, messages, sessions]);
 
   const renderItem = useCallback(
     ({item}: {item: Message}) => {
