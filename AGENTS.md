@@ -1,5 +1,17 @@
 # Agents
 
+## MANDATORY — Session Checklist
+Every session MUST do these three things. No exceptions.
+
+```
+1. notes new "Session title" --tags area,subarea --status wip   ← FIRST action
+2. (work happens)
+3. notes edit <id> --status done --body "Summary"               ← BEFORE done
+4. sync-notes-to-board                                           ← AFTER commit
+```
+
+If you skip step 1, you're doing it wrong. Go back and create the note.
+
 ## Doc-First Workflow
 Before any edit, read the relevant docs for the area. Use `opencode doc-aware` to load context:
 - Frontend → `docs/UI_INTEGRATION_README.md`, `docs/API.md`
