@@ -484,9 +484,24 @@ def distill_gpt2_to_slo(
         # Extract training state from checkpoint metadata
         if hasattr(student, 'metadata') and student.metadata:
             meta = student.metadata
-            start_epoch = meta.get("epoch", config.resume_epoch)
-            start_step = meta.get("step", config.resume_step)
-            best_loss = meta.get("best_loss", float("inf"))
+            raw_epoch = meta.get("epoch", 0)
+            raw_step = meta.get("step", 0)
+            raw_best = meta.get("best_loss", float("inf"))
+            # Validate epoch: must be int in [0, epochs)
+            if isinstance(raw_epoch, (int, float)) and 0 <= raw_epoch < config.epochs:
+                start_epoch = int(raw_epoch)
+            else:
+                logger.warning("Checkpoint epoch=%s invalid for %d epochs, starting from 0",
+                    raw_epoch, config.epochs, extra={"tag": "TRAIN"})
+            # Validate step: must be non-negative int
+            if isinstance(raw_step, (int, float)) and raw_step >= 0:
+                start_step = int(raw_step)
+            else:
+                logger.warning("Checkpoint step=%s invalid, starting from 0", raw_step,
+                    extra={"tag": "TRAIN"})
+            # Validate best_loss: must be finite positive
+            if isinstance(raw_best, (int, float)) and np.isfinite(raw_best) and raw_best > 0:
+                best_loss = float(raw_best)
             logger.info("Resumed at epoch %d, step %d, best_loss=%.4f",
                         start_epoch, start_step, best_loss,
                         extra={"tag": "TRAIN"})

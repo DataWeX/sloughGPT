@@ -10,7 +10,7 @@ Output: .soul checkpoint that can be loaded into the inference pipeline.
 
 import gc
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -112,6 +112,105 @@ def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
     return float(-log_probs[np.arange(batch_size), targets].mean())
 
 
+@dataclass
+class _ResumeState:
+    """Validated state restored from a training checkpoint."""
+    model: SloTransformer = None
+    epoch: int = 0
+    step: int = 0
+    best_loss: float = float("inf")
+    stoi: Optional[Dict[str, int]] = None
+    itos: Optional[Dict[int, str]] = None
+    vocab_size: int = 0
+    optimizer_state: Optional[dict] = None
+    found: bool = False
+
+
+def _validate_int(value, lo: int, hi: int, name: str, default: int) -> int:
+    """Validate an integer metadata field is within bounds."""
+    if isinstance(value, (int, float)) and lo <= value < hi:
+        return int(value)
+    logger.warning("Checkpoint %s=%s invalid (expected [%s,%s)), using %s",
+        name, value, lo, hi, default, extra={"tag": "TRAIN"})
+    return default
+
+
+def _validate_float(value, name: str, default: float) -> float:
+    """Validate a float metadata field is finite and positive."""
+    if isinstance(value, (int, float)) and np.isfinite(value) and value > 0:
+        return float(value)
+    return default
+
+
+def _repair_itos(raw: dict) -> Dict[int, str]:
+    """Convert JSON-deserialized itos (string keys) back to int keys.
+
+    Skips corrupt entries that cannot be cast to int.
+    """
+    repaired = {}
+    for k, v in raw.items():
+        try:
+            repaired[int(k)] = v
+        except (ValueError, TypeError):
+            logger.warning("Skipping corrupt itos entry: %s=%s", k, v,
+                extra={"tag": "TRAIN"})
+    return repaired
+
+
+def _load_resume_state(
+    config: ChatTrainConfig,
+    data_stoi: Dict[str, int],
+    data_itos: Dict[int, str],
+    data_vocab_size: int,
+) -> _ResumeState:
+    """Load and validate a training checkpoint for resume.
+
+    Returns a _ResumeState with validated fields. If the checkpoint is
+    missing or corrupt, falls back to data-derived values.
+    """
+    result = _ResumeState()
+    path = config.resume_checkpoint
+
+    if not path or not Path(path).exists():
+        return result
+
+    logger.info("Resuming from: %s", path, extra={"tag": "TRAIN"})
+    from domains.training.slonet import import_from_sou
+    model = import_from_sou(path)
+    raw = model.metadata if hasattr(model, 'metadata') and model.metadata else {}
+
+    result.model = model
+    result.found = True
+    result.epoch = _validate_int(
+        raw.get("epoch", config.resume_epoch), 0, config.epochs, "epoch", 0)
+    result.step = _validate_int(
+        raw.get("step", config.resume_step), 0, 1_000_000, "step", 0)
+    result.best_loss = _validate_float(
+        raw.get("best_loss", float("inf")), "best_loss", float("inf"))
+
+    # Vocab: prefer checkpoint (prevents mismatch when data changes)
+    raw_stoi = raw.get("stoi")
+    raw_itos = raw.get("itos")
+    if (raw_stoi and isinstance(raw_stoi, dict)
+            and raw_itos and isinstance(raw_itos, dict)):
+        result.stoi = raw_stoi
+        result.itos = _repair_itos(raw_itos)
+        if result.itos:
+            result.vocab_size = len(result.stoi)
+            logger.info("Using checkpoint vocab: %d chars", result.vocab_size,
+                extra={"tag": "TRAIN"})
+        else:
+            logger.warning("itos empty after repair, using vocab from data",
+                extra={"tag": "TRAIN"})
+            result.stoi, result.itos = None, None
+    else:
+        logger.warning("Checkpoint missing stoi/itos, using vocab from data",
+            extra={"tag": "TRAIN"})
+
+    result.optimizer_state = raw.get("optimizer_state")
+    return result
+
+
 def train_chat_model(
     pairs: List[Dict[str, str]],
     config: Optional[ChatTrainConfig] = None,
@@ -174,65 +273,14 @@ def train_chat_model(
     start_epoch = config.resume_epoch
     start_step = config.resume_step
     best_loss = float("inf")
-    ckpt_meta = {}
-
-    if config.resume_checkpoint and Path(config.resume_checkpoint).exists():
-        logger.info("Resuming from: %s", config.resume_checkpoint,
-            extra={"tag": "TRAIN"})
-        from domains.training.slonet import import_from_sou
-        model = import_from_sou(config.resume_checkpoint)
-        ckpt_meta = model.metadata if hasattr(model, 'metadata') and model.metadata else {}
-
-        # Validate and restore epoch — must be in [0, config.epochs)
-        raw_epoch = ckpt_meta.get("epoch", config.resume_epoch)
-        if isinstance(raw_epoch, (int, float)) and 0 <= raw_epoch < config.epochs:
-            start_epoch = int(raw_epoch)
-        else:
-            logger.warning(
-                "Checkpoint epoch=%s invalid for %d epochs, starting from 0",
-                raw_epoch, config.epochs, extra={"tag": "TRAIN"})
-            start_epoch = 0
-
-        # Validate and restore step — must be >= 0
-        raw_step = ckpt_meta.get("step", config.resume_step)
-        if isinstance(raw_step, (int, float)) and raw_step >= 0:
-            start_step = int(raw_step)
-        else:
-            logger.warning(
-                "Checkpoint step=%s invalid, starting from 0", raw_step,
-                extra={"tag": "TRAIN"})
-            start_step = 0
-
-        # Validate and restore best_loss — must be finite
-        raw_best = ckpt_meta.get("best_loss", float("inf"))
-        if isinstance(raw_best, (int, float)) and np.isfinite(raw_best) and raw_best > 0:
-            best_loss = float(raw_best)
-        else:
-            best_loss = float("inf")
-
-        # Use checkpoint's vocab if available — prevents mismatch when data changes
-        ckpt_stoi = ckpt_meta.get("stoi")
-        ckpt_itos = ckpt_meta.get("itos")
-        if ckpt_stoi and isinstance(ckpt_stoi, dict) and ckpt_itos and isinstance(ckpt_itos, dict):
-            stoi = ckpt_stoi
-            # JSON serializes int keys as strings — restore int keys for itos
-            itos = {}
-            for k, v in ckpt_itos.items():
-                try:
-                    itos[int(k)] = v
-                except (ValueError, TypeError):
-                    logger.warning("Skipping corrupt itos entry: %s=%s", k, v,
-                        extra={"tag": "TRAIN"})
-            if not itos:
-                logger.warning("itos empty after repair, using vocab from data",
-                    extra={"tag": "TRAIN"})
-            else:
-                vocab_size = len(stoi)
-                logger.info("Using checkpoint vocab: %d chars", vocab_size,
-                    extra={"tag": "TRAIN"})
-        else:
-            logger.warning("Checkpoint missing stoi/itos, using vocab from data",
-                extra={"tag": "TRAIN"})
+    resume = _load_resume_state(config, stoi, itos, vocab_size)
+    if resume.found:
+        model = resume.model
+        stoi = resume.stoi or stoi
+        itos = resume.itos or itos
+        vocab_size = resume.vocab_size or vocab_size
+        start_epoch, start_step = resume.epoch, resume.step
+        best_loss = resume.best_loss
     else:
         logger.info("Creating model: embed=%d, layers=%d, heads=%d, block=%d",
                     config.n_embed, config.n_layer, config.n_head, config.block_size,
@@ -260,12 +308,13 @@ def train_chat_model(
 
     optimizer = SloAdam(lr=config.lr)
     rng = np.random.default_rng(42)
+
     # Restore optimizer state from checkpoint
-    if config.resume_checkpoint and ckpt_meta.get("optimizer_state"):
+    if resume.optimizer_state:
         try:
-            optimizer.load_state_dict(ckpt_meta["optimizer_state"], params=list(model.parameters()))
+            optimizer.load_state_dict(resume.optimizer_state, params=list(model.parameters()))
             logger.info("Restored optimizer state: t=%s",
-                ckpt_meta["optimizer_state"].get("t", "?"), extra={"tag": "TRAIN"})
+                resume.optimizer_state.get("t", "?"), extra={"tag": "TRAIN"})
         except Exception as e:
             logger.warning("Could not restore optimizer state (%s), starting fresh",
                 type(e).__name__, extra={"tag": "TRAIN"})
