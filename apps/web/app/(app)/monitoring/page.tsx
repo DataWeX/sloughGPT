@@ -102,23 +102,21 @@ export default function SystemHealthPage() {
     setError(null)
     try {
       const [d, m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
-        systemController.getDetailedHealth().catch(() => null),
-        systemController.getMetrics().catch(() => null),
-        systemController.getInfo().catch(() => null),
-        systemController.getDisk().catch(() => null),
-        knowledgeController.stats().catch(() => null),
-        knowledgeController.getAdapterStatus().catch(() => null),
-        benchmarkController.quality().catch(() => null),
-        benchmarkController.stats().catch(() => null),
-        multimodalController.getDPOStatus().catch(() => null),
-        multimodalController.getStatus().catch(() => null),
-        systemController.getExecutorStatus().catch(() => null),
-        trainingController.getAutoTrainStatus().catch(() => null),
-        trainingController.list().catch(() => []),
+        systemController.getDetailedHealth().catch((e: unknown) => { console.error('[monitoring] detailedHealth:', e); return null }),
+        systemController.getMetrics().catch((e: unknown) => { console.error('[monitoring] metrics:', e); return null }),
+        systemController.getInfo().catch((e: unknown) => { console.error('[monitoring] info:', e); return null }),
+        systemController.getDisk().catch((e: unknown) => { console.error('[monitoring] disk:', e); return null }),
+        knowledgeController.stats().catch((e: unknown) => { console.error('[monitoring] knowledgeStats:', e); return null }),
+        knowledgeController.getAdapterStatus().catch((e: unknown) => { console.error('[monitoring] adapterStatus:', e); return null }),
+        benchmarkController.quality().catch((e: unknown) => { console.error('[monitoring] benchQuality:', e); return null }),
+        benchmarkController.stats().catch((e: unknown) => { console.error('[monitoring] benchStats:', e); return null }),
+        multimodalController.getDPOStatus().catch((e: unknown) => { console.error('[monitoring] dpoStatus:', e); return null }),
+        multimodalController.getStatus().catch((e: unknown) => { console.error('[monitoring] visualStatus:', e); return null }),
+        systemController.getExecutorStatus().catch((e: unknown) => { console.error('[monitoring] executor:', e); return null }),
+        trainingController.getAutoTrainStatus().catch((e: unknown) => { console.error('[monitoring] autoTrain:', e); return null }),
+        trainingController.list().catch((e: unknown) => { console.error('[monitoring] trainingJobs:', e); return [] }),
       ])
-      const ok = [d, m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj].some(v => v != null)
-      // Keep last-good data: only overwrite a slice when its fetch succeeded, so a
-      // transient failure never blanks previously loaded cards.
+      // Keep last-good data: only overwrite a slice when its fetch succeeded.
       if (d != null) setDetailed(d)
       if (m != null) setMetrics(m)
       if (i != null) setInfo(i)
@@ -140,33 +138,17 @@ export default function SystemHealthPage() {
       if (at != null) setAutoTrainStatus(at)
       if (Array.isArray(tj)) setTrainingJobs(tj)
       setLastUpdated(new Date().toLocaleTimeString())
-      if (d == null) setError('Could not reach the server. Retrying...')
-      return ok
+      if (d == null) setError('Could not reach the server')
+      return d != null
     } catch (e: unknown) {
-      setError(extractErrorMessage(e, 'Could not reach the server. Retrying...'))
+      setError(extractErrorMessage(e, 'Failed to load system health'))
       return false
     } finally {
       if (showRefreshing) setRefreshing(false)
     }
   }, [])
 
-  // Retry initial fetchAll up to 3 times on failure so transient startup errors
-  // don't leave the page stuck on skeleton loaders.
-  const initRetriesRef = useRef(0)
-  const MAX_INIT_RETRIES = 3
-  useEffect(() => {
-    let cancelled = false
-    const tryFetch = async () => {
-      const ok = await fetchAll()
-      if (!cancelled && !ok && initRetriesRef.current < MAX_INIT_RETRIES) {
-        initRetriesRef.current++
-        setTimeout(tryFetch, 2000 * initRetriesRef.current)
-      }
-    }
-    initRetriesRef.current = 0
-    tryFetch()
-    return () => { cancelled = true }
-  }, [fetchAll])
+  useEffect(() => { fetchAll() }, [fetchAll])
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
