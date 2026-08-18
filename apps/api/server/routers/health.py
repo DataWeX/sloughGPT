@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from controllers.health import get_health_controller
 from startup_progress import STARTUP_PHASE
 from schemas.common import success_response, raise_error, classify_and_raise
+from typing import AsyncGenerator
 
 
 class HealthRouter:
@@ -32,26 +33,32 @@ class HealthRouter:
         self.router.add_api_route("/summary", self.health_summary, methods=["GET"])
         self.router.add_api_route("/stream", self.health_stream, methods=["GET"])
 
-    async def health(self):
+    async def health(self) -> dict:
+        """health."""
         ctrl = get_health_controller()
         return success_response(data=await asyncio.to_thread(ctrl.get_basic_health))
 
-    async def liveness(self):
+    async def liveness(self) -> dict:
+        """liveness."""
         ctrl = get_health_controller()
         return success_response(data=await asyncio.to_thread(ctrl.get_liveness))
 
-    async def readiness(self):
+    async def readiness(self) -> dict:
+        """readiness."""
         ctrl = get_health_controller()
         return success_response(data=await asyncio.to_thread(ctrl.get_readiness))
 
-    async def detailed_health(self):
+    async def detailed_health(self) -> dict:
+        """detailed_health."""
         ctrl = get_health_controller()
         return success_response(data=await asyncio.to_thread(ctrl.get_detailed_health))
 
-    async def startup_progress(self):
+    async def startup_progress(self) -> dict:
+        """startup_progress."""
         return success_response(data=STARTUP_PHASE)
 
-    async def debug_info(self):
+    async def debug_info(self) -> dict:
+        """debug_info."""
         ctrl = get_health_controller()
         detailed = await asyncio.to_thread(ctrl.get_detailed_health)
         return success_response(data={
@@ -80,7 +87,8 @@ class HealthRouter:
             "gpu_backend": detailed.get("gpu", {}).get("backend"),
         })
 
-    async def model_health(self):
+    async def model_health(self) -> dict:
+        """model_health."""
         try:
             from domains.feedback.model_health import get_health_monitor
             mon = get_health_monitor()
@@ -92,7 +100,8 @@ class HealthRouter:
         except Exception as e:
             classify_and_raise(e, source="health_model_health")
 
-    async def health_summary(self):
+    async def health_summary(self) -> dict:
+        """health_summary."""
         ctrl = get_health_controller()
         detailed = await asyncio.to_thread(ctrl.get_detailed_health)
         hs = detailed.get("health_score", {})
@@ -157,10 +166,12 @@ class HealthRouter:
             "message": hs.get("summary", ""),
         }
 
-    async def health_stream(self, request: Request):
+    async def health_stream(self, request: Request) -> AsyncGenerator[str, None]:
+        """health_stream."""
         ctrl = get_health_controller()
 
-        async def generate():
+        async def generate() -> AsyncGenerator[str, None]:
+            """generate."""
             while True:
                 if await request.is_disconnected():
                     break
