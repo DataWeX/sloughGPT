@@ -69,7 +69,7 @@ export interface CheckpointsResponse {
 export const soulsController = {
   async list(): Promise<SoulsResponse> {
     const souls = await apiGet<Soul[]>('/souls')
-    // _meta is attached by http-client unwrap for StandardResponse meta field
+    // _meta is attached as non-enumerable by http-client StandardResponse unwrapper
     const meta = (souls as unknown as { _meta?: { current_soul?: string } })?._meta
     return {souls: souls || [], current_soul: meta?.current_soul}
   },
@@ -152,5 +152,31 @@ export const soulsController = {
 
   async deleteCheckpoint(name: string): Promise<{ status: string }> {
     return apiDelete<{ status: string }>(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
+  },
+
+  async getSoul(name: string): Promise<Soul | null> {
+    try {
+      return await apiGet<Soul>(`/souls/${encodeURIComponent(name)}`)
+    } catch {
+      return null
+    }
+  },
+
+  async getStats(): Promise<{ total_souls: number; current_soul: string | null; available_souls: string[] }> {
+    return apiGet('/souls/stats')
+  },
+
+  async checkpointInfo(name: string): Promise<Checkpoint | null> {
+    try {
+      return await apiGet<Checkpoint>(`/auto-train/checkpoints/${encodeURIComponent(name)}/info`)
+    } catch {
+      return null
+    }
+  },
+
+  async downloadCheckpoint(name: string): Promise<Blob> {
+    const response = await fetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
+    if (!response.ok) throw new Error('Download failed')
+    return response.blob()
   },
 }

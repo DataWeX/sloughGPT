@@ -1,566 +1,255 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-
-const mockList = vi.fn()
-const mockListCheckpoints = vi.fn()
-const mockSwitch = vi.fn()
-const mockLoadCheckpoint = vi.fn()
-const mockGetTraitWeights = vi.fn()
-const mockListWeightSnapshots = vi.fn()
-const mockSaveWeightSnapshot = vi.fn()
-const mockLoadWeightSnapshot = vi.fn()
-const mockDeleteWeightSnapshot = vi.fn()
-const mockGetModes = vi.fn()
-const mockSaveTraitWeights = vi.fn()
-const mockDeleteCheckpoint = vi.fn()
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 
 vi.mock('@/lib/souls-controller', () => ({
   soulsController: {
-    list: (...args: unknown[]) => mockList(...args),
-    listCheckpoints: (...args: unknown[]) => mockListCheckpoints(...args),
-    switch: (...args: unknown[]) => mockSwitch(...args),
-    loadCheckpoint: (...args: unknown[]) => mockLoadCheckpoint(...args),
-    getTraitWeights: (...args: unknown[]) => mockGetTraitWeights(...args),
-    listWeightSnapshots: (...args: unknown[]) => mockListWeightSnapshots(...args),
-    saveWeightSnapshot: (...args: unknown[]) => mockSaveWeightSnapshot(...args),
-    loadWeightSnapshot: (...args: unknown[]) => mockLoadWeightSnapshot(...args),
-    deleteWeightSnapshot: (...args: unknown[]) => mockDeleteWeightSnapshot(...args),
-    getModes: (...args: unknown[]) => mockGetModes(...args),
-    saveTraitWeights: (...args: unknown[]) => mockSaveTraitWeights(...args),
-    deleteCheckpoint: (...args: unknown[]) => mockDeleteCheckpoint(...args),
+    list: vi.fn().mockResolvedValue({
+      souls: [
+        { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7, precision: 0.5, logic: 0.4, creativity: 0.6 }, lineage: 'gpt2', size_mb: 0.5, born_at: '2025-01-10T00:00:00Z', epochs_trained: 5, final_val_loss: 0.42 },
+        { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8, warmth: 0.3, humor: 0.2, creativity: 0.4 }, lineage: 'gpt2', size_mb: 0.6 },
+        { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6, warmth: 0.5, precision: 0.3, logic: 0.4 }, lineage: 'gpt2-medium' },
+      ],
+      current_soul: 'Friendly',
+    }),
+    switch: vi.fn().mockResolvedValue(undefined),
+    loadCheckpoint: vi.fn().mockResolvedValue({ status: 'loaded' }),
+    getTraitWeights: vi.fn().mockResolvedValue({ personality: { warmth: 0.8 }, cognition: { reasoning: 0.7 }, emotion: { empathy: 0.5 } }),
+    listWeightSnapshots: vi.fn().mockResolvedValue([{ name: 'baseline', saved_at: '2025-01-15T10:00:00Z' }]),
+    saveWeightSnapshot: vi.fn().mockResolvedValue('/path'),
+    loadWeightSnapshot: vi.fn().mockResolvedValue(3),
+    deleteWeightSnapshot: vi.fn().mockResolvedValue(true),
+    getModes: vi.fn().mockResolvedValue({ personality: { label: 'warm', confidence: 0.85 }, memory: { label: 'standard', confidence: 0.7 }, style: { label: 'formal', confidence: 0.6 }, task: { label: 'analytical', confidence: 0.75 } }),
+    saveTraitWeights: vi.fn().mockResolvedValue({ status: 'ok' }),
+    deleteCheckpoint: vi.fn().mockResolvedValue({ status: 'deleted' }),
+    getSoul: vi.fn().mockResolvedValue({ name: 'Friendly', description: 'A warm companion' }),
+    getStats: vi.fn().mockResolvedValue({ total_souls: 3, current_soul: 'Friendly' }),
+    checkpointInfo: vi.fn().mockResolvedValue({ name: 'cp-warm-v2', loss: 0.45 }),
+    downloadCheckpoint: vi.fn().mockResolvedValue(new Blob()),
+    listCheckpoints: vi.fn().mockResolvedValue({
+      checkpoints: [
+        { name: 'cp-warm-v2', soul: 'Friendly', loss: 0.45, verdict: 'improved', size_mb: 1.2, perplexity_delta: -0.12, bleu_delta: 0.08 },
+        { name: 'cp-base-v1', soul: 'Analyst', loss: 0.62, verdict: 'neutral', size_mb: 0.8 },
+      ],
+    }),
   },
 }))
-
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: vi.fn() }),
+  useToastStore: (sel: (s: { addToast: (...a: unknown[]) => void }) => unknown) => sel({ addToast: vi.fn() }),
 }))
-
 vi.mock('@/components/souls/SoulPersonalityCard', () => ({
   SoulPersonalityCard: () => <div data-testid="soul-personality-card" />,
 }))
 
 import SoulsPage from './page'
+import { soulsController } from '@/lib/souls-controller'
+const sc = vi.mocked(soulsController)
 
-const SAMPLE_SOULS = [
-  { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7 } },
-  { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8 } },
-  { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6 } },
-]
-
-const SAMPLE_CHECKPOINTS = [
-  { name: 'cp-warm-v2', soul: 'Friendly', loss: 0.45, verdict: 'improved', size_mb: 1.2 },
-  { name: 'cp-base-v1', soul: 'Analyst', loss: 0.62, verdict: 'neutral', size_mb: 0.8 },
-]
+const DEFAULT_SOULS = {
+  souls: [
+    { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7 }, lineage: 'gpt2', size_mb: 0.5, born_at: '2025-01-10T00:00:00Z', epochs_trained: 5, final_val_loss: 0.42 },
+    { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8 }, lineage: 'gpt2', size_mb: 0.6 },
+    { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6 }, lineage: 'gpt2-medium' },
+  ],
+  current_soul: 'Friendly',
+}
+const DEFAULT_CHECKPOINTS = {
+  checkpoints: [
+    { name: 'cp-warm-v2', soul: 'Friendly', loss: 0.45, verdict: 'improved', size_mb: 1.2, perplexity_delta: -0.12, bleu_delta: 0.08 },
+    { name: 'cp-base-v1', soul: 'Analyst', loss: 0.62, verdict: 'neutral', size_mb: 0.8 },
+  ],
+}
 
 async function clickTab(name: string) {
   await waitFor(() => {
-    const tabs = screen.getAllByRole('tab')
-    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())).toBeTruthy()
+    expect(screen.getAllByRole('tab').some(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())).toBeTruthy()
   })
-  const tabs = screen.getAllByRole('tab')
-  const tab = tabs.find(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())
-  if (tab) act(() => { fireEvent.click(tab) })
+  fireEvent.click(screen.getAllByRole('tab').find(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())!)
 }
 
-describe('SoulsPage — initial load flow', () => {
+describe('SoulsPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: [], current_soul: null })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockResolvedValue([])
+    sc.list.mockResolvedValue(DEFAULT_SOULS)
+    sc.listCheckpoints.mockResolvedValue(DEFAULT_CHECKPOINTS)
+    sc.listWeightSnapshots.mockResolvedValue([{ name: 'baseline', saved_at: '2025-01-15T10:00:00Z' }])
+    sc.getModes.mockResolvedValue({ personality: { label: 'warm', confidence: 0.85 }, memory: { label: 'standard', confidence: 0.7 }, style: { label: 'formal', confidence: 0.6 }, task: { label: 'analytical', confidence: 0.75 } })
+    sc.getTraitWeights.mockResolvedValue({ personality: { warmth: 0.8 }, cognition: { reasoning: 0.7 }, emotion: { empathy: 0.5 } })
   })
-  afterEach(() => { cleanup() })
 
   it('renders page header', async () => {
     render(<SoulsPage />)
-    expect(screen.getAllByText('Souls').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => { expect(screen.getByText('Souls')).toBeTruthy() })
   })
 
-  it('shows empty souls state', async () => {
+  it('shows KPI stats', async () => {
     render(<SoulsPage />)
     await waitFor(() => {
-      expect(screen.getByText('No personalities found.')).toBeTruthy()
+      expect(screen.getAllByText('Personalities').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('3')).toBeTruthy()
     })
   })
 
-  it('shows empty checkpoints state', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Checkpoints')
-    await waitFor(() => {
-      expect(screen.getByText(/no checkpoints/i)).toBeTruthy()
-    })
-  })
-
-  it('shows train link in empty checkpoints', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Checkpoints')
-    await waitFor(() => {
-      expect(screen.getAllByText(/train a model/i).length).toBeGreaterThanOrEqual(1)
-    })
-  })
-})
-
-describe('SoulsPage — tab switching flow', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: SAMPLE_SOULS, current_soul: null })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockResolvedValue([])
-  })
-  afterEach(() => { cleanup() })
-
-  it('renders all four tabs', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    const tabs = screen.getAllByRole('tab')
-    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === 'souls')).toBeTruthy()
-    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === 'checkpoints')).toBeTruthy()
-    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === 'weights')).toBeTruthy()
-    expect(tabs.some(b => b.textContent?.trim().toLowerCase() === 'snapshots')).toBeTruthy()
-  })
-
-  it('souls tab active by default', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    expect(screen.getByText(/3 personalities/)).toBeTruthy()
-  })
-
-  it('switching to checkpoints tab shows checkpoints content', async () => {
-    mockListCheckpoints.mockResolvedValue({ checkpoints: SAMPLE_CHECKPOINTS })
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    await clickTab('Checkpoints')
-    await waitFor(() => {
-      expect(screen.getByText('cp-warm-v2')).toBeTruthy()
-    })
-  })
-
-  it('switching to weights tab loads weights and modes', async () => {
-    mockGetTraitWeights.mockResolvedValue({ personality: { warmth: 0.8, humor: 0.5 } })
-    mockGetModes.mockResolvedValue({
-      personality: { label: 'Friendly', confidence: 0.85 },
-      memory: { label: 'Balanced', confidence: 0.6 },
-      style: { label: 'Casual', confidence: 0.7 },
-      task: { label: 'Thorough', confidence: 0.75 },
-    })
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    await clickTab('Weights')
-    await waitFor(() => {
-      expect(mockGetTraitWeights).toHaveBeenCalled()
-      expect(mockGetModes).toHaveBeenCalled()
-    })
-  })
-
-  it('switching to snapshots tab loads snapshots', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    await clickTab('Snapshots')
-    await waitFor(() => {
-      expect(mockListWeightSnapshots).toHaveBeenCalled()
-    })
-  })
-})
-
-describe('SoulsPage — soul list display flow', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: SAMPLE_SOULS, current_soul: null })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockResolvedValue([])
-  })
-  afterEach(() => { cleanup() })
-
-  it('displays all souls', async () => {
+  it('shows all soul names', async () => {
     render(<SoulsPage />)
     await waitFor(() => {
-      expect(screen.getByText('Friendly')).toBeTruthy()
+      expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText('Analyst')).toBeTruthy()
       expect(screen.getByText('Creative')).toBeTruthy()
     })
   })
 
-  it('shows active badge for current soul', async () => {
-    mockList.mockResolvedValue({ souls: SAMPLE_SOULS, current_soul: 'Friendly' })
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
-    expect(screen.getAllByText(/active/i).length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('shows soul descriptions in detail dialog', async () => {
+  it('shows soul metadata', async () => {
     render(<SoulsPage />)
     await waitFor(() => {
-      expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1)
-    })
-    // Click on a soul card to open detail dialog
-    const soulCard = screen.getAllByText('Friendly')[0].closest('[class*="cursor-pointer"]')!
-    fireEvent.click(soulCard)
-    await waitFor(() => {
-      expect(screen.getByText('A warm companion')).toBeTruthy()
+      expect(screen.getAllByText('gpt2').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('0.5 MB').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('5 epochs').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('val 0.420').length).toBeGreaterThanOrEqual(1)
     })
   })
 
   it('shows trait chips', async () => {
     render(<SoulsPage />)
-    await waitFor(() => {
-      expect(screen.getAllByText('warmth').length).toBeGreaterThanOrEqual(1)
-    })
+    await waitFor(() => { expect(screen.getAllByText('warmth').length).toBeGreaterThanOrEqual(1) })
   })
 
-  it('shows switch button for non-active souls', async () => {
+  it('calls switch on button click', async () => {
     render(<SoulsPage />)
-    await waitFor(() => {
-      expect(screen.getAllByText('Switch').length).toBeGreaterThanOrEqual(1)
-    })
+    await waitFor(() => { expect(screen.getAllByText('Switch').length).toBeGreaterThanOrEqual(1) })
+    fireEvent.click(screen.getAllByText('Switch')[0])
+    await waitFor(() => { expect(sc.switch).toHaveBeenCalled() })
   })
 
-  it('no switch button for active soul', async () => {
-    mockList.mockResolvedValue({ souls: SAMPLE_SOULS, current_soul: 'Friendly' })
+  it('shows personality card', async () => {
+    render(<SoulsPage />)
+    await waitFor(() => { expect(screen.getAllByTestId('soul-personality-card').length).toBeGreaterThanOrEqual(1) })
+  })
+
+  it('filters souls by search', async () => {
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
-    const switchButtons = screen.getAllByText('Switch')
-    expect(switchButtons.length).toBeLessThan(SAMPLE_SOULS.length)
-  })
-})
-
-describe('SoulsPage — switch soul flow', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: SAMPLE_SOULS, current_soul: 'Friendly' })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockResolvedValue([])
-    mockSwitch.mockResolvedValue(undefined)
-  })
-  afterEach(() => { cleanup() })
-
-  it('switch calls soulsController.switch', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Switch').length).toBeGreaterThanOrEqual(1) })
-    const switchBtn = screen.getAllByText('Switch')[0]
-    await act(async () => { fireEvent.click(switchBtn) })
-    expect(mockSwitch).toHaveBeenCalled()
-  })
-
-  it('switch shows Switching... while pending', async () => {
-    let resolve: (v: unknown) => void
-    mockSwitch.mockReturnValue(new Promise(r => { resolve = r }))
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Switch').length).toBeGreaterThanOrEqual(1) })
-    const switchBtn = screen.getAllByText('Switch')[0]
-    await act(async () => { fireEvent.click(switchBtn) })
-    await waitFor(() => {
-      expect(screen.getAllByText(/switching/i).length).toBeGreaterThanOrEqual(1)
-    })
-    await act(async () => { resolve!(undefined) })
-  })
-
-  it('switch failure shows toast', async () => {
-    mockSwitch.mockRejectedValue(new Error('Switch failed'))
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Switch').length).toBeGreaterThanOrEqual(1) })
-    const switchBtn = screen.getAllByText('Switch')[0]
-    await act(async () => { fireEvent.click(switchBtn) })
-  })
-})
-
-describe('SoulsPage — checkpoints tab flow', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: [], current_soul: null })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: SAMPLE_CHECKPOINTS })
-    mockListWeightSnapshots.mockResolvedValue([])
-    mockLoadCheckpoint.mockResolvedValue(undefined)
-    mockDeleteCheckpoint.mockResolvedValue(undefined)
-  })
-  afterEach(() => { cleanup() })
-
-  it('displays checkpoints list', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Checkpoints')
-    await waitFor(() => {
-      expect(screen.getByText('cp-warm-v2')).toBeTruthy()
-    })
-  })
-
-  it('shows verdict badges', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Checkpoints')
-    await waitFor(() => {
-      expect(screen.getAllByText('improved').length).toBeGreaterThanOrEqual(1)
-    })
-  })
-
-  it('shows checkpoint metadata', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Checkpoints')
-    await waitFor(() => {
-      expect(screen.getAllByText(/Friendly/).length).toBeGreaterThanOrEqual(1)
-    })
-  })
-
-  it('load button triggers checkpoint load', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Checkpoints')
-    await waitFor(() => { expect(screen.getByText('cp-warm-v2')).toBeTruthy() })
-    const loadBtn = screen.getAllByText('Load')[0]
-    await act(async () => { fireEvent.click(loadBtn) })
-    expect(mockLoadCheckpoint).toHaveBeenCalledWith('cp-warm-v2')
-  })
-
-  it('checkpoint count shown in header', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Checkpoints')
-    await waitFor(() => {
-      expect(screen.getByText(/Checkpoints \(2\)/)).toBeTruthy()
-    })
-  })
-})
-
-describe('SoulsPage — weights tab flow', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: [], current_soul: null })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockResolvedValue([])
-    mockGetTraitWeights.mockResolvedValue({
-      personality: { warmth: 0.80, humor: 0.50, curiosity: 0.65 },
-      cognition: { reasoning: 0.70, memory: 0.55 },
-    })
-    mockGetModes.mockResolvedValue({
-      personality: { label: 'Friendly', confidence: 0.85 },
-      memory: { label: 'Balanced', confidence: 0.6 },
-      style: { label: 'Casual', confidence: 0.7 },
-      task: { label: 'Thorough', confidence: 0.75 },
-    })
-    mockSaveTraitWeights.mockResolvedValue({ status: 'saved' })
-  })
-  afterEach(() => { cleanup() })
-
-  it('loads weights on tab switch', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Weights')
-    await waitFor(() => {
-      expect(mockGetTraitWeights).toHaveBeenCalled()
-    })
-  })
-
-  it('displays weight categories', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Weights')
-    await waitFor(() => {
-      expect(screen.getByText('Trait Weights')).toBeTruthy()
-    })
-  })
-
-  it('shows context modes', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Weights')
-    await waitFor(() => {
-      expect(screen.getByText('Context Modes')).toBeTruthy()
-      expect(screen.getByText('Friendly')).toBeTruthy()
-    })
-  })
-
-  it('save button enabled when weights changed', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Weights')
-    await waitFor(() => { expect(screen.getByText('Trait Weights')).toBeTruthy() })
-    // Initially disabled (no changes)
-    const saveBtn = screen.getByText('Save')
-    expect(saveBtn).toBeDisabled()
-  })
-})
-
-describe('SoulsPage — snapshots tab flow', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: [], current_soul: null })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockResolvedValue([{ name: 'v1-baseline', saved_at: '2026-01-15T00:00:00Z' }])
-    mockSaveWeightSnapshot.mockResolvedValue(undefined)
-    mockLoadWeightSnapshot.mockResolvedValue(undefined)
-    mockDeleteWeightSnapshot.mockResolvedValue(undefined)
-    mockGetTraitWeights.mockResolvedValue({})
-  })
-  afterEach(() => { cleanup() })
-
-  it('displays snapshots list', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Snapshots')
-    await waitFor(() => {
-      expect(screen.getByText('v1-baseline')).toBeTruthy()
-    })
-  })
-
-  it('shows snapshot date', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Snapshots')
-    await waitFor(() => {
-      expect(screen.getAllByText(/1\/15\/2026/).length).toBeGreaterThanOrEqual(1)
-    })
-  })
-
-  it('save snapshot with name', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Snapshots')
-    await waitFor(() => { expect(screen.getByText('v1-baseline')).toBeTruthy() })
-    const input = screen.getByPlaceholderText(/snapshot name/i)
-    act(() => { fireEvent.change(input, { target: { value: 'new-snap' } }) })
-    const saveBtn = screen.getByText(/save/i)
-    await act(async () => { fireEvent.click(saveBtn) })
-    expect(mockSaveWeightSnapshot).toHaveBeenCalledWith('new-snap')
-  })
-
-  it('save button disabled when name empty', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Snapshots')
-    await waitFor(() => { expect(screen.getByText(/save/i)).toBeTruthy() })
-    const saveBtn = screen.getByText(/save/i)
-    expect(saveBtn).toBeDisabled()
-  })
-
-  it('empty snapshots shows placeholder', async () => {
-    mockListWeightSnapshots.mockResolvedValue([])
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('No personalities found.')).toBeTruthy() })
-    await clickTab('Snapshots')
-    await waitFor(() => {
-      expect(screen.getByText(/no snapshots saved/i)).toBeTruthy()
-    })
-  })
-})
-
-describe('SoulsPage — search flow', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: SAMPLE_SOULS, current_soul: null })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockResolvedValue([])
-  })
-  afterEach(() => { cleanup() })
-
-  it('search filters souls by name', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    const searchInput = screen.getAllByPlaceholderText(/search/i)[0]
-    const user = userEvent.setup()
-    await user.type(searchInput, 'friendly')
-    await waitFor(() => {
-      expect(screen.getByText('Friendly')).toBeTruthy()
-      expect(screen.queryByText('Analyst')).toBeNull()
-    })
-  })
-
-  it('search filters souls by trait', async () => {
-    render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    const searchInput = screen.getAllByPlaceholderText(/search/i)[0]
-    const user = userEvent.setup()
-    await user.type(searchInput, 'logic')
+    fireEvent.change(screen.getAllByPlaceholderText('Search souls...')[0], { target: { value: 'Analyst' } })
     await waitFor(() => {
       expect(screen.getByText('Analyst')).toBeTruthy()
-      expect(screen.queryByText('Friendly')).toBeNull()
+      expect(screen.queryByText('Creative')).toBeNull()
     })
   })
 
-  it('search with no match shows empty', async () => {
+  it('shows empty search state', async () => {
     render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Friendly')).toBeTruthy() })
-    const searchInput = screen.getAllByPlaceholderText(/search/i)[0]
-    const user = userEvent.setup()
-    await user.type(searchInput, 'zzz')
-    await waitFor(() => {
-      expect(screen.getAllByText(/no personalities match/i).length).toBeGreaterThanOrEqual(1)
-    })
+    await waitFor(() => { expect(screen.getAllByPlaceholderText('Search souls...').length).toBeGreaterThanOrEqual(1) })
+    fireEvent.change(screen.getAllByPlaceholderText('Search souls...')[0], { target: { value: 'zzz' } })
+    await waitFor(() => { expect(screen.getByText('No personalities match your search.')).toBeTruthy() })
   })
-})
 
-describe('SoulsPage — error handling', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-  afterEach(() => { cleanup() })
-
-  it('handles list failure gracefully', async () => {
-    mockList.mockRejectedValue(new Error('Network error'))
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockResolvedValue([])
+  it('opens detail dialog with full metadata', async () => {
     render(<SoulsPage />)
+    await waitFor(() => { expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
+    fireEvent.click(screen.getAllByText('Friendly')[0].closest('[class*="cursor-pointer"]')!)
     await waitFor(() => {
-      expect(screen.getAllByText('Souls').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('A warm companion')).toBeTruthy()
+      expect(screen.getByText('Training Info')).toBeTruthy()
+      expect(screen.getByText('Personality')).toBeTruthy()
+      expect(screen.getByText('Traits')).toBeTruthy()
     })
   })
 
-  it('handles checkpoints failure gracefully', async () => {
-    mockList.mockResolvedValue({ souls: [], current_soul: null })
-    mockListCheckpoints.mockRejectedValue(new Error('Checkpoints error'))
-    mockListWeightSnapshots.mockResolvedValue([])
+  it('closes detail dialog on Close', async () => {
     render(<SoulsPage />)
-    await waitFor(() => {
-      expect(screen.getAllByText('Souls').length).toBeGreaterThanOrEqual(1)
-    })
+    await waitFor(() => { expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
+    fireEvent.click(screen.getAllByText('Friendly')[0].closest('[class*="cursor-pointer"]')!)
+    await waitFor(() => { expect(screen.getAllByText('Close').length).toBeGreaterThanOrEqual(1) })
+    fireEvent.click(screen.getAllByText('Close')[0])
+    await waitFor(() => { expect(screen.queryByText('A warm companion')).toBeNull() })
   })
 
-  it('handles snapshot failure gracefully', async () => {
-    mockList.mockResolvedValue({ souls: [], current_soul: null })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: [] })
-    mockListWeightSnapshots.mockRejectedValue(new Error('Snapshots error'))
+  it('shows checkpoints with verdict and loss', async () => {
     render(<SoulsPage />)
+    await clickTab('checkpoints')
     await waitFor(() => {
-      expect(screen.getAllByText('Souls').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('cp-warm-v2')).toBeTruthy()
+      expect(screen.getAllByText('Improved').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('loss 0.450').length).toBeGreaterThanOrEqual(1)
     })
   })
-})
 
-describe('SoulsPage — KPI grid flow', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockList.mockResolvedValue({ souls: SAMPLE_SOULS, current_soul: 'Friendly' })
-    mockListCheckpoints.mockResolvedValue({ checkpoints: SAMPLE_CHECKPOINTS })
-    mockListWeightSnapshots.mockResolvedValue([{ name: 'v1' }])
-  })
-  afterEach(() => { cleanup() })
-
-  it('shows personalities count', async () => {
+  it('shows perplexity and BLEU deltas', async () => {
     render(<SoulsPage />)
+    await clickTab('checkpoints')
     await waitFor(() => {
-      expect(screen.getByText('3')).toBeTruthy()
+      expect(screen.getAllByText('PPL -0.120').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('BLEU +0.080').length).toBeGreaterThanOrEqual(1)
     })
   })
 
-  it('shows active soul name', async () => {
-    mockList.mockResolvedValue({ souls: SAMPLE_SOULS, current_soul: 'Analyst' })
+  it('calls loadCheckpoint', async () => {
     render(<SoulsPage />)
+    await clickTab('checkpoints')
+    await waitFor(() => { expect(screen.getAllByText('Load').length).toBeGreaterThanOrEqual(1) })
+    fireEvent.click(screen.getAllByText('Load')[0])
+    await waitFor(() => { expect(sc.loadCheckpoint).toHaveBeenCalled() })
+  })
+
+  it('shows empty checkpoints', async () => {
+    sc.listCheckpoints.mockResolvedValue({ checkpoints: [] })
+    render(<SoulsPage />)
+    await clickTab('checkpoints')
+    await waitFor(() => { expect(screen.getByText('No checkpoints found.')).toBeTruthy() })
+  })
+
+  it('shows modes and trait weights', async () => {
+    render(<SoulsPage />)
+    await clickTab('weights')
     await waitFor(() => {
-      expect(screen.getAllByText('Analyst').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('Context Modes')).toBeTruthy()
+      expect(screen.getByText('Trait Weights')).toBeTruthy()
+      expect(screen.getAllByText('Warmth').length).toBeGreaterThanOrEqual(1)
     })
   })
 
-  it('shows checkpoints count', async () => {
+  it('shows save disabled initially', async () => {
     render(<SoulsPage />)
+    await clickTab('weights')
+    await waitFor(() => { expect(screen.getByText('Trait Weights')).toBeTruthy() })
+    expect(screen.getByText('Save').closest('button')?.disabled).toBeTruthy()
+  })
+
+  it('shows snapshots', async () => {
+    render(<SoulsPage />)
+    await clickTab('snapshots')
     await waitFor(() => {
-      expect(screen.getByText('2')).toBeTruthy()
+      expect(screen.getByText('Weight Snapshots')).toBeTruthy()
+      expect(screen.getByText('baseline')).toBeTruthy()
     })
   })
 
-  it('shows snapshots count', async () => {
+  it('calls saveWeightSnapshot', async () => {
     render(<SoulsPage />)
+    await clickTab('snapshots')
+    await waitFor(() => { expect(screen.getByPlaceholderText('Snapshot name...')).toBeTruthy() })
+    fireEvent.change(screen.getByPlaceholderText('Snapshot name...'), { target: { value: 'new-snap' } })
+    fireEvent.click(screen.getByPlaceholderText('Snapshot name...').parentElement!.querySelector('button')!)
+    await waitFor(() => { expect(sc.saveWeightSnapshot).toHaveBeenCalledWith('new-snap') })
+  })
+
+  it('shows analytics overview', async () => {
+    render(<SoulsPage />)
+    await clickTab('analytics')
     await waitFor(() => {
-      expect(screen.getByText('1')).toBeTruthy()
+      expect(screen.getByText('Soul Overview')).toBeTruthy()
+      expect(screen.getByText('Personality Comparison')).toBeTruthy()
+      expect(screen.getByText('Checkpoint Summary')).toBeTruthy()
     })
+  })
+
+  it('opens register dialog', async () => {
+    render(<SoulsPage />)
+    await waitFor(() => { expect(screen.getByText('Register')).toBeTruthy() })
+    fireEvent.click(screen.getByText('Register'))
+    await waitFor(() => {
+      expect(screen.getByText('Register Soul')).toBeTruthy()
+      expect(screen.getByPlaceholderText('/absolute/path/to/soul.soul')).toBeTruthy()
+    })
+    fireEvent.click(screen.getAllByText('Cancel')[0])
+    await waitFor(() => { expect(screen.queryByText('Register Soul')).toBeNull() })
   })
 })

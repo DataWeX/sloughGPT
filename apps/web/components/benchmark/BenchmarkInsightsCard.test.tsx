@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 import { BenchmarkInsightsCard } from './BenchmarkInsightsCard'
+import type { BenchmarkResult } from '@/lib/benchmark-controller'
 
 afterEach(() => { cleanup() })
 
@@ -12,10 +13,16 @@ const quality = {
   repetition_rate: 0.15,
 }
 
-const metrics: Record<string, unknown> = {
+const metrics: BenchmarkResult = {
+  model: 'gpt2',
   perplexity: 12.5,
-  tokens_per_second: 8.3,
-  avg_latency_ms: 3200,
+  throughput_tokens_per_sec: 8.3,
+  latency_p50_ms: 3200,
+  memory_mb: 500,
+  num_parameters: 124_000_000,
+  latency_ms: 3200,
+  throughput: 8.3,
+  inference_time_ms: 3000,
 }
 
 const stats = { total: 42, avg_tokens: 64 }

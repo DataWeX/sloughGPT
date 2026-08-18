@@ -1,26 +1,32 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid,
-  SearchInput, Slider, Dialog, DialogContent, DialogHeader, DialogTitle,
+  SearchInput, Slider, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   Tabs, TabsList, TabsTrigger, TabsContent, AlertDialog, AlertDialogAction,
   AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { IconRefresh, IconPlus, IconTrash } from '@sloughgpt/strui'
+import { IconRefresh, IconPlus, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-controller'
 import { SoulPersonalityCard } from '@/components/souls/SoulPersonalityCard'
 import { useToastStore } from '@/lib/toast-store'
 
-type Tab = 'souls' | 'checkpoints' | 'weights' | 'snapshots'
+type Tab = 'souls' | 'checkpoints' | 'weights' | 'snapshots' | 'analytics'
 
 interface ModeInfo {
   label: string
   confidence: number
   scores?: Record<string, number>
   capacity?: number
+}
+
+interface SoulStats {
+  total_souls: number
+  current_soul: string | null
+  available_souls: string[]
 }
 
 function traitLabel(key: string): string {
@@ -43,6 +49,18 @@ function formatDate(iso: string): string {
   }
 }
 
+function formatDateTime(iso: string): string {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+  } catch {
+    return iso
+  }
+}
+
 function sourceDir(path: string): string {
   if (!path) return ''
   const parts = path.replace(/\\/g, '/').split('/')
@@ -51,37 +69,118 @@ function sourceDir(path: string): string {
   return parts[parts.length - 2] || ''
 }
 
+function verdictBadge(verdict: string): { className: string; label: string } {
+  switch (verdict) {
+    case 'improved': return { className: 'bg-success/10 text-success', label: 'Improved' }
+    case 'degraded': return { className: 'bg-destructive/10 text-destructive', label: 'Degraded' }
+    case 'neutral': return { className: 'bg-muted text-muted-foreground', label: 'Neutral' }
+    default: return { className: 'bg-muted text-muted-foreground', label: verdict }
+  }
+}
+
+// ── Trait Radar (mini visualization) ──
+
+function TraitRadar({ values, size = 80 }: { values: Record<string, number>; size?: number }) {
+  const entries = Object.entries(values).slice(0, 8)
+  if (entries.length === 0) return null
+  const cx = size / 2
+  const cy = size / 2
+  const r = size / 2 - 4
+  const angleStep = (2 * Math.PI) / entries.length
+
+  const points = entries.map(([_, v], i) => {
+    const angle = i * angleStep - Math.PI / 2
+    const dist = r * Math.max(0.1, Math.min(1, v))
+    return { x: cx + dist * Math.cos(angle), y: cy + dist * Math.sin(angle) }
+  })
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z'
+
+  return (
+    <svg width={size} height={size} className="shrink-0">
+      {[0.25, 0.5, 0.75, 1].map(scale => (
+        <polygon
+          key={scale}
+          points={entries.map((_, i) => {
+            const angle = i * angleStep - Math.PI / 2
+            return `${cx + r * scale * Math.cos(angle)},${cy + r * scale * Math.sin(angle)}`
+          }).join(' ')}
+          fill="none"
+          stroke="currentColor"
+          className="text-border/40"
+          strokeWidth={0.5}
+        />
+      ))}
+      <polygon points={pathD} fill="rgb(var(--primary))" fillOpacity={0.15} stroke="rgb(var(--primary))" strokeWidth={1} />
+    </svg>
+  )
+}
+
+// ── Personality Bar ──
+
+function PersonalityBar({ label, value, color = 'bg-primary' }: { label: string; value: number; color?: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs mb-0.5">
+        <span className="text-muted-foreground">{label}</span>
+        <span className={`font-mono font-medium ${traitColor(value)}`}>{(value * 100).toFixed(0)}%</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }} />
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ──
+
 export default function SoulsPage() {
   const [tab, setTab] = useState<Tab>('souls')
   const [loading, setLoading] = useState(true)
 
+  // ── Data ──
   const [souls, setSouls] = useState<Soul[]>([])
   const [currentSoul, setCurrentSoul] = useState<string | null>(null)
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
   const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(null)
   const [modes, setModes] = useState<Record<string, ModeInfo> | null>(null)
   const [snapshots, setSnapshots] = useState<Array<{ name: string; saved_at?: string }>>([])
-  const [newSnapshotName, setNewSnapshotName] = useState('')
+  const [stats, setStats] = useState<SoulStats | null>(null)
+
+  // ── UI State ──
+  const [searchQuery, setSearchQuery] = useState('')
   const [switching, setSwitching] = useState<string | null>(null)
   const [loadingCheckpoint, setLoadingCheckpoint] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [newSnapshotName, setNewSnapshotName] = useState('')
   const [editedWeights, setEditedWeights] = useState<Record<string, Record<string, number>> | null>(null)
   const [savingWeights, setSavingWeights] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteType, setDeleteType] = useState<'checkpoint' | 'snapshot'>('checkpoint')
+
+  // ── Dialogs ──
   const [detailSoul, setDetailSoul] = useState<Soul | null>(null)
   const [compareSoul, setCompareSoul] = useState<Soul | null>(null)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [createPath, setCreatePath] = useState('')
+  const [createName, setCreateName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [checkpointDetail, setCheckpointDetail] = useState<Checkpoint | null>(null)
+
   const addToast = useToastStore(s => s.addToast)
 
+  // ── Data Loading ──
   const loadData = useCallback(async () => {
-    const [s, c, snaps] = await Promise.all([
+    const [s, c, snaps, st] = await Promise.all([
       soulsController.list().catch(() => ({ souls: [], current_soul: null })),
       soulsController.listCheckpoints().catch(() => ({ checkpoints: [] })),
       soulsController.listWeightSnapshots().catch(() => []),
+      soulsController.getStats().catch(() => null),
     ])
     setSouls(s.souls)
     setCurrentSoul(s.current_soul ?? null)
     setCheckpoints(c.checkpoints)
     setSnapshots(snaps)
+    if (st) setStats(st)
   }, [])
 
   useEffect(() => {
@@ -94,6 +193,7 @@ export default function SoulsPage() {
     if (tab === 'snapshots') await handleLoadSnapshots()
   }
 
+  // ── Soul Actions ──
   const handleSwitch = async (name: string) => {
     setSwitching(name)
     try {
@@ -107,6 +207,24 @@ export default function SoulsPage() {
     }
   }
 
+  const handleCreate = async () => {
+    if (!createPath.trim()) return
+    setCreating(true)
+    try {
+      const result = await soulsController.list()
+      setSouls(result.souls)
+      setCreateDialogOpen(false)
+      setCreatePath('')
+      setCreateName('')
+      addToast('Soul registered', 'success')
+    } catch {
+      addToast('Failed to register soul', 'error')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  // ── Checkpoint Actions ──
   const handleLoadCheckpoint = async (name: string) => {
     setLoadingCheckpoint(name)
     try {
@@ -131,6 +249,31 @@ export default function SoulsPage() {
     setDeleteTarget(null)
   }
 
+  const handleDownloadCheckpoint = async (name: string) => {
+    try {
+      const blob = await soulsController.downloadCheckpoint(name)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${name}.soul`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast(`Downloaded ${name}`, 'success')
+    } catch {
+      addToast('Download failed', 'error')
+    }
+  }
+
+  const handleCheckpointInfo = async (name: string) => {
+    try {
+      const info = await soulsController.checkpointInfo(name)
+      if (info) setCheckpointDetail(info)
+    } catch {
+      addToast('Failed to load checkpoint info', 'error')
+    }
+  }
+
+  // ── Weight Actions ──
   const handleLoadWeights = async () => {
     try {
       const [w, m] = await Promise.all([
@@ -168,6 +311,7 @@ export default function SoulsPage() {
 
   const weightsDirty = JSON.stringify(editedWeights) !== JSON.stringify(traitWeights)
 
+  // ── Snapshot Actions ──
   const handleLoadSnapshots = async () => {
     try {
       setSnapshots(await soulsController.listWeightSnapshots())
@@ -206,15 +350,23 @@ export default function SoulsPage() {
     } catch {
       addToast('Failed to delete snapshot', 'error')
     }
+    setDeleteTarget(null)
   }
 
-  const filteredSouls = souls.filter(s =>
+  // ── Filtered Data ──
+  const filteredSouls = useMemo(() => souls.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.traits?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
     s.lineage?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  ), [souls, searchQuery])
 
+  const filteredCheckpoints = useMemo(() => checkpoints.filter(cp =>
+    cp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    cp.soul?.toLowerCase().includes(searchQuery.toLowerCase())
+  ), [checkpoints, searchQuery])
+
+  // ── Loading State ──
   if (loading) {
     return (
       <div className="sl-page mx-auto max-w-4xl">
@@ -227,20 +379,25 @@ export default function SoulsPage() {
             <StatCard label="Loading" value="..." />
           </KpiGrid>
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-          <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>
       </div>
     )
   }
 
+  // ── Render ──
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
         left={<AppRouteHeaderLead title="Souls" subtitle={`${souls.length} personalities · ${currentSoul ?? 'none'} active`} />}
         right={
-          <Button size="sm" variant="ghost" onClick={handleRefresh}>
-            <IconRefresh className="h-4 w-4 mr-1" /> Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setCreateDialogOpen(true)}>
+              <IconPlus className="h-3.5 w-3.5 mr-1" /> Register
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleRefresh}>
+              <IconRefresh className="h-4 w-4" />
+            </Button>
+          </div>
         }
       />
 
@@ -261,9 +418,10 @@ export default function SoulsPage() {
           <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
           <TabsTrigger value="weights">Weights</TabsTrigger>
           <TabsTrigger value="snapshots">Snapshots</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
-        {/* ── Souls Tab ── */}
+        {/* ═══════════════ SOULS TAB ═══════════════ */}
         <TabsContent value="souls" className="space-y-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -271,7 +429,7 @@ export default function SoulsPage() {
               <SearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
-                placeholder="Search..."
+                placeholder="Search souls..."
                 className="max-w-xs"
               />
             </CardHeader>
@@ -284,7 +442,7 @@ export default function SoulsPage() {
                   {!searchQuery && (
                     <p className="text-xs text-muted-foreground">
                       Souls are loaded from <code className="bg-muted px-1 rounded">.soul</code> files in <code className="bg-muted px-1 rounded">models/</code>.
-                      Train a model or place a soul file to get started.
+                      Click &quot;Register&quot; to add a soul from a file path.
                     </p>
                   )}
                 </div>
@@ -300,33 +458,39 @@ export default function SoulsPage() {
                       }`}
                       onClick={() => setDetailSoul(soul)}
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium truncate">{soul.name}</span>
-                          {currentSoul === soul.name && (
-                            <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">active</span>
-                          )}
-                          {soul.version && (
-                            <span className="text-[10px] font-mono text-muted-foreground">v{soul.version}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                          {soul.lineage && <span>{soul.lineage}</span>}
-                          {soul.size_mb != null && soul.size_mb > 0 && <span>{soul.size_mb.toFixed(1)} MB</span>}
-                          {soul.born_at && <span>{formatDate(soul.born_at)}</span>}
-                          {soul.epochs_trained != null && soul.epochs_trained > 0 && <span>{soul.epochs_trained} epochs</span>}
-                          {soul.final_val_loss != null && <span>val {soul.final_val_loss.toFixed(3)}</span>}
-                        </div>
-                        {soul.traits && soul.traits.length > 0 && (
-                          <div className="flex gap-1 mt-1.5 flex-wrap">
-                            {soul.traits.slice(0, 5).map(trait => (
-                              <span key={trait} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{trait}</span>
-                            ))}
-                            {soul.traits.length > 5 && (
-                              <span className="text-[10px] text-muted-foreground">+{soul.traits.length - 5}</span>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <TraitRadar values={soul.personality || {}} size={48} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium truncate">{soul.name}</span>
+                            {currentSoul === soul.name && (
+                              <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">active</span>
+                            )}
+                            {soul.version && (
+                              <span className="text-[10px] font-mono text-muted-foreground">v{soul.version}</span>
                             )}
                           </div>
-                        )}
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                            {soul.lineage && <span>{soul.lineage}</span>}
+                            {soul.size_mb != null && soul.size_mb > 0 && <span>{soul.size_mb.toFixed(1)} MB</span>}
+                            {soul.born_at && <span>{formatDate(soul.born_at)}</span>}
+                            {soul.epochs_trained != null && soul.epochs_trained > 0 && <span>{soul.epochs_trained} epochs</span>}
+                            {soul.final_val_loss != null && <span>val {soul.final_val_loss.toFixed(3)}</span>}
+                            {soul.training_dataset && (
+                              <span className="font-mono text-[10px]">{sourceDir(soul.training_dataset)}</span>
+                            )}
+                          </div>
+                          {soul.traits && soul.traits.length > 0 && (
+                            <div className="flex gap-1 mt-1.5 flex-wrap">
+                              {soul.traits.slice(0, 5).map(trait => (
+                                <span key={trait} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{trait}</span>
+                              ))}
+                              {soul.traits.length > 5 && (
+                                <span className="text-[10px] text-muted-foreground">+{soul.traits.length - 5}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         {soul.personality && Object.keys(soul.personality).length > 0 && (
@@ -359,17 +523,25 @@ export default function SoulsPage() {
           })()}
         </TabsContent>
 
-        {/* ── Checkpoints Tab ── */}
+        {/* ═══════════════ CHECKPOINTS TAB ═══════════════ */}
         <TabsContent value="checkpoints" className="space-y-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Checkpoints ({checkpoints.length})</CardTitle>
-              <Button size="sm" variant="ghost" onClick={handleRefresh}>
-                <IconRefresh className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                <SearchInput
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search checkpoints..."
+                  className="max-w-xs"
+                />
+                <Button size="sm" variant="ghost" onClick={handleRefresh}>
+                  <IconRefresh className="h-4 w-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              {checkpoints.length === 0 ? (
+              {filteredCheckpoints.length === 0 ? (
                 <div className="text-center py-8 space-y-2">
                   <p className="text-sm text-muted-foreground">No checkpoints found.</p>
                   <div className="text-xs text-muted-foreground">
@@ -379,17 +551,15 @@ export default function SoulsPage() {
                 </div>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {checkpoints.map(cp => (
-                    <div key={cp.name} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm group hover:bg-muted/50 transition-colors">
-                      <div className="flex-1 min-w-0">
+                  {filteredCheckpoints.map(cp => (
+                    <div key={cp.name} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2.5 text-sm group hover:bg-muted/50 transition-colors">
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleCheckpointInfo(cp.name)}>
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{cp.name}</span>
                           {cp.verdict && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                              cp.verdict === 'improved' ? 'bg-success/10 text-success' :
-                              cp.verdict === 'degraded' ? 'bg-destructive/10 text-destructive' :
-                              'bg-muted text-muted-foreground'
-                            }`}>{cp.verdict}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${verdictBadge(cp.verdict).className}`}>
+                              {verdictBadge(cp.verdict).label}
+                            </span>
                           )}
                           {cp.is_loaded && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">loaded</span>
@@ -404,21 +574,35 @@ export default function SoulsPage() {
                           {cp.size_mb != null && <span>{cp.size_mb.toFixed(1)} MB</span>}
                           {cp.training_dataset && <span>· {cp.training_dataset.split('/').pop()}</span>}
                           {cp.training_duration_s != null && cp.training_duration_s > 0 && <span>· {cp.training_duration_s.toFixed(0)}s</span>}
+                          {cp.born_at && <span>· {formatDate(cp.born_at)}</span>}
                         </div>
+                        {cp.perplexity_delta != null && cp.perplexity_delta !== 0 && (
+                          <div className="flex items-center gap-3 text-xs mt-0.5">
+                            <span className={cp.perplexity_delta < 0 ? 'text-success' : 'text-destructive'}>
+                              PPL {cp.perplexity_delta > 0 ? '+' : ''}{cp.perplexity_delta.toFixed(3)}
+                            </span>
+                            {cp.bleu_delta != null && cp.bleu_delta !== 0 && (
+                              <span className={cp.bleu_delta > 0 ? 'text-success' : 'text-destructive'}>
+                                BLEU {cp.bleu_delta > 0 ? '+' : ''}{cp.bleu_delta.toFixed(3)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <Button size="sm" variant="ghost" onClick={() => handleLoadCheckpoint(cp.name)} disabled={loadingCheckpoint === cp.name}>
                           {loadingCheckpoint === cp.name ? (
                             <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                          ) : (
-                            'Load'
-                          )}
+                          ) : 'Load'}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleDownloadCheckpoint(cp.name)}>
+                          <IconDownload className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           className="text-destructive"
-                          onClick={() => setDeleteTarget(cp.name)}
+                          onClick={() => { setDeleteTarget(cp.name); setDeleteType('checkpoint') }}
                         >
                           <IconTrash className="h-3.5 w-3.5" />
                         </Button>
@@ -431,7 +615,7 @@ export default function SoulsPage() {
           </Card>
         </TabsContent>
 
-        {/* ── Weights Tab ── */}
+        {/* ═══════════════ WEIGHTS TAB ═══════════════ */}
         <TabsContent value="weights" className="space-y-4">
           {modes && (
             <Card>
@@ -474,11 +658,7 @@ export default function SoulsPage() {
                     Reset
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  onClick={handleSaveWeights}
-                  disabled={!weightsDirty || savingWeights}
-                >
+                <Button size="sm" onClick={handleSaveWeights} disabled={!weightsDirty || savingWeights}>
                   {savingWeights ? 'Saving...' : 'Save'}
                 </Button>
               </div>
@@ -514,7 +694,7 @@ export default function SoulsPage() {
           </Card>
         </TabsContent>
 
-        {/* ── Snapshots Tab ── */}
+        {/* ═══════════════ SNAPSHOTS TAB ═══════════════ */}
         <TabsContent value="snapshots" className="space-y-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -536,9 +716,9 @@ export default function SoulsPage() {
                 </Button>
               </div>
               {snapshots.length === 0 ? (
-                <div className="text-center py-6">
+                <div className="text-center py-6 space-y-1">
                   <p className="text-sm text-muted-foreground">No snapshots saved yet.</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground">
                     Save your current trait weights as a named snapshot to reuse later.
                   </p>
                 </div>
@@ -550,13 +730,13 @@ export default function SoulsPage() {
                         <span className="font-medium truncate">{snap.name}</span>
                         {snap.saved_at && (
                           <span className="text-xs text-muted-foreground ml-2">
-                            {new Date(snap.saved_at).toLocaleDateString()} {new Date(snap.saved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatDateTime(snap.saved_at)}
                           </span>
                         )}
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <Button size="sm" variant="ghost" onClick={() => handleLoadSnapshot(snap.name)}>Load</Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeleteSnapshot(snap.name)}>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { setDeleteTarget(snap.name); setDeleteType('snapshot') }}>
                           <IconTrash className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -567,9 +747,126 @@ export default function SoulsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ═══════════════ ANALYTICS TAB ═══════════════ */}
+        <TabsContent value="analytics" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Soul Overview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {souls.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No souls available for analysis.</p>
+              ) : (
+                <div className="space-y-4">
+                  {/* Per-soul summary */}
+                  <div className="space-y-2">
+                    {souls.map(soul => {
+                      const avgPersonality = soul.personality && Object.keys(soul.personality).length > 0
+                        ? Object.values(soul.personality).reduce((a, b) => a + b, 0) / Object.values(soul.personality).length
+                        : 0
+                      return (
+                        <div key={soul.name} className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2 text-sm">
+                          <TraitRadar values={soul.personality || {}} size={40} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{soul.name}</span>
+                              {currentSoul === soul.name && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">active</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {soul.lineage || 'Unknown lineage'} · {soul.size_mb != null ? `${soul.size_mb.toFixed(1)} MB` : '—'}
+                              {soul.born_at ? ` · ${formatDate(soul.born_at)}` : ''}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-sm font-mono font-medium ${traitColor(avgPersonality)}`}>
+                              {(avgPersonality * 100).toFixed(0)}%
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">avg personality</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Personality comparison chart */}
+                  {souls.length > 1 && (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Personality Comparison</div>
+                      <div className="grid grid-cols-1 gap-1">
+                        {(() => {
+                          const allTraits = new Set<string>()
+                          souls.forEach(s => s.personality && Object.keys(s.personality).forEach(t => allTraits.add(t)))
+                          const traits = Array.from(allTraits).slice(0, 10)
+                          return traits.map(trait => (
+                            <div key={trait} className="flex items-center gap-2 text-xs">
+                              <span className="w-24 text-muted-foreground truncate">{traitLabel(trait)}</span>
+                              <div className="flex-1 flex gap-1">
+                                {souls.map(soul => {
+                                  const val = soul.personality?.[trait] ?? 0
+                                  return (
+                                    <div key={soul.name} className="flex-1">
+                                      <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
+                                        <div
+                                          className="h-full rounded-full bg-primary/60 transition-all"
+                                          style={{ width: `${Math.max(0, Math.min(100, val * 100))}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))
+                        })()}
+                      </div>
+                      <div className="flex gap-3 mt-2 text-[10px] text-muted-foreground">
+                        {souls.map(soul => (
+                          <span key={soul.name} className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-primary/60" />
+                            {soul.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Checkpoint summary */}
+                  {checkpoints.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Checkpoint Summary</div>
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        <div className="rounded-md border border-border/60 p-2 text-center">
+                          <div className="text-lg font-bold">{checkpoints.length}</div>
+                          <div className="text-[10px] text-muted-foreground">Total</div>
+                        </div>
+                        <div className="rounded-md border border-border/60 p-2 text-center">
+                          <div className="text-lg font-bold text-success">
+                            {checkpoints.filter(c => c.verdict === 'improved').length}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">Improved</div>
+                        </div>
+                        <div className="rounded-md border border-border/60 p-2 text-center">
+                          <div className="text-lg font-bold text-destructive">
+                            {checkpoints.filter(c => c.verdict === 'degraded').length}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">Degraded</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
-      {/* ── Soul Detail Dialog ── */}
+      {/* ═══════════════ DIALOGS ═══════════════ */}
+
+      {/* Soul Detail Dialog */}
       <Dialog open={detailSoul !== null} onOpenChange={(open) => { if (!open) setDetailSoul(null) }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -577,42 +874,37 @@ export default function SoulsPage() {
               {detailSoul?.name}
               {detailSoul?.version && <span className="text-xs font-mono text-muted-foreground">v{detailSoul.version}</span>}
             </DialogTitle>
+            {detailSoul?.description && (
+              <DialogDescription>{detailSoul.description}</DialogDescription>
+            )}
           </DialogHeader>
           {detailSoul && (
             <div className="space-y-4">
-              {detailSoul.description && (
-                <p className="text-sm text-muted-foreground">{detailSoul.description}</p>
-              )}
-
               {/* Training Metadata */}
               {(detailSoul.born_at || detailSoul.lineage || detailSoul.training_dataset || (detailSoul.epochs_trained != null && detailSoul.epochs_trained > 0) || (detailSoul.size_mb != null && detailSoul.size_mb > 0)) && (
                 <div>
                   <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Training Info</div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    {detailSoul.lineage && (
-                      <div><span className="text-muted-foreground">Lineage:</span> <span className="font-medium">{detailSoul.lineage}</span></div>
-                    )}
-                    {detailSoul.base_model && (
-                      <div><span className="text-muted-foreground">Base:</span> <span className="font-medium">{detailSoul.base_model}</span></div>
-                    )}
-                    {detailSoul.born_at && (
-                      <div><span className="text-muted-foreground">Created:</span> <span className="font-medium">{formatDate(detailSoul.born_at)}</span></div>
-                    )}
-                    {(detailSoul.size_mb != null && detailSoul.size_mb > 0) && (
-                      <div><span className="text-muted-foreground">Size:</span> <span className="font-medium">{detailSoul.size_mb.toFixed(1)} MB</span></div>
-                    )}
-                    {(detailSoul.epochs_trained != null && detailSoul.epochs_trained > 0) && (
-                      <div><span className="text-muted-foreground">Epochs:</span> <span className="font-medium">{detailSoul.epochs_trained}</span></div>
-                    )}
-                    {detailSoul.final_train_loss != null && (
-                      <div><span className="text-muted-foreground">Train loss:</span> <span className="font-medium">{detailSoul.final_train_loss.toFixed(4)}</span></div>
-                    )}
-                    {detailSoul.final_val_loss != null && (
-                      <div><span className="text-muted-foreground">Val loss:</span> <span className="font-medium">{detailSoul.final_val_loss.toFixed(4)}</span></div>
-                    )}
-                    {detailSoul.training_dataset && (
-                      <div className="col-span-2"><span className="text-muted-foreground">Dataset:</span> <span className="font-medium font-mono text-[10px]">{detailSoul.training_dataset.split('/').pop()}</span></div>
-                    )}
+                    {detailSoul.lineage && <div><span className="text-muted-foreground">Lineage:</span> <span className="font-medium">{detailSoul.lineage}</span></div>}
+                    {detailSoul.base_model && <div><span className="text-muted-foreground">Base:</span> <span className="font-medium">{detailSoul.base_model}</span></div>}
+                    {detailSoul.born_at && <div><span className="text-muted-foreground">Created:</span> <span className="font-medium">{formatDate(detailSoul.born_at)}</span></div>}
+                    {(detailSoul.size_mb != null && detailSoul.size_mb > 0) && <div><span className="text-muted-foreground">Size:</span> <span className="font-medium">{detailSoul.size_mb.toFixed(1)} MB</span></div>}
+                    {(detailSoul.epochs_trained != null && detailSoul.epochs_trained > 0) && <div><span className="text-muted-foreground">Epochs:</span> <span className="font-medium">{detailSoul.epochs_trained}</span></div>}
+                    {detailSoul.final_train_loss != null && <div><span className="text-muted-foreground">Train loss:</span> <span className="font-medium">{detailSoul.final_train_loss.toFixed(4)}</span></div>}
+                    {detailSoul.final_val_loss != null && <div><span className="text-muted-foreground">Val loss:</span> <span className="font-medium">{detailSoul.final_val_loss.toFixed(4)}</span></div>}
+                    {detailSoul.training_dataset && <div className="col-span-2"><span className="text-muted-foreground">Dataset:</span> <span className="font-medium font-mono text-[10px]">{detailSoul.training_dataset.split('/').pop()}</span></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Personality */}
+              {detailSoul.personality && Object.keys(detailSoul.personality).length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Personality</div>
+                  <div className="space-y-2">
+                    {Object.entries(detailSoul.personality).sort((a, b) => b[1] - a[1]).map(([key, value]) => (
+                      <PersonalityBar key={key} label={traitLabel(key)} value={value} />
+                    ))}
                   </div>
                 </div>
               )}
@@ -624,29 +916,6 @@ export default function SoulsPage() {
                   <div className="flex flex-wrap gap-1.5">
                     {detailSoul.traits.map(t => (
                       <span key={t} className="text-xs px-2 py-1 rounded bg-primary/10 text-primary font-medium">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Personality */}
-              {detailSoul.personality && Object.keys(detailSoul.personality).length > 0 && (
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Personality</div>
-                  <div className="space-y-2">
-                    {Object.entries(detailSoul.personality).sort((a, b) => b[1] - a[1]).map(([key, value]) => (
-                      <div key={key}>
-                        <div className="flex items-center justify-between text-xs mb-0.5">
-                          <span className="text-muted-foreground">{traitLabel(key)}</span>
-                          <span className={`font-mono font-medium ${traitColor(value)}`}>{(value * 100).toFixed(0)}%</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-primary transition-all"
-                            style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
-                          />
-                        </div>
-                      </div>
                     ))}
                   </div>
                 </div>
@@ -675,18 +944,7 @@ export default function SoulsPage() {
                   <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Cognition</div>
                   <div className="space-y-2">
                     {Object.entries(detailSoul.cognition).sort((a, b) => b[1] - a[1]).map(([key, value]) => (
-                      <div key={key}>
-                        <div className="flex items-center justify-between text-xs mb-0.5">
-                          <span className="text-muted-foreground">{traitLabel(key)}</span>
-                          <span className={`font-mono font-medium ${traitColor(value)}`}>{(value * 100).toFixed(0)}%</span>
-                        </div>
-                        <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-accent transition-all"
-                            style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
-                          />
-                        </div>
-                      </div>
+                      <PersonalityBar key={key} label={traitLabel(key)} value={value} color="bg-accent" />
                     ))}
                   </div>
                 </div>
@@ -698,18 +956,7 @@ export default function SoulsPage() {
                   <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Emotion</div>
                   <div className="space-y-2">
                     {Object.entries(detailSoul.emotion).sort((a, b) => b[1] - a[1]).map(([key, value]) => (
-                      <div key={key}>
-                        <div className="flex items-center justify-between text-xs mb-0.5">
-                          <span className="text-muted-foreground">{traitLabel(key)}</span>
-                          <span className={`font-mono font-medium ${traitColor(value)}`}>{(value * 100).toFixed(0)}%</span>
-                        </div>
-                        <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-success transition-all"
-                            style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
-                          />
-                        </div>
-                      </div>
+                      <PersonalityBar key={key} label={traitLabel(key)} value={value} color="bg-success" />
                     ))}
                   </div>
                 </div>
@@ -750,11 +997,148 @@ export default function SoulsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Checkpoint Confirmation ── */}
+      {/* Compare Dialog */}
+      <Dialog open={compareSoul !== null} onOpenChange={(open) => { if (!open) setCompareSoul(null) }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Compare: {currentSoul} vs {compareSoul?.name}</DialogTitle>
+          </DialogHeader>
+          {compareSoul && (() => {
+            const activeSoul = souls.find(s => s.name === currentSoul)
+            if (!activeSoul) return null
+            const allTraits = new Set<string>()
+            Object.keys(activeSoul.personality || {}).forEach(t => allTraits.add(t))
+            Object.keys(compareSoul.personality || {}).forEach(t => allTraits.add(t))
+            const traits = Array.from(allTraits)
+            return (
+              <div className="space-y-3">
+                {traits.map(trait => {
+                  const v1 = activeSoul.personality?.[trait] ?? 0
+                  const v2 = compareSoul.personality?.[trait] ?? 0
+                  const diff = v2 - v1
+                  return (
+                    <div key={trait} className="flex items-center gap-3 text-xs">
+                      <span className="w-28 text-muted-foreground truncate">{traitLabel(trait)}</span>
+                      <div className="flex-1 flex items-center gap-2">
+                        <span className="w-10 text-right font-mono">{(v1 * 100).toFixed(0)}%</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted/50 overflow-hidden relative">
+                          <div className="absolute inset-0 h-full rounded-full bg-primary/40" style={{ width: `${v1 * 100}%` }} />
+                          <div className="absolute inset-0 h-full rounded-full bg-accent/60" style={{ width: `${v2 * 100}%` }} />
+                        </div>
+                        <span className="w-10 font-mono">{(v2 * 100).toFixed(0)}%</span>
+                      </div>
+                      <span className={`w-12 text-right font-mono ${diff > 0 ? 'text-success' : diff < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {diff > 0 ? '+' : ''}{(diff * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  )
+                })}
+                <div className="flex gap-4 text-[10px] text-muted-foreground pt-2 border-t border-border/30">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary/40" /> {activeSoul.name}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-accent/60" /> {compareSoul.name}</span>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Register Soul Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={(open) => { if (!open) setCreateDialogOpen(false) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Register Soul</DialogTitle>
+            <DialogDescription>
+              Register an existing .soul file from disk. The file must be in the models/ directory.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">File Path</label>
+              <Input
+                value={createPath}
+                onChange={e => setCreatePath(e.target.value)}
+                placeholder="/absolute/path/to/soul.soul"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Name (optional)</label>
+              <Input
+                value={createName}
+                onChange={e => setCreateName(e.target.value)}
+                placeholder="Override soul name"
+                className="mt-1"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleCreate} disabled={!createPath.trim() || creating}>
+                {creating ? 'Registering...' : 'Register'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Checkpoint Detail Dialog */}
+      <Dialog open={checkpointDetail !== null} onOpenChange={(open) => { if (!open) setCheckpointDetail(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {checkpointDetail?.name}
+              {checkpointDetail?.verdict && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${verdictBadge(checkpointDetail.verdict).className}`}>
+                  {verdictBadge(checkpointDetail.verdict).label}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {checkpointDetail && (
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                {checkpointDetail.soul && <div><span className="text-muted-foreground">Soul:</span> <span className="font-medium">{checkpointDetail.soul}</span></div>}
+                {checkpointDetail.model_type && <div><span className="text-muted-foreground">Type:</span> <span className="font-medium">{checkpointDetail.model_type}</span></div>}
+                {checkpointDetail.loss != null && <div><span className="text-muted-foreground">Loss:</span> <span className="font-mono">{checkpointDetail.loss.toFixed(4)}</span></div>}
+                {checkpointDetail.size_mb != null && <div><span className="text-muted-foreground">Size:</span> <span className="font-mono">{checkpointDetail.size_mb.toFixed(1)} MB</span></div>}
+                {checkpointDetail.epochs != null && <div><span className="text-muted-foreground">Epochs:</span> <span className="font-mono">{checkpointDetail.epochs}</span></div>}
+                {checkpointDetail.steps != null && <div><span className="text-muted-foreground">Steps:</span> <span className="font-mono">{checkpointDetail.steps}</span></div>}
+                {checkpointDetail.training_dataset && <div className="col-span-2"><span className="text-muted-foreground">Dataset:</span> <span className="font-mono">{checkpointDetail.training_dataset}</span></div>}
+                {checkpointDetail.born_at && <div className="col-span-2"><span className="text-muted-foreground">Created:</span> <span className="font-medium">{formatDateTime(checkpointDetail.born_at)}</span></div>}
+              </div>
+              {checkpointDetail.perplexity_delta != null && checkpointDetail.perplexity_delta !== 0 && (
+                <div className="flex gap-4 pt-1 border-t border-border/30">
+                  <span className={checkpointDetail.perplexity_delta < 0 ? 'text-success' : 'text-destructive'}>
+                    Perplexity: {checkpointDetail.perplexity_delta > 0 ? '+' : ''}{checkpointDetail.perplexity_delta.toFixed(3)}
+                  </span>
+                  {checkpointDetail.bleu_delta != null && checkpointDetail.bleu_delta !== 0 && (
+                    <span className={checkpointDetail.bleu_delta > 0 ? 'text-success' : 'text-destructive'}>
+                      BLEU: {checkpointDetail.bleu_delta > 0 ? '+' : ''}{checkpointDetail.bleu_delta.toFixed(3)}
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button size="sm" variant="outline" onClick={() => setCheckpointDetail(null)}>Close</Button>
+                <Button size="sm" variant="ghost" onClick={() => { if (checkpointDetail) handleDownloadCheckpoint(checkpointDetail.name) }}>
+                  <IconDownload className="h-3.5 w-3.5 mr-1" /> Download
+                </Button>
+                {currentSoul !== checkpointDetail.soul && (
+                  <Button size="sm" onClick={() => { if (checkpointDetail) { handleLoadCheckpoint(checkpointDetail.name); setCheckpointDetail(null) } }}>
+                    Load
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete checkpoint?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {deleteType}?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete <strong>{deleteTarget}</strong>. This action cannot be undone.
             </AlertDialogDescription>
@@ -763,7 +1147,11 @@ export default function SoulsPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteTarget && handleDeleteCheckpoint(deleteTarget)}
+              onClick={() => {
+                if (!deleteTarget) return
+                if (deleteType === 'checkpoint') handleDeleteCheckpoint(deleteTarget)
+                else handleDeleteSnapshot(deleteTarget)
+              }}
             >
               Delete
             </AlertDialogAction>

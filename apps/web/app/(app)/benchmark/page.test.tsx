@@ -79,17 +79,17 @@ describe('BenchmarkPage — initial load flow', () => {
     })
   })
 
-  it('fetches history, quality, and stats on mount', async () => {
+  it('fetches run, quality, and stats on mount', async () => {
     render(<BenchmarkPage />)
     await waitFor(() => {
-      expect(mockHistory).toHaveBeenCalledTimes(1)
+      expect(mockRun).toHaveBeenCalledTimes(1)
       expect(mockQuality).toHaveBeenCalledTimes(1)
       expect(mockStats).toHaveBeenCalledTimes(1)
     })
   })
 
   it('shows loading state initially', async () => {
-    mockHistory.mockReturnValue(new Promise(() => {})) // never resolves
+    mockRun.mockReturnValue(new Promise(() => {})) // never resolves
     render(<BenchmarkPage />)
     // Should render skeleton while loading
     expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
@@ -107,7 +107,7 @@ describe('BenchmarkPage — metrics tab flow', () => {
 
   it('refresh metrics button triggers re-run', async () => {
     render(<BenchmarkPage />)
-    await waitFor(() => { expect(mockHistory).toHaveBeenCalledTimes(1) })
+    await waitFor(() => { expect(mockRun).toHaveBeenCalledTimes(1) })
 
     const refreshBtns = screen.getAllByRole('button').filter(b =>
       b.textContent?.includes('refresh') || b.textContent?.includes('Refresh')
@@ -115,7 +115,7 @@ describe('BenchmarkPage — metrics tab flow', () => {
     if (refreshBtns.length > 0) {
       await act(async () => { fireEvent.click(refreshBtns[0]) })
       await waitFor(() => {
-        expect(mockRun).toHaveBeenCalledTimes(1)
+        expect(mockRun).toHaveBeenCalledTimes(2)
       })
     }
   })

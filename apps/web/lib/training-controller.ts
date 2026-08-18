@@ -33,6 +33,8 @@ export interface TrainingJob {
   reward_history?: Array<{ step: number; value: number }>
   result?: Record<string, unknown>
   metrics?: Record<string, unknown>
+  output_dir?: string
+  sou_path?: string
   epochs_completed?: number
   error?: string
   explanation?: string
@@ -165,6 +167,19 @@ export interface TurboJobStatus {
   elapsed_s?: number | null
   error?: string | null
   result?: Record<string, unknown> | null
+}
+
+export interface TrainFromSessionsParams {
+  epochs?: number
+  learning_rate?: number
+  n_embed?: number
+  n_layer?: number
+  n_head?: number
+  block_size?: number
+  soul_name?: string
+  min_pair_quality?: number
+  max_pairs?: number
+  session_ids?: string[]
 }
 
 export const trainingJobsController = {
@@ -497,18 +512,7 @@ export const trainingJobsController = {
   // On-device SloNet training from sessions (pure NumPy)
   // ---------------------------------------------------------------------------
 
-  async startFromSessionsSloNet(params: {
-    epochs?: number
-    learning_rate?: number
-    n_embed?: number
-    n_layer?: number
-    n_head?: number
-    block_size?: number
-    soul_name?: string
-    min_pair_quality?: number
-    max_pairs?: number
-    session_ids?: string[]
-  }): Promise<void> {
+  async startFromSessionsSloNet(params: TrainFromSessionsParams): Promise<void> {
     await apiPost('/auto-train/from-sessions/start', params)
   },
 

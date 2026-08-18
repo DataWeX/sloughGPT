@@ -7,6 +7,7 @@ import { CompanionInsightsCard } from './CompanionInsightsCard'
 afterEach(() => { cleanup() })
 
 const traits = {
+  name: 'Test Companion',
   warmth: 0.9,
   curiosity: 0.7,
   creativity: 0.5,
@@ -26,7 +27,7 @@ describe('CompanionInsightsCard', () => {
   })
 
   it('returns null for empty traits', () => {
-    const { container } = render(<CompanionInsightsCard traits={{}} presets={[]} />)
+    const { container } = render(<CompanionInsightsCard traits={{ name: 'empty', warmth: 0, curiosity: 0, creativity: 0, confidence: 0, humor: 0 }} presets={[]} />)
     expect(container.querySelector('[data-testid="companion-insights"]')).toBeNull()
   })
 

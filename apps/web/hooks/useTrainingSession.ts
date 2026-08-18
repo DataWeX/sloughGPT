@@ -194,8 +194,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         addToast, completeMessage: 'Image model training complete',
         onComplete: (job) => {
           writeTraining({
-            visualOutputDir: (job as unknown as Record<string, unknown>)?.output_dir as string ?? null,
-            visualSouPath: (job as unknown as Record<string, unknown>)?.sou_path as string ?? null,
+            visualOutputDir: job.output_dir ?? null,
+            visualSouPath: job.sou_path ?? null,
           })
           onComplete?.()
         },

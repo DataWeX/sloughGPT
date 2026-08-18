@@ -98,6 +98,13 @@ function docUrl(collection: string, id?: string): string {
   return id ? `${base}/${encodeURIComponent(id)}` : base
 }
 
+// ── In-flight request deduplication ────────────────────────────────────
+// When multiple components mount simultaneously (React StrictMode,
+// parallel effects), they fire the same GET for the same KV key.
+// This map deduplicates them: only one HTTP request per key is in flight
+// at a time; subsequent callers receive the same promise.
+const _inflightKV = new Map<string, Promise<unknown>>()
+
 // ── Server circuit breaker ────────────────────────────────────────────
 // When the API server is unreachable every failed write re-throws, which
 // fires window.onerror, which calls chatDB.addError(), which fails again —
@@ -311,8 +318,15 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     },
 
     async getKV<T = unknown>(key: string): Promise<T | undefined> {
-      const entry = await apiGet<KVEntry | null>(docUrl('kv', key))
-      return entry?.value as T | undefined
+      // Deduplicate concurrent reads for the same key
+      if (_inflightKV.has(key)) {
+        return _inflightKV.get(key)! as Promise<T | undefined>
+      }
+      const promise = apiGet<KVEntry | null>(docUrl('kv', key))
+        .then(entry => entry?.value as T | undefined)
+        .finally(() => _inflightKV.delete(key))
+      _inflightKV.set(key, promise)
+      return promise
     },
 
     async setKV(key: string, value: unknown): Promise<void> {

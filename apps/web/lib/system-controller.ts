@@ -175,7 +175,11 @@ export const systemController = {
   async *streamOutput(tail: number = 50): AsyncGenerator<OutputLine> {
     try {
       for await (const event of streamSSE(`/system/stream?tail=${tail}`, { method: 'GET' })) {
-        yield event as unknown as OutputLine
+        const d = event.data
+        if (d && typeof d.text === 'string' && typeof d.level === 'string' && typeof d.source === 'string' && typeof d.ts === 'number') {
+          const line: OutputLine = { text: d.text, level: d.level, source: d.source, ts: d.ts }
+          yield line
+        }
       }
     } catch (err) {
       throw new Error(`Stream failed: ${err instanceof Error ? err.message : 'unknown'}`)

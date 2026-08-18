@@ -1,23 +1,15 @@
 'use client'
 
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
-
-interface CompanionTraits {
-  warmth: number
-  curiosity: number
-  creativity: number
-  confidence: number
-  humor: number
-  [key: string]: number
-}
+import type { CompanionTraits } from '@/lib/companion-controller'
 
 interface CompanionInsightsCardProps {
-  traits: Record<string, unknown> | null
+  traits: CompanionTraits | null
   presets: Array<{ id: string; name: string; description?: string }>
 }
 
-function traitBalance(traits: Record<string, number>): { dominant: string; weakest: string; spread: number } {
-  const entries = Object.entries(traits).filter(([k]) => k !== 'id' && k !== 'name')
+function traitBalance(traits: CompanionTraits): { dominant: string; weakest: string; spread: number } {
+  const entries = (Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'id' && k !== 'name')
   if (entries.length === 0) return { dominant: '—', weakest: '—', spread: 0 }
   entries.sort((a, b) => b[1] - a[1])
   return {
@@ -27,9 +19,11 @@ function traitBalance(traits: Record<string, number>): { dominant: string; weake
   }
 }
 
-function personalityType(traits: Record<string, number>): string {
-  const avg = Object.values(traits).reduce((s, v) => s + v, 0) / Object.values(traits).length
-  const maxTrait = Object.entries(traits).sort((a, b) => b[1] - a[1])[0]
+function personalityType(traits: CompanionTraits): string {
+  const numericValues = (Object.values(traits) as unknown[]).filter((v): v is number => typeof v === 'number')
+  const avg = numericValues.reduce((s, v) => s + v, 0) / numericValues.length
+  const entries = (Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'name')
+  const maxTrait = entries.sort((a, b) => b[1] - a[1])[0]
 
   if (maxTrait[1] >= 0.8) return `Strong ${maxTrait[0]}`
   if (avg >= 0.7) return 'Balanced'
@@ -38,12 +32,13 @@ function personalityType(traits: Record<string, number>): string {
 }
 
 export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCardProps) {
-  if (!traits || Object.keys(traits).length === 0) return null
+  if (!traits) return null
+  const numericValues = (Object.values(traits) as unknown[]).filter((v): v is number => typeof v === 'number')
+  if (numericValues.length === 0 || numericValues.every(v => v === 0)) return null
 
-  const { dominant, weakest, spread } = traitBalance(traits as Record<string, number>)
-  const type = personalityType(traits as Record<string, number>)
-  const vals = Object.values(traits)
-  const avg = vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 0
+  const { dominant, weakest, spread } = traitBalance(traits)
+  const type = personalityType(traits)
+  const avg = numericValues.length > 0 ? numericValues.reduce((s, v) => s + v, 0) / numericValues.length : 0
 
   return (
     <Card data-testid="companion-insights">
@@ -72,7 +67,7 @@ export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCard
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {Object.entries(traits).map(([key, value]) => (
+          {(Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'name').map(([key, value]) => (
             <span
               key={key}
               className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${

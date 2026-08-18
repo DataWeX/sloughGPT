@@ -1,9 +1,10 @@
 'use client'
 
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import type { BenchmarkResult } from '@/lib/benchmark-controller'
 
 interface BenchmarkInsightsCardProps {
-  metrics: Record<string, unknown> | null
+  metrics: BenchmarkResult | null
   quality: { coherence_score: number; quality_score: number; repetition_rate: number } | null
   stats: { total: number; avg_tokens: number } | null
 }
@@ -15,8 +16,8 @@ function scoreLabel(score: number): { label: string; color: string } {
   return { label: 'Poor', color: 'text-destructive' }
 }
 
-function extractMetric(metrics: Record<string, unknown>, key: string): number | null {
-  const val = metrics[key]
+function extractMetric(metrics: BenchmarkResult, key: string): number | null {
+  const val = (metrics as unknown as Record<string, unknown>)[key]
   if (typeof val === 'number') return val
   if (typeof val === 'object' && val !== null && 'value' in val) {
     return typeof (val as { value: unknown }).value === 'number' ? (val as { value: number }).value : null
@@ -31,7 +32,7 @@ export function BenchmarkInsightsCard({ metrics, quality, stats }: BenchmarkInsi
   const coherenceInfo = quality ? scoreLabel(quality.coherence_score) : null
 
   const perplexity = metrics ? extractMetric(metrics, 'perplexity') : null
-  const throughput = metrics ? extractMetric(metrics, 'tokens_per_second') : null
+  const throughput = metrics ? extractMetric(metrics, 'throughput_tokens_per_sec') : null
   const latency = metrics ? extractMetric(metrics, 'avg_latency_ms') : null
 
   return (
