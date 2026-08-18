@@ -155,7 +155,7 @@ export default function CompanionPage() {
         </CardContent>
       </Card>
 
-      <CompanionInsightsCard traits={traits as unknown as Record<string, number>} presets={presets} />
+      <CompanionInsightsCard traits={traits} presets={presets} />
 
       {traits && (
         <Card>

@@ -133,7 +133,7 @@ export default function HomePage() {
 
   return (
     <PageContainer
-      title={<Greeting /> as unknown as string}
+      title={<Greeting />}
       subtitle={subtitleText()}
       className="relative"
       contentClassName="space-y-4"

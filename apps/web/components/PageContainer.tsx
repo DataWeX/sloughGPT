@@ -8,7 +8,7 @@ import { PageSkeleton } from '@/components/ui/PageSkeleton'
 
 interface PageContainerProps {
   /** Page title — rendered inside AppRouteHeaderLead. */
-  title: string
+  title: ReactNode
   /** Optional subtitle below title. */
   subtitle?: string
   /** Right-side actions in the header. Wraps on mobile. */

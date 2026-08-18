@@ -12,7 +12,7 @@ interface CompanionTraits {
 }
 
 interface CompanionInsightsCardProps {
-  traits: Record<string, number> | null
+  traits: Record<string, unknown> | null
   presets: Array<{ id: string; name: string; description?: string }>
 }
 
