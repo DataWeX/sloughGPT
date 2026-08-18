@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 
 
 class SelfTrainRequest(BaseModel):
@@ -63,24 +63,13 @@ class SelfTrainRouter:
                 cmd.append("--forever")
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             server_state._self_train_proc = proc
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "self_train.start",
-                    resource=(req.model if req and req.model else "default"),
-                    detail=f"pid={proc.pid}",
-                    extra={"temperature": req.temperature if req and req.temperature is not None else None, "forever": bool(req and req.forever)},
-                )
-            except Exception:
-                pass
+            safe_audit_log("self_train.start", resource=req.model if req and req.model else "default", detail=f"pid={proc.pid}", temperature=req.temperature if req and req.temperature is not None else None, forever=bool(req and req.forever))
             return success_response(data={"status": "started", "pid": proc.pid})
         except HTTPException:
             raise
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="self_train_start")
-            return error_response(str(e), "E_INFRA_STARTUP")
+            classify_and_raise(e, source="self_train_start")
+            raise_error(str(e), "E_INFRA_STARTUP")
 
     async def stop_self_train(self):
         """Stop self-training subprocess."""
@@ -91,21 +80,13 @@ class SelfTrainRouter:
             proc.terminate()
             proc.wait(timeout=5)
             server_state._self_train_proc = None
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log("self_train.stop", resource=str(proc.pid), detail="stopped")
-            except Exception:
-                pass
+            safe_audit_log("self_train.stop", resource=str(proc.pid), detail="stopped")
             return success_response(data={"status": "stopped"})
         except Exception as e:
             proc.kill()
             server_state._self_train_proc = None
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log("self_train.stop", resource=str(proc.pid), detail="killed")
-            except Exception:
-                pass
-            return error_response(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
+            safe_audit_log("self_train.stop", resource=str(proc.pid), detail="killed")
+            raise_error(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
 
     async def get_self_train_status(self):
         """Get self-training status."""

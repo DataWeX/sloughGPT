@@ -5,7 +5,7 @@ from fastapi import APIRouter
 
 from schemas.config import ConfigUpdate
 from controllers.config import get_config_controller
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise, safe_audit_log
 
 
 class ConfigRouter:
@@ -29,16 +29,7 @@ class ConfigRouter:
         ctrl = get_config_controller()
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         result = ctrl.update_generation_config(**updates)
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "config.generation.save",
-                resource="generation",
-                detail=str(updates),
-                extra={k: str(v) for k, v in updates.items()},
-            )
-        except Exception:
-            pass
+        safe_audit_log("config.generation.save", resource="generation", detail=str(updates), **{k: str(v) for k, v in updates.items()})
         return success_response(data=result)
 
 

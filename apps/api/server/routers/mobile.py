@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response, raise_error
 
 logger = logging.getLogger(__name__)
 
@@ -571,7 +571,7 @@ class MobileRouter:
             "content": body.content,
             "topic": body.topic,
         })
-        return result or error_response("Failed to create", "E_DOMAIN")
+        return result or raise_error("Failed to create", "E_DOMAIN")
 
     async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest):
         """
@@ -596,7 +596,7 @@ class MobileRouter:
             update_body["importance"] = body.importance
 
         result = await self._internal_patch(request, f"/knowledge/{item_id}", update_body)
-        return result or error_response("Failed to update", "E_DOMAIN")
+        return result or raise_error("Failed to update", "E_DOMAIN")
 
     async def delete_knowledge(self, request: Request, item_id: str):
         """

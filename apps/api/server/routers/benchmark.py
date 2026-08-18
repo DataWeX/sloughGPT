@@ -6,11 +6,14 @@ Includes quality evaluation:
 - Repetition detection
 - Real model metrics
 """
+import logging
 import time
 from fastapi import APIRouter, HTTPException
 from typing import Optional, Dict, Any
 
-from schemas.common import success_response, error_response
+logger = logging.getLogger(__name__)
+
+from schemas.common import success_response, raise_error
 
 
 def _numpy_perplexity(model, ids):
@@ -56,6 +59,7 @@ def _process_memory_mb() -> float:
         return psutil.Process().memory_info().rss / (1024 * 1024)
     except Exception:
         pass
+    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
     try:
         import os
         with open("/proc/self/statm") as fh:
@@ -64,11 +68,13 @@ def _process_memory_mb() -> float:
         return resident_pages * page_size_kb / 1024
     except Exception:
         pass
+    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
     try:
         import resource
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
     except Exception:
         pass
+    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
     return 0.0
 
 
@@ -134,7 +140,7 @@ class BenchmarkRouter:
                 "num_parameters": getattr(provider, "num_parameters", None),
             }
         except Exception as e:
-            return error_response(str(e), "E_DOMAIN", details={"model": model})
+            raise_error(str(e), "E_DOMAIN", details={"model": model})
 
     async def run_benchmark(self, model: str = "gpt2"):
         """Run model benchmark - returns real metrics"""

@@ -1,7 +1,7 @@
 """
 Security Router - Audit logs and API key management
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from typing import Optional
 
 from schemas.common import success_response
@@ -20,10 +20,10 @@ class SecurityRouter:
 
     async def get_audit_logs(
         self,
-        limit: int = 100,
-        event_type: Optional[str] = None,
-        history: bool = False,
-        before: Optional[str] = None,
+        limit: int = Query(default=100, ge=1, le=10000, description="Maximum number of log entries to return"),
+        event_type: Optional[str] = Query(default=None, description="Filter by event type"),
+        history: bool = Query(default=False, description="Read from persisted audit.log file"),
+        before: Optional[str] = Query(default=None, description="ISO-8601 cursor for pagination"),
     ):
         """Get audit logs.
 

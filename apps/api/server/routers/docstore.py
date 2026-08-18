@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Path, Query
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response, raise_error
 from mogdb import MogDB
 
 COLLECTIONS = frozenset({
@@ -84,7 +84,7 @@ class DocStoreRouter:
     def _validate(self, collection: str) -> Optional[dict]:
         """Return an error response dict for an unknown collection, else ``None``."""
         if collection not in COLLECTIONS:
-            return error_response(
+            raise_error(
                 f"Unknown collection: {collection}",
                 code="E_UNKNOWN_COLLECTION",
                 details={"allowed": sorted(COLLECTIONS)},
@@ -232,7 +232,7 @@ class DocStoreRouter:
             return err
         docs = body.get("docs")
         if not isinstance(docs, list):
-            return error_response("body.docs must be an array", code="E_BAD_REQUEST")
+            raise_error("body.docs must be an array", code="E_BAD_REQUEST")
         coll = _collection(collection)
         count = 0
         for raw in docs:

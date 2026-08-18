@@ -8,7 +8,7 @@ import psutil
 import platform
 import time
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
 
 
@@ -163,10 +163,10 @@ class SystemRouter:
         """Get metadata for a single training job by ID."""
         from domains.training.executor import _instance
         if _instance is None:
-            return error_response("executor not initialized", "E_INFRA_STARTUP")
+            raise_error("executor not initialized", "E_INFRA_STARTUP")
         status = _instance.status(job_id)
         if status is None:
-            return error_response(f"job {job_id} not found", "E_NOT_FOUND")
+            raise_error(f"job {job_id} not found", "E_NOT_FOUND")
         return success_response(data=status)
 
     async def get_executor_job_result(self, job_id: str):
@@ -177,13 +177,13 @@ class SystemRouter:
         """
         from domains.training.executor import _instance
         if _instance is None:
-            return error_response("executor not initialized", "E_INFRA_STARTUP")
+            raise_error("executor not initialized", "E_INFRA_STARTUP")
         summary = _instance.result_summary(job_id)
         if summary is None:
             info = _instance.status(job_id)
             if info is None:
-                return error_response(f"job {job_id} not found", "E_NOT_FOUND")
-            return error_response("job not completed or has no weight result", "E_DOMAIN")
+                raise_error(f"job {job_id} not found", "E_NOT_FOUND")
+            raise_error("job not completed or has no weight result", "E_DOMAIN")
         return success_response(data=summary)
 
     async def purge_executor_jobs(
@@ -196,16 +196,7 @@ class SystemRouter:
         if _instance is None:
             return success_response(data={"purged": 0})
         purged = _instance.purge_completed(max_age_s=max_age_s)
-        try:
-            from infrastructure.auth import get_audit_logger, audit_user
-            get_audit_logger().log(
-                "executor.purge",
-                resource="executor",
-                detail=f"purged={purged} max_age_s={max_age_s}",
-                user=audit_user(auth_user),
-            )
-        except Exception:
-            pass
+        safe_audit_log("executor.purge", resource="executor", detail=f"purged={purged} max_age_s={max_age_s}")
         return success_response(data={"purged": purged})
 
     async def cancel_executor_job(self, job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
@@ -219,16 +210,7 @@ class SystemRouter:
         if _instance is None:
             return success_response(data={"cancelled": False, "reason": "executor not initialized"})
         cancelled = _instance.cancel(job_id)
-        try:
-            from infrastructure.auth import get_audit_logger, audit_user
-            get_audit_logger().log(
-                "executor.cancel",
-                resource=job_id,
-                detail=f"cancelled={cancelled}",
-                user=audit_user(auth_user),
-            )
-        except Exception:
-            pass
+        safe_audit_log("executor.cancel", resource=job_id, detail=f"cancelled={cancelled}")
         return success_response(data={"cancelled": cancelled})
 
     async def get_inference_pool_status(self):

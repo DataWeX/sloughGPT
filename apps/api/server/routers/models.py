@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 
 from schemas.models import ModelInfo, LoadModelRequest, LoadModelResponse, ModelStatus
-from schemas.common import success_response, error_response, wrap_controller_result
+from schemas.common import success_response, raise_error, wrap_controller_result
 from controllers.models import get_models_controller
 from infrastructure.auth import require_auth_if_enabled
 
@@ -45,6 +45,10 @@ class QuantizeRequest(BaseModel):
 class PrecisionRequest(BaseModel):
     """Request body for POST /models/precision."""
     mode: str = "auto"
+
+
+class ProcessGuardRequest(BaseModel):
+    enabled: bool
 
 
 class ModelsRouter:
@@ -267,6 +271,7 @@ class ModelsRouter:
                 model_id = get_model_registry().default_id
             except Exception:
                 pass
+            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
         result = ctrl.unload_model()
         try:
             from domains.infrastructure.server_state import get_server_state
@@ -302,84 +307,86 @@ class ModelsRouter:
         2. Local HF cache — any model that has safetensors files on disk
 
         Sizes are computed in parallel to avoid sequential blocking on Hub API calls.
+        All filesystem I/O and network calls run off the event loop via asyncio.to_thread.
         """
+        import asyncio
         ctrl = get_models_controller()
-        model_ids = ctrl.list_hf_models(q)
 
-        def _is_cached(model_id: str) -> bool:
-            try:
-                return is_model_cached(model_id)
-            except Exception as exc:
-                logger.error("is_model_cached(%s) failed: %s", model_id, exc, extra={"tag": "MODEL"})
-                return False
+        def _build_list():
+            model_ids = ctrl.list_hf_models(q)
 
-        def _cache_model_id(cache_dir_name: str) -> Optional[str]:
-            """Convert a HF cache directory name like 'models--Qwen--Qwen2.5-0.5B-Instruct'
-            back to a model ID like 'Qwen/Qwen2.5-0.5B-Instruct'."""
-            if not cache_dir_name.startswith("models--"):
-                return None
-            return cache_dir_name[len("models--"):].replace("--", "/")
-
-        models_out = []
-        seen_ids = set()
-
-        # Collect all model IDs to process (hub list + local cache extras)
-        all_model_ids = []
-        for m in model_ids:
-            mid = m["model_id"] if isinstance(m, dict) else m
-            if mid not in seen_ids:
-                seen_ids.add(mid)
-                all_model_ids.append(mid)
-
-        if not q and _hf_cache_dir.exists():
-            try:
-                for entry in _hf_cache_dir.iterdir():
-                    if not entry.name.startswith("models--") or not entry.is_dir():
-                        continue
-                    cached_id = _cache_model_id(entry.name)
-                    if cached_id and cached_id not in seen_ids:
-                        seen_ids.add(cached_id)
-                        all_model_ids.append(cached_id)
-            except Exception:
-                pass
-
-        # Compute sizes in parallel (each call may hit HF Hub API)
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        size_results: dict[str, Optional[float]] = {}
-        cached_results: dict[str, bool] = {}
-
-        def _compute_one(mid: str):
-            return mid, compute_model_size_gb(mid), _is_cached(mid)
-
-        from domains.infrastructure.resource_manager import get_resource_manager
-        rm = get_resource_manager()
-        max_workers = min(max(len(all_model_ids), rm.inference_pool_size * 2), 16)
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(_compute_one, mid): mid for mid in all_model_ids}
-            for future in as_completed(futures):
+            def _is_cached(model_id: str) -> bool:
                 try:
-                    mid, size_gb, cached = future.result()
-                    size_results[mid] = size_gb
-                    cached_results[mid] = cached
+                    return is_model_cached(model_id)
+                except Exception as exc:
+                    logger.error("is_model_cached(%s) failed: %s", model_id, exc, extra={"tag": "MODEL"})
+                    return False
+
+            def _cache_model_id(cache_dir_name: str) -> Optional[str]:
+                if not cache_dir_name.startswith("models--"):
+                    return None
+                return cache_dir_name[len("models--"):].replace("--", "/")
+
+            models_out = []
+            seen_ids = set()
+
+            all_model_ids = []
+            for m in model_ids:
+                mid = m["model_id"] if isinstance(m, dict) else m
+                if mid not in seen_ids:
+                    seen_ids.add(mid)
+                    all_model_ids.append(mid)
+
+            if not q and _hf_cache_dir.exists():
+                try:
+                    for entry in _hf_cache_dir.iterdir():
+                        if not entry.name.startswith("models--") or not entry.is_dir():
+                            continue
+                        cached_id = _cache_model_id(entry.name)
+                        if cached_id and cached_id not in seen_ids:
+                            seen_ids.add(cached_id)
+                            all_model_ids.append(cached_id)
                 except Exception:
-                    mid = futures[future]
-                    size_results[mid] = None
-                    cached_results[mid] = False
+                    pass
 
-        # Build output in original order
-        for mid in all_model_ids:
-            size_gb = size_results.get(mid)
-            models_out.append({
-                "id": mid,
-                "name": self._model_display_name(mid),
-                "hf_model_id": mid,
-                "source": "huggingface",
-                "size_mb": size_gb * 1024 if size_gb is not None else None,
-                "size_gb": size_gb,
-                "cached": cached_results.get(mid, False),
-            })
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            size_results: dict[str, Optional[float]] = {}
+            cached_results: dict[str, bool] = {}
 
-        return success_response(data=models_out, meta={"q": q})
+            def _compute_one(mid: str):
+                return mid, compute_model_size_gb(mid), _is_cached(mid)
+
+            from domains.infrastructure.resource_manager import get_resource_manager
+            rm = get_resource_manager()
+            max_workers = min(max(len(all_model_ids), rm.inference_pool_size * 2), 16)
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = {pool.submit(_compute_one, mid): mid for mid in all_model_ids}
+                for future in as_completed(futures):
+                    try:
+                        mid, size_gb, cached = future.result()
+                        size_results[mid] = size_gb
+                        cached_results[mid] = cached
+                    except Exception:
+                        mid = futures[future]
+                        size_results[mid] = None
+                        cached_results[mid] = False
+
+            for mid in all_model_ids:
+                size_gb = size_results.get(mid)
+                models_out.append({
+                    "id": mid,
+                    "name": self._model_display_name(mid),
+                    "hf_model_id": mid,
+                    "source": "huggingface",
+                    "size_mb": size_gb * 1024 if size_gb is not None else None,
+                    "size_gb": size_gb,
+                    "cached": cached_results.get(mid, False),
+                })
+
+            return models_out
+
+        models = await asyncio.to_thread(_build_list)
+        return success_response(data=models, meta={"q": q})
 
     async def get_model_logs(self, limit: int = 50, model_filter: Optional[str] = None):
         """Get model request logs (for debugging/monitoring)."""
@@ -396,7 +403,7 @@ class ModelsRouter:
         import state as server_state
         import time
         if server_state.model is None:
-            return error_response("No model loaded", code="E_NOT_FOUND")
+            raise_error("No model loaded", code="E_NOT_FOUND")
         try:
             from domains.training.export import export_model as do_export, ExportConfig
             config = ExportConfig(
@@ -415,7 +422,7 @@ class ModelsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="export_model")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def get_export_formats(self):
         """Get list of supported export formats."""
@@ -535,7 +542,7 @@ class ModelsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="verify_download")
-            return error_response(err.user_message, code=err.code, details={"model_id": model_id})
+            raise_error(err.user_message, code=err.code, details={"model_id": model_id})
 
     async def retry_download(self, model_id: str) -> Dict[str, Any]:
         """Redownload a cached model (cleanup + fresh download)."""
@@ -935,7 +942,7 @@ class ModelsRouter:
         ctrl = get_models_controller()
         return success_response(data=ctrl.get_process_guard_status())
 
-    async def set_process_guard(self, request: Dict[str, Any]):
+    async def set_process_guard(self, req: ProcessGuardRequest):
         """Enable or disable ProcessGuard at runtime.
 
         Body: ``{"enabled": true}`` or ``{"enabled": false}``
@@ -943,11 +950,8 @@ class ModelsRouter:
         Disabling stops any active guard. Enabling starts the guard for the
         currently loaded model if a .slnc file exists.
         """
-        enabled = request.get("enabled")
-        if not isinstance(enabled, bool):
-            raise HTTPException(status_code=422, detail="`enabled` must be a boolean")
         ctrl = get_models_controller()
-        return success_response(data=ctrl.set_process_guard_enabled(enabled))
+        return success_response(data=ctrl.set_process_guard_enabled(req.enabled))
 
 
 router = ModelsRouter().router

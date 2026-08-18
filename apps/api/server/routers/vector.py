@@ -6,12 +6,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 
+logger = logging.getLogger(__name__)
+
 from schemas.common import success_response
 
 
 class VectorStoreConfig(BaseModel):
     provider: str = "in_memory"
-    dimension: Optional[int] = 768
+    dimension: Optional[int] = 384
 
 
 class UpsertRequest(BaseModel):
@@ -56,7 +58,7 @@ class VectorRouter:
         self._vector_store_type = config.provider or "chromadb"
         try:
             from domains.inference.vector_store import create_vector_store
-            kwargs = {"dimension": 384}
+            kwargs = {"dimension": config.dimension}
             if self._vector_store_type == "chromadb":
                 kwargs["persist_directory"] = "data/vector_store"
             self._vector_store = await create_vector_store(provider=self._vector_store_type, **kwargs)
@@ -65,15 +67,17 @@ class VectorRouter:
                 set_vector_store_ref(self._vector_store)
             except Exception:
                 pass
+            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
             return success_response(data={"status": "connected", "provider": self._vector_store_type})
         except ImportError:
             self._vector_store_type = "in_memory"
-            self._vector_store = await create_vector_store(provider="in_memory", dimension=384)
+            self._vector_store = await create_vector_store(provider="in_memory", dimension=config.dimension)
             try:
                 from routers.inference import set_vector_store_ref
                 set_vector_store_ref(self._vector_store)
             except Exception:
                 pass
+            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
             return success_response(data={"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"})
         except Exception as e:
             from domains.infrastructure.errors import classify_exception, emit_error_event

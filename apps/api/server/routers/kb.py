@@ -5,6 +5,7 @@ All operations use the vector-store-backed KnowledgeMemory (the same store
 used by entity_extractor, soul engine prompt injection, and chat enrichment).
 """
 import json
+import logging
 import re
 import asyncio
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
@@ -12,7 +13,9 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import time
 
-from schemas.common import success_response, error_response, safe_audit_log
+logger = logging.getLogger(__name__)
+
+from schemas.common import success_response, raise_error, safe_audit_log
 
 import urllib.parse
 
@@ -243,6 +246,7 @@ class KBRouter:
             label = lr.label
         except Exception:
             pass
+        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         fact = KnowledgeFact(
             content=req.content,
@@ -266,6 +270,7 @@ class KBRouter:
                 )
             except Exception:
                 pass
+            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         safe_audit_log(
             "knowledge.add",
@@ -403,6 +408,7 @@ class KBRouter:
                             )
                 except Exception:
                     pass
+                logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             safe_audit_log(
                 "knowledge.add",
@@ -562,6 +568,7 @@ class KBRouter:
                 )
         except Exception:
             pass
+        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         return success_response(data={
             "status": "imported",
@@ -767,6 +774,7 @@ class KBRouter:
                         texts.extend(chunks[:500])
                     except Exception:
                         pass
+                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             # 3. Dataset files
             datasets_dir = REPO / "datasets"
@@ -778,6 +786,7 @@ class KBRouter:
                         texts.extend(chunks[:500])
                     except Exception:
                         pass
+                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             # Deduplicate
             seen = set()
@@ -785,7 +794,7 @@ class KBRouter:
             texts = unique[:500]
 
             if len(texts) < 10:
-                return error_response(f"Only {len(texts)} texts found. Need at least 10.", code="E_VAL_FIELD")
+                raise_error(f"Only {len(texts)} texts found. Need at least 10.", code="E_VAL_FIELD")
 
             result = train_embedder(
                 texts, epochs=15, lr=5e-4, batch_size=32,

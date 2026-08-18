@@ -219,3 +219,28 @@ def safe_audit_log(
         get_audit_logger().log(action, resource=resource, detail=detail, **kwargs)
     except Exception:
         pass
+
+
+def classify_and_raise(e: Exception, source: str = "router") -> None:
+    """Classify an exception, emit an error event, and raise HTTPException.
+
+    Replaces the repeated ``classify_exception + emit_error_event + raise_error``
+    blocks across router files.
+
+    Args:
+        e: The caught exception.
+        source: Identifier for the error source.
+
+    Raises:
+        HTTPException: Always, with classified error details.
+    """
+    from fastapi import HTTPException as _HTTPException
+    try:
+        from domains.infrastructure.errors import classify_exception, emit_error_event
+        err = classify_exception(e)
+        emit_error_event(err, source=source)
+        raise _HTTPException(status_code=err.http_status, detail=err.user_message)
+    except _HTTPException:
+        raise
+    except Exception:
+        raise _HTTPException(status_code=500, detail=str(e))

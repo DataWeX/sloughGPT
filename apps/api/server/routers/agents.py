@@ -12,7 +12,7 @@ from typing import Optional, List
 
 from domains.api.sse_envelope import sse_event, sse_complete, sse_error
 
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -96,16 +96,7 @@ class AgentsRouter:
             tools=req.tools,
             avatar=req.avatar,
         )
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "agent.create",
-                resource=agent_id,
-                detail=req.name,
-                extra={"tools": list(req.tools or [])},
-            )
-        except Exception:
-            pass
+        safe_audit_log("agent.create", resource=agent_id, detail=req.name, tools=list(req.tools or []))
         return AgentOut(**result)
 
     async def get_agent(self, agent_id: str):
@@ -128,22 +119,14 @@ class AgentsRouter:
         )
         if result is None:
             raise HTTPException(status_code=404, detail="Agent not found")
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("agent.update", resource=agent_id)
-        except Exception:
-            pass
+        safe_audit_log("agent.update", resource=agent_id)
         return AgentOut(**result)
 
     async def delete_agent(self, agent_id: str):
         """Delete an agent."""
         if not self._get_system().delete(agent_id):
             raise HTTPException(status_code=404, detail="Agent not found")
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("agent.delete", resource=agent_id)
-        except Exception:
-            pass
+        safe_audit_log("agent.delete", resource=agent_id)
         return success_response(data={"status": "deleted"})
 
     async def execute_agent(self, agent_id: str, req: ExecuteRequest):
@@ -156,15 +139,7 @@ class AgentsRouter:
         )
         if "error" in result:
             raise HTTPException(status_code=404, detail=result["error"])
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "agent.execute",
-                resource=agent_id,
-                extra={"user_id": req.user_id or "", "session_id": req.session_id or ""},
-            )
-        except Exception:
-            pass
+        safe_audit_log("agent.execute", resource=agent_id, user_id=req.user_id or "", session_id=req.session_id or "")
         return result
 
     # ── Orchestration ─────────────────────────────────────────────────────
@@ -190,11 +165,7 @@ class AgentsRouter:
                     if filtered:
                         orch = MultiAgentOrchestrator(agents=filtered)
                 run_id = store.start(req.goal, req.context or "")
-                try:
-                    from infrastructure.auth import get_audit_logger
-                    get_audit_logger().log("agent.orchestrate", resource=run_id, detail=req.goal[:200])
-                except Exception:
-                    pass
+                safe_audit_log("agent.orchestrate", resource=run_id, detail=req.goal[:200])
                 yield sse_event(
                     stream="agent-orchestrate",
                     phase="PLAN",
@@ -280,9 +251,7 @@ class AgentsRouter:
                                 message=f"Completed: {task.description}",
                             )
                         except Exception as e:
-                            from domains.infrastructure.errors import classify_exception, emit_error_event
-                            err = classify_exception(e)
-                            emit_error_event(err, source="agents_orchestrate_run_task")
+                            classify_and_raise(e, source="agents_orchestrate_run_task")
                             error = str(e)
                             task.error = error
                             task.status = "failed"
@@ -341,9 +310,7 @@ class AgentsRouter:
                 )
 
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="agents_orchestrate")
+                classify_and_raise(e, source="agents_orchestrate")
                 logger.exception("Orchestration error", extra={"tag": "MODEL"})
                 if run_id:
                     store.fail(run_id, str(e))

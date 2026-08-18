@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from domains.training.tokenizer_manager import get_tokenizer_manager
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise, safe_audit_log
 
 
 class TokenizeRequest(BaseModel):
@@ -150,15 +150,7 @@ class TokenizerRouter:
             lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
         mgr = get_tokenizer_manager()
         mgr.train(lines, vocab_size=req.vocab_size, min_frequency=3)
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "tokenizer.train",
-                resource="bpe",
-                extra={"vocab_size": req.vocab_size, "corpus_size": len(lines)},
-            )
-        except Exception:
-            pass
+        safe_audit_log("tokenizer.train", resource="bpe", vocab_size=req.vocab_size, corpus_size=len(lines))
         return success_response(data={"status": "trained", "corpus_size": len(lines), "stats": mgr.stats()})
 
     async def get_tokenization_sample(self):

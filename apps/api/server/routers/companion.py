@@ -45,6 +45,8 @@ class ChatRequest(BaseModel):
     user_name: Optional[str] = Field(default=None, max_length=100)
     user_mood: Optional[str] = Field(default=None, max_length=100)
     include_system_prompt: bool = True
+    max_tokens: int = Field(default=256, ge=1, le=4096, description="Max tokens to generate")
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
 
 
 class ChatResponse(BaseModel):
@@ -160,8 +162,8 @@ class CompanionRouter:
             if provider is not None:
                 response_text = await provider.chat(
                     messages,
-                    max_tokens=256,
-                    temperature=0.7,
+                    max_tokens=req.max_tokens,
+                    temperature=req.temperature,
                 )
             else:
                 error_msg = "No model loaded"

@@ -615,6 +615,7 @@ class MultimodalRouter:
                             entry["caption"] = caps[0].text
                     except Exception:
                         pass
+                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                 f.write(json.dumps(entry) + "\n")
                 entries += 1
         return success_response(data={"status": "created", "dataset": req.name, "path": str(output_path),

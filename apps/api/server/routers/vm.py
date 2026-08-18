@@ -248,6 +248,7 @@ async def run_assembly(req: VMRunRequest):
             vga_text = "\n".join(lines) if lines else None
         except Exception:
             pass
+        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         mem_dump = None
         if req.debug:
@@ -264,6 +265,7 @@ async def run_assembly(req: VMRunRequest):
                 mem_dump = "\n".join(rows)
             except Exception:
                 pass
+            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         kbd_state = None
         try:
@@ -272,6 +274,7 @@ async def run_assembly(req: VMRunRequest):
                 kbd_state = "".join(chr(b) for b in kbd._scancode_buffer if 32 <= b < 127)
         except Exception:
             pass
+        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         return VMRunResponse(
             success=True,

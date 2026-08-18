@@ -3,7 +3,7 @@ LoRA Evaluation Router - Trigger adapter quality evaluation.
 """
 from fastapi import APIRouter, HTTPException, Query
 
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise, safe_audit_log
 
 
 class LoraEvalRouter:
@@ -65,9 +65,7 @@ class LoraEvalRouter:
                 "note": "No adapter found — run aggregate first",
             })
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="lora_eval_run")
+            classify_and_raise(e, source="lora_eval_run")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_eval_history(
@@ -118,15 +116,7 @@ class LoraEvalRouter:
                 run_eval=run_eval,
             )
 
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "adapter.eval.aggregate",
-                    resource=output_name,
-                    extra={"user_count": result.get("user_count", 0), "total_feedback": result.get("total_feedback", 0)},
-                )
-            except Exception:
-                pass
+            safe_audit_log("adapter.eval.aggregate", resource=output_name, user_count=result.get("user_count", 0), total_feedback=result.get("total_feedback", 0))
 
             if "error" in result:
                 return success_response(data={"status": "no_adapters", "message": result["error"]})
@@ -154,9 +144,7 @@ class LoraEvalRouter:
                 "total_feedback": result["total_feedback"],
             })
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="lora_eval_aggregate")
+            classify_and_raise(e, source="lora_eval_aggregate")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
 

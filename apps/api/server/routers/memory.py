@@ -6,7 +6,7 @@ manage the memory store the chat loop writes to automatically.
 """
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from domains.memory.memory_service import get_memory_service
@@ -109,7 +109,10 @@ class MemoryRouter:
         stats["enabled"] = svc.enabled
         return stats
 
-    def list_memory(self, limit: Optional[int] = None) -> dict:
+    def list_memory(
+        self,
+        limit: int = Query(default=50, ge=1, le=1000, description="Maximum number of items to return"),
+    ) -> dict:
         """
         List stored memory items, most recent first.
 
@@ -122,13 +125,14 @@ class MemoryRouter:
         Side effects:
             - none; read-only.
         """
-        if limit is None:
-            limit = 50
-        limit = max(1, min(int(limit), 1000))
         items = self._service().list_all(limit=limit)
         return {"items": items, "total": len(items)}
 
-    def search(self, q: Optional[str] = None, limit: Optional[int] = None) -> dict:
+    def search(
+        self,
+        q: str = Query(..., min_length=1, description="The lookup text"),
+        limit: int = Query(default=5, ge=1, le=100, description="Maximum number of results"),
+    ) -> dict:
         """
         Semantic-search stored memory.
 
@@ -142,11 +146,6 @@ class MemoryRouter:
         Side effects:
             - none; read-only.
         """
-        if not q or not q.strip():
-            raise HTTPException(status_code=400, detail="q query parameter is required")
-        if limit is None:
-            limit = 5
-        limit = max(1, min(int(limit), 100))
         results = self._service().retrieve(q.strip(), limit=limit)
         return {"results": results, "total": len(results)}
 

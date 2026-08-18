@@ -487,6 +487,15 @@ class StartupOrchestrator:
                     extra={"tag": "START"},
                 )
                 self._routers_registered = True
+
+                # Pre-initialize SloManager so the first /souls request is
+                # instant (the scan runs here instead of blocking a request).
+                try:
+                    from domains.inference.slo_manager import get_slo_manager
+                    get_slo_manager()
+                except Exception as e:
+                    logger.debug("SloManager pre-init failed: %s", e, extra={"tag": "START"})
+
                 return
             except Exception as e:
                 last_exc = e

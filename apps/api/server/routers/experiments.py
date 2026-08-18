@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise, safe_audit_log
 
 
 class ExperimentCreate(BaseModel):
@@ -44,11 +44,7 @@ class ExperimentsRouter:
         exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         exp_dir = self.EXPERIMENTS_DIR / exp_id
         exp_dir.mkdir(exist_ok=True)
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("experiment.create", resource=exp_id, detail=req.name)
-        except Exception:
-            pass
+        safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
         return success_response(data={"id": exp_id, "name": req.name, "created": True})
 
     async def list_experiments(self):
@@ -76,11 +72,7 @@ class ExperimentsRouter:
         if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
             raise HTTPException(status_code=404, detail="Experiment not found")
         shutil.rmtree(path)
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("experiment.delete", resource=experiment_id)
-        except Exception:
-            pass
+        safe_audit_log("experiment.delete", resource=experiment_id)
         return success_response(data={"id": experiment_id, "deleted": True})
 
     async def get_experiment_runs(self, experiment_id: str):

@@ -1,7 +1,7 @@
 """
 Feedback Router - MVC View layer
 """
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from pydantic import BaseModel, Field
 from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
@@ -78,7 +78,10 @@ class FeedbackRouter:
         )
         return conv
 
-    async def list_conversations(self, limit: int = 50):
+    async def list_conversations(
+        self,
+        limit: int = Query(default=50, ge=1, le=1000, description="Maximum number of conversations to return"),
+    ):
         """List all conversations"""
         ctrl = get_feedback_controller()
         return ctrl.list_conversations(limit=limit)

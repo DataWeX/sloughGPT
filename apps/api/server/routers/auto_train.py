@@ -25,7 +25,7 @@ import math
 import re
 import time
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response, raise_error
 
 from training.runtime import get_training_runtime
 
@@ -313,6 +313,7 @@ def _load_soul_meta(ckpt_file: Path) -> dict:
             return json.loads(meta_file.read_text())
         except Exception:
             pass
+        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
     if ckpt_file.suffix == ".soul":
         return _read_slo_json_header(ckpt_file)
     if ckpt_file.suffix == ".slo":
@@ -509,7 +510,7 @@ class AutoTrainRouter:
 
     async def start(self, req: StartRequest):
         if not req.source_text and not req.dataset_id and not req.checkpoint_name:
-            return error_response("Provide source_text, dataset_id, or checkpoint_name", code="E_VAL_REQUEST")
+            raise_error("Provide source_text, dataset_id, or checkpoint_name", code="E_VAL_REQUEST")
 
         data_path = ""
         if req.source_text:
@@ -572,6 +573,7 @@ class AutoTrainRouter:
             )
         except Exception:
             pass
+        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
         return {"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": self.state.config}
 
     async def start_turbo(self, req: TurboStartRequest):
@@ -582,11 +584,11 @@ class AutoTrainRouter:
             data_path = _resolve_dataset_path(req.dataset_id)
 
         if not data_path:
-            return error_response("No data_path or dataset_id provided", code="E_VAL_REQUEST")
+            raise_error("No data_path or dataset_id provided", code="E_VAL_REQUEST")
 
         with _turbo_lock:
             if _turbo_state.get("status") == "running":
-                return error_response("A turbo training job is already running", code="E_INFRA_BUSY")
+                raise_error("A turbo training job is already running", code="E_INFRA_BUSY")
             _turbo_state = {
                 "status": "running",
                 "job_id": f"turbo_{int(time.time())}",
@@ -792,6 +794,7 @@ class AutoTrainRouter:
                     _auto_train_pgq.cancel_training(job_id)
                 except Exception:
                     pass
+                logger.debug("Suppressed exception in %s", __name__, exc_info=True)
         if _auto_train_cancel_event is not None:
             try:
                 from infrastructure.auth import get_audit_logger
@@ -947,6 +950,7 @@ class AutoTrainRouter:
                                             job["checkpoint"] = str(soul_files[-1])
                                     except Exception:
                                         pass
+                                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                                     get_training_runtime().sync(task_id)
                                 break
                         except json.JSONDecodeError:
@@ -978,6 +982,7 @@ class AutoTrainRouter:
                     _srv_state.training_active = False
                 except Exception:
                     pass
+                logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                 from training.runtime import get_training_runtime
                 job = get_training_runtime().get(task_id)
                 if job is not None and job.get("status") not in ("completed", "failed", "cancelled"):
@@ -1059,7 +1064,7 @@ class AutoTrainRouter:
 
         cp = self._find_checkpoint(name)
         if cp is None:
-            return error_response(f"Checkpoint not found: {name}", code="E_NOT_FOUND", details={"name": name})
+            raise_error(f"Checkpoint not found: {name}", code="E_NOT_FOUND", details={"name": name})
 
         try:
             soul_net = import_from_sou(str(cp))
@@ -1075,7 +1080,7 @@ class AutoTrainRouter:
             stoi = md.get("stoi") or md.get("metadata", {}).get("stoi")
             itos = md.get("itos") or md.get("metadata", {}).get("itos")
             if stoi is None or itos is None:
-                return error_response(
+                raise_error(
                     "Checkpoint has no stoi/itos vocab - retrain to include vocab.",
                     code="E_VAL_FIELD",
                     details={"name": cp.name},
@@ -1123,7 +1128,7 @@ class AutoTrainRouter:
             emit_error_event(err, source="load_checkpoint")
             import traceback
             autotrain_logger.error("Failed to load checkpoint %s: %s", cp.name, e, extra={"tag": "TRAIN", "context": {"checkpoint": cp.name, "error": str(e), "traceback": traceback.format_exc()}})
-            return error_response(str(e), details={"name": cp.name})
+            raise_error(str(e), details={"name": cp.name})
 
     async def download_checkpoint(self, name: str):
         if not _VALID_CKPT_NAME.match(name) or '..' in name:
@@ -1262,7 +1267,7 @@ class AutoTrainRouter:
 
     async def start_from_sessions(self, req: FromSessionsRequest):
         if self.state.running:
-            return error_response("Training already in progress", code="E_INFRA_BUSY")
+            raise_error("Training already in progress", code="E_INFRA_BUSY")
 
         self.state.running = True
         self.state.config = {
@@ -1288,7 +1293,7 @@ class AutoTrainRouter:
                 "training.start",
                 resource=req.soul_name or "from-sessions",
                 detail="from-sessions",
-                extra={"session_ids": len(req.session_ids), "epochs": req.epochs},
+                extra={"session_ids": len(req.session_ids) if req.session_ids else 0, "epochs": req.epochs},
             )
         except Exception:
             pass
@@ -1322,6 +1327,7 @@ class AutoTrainRouter:
         task.metadata["sse_queue"] = queue
         task.metadata["enqueue"] = _enqueue
 
+        global _auto_train_cancel_event
         _auto_train_cancel_event = threading.Event()
         _complete_enqueued[0] = False
         self.state.running = True
@@ -1395,6 +1401,7 @@ class AutoTrainRouter:
                                             job["checkpoint"] = str(soul_files[-1])
                                     except Exception:
                                         pass
+                                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                                     get_training_runtime().sync(task_id)
                                 break
                         except json.JSONDecodeError:

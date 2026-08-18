@@ -12,8 +12,8 @@ from pydantic import BaseModel
 import re
 import json, asyncio, numpy as np, logging
 
-from schemas.common import success_response, raise_error
-from infrastructure.auth import require_auth_if_enabled, audit_user, get_audit_logger
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled, audit_user
 
 try:
     from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
@@ -209,10 +209,7 @@ class SoulsRouter:
 
             return {"status": "no_target_model"}
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="load_checkpoint_into_model")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="load_checkpoint_into_model")
 
     def _build_soul_system_prompt(self, soul_info) -> str:
         """Build system prompt from soul personality traits."""
@@ -322,10 +319,7 @@ Be yourself — let your personality shape how you respond."""
             return StreamingResponse(stream(), media_type="text/event-stream")
 
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_chat")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_chat")
 
     async def switch_soul(
         self,
@@ -394,23 +388,11 @@ Be yourself — let your personality shape how you respond."""
             except Exception:
                 pass
 
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "soul.switch",
-                    resource=req.name,
-                    detail="checkpoint_loaded" if req.checkpoint_name else "",
-                    extra={"checkpoint_name": req.checkpoint_name or ""},
-                )
-            except Exception:
-                pass
+            safe_audit_log("soul.switch", resource=req.name, detail="checkpoint_loaded" if req.checkpoint_name else "", checkpoint_name=req.checkpoint_name or "")
 
             return success_response(data=result)
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="switch_soul")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="switch_soul")
 
     async def list_souls(self):
         """
@@ -423,9 +405,12 @@ Be yourself — let your personality shape how you respond."""
             - calls SloManager.list_souls() and get_current_soul()
         """
         try:
+            import asyncio
             from domains.inference.slo_manager import get_slo_manager
             manager = get_slo_manager()
-            souls = manager.list_souls()
+            # list_souls() is sync (filesystem glob).  Offload the first
+            # scan to a thread so the event loop stays responsive.
+            souls = await asyncio.to_thread(manager.list_souls)
             current = manager.get_current_soul()
             return success_response(data=[
                 {
@@ -485,10 +470,7 @@ Be yourself — let your personality shape how you respond."""
         except HTTPException:
             raise
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="get_soul")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
+            classify_and_raise(e, source="get_soul")
 
     async def get_trait_weights(self):
         """
@@ -512,10 +494,7 @@ Be yourself — let your personality shape how you respond."""
             weights = manager.get_trait_weights()
             return success_response(data=weights)
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_handler")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_handler")
 
     async def save_trait_weights(self, body: SaveWeightsRequest):
         """
@@ -539,22 +518,10 @@ Be yourself — let your personality shape how you respond."""
                     for k, v in traits.items():
                         flat[k] = float(v)
             config.set_many(flat)
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "soul.weights.save",
-                    resource="traits",
-                    detail=f"traits_saved={len(flat)}",
-                    extra={"groups": [g for g in ("personality", "cognition", "emotion") if getattr(body, g, None)]},
-                )
-            except Exception:
-                pass
+            safe_audit_log("soul.weights.save", resource="traits", detail=f"traits_saved={len(flat)}", groups=[g for g in ("personality", "cognition", "emotion") if getattr(body, g, None)])
             return success_response(message="saved")
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_handler")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_handler")
 
     async def get_trait_modes(self):
         """
@@ -586,10 +553,7 @@ Be yourself — let your personality shape how you respond."""
                 "task": TaskManager(config).get_mode(),
             })
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_handler")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_handler")
 
     async def get_current_soul(self):
         """
@@ -613,10 +577,7 @@ Be yourself — let your personality shape how you respond."""
                 })
             return success_response(data={"name": None})
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_handler")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_handler")
 
     async def list_weight_snapshots(self):
         """
@@ -652,17 +613,10 @@ Be yourself — let your personality shape how you respond."""
             from domains.context.managers import get_trait_config
             config = get_trait_config()
             path = config.save_snapshot(name)
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log("weights.snapshot.save", resource=name)
-            except Exception:
-                pass
+            safe_audit_log("weights.snapshot.save", resource=name)
             return success_response(data={"path": path}, message="saved")
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_handler")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_handler")
 
     async def load_weight_snapshot(self, name: str):
         """
@@ -681,21 +635,10 @@ Be yourself — let your personality shape how you respond."""
             from domains.context.managers import get_trait_config
             config = get_trait_config()
             count = config.load_snapshot(name)
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "weights.snapshot.load",
-                    resource=name,
-                    detail=f"traits_loaded={count}",
-                )
-            except Exception:
-                pass
+            safe_audit_log("weights.snapshot.load", resource=name, detail=f"traits_loaded={count}")
             return success_response(data={"traits_loaded": count}, message="loaded")
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_handler")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_handler")
 
     async def delete_weight_snapshot(self, name: str):
         """
@@ -714,21 +657,10 @@ Be yourself — let your personality shape how you respond."""
             from domains.context.managers import get_trait_config
             config = get_trait_config()
             ok = config.delete_snapshot(name)
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "weights.snapshot.delete",
-                    resource=name,
-                    detail=f"deleted={ok}",
-                )
-            except Exception:
-                pass
+            safe_audit_log("weights.snapshot.delete", resource=name, detail=f"deleted={ok}")
             return success_response(data={"deleted": ok})
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_handler")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_handler")
 
     async def get_soul_stats(self):
         """
@@ -744,10 +676,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.inference.slo_manager import get_slo_manager
             return success_response(data=get_slo_manager().get_stats())
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="soul_handler")
-            raise_error(err.user_message, code=err.code)
+            classify_and_raise(e, source="soul_handler")
 
 
 router = SoulsRouter().router

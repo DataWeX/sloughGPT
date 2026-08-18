@@ -1,11 +1,13 @@
 """
 Auth Router - JWT token management + login/register/me/logout endpoints
 """
-import uuid, json, os, hashlib, secrets
+import uuid, json, os, hashlib, secrets, logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Header, Request, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from schemas.common import success_response
 
@@ -63,7 +65,8 @@ class AuthRouter:
         try:
             with open(USERS_FILE) as f:
                 return json.load(f)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to parse %s: %s", USERS_FILE, exc)
             return {}
 
     @staticmethod
