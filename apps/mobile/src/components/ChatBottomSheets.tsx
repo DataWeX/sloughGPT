@@ -342,7 +342,7 @@ export function ChatBottomSheets({
                     pressStyle={{backgroundColor: colors.primaryAlpha(0.06), scale: 0.98}}>
                     <YStack
                       width={36} height={36} borderRadius={18}
-                      backgroundColor={isActive ? '$color9' : colors.primaryAlpha(0.08)}
+                      backgroundColor={isActive ? colors.primary : colors.primaryAlpha(0.08)}
                       alignItems="center" justifyContent="center">
                       <Icon name="user" size={16} color={isActive ? 'white' : colors.primary} />
                     </YStack>
@@ -362,7 +362,7 @@ export function ChatBottomSheets({
                       )}
                     </YStack>
                     {isActive && (
-                      <YStack width={20} height={20} borderRadius={10} backgroundColor="$color9" alignItems="center" justifyContent="center">
+                      <YStack width={20} height={20} borderRadius={10} backgroundColor={colors.primary} alignItems="center" justifyContent="center">
                         <Icon name="check" size={12} color="white" />
                       </YStack>
                     )}
