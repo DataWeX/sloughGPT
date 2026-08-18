@@ -80,10 +80,10 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
 
   const renderMatch = (match: SearchMatch, idx: number) => (
     <XStack key={idx} gap={8} paddingVertical={2}>
-      <Text fontSize={11} fontWeight="600" letterSpacing={0.2} color="$color9" minWidth={60}>
+      <Text fontSize={11} fontWeight="600" letterSpacing={0.2} color={colors.primary} minWidth={60}>
         {match.role === 'user' ? 'You' : 'Assistant'}:
       </Text>
-      <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color11" flex={1} numberOfLines={2}>
+      <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color={colors.textMuted} flex={1} numberOfLines={2}>
         {match.content}
       </Text>
     </XStack>
@@ -93,7 +93,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <YStack flex={1} backgroundColor={colors.overlay(0.4)} justifyContent="flex-end">
         <YStack
-          backgroundColor="$background"
+          backgroundColor={colors.background}
           borderTopLeftRadius={24}
           borderTopRightRadius={24}
           maxHeight="85%"
@@ -104,8 +104,8 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
             paddingHorizontal={20}
             paddingVertical={14}
             borderBottomWidth={0.5}
-            borderBottomColor="$borderColor">
-            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">
+            borderBottomColor={colors.border}>
+            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>
               Search Conversations
             </Text>
             <Pressable onPress={onClose}>
@@ -144,7 +144,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
 
           {searched && !loading && results.length === 0 && (
             <YStack alignItems="center" paddingVertical={48}>
-              <Text fontSize={15} fontWeight="400" color="$color10">
+              <Text fontSize={15} fontWeight="400" color={colors.textSecondary}>
                 {query.trim() ? 'No results found' : 'Type to search'}
               </Text>
             </YStack>
@@ -155,12 +155,12 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
             keyExtractor={item => item.id}
             renderItem={({item}) => (
               <Pressable onPress={() => handleSelect(item.id)}>
-                <YStack paddingHorizontal={16} paddingVertical={12} borderBottomWidth={0.5} borderBottomColor="$borderColor">
+                <YStack paddingHorizontal={16} paddingVertical={12} borderBottomWidth={0.5} borderBottomColor={colors.border}>
                   <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
-                    <Text fontSize={15} fontWeight="600" color="$color" flex={1} marginRight={8} numberOfLines={1}>
+                    <Text fontSize={15} fontWeight="600" color={colors.text} flex={1} marginRight={8} numberOfLines={1}>
                       {item.name || 'Untitled'}
                     </Text>
-                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color9">
+                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color={colors.primary}>
                       {item.match_count} {item.match_count === 1 ? 'match' : 'matches'}
                     </Text>
                   </XStack>

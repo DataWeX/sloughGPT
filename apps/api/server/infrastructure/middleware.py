@@ -55,6 +55,8 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
         self.timeout = timeout
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        if request.method == "OPTIONS":
+            return await call_next(request)
         try:
             return await asyncio.wait_for(call_next(request), timeout=self.timeout)
         except asyncio.TimeoutError:

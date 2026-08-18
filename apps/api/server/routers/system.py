@@ -34,54 +34,73 @@ class SystemRouter:
         self.router.add_api_route("/inference-pool", self.get_inference_pool_status, methods=["GET"])
 
     async def get_metrics(self):
-        """Get system metrics (cached for 2s)"""
+        """Get system metrics (cached for 2s).
+
+        All sync I/O runs off the event loop via asyncio.to_thread to prevent
+        blocking other requests during the psutil sampling window.
+        """
         now = time.monotonic()
         if self._metrics_cache["data"] is None or (now - self._metrics_cache["ts"]) > self._METRICS_TTL:
-            try:
-                from domains.infrastructure.resource_manager import get_resource_manager
-                rm = get_resource_manager()
-                logical = rm.topology.logical_cores
-                physical = rm.topology.physical_cores
-            except Exception:
-                logical = psutil.cpu_count(logical=True) or 1
-                physical = psutil.cpu_count(logical=False) or 1
-            self._metrics_cache["data"] = {
-                "cpu_percent": psutil.cpu_percent(interval=0.1),
-                "memory_percent": psutil.virtual_memory().percent,
-                "memory_used_gb": psutil.virtual_memory().used / (1024**3),
-                "memory_total_gb": psutil.virtual_memory().total / (1024**3),
-                "cpu_count_logical": logical,
-                "cpu_count_physical": physical,
-            }
+            import asyncio
+
+            def _sample():
+                try:
+                    from domains.infrastructure.resource_manager import get_resource_manager
+                    rm = get_resource_manager()
+                    logical = rm.topology.logical_cores
+                    physical = rm.topology.physical_cores
+                except Exception:
+                    logical = psutil.cpu_count(logical=True) or 1
+                    physical = psutil.cpu_count(logical=False) or 1
+                return {
+                    "cpu_percent": psutil.cpu_percent(interval=None),
+                    "memory_percent": psutil.virtual_memory().percent,
+                    "memory_used_gb": psutil.virtual_memory().used / (1024**3),
+                    "memory_total_gb": psutil.virtual_memory().total / (1024**3),
+                    "cpu_count_logical": logical,
+                    "cpu_count_physical": physical,
+                }
+
+            self._metrics_cache["data"] = await asyncio.to_thread(_sample)
             self._metrics_cache["ts"] = now
         return success_response(data=self._metrics_cache["data"])
 
     async def get_info(self):
         """Get system info"""
-        try:
-            from domains.infrastructure.resource_manager import get_resource_manager
-            rm = get_resource_manager()
-            cpu_count = rm.topology.logical_cores
-        except Exception:
-            cpu_count = psutil.cpu_count()
-        return success_response(data={
-            "platform": platform.system(),
-            "platform_release": platform.release(),
-            "platform_version": platform.version(),
-            "architecture": platform.machine(),
-            "processor": platform.processor(),
-            "cpu_count": cpu_count,
-        })
+        import asyncio
+
+        def _read():
+            try:
+                from domains.infrastructure.resource_manager import get_resource_manager
+                rm = get_resource_manager()
+                cpu_count = rm.topology.logical_cores
+            except Exception:
+                cpu_count = psutil.cpu_count()
+            return {
+                "platform": platform.system(),
+                "platform_release": platform.release(),
+                "platform_version": platform.version(),
+                "architecture": platform.machine(),
+                "processor": platform.processor(),
+                "cpu_count": cpu_count,
+            }
+
+        return success_response(data=await asyncio.to_thread(_read))
 
     async def get_disk(self):
         """Get disk usage"""
-        disk = psutil.disk_usage('/')
-        return success_response(data={
-            "total_gb": disk.total / (1024**3),
-            "used_gb": disk.used / (1024**3),
-            "free_gb": disk.free / (1024**3),
-            "percent": disk.percent,
-        })
+        import asyncio
+
+        def _read():
+            disk = psutil.disk_usage('/')
+            return {
+                "total_gb": disk.total / (1024**3),
+                "used_gb": disk.used / (1024**3),
+                "free_gb": disk.free / (1024**3),
+                "percent": disk.percent,
+            }
+
+        return success_response(data=await asyncio.to_thread(_read))
 
     async def get_lifecycle_status(self):
         """Get the current lifecycle manager state.

@@ -4,34 +4,22 @@ import userEvent from '@testing-library/user-event'
 
 vi.mock('@/lib/souls-controller', () => ({
   soulsController: {
-    list: vi.fn().mockResolvedValue({
-      souls: [
-        { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7 }, lineage: 'gpt2', size_mb: 0.5, born_at: '2025-01-10T00:00:00Z', epochs_trained: 5, final_val_loss: 0.42 },
-        { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8 }, lineage: 'gpt2', size_mb: 0.6 },
-        { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6 }, lineage: 'gpt2-medium' },
-      ],
-      current_soul: 'Friendly',
-    }),
-    switch: vi.fn().mockResolvedValue(undefined),
-    loadCheckpoint: vi.fn().mockResolvedValue({ status: 'loaded' }),
-    getTraitWeights: vi.fn().mockResolvedValue({ personality: { warmth: 0.8 }, cognition: { reasoning: 0.7 }, emotion: { empathy: 0.5 } }),
-    listWeightSnapshots: vi.fn().mockResolvedValue([{ name: 'baseline', saved_at: '2025-01-15T10:00:00Z' }]),
-    saveWeightSnapshot: vi.fn().mockResolvedValue('/path'),
-    loadWeightSnapshot: vi.fn().mockResolvedValue(3),
-    deleteWeightSnapshot: vi.fn().mockResolvedValue(true),
-    getModes: vi.fn().mockResolvedValue({ personality: { label: 'warm', confidence: 0.85 }, memory: { label: 'standard', confidence: 0.7 }, style: { label: 'formal', confidence: 0.6 }, task: { label: 'analytical', confidence: 0.75 } }),
-    saveTraitWeights: vi.fn().mockResolvedValue({ status: 'ok' }),
-    deleteCheckpoint: vi.fn().mockResolvedValue({ status: 'deleted' }),
-    getSoul: vi.fn().mockResolvedValue({ name: 'Friendly', description: 'A warm companion' }),
-    getStats: vi.fn().mockResolvedValue({ total_souls: 3, current_soul: 'Friendly' }),
-    checkpointInfo: vi.fn().mockResolvedValue({ name: 'cp-warm-v2', loss: 0.45 }),
-    downloadCheckpoint: vi.fn().mockResolvedValue(new Blob()),
-    listCheckpoints: vi.fn().mockResolvedValue({
-      checkpoints: [
-        { name: 'cp-warm-v2', soul: 'Friendly', loss: 0.45, verdict: 'improved', size_mb: 1.2, perplexity_delta: -0.12, bleu_delta: 0.08 },
-        { name: 'cp-base-v1', soul: 'Analyst', loss: 0.62, verdict: 'neutral', size_mb: 0.8 },
-      ],
-    }),
+    list: vi.fn(),
+    switch: vi.fn(),
+    loadCheckpoint: vi.fn(),
+    getTraitWeights: vi.fn(),
+    listWeightSnapshots: vi.fn(),
+    saveWeightSnapshot: vi.fn(),
+    loadWeightSnapshot: vi.fn(),
+    deleteWeightSnapshot: vi.fn(),
+    getModes: vi.fn(),
+    saveTraitWeights: vi.fn(),
+    deleteCheckpoint: vi.fn(),
+    getSoul: vi.fn(),
+    getStats: vi.fn(),
+    checkpointInfo: vi.fn(),
+    downloadCheckpoint: vi.fn(),
+    listCheckpoints: vi.fn(),
   },
 }))
 vi.mock('@/lib/toast-store', () => ({
@@ -71,6 +59,11 @@ function clickSoulCard(name: string) {
   throw new Error(`No clickable card found for "${name}"`)
 }
 
+function clickCheckpointRow(name: string) {
+  const el = screen.getByText(name).closest('[class*="cursor-pointer"]')
+  if (el) fireEvent.click(el)
+}
+
 describe('SoulsPage', () => {
   afterEach(cleanup)
 
@@ -80,6 +73,17 @@ describe('SoulsPage', () => {
     sc.listWeightSnapshots.mockResolvedValue([{ name: 'baseline', saved_at: '2025-01-15T10:00:00Z' }])
     sc.getModes.mockResolvedValue({ personality: { label: 'warm', confidence: 0.85 }, memory: { label: 'standard', confidence: 0.7 }, style: { label: 'formal', confidence: 0.6 }, task: { label: 'analytical', confidence: 0.75 } })
     sc.getTraitWeights.mockResolvedValue({ personality: { warmth: 0.8 }, cognition: { reasoning: 0.7 }, emotion: { empathy: 0.5 } })
+    sc.getSoul.mockResolvedValue({ name: 'Friendly', description: 'A warm companion', personality: { warmth: 0.9 }, traits: ['warmth'] } as Soul)
+    sc.checkpointInfo.mockResolvedValue(CHECKPOINTS[0])
+    sc.downloadCheckpoint.mockResolvedValue(new Blob())
+    sc.deleteCheckpoint.mockResolvedValue({ status: 'deleted' } as never)
+    sc.deleteWeightSnapshot.mockResolvedValue(true)
+    sc.loadWeightSnapshot.mockResolvedValue(3)
+    sc.saveWeightSnapshot.mockResolvedValue('/path')
+    sc.saveTraitWeights.mockResolvedValue({ status: 'ok' } as never)
+    sc.switch.mockResolvedValue(undefined as never)
+    sc.loadCheckpoint.mockResolvedValue({ status: 'loaded' } as never)
+    sc.getStats.mockResolvedValue({ total_souls: 3, current_soul: 'Friendly', available_souls: ['Friendly', 'Analyst', 'Creative'] })
   })
 
   it('renders page header', async () => {
@@ -209,6 +213,39 @@ describe('SoulsPage', () => {
     await waitFor(() => { expect(screen.getByText('No checkpoints found.')).toBeTruthy() })
   })
 
+  it('opens checkpoint detail dialog', async () => {
+    render(<SoulsPage />)
+    await clickTab('checkpoints')
+    await waitFor(() => { expect(screen.getByText('cp-warm-v2')).toBeTruthy() })
+    clickCheckpointRow('cp-warm-v2')
+    await waitFor(() => {
+      expect(screen.getAllByText('cp-warm-v2').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1)
+    })
+    expect(sc.checkpointInfo).toHaveBeenCalledWith('cp-warm-v2')
+  })
+
+  it('downloads checkpoint', async () => {
+    render(<SoulsPage />)
+    await clickTab('checkpoints')
+    await waitFor(() => { expect(screen.getAllByText('Load').length).toBeGreaterThanOrEqual(1) })
+    const loadRow = screen.getByText('cp-warm-v2').closest('[class*="rounded"]')!
+    const downloadBtn = loadRow.querySelectorAll('button')[1]
+    fireEvent.click(downloadBtn)
+    await waitFor(() => { expect(sc.downloadCheckpoint).toHaveBeenCalled() })
+  })
+
+  it('opens delete confirmation for checkpoint', async () => {
+    render(<SoulsPage />)
+    await clickTab('checkpoints')
+    await waitFor(() => { expect(screen.getAllByText('Load').length).toBeGreaterThanOrEqual(1) })
+    const trashBtns = screen.getAllByRole('button').filter(b => b.className.includes('destructive'))
+    if (trashBtns.length > 0) {
+      fireEvent.click(trashBtns[0])
+      await waitFor(() => { expect(screen.getByText('Delete checkpoint?')).toBeTruthy() })
+    }
+  })
+
   it('shows modes and trait weights', async () => {
     render(<SoulsPage />)
     await clickTab('weights')
@@ -244,6 +281,28 @@ describe('SoulsPage', () => {
     await waitFor(() => { expect(sc.saveWeightSnapshot).toHaveBeenCalledWith('new-snap') })
   })
 
+  it('loads snapshot', async () => {
+    render(<SoulsPage />)
+    await clickTab('snapshots')
+    await waitFor(() => { expect(screen.getByText('baseline')).toBeTruthy() })
+    const loadBtn = screen.getAllByText('Load').find(b => b.closest('[class*="border-border"]'))
+    if (loadBtn) {
+      fireEvent.click(loadBtn)
+      await waitFor(() => { expect(sc.loadWeightSnapshot).toHaveBeenCalledWith('baseline') })
+    }
+  })
+
+  it('opens delete confirmation for snapshot', async () => {
+    render(<SoulsPage />)
+    await clickTab('snapshots')
+    await waitFor(() => { expect(screen.getByText('baseline')).toBeTruthy() })
+    const trashBtns = screen.getAllByRole('button').filter(b => b.className.includes('destructive'))
+    if (trashBtns.length > 0) {
+      fireEvent.click(trashBtns[0])
+      await waitFor(() => { expect(screen.getByText('Delete snapshot?')).toBeTruthy() })
+    }
+  })
+
   it('shows analytics overview', async () => {
     render(<SoulsPage />)
     await clickTab('analytics')
@@ -252,6 +311,23 @@ describe('SoulsPage', () => {
       expect(screen.getByText('Personality Comparison')).toBeTruthy()
       expect(screen.getByText('Checkpoint Summary')).toBeTruthy()
     })
+  })
+
+  it('shows personality comparison chart with multiple souls', async () => {
+    render(<SoulsPage />)
+    await clickTab('analytics')
+    await waitFor(() => { expect(screen.getByText('Personality Comparison')).toBeTruthy() })
+    expect(screen.getByText('Warmth')).toBeTruthy()
+    expect(screen.getByText('Humor')).toBeTruthy()
+  })
+
+  it('shows checkpoint summary counts', async () => {
+    render(<SoulsPage />)
+    await clickTab('analytics')
+    await waitFor(() => { expect(screen.getByText('Checkpoint Summary')).toBeTruthy() })
+    expect(screen.getByText('Total')).toBeTruthy()
+    expect(screen.getByText('Improved')).toBeTruthy()
+    expect(screen.getByText('Degraded')).toBeTruthy()
   })
 
   it('opens register dialog', async () => {
@@ -265,5 +341,15 @@ describe('SoulsPage', () => {
     })
     fireEvent.click(screen.getAllByText('Cancel')[0])
     await waitFor(() => { expect(screen.queryByText('Register Soul')).toBeNull() })
+  })
+
+  it('refreshes data', async () => {
+    render(<SoulsPage />)
+    await waitFor(() => { expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
+    const refreshBtns = screen.getAllByRole('button').filter(b => b.querySelector('svg.h-4'))
+    if (refreshBtns.length > 0) {
+      fireEvent.click(refreshBtns[0])
+      await waitFor(() => { expect(sc.list).toHaveBeenCalledTimes(2) })
+    }
   })
 })

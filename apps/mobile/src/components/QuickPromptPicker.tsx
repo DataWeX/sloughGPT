@@ -105,14 +105,14 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
                   paddingHorizontal={12}
                   paddingVertical={5}
                   borderRadius={999}
-                  backgroundColor={category === c ? accent : '$background'}
+                  backgroundColor={category === c ? accent : colors.background}
                   borderWidth={0.5}
-                  borderColor={category === c ? accent : '$borderColor'}>
+                  borderColor={category === c ? accent : colors.border}>
                   <Text
                     fontSize={11}
                     fontWeight="500"
                     letterSpacing={0.2}
-                    color={category === c ? 'white' : '$color11'}>
+                    color={category === c ? 'white' : colors.textMuted}>
                     {c.charAt(0).toUpperCase() + c.slice(1)}
                   </Text>
                 </YStack>
@@ -132,7 +132,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
                     <Text fontSize={15} fontWeight="600" color={colors.text}>
                       {p.title}
                     </Text>
-                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color10" textTransform="capitalize">
+                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color={colors.textSecondary} textTransform="capitalize">
                       {p.category}
                     </Text>
                   </XStack>
@@ -149,7 +149,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
               </Pressable>
             )}
             ListEmptyComponent={
-              <Text fontSize={15} fontWeight="400" color="$color10" textAlign="center" paddingVertical={24}>
+              <Text fontSize={15} fontWeight="400" color={colors.textSecondary} textAlign="center" paddingVertical={24}>
                 No prompts yet. Tap + to add one.
               </Text>
             }

@@ -9,10 +9,12 @@ No headless browser needed — pure HTTP + regex + HTML parsing.
 """
 
 import logging
+import os
 import re
 import urllib.parse
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 import requests
@@ -26,15 +28,15 @@ DOWNLOAD_EXTENSIONS = {
     ".tar.xz", ".txz", ".7z", ".rar", ".deb", ".rpm",
     # Installers
     ".exe", ".msi", ".dmg", ".pkg", ".app", ".apk",
-    # Images
-    ".iso", ".img", ".bin",
+    # Disk images
+    ".iso", ".img",
     # Documents
     ".pdf", ".epub",
     # Code / data
-    ".whl", ".tar.gz", ".gem",
+    ".whl", ".gem", ".bin",
     # Models / ML
     ".safetensors", ".gguf", ".ggml", ".npz", ".onnx",
-    ".bin", ".pt", ".pth", ".ckpt",
+    ".pt", ".pth", ".ckpt",
 }
 
 # Words that indicate a download link (case-insensitive)
@@ -225,7 +227,7 @@ def _get_extension(url: str) -> str:
     for compound in (".tar.gz", ".tar.bz2", ".tar.xz"):
         if path.endswith(compound):
             return compound
-    _, ext = __import__("os").path.splitext(path)
+    _, ext = os.path.splitext(path)
     return ext
 
 
@@ -289,8 +291,6 @@ def resolve_page(
         logger.warning("Failed to fetch %s: %s", page_url, e)
         return []
 
-    # Track the full redirect chain
-    redirects = [r.url for r in resp.history] if hasattr(resp, "history") else []
     final_url = resp.url
     html = resp.text
 
@@ -310,13 +310,15 @@ def resolve_page(
         resolved = _resolve_relative(href, final_url)
         candidates.append((resolved, text, attrs, "html_link"))
 
-    # 2. JavaScript redirects
-    for url in _extract_js_redirects(html):
+    # 2. JavaScript redirects (capped to avoid runaway)
+    js_urls = _extract_js_redirects(html)[:20]
+    for url in js_urls:
         resolved = _resolve_relative(url, final_url)
         candidates.append((resolved, "[js-redirect]", {}, "js_redirect"))
 
-    # 3. Meta URLs
-    for url in _extract_meta_urls(html):
+    # 3. Meta URLs (capped)
+    meta_urls = _extract_meta_urls(html)[:10]
+    for url in meta_urls:
         resolved = _resolve_relative(url, final_url)
         candidates.append((resolved, "[meta]", {}, "meta_tag"))
 
@@ -342,7 +344,6 @@ def resolve_page(
             extension=ext,
             confidence=round(score, 3),
             source=source,
-            redirects=redirects if source == "js_redirect" else [],
         )
         results.append(rl)
 
@@ -367,7 +368,7 @@ def resolve_and_download(
     headers: Optional[Dict[str, str]] = None,
     min_confidence: float = 0.3,
     on_progress: Optional[Callable[[str], None]] = None,
-) -> "downloader.Path":
+) -> Path:
     """Resolve a page, then download the best candidate.
 
     Args:
