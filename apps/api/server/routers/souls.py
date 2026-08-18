@@ -12,7 +12,7 @@ from pydantic import BaseModel
 import re
 import json, asyncio, numpy as np, logging
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response, raise_error
 from infrastructure.auth import require_auth_if_enabled, audit_user, get_audit_logger
 
 try:
@@ -212,7 +212,7 @@ class SoulsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="load_checkpoint_into_model")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     def _build_soul_system_prompt(self, soul_info) -> str:
         """Build system prompt from soul personality traits."""
@@ -247,13 +247,13 @@ Be yourself — let your personality shape how you respond."""
             acc = get_accelerator()
             repo_root = self._get_repo_root()
             if not self._VALID_CKPT_NAME.match(req.checkpoint_name) or '..' in req.checkpoint_name:
-                return error_response("Invalid checkpoint name", code="E_VAL_REQUEST")
+                raise_error("Invalid checkpoint name", code="E_VAL_REQUEST")
             checkpoint_file = (repo_root / "models" / "auto-training" / (req.checkpoint_name + ".soul")).resolve()
             if not checkpoint_file.exists():
                 checkpoint_file = (repo_root / "models" / (req.checkpoint_name + ".soul")).resolve()
 
             if not checkpoint_file.exists() or not str(checkpoint_file).startswith(str((repo_root / "models").resolve())):
-                return error_response(f"Checkpoint not found: {req.checkpoint_name}", code="E_NOT_FOUND")
+                raise_error(f"Checkpoint not found: {req.checkpoint_name}", code="E_NOT_FOUND")
 
             # Load checkpoint into SloughGPTModel
             model = self._load_slough_model(checkpoint_file)
@@ -325,7 +325,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_chat")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def switch_soul(
         self,
@@ -410,7 +410,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="switch_soul")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def list_souls(self):
         """
@@ -451,7 +451,7 @@ Be yourself — let your personality shape how you respond."""
                 for s in souls
             ], meta={"current_soul": current.name if current else None})
         except Exception as e:
-            return error_response(str(e), "E_DOMAIN")
+            raise_error(str(e), "E_DOMAIN")
 
     async def get_soul(self, soul_name: str):
         """Get details for a specific soul by name."""
@@ -515,7 +515,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_handler")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def save_trait_weights(self, body: SaveWeightsRequest):
         """
@@ -554,7 +554,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_handler")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def get_trait_modes(self):
         """
@@ -589,7 +589,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_handler")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def get_current_soul(self):
         """
@@ -616,7 +616,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_handler")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def list_weight_snapshots(self):
         """
@@ -633,7 +633,7 @@ Be yourself — let your personality shape how you respond."""
             config = get_trait_config()
             return success_response(data=config.list_snapshots())
         except Exception as e:
-            return error_response(str(e), "E_DOMAIN")
+            raise_error(str(e), "E_DOMAIN")
 
     async def save_weight_snapshot(self, name: str):
         """
@@ -662,7 +662,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_handler")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def load_weight_snapshot(self, name: str):
         """
@@ -695,7 +695,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_handler")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def delete_weight_snapshot(self, name: str):
         """
@@ -728,7 +728,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_handler")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
     async def get_soul_stats(self):
         """
@@ -747,7 +747,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="soul_handler")
-            return error_response(err.user_message, code=err.code)
+            raise_error(err.user_message, code=err.code)
 
 
 router = SoulsRouter().router

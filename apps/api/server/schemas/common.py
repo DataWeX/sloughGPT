@@ -140,6 +140,66 @@ def wrap_controller_result(
     return success_response(data=result)
 
 
+def raise_error(
+    message: str,
+    code: str = "E_DOMAIN",
+    *,
+    status_code: int | None = None,
+    details: dict[str, Any] | None = None,
+) -> None:
+    """Raise an AppError that the global exception handler converts to JSON.
+
+    Maps router error codes to the AppError subclass hierarchy so the
+    existing exception_handlers.py catches and formats the response
+    with the correct HTTP status.
+
+    Args:
+        message: Human-readable error description.
+        code: Machine-readable error code (e.g. ``E_NOT_FOUND``).
+        status_code: Override HTTP status (optional — derived from code if omitted).
+        details: Optional extra context.
+
+    Raises:
+        AppError (or subclass) — never returns.
+    """
+    # Lazy import to avoid circular dependency at module load time
+    from domains.infrastructure.errors import (
+        AppError,
+        NotFoundError,
+        ValidationError as AppValidationError,
+        AuthError,
+        ResourceExhaustedError,
+        ConfigError,
+    )
+
+    # Map router error codes → AppError subclasses + HTTP status
+    _code_map: dict[str, tuple[type[AppError], int]] = {
+        "E_NOT_FOUND":        (NotFoundError, 404),
+        "E_VAL_REQUEST":      (AppValidationError, 422),
+        "E_VAL_FIELD":        (AppValidationError, 422),
+        "E_BAD_REQUEST":      (AppValidationError, 400),
+        "E_AUTH_MISSING":     (AuthError, 401),
+        "E_AUTH_FORBIDDEN":   (AuthError, 403),
+        "E_INFRA_BUSY":       (ResourceExhaustedError, 409),
+        "E_INFRA_RATE_LIMIT": (ResourceExhaustedError, 429),
+        "E_INFRA_TIMEOUT":    (ResourceExhaustedError, 408),
+        "E_INFRA_STARTUP":    (ConfigError, 503),
+        "E_INFRA_REGISTRY":   (ConfigError, 503),
+        "E_DOMAIN":           (AppError, status_code or 400),
+    }
+
+    exc_cls, default_status = _code_map.get(code, (AppError, status_code or 400))
+    http_status = status_code or default_status
+
+    raise exc_cls(
+        message=message,
+        code=code,
+        user_message=message,
+        http_status=http_status,
+        details=details or {},
+    )
+
+
 def safe_audit_log(
     action: str,
     resource: str = "",
