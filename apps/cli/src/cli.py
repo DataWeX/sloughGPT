@@ -831,6 +831,47 @@ def train_distill(ctx, text_source, file, epochs, lr, batch_size, n_embed, n_lay
     cmd_distill(args)
 
 
+@train.command("from-sessions", help="Train on your API chat logs (sessions + response logs)")
+@click.option("--epochs", default=5, type=int, help="Training epochs")
+@click.option("--lr", default=3e-4, type=float, help="Learning rate")
+@click.option("--batch-size", default=8, type=int, help="Batch size")
+@click.option("--n-embed", default=128, type=int, help="Embedding dimension")
+@click.option("--n-layer", default=4, type=int, help="Transformer layers")
+@click.option("--n-head", default=4, type=int, help="Attention heads")
+@click.option("--block-size", default=128, type=int, help="Context block size")
+@click.option("--dropout", default=0.1, type=float, help="Dropout rate")
+@click.option("--soul-name", default="chat-trained", help="Name for the trained soul")
+@click.option("--min-quality", default=2.0, type=float, help="Min pair quality (0-5)")
+@click.option("--max-pairs", default=500, type=int, help="Max training pairs to use")
+@click.option("--session-ids", default=None, help="Comma-separated session IDs (default: all)")
+@click.option("--load", "auto_load", is_flag=True, help="Auto-load checkpoint into chat after training")
+@click.option("--json", "json_output", is_flag=True, help="JSON output")
+@click.pass_context
+def train_from_sessions(ctx, epochs, lr, batch_size, n_embed, n_layer, n_head,
+                        block_size, dropout, soul_name, min_quality, max_pairs,
+                        session_ids, auto_load, json_output):
+    """Train a model on your API chat logs.
+
+    \b
+    Examples:
+      sloughgpt train from-sessions                          # train with defaults
+      sloughgpt train from-sessions --epochs 10 --lr 1e-3    # tune hyperparams
+      sloughgpt train from-sessions --load                   # train + load into chat
+      sloughgpt train from-sessions --max-pairs 1000         # use more data
+    """
+    from commands.train import cmd_train_from_sessions
+    args = _ns(
+        epochs=epochs, lr=lr, batch_size=batch_size,
+        n_embed=n_embed, n_layer=n_layer, n_head=n_head,
+        block_size=block_size, dropout=dropout,
+        soul_name=soul_name, min_quality=min_quality,
+        max_pairs=max_pairs, session_ids=session_ids,
+        auto_load=auto_load, json_output=json_output,
+        host=ctx.obj["host"], port=ctx.obj["port"],
+    )
+    cmd_train_from_sessions(args)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # token-tree — train, encode, decode, and query a tree tokenizer
 # ═══════════════════════════════════════════════════════════════════════

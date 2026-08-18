@@ -82,14 +82,6 @@ class ChatTextDataset:
         return x.astype(np.int32), y.astype(np.int32)
 
 
-def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
-    """Cross-entropy loss on (batch, vocab) logits and (batch,) targets."""
-    log_probs = logits - logits.max(axis=-1, keepdims=True)
-    log_probs = log_probs - np.log(np.exp(log_probs).sum(axis=-1, keepdims=True))
-    batch_size = targets.shape[0]
-    return float(-log_probs[np.arange(batch_size), targets].mean())
-
-
 def _build_vocab(pairs: List[Dict[str, str]]) -> Tuple[Dict[str, int], Dict[int, str]]:
     """Build character-level vocabulary from chat pairs."""
     chars = set()
@@ -110,6 +102,14 @@ def _format_pairs_text(pairs: List[Dict[str, str]]) -> str:
     for pair in pairs:
         parts.append(f"User: {pair['user_msg']}\nAssistant: {pair['assistant_msg']}\n\n")
     return "".join(parts)
+
+
+def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
+    """Cross-entropy loss on (batch, vocab) logits and (batch,) targets."""
+    log_probs = logits - logits.max(axis=-1, keepdims=True)
+    log_probs = log_probs - np.log(np.exp(log_probs).sum(axis=-1, keepdims=True))
+    batch_size = targets.shape[0]
+    return float(-log_probs[np.arange(batch_size), targets].mean())
 
 
 def train_chat_model(
@@ -162,10 +162,11 @@ def train_chat_model(
     logger.info("Vocab: %d chars, text: %d chars", vocab_size, len(text),
         extra={"tag": "TRAIN"})
 
-    # Split train/val
+    # Split train/val — pairs are newest-first from extractor, so validate
+    # on the oldest (tail) and train on the newer (head).
     val_size = max(1, int(len(good_pairs) * config.val_split))
-    val_pairs = good_pairs[:val_size]
-    train_pairs = good_pairs[val_size:]
+    val_pairs = good_pairs[-val_size:]
+    train_pairs = good_pairs[:-val_size] if val_size < len(good_pairs) else good_pairs
     val_text = _format_pairs_text(val_pairs)
     train_text = _format_pairs_text(train_pairs) if train_pairs else text
 
@@ -216,8 +217,10 @@ def train_chat_model(
     steps_per_epoch = max(1, len(train_ds) // config.batch_size)
     total_steps = config.epochs * steps_per_epoch
     step = start_step
-    train_losses = []
-    val_losses = []
+    train_losses: List[float] = []
+    val_losses: List[float] = []
+    avg_epoch_loss = 0.0
+    last_epoch = start_epoch
 
     logger.info("Starting training: %d epochs, %d steps/epoch, %d total",
                 config.epochs, steps_per_epoch, total_steps,
@@ -240,48 +243,36 @@ def train_chat_model(
             x_t = tensor(x_batch, requires_grad=False)
             y_t = tensor(y_batch, requires_grad=False)
 
-            logits, _ = model.forward(x_t)
-
-            if hasattr(logits, 'data'):
-                logits_np = logits.data
-            else:  # pragma: no cover (SloNet always returns Tensors with .data)
-                logits_np = np.array(logits)
-
-            # Reshape for cross-entropy: (batch * seq, vocab) vs (batch * seq,)
-            batch_size, seq_len, vocab = logits_np.shape
-            flat_logits = logits_np.reshape(-1, vocab)
-            flat_targets = y_batch.reshape(-1)
-
-            # Compute loss
-            loss_val = _cross_entropy_loss(flat_logits, flat_targets)
-
-            # Backward
-            loss_tensor = tensor([loss_val], requires_grad=True)
-            loss_tensor.backward()
+            # Forward + loss in one pass — loss Tensor is connected to the
+            # model's autograd graph, so .backward() produces real gradients.
+            _, loss = model.forward(x_t, targets=y_t)
+            loss_val = loss.item()
+            loss.backward()
 
             # Clip gradients
             params = model.parameters()
             total_norm = 0.0
-            for p in params:  # pragma: no cover (loss backward is detached — no param grads)
-                if hasattr(p, 'grad') and p.grad is not None:
-                    g = p.grad.data if hasattr(p, 'grad') and hasattr(p.grad, 'data') else np.array(p.grad)
+            for p in params:
+                if p.grad is not None:
+                    g = p.grad.data if hasattr(p.grad, 'data') else p.grad
                     total_norm += float(np.sum(g ** 2))
             total_norm = total_norm ** 0.5
-            if total_norm > config.grad_clip:  # pragma: no cover (dead until grads flow)
+            if total_norm > config.grad_clip:
                 scale = config.grad_clip / total_norm
                 for p in params:
-                    if hasattr(p, 'grad') and p.grad is not None:
+                    if p.grad is not None:
                         p.grad.data *= scale
 
             # Step
             optimizer.step(params)
-            for p in params:  # pragma: no cover (dead until grads flow)
-                if hasattr(p, 'grad') and p.grad is not None:
+            for p in params:
+                if p.grad is not None:
                     p.grad.data = np.zeros_like(p.grad.data)
 
             step += 1
-            epoch_loss += loss_val * batch_size * seq_len
-            epoch_tokens += batch_size * seq_len
+            bs, sl = x_batch.shape
+            epoch_loss += loss_val * bs * sl
+            epoch_tokens += bs * sl
             train_losses.append(loss_val)
 
             if step % config.log_interval == 0:
@@ -305,6 +296,7 @@ def train_chat_model(
 
         # End of epoch
         avg_epoch_loss = epoch_loss / max(1, epoch_tokens)
+        last_epoch = epoch + 1
         logger.info("Epoch %d complete: avg_loss=%.4f", epoch, avg_epoch_loss,
             extra={"tag": "TRAIN"})
 
@@ -331,10 +323,10 @@ def train_chat_model(
             "n_layer": config.n_layer,
             "n_head": config.n_head,
             "block_size": config.block_size,
-            "epoch": epoch + 1,
+            "epoch": last_epoch,
             "step": step,
             "epochs": config.epochs,
-            "final_loss": float(avg_epoch_loss) if 'avg_epoch_loss' in dir() else 0.0,
+            "final_loss": float(avg_epoch_loss),
             "best_loss": best_loss,
             "num_pairs": len(good_pairs),
             "num_chars": len(text),
@@ -347,13 +339,13 @@ def train_chat_model(
 
     metadata = {
         "checkpoint": str(ckpt_path),
-        "final_loss": float(avg_epoch_loss) if 'avg_epoch_loss' in dir() else 0.0,
+        "final_loss": float(avg_epoch_loss),
         "best_loss": best_loss,
         "val_loss": final_val if not np.isnan(final_val) else None,
         "num_pairs": len(good_pairs),
         "total_pairs": len(pairs),
         "vocab_size": vocab_size,
-        "epochs_completed": epoch + 1 if 'epoch' in dir() else config.epochs,
+        "epochs_completed": last_epoch,
         "total_steps": step,
         "train_losses": [float(l) for l in train_losses[-20:]],
         "val_losses": [float(l) for l in val_losses[-20:]],
@@ -378,17 +370,10 @@ def _eval_loss(
     for _ in range(n_batches):
         x_batch, y_batch = val_ds.get_batch(batch_size, rng)
         x_t = tensor(x_batch, requires_grad=False)
-        logits, _ = model.forward(x_t)
-        if hasattr(logits, 'data'):
-            logits_np = logits.data
-        else:  # pragma: no cover (SloNet always returns Tensors with .data)
-            logits_np = np.array(logits)
-
-        bs, sl, v = logits_np.shape
-        flat_logits = logits_np.reshape(-1, v)
-        flat_targets = y_batch.reshape(-1)
-        loss = _cross_entropy_loss(flat_logits, flat_targets)
-        total_loss += loss * bs * sl
+        y_t = tensor(y_batch, requires_grad=False)
+        _, loss = model.forward(x_t, targets=y_t)
+        bs, sl = x_batch.shape
+        total_loss += loss.item() * bs * sl
         total_tokens += bs * sl
 
     return total_loss / max(1, total_tokens)
@@ -419,7 +404,7 @@ def generate_from_chat_model(
     if not tokens:
         tokens = [0]
 
-    eos = stoi.get("<PAD>", 0)
+    eos = 0  # index 0 is "\x00" (null char) — our padding/EOS token
     inp = np.array([tokens[-model.block_size:]], dtype=np.int64)
     out = model.generate(
         inp,

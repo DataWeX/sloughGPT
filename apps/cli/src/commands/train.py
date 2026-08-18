@@ -1729,3 +1729,186 @@ def _stream_api_progress(base_url, job_id):
 
     except Exception as e:
         log.error(f"Progress stream error: {e}")
+
+
+def cmd_train_from_sessions(args):
+    """Train a SloNet model on API chat logs via the server.
+
+    Posts to /auto-train/from-sessions/start, then streams SSE from
+    /auto-train/from-sessions/stream for live progress.
+    """
+    import json as _json
+    import requests
+
+    host = getattr(args, "host", "127.0.0.1")
+    port = getattr(args, "port", 8000)
+    base_url = f"http://{host}:{port}"
+
+    log.header("Train from API Logs")
+
+    # Check server health
+    try:
+        health = requests.get(f"{base_url}/health", timeout=3).json()
+        if not health.get("model_loaded"):
+            log.warning("No model loaded on server. Training will still work,")
+            log.warning("but you need a model to test the checkpoint afterwards.")
+    except Exception:
+        log.error("Cannot reach server. Is it running? (make api)")
+        return
+
+    # Count available pairs
+    try:
+        sessions_dir = Path("data/chat_sessions")
+        corpus_file = Path("datasets/api_conversations/corpus.jsonl")
+        n_sessions = len(list(sessions_dir.glob("*.json"))) if sessions_dir.exists() else 0
+        n_corpus = 0
+        if corpus_file.exists():
+            with open(corpus_file) as f:
+                n_corpus = sum(1 for _ in f)
+        log.info(f"Available data: {n_sessions} sessions, {n_corpus} corpus entries")
+        if n_sessions == 0 and n_corpus == 0:
+            log.error("No chat data found. Use the chat first to generate training data.")
+            return
+    except Exception:
+        pass
+
+    # Start training
+    session_ids = None
+    if getattr(args, "session_ids", None):
+        session_ids = [s.strip() for s in args.session_ids.split(",")]
+
+    payload = {
+        "epochs": getattr(args, "epochs", 5),
+        "learning_rate": getattr(args, "lr", 3e-4),
+        "batch_size": getattr(args, "batch_size", 8),
+        "n_embed": getattr(args, "n_embed", 128),
+        "n_layer": getattr(args, "n_layer", 4),
+        "n_head": getattr(args, "n_head", 4),
+        "block_size": getattr(args, "block_size", 128),
+        "dropout": getattr(args, "dropout", 0.1),
+        "soul_name": getattr(args, "soul_name", "chat-trained"),
+        "min_pair_quality": getattr(args, "min_quality", 2.0),
+        "max_pairs": getattr(args, "max_pairs", 500),
+        "session_ids": session_ids,
+    }
+
+    try:
+        resp = requests.post(f"{base_url}/auto-train/from-sessions/start", json=payload, timeout=10)
+        if not resp.ok:
+            log.error(f"Failed to start: {resp.status_code} {resp.text}")
+            return
+    except Exception as e:
+        log.error(f"Failed to start training: {e}")
+        return
+
+    log.success("Training started — streaming progress...")
+
+    # Stream SSE progress
+    bar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
+    checkpoint_name = None
+    final_loss = None
+    num_pairs = None
+
+    try:
+        import requests as _req
+        with _req.get(
+            f"{base_url}/auto-train/from-sessions/stream",
+            stream=True,
+            timeout=300,
+        ) as stream:
+            for line in stream.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                try:
+                    event = _json.loads(data_str)
+                except _json.JSONDecodeError:
+                    continue
+
+                status = event.get("status", "")
+                phase = event.get("phase", "")
+                data = event.get("data", {})
+                message = event.get("message", "")
+
+                if phase == "PAIRS" and status == "working":
+                    log.info(f"  {message}")
+                    bar.desc = "Extracting pairs"
+                    bar.set_progress(5)
+
+                elif phase == "TRAIN" and status == "working":
+                    step = data.get("step", 0)
+                    loss = data.get("loss", 0)
+                    epoch = event.get("meta", {}).get("epoch", 0)
+                    total_epochs = event.get("meta", {}).get("total_epochs", 0)
+                    # Estimate progress: epoch progress + step progress
+                    if total_epochs > 0:
+                        pct = int(((epoch - 1) / total_epochs) * 90 + 10)
+                        bar.desc = f"Epoch {epoch}/{total_epochs} loss={loss:.4f}"
+                    bar.set_progress(min(pct, 99))
+
+                elif status == "complete":
+                    bar.set_progress(100)
+                    bar.finish()
+                    checkpoint_name = data.get("checkpoint", "")
+                    final_loss = data.get("final_loss")
+                    num_pairs = data.get("num_pairs")
+                    perplexity = data.get("perplexity")
+                    samples = data.get("samples", [])
+
+                    log.blank()
+                    log.success("Training complete!")
+                    log.key_value("Checkpoint", checkpoint_name)
+                    if final_loss is not None:
+                        log.key_value("Final loss", f"{final_loss:.4f}")
+                    if num_pairs is not None:
+                        log.key_value("Training pairs", str(num_pairs))
+                    if perplexity is not None:
+                        log.key_value("Perplexity", f"{perplexity:.2f}")
+                    if samples:
+                        log.info("Sample outputs:")
+                        for s in samples[:3]:
+                            log.info(f"  {s.get('prompt', '')} → {s.get('response', '')[:80]}")
+                    break
+
+                elif status == "error":
+                    bar.finish()
+                    log.error(f"Training failed: {message}")
+                    return
+
+    except KeyboardInterrupt:
+        bar.finish()
+        log.info("Training cancelled")
+        return
+    except Exception as e:
+        bar.finish()
+        log.error(f"Stream error: {e}")
+        return
+
+    # Auto-load checkpoint
+    if checkpoint_name and getattr(args, "auto_load", False):
+        log.info(f"Loading checkpoint into chat: {checkpoint_name}")
+        try:
+            load_resp = requests.post(
+                f"{base_url}/auto-train/checkpoints/{checkpoint_name}/load",
+                timeout=30,
+            )
+            if load_resp.ok:
+                log.success(f"Loaded '{checkpoint_name}' — ready to chat!")
+            else:
+                log.warning(f"Load failed ({load_resp.status_code}): {load_resp.text}")
+                log.info(f"Load manually: sloughgpt checkpoint load {checkpoint_name}")
+        except Exception as e:
+            log.warning(f"Load failed: {e}")
+            log.info(f"Load manually: sloughgpt checkpoint load {checkpoint_name}")
+    elif checkpoint_name:
+        log.info(f"Next step: sloughgpt checkpoint load {checkpoint_name}")
+
+    # JSON output
+    if getattr(args, "json_output", False):
+        import json as _json2
+        result = {
+            "checkpoint": checkpoint_name,
+            "final_loss": final_loss,
+            "num_pairs": num_pairs,
+        }
+        print(_json2.dumps(result, indent=2))

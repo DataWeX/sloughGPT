@@ -71,8 +71,13 @@ class SloManager:
         self._load_preference()
 
     def _scan_souls(self) -> None:
-        """Scan for available .slo (personality profiles) and .soul (checkpoint) files."""
-        self._souls_cache.clear()
+        """Scan for available .slo (personality profiles) and .soul (checkpoint) files.
+
+        Skips the scan if the cache is already populated (idempotent).
+        Call ``rescan_souls()`` to force a refresh.
+        """
+        if self._souls_cache:
+            return
 
         if not self.slos_dir.exists():
             logger.warning(f"Slos directory not found: {self.slos_dir}", extra={"tag": "SOUL"})
@@ -214,6 +219,16 @@ class SloManager:
 
     def list_souls(self) -> List[SloInfo]:
         """List all available souls."""
+        self._scan_souls()
+        return list(self._souls_cache.values())
+
+    def rescan_souls(self) -> List[SloInfo]:
+        """Force a full re-scan of the souls directory.
+
+        Clears the cached results and re-globs the filesystem.  Call after
+        soul files are created, deleted, or renamed.
+        """
+        self._souls_cache.clear()
         self._scan_souls()
         return list(self._souls_cache.values())
 
