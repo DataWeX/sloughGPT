@@ -20,6 +20,7 @@ import { TrainingSummaryCard } from '@/components/training/TrainingSummaryCard'
 import { TrainingHealthCard } from '@/components/training/TrainingHealthCard'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
 import { TurboCard } from '@/components/training/TurboCard'
+import { APILogsCard } from '@/components/training/APILogsCard'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
@@ -191,6 +192,9 @@ export default function TrainingPage() {
 
         {/* Fast train (turbo) */}
         <TurboCard datasets={datasets} session={session} addToast={addToast} />
+
+        {/* Train from API conversation logs */}
+        <APILogsCard addToast={addToast} />
 
       <TestModelDialog
         open={test.testDialogOpen}

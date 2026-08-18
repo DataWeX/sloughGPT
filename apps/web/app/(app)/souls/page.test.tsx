@@ -1,13 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 vi.mock('@/lib/souls-controller', () => ({
   soulsController: {
     list: vi.fn().mockResolvedValue({
       souls: [
-        { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7, precision: 0.5, logic: 0.4, creativity: 0.6 }, lineage: 'gpt2', size_mb: 0.5, born_at: '2025-01-10T00:00:00Z', epochs_trained: 5, final_val_loss: 0.42 },
-        { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8, warmth: 0.3, humor: 0.2, creativity: 0.4 }, lineage: 'gpt2', size_mb: 0.6 },
-        { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6, warmth: 0.5, precision: 0.3, logic: 0.4 }, lineage: 'gpt2-medium' },
+        { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7 }, lineage: 'gpt2', size_mb: 0.5, born_at: '2025-01-10T00:00:00Z', epochs_trained: 5, final_val_loss: 0.42 },
+        { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8 }, lineage: 'gpt2', size_mb: 0.6 },
+        { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6 }, lineage: 'gpt2-medium' },
       ],
       current_soul: 'Friendly',
     }),
@@ -41,23 +42,18 @@ vi.mock('@/components/souls/SoulPersonalityCard', () => ({
 }))
 
 import SoulsPage from './page'
-import { soulsController } from '@/lib/souls-controller'
+import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-controller'
 const sc = vi.mocked(soulsController)
 
-const DEFAULT_SOULS = {
-  souls: [
-    { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7 }, lineage: 'gpt2', size_mb: 0.5, born_at: '2025-01-10T00:00:00Z', epochs_trained: 5, final_val_loss: 0.42 },
-    { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8 }, lineage: 'gpt2', size_mb: 0.6 },
-    { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6 }, lineage: 'gpt2-medium' },
-  ],
-  current_soul: 'Friendly',
-}
-const DEFAULT_CHECKPOINTS = {
-  checkpoints: [
-    { name: 'cp-warm-v2', soul: 'Friendly', loss: 0.45, verdict: 'improved', size_mb: 1.2, perplexity_delta: -0.12, bleu_delta: 0.08 },
-    { name: 'cp-base-v1', soul: 'Analyst', loss: 0.62, verdict: 'neutral', size_mb: 0.8 },
-  ],
-}
+const SOULS: Soul[] = [
+  { name: 'Friendly', description: 'A warm companion', traits: ['warmth', 'humor'], personality: { warmth: 0.9, humor: 0.7 }, lineage: 'gpt2', size_mb: 0.5, born_at: '2025-01-10T00:00:00Z', epochs_trained: 5, final_val_loss: 0.42 },
+  { name: 'Analyst', description: 'Logical and precise', traits: ['precision', 'logic'], personality: { precision: 0.85, logic: 0.8 }, lineage: 'gpt2', size_mb: 0.6 },
+  { name: 'Creative', description: 'Imaginative and playful', traits: ['creativity', 'humor'], personality: { creativity: 0.95, humor: 0.6 }, lineage: 'gpt2-medium' },
+]
+const CHECKPOINTS: Checkpoint[] = [
+  { name: 'cp-warm-v2', soul: 'Friendly', loss: 0.45, verdict: 'improved', size_mb: 1.2, perplexity_delta: -0.12, bleu_delta: 0.08 },
+  { name: 'cp-base-v1', soul: 'Analyst', loss: 0.62, verdict: 'neutral', size_mb: 0.8 },
+]
 
 async function clickTab(name: string) {
   await waitFor(() => {
@@ -66,10 +62,21 @@ async function clickTab(name: string) {
   fireEvent.click(screen.getAllByRole('tab').find(b => b.textContent?.trim().toLowerCase() === name.toLowerCase())!)
 }
 
+function clickSoulCard(name: string) {
+  const spans = screen.getAllByText(name)
+  for (const span of spans) {
+    const card = span.closest('[class*="cursor-pointer"]')
+    if (card) { fireEvent.click(card); return }
+  }
+  throw new Error(`No clickable card found for "${name}"`)
+}
+
 describe('SoulsPage', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
-    sc.list.mockResolvedValue(DEFAULT_SOULS)
-    sc.listCheckpoints.mockResolvedValue(DEFAULT_CHECKPOINTS)
+    sc.list.mockResolvedValue({ souls: SOULS, current_soul: 'Friendly' })
+    sc.listCheckpoints.mockResolvedValue({ checkpoints: CHECKPOINTS })
     sc.listWeightSnapshots.mockResolvedValue([{ name: 'baseline', saved_at: '2025-01-15T10:00:00Z' }])
     sc.getModes.mockResolvedValue({ personality: { label: 'warm', confidence: 0.85 }, memory: { label: 'standard', confidence: 0.7 }, style: { label: 'formal', confidence: 0.6 }, task: { label: 'analytical', confidence: 0.75 } })
     sc.getTraitWeights.mockResolvedValue({ personality: { warmth: 0.8 }, cognition: { reasoning: 0.7 }, emotion: { empathy: 0.5 } })
@@ -92,8 +99,8 @@ describe('SoulsPage', () => {
     render(<SoulsPage />)
     await waitFor(() => {
       expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getByText('Analyst')).toBeTruthy()
-      expect(screen.getByText('Creative')).toBeTruthy()
+      expect(screen.getAllByText('Analyst').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Creative').length).toBeGreaterThanOrEqual(1)
     })
   })
 
@@ -125,38 +132,44 @@ describe('SoulsPage', () => {
   })
 
   it('filters souls by search', async () => {
+    const user = userEvent.setup()
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
-    fireEvent.change(screen.getAllByPlaceholderText('Search souls...')[0], { target: { value: 'Analyst' } })
+    const input = screen.getAllByPlaceholderText('Search souls...')[0]
+    await user.clear(input)
+    await user.type(input, 'Analyst')
     await waitFor(() => {
-      expect(screen.getByText('Analyst')).toBeTruthy()
-      expect(screen.queryByText('Creative')).toBeNull()
+      expect(screen.getAllByText('Analyst').length).toBeGreaterThanOrEqual(1)
+      expect(screen.queryAllByText('Creative').length).toBe(0)
     })
   })
 
   it('shows empty search state', async () => {
+    const user = userEvent.setup()
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getAllByPlaceholderText('Search souls...').length).toBeGreaterThanOrEqual(1) })
-    fireEvent.change(screen.getAllByPlaceholderText('Search souls...')[0], { target: { value: 'zzz' } })
+    const input = screen.getAllByPlaceholderText('Search souls...')[0]
+    await user.clear(input)
+    await user.type(input, 'zzz')
     await waitFor(() => { expect(screen.getByText('No personalities match your search.')).toBeTruthy() })
   })
 
   it('opens detail dialog with full metadata', async () => {
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
-    fireEvent.click(screen.getAllByText('Friendly')[0].closest('[class*="cursor-pointer"]')!)
+    clickSoulCard('Friendly')
     await waitFor(() => {
-      expect(screen.getByText('A warm companion')).toBeTruthy()
-      expect(screen.getByText('Training Info')).toBeTruthy()
-      expect(screen.getByText('Personality')).toBeTruthy()
-      expect(screen.getByText('Traits')).toBeTruthy()
+      expect(screen.getAllByText('A warm companion').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Training Info').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Personality').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Traits').length).toBeGreaterThanOrEqual(1)
     })
   })
 
   it('closes detail dialog on Close', async () => {
     render(<SoulsPage />)
     await waitFor(() => { expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
-    fireEvent.click(screen.getAllByText('Friendly')[0].closest('[class*="cursor-pointer"]')!)
+    clickSoulCard('Friendly')
     await waitFor(() => { expect(screen.getAllByText('Close').length).toBeGreaterThanOrEqual(1) })
     fireEvent.click(screen.getAllByText('Close')[0])
     await waitFor(() => { expect(screen.queryByText('A warm companion')).toBeNull() })
@@ -243,8 +256,9 @@ describe('SoulsPage', () => {
 
   it('opens register dialog', async () => {
     render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getByText('Register')).toBeTruthy() })
-    fireEvent.click(screen.getByText('Register'))
+    await waitFor(() => { expect(screen.getAllByText('Register').length).toBeGreaterThanOrEqual(1) })
+    const registerBtn = screen.getAllByRole('button', { name: /register/i })[0]
+    fireEvent.click(registerBtn)
     await waitFor(() => {
       expect(screen.getByText('Register Soul')).toBeTruthy()
       expect(screen.getByPlaceholderText('/absolute/path/to/soul.soul')).toBeTruthy()
