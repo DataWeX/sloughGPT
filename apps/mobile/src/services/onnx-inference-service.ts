@@ -212,6 +212,7 @@ function _forwardSingle(
 
   const nEmb = cfg.n_embed;
   const nHead = cfg.n_head;
+  const nLayer = cfg.n_layer;
   const headDim = nEmb / nHead;
   const dimFF = _nEmbedDimFF(cfg);
   const eps = 1e-5;
@@ -234,7 +235,7 @@ function _forwardSingle(
     const pos = step === 0 ? 0 : prompt.length - 1;
 
     // Transformer blocks
-    for (let i = 0; i < nHead; i++) {
+    for (let i = 0; i < nLayer; i++) {
       // Attn norm
       const [anOff] = offsets.get(`blocks.${i}.attn_norm.weight`)!;
       const anW = _slice(w, anOff, nEmb);

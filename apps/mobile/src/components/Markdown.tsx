@@ -119,19 +119,18 @@ function parseBlocks(text: string): Block[] {
   return blocks;
 }
 
-function InlineText({text, fontSize = 14}: {text: string; fontSize?: number}) {
-  const colors = useColors();
+function InlineText({text, fontSize = 14, colors}: {text: string; fontSize?: number; colors: ReturnType<typeof useColors>}) {
   const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|~~[^~]+~~)/g).filter(Boolean);
 
   return (
-    <Text fontSize={fontSize} lineHeight={fontSize * 1.5} color="$color">
+    <Text fontSize={fontSize} lineHeight={fontSize * 1.5} color={colors.text}>
       {parts.map((part, i) => {
         // Inline code
         if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
           return (
             <Text key={i} fontFamily="mono" fontSize={fontSize - 1}
               backgroundColor={colors.primaryAlpha(0.08)} paddingHorizontal={4}
-              paddingVertical={1} borderRadius={3} color="$color9">
+              paddingVertical={1} borderRadius={3} color={colors.primary}>
               {part.slice(1, -1)}
             </Text>
           );
@@ -153,7 +152,7 @@ function InlineText({text, fontSize = 14}: {text: string; fontSize?: number}) {
           const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
           if (linkMatch) {
             return (
-              <Text key={i} color="$color9" textDecorationLine="underline">
+              <Text key={i} color={colors.primary} textDecorationLine="underline">
                 {linkMatch[1]}
               </Text>
             );
@@ -165,8 +164,7 @@ function InlineText({text, fontSize = 14}: {text: string; fontSize?: number}) {
   );
 }
 
-function CodeBlock({language, code}: {language: string; code: string}) {
-  const colors = useColors();
+function CodeBlock({language, code, colors}: {language: string; code: string; colors: ReturnType<typeof useColors>}) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -187,19 +185,19 @@ function CodeBlock({language, code}: {language: string; code: string}) {
         backgroundColor={colors.primaryAlpha(0.06)}
         borderBottomWidth={0.5} borderBottomColor={colors.primaryAlpha(0.08)}
         alignItems="center" justifyContent="space-between">
-        <Text fontSize={10} fontFamily="mono" fontWeight="500" color="$color10">
+        <Text fontSize={10} fontFamily="mono" fontWeight="500" color={colors.textSecondary}>
           {language || 'code'}
         </Text>
         <Pressable onPress={handleCopy} hitSlop={8}>
           <XStack alignItems="center" gap={4}>
-            <Icon name={copied ? 'check' : 'copy'} size={12} color="$color10" />
-            <Text fontSize={10} color="$color10">{copied ? 'Copied' : 'Copy'}</Text>
+            <Icon name={copied ? 'check' : 'copy'} size={12} color={colors.textSecondary} />
+            <Text fontSize={10} color={colors.textSecondary}>{copied ? 'Copied' : 'Copy'}</Text>
           </XStack>
         </Pressable>
       </XStack>
       {/* Code content */}
       <Text fontFamily="mono" fontSize={12} lineHeight={18}
-        color="$color" paddingHorizontal={12} paddingVertical={10}
+        color={colors.text} paddingHorizontal={12} paddingVertical={10}
         selectable>
         {code}
       </Text>
@@ -210,6 +208,7 @@ function CodeBlock({language, code}: {language: string; code: string}) {
 export function Markdown({content, streaming = false}: MarkdownProps) {
   const [rendered, setRendered] = useState(content);
   const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const colors = useColors();
 
   // Streaming throttle: don't re-parse on every token
   useEffect(() => {
@@ -254,18 +253,18 @@ export function Markdown({content, streaming = false}: MarkdownProps) {
             const s = sizes[block.level] || sizes[3];
             return (
               <Text key={i} fontSize={s.size} fontWeight={s.weight as any}
-                letterSpacing={-0.3} color="$color" marginTop={s.mt} marginBottom={s.mb}>
+                letterSpacing={-0.3} color={colors.text} marginTop={s.mt} marginBottom={s.mb}>
                 {block.text}
               </Text>
             );
           }
           case 'code':
-            return <CodeBlock key={i} language={block.language} code={block.code} />;
+            return <CodeBlock key={i} language={block.language} code={block.code} colors={colors} />;
           case 'blockquote':
             return (
               <XStack key={i} gap={8} marginVertical={4} paddingLeft={12}
-                borderLeftWidth={2} borderLeftColor="$color9" opacity={0.85}>
-                <InlineText text={block.text} />
+                borderLeftWidth={2} borderLeftColor={colors.primary} opacity={0.85}>
+                <InlineText text={block.text} colors={colors} />
               </XStack>
             );
           case 'ul':
@@ -273,8 +272,8 @@ export function Markdown({content, streaming = false}: MarkdownProps) {
               <YStack key={i} gap={2} marginVertical={2}>
                 {block.items.map((item, j) => (
                   <XStack key={j} gap={6} paddingLeft={4}>
-                    <Text fontSize={14} color="$color9" marginTop={1}>•</Text>
-                    <InlineText text={item} />
+                    <Text fontSize={14} color={colors.primary} marginTop={1}>•</Text>
+                    <InlineText text={item} colors={colors} />
                   </XStack>
                 ))}
               </YStack>
@@ -284,10 +283,10 @@ export function Markdown({content, streaming = false}: MarkdownProps) {
               <YStack key={i} gap={2} marginVertical={2}>
                 {block.items.map((item, j) => (
                   <XStack key={j} gap={6} paddingLeft={4}>
-                    <Text fontSize={14} color="$color10" fontWeight="600" minWidth={18}>
+                    <Text fontSize={14} color={colors.textSecondary} fontWeight="600" minWidth={18}>
                       {j + 1}.
                     </Text>
-                    <InlineText text={item} />
+                    <InlineText text={item} colors={colors} />
                   </XStack>
                 ))}
               </YStack>
@@ -295,12 +294,12 @@ export function Markdown({content, streaming = false}: MarkdownProps) {
           case 'hr':
             return (
               <YStack key={i} marginVertical={8}
-                borderBottomWidth={0.5} borderBottomColor="$borderColor" />
+                borderBottomWidth={0.5} borderBottomColor={colors.border} />
             );
           case 'paragraph':
             return (
               <YStack key={i} marginVertical={2}>
-                <InlineText text={block.text} />
+                <InlineText text={block.text} colors={colors} />
               </YStack>
             );
           default:

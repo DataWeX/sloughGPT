@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {StatusBar, StyleSheet, useColorScheme} from 'react-native';
+import {StatusBar, useColorScheme} from 'react-native';
 import {NavigationContainer, DefaultTheme, DarkTheme} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
@@ -13,6 +13,22 @@ import {TrainingScreen} from './src/screens/TrainingScreen';
 import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
 import {SearchScreen} from './src/screens/SearchScreen';
 import {ProvidersScreen} from './src/screens/ProvidersScreen';
+import {SoulsScreen} from './src/screens/SoulsScreen';
+import {TokenizerScreen} from './src/screens/TokenizerScreen';
+import {CompareScreen} from './src/screens/CompareScreen';
+import {DatasetsScreen} from './src/screens/DatasetsScreen';
+import {DatasetDetailScreen} from './src/screens/DatasetDetailScreen';
+import {ExportScreen} from './src/screens/ExportScreen';
+import {BenchmarkScreen} from './src/screens/BenchmarkScreen';
+import {AdaptersScreen} from './src/screens/AdaptersScreen';
+import {FeedbackScreen} from './src/screens/FeedbackScreen';
+import {WorkflowScreen} from './src/screens/WorkflowScreen';
+import {VoiceScreen} from './src/screens/VoiceScreen';
+import {CompanionScreen} from './src/screens/CompanionScreen';
+import {LearnScreen} from './src/screens/LearnScreen';
+import {AgentsScreen} from './src/screens/AgentsScreen';
+import {MultimodalScreen} from './src/screens/MultimodalScreen';
+import {ModelDetailScreen} from './src/screens/ModelDetailScreen';
 import {useSettingsStore} from './src/stores/settings-store';
 import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
@@ -57,6 +73,22 @@ function SettingsStack() {
       <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="Providers" component={ProvidersScreen} />
+      <Stack.Screen name="Souls" component={SoulsScreen} />
+      <Stack.Screen name="Tokenizer" component={TokenizerScreen} />
+      <Stack.Screen name="Compare" component={CompareScreen} />
+      <Stack.Screen name="Datasets" component={DatasetsScreen} />
+      <Stack.Screen name="DatasetDetail" component={DatasetDetailScreen} />
+      <Stack.Screen name="Export" component={ExportScreen} />
+      <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
+      <Stack.Screen name="Adapters" component={AdaptersScreen} />
+      <Stack.Screen name="Feedback" component={FeedbackScreen} />
+      <Stack.Screen name="Workflow" component={WorkflowScreen} />
+      <Stack.Screen name="Voice" component={VoiceScreen} />
+      <Stack.Screen name="Companion" component={CompanionScreen} />
+      <Stack.Screen name="Learn" component={LearnScreen} />
+      <Stack.Screen name="Agents" component={AgentsScreen} />
+      <Stack.Screen name="Multimodal" component={MultimodalScreen} />
+      <Stack.Screen name="ModelDetail" component={ModelDetailScreen} />
     </Stack.Navigator>
   );
 }
@@ -70,6 +102,22 @@ function ToolsStack() {
       <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="Health" component={HealthScreen} />
+      <Stack.Screen name="Souls" component={SoulsScreen} />
+      <Stack.Screen name="Tokenizer" component={TokenizerScreen} />
+      <Stack.Screen name="Compare" component={CompareScreen} />
+      <Stack.Screen name="Datasets" component={DatasetsScreen} />
+      <Stack.Screen name="DatasetDetail" component={DatasetDetailScreen} />
+      <Stack.Screen name="Export" component={ExportScreen} />
+      <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
+      <Stack.Screen name="Adapters" component={AdaptersScreen} />
+      <Stack.Screen name="Feedback" component={FeedbackScreen} />
+      <Stack.Screen name="Workflow" component={WorkflowScreen} />
+      <Stack.Screen name="Voice" component={VoiceScreen} />
+      <Stack.Screen name="Companion" component={CompanionScreen} />
+      <Stack.Screen name="Learn" component={LearnScreen} />
+      <Stack.Screen name="Agents" component={AgentsScreen} />
+      <Stack.Screen name="Multimodal" component={MultimodalScreen} />
+      <Stack.Screen name="ModelDetail" component={ModelDetailScreen} />
     </Stack.Navigator>
   );
 }

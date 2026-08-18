@@ -110,7 +110,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'terminal': Terminal,
 };
 
-export function Icon({name, size = 20, color = '$color'}: IconProps) {
+export function Icon({name, size = 20, color}: IconProps) {
   const C = ICON_MAP[name];
   if (!C) return null;
   return <C size={size} color={color} />;

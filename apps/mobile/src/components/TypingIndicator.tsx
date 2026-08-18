@@ -6,12 +6,13 @@
 import React, {useEffect, useRef} from 'react';
 import {Animated} from 'react-native';
 import {XStack} from 'tamagui';
+import {useColors} from '../theme/colors';
 
 interface Props {
   visible: boolean;
 }
 
-function Dot({delay}: {delay: number}) {
+function Dot({delay, color}: {delay: number; color: string}) {
   const bounce = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -32,7 +33,7 @@ function Dot({delay}: {delay: number}) {
         width: 7,
         height: 7,
         borderRadius: 3.5,
-        backgroundColor: '$color10',
+        backgroundColor: color,
         transform: [{translateY: bounce}],
       }}
     />
@@ -40,21 +41,22 @@ function Dot({delay}: {delay: number}) {
 }
 
 export function TypingIndicator({visible}: Props) {
+  const c = useColors();
   if (!visible) return null;
 
   return (
     <XStack paddingHorizontal={16} marginBottom={8} alignItems="flex-start">
       <XStack
         alignItems="center"
-        backgroundColor="$background"
+        backgroundColor={c.background}
         paddingHorizontal={16}
         paddingVertical={12}
         borderRadius={12}
         borderBottomLeftRadius={4}
         gap={5}>
-        <Dot delay={0} />
-        <Dot delay={150} />
-        <Dot delay={300} />
+        <Dot delay={0} color={c.textSecondary} />
+        <Dot delay={150} color={c.textSecondary} />
+        <Dot delay={300} color={c.textSecondary} />
       </XStack>
     </XStack>
   );

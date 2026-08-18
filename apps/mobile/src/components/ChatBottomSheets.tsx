@@ -113,18 +113,18 @@ export function ChatBottomSheets({
             onPress={() => setShowInfo(false)}
           />
           <YStack
-            backgroundColor="$background"
+            backgroundColor={colors.background}
             borderTopLeftRadius={24}
             borderTopRightRadius={24}
             maxHeight="85%"
             overflow="hidden">
             <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
-              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+              <YStack width={40} height={5} borderRadius={3} backgroundColor={colors.border} opacity={0.4} />
             </YStack>
 
             <XStack
               paddingHorizontal={20} paddingVertical={14}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
               <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Details</Text>
               <YStack
@@ -152,7 +152,7 @@ export function ChatBottomSheets({
 
             <YStack paddingHorizontal={20} paddingBottom={4}>
               <XStack justifyContent="space-between" paddingVertical={12}
-                borderBottomWidth={0.5} borderBottomColor="$borderColor">
+                borderBottomWidth={0.5} borderBottomColor={colors.border}>
                 <Text fontSize={13} color="$color11">Session</Text>
                 <Text fontSize={13} color="$color" fontWeight="500" numberOfLines={1}>
                   {activeSessionId?.slice(0, 12) || 'None'}
@@ -160,13 +160,13 @@ export function ChatBottomSheets({
               </XStack>
               {currentSoul && (
                 <XStack justifyContent="space-between" paddingVertical={12}
-                  borderBottomWidth={0.5} borderBottomColor="$borderColor">
+                  borderBottomWidth={0.5} borderBottomColor={colors.border}>
                   <Text fontSize={13} color="$color11">Soul</Text>
                   <Text fontSize={13} color="$color" fontWeight="500">{currentSoul.name}</Text>
                 </XStack>
               )}
               <XStack justifyContent="space-between" paddingVertical={12}
-                borderBottomWidth={0.5} borderBottomColor="$borderColor">
+                borderBottomWidth={0.5} borderBottomColor={colors.border}>
                 <Text fontSize={13} color="$color11">Status</Text>
                 <XStack alignItems="center" gap={6}>
                   <YStack width={7} height={7} borderRadius={4}
@@ -277,18 +277,18 @@ export function ChatBottomSheets({
             onPress={() => setShowSoulPicker(false)}
           />
           <YStack
-            backgroundColor="$background"
+            backgroundColor={colors.background}
             borderTopLeftRadius={24}
             borderTopRightRadius={24}
             maxHeight="75%"
             overflow="hidden">
             <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
-              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+              <YStack width={40} height={5} borderRadius={3} backgroundColor={colors.border} opacity={0.4} />
             </YStack>
 
             <XStack
               paddingHorizontal={20} paddingVertical={14}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
               <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Personalities</Text>
               <YStack
@@ -395,17 +395,17 @@ export function ChatBottomSheets({
             onPress={() => setShowSettings(false)}
           />
           <YStack
-            backgroundColor="$background"
+            backgroundColor={colors.background}
             borderTopLeftRadius={24}
             borderTopRightRadius={24}
             overflow="hidden">
             <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
-              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+              <YStack width={40} height={5} borderRadius={3} backgroundColor={colors.border} opacity={0.4} />
             </YStack>
 
             <XStack
               paddingHorizontal={20} paddingVertical={16}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
               <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Menu</Text>
               <YStack
@@ -419,7 +419,7 @@ export function ChatBottomSheets({
 
             <YStack
               paddingVertical={14} paddingHorizontal={20}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               onPress={() => { createSession(); setShowSettings(false); }}
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
@@ -435,7 +435,7 @@ export function ChatBottomSheets({
 
             <YStack
               paddingVertical={14} paddingHorizontal={20}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               onPress={() => { setShowSettings(false); setShowSearch(true); }}
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
@@ -451,7 +451,7 @@ export function ChatBottomSheets({
 
             <YStack
               paddingVertical={14} paddingHorizontal={20}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               onPress={() => {
                 setShowSettings(false);
                 updateTheme({theme: themeMode === 'dark' ? 'light' : 'dark'});
@@ -472,7 +472,7 @@ export function ChatBottomSheets({
 
             <YStack
               paddingVertical={14} paddingHorizontal={20}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               onPress={() => { setShowSettings(false); setShowInfo(true); }}
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
@@ -488,7 +488,7 @@ export function ChatBottomSheets({
 
             <YStack
               paddingVertical={14} paddingHorizontal={20}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               onPress={() => { setShowSettings(false); setShowChatSettings(true); }}
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
@@ -504,7 +504,7 @@ export function ChatBottomSheets({
 
             <YStack
               paddingVertical={14} paddingHorizontal={20}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               onPress={() => { setShowSettings(false); setShowSystemPrompt(true); }}
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
@@ -547,18 +547,18 @@ export function ChatBottomSheets({
         <YStack flex={1} justifyContent="flex-end">
           <YStack flex={1} backgroundColor={colors.overlay(0.3)} onPress={() => setForwardTo(null)} />
           <YStack
-            backgroundColor="$background"
+            backgroundColor={colors.background}
             borderTopLeftRadius={24}
             borderTopRightRadius={24}
             maxHeight="65%"
             overflow="hidden">
             <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
-              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+              <YStack width={40} height={5} borderRadius={3} backgroundColor={colors.border} opacity={0.4} />
             </YStack>
 
             <XStack
               paddingHorizontal={20} paddingVertical={14}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
               <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Forward to...</Text>
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center"
@@ -629,17 +629,17 @@ export function ChatBottomSheets({
             onPress={() => setShowChatSettings(false)}
           />
           <YStack
-            backgroundColor="$background"
+            backgroundColor={colors.background}
             borderTopLeftRadius={24}
             borderTopRightRadius={24}
             overflow="hidden">
             <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
-              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+              <YStack width={40} height={5} borderRadius={3} backgroundColor={colors.border} opacity={0.4} />
             </YStack>
 
             <XStack
               paddingHorizontal={20} paddingVertical={16}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
               <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Generation Settings</Text>
               <YStack
@@ -668,17 +668,17 @@ export function ChatBottomSheets({
             onPress={() => setShowSystemPrompt(false)}
           />
           <YStack
-            backgroundColor="$background"
+            backgroundColor={colors.background}
             borderTopLeftRadius={24}
             borderTopRightRadius={24}
             overflow="hidden">
             <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
-              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+              <YStack width={40} height={5} borderRadius={3} backgroundColor={colors.border} opacity={0.4} />
             </YStack>
 
             <XStack
               paddingHorizontal={20} paddingVertical={16}
-              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
               <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">System Prompt</Text>
               <YStack

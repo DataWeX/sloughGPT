@@ -215,8 +215,10 @@ export const api = {
   getAutoTrainStatus: <T>() => request<T>('GET', '/mobile/train/auto-status'),
 
   /** Pull latest weights from a trained checkpoint. */
-  pullWeights: (checkpoint: string) =>
-    fetch(
-      `${'' /* resolved at call site */}/auto-train/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
-    ).then(r => r.json()),
+  pullWeights: async (checkpoint: string) => {
+    const baseUrl = await getApiUrl();
+    return fetch(
+      `${baseUrl}/auto-train/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
+    ).then(r => r.json());
+  },
 };

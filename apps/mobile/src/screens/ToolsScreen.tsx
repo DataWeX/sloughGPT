@@ -22,6 +22,20 @@ const TOOLS: ToolItem[] = [
   {icon: 'book-open', title: 'Knowledge', desc: "Manage what the AI knows about you", target: 'Knowledge'},
   {icon: 'bookmark', title: 'Bookmarks', desc: 'Saved messages for quick access', target: 'Bookmarks'},
   {icon: 'search', title: 'Search', desc: 'Find messages across conversations', target: 'Search'},
+  {icon: 'brain', title: 'Souls', desc: 'Switch AI personalities and traits', target: 'Souls'},
+  {icon: 'package', title: 'Datasets', desc: 'Import and manage training data', target: 'Datasets'},
+  {icon: 'bar-chart', title: 'Benchmark', desc: 'Compare model quality metrics', target: 'Benchmark'},
+  {icon: 'refresh-cw', title: 'Adapters', desc: 'Per-user LoRA adapter management', target: 'Adapters'},
+  {icon: 'zap', title: 'Feedback', desc: 'Review feedback and improve models', target: 'Feedback'},
+  {icon: 'target', title: 'Workflow', desc: 'Feedback pipeline and automation', target: 'Workflow'},
+  {icon: 'mic', title: 'Voice', desc: 'Speech-to-text and audio settings', target: 'Voice'},
+  {icon: 'user', title: 'Companion', desc: 'Personality presets and tone', target: 'Companion'},
+  {icon: 'book', title: 'Learn', desc: 'Learning progress and insights', target: 'Learn'},
+  {icon: 'message-circle', title: 'Agents', desc: 'Multi-agent orchestration', target: 'Agents'},
+  {icon: 'image', title: 'Multimodal', desc: 'Vision, image analysis, DPO', target: 'Multimodal'},
+  {icon: 'download', title: 'Export', desc: 'Export models and training data', target: 'Export'},
+  {icon: 'settings', title: 'Tokenizer', desc: 'Vocab stats and tokenization', target: 'Tokenizer'},
+  {icon: 'copy', title: 'Compare', desc: 'Side-by-side model comparison', target: 'Compare'},
 ];
 
 function formatUptime(seconds: number): string {
