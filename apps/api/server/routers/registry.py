@@ -26,13 +26,13 @@ class RegistryRouter:
         from domains.infrastructure.model_registry import get_model_registry
         return get_model_registry()
 
-    async def list_models(self):
+    async def list_models(self) -> dict:
         """List registered models from the live registry."""
         reg = self._get_registry()
         models = reg.list_models()
         return success_response(data={"models": models, "count": len(models)})
 
-    async def get_model(self, model_id: str):
+    async def get_model(self, model_id: str) -> dict:
         """Get model details from the live registry."""
         reg = self._get_registry()
         models = reg.list_models()
@@ -41,14 +41,21 @@ class RegistryRouter:
             raise HTTPException(status_code=404, detail="Model not found")
         return success_response(data=found)
 
-    async def get_best_model(self):
+    async def get_best_model(self) -> dict:
         """Get best performing model by metrics."""
         reg = self._get_registry()
         health = reg.health_summary()
         return success_response(data=health)
 
-    async def get_registry_stats(self):
-        """Get registry statistics."""
+    async def get_registry_stats(self) -> dict:
+        """Retrieve aggregate statistics for the model registry.
+
+        Returns health summary including total registered models, loaded
+        count, and per-model status information.
+
+        Returns:
+            Success envelope with registry health summary dict.
+        """
         reg = self._get_registry()
         health = reg.health_summary()
         return success_response(data=health)

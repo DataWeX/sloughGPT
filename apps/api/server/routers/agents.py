@@ -8,7 +8,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, AsyncGenerator
 
 from domains.api.sse_envelope import sse_event, sse_complete, sse_error
 
@@ -78,12 +78,34 @@ class AgentsRouter:
         from domains.agents.system import get_agent_system
         return get_agent_system()
 
-    async def list_agents(self):
-        """List all available agents."""
+    async def list_agents(self) -> dict:
+        """List all agents stored in the agent system.
+
+        Returns:
+            List of AgentOut objects, each containing id, name,
+            description, instructions, tools, and avatar fields.
+
+        Side effects:
+            Reads from the agent system singleton.
+        """
         return [AgentOut(**a) for a in self._get_system().list()]
 
-    async def create_agent(self, req: AgentCreate):
-        """Create a new agent."""
+    async def create_agent(self, req: AgentCreate) -> dict:
+        """Create a new agent with the given name, description, tools, and instructions.
+
+        Args:
+            req: AgentCreate with name (required), description, instructions,
+                tools list, and avatar. If id is empty, a slug is derived from
+                the name.
+
+        Returns:
+            AgentOut with the created agent's data.
+
+        Side effects:
+            Persists the agent to the agent system store.
+            Logs an audit entry for agent creation.
+            Raises 409 if an agent with the same ID already exists.
+        """
         agent_id = req.id or req.name.lower().replace(" ", "-").replace("_", "-")[:32]
         system = self._get_system()
         if system.get(agent_id):
@@ -99,15 +121,29 @@ class AgentsRouter:
         safe_audit_log("agent.create", resource=agent_id, detail=req.name, tools=list(req.tools or []))
         return AgentOut(**result)
 
-    async def get_agent(self, agent_id: str):
+    async def get_agent(self, agent_id: str) -> dict:
         """Get a specific agent by ID."""
         result = self._get_system().get(agent_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Agent not found")
         return AgentOut(**result)
 
-    async def update_agent(self, agent_id: str, req: AgentUpdate):
-        """Update an existing agent."""
+    async def update_agent(self, agent_id: str, req: AgentUpdate) -> dict:
+        """Update an existing agent by ID with partial field changes.
+
+        Args:
+            agent_id: The unique identifier of the agent to update.
+            req: AgentUpdate with optional name, description, instructions,
+                tools, and avatar fields. Only non-None fields are applied.
+
+        Returns:
+            AgentOut with the updated agent data.
+
+        Side effects:
+            Modifies the agent record in the agent system store.
+            Logs an audit entry for agent update.
+            Raises 404 if no agent with the given ID is found.
+        """
         system = self._get_system()
         result = system.update(
             agent_id=agent_id,
@@ -122,14 +158,26 @@ class AgentsRouter:
         safe_audit_log("agent.update", resource=agent_id)
         return AgentOut(**result)
 
-    async def delete_agent(self, agent_id: str):
-        """Delete an agent."""
+    async def delete_agent(self, agent_id: str) -> dict:
+        """Delete an agent by its unique identifier.
+
+        Args:
+            agent_id: The unique identifier of the agent to delete.
+
+        Returns:
+            Success response with status "deleted".
+
+        Side effects:
+            Removes the agent from the agent system store.
+            Logs an audit entry for agent deletion.
+            Raises 404 if no agent with the given ID is found.
+        """
         if not self._get_system().delete(agent_id):
             raise HTTPException(status_code=404, detail="Agent not found")
         safe_audit_log("agent.delete", resource=agent_id)
         return success_response(data={"status": "deleted"})
 
-    async def execute_agent(self, agent_id: str, req: ExecuteRequest):
+    async def execute_agent(self, agent_id: str, req: ExecuteRequest) -> dict:
         """Execute an agent on a user request."""
         result = await self._get_system().execute(
             agent_id=agent_id,
@@ -144,7 +192,7 @@ class AgentsRouter:
 
     # ── Orchestration ─────────────────────────────────────────────────────
 
-    async def orchestrate_agents(self, req: OrchestrateRequest, request: Request):
+    async def orchestrate_agents(self, req: OrchestrateRequest, request: Request) -> AsyncGenerator[str, None]:
         """Orchestrate multiple agents on a goal with SSE streaming.
 
         Streams plan → per-level task execution → composition → complete.
@@ -155,7 +203,8 @@ class AgentsRouter:
 
         store = get_agent_run_store()
 
-        async def event_stream():
+        async def event_stream() -> AsyncGenerator[str, None]:
+            """event_stream."""
             run_id = None
             try:
                 orch = MultiAgentOrchestrator()
@@ -228,7 +277,8 @@ class AgentsRouter:
                         message=f"Executing level {level_idx + 1}/{len(levels)} ({len(task_ids)} tasks)",
                     )
 
-                    async def run_and_yield(tid: str):
+                    async def run_and_yield(tid: str) -> dict:
+                        """run_and_yield."""
                         task = task_map[tid]
                         task.status = "in_progress"
                         dep_context = orch._build_dep_context(task, task_map, results_ctx)
@@ -324,14 +374,14 @@ class AgentsRouter:
 
     # ── Run history ─────────────────────────────────────────────────────
 
-    async def list_runs(self, limit: int = 20):
+    async def list_runs(self, limit: int = 20) -> dict:
         """List orchestration run history, newest first."""
         from domains.agents.run_history import get_agent_run_store
 
         runs = get_agent_run_store().list_runs(limit=max(1, min(int(limit), 200)))
         return {"runs": runs, "count": len(runs)}
 
-    async def get_run(self, run_id: str):
+    async def get_run(self, run_id: str) -> dict:
         """Return a single orchestration run record."""
         from domains.agents.run_history import get_agent_run_store
 

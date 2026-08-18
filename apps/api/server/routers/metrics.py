@@ -29,7 +29,7 @@ class MetricsRouter:
             methods=["GET"],
         )
 
-    async def get_metrics(self):
+    async def get_metrics(self) -> dict:
         """Get internal request metrics (JSON)."""
         c = get_metrics_collector()
         import state as server_state
@@ -47,8 +47,16 @@ class MetricsRouter:
             "tokens_generated_total": c._tokens_generated,
         })
 
-    async def prometheus_metrics(self):
-        """Prometheus-compatible metrics output (text/plain)."""
+    async def prometheus_metrics(self) -> dict:
+        """Render server metrics in Prometheus text exposition format.
+
+        Returns all tracked counters (inferences, tokens, active requests)
+        as a text/plain response suitable for Prometheus scraping.
+
+        Returns:
+            Response with content-type text/plain; version=0.0.4 containing
+            Prometheus-formatted metric lines.
+        """
         c = get_metrics_collector()
         body = c.render()
         return Response(content=body, media_type="text/plain; version=0.0.4; charset=utf-8")

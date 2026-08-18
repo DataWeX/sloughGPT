@@ -37,7 +37,7 @@ class MetaWeightsRouter:
         self.router.add_api_route("/get", self.get_meta_weights, methods=["POST"], response_model=MetaWeightResponse)
         self.router.add_api_route("/stats", self.get_meta_weight_stats, methods=["GET"])
 
-    async def get_meta_weights(self, request: GetMetaWeightsRequest, req: Request):
+    async def get_meta_weights(self, request: GetMetaWeightsRequest, req: Request) -> dict:
         """Get meta-weight adjustments based on similar past feedback.
 
         Combines per-user accumulated boosts with pattern-based adjustments
@@ -64,7 +64,7 @@ class MetaWeightsRouter:
             based_on_samples=len(manager._weight_history),
         )
 
-    async def get_meta_weight_stats(self, req: Request):
+    async def get_meta_weight_stats(self, req: Request) -> dict:
         """Get meta-weight system statistics.
 
         Returns db stats, quality trend, current average weights,
@@ -79,7 +79,7 @@ class MetaWeightsRouter:
             raise HTTPException(status_code=503, detail="Meta-weight system not available")
         return success_response(data=manager.get_stats())
 
-    async def ping(self):
+    async def ping(self) -> dict:
         """
         Health probe for the meta-weights system.
 

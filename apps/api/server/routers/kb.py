@@ -225,14 +225,15 @@ class KBRouter:
         best = max(scores, key=scores.get)
         return best if scores[best] > 0 else "general"
 
-    def list_knowledge(self, limit: int = Query(200, ge=1, le=5000), offset: int = Query(0, ge=0)):
+    def list_knowledge(self, limit: int = Query(200, ge=1, le=5000), offset: int = Query(0, ge=0)) -> dict:
         """List knowledge items with optional pagination."""
         memory = self._get_memory()
         entries = memory.list_all(top_k=limit + offset)
         entries = entries[offset:offset + limit]
         return [self._fact_from_entry(e) for e in entries]
 
-    def add_knowledge(self, req: KnowledgeCreate):
+    def add_knowledge(self, req: KnowledgeCreate) -> dict:
+        """add_knowledge."""
         from domains.learner.knowledge import KnowledgeFact
         memory = self._get_memory()
         topic = req.topic if not req.auto_tag else self._auto_tag(req.content)
@@ -280,7 +281,7 @@ class KBRouter:
         )
         return success_response(data={"status": "stored" if is_new else "duplicate", "id": item_id, "content": req.content, "topic": topic, "label": label})
 
-    def update_knowledge(self, item_id: str, req: KnowledgeUpdate):
+    def update_knowledge(self, item_id: str, req: KnowledgeUpdate) -> dict:
         """Update a knowledge item's content, topic, or importance."""
         memory = self._get_memory()
         all_items = memory.list_all(top_k=5000)
@@ -309,7 +310,7 @@ class KBRouter:
         safe_audit_log("knowledge.update", resource=item_id, detail="updated" if ok else "stored")
         return success_response(data={"status": "updated" if ok else "stored"})
 
-    def batch_ingest(self, req: KnowledgeBatchRequest):
+    def batch_ingest(self, req: KnowledgeBatchRequest) -> dict:
         """Store multiple knowledge items in KnowledgeMemory."""
         from domains.learner.knowledge import KnowledgeFact
         memory = self._get_memory()
@@ -327,7 +328,8 @@ class KBRouter:
         safe_audit_log("knowledge.add", resource="batch", detail=f"stored={stored}")
         return success_response(data={"stored": stored})
 
-    def search_knowledge(self, query: str = ""):
+    def search_knowledge(self, query: str = "") -> dict:
+        """search_knowledge."""
         memory = self._get_memory()
         results = memory.search(query, top_k=20) if query else []
         return success_response(data={
@@ -335,7 +337,7 @@ class KBRouter:
             "count": len(results),
         })
 
-    def knowledge_stats(self):
+    def knowledge_stats(self) -> dict:
         """Return knowledge base statistics.
 
         Aggregates topic/source counts from the full store in a single pass.
@@ -364,7 +366,7 @@ class KBRouter:
             "searchable": True,
         })
 
-    def list_topics(self):
+    def list_topics(self) -> dict:
         """List all unique topics with item counts."""
         memory = self._get_memory()
         all_items = memory.list_all(top_k=5000)
@@ -378,7 +380,7 @@ class KBRouter:
             "total": len(topics),
         })
 
-    def ingest_url(self, req: UrlIngestRequest):
+    def ingest_url(self, req: UrlIngestRequest) -> dict:
         """Ingest a URL into the knowledge base."""
         try:
             parsed = urllib.parse.urlparse(req.url)
@@ -429,7 +431,7 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb_ingest")
 
-    def batch_delete_knowledge(self, req: BatchDeleteRequest):
+    def batch_delete_knowledge(self, req: BatchDeleteRequest) -> dict:
         """Delete multiple knowledge items by ID."""
         memory = self._get_memory()
         deleted = 0
@@ -439,19 +441,20 @@ class KBRouter:
         safe_audit_log("knowledge.batch.delete", resource="batch", detail=f"deleted={deleted}")
         return success_response(data={"deleted": deleted})
 
-    def suggest_topic(self, req: SuggestTopicRequest):
+    def suggest_topic(self, req: SuggestTopicRequest) -> dict:
         """Return the best auto-detected topic for content without storing."""
         topic = self._auto_tag(req.content)
         return success_response(data={"topic": topic, "confidence": "high" if topic != "general" else "low"})
 
-    def delete_knowledge(self, item_id: str):
+    def delete_knowledge(self, item_id: str) -> dict:
+        """delete_knowledge."""
         memory = self._get_memory()
         if memory.delete_by_id(item_id):
             safe_audit_log("knowledge.delete", resource=item_id)
             return success_response(data={"status": "deleted"})
         raise HTTPException(status_code=404, detail="Item not found")
 
-    def train_knowledge_adapter_route(self):
+    def train_knowledge_adapter_route(self) -> dict:
         """Train a LoRA adapter on all knowledge facts to bake them into model weights."""
         from domains.infrastructure.knowledge_weight_integrator import train_knowledge_adapter, get_adapter_status
         memory = self._get_memory()
@@ -470,12 +473,12 @@ class KBRouter:
         )
         return success_response(data={**result, "adapter_status": status})
 
-    def knowledge_adapter_status(self):
+    def knowledge_adapter_status(self) -> dict:
         """Return status of the knowledge weight adapter."""
         from domains.infrastructure.knowledge_weight_integrator import get_adapter_status
         return success_response(data=get_adapter_status())
 
-    def related_knowledge(self, item_id: str, top_k: int = Query(6, ge=1, le=20)):
+    def related_knowledge(self, item_id: str, top_k: int = Query(6, ge=1, le=20)) -> dict:
         """Return semantically related knowledge items, excluding the current one."""
         memory = self._get_memory()
         all_items = memory.list_all(top_k=5000)
@@ -490,7 +493,8 @@ class KBRouter:
         related = [r for r in results if r.get("id") != item_id][:top_k]
         return success_response(data={"items": [self._fact_from_entry(r) for r in related], "count": len(related)})
 
-    def get_context(self):
+    def get_context(self) -> dict:
+        """get_context."""
         memory = self._get_memory()
         context = memory.get_context_string(max_items=50)
         all_facts = memory.list_all()
@@ -502,7 +506,7 @@ class KBRouter:
         topic: str = Form("imported"),
         chunk_size: int = Form(500),
         overlap: int = Form(50),
-    ):
+    ) -> dict:
         """Import a textbook or document file as knowledge facts.
 
         Supports .txt, .md, and .json (array of strings) files.
@@ -635,7 +639,7 @@ class KBRouter:
 
         return chunks
 
-    async def search_files(self, req: FileSearchRequest):
+    async def search_files(self, req: FileSearchRequest) -> dict:
         """Semantic search across codebase files.
 
         Indexes files in the given path and returns results ranked by
@@ -654,7 +658,7 @@ class KBRouter:
             "indexed_chunks": stats["chunks_total"],
         })
 
-    async def check_duplicate(self, req: DuplicateCheckRequest):
+    async def check_duplicate(self, req: DuplicateCheckRequest) -> dict:
         """Check if content is a near-duplicate of existing knowledge.
 
         Returns whether it's a duplicate, the best match, and similarity score.
@@ -674,7 +678,7 @@ class KBRouter:
             "threshold": req.threshold,
         })
 
-    async def categorize_knowledge(self, req: CategorizeRequest):
+    async def categorize_knowledge(self, req: CategorizeRequest) -> dict:
         """Auto-assign a topic to content based on existing knowledge categories."""
         from domains.learner.knowledge_ops import AutoCategorizer
 
@@ -690,7 +694,7 @@ class KBRouter:
             "suggestions": [{"topic": t, "score": round(s, 4)} for t, s in suggestions],
         }
 
-    async def knowledge_gaps(self):
+    async def knowledge_gaps(self) -> dict:
         """Find under-represented topics and knowledge gaps."""
         from domains.learner.knowledge_ops import KnowledgeGapDetector
 
@@ -706,7 +710,7 @@ class KBRouter:
             "topics": list(gap._topic_counts.keys()),
         }
 
-    async def bulk_ingest(self, req: BulkIngestRequest):
+    async def bulk_ingest(self, req: BulkIngestRequest) -> dict:
         """Bulk ingest texts with automatic deduplication.
 
         Skips near-duplicate content and reports added/skipped/errors.
@@ -736,7 +740,7 @@ class KBRouter:
             **report,
         }
 
-    async def train_embedder_endpoint(self):
+    async def train_embedder_endpoint(self) -> dict:
         """Train the SloNet text embedder on all knowledge + dataset texts.
 
         Collects texts from the knowledge base, ingested files, and datasets,
@@ -810,7 +814,7 @@ class KBRouter:
         safe_audit_log("knowledge.train", resource="embedder", detail=result.get("status", "ok"), texts_used=result.get("texts_used", 0))
         return result
 
-    async def embedder_status(self):
+    async def embedder_status(self) -> dict:
         """Check if a trained embedder checkpoint exists."""
         from domains.inference.slo_embedder import _EMBEDDER_PATH, SloTextEmbedder
 
@@ -836,20 +840,20 @@ class KBRouter:
             self._spaced_rep_scheduler = SpacedRepetitionScheduler()
         return self._spaced_rep_scheduler
 
-    def get_due_reviews(self):
+    def get_due_reviews(self) -> dict:
         """Get knowledge items that are due for review."""
         scheduler = self._get_spaced_rep()
         due_ids = scheduler.get_due_reviews()
         stats = scheduler.get_review_stats()
         return success_response(data={"due_ids": due_ids, "stats": stats})
 
-    def schedule_review(self, item_id: str, performance: float = Query(0.8, ge=0.0, le=1.0)):
+    def schedule_review(self, item_id: str, performance: float = Query(0.8, ge=0.0, le=1.0)) -> dict:
         """Record a review performance and schedule next review."""
         scheduler = self._get_spaced_rep()
         next_time = scheduler.schedule_review(item_id, performance)
         return success_response(data={"item_id": item_id, "next_review": next_time})
 
-    def label_text(self, text: str = Query(..., min_length=1)):
+    def label_text(self, text: str = Query(..., min_length=1)) -> dict:
         """Classify text into semantic category (factual, procedural, etc.)."""
         from domains.infrastructure.truth_labeler import get_truth_labeler
         labeler = get_truth_labeler()
@@ -858,7 +862,7 @@ class KBRouter:
 
     # ── Production RAG Endpoints ───────────────────────────────────────────
 
-    def rag_ingest(self, req: RAGIngestRequest):
+    def rag_ingest(self, req: RAGIngestRequest) -> dict:
         """Ingest a document into the production RAG index.
 
         The document is chunked with overlap, embedded via n-gram TF-IDF,
@@ -877,7 +881,7 @@ class KBRouter:
             "stats": rag_svc.stats(),
         })
 
-    def rag_query(self, req: RAGQueryRequest):
+    def rag_query(self, req: RAGQueryRequest) -> dict:
         """Query the production RAG index for relevant context.
 
         Returns ranked results with BM25 + dense scores and combined ranking.
@@ -887,7 +891,7 @@ class KBRouter:
         result = rag_svc.query(req.question, top_k=req.top_k)
         return success_response(data=result)
 
-    def rag_verify(self, req: RAGVerifyRequest):
+    def rag_verify(self, req: RAGVerifyRequest) -> dict:
         """Verify generated text against the RAG index for hallucinations.
 
         Returns grounded claims, hallucination rate, and citations.
@@ -897,7 +901,7 @@ class KBRouter:
         result = rag_svc.verify_and_ground(req.text, req.question)
         return success_response(data=result)
 
-    def rag_list_documents(self):
+    def rag_list_documents(self) -> dict:
         """List all documents in the RAG index (metadata only)."""
         from domains.cognitive.rag_service import get_rag_service
         rag_svc = get_rag_service()
@@ -906,20 +910,27 @@ class KBRouter:
             "stats": rag_svc.stats(),
         })
 
-    def rag_clear(self):
+    def rag_clear(self) -> dict:
         """Clear the entire RAG index and persisted documents."""
         from domains.cognitive.rag_service import get_rag_service
         rag_svc = get_rag_service()
         count = rag_svc.clear()
         return success_response(data={"cleared": count})
 
-    def rag_stats(self):
-        """Return RAG index statistics."""
+    def rag_stats(self) -> dict:
+        """Retrieve statistics for the production RAG index.
+
+        Returns document count, chunk count, index size, and other
+        metrics from the RAG service's internal state.
+
+        Returns:
+            Success envelope with RAG stats dict.
+        """
         from domains.cognitive.rag_service import get_rag_service
         rag_svc = get_rag_service()
         return success_response(data=rag_svc.stats())
 
-    def kg_sync_to_rag(self):
+    def kg_sync_to_rag(self) -> dict:
         """Sync all KG triples into the RAG index via the training pipeline."""
         from domains.cognitive.rag_service import KGTrainingPipeline, get_rag_service
         rag_svc = get_rag_service()
@@ -927,7 +938,7 @@ class KBRouter:
         result = pipeline.sync_kg_to_rag()
         return success_response(data=result)
 
-    def kg_pipeline_stats(self):
+    def kg_pipeline_stats(self) -> dict:
         """Return KG → RAG pipeline queue stats."""
         from domains.cognitive.rag_service import KGTrainingPipeline
         pipeline = KGTrainingPipeline()

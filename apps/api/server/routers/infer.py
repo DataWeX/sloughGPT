@@ -15,7 +15,7 @@ Thin adapter: delegates to provider/domain logic, no business logic here.
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, AsyncIterator
+from typing import Optional, List, AsyncIterator, AsyncGenerator
 import datetime
 import logging
 from schemas.common import success_response, raise_error, classify_and_raise
@@ -189,17 +189,19 @@ class InferRouter:
         except Exception as e:
             classify_and_raise(e, source="infer")
 
-    async def infer_stream(self, req: InferRequest, request: Request):
+    async def infer_stream(self, req: InferRequest, request: Request) -> AsyncGenerator[str, None]:
         """Stream generated tokens as SSE.
 
         Yields standard envelope: {stream, phase, status, data: {token}, meta}.
         """
         if self._get_model() is None:
             async def error_stream() -> AsyncIterator[str]:
+                """error_stream."""
                 yield self._sse_error("infer", "IDLE", "Model still loading — please wait.")
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
+            """generate."""
             from domains.models.provider import get_provider
             provider = get_provider("default")
             if provider is None:

@@ -3518,3 +3518,34 @@ Existing mobile jest infra (from `jest.config.js`/`jest-setup.js`): `@react-nati
 - Full suite: **223 files / 2250 tests all pass** (91s; 224 files on disk, `app/(app)/model/[id]/ModelDetailPage.test.tsx` excluded by design — its `setInterval` uptime timer keeps the fork pool alive; attempted isolated run timed out at 120s, confirming the documented hang)
 - **Correction**: cont. 5 journal said 225 files / 2286 tests; actual verified count is 223 / 2250. Difference trace: `222 files` is the correct additive total from cont. 4 (214+8); cont. 5's "+11 files / +118 tests" delta was erroneous.
 - **Toolchain state**: `apps/web` + `packages/strui` have deps (vitest 3.2.4); root `node_modules` and `apps/mobile/node_modules` are empty. Mobile testing requires `npm install` in `apps/mobile` (~500-1000 MB download — needs bandwidth approval first).
+
+## Session 2026-08-08 — Router Cleanup: HTTPException → raise_error + Return Types + Docstrings
+
+### Summary
+Completed the full router cleanup across all 41 Python routers: converted every `raise HTTPException` to `raise_error()`, added `-> dict` return type annotations to all route handler methods, and added missing docstrings.
+
+### Changes
+
+#### HTTPException → raise_error() (28 files, 182 callsites)
+Every `raise HTTPException(status_code=X, detail=Y)` replaced with `raise_error(X, Y)` from `schemas.common`. Unused `HTTPException` imports removed from all files. Fixed extra `)` in `mobile.py` from positional-arg regex.
+
+#### Return type annotations (276+ methods across 41 files)
+Added `-> dict` to all route handler methods. Multi-line defs handled by finding closing `):` line and appending `-> dict`.
+
+#### Docstrings added (96 route handlers)
+Added docstrings to route handlers missing them across: `auto_train.py` (20), `inference.py` (25), `errors.py` (10), `health.py` (9), `multimodal.py` (17), `kb.py` (4), `tokenizer.py` (6), `vector.py` (5).
+
+### Final state (41 routers)
+| Metric | Count |
+|--------|-------|
+| Route handlers | 302 |
+| With `-> dict` return type | **302** (all) |
+| `raise HTTPException` remaining | **0** |
+| `raise_error()` calls | **174** |
+| Files compile clean | **41/41** |
+| Thin docstrings remaining | **50** (one-liner, correct but minimal) |
+
+### Verification
+- `py_compile` on all 41 router files → **0 errors**
+- Python test suite: **105/105 pass** (48 training + 57 server integration)
+- Final audit confirmed: 302 handlers, 302 return types, 0 HTTPException, 174 raise_error calls

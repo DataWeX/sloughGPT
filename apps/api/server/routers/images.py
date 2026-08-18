@@ -287,7 +287,7 @@ class ImagesRouter:
         self,
         request: GenerateRequest,
         background_tasks: BackgroundTasks = None,
-    ):
+    ) -> dict:
         """Generate an image from text description.
 
         Creates an AI-generated image using procedural generation (no external APIs required).
@@ -319,7 +319,7 @@ class ImagesRouter:
             logger.error(f"Image generation failed: {e}", extra={"tag": "MODEL"})
             raise HTTPException(status_code=500, detail=f"Failed to generate image: {e}")
 
-    async def list_gallery(self):
+    async def list_gallery(self) -> dict:
         """List all generated images in the gallery."""
         gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
 
@@ -336,7 +336,7 @@ class ImagesRouter:
 
         return success_response(data={"images": images[:50]})
 
-    async def list_styles(self):
+    async def list_styles(self) -> dict:
         """List available image generation styles."""
         return success_response(data={"styles": list(self.STYLES.items())})
 

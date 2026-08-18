@@ -99,7 +99,7 @@ class DocStoreRouter:
             default=-1, ge=-1, le=1, alias="dir", description="Sort direction: 1 or -1"
         ),
         limit: Optional[int] = Query(default=None, gt=0, description="Max results"),
-    ):
+    ) -> dict:
         """List all documents in a collection, optionally sorted/limited.
 
         Args:
@@ -122,7 +122,7 @@ class DocStoreRouter:
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
-    ):
+    ) -> dict:
         """Get a single document by ``doc_id``.
 
         Returns:
@@ -139,7 +139,7 @@ class DocStoreRouter:
         collection: str = Path(...),
         doc_id: str = Path(...),
         body: Dict[str, Any] = Body(...),
-    ):
+    ) -> dict:
         """Upsert a document: replace it if it exists, otherwise insert.
 
         Args:
@@ -167,7 +167,7 @@ class DocStoreRouter:
         collection: str = Path(...),
         doc_id: str = Path(...),
         body: Dict[str, Any] = Body(...),
-    ):
+    ) -> dict:
         """Merge fields into an existing document (no-op if it does not exist).
 
         Mirrors Dexie ``Table.update``: a missing document is not created.
@@ -189,7 +189,7 @@ class DocStoreRouter:
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
-    ):
+    ) -> dict:
         """Delete a single document by ``doc_id``.
 
         Returns:
@@ -201,7 +201,7 @@ class DocStoreRouter:
         deleted = _collection(collection).delete_one({"_id": doc_id})
         return success_response(data={"deleted": bool(deleted)})
 
-    def clear_collection(self, collection: str = Path(...)):
+    def clear_collection(self, collection: str = Path(...)) -> dict:
         """Delete every document in a collection (drops its journal files).
 
         Returns:
@@ -217,7 +217,7 @@ class DocStoreRouter:
         self,
         collection: str = Path(...),
         body: Dict[str, Any] = Body(...),
-    ):
+    ) -> dict:
         """Upsert many documents in one request.
 
         Args:

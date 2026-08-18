@@ -40,14 +40,16 @@ class SessionRouter:
                     "stream": stream, "phase": phase, "status": status,
                     "data": data or {}, "meta": meta or {}, "message": message,
                 }) + "\n\n"
-            def sse_token(stream, token, done=False, meta=None, elapsed_ms=None):
+            def sse_token(stream, token, done=False, meta=None, elapsed_ms=None) -> dict:
+                """sse_token."""
                 phase = "STREAMING"
                 status = "complete" if done else "working"
                 m = dict(meta) if meta else {}
                 if done and elapsed_ms is not None:
                     m["elapsed_ms"] = round(elapsed_ms, 1)
                 return _sse_event(stream, phase, status, {"token": token}, m, "")
-            def sse_error(stream, phase, error, meta=None):
+            def sse_error(stream, phase, error, meta=None) -> dict:
+                """sse_error."""
                 return _sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
             self._sse_event = _sse_event
             self._sse_token = sse_token
@@ -69,7 +71,7 @@ class SessionRouter:
         from domains.infrastructure.session_core import SessionCore
         return SessionCore.get_messages(session_id)
 
-    async def set_session_context(self, session_id: str, ctx: SessionContext):
+    async def set_session_context(self, session_id: str, ctx: SessionContext) -> dict:
         """Set session context (messages stored for regeneration)."""
         if ctx.messages:
             from domains.infrastructure.session_core import SessionCore
@@ -77,7 +79,7 @@ class SessionRouter:
             return success_response(data=result)
         return success_response(data={"session_id": session_id, "message_count": 0}, message="stored")
 
-    async def get_session_messages(self, session_id: str):
+    async def get_session_messages(self, session_id: str) -> dict:
         """Return stored conversation messages for a session.
 
         Used by the UI to load a chat history.
@@ -89,7 +91,7 @@ class SessionRouter:
         except Exception as e:
             classify_and_raise(e, source="session_get_messages")
 
-    async def get_session_inspector(self, session_id: str):
+    async def get_session_inspector(self, session_id: str) -> dict:
         """Return aggregated context state for the UI context inspector.
 
         Combines session context, knowledge stats, trait weights, manager
@@ -186,6 +188,7 @@ class SessionRouter:
         the next assistant response, and streams the result via SSE.
         """
         async def generate() -> AsyncIterator[str]:
+            """generate."""
             try:
                 from domains.infrastructure.session_core import SessionCore
                 msgs = SessionCore.get_messages(session_id)

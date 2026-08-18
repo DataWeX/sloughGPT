@@ -188,7 +188,7 @@ class ModelsRouter:
                         result.append(w[0].upper() + w[1:])
         return " ".join(result)
 
-    async def list_models(self):
+    async def list_models(self) -> dict:
         """List available/loaded models with plain-language descriptions."""
         ctrl = get_models_controller()
 
@@ -235,7 +235,7 @@ class ModelsRouter:
         self,
         req: LoadModelRequest,
         auth_user: dict = Depends(require_auth_if_enabled),
-    ):
+    ) -> dict:
         """Load a model"""
         ctrl = get_models_controller()
         result = ctrl.load_model(req.model_id, req.device.value, req.quantize)
@@ -252,7 +252,7 @@ class ModelsRouter:
         safe_audit_log("model.load", resource=req.model_id, detail=result.get("status", "unknown"), device=req.device.value, quantize=req.quantize)
         return wrap_controller_result(result)
 
-    async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)):
+    async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Unload current model"""
         ctrl = get_models_controller()
         model_id = ctrl._current_model
@@ -273,7 +273,7 @@ class ModelsRouter:
         safe_audit_log("model.unload", resource=model_id or "unknown", detail=result.get("status", "unknown"))
         return wrap_controller_result(result)
 
-    async def current_model(self):
+    async def current_model(self) -> dict:
         """Get current model info"""
         ctrl = get_models_controller()
         model = ctrl.get_current_model()
@@ -281,7 +281,7 @@ class ModelsRouter:
             raise HTTPException(status_code=404, detail="No model loaded")
         return success_response(data=model)
 
-    async def list_hf_models(self, q: Optional[str] = None):
+    async def list_hf_models(self, q: Optional[str] = None) -> dict:
         """List HuggingFace available models with actual sizes and cache status.
 
         Models come from two sources:
@@ -368,7 +368,7 @@ class ModelsRouter:
         models = await asyncio.to_thread(_build_list)
         return success_response(data=models, meta={"q": q})
 
-    async def get_model_logs(self, limit: int = 50, model_filter: Optional[str] = None):
+    async def get_model_logs(self, limit: int = 50, model_filter: Optional[str] = None) -> dict:
         """Get model request logs (for debugging/monitoring)."""
         try:
             from state import model_request_logger as _logger
@@ -378,7 +378,7 @@ class ModelsRouter:
         except ImportError:
             return success_response(data=[], meta={})
 
-    async def export_model(self, request: ExportRequest):
+    async def export_model(self, request: ExportRequest) -> dict:
         """Export current model to file."""
         import state as server_state
         import time
@@ -401,7 +401,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="export_model")
 
-    async def get_export_formats(self):
+    async def get_export_formats(self) -> dict:
         """Get list of supported export formats."""
         from domains.training.export import list_export_formats
         return success_response(data=list_export_formats())
@@ -542,7 +542,7 @@ class ModelsRouter:
             "cache_dir": str(cache),
         })
 
-    async def download_qwen_gguf(self):
+    async def download_qwen_gguf(self) -> dict:
         """Download Qwen2.5-0.5B-Instruct GGUF (Q4_K_M) from HuggingFace Hub.
 
         Returns the GGUF file as a streaming download.  The mobile app calls this
@@ -570,7 +570,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="download_gguf")
 
-    async def visual_model_load(self, model_dir: str = "", model_id: str = ""):
+    async def visual_model_load(self, model_dir: str = "", model_id: str = "") -> dict:
         """Load a vision / multimodal model from a local directory.
 
         ``model_dir`` — path to the model directory on disk.
@@ -586,7 +586,7 @@ class ModelsRouter:
             raise HTTPException(status_code=400, detail="Either model_dir or model_id required")
         return wrap_controller_result(result)
 
-    async def quantize_model(self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)):
+    async def quantize_model(self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Apply int8/int4 quantization to the currently loaded model.
 
         Works with both SloNet and HuggingFace models. Quantizes all
@@ -697,7 +697,7 @@ class ModelsRouter:
 
         return success_response(data=report)
 
-    async def dequantize_model(self, auth_user: dict = Depends(require_auth_if_enabled)):
+    async def dequantize_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Reset quantized model back to float32 weights.
 
         Clears quantization state from all linear layers. The model
@@ -752,7 +752,7 @@ class ModelsRouter:
             "layers_reset": len(layers),
         })
 
-    async def set_precision(self, req: PrecisionRequest, auth_user: dict = Depends(require_auth_if_enabled)):
+    async def set_precision(self, req: PrecisionRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Switch compute precision on-the-fly without model reload.
 
         Works on both GPU (fp16 via accelerator) and CPU (fp32/int8/int4).
@@ -826,19 +826,19 @@ class ModelsRouter:
 
         return wrap_controller_result(result)
 
-    async def get_catalog(self):
+    async def get_catalog(self) -> dict:
         """Get the persistent model catalog."""
         from domains.infrastructure.model_catalog import get_model_catalog
         catalog = get_model_catalog()
         return success_response(data=catalog.list_all())
 
-    async def get_catalog_stats(self):
+    async def get_catalog_stats(self) -> dict:
         """Get catalog statistics."""
         from domains.infrastructure.model_catalog import get_model_catalog
         catalog = get_model_catalog()
         return success_response(data=catalog.stats())
 
-    async def get_conversion_status(self, model_id: Optional[str] = None):
+    async def get_conversion_status(self, model_id: Optional[str] = None) -> dict:
         """Get model conversion/download status.
 
         Without model_id: returns all active conversions.
@@ -855,7 +855,7 @@ class ModelsRouter:
 
         return success_response(data=tracker.get_active())
 
-    async def get_process_guard(self):
+    async def get_process_guard(self) -> dict:
         """Get ProcessGuard status.
 
         Returns enabled state, whether a guard is actively running, the
@@ -864,7 +864,7 @@ class ModelsRouter:
         ctrl = get_models_controller()
         return success_response(data=ctrl.get_process_guard_status())
 
-    async def set_process_guard(self, req: ProcessGuardRequest):
+    async def set_process_guard(self, req: ProcessGuardRequest) -> dict:
         """Enable or disable ProcessGuard at runtime.
 
         Body: ``{"enabled": true}`` or ``{"enabled": false}``

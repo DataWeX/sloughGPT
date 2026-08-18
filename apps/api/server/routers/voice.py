@@ -25,7 +25,8 @@ class _TTSBackend:
         self._loaded = False
         self._error = None
 
-    def load(self):
+    def load(self) -> dict:
+        """load."""
         if self._loaded:
             return True
         self._error = "Text-to-speech requires transformers, which is not supported"
@@ -33,6 +34,7 @@ class _TTSBackend:
         return False
 
     def generate(self, text: str) -> bytes:
+        """generate."""
         if not self._loaded:
             if not self.load():
                 raise RuntimeError(f"TTS unavailable: {self._error}")
@@ -117,7 +119,7 @@ class VoiceRouter:
             backend="browser-fallback",
         )
 
-    async def voice_status(self):
+    async def voice_status(self) -> dict:
         """Check if server-side TTS model is available."""
         available = self._tts_backend.load()
         return success_response(data={

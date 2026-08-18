@@ -40,7 +40,7 @@ class LearnerRouter:
         self.router.add_api_route("/status", self.learn_status, methods=["GET"])
 
     @staticmethod
-    def learn_search(req: LearnSearchRequest):
+    def learn_search(req: LearnSearchRequest) -> dict:
         """Search web, fetch full articles, store facts, and fine-tune.
 
         Args:
@@ -67,7 +67,7 @@ class LearnerRouter:
         action: str = Query(..., max_length=20),
         url: Optional[str] = Query(None, max_length=2000),
         poll_interval: int = Query(3600, ge=60, le=86400),
-    ):
+    ) -> dict:
         """Manage RSS feed subscriptions.
 
         Args:
@@ -95,7 +95,7 @@ class LearnerRouter:
         raise_error("unknown action", code="E_VAL_REQUEST")
 
     @staticmethod
-    def learn_ingest_url(url: str = Query(..., min_length=1, max_length=2000)):
+    def learn_ingest_url(url: str = Query(..., min_length=1, max_length=2000)) -> dict:
         """Ingest a single URL: scrape article, store facts, fine-tune.
 
         Args:
@@ -114,7 +114,7 @@ class LearnerRouter:
         topic: Optional[str] = Query(None, max_length=100),
         query: Optional[str] = Query(None, max_length=1000),
         top_k: int = Query(10, ge=1, le=100),
-    ):
+    ) -> dict:
         """Query learned knowledge by topic or keyword search.
 
         Args:
@@ -139,7 +139,7 @@ class LearnerRouter:
     def learn_ingest(
         text: Optional[str] = None,
         conversations: Optional[list[list[str]]] = None,
-    ):
+    ) -> dict:
         """Ingest raw text or conversation pairs into the learner.
 
         Args:
@@ -161,7 +161,7 @@ class LearnerRouter:
         return success_response(data=learner.status())
 
     @staticmethod
-    def learn_train():
+    def learn_train() -> dict:
         """Force an immediate training step on accumulated data.
 
         Returns:
@@ -173,7 +173,7 @@ class LearnerRouter:
         return success_response(data=status)
 
     @staticmethod
-    def learn_deploy(name: Optional[str] = None):
+    def learn_deploy(name: Optional[str] = None) -> dict:
         """Export the learner's SloTransformer as a deployable .soul file.
 
         Args:
@@ -188,7 +188,7 @@ class LearnerRouter:
         return success_response(data=result)
 
     @staticmethod
-    def learn_evaluate(text: Optional[str] = None):
+    def learn_evaluate(text: Optional[str] = None) -> dict:
         """Evaluate the learner on provided text or ring buffer test split.
 
         Args:
@@ -203,7 +203,7 @@ class LearnerRouter:
         return success_response(data=result)
 
     @staticmethod
-    def learn_status():
+    def learn_status() -> dict:
         """Return current learner + knowledge state.
 
         Returns:

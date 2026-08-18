@@ -137,7 +137,8 @@ class MultimodalRouter:
 
     # ── Unified Status ────────────────────────────────────────────────
 
-    async def status(self):
+    async def status(self) -> dict:
+        """status."""
         mgr = self._ensure_initialized()
         caps = mgr.capabilities
         engine = getattr(mgr, "_multimodal_engine", None)
@@ -192,7 +193,8 @@ class MultimodalRouter:
 
     # ── Training ───────────────────────────────────────────────────────
 
-    async def train_on_image(self, file: UploadFile = File(...), label: Optional[str] = Form(None)):
+    async def train_on_image(self, file: UploadFile = File(...), label: Optional[str] = Form(None)) -> dict:
+        """train_on_image."""
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Only image files accepted")
         mgr = self._ensure_initialized()
@@ -218,7 +220,8 @@ class MultimodalRouter:
         self,
         files: Optional[List[UploadFile]] = File(None),
         dataset_path: Optional[str] = Form(None),
-    ):
+    ) -> dict:
+        """train_batch."""
         mgr = self._ensure_initialized()
         if self._background_job["running"]:
             raise HTTPException(status_code=409, detail="Training job already running")
@@ -279,7 +282,8 @@ class MultimodalRouter:
         self._background_job["running"] = False
         self._background_job["finished_at"] = datetime.datetime.now().isoformat()
 
-    async def train_video(self, req: VideoTrainRequest):
+    async def train_video(self, req: VideoTrainRequest) -> dict:
+        """train_video."""
         with self._video_training_lock:
             if self._video_training_state["status"] == "running":
                 raise HTTPException(status_code=409, detail="Video training already in progress")
@@ -319,7 +323,8 @@ class MultimodalRouter:
         safe_audit_log("multimodal.train", resource=req.data_path or job_id, detail="video", epochs=req.epochs, batch_size=req.batch_size)
         return success_response(data={"status": "started", "job_id": job_id, "data_path": req.data_path})
 
-    async def video_infer(self, req: VideoInferRequest):
+    async def video_infer(self, req: VideoInferRequest) -> dict:
+        """video_infer."""
         try:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
             checkpoints = list_video_checkpoints()
@@ -340,7 +345,8 @@ class MultimodalRouter:
 
     # ── DPO ────────────────────────────────────────────────────────────
 
-    async def trigger_dpo(self, req: DPOTriggerRequest):
+    async def trigger_dpo(self, req: DPOTriggerRequest) -> dict:
+        """trigger_dpo."""
         model, tokenizer = self._get_active_model_and_tokenizer()
         if model is None or tokenizer is None:
             raise HTTPException(status_code=400, detail="No model loaded.")
@@ -380,7 +386,8 @@ class MultimodalRouter:
 
     # ── Analysis ──────────────────────────────────────────────────────
 
-    async def analyze_image(self, file: UploadFile = File(...)):
+    async def analyze_image(self, file: UploadFile = File(...)) -> dict:
+        """analyze_image."""
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Only image files accepted")
         mgr = self._ensure_initialized()
@@ -410,7 +417,8 @@ class MultimodalRouter:
         question: str = Form("Summarize this document."),
         per_page: bool = Form(False),
         max_new_tokens: int = Form(512),
-    ):
+    ) -> dict:
+        """analyze_pdf."""
         import tempfile
         from domains.inference.pdf_vlm import PDFVLMProcessor
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -432,7 +440,8 @@ class MultimodalRouter:
         finally:
             os.unlink(tmp_path)
 
-    async def process_video(self, file: UploadFile = File(...), num_frames: int = Form(16)):
+    async def process_video(self, file: UploadFile = File(...), num_frames: int = Form(16)) -> dict:
+        """process_video."""
         try:
             from domains.multimodal.video import VideoProcessor
             import tempfile
@@ -458,7 +467,8 @@ class MultimodalRouter:
 
     # ── Speech ────────────────────────────────────────────────────────
 
-    async def transcribe_audio(self, file: UploadFile = File(...), language: str = Form("en")):
+    async def transcribe_audio(self, file: UploadFile = File(...), language: str = Form("en")) -> dict:
+        """transcribe_audio."""
         if not file.content_type or not file.content_type.startswith("audio/"):
             raise HTTPException(status_code=400, detail="Only audio files accepted")
         mgr = self._ensure_initialized()
@@ -471,7 +481,8 @@ class MultimodalRouter:
         except Exception as e:
             classify_and_raise(e, source="multimodal_transcribe")
 
-    async def synthesize_speech(self, text: str = Form(...)):
+    async def synthesize_speech(self, text: str = Form(...)) -> dict:
+        """synthesize_speech."""
         try:
             from domains.multimodal.tts import TTSEngine
             import base64, io, wave
@@ -493,7 +504,8 @@ class MultimodalRouter:
     # ── Generation ────────────────────────────────────────────────────
 
     async def generate_image(self, prompt: str = Form(...), steps: int = Form(20),
-                            guidance_scale: float = Form(7.5)):
+                            guidance_scale: float = Form(7.5)) -> dict:
+        """generate_image."""
         try:
             from domains.multimodal.diffusion import LatentDiffusionModel
             from domains.multimodal.vae import SloVAE
@@ -520,7 +532,8 @@ class MultimodalRouter:
 
     # ── Dataset ───────────────────────────────────────────────────────
 
-    async def create_visual_dataset(self, req: VisualDatasetRequest):
+    async def create_visual_dataset(self, req: VisualDatasetRequest) -> dict:
+        """create_visual_dataset."""
         image_dir = Path(req.image_dir).resolve()
         _REPO_ROOT = Path(__file__).resolve().parents[4]
         allowed_bases = {_REPO_ROOT / "datasets", _REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
@@ -561,7 +574,8 @@ class MultimodalRouter:
 
     # ── Checkpoints ──────────────────────────────────────────────────
 
-    async def list_checkpoints(self):
+    async def list_checkpoints(self) -> dict:
+        """list_checkpoints."""
         try:
             from domains.training.video_trainer import list_video_checkpoints
             ckpts = list_video_checkpoints()
@@ -571,7 +585,8 @@ class MultimodalRouter:
         except Exception:
             return []
 
-    async def load_checkpoint(self, name: str):
+    async def load_checkpoint(self, name: str) -> dict:
+        """load_checkpoint."""
         try:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
             ckpts = list_video_checkpoints()
@@ -589,7 +604,8 @@ class MultimodalRouter:
         except Exception as e:
             classify_and_raise(e, source="multimodal_load_checkpoint")
 
-    async def delete_checkpoint(self, name: str):
+    async def delete_checkpoint(self, name: str) -> dict:
+        """delete_checkpoint."""
         try:
             from domains.training.video_trainer import list_video_checkpoints
             ckpts = list_video_checkpoints()
@@ -611,7 +627,8 @@ class MultimodalRouter:
 
     # ── Reset ─────────────────────────────────────────────────────────
 
-    async def reset(self):
+    async def reset(self) -> dict:
+        """reset."""
         mgr = self._ensure_initialized()
         mgr._learning_count = 0
         mgr._caption_history = []

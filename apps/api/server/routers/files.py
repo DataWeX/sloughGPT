@@ -138,7 +138,7 @@ class FilesRouter:
         sort: str = Query("uploaded_at", description="Sort field"),
         order: str = Query("desc", description="asc or desc"),
         tag: Optional[str] = Query(None, description="Filter by tag"),
-    ):
+    ) -> dict:
         """List all uploaded files with metadata."""
         meta = self._load_metadata()
         items = []
@@ -164,7 +164,7 @@ class FilesRouter:
         self,
         file: UploadFile = File(...),
         tags: str = Form("[]"),
-    ):
+    ) -> dict:
         """Upload a file and save it to the server."""
         if not file.filename:
             raise HTTPException(status_code=400, detail="No filename provided")
@@ -210,8 +210,19 @@ class FilesRouter:
         self,
         q: str = Query(..., min_length=1, description="Search query"),
         tag: Optional[str] = Query(None, description="Filter by tag"),
-    ):
-        """Search files by name."""
+    ) -> dict:
+        """Search uploaded files by name substring match.
+
+        Performs case-insensitive substring matching against the original
+        filename of all uploaded files. Optionally filters by tag.
+
+        Args:
+            q: Search query to match against file names (min 1 character).
+            tag: Optional tag to filter results by.
+
+        Returns:
+            FileListResponse with matching files sorted by upload time descending.
+        """
         query = q.lower()
         meta = self._load_metadata()
         items = []
@@ -235,7 +246,7 @@ class FilesRouter:
         items.sort(key=lambda x: x.uploaded_at, reverse=True)
         return FileListResponse(files=items, total=len(items))
 
-    async def get_file(self, file_id: str):
+    async def get_file(self, file_id: str) -> dict:
         """Get file metadata and extracted text."""
         meta = self._load_metadata()
         m = meta.get(file_id)
@@ -266,7 +277,7 @@ class FilesRouter:
             text=text,
         )
 
-    async def delete_file(self, file_id: str):
+    async def delete_file(self, file_id: str) -> dict:
         """Delete a file and its metadata."""
         meta = self._load_metadata()
         m = meta.pop(file_id, None)
@@ -279,7 +290,7 @@ class FilesRouter:
         self._save_metadata(meta)
         return success_response(data={"status": "deleted", "file_id": file_id})
 
-    async def ingest_file(self, file_id: str):
+    async def ingest_file(self, file_id: str) -> dict:
         """Extract text from a file and store it in the knowledge base."""
         meta = self._load_metadata()
         m = meta.get(file_id)

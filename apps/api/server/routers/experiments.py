@@ -38,8 +38,23 @@ class ExperimentsRouter:
         self.router.add_api_route("/{experiment_id}/log_metric", self.log_metric, methods=["POST"])
         self.router.add_api_route("/{experiment_id}/log_param", self.log_param, methods=["POST"])
 
-    async def create_experiment(self, req: ExperimentCreate):
-        """Create a new experiment"""
+    async def create_experiment(self, req: ExperimentCreate) -> dict:
+        """Create a new ML experiment with a timestamped directory.
+
+        Generates a unique experiment ID from the name and current timestamp,
+        creates the experiment directory under data/experiments/, and returns
+        the experiment metadata.
+
+        Args:
+            req: ExperimentCreate with name (required) and optional config dict.
+
+        Returns:
+            Success envelope with id, name, and created flag.
+
+        Side effects:
+            - Creates a directory under data/experiments/ for the experiment.
+            - Writes an audit log entry for the creation.
+        """
         self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
         exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         exp_dir = self.EXPERIMENTS_DIR / exp_id
@@ -47,15 +62,36 @@ class ExperimentsRouter:
         safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
         return success_response(data={"id": exp_id, "name": req.name, "created": True})
 
-    async def list_experiments(self):
-        """List all experiments"""
+    async def list_experiments(self) -> dict:
+        """List all ML experiments stored on disk.
+
+        Scans the data/experiments/ directory for subdirectories, each
+        representing an experiment, and returns their names.
+
+        Returns:
+            Success envelope with experiments array and count.
+        """
         if not self.EXPERIMENTS_DIR.exists():
             return success_response(data={"experiments": [], "count": 0})
         exps = [d.name for d in self.EXPERIMENTS_DIR.iterdir() if d.is_dir()]
         return success_response(data={"experiments": exps, "count": len(exps)})
 
-    async def get_experiment(self, experiment_id: str):
-        """Get experiment details"""
+    async def get_experiment(self, experiment_id: str) -> dict:
+        """Retrieve metadata for a single experiment by its ID.
+
+        Validates the experiment ID format and checks that the directory
+        exists under data/experiments/.
+
+        Args:
+            experiment_id: The unique experiment identifier.
+
+        Returns:
+            Success envelope with id and filesystem path.
+
+        Raises:
+            400 if the experiment ID is invalid.
+            404 if the experiment directory is not found.
+        """
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
             raise HTTPException(status_code=400, detail="Invalid experiment ID")
         path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
@@ -63,7 +99,7 @@ class ExperimentsRouter:
             raise HTTPException(status_code=404, detail="Experiment not found")
         return success_response(data={"id": experiment_id, "path": str(path)})
 
-    async def delete_experiment(self, experiment_id: str):
+    async def delete_experiment(self, experiment_id: str) -> dict:
         """Delete an experiment and all its data."""
         import shutil
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
@@ -75,7 +111,7 @@ class ExperimentsRouter:
         safe_audit_log("experiment.delete", resource=experiment_id)
         return success_response(data={"id": experiment_id, "deleted": True})
 
-    async def get_experiment_runs(self, experiment_id: str):
+    async def get_experiment_runs(self, experiment_id: str) -> dict:
         """Get runs for an experiment"""
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
             raise HTTPException(status_code=400, detail="Invalid experiment ID")
@@ -85,7 +121,7 @@ class ExperimentsRouter:
         runs = list(path.glob("*.json"))
         return success_response(data={"runs": len(runs)})
 
-    async def get_experiment_data(self, experiment_id: str):
+    async def get_experiment_data(self, experiment_id: str) -> dict:
         """Get logged metrics and params for an experiment."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
@@ -122,7 +158,7 @@ class ExperimentsRouter:
                     pass
         return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
 
-    async def complete_experiment(self, experiment_id: str):
+    async def complete_experiment(self, experiment_id: str) -> dict:
         """Mark experiment as complete and persist status to disk."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
@@ -138,7 +174,7 @@ class ExperimentsRouter:
             json.dump(status_data, f)
         return success_response(data={"id": e_id, "status": "completed"})
 
-    async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0):
+    async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0) -> dict:
         """Log a metric for an experiment."""
         e_id = experiment_id
         self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -149,7 +185,7 @@ class ExperimentsRouter:
             f.write(json.dumps(entry) + "\n")
         return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
 
-    async def log_param(self, experiment_id: str, param_name: str, value: Any):
+    async def log_param(self, experiment_id: str, param_name: str, value: Any) -> dict:
         """Log a parameter for an experiment."""
         e_id = experiment_id
         self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)

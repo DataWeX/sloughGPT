@@ -142,15 +142,30 @@ class BenchmarkRouter:
         except Exception as e:
             raise_error(str(e), "E_DOMAIN", details={"model": model})
 
-    async def run_benchmark(self, model: str = "gpt2"):
+    async def run_benchmark(self, model: str = "gpt2") -> dict:
         """Run model benchmark - returns real metrics"""
         return success_response(data=self._get_model_metrics(model))
 
-    async def get_model_metrics(self, model: str = "gpt2"):
-        """Get real-time model metrics"""
+    async def get_model_metrics(self, model: str = "gpt2") -> dict:
+        """Return real-time metrics for the currently loaded model.
+
+        Args:
+            model: Model ID string used for label only; the actual
+                metrics come from whatever provider is loaded in
+                ServerState. Defaults to "gpt2".
+
+        Returns:
+            Success envelope containing inference_count, total_tokens,
+            tokens_per_second, memory_mb, and num_parameters.
+
+        Side effects:
+            Reads the ServerState singleton for the active provider.
+            Reads the ModelsController for inference counters.
+            Returns model_loaded=False if no provider is resident.
+        """
         return success_response(data=self._get_model_metrics(model))
 
-    async def calculate_perplexity(self, text: str = "Sample text for evaluation"):
+    async def calculate_perplexity(self, text: str = "Sample text for evaluation") -> dict:
         """Calculate next-token perplexity on text using the active SloNet model.
 
         Pure NumPy: one causal forward pass, then the negative log-likelihood

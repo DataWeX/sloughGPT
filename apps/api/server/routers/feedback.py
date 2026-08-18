@@ -33,7 +33,7 @@ class FeedbackRouter:
         self.router.add_api_route("/conversations/{conv_id}", self.delete_conversation, methods=["DELETE"])
         self.router.add_api_route("/{message_id}", self.get_feedback, methods=["GET"])
 
-    async def record_feedback_workflow(self, req: WorkflowFeedbackRequest):
+    async def record_feedback_workflow(self, req: WorkflowFeedbackRequest) -> dict:
         """Record user feedback (workflow variant used by frontend feedback store)."""
         from controllers.feedback import get_feedback_controller
         ctrl = get_feedback_controller()
@@ -50,7 +50,7 @@ class FeedbackRouter:
             "workflow_active": True,
         }, message="recorded")
 
-    async def record_feedback(self, req: FeedbackRequest):
+    async def record_feedback(self, req: FeedbackRequest) -> dict:
         """Record user feedback and pipe into learning systems."""
         ctrl = get_feedback_controller()
         feedback = ctrl.record_feedback(
@@ -63,14 +63,34 @@ class FeedbackRouter:
         )
         return FeedbackResponse(**feedback)
 
-    async def get_feedback_stats(self):
-        """Get feedback statistics"""
+    async def get_feedback_stats(self) -> dict:
+        """Retrieve aggregate feedback statistics across all conversations.
+
+        Returns thumbs_up/thumbs_down counts, average rating, and other
+        summary metrics computed by the FeedbackController.
+
+        Returns:
+            FeedbackStats with aggregate feedback metrics.
+        """
         ctrl = get_feedback_controller()
         stats = ctrl.get_stats()
         return FeedbackStats(**stats)
 
-    async def create_conversation(self, req: ConversationCreate):
-        """Create a new conversation"""
+    async def create_conversation(self, req: ConversationCreate) -> dict:
+        """Create a new conversation to associate feedback with.
+
+        Registers a conversation record that groups related feedback
+        entries together for analysis.
+
+        Args:
+            req: ConversationCreate with name (required) and session_id (optional).
+
+        Returns:
+            ConversationResponse with the new conversation's id and metadata.
+
+        Side effects:
+            - Persists the conversation record to the feedback store.
+        """
         ctrl = get_feedback_controller()
         conv = ctrl.create_conversation(
             name=req.name,
@@ -81,34 +101,72 @@ class FeedbackRouter:
     async def list_conversations(
         self,
         limit: int = Query(default=50, ge=1, le=1000, description="Maximum number of conversations to return"),
-    ):
-        """List all conversations"""
+    ) -> dict:
+        """List all conversations sorted by most recent first.
+
+        Args:
+            limit: Maximum number of conversations to return (1-1000, default 50).
+
+        Returns:
+            List of ConversationResponse objects with id, name, and metadata.
+        """
         ctrl = get_feedback_controller()
         return ctrl.list_conversations(limit=limit)
 
-    async def get_conversation(self, conv_id: str):
-        """Get a conversation by ID"""
+    async def get_conversation(self, conv_id: str) -> dict:
+        """Retrieve a single conversation by its unique ID.
+
+        Args:
+            conv_id: The conversation identifier.
+
+        Returns:
+            ConversationResponse with conversation details.
+
+        Raises:
+            404 if the conversation is not found.
+        """
         ctrl = get_feedback_controller()
         conv = ctrl.get_conversation(conv_id)
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
         return conv
 
-    async def update_conversation(self, conv_id: str, req: ConversationUpdate):
-        """Update a conversation"""
+    async def update_conversation(self, conv_id: str, req: ConversationUpdate) -> dict:
+        """Update a conversation's metadata (name, session_id, etc.).
+
+        Args:
+            conv_id: The conversation identifier.
+            req: ConversationUpdate with optional fields to update.
+
+        Returns:
+            ConversationResponse with the updated conversation.
+
+        Raises:
+            404 if the conversation is not found.
+        """
         ctrl = get_feedback_controller()
         conv = ctrl.update_conversation(conv_id, req.model_dump(exclude_unset=True))
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
         return conv
 
-    async def delete_conversation(self, conv_id: str):
-        """Delete a conversation"""
+    async def delete_conversation(self, conv_id: str) -> dict:
+        """Delete a conversation and its associated feedback records.
+
+        Args:
+            conv_id: The conversation identifier.
+
+        Returns:
+            Dict with status "deleted" and the conversation id.
+
+        Side effects:
+            - Removes the conversation and all linked feedback from the store.
+        """
         ctrl = get_feedback_controller()
         ctrl.delete_conversation(conv_id)
         return {"status": "deleted", "id": conv_id}
 
-    async def get_feedback(self, message_id: str):
+    async def get_feedback(self, message_id: str) -> dict:
         """Get feedback for a message"""
         ctrl = get_feedback_controller()
         feedback = ctrl.get_feedback(message_id)

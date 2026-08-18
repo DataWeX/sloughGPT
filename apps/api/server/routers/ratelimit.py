@@ -17,6 +17,7 @@ class _RateLimiter:
         self._history: dict = defaultdict(list)
 
     def is_allowed(self, key: str) -> bool:
+        """is_allowed."""
         now = time.time()
         window = 60.0
         self._history[key] = [t for t in self._history[key] if now - t < window]
@@ -26,6 +27,7 @@ class _RateLimiter:
         return True
 
     def get_wait_time(self, key: str) -> float:
+        """get_wait_time."""
         now = time.time()
         window = 60.0
         self._history[key] = [t for t in self._history[key] if now - t < window]
@@ -46,7 +48,7 @@ class RatelimitRouter:
         self.router.add_api_route(path="/status", endpoint=self.get_rate_limit_status, methods=["GET"])
         self.router.add_api_route(path="/check", endpoint=self.check_rate_limit, methods=["GET"])
 
-    async def get_rate_limit_status(self):
+    async def get_rate_limit_status(self) -> dict:
         """Get current rate limit configuration"""
         return success_response(data={
             "requests_per_minute": self._rate_limiter.requests_per_minute,
@@ -54,7 +56,7 @@ class RatelimitRouter:
             "enabled": True,
         })
 
-    async def check_rate_limit(self, request: Request):
+    async def check_rate_limit(self, request: Request) -> dict:
         """Check if request would be rate limited"""
         client_ip = request.client.host if request.client else "unknown"
         allowed = self._rate_limiter.is_allowed(client_ip)

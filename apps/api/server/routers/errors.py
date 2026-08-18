@@ -147,7 +147,26 @@ class ErrorsRouter:
 
     # ── Route handlers ──────────────────────────────────────────────────
 
-    async def log_errors(self, batch: ErrorBatch, request: Request):
+    async def log_errors(self, batch: ErrorBatch, request: Request) -> dict:
+        """Log one or more client-side JavaScript errors for server-side monitoring.
+
+        Deduplicates errors within a 10-second window by fingerprint. Each new
+        error is assigned a UUID, persisted to disk, and appended to the in-memory
+        buffer. Errors exceeding MAX_ERRORS are evicted oldest-first.
+
+        Args:
+            batch: ErrorBatch containing up to 100 ErrorEntry objects with message,
+                source, stack trace, URL, line/column numbers, and optional metadata.
+            request: FastAPI request used to extract the client IP address.
+
+        Returns:
+            Success envelope with logged count and status.
+
+        Side effects:
+            - Appends each new error record to the on-disk JSONL log file.
+            - Increments the unread error counter.
+            - Evicts oldest buffer entries when buffer exceeds MAX_ERRORS.
+        """
         now_ts = datetime.now(timezone.utc)
         now_iso = now_ts.isoformat()
         now_epoch = now_ts.timestamp()
@@ -215,7 +234,8 @@ class ErrorsRouter:
 
         return success_response(data={"status": "ok", "logged": logged})
 
-    async def ingest_frontend_logs(self, batch: FrontendLogBatch):
+    async def ingest_frontend_logs(self, batch: FrontendLogBatch) -> dict:
+        """ingest_frontend_logs."""
         from domains.infrastructure.output_buffer import get_server_buffer
         from domains.logging import LogLevel as _LL
 
@@ -243,7 +263,8 @@ class ErrorsRouter:
 
         return success_response(data={"status": "ok", "ingested": len(batch.logs)})
 
-    async def get_recent_errors(self, limit: int = 50, offset: int = 0):
+    async def get_recent_errors(self, limit: int = 50, offset: int = 0) -> dict:
+        """get_recent_errors."""
         total = len(self._error_buffer)
         start = max(0, total - offset - limit)
         end = max(0, total - offset)
@@ -255,7 +276,8 @@ class ErrorsRouter:
             "limit": limit,
         })
 
-    async def get_grouped_errors(self):
+    async def get_grouped_errors(self) -> dict:
+        """get_grouped_errors."""
         groups: dict[str, dict] = {}
         for entry in reversed(self._error_buffer):
             fp = entry.get("fingerprint") or self._fingerprint(entry.get("message", ""))
@@ -277,7 +299,8 @@ class ErrorsRouter:
         result = sorted(groups.values(), key=lambda g: g["count"], reverse=True)
         return success_response(data={"groups": result, "total_groups": len(result)})
 
-    async def get_error_trends(self, hours: int = 24):
+    async def get_error_trends(self, hours: int = 24) -> dict:
+        """get_error_trends."""
         now = datetime.now(timezone.utc)
         buckets: dict[str, int] = {}
 
@@ -324,7 +347,8 @@ class ErrorsRouter:
         result = [{"hour": k, "count": v} for k, v in sorted(buckets.items())]
         return success_response(data={"trends": result, "hours": hours})
 
-    async def export_errors(self, limit: int = 500):
+    async def export_errors(self, limit: int = 500) -> dict:
+        """export_errors."""
         errors = list(reversed(self._error_buffer[-limit:]))
         return JSONResponse(
             content={"errors": errors, "total": len(self._error_buffer), "exported": len(errors)},
@@ -333,17 +357,20 @@ class ErrorsRouter:
             },
         )
 
-    async def clear_errors(self):
+    async def clear_errors(self) -> dict:
+        """clear_errors."""
         self._error_buffer.clear()
         self._clear_disk()
         self._error_count_since_clear = 0
         self._dedup_map.clear()
         return success_response(data={"status": "ok", "cleared": True})
 
-    async def unread_count(self):
+    async def unread_count(self) -> dict:
+        """unread_count."""
         return success_response(data={"unread_count": self._error_count_since_clear})
 
-    async def get_opencode_log(self):
+    async def get_opencode_log(self) -> dict:
+        """get_opencode_log."""
         import os
         home = os.path.expanduser("~")
         entries: list[dict] = []
@@ -401,5 +428,6 @@ _error_count_since_clear = _errors_instance._error_count_since_clear
 _dedup_map = _errors_instance._dedup_map
 
 
-def clear_errors():
+def clear_errors() -> dict:
+    """clear_errors."""
     return _errors_instance.clear_errors()

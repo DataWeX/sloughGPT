@@ -23,14 +23,16 @@ except ImportError:
             "stream": stream, "phase": phase, "status": status,
             "data": data or {}, "meta": meta or {}, "message": message,
         }) + "\n\n"
-    def sse_token(stream, token, done=False, meta=None, elapsed_ms=None):
+    def sse_token(stream, token, done=False, meta=None, elapsed_ms=None) -> dict:
+        """sse_token."""
         phase = "STREAMING"
         status = "complete" if done else "working"
         m = dict(meta) if meta else {}
         if done and elapsed_ms is not None:
             m["elapsed_ms"] = round(elapsed_ms, 1)
         return _sse_event(stream, phase, status, {"token": token}, m, "")
-    def sse_error(stream, phase, error, meta=None):
+    def sse_error(stream, phase, error, meta=None) -> dict:
+        """sse_error."""
         return _sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
 import asyncio
 import datetime
@@ -265,9 +267,11 @@ class _SessionDictSerializer(Serializer[dict]):
     """JSON serializer for session dict data."""
 
     def serialize(self, obj: dict) -> dict:
+        """serialize."""
         return obj
 
     def deserialize(self, data: dict) -> dict:
+        """deserialize."""
         return data
 
 
@@ -332,7 +336,8 @@ class InferenceRouter:
                 logger.debug("Vector store connection failed: %s", e)
         return self._context_core
 
-    def set_vector_store_ref(self, store):
+    def set_vector_store_ref(self, store) -> dict:
+        """set_vector_store_ref."""
         self._vector_store_ref = store
 
     def _load_session_from_disk(self, session_id: str) -> dict:
@@ -370,6 +375,7 @@ class InferenceRouter:
             self._session_dirty.discard(session_id)
 
     async def flush_dirty_sessions(self) -> int:
+        """flush_dirty_sessions."""
         dirty = list(self._session_dirty)
         if not dirty:
             return 0
@@ -420,6 +426,7 @@ class InferenceRouter:
     # ── Route handlers ──
 
     async def generate(self, req: GenerateRequest) -> GenerateResponse:
+        """generate."""
         from domains.models.provider import get_provider
         from startup_progress import STARTUP_PHASE
         import state as _gen_state
@@ -481,15 +488,18 @@ class InferenceRouter:
             classify_and_raise(e, source="generate")
 
     async def generate_stream(self, req: GenerateRequest, request: Request) -> StreamingResponse:
+        """generate_stream."""
         from startup_progress import STARTUP_PHASE
         import state as _stream_state
 
         if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
             async def error_stream() -> AsyncIterator[str]:
+                """error_stream."""
                 yield sse_error("generate", "IDLE", "Model still loading — please wait.")
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
+            """generate."""
             from domains.models.provider import get_provider
             provider = get_provider("default")
             if provider is None:
@@ -574,7 +584,8 @@ class InferenceRouter:
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
-    async def get_info(self):
+    async def get_info(self) -> dict:
+        """get_info."""
         from host_metrics import sample_host_metrics_async
         import state as server_state
 
@@ -608,7 +619,8 @@ class InferenceRouter:
 
         return data
 
-    async def get_info_soul(self):
+    async def get_info_soul(self) -> dict:
+        """get_info_soul."""
         import state as server_state
         cs = server_state.current_soul
         if not cs:
@@ -627,7 +639,8 @@ class InferenceRouter:
             logger.debug("Failed to build soul info: %s", e)
         return soul_info
 
-    async def root(self):
+    async def root(self) -> dict:
+        """root."""
         import state as server_state
         soul_name = None
         if server_state.soul_engine is not None and getattr(server_state.soul_engine, 'slo', None):
@@ -655,7 +668,8 @@ class InferenceRouter:
             },
         }
 
-    async def list_chat_tools(self):
+    async def list_chat_tools(self) -> dict:
+        """list_chat_tools."""
         try:
             from domains.agents.tools import get_tool_registry
             return {"tools": get_tool_registry().list_tools()}
@@ -664,6 +678,7 @@ class InferenceRouter:
             return {"tools": []}
 
     async def chat_stream(self, req: ChatRequest, request: Request) -> StreamingResponse:
+        """chat_stream."""
         from startup_progress import STARTUP_PHASE
 
         import state as _check_state
@@ -674,10 +689,12 @@ class InferenceRouter:
             else:
                 msg = f"Server starting (phase: {phase}). Please wait."
             async def error_stream() -> AsyncIterator[str]:
+                """error_stream."""
                 yield sse_error("chat", "IDLE", msg)
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
+            """generate."""
             logger.debug("chat_stream.generate() ENTERED")
             cancel_event = threading.Event()
             user_msg = _extract_user_message(req.messages)
@@ -1092,12 +1109,14 @@ class InferenceRouter:
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     async def inspect_context(self) -> dict:
+        """inspect_context."""
         ctx_core = self._get_context_core()
         if not ctx_core:
             raise_error("ContextCore not available", "E_INFRA_STARTUP")
         return ctx_core.get_context_inspector()
 
     async def store_fact(self, key: str, value: str) -> dict:
+        """store_fact."""
         ctx_core = self._get_context_core()
         if not ctx_core:
             raise_error("ContextCore not available", "E_INFRA_STARTUP")
@@ -1105,6 +1124,7 @@ class InferenceRouter:
         return {"stored": key}
 
     async def get_facts(self, query: str = "") -> dict:
+        """get_facts."""
         ctx_core = self._get_context_core()
         if not ctx_core:
             raise_error("ContextCore not available", "E_INFRA_STARTUP")
@@ -1113,6 +1133,7 @@ class InferenceRouter:
         return {"facts": [{"key": k, **v} for k, v in ctx_core.semantic_memory.items()]}
 
     async def reset_context(self, all: bool = False) -> dict:
+        """reset_context."""
         self._context_core = None
         ctx_core = self._get_context_core()
         if not ctx_core:
@@ -1124,6 +1145,7 @@ class InferenceRouter:
         return {"reset": "session" if not all else "all"}
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
+        """chat."""
         from domains import get_chat_domain
         from startup_progress import STARTUP_PHASE
         import state as _chat_state
@@ -1246,7 +1268,8 @@ class InferenceRouter:
         session_id: str,
         file: UploadFile = File(...),
         duration_ms: int = Form(0),
-    ):
+    ) -> dict:
+        """send_voice_message."""
         if not file.content_type or not file.content_type.startswith("audio/"):
             raise HTTPException(status_code=400, detail="Only audio files accepted")
 
@@ -1278,7 +1301,8 @@ class InferenceRouter:
             "session_id": session_id,
         })
 
-    async def get_voice_audio(self, session_id: str, message_id: str):
+    async def get_voice_audio(self, session_id: str, message_id: str) -> dict:
+        """get_voice_audio."""
         base = self._VOICE_DIR.resolve()
         audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
         if not str(audio_path).startswith(str(base)):
@@ -1293,25 +1317,29 @@ class InferenceRouter:
                 raise HTTPException(status_code=404, detail="Audio not found")
         return FileResponse(str(audio_path), media_type="audio/m4a")
 
-    async def list_sessions(self, archived: Optional[bool] = None):
+    async def list_sessions(self, archived: Optional[bool] = None) -> dict:
+        """list_sessions."""
         sessions = await asyncio.to_thread(self._build_session_cache)
         if archived is not None:
             sessions = [s for s in sessions if s.get("archived", False) == archived]
         return success_response(data=sessions)
 
-    async def search_sessions(self, q: str = "", limit: int = 20):
+    async def search_sessions(self, q: str = "", limit: int = 20) -> dict:
+        """search_sessions."""
         if not q.strip():
             return success_response(data=[], meta={"query": q, "total": 0})
         results = await asyncio.to_thread(_search_sessions_sync, q, limit)
         return success_response(data=results, meta={"query": q, "total": len(results)})
 
-    async def get_current_session(self):
+    async def get_current_session(self) -> dict:
+        """get_current_session."""
         sessions = await asyncio.to_thread(self._build_session_cache)
         if not sessions:
             return success_response(data=None)
         return success_response(data=sessions[0])
 
-    async def upsert_session(self, session_id: str, req: UpsertSessionRequest):
+    async def upsert_session(self, session_id: str, req: UpsertSessionRequest) -> dict:
+        """upsert_session."""
         existing = self._get_session(session_id)
         update_data = req.model_dump(exclude_none=True)
         for key, value in update_data.items():
@@ -1320,7 +1348,8 @@ class InferenceRouter:
         await self._flush_session_to_disk(session_id)
         return success_response(data={"session_id": session_id}, message="saved")
 
-    async def create_session(self, req: CreateSessionRequest):
+    async def create_session(self, req: CreateSessionRequest) -> dict:
+        """create_session."""
         try:
             session_id = req.session_id or str(uuid.uuid4())
             session_data = req.model_dump(exclude_none=True)
@@ -1331,13 +1360,15 @@ class InferenceRouter:
         except Exception as exc:
             classify_and_raise(exc, source="create_session")
 
-    async def get_session(self, session_id: str):
+    async def get_session(self, session_id: str) -> dict:
+        """get_session."""
         data = self._get_session(session_id)
         if not data.get("messages"):
             raise HTTPException(status_code=404, detail="Session not found")
         return success_response(data=data)
 
-    async def delete_session(self, session_id: str):
+    async def delete_session(self, session_id: str) -> dict:
+        """delete_session."""
         if self._session_repo.delete(session_id):
             self._session_memory_cache.pop(session_id, None)
             self._session_dirty.discard(session_id)
@@ -1364,7 +1395,8 @@ class InferenceRouter:
             logger.warning("Failed to clear KV state for session %s: %s",
                            session_id, exc, extra={"tag": "KV"})
 
-    async def chat_suggestions(self):
+    async def chat_suggestions(self) -> dict:
+        """chat_suggestions."""
         return success_response(data=[
             {"text": "What can you help me with?", "icon": "chat"},
             {"text": "Tell me about yourself", "icon": "user"},
@@ -1374,7 +1406,8 @@ class InferenceRouter:
             {"text": "Summarize a topic for me", "icon": "document"},
         ])
 
-    async def list_model_providers(self):
+    async def list_model_providers(self) -> dict:
+        """list_model_providers."""
         from domains.models.provider import list_providers, get_provider
 
         result = {}
@@ -1432,8 +1465,10 @@ class InferenceRouter:
 _instance = InferenceRouter()
 router = _instance.router
 
-def set_vector_store_ref(ref):
+def set_vector_store_ref(ref) -> dict:
+    """set_vector_store_ref."""
     return _instance.set_vector_store_ref(ref)
 
-def flush_dirty_sessions():
+def flush_dirty_sessions() -> dict:
+    """flush_dirty_sessions."""
     return _instance.flush_dirty_sessions()

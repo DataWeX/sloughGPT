@@ -24,7 +24,7 @@ class SecurityRouter:
         event_type: Optional[str] = Query(default=None, description="Filter by event type"),
         history: bool = Query(default=False, description="Read from persisted audit.log file"),
         before: Optional[str] = Query(default=None, description="ISO-8601 cursor for pagination"),
-    ):
+    ) -> dict:
         """Get audit logs.
 
         With ``history=true`` reads the persisted ``audit.log`` file (full trail
@@ -41,7 +41,7 @@ class SecurityRouter:
                 logs = [l for l in logs if l.get("event_type") == event_type]
         return success_response(data={"logs": logs, "count": len(logs)})
 
-    async def get_keys(self):
+    async def get_keys(self) -> dict:
         """Get API key info (not the keys themselves)"""
         from settings import get_security_settings
         sec = get_security_settings()

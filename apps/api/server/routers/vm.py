@@ -90,7 +90,7 @@ class VMTrainingJobResponse(BaseModel):
 
 
 @router.post("/run", response_model=VMRunResponse)
-async def run_assembly(req: VMRunRequest):
+async def run_assembly(req: VMRunRequest) -> dict:
     """Run x86 assembly code in the sandboxed VM.
 
     Assembles the source, spawns a user process, and executes it.
@@ -307,7 +307,7 @@ async def run_assembly(req: VMRunRequest):
 
 
 @router.get("/training/jobs/{job_id}", response_model=VMTrainingJobResponse)
-async def training_job_status(job_id: str):
+async def training_job_status(job_id: str) -> dict:
     """Return the status of a training job launched via VM syscall.
 
     Delegates to the VM training bridge, which proxies ``GET /training/jobs/{id}``.
@@ -342,7 +342,7 @@ async def training_job_status(job_id: str):
 
 
 @router.post("/training/jobs/{job_id}/stop")
-async def training_job_stop(job_id: str):
+async def training_job_stop(job_id: str) -> dict:
     """Request a stop for a running training job launched via VM syscall.
 
     Delegates to the VM training bridge, which proxies
@@ -366,7 +366,7 @@ async def training_job_stop(job_id: str):
 
 
 @router.get("/builtins")
-async def list_builtins():
+async def list_builtins() -> dict:
     """List built-in x86 assembly programs with their source code."""
     try:
         from vm_builtins import BUILTIN_PROGRAMS
@@ -380,7 +380,7 @@ async def list_builtins():
 
 
 @router.get("/info")
-async def vm_info():
+async def vm_info() -> dict:
     """Return VM capabilities and limits."""
     reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
     registers = {name: {"size_bits": 32, "name": name} for name in reg_names}

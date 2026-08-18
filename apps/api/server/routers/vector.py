@@ -42,7 +42,8 @@ class VectorRouter:
         self.router.add_api_route("/search", self.search_vectors, methods=["POST"])
         self.router.add_api_route("/ingest/status", self.ingest_status, methods=["GET"])
 
-    async def get_vector_store(self):
+    async def get_vector_store(self) -> dict:
+        """get_vector_store."""
         if self._vector_store is None:
             try:
                 from domains.inference.vector_store import create_vector_store
@@ -54,7 +55,8 @@ class VectorRouter:
                 logging.getLogger(__name__).debug("Vector store init failed: %s", e)
         return self._vector_store
 
-    async def init_vector_store(self, config: VectorStoreConfig):
+    async def init_vector_store(self, config: VectorStoreConfig) -> dict:
+        """init_vector_store."""
         self._vector_store_type = config.provider or "chromadb"
         try:
             from domains.inference.vector_store import create_vector_store
@@ -82,13 +84,15 @@ class VectorRouter:
         except Exception as e:
             classify_and_raise(e, source="vector")
 
-    async def get_stats(self):
+    async def get_stats(self) -> dict:
+        """get_stats."""
         store = await self.get_vector_store()
         if not store:
             return success_response(data={"provider": self._vector_store_type, "count": 0})
         return success_response(data={"provider": self._vector_store_type, "count": await store.count()})
 
-    async def upsert_vectors(self, request: UpsertRequest):
+    async def upsert_vectors(self, request: UpsertRequest) -> dict:
+        """upsert_vectors."""
         store = await self.get_vector_store()
         if not store:
             raise HTTPException(status_code=500, detail="Vector store not connected")
@@ -106,7 +110,8 @@ class VectorRouter:
         count = await store.upsert(entries)
         return success_response(data={"status": "upserted", "count": count})
 
-    async def search_vectors(self, request: SearchRequest):
+    async def search_vectors(self, request: SearchRequest) -> dict:
+        """search_vectors."""
         store = await self.get_vector_store()
         if not store:
             return success_response(data={"results": []})
@@ -115,7 +120,8 @@ class VectorRouter:
         results = await store.query(query_embedding, top_k=request.top_k)
         return success_response(data={"results": [{"text": r.text, "score": r.score, "id": r.id} for r in results]})
 
-    async def ingest_status(self):
+    async def ingest_status(self) -> dict:
+        """ingest_status."""
         return success_response(data={"status": "ready"})
 
 

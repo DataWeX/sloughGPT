@@ -94,7 +94,7 @@ class TokenTreeRouter:
         self.router.add_api_route("/matrix", self.matrix, methods=["GET"])
         self.router.add_api_route("/compare", self.compare, methods=["POST"])
 
-    def get_stats(self):
+    def get_stats(self) -> dict:
         """Return summary statistics of the current token tree."""
         return success_response(data=get_token_tree_manager().stats())
 
@@ -102,7 +102,7 @@ class TokenTreeRouter:
         self,
         limit: int = Query(default=50, ge=1, le=500),
         offset: int = Query(default=0, ge=0),
-    ):
+    ) -> dict:
         """Return a paged slice of the current tree's vocabulary.
 
         Args:
@@ -121,7 +121,7 @@ class TokenTreeRouter:
         self,
         top_n: int = Query(default=20, ge=1, le=200),
         query: str = Query(default="", max_length=128),
-    ):
+    ) -> dict:
         """Return the most frequent BPE merge rules of the current tree.
 
         Args:
@@ -139,7 +139,7 @@ class TokenTreeRouter:
             data = mgr.top_merges(top_n=top_n)
         return success_response(data=data)
 
-    def get_saved(self):
+    def get_saved(self) -> dict:
         """List saved token trees.
 
         Returns:
@@ -149,7 +149,7 @@ class TokenTreeRouter:
         """
         return success_response(data={"trees": get_token_tree_manager().list_saved()})
 
-    def save_tree(self, req: TreeNameRequest):
+    def save_tree(self, req: TreeNameRequest) -> dict:
         """Save the current tree under a name in the save directory.
 
         Args:
@@ -166,7 +166,7 @@ class TokenTreeRouter:
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
 
-    def load_tree(self, req: TreeNameRequest):
+    def load_tree(self, req: TreeNameRequest) -> dict:
         """Load a saved tree and make it the current tree.
 
         Args:
@@ -186,7 +186,7 @@ class TokenTreeRouter:
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
 
-    def delete_saved_tree(self, name: str):
+    def delete_saved_tree(self, name: str) -> dict:
         """Delete a saved tree's sidecar files.
 
         Args:
@@ -207,7 +207,7 @@ class TokenTreeRouter:
             raise HTTPException(status_code=404, detail=f"No saved token tree named {name!r}")
         return success_response(data={"name": name, "deleted": True})
 
-    def train_tree(self, req: TrainTreeRequest):
+    def train_tree(self, req: TrainTreeRequest) -> dict:
         """Train a token tree on the provided corpus (built-in default when empty).
 
         Args:
@@ -238,7 +238,7 @@ class TokenTreeRouter:
             "embed_dim": stats["embed_dim"],
         })
 
-    def similar(self, req: SimilarRequest):
+    def similar(self, req: SimilarRequest) -> dict:
         """Return ranked nearest-neighbor tokens for a query token.
 
         Args:
@@ -256,7 +256,7 @@ class TokenTreeRouter:
             raise HTTPException(status_code=404, detail=f"Token not in vocabulary: {e}")
         return success_response(data=data)
 
-    def embedding(self, req: EmbeddingRequest):
+    def embedding(self, req: EmbeddingRequest) -> dict:
         """Inspect a token's generated embedding vector.
 
         Args:
@@ -279,7 +279,7 @@ class TokenTreeRouter:
             raise HTTPException(status_code=422, detail=str(e))
         return success_response(data=data)
 
-    def encode(self, req: TokenTextRequest):
+    def encode(self, req: TokenTextRequest) -> dict:
         """Encode text into token ids by walking the tree.
 
         Args:
@@ -290,7 +290,7 @@ class TokenTreeRouter:
         """
         return success_response(data=get_token_tree_manager().encode(req.text))
 
-    def path(self, req: TokenTextRequest):
+    def path(self, req: TokenTextRequest) -> dict:
         """Trace the encoder's greedy trie walk over text.
 
         Args:
@@ -302,7 +302,7 @@ class TokenTreeRouter:
         """
         return success_response(data=get_token_tree_manager().path(req.text))
 
-    def decode(self, req: TokenIdsRequest):
+    def decode(self, req: TokenIdsRequest) -> dict:
         """Decode a list of token ids back to text.
 
         Args:
@@ -313,7 +313,7 @@ class TokenTreeRouter:
         """
         return success_response(data=get_token_tree_manager().decode(req.ids))
 
-    def lineage(self, req: LineageRequest):
+    def lineage(self, req: LineageRequest) -> dict:
         """Render a token's merge lineage down to character leaves.
 
         Args:
@@ -334,7 +334,7 @@ class TokenTreeRouter:
     def matrix(
         self,
         top_k: int = Query(default=8, ge=1, le=64),
-    ):
+    ) -> dict:
         """Return an embedding-matrix overview for the current tree.
 
         Args:
@@ -349,7 +349,7 @@ class TokenTreeRouter:
             top_k=top_k,
         ))
 
-    def compare(self, req: CompareTreesRequest):
+    def compare(self, req: CompareTreesRequest) -> dict:
         """Diff two saved trees without changing the current tree.
 
         Args:

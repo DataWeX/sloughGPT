@@ -11,7 +11,7 @@ import json
 import logging
 import subprocess
 import time as _time
-from typing import Optional, List
+from typing import Optional, List, AsyncGenerator
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -224,7 +224,7 @@ class MobileRouter:
                 logger.warning(f"Internal DELETE {path} failed: {e}", extra={"tag": "REQ"})
                 return None
 
-    async def get_dashboard(self, request: Request):
+    async def get_dashboard(self, request: Request) -> dict:
         """
         Mobile dashboard — aggregated home screen data.
 
@@ -279,7 +279,7 @@ class MobileRouter:
         page: int = Query(1, ge=1),
         per_page: int = Query(20, ge=1, le=100),
         search: Optional[str] = Query(None),
-    ):
+    ) -> dict:
         """
         Paginated conversation list for mobile.
 
@@ -337,7 +337,7 @@ class MobileRouter:
             "per_page": per_page,
         }
 
-    async def get_conversation(self, request: Request, session_id: str):
+    async def get_conversation(self, request: Request, session_id: str) -> dict:
         """
         Single conversation with full message history.
 
@@ -357,7 +357,7 @@ class MobileRouter:
             "created_at": data.get("created_at", ""),
         }
 
-    async def get_models(self, request: Request):
+    async def get_models(self, request: Request) -> dict:
         """
         Model catalog with souls and checkpoints for mobile.
 
@@ -414,7 +414,7 @@ class MobileRouter:
             "checkpoints": cp_list,
         }
 
-    async def switch_model(self, request: Request, body: SwitchRequest):
+    async def switch_model(self, request: Request, body: SwitchRequest) -> dict:
         """
         Switch model and/or soul in one call.
 
@@ -450,7 +450,7 @@ class MobileRouter:
             "checkpoint": body.checkpoint_name,
         }
 
-    async def get_health(self, request: Request):
+    async def get_health(self, request: Request) -> dict:
         """
         System health summary for mobile.
 
@@ -492,7 +492,7 @@ class MobileRouter:
         per_page: int = Query(20, ge=1, le=100),
         topic: Optional[str] = Query(None),
         search: Optional[str] = Query(None),
-    ):
+    ) -> dict:
         """
         Paginated knowledge items for mobile.
 
@@ -546,7 +546,7 @@ class MobileRouter:
             "per_page": per_page,
         }
 
-    async def create_knowledge(self, request: Request, body: KnowledgeCreateRequest):
+    async def create_knowledge(self, request: Request, body: KnowledgeCreateRequest) -> dict:
         """
         Add a knowledge item.
 
@@ -565,7 +565,7 @@ class MobileRouter:
         })
         return result or raise_error("Failed to create", "E_DOMAIN")
 
-    async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest):
+    async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest) -> dict:
         """
         Update a knowledge item.
 
@@ -590,7 +590,7 @@ class MobileRouter:
         result = await self._internal_patch(request, f"/knowledge/{item_id}", update_body)
         return result or raise_error("Failed to update", "E_DOMAIN")
 
-    async def delete_knowledge(self, request: Request, item_id: str):
+    async def delete_knowledge(self, request: Request, item_id: str) -> dict:
         """
         Delete a knowledge item.
 
@@ -606,7 +606,7 @@ class MobileRouter:
         result = await self._internal_delete(request, f"/knowledge/{item_id}")
         return {"status": "deleted", "id": item_id}
 
-    async def sync_offline(self, request: Request, body: SyncRequest):
+    async def sync_offline(self, request: Request, body: SyncRequest) -> dict:
         """
         Sync offline messages when mobile reconnects.
 
@@ -676,7 +676,7 @@ class MobileRouter:
             "sessions": sessions[:20],
         })
 
-    async def sync_status(self, request: Request):
+    async def sync_status(self, request: Request) -> dict:
         """
         Check server connectivity and last sync state.
 
@@ -692,7 +692,7 @@ class MobileRouter:
             "inference_count": health.get("inference_count", 0),
         })
 
-    async def register_device(self, body: DeviceRegistrationRequest):
+    async def register_device(self, body: DeviceRegistrationRequest) -> dict:
         """
         Register a mobile device for push notifications.
 
@@ -713,7 +713,7 @@ class MobileRouter:
         )
         return result
 
-    async def unregister_device(self, body: UnregisterDeviceRequest):
+    async def unregister_device(self, body: UnregisterDeviceRequest) -> dict:
         """
         Unregister a device from push notifications.
 
@@ -729,7 +729,7 @@ class MobileRouter:
         removed = svc.unregister_device(body.token)
         return {"status": "removed" if removed else "not_found"}
 
-    async def list_devices(self, topic: Optional[str] = Query(None)):
+    async def list_devices(self, topic: Optional[str] = Query(None)) -> dict:
         """
         List registered devices.
 
@@ -744,7 +744,7 @@ class MobileRouter:
         svc = get_notification_service()
         return {"devices": svc.get_devices(topic=topic)}
 
-    async def send_notification(self, body: NotificationSendRequest):
+    async def send_notification(self, body: NotificationSendRequest) -> dict:
         """
         Send a push notification to registered devices.
 
@@ -771,7 +771,7 @@ class MobileRouter:
         )
         return result
 
-    async def notification_history(self, limit: int = Query(50, ge=1, le=200)):
+    async def notification_history(self, limit: int = Query(50, ge=1, le=200)) -> dict:
         """
         Get recent notification history.
 
@@ -786,7 +786,7 @@ class MobileRouter:
         svc = get_notification_service()
         return {"history": svc.get_history(limit=limit)}
 
-    async def cleanup_devices(self):
+    async def cleanup_devices(self) -> dict:
         """
         Remove devices inactive for 30+ days.
 
@@ -799,7 +799,7 @@ class MobileRouter:
         removed = svc.cleanup_stale()
         return {"removed": removed}
 
-    async def notify_training_complete(self, request: Request):
+    async def notify_training_complete(self, request: Request) -> dict:
         """
         Send a training-complete notification to all registered devices.
 
@@ -825,7 +825,7 @@ class MobileRouter:
         result = svc.send_notification(payload=payload, topic="training")
         return result
 
-    async def mobile_train(self, body: MobileTrainRequest):
+    async def mobile_train(self, body: MobileTrainRequest) -> dict:
         """
         Train the SloNet model on conversation pairs from the mobile app.
 
@@ -949,7 +949,7 @@ class MobileRouter:
             logger.error("Mobile training failed: %s", e, extra={"tag": "REQ"})
             raise HTTPException(500, f"Training failed: {e}")
 
-    async def get_training_stats(self):
+    async def get_training_stats(self) -> dict:
         """
         Get training data statistics.
 
@@ -973,7 +973,7 @@ class MobileRouter:
             "by_quality": quality_counts,
         }
 
-    async def get_pending_pairs(self, limit: int = Query(50, ge=1, le=500)):
+    async def get_pending_pairs(self, limit: int = Query(50, ge=1, le=500)) -> dict:
         """
         Get pending (unsynced) training pairs.
 
@@ -1012,7 +1012,7 @@ class MobileRouter:
         min_quality: Optional[float] = Query(None),
         session_id: Optional[str] = Query(None),
         search: Optional[str] = Query(None),
-    ):
+    ) -> dict:
         """
         List training pairs with optional filters.
 
@@ -1062,7 +1062,7 @@ class MobileRouter:
         min_quality: Optional[float] = Query(None),
         session_id: Optional[str] = Query(None),
         limit: int = Query(500, ge=1, le=5000),
-    ):
+    ) -> AsyncGenerator[str, None]:
         """
         Export training pairs as JSONL for download.
 
@@ -1082,7 +1082,8 @@ class MobileRouter:
         store = get_training_store()
         pairs = store.list_pairs(limit=limit, min_quality=min_quality, session_id=session_id)
 
-        def generate():
+        def generate() -> AsyncGenerator[str, None]:
+            """generate."""
             for p in pairs:
                 yield json.dumps({
                     "user_msg": p.get("user_msg", ""),
@@ -1097,7 +1098,7 @@ class MobileRouter:
             headers={"Content-Disposition": "attachment; filename=training_pairs.jsonl"},
         )
 
-    async def get_session_pairs(self, session_id: str):
+    async def get_session_pairs(self, session_id: str) -> dict:
         """
         Get all training pairs from a specific session.
 
@@ -1129,7 +1130,7 @@ class MobileRouter:
             "count": len(pairs),
         }
 
-    async def update_pair_quality(self, pair_id: str, body: QualityUpdateRequest):
+    async def update_pair_quality(self, pair_id: str, body: QualityUpdateRequest) -> dict:
         """
         Update quality signal on a training pair.
 
@@ -1152,7 +1153,7 @@ class MobileRouter:
             raise HTTPException(404, "Pair not found")
         return {"status": "updated", "pair_id": pair_id, "quality": body.quality}
 
-    async def delete_pair(self, pair_id: str):
+    async def delete_pair(self, pair_id: str) -> dict:
         """
         Delete a single training pair.
 
@@ -1174,7 +1175,7 @@ class MobileRouter:
             raise HTTPException(404, "Pair not found")
         return {"status": "deleted", "pair_id": pair_id}
 
-    async def delete_synced_pairs(self):
+    async def delete_synced_pairs(self) -> dict:
         """
         Delete all synced training pairs (already used for training).
 
@@ -1190,7 +1191,7 @@ class MobileRouter:
         count = store.delete_synced()
         return {"status": "deleted", "count": count}
 
-    async def delete_pairs_bulk(self, ids: list[str] = Query(..., description="Pair IDs to delete")):
+    async def delete_pairs_bulk(self, ids: list[str] = Query(..., description="Pair IDs to delete")) -> dict:
         """
         Delete multiple training pairs by ID.
 
@@ -1212,7 +1213,7 @@ class MobileRouter:
                 count += 1
         return {"status": "deleted", "count": count}
 
-    async def compact_training_store(self):
+    async def compact_training_store(self) -> dict:
         """
         Compact the training data store (reclaim space from deleted records).
 
@@ -1228,7 +1229,7 @@ class MobileRouter:
         count = store.compact()
         return {"status": "compacted", "count": count}
 
-    async def train_from_sessions(self, body: FromSessionsRequest = FromSessionsRequest(), request: Request = None):
+    async def train_from_sessions(self, body: FromSessionsRequest = FromSessionsRequest(), request: Request = None) -> AsyncGenerator[str, None]:
         """
         Train the model from server-side inference logs (SSE streaming).
 
@@ -1447,7 +1448,7 @@ class MobileRouter:
             if proc.poll() is None:
                 proc.kill()
 
-    async def get_auto_train_status(self):
+    async def get_auto_train_status(self) -> dict:
         """
         Get auto-trainer status and configuration.
 
@@ -1466,7 +1467,7 @@ class MobileRouter:
         self,
         threshold: Optional[int] = Query(None, ge=1, le=100),
         interval_s: Optional[int] = Query(None, ge=30, le=3600),
-    ):
+    ) -> dict:
         """
         Update auto-trainer configuration at runtime.
 

@@ -7,7 +7,7 @@ mutable globals. Actual soul state lives in ``SloManager`` singleton.
 from dataclasses import dataclass
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, AsyncGenerator
 from pydantic import BaseModel
 import re
 import json, asyncio, numpy as np, logging
@@ -18,16 +18,20 @@ from infrastructure.auth import require_auth_if_enabled, audit_user
 try:
     from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
 except ImportError:
-    def sse_event(stream, phase, status, data=None, meta=None, message=""):
+    def sse_event(stream, phase, status, data=None, meta=None, message="") -> dict:
+        """sse_event."""
         return "data: " + json.dumps({
             "stream": stream, "phase": phase, "status": status,
             "data": data or {}, "meta": meta or {}, "message": message
         }) + "\n\n"
-    def sse_token(stream, token, meta=None):
+    def sse_token(stream, token, meta=None) -> dict:
+        """sse_token."""
         return sse_event(stream, "STREAMING", "working", {"token": token}, meta or {})
-    def sse_error(stream, phase, error, meta=None):
+    def sse_error(stream, phase, error, meta=None) -> dict:
+        """sse_error."""
         return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
-    def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done"):
+    def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done") -> dict:
+        """sse_complete."""
         return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
 
 try:
@@ -230,7 +234,7 @@ Be yourself — let your personality shape how you respond."""
     # Route handlers
     # ------------------------------------------------------------------
 
-    async def soul_chat(self, req: SloChatRequest, request: Request):
+    async def soul_chat(self, req: SloChatRequest, request: Request) -> AsyncGenerator[str, None]:
         """Chat using a SloughGPTModel checkpoint (PyTorch-trained transformer).
 
         Loads the .soul file (PyTorch ZIP format), creates a SloughGPTModel with matching
@@ -259,17 +263,20 @@ Be yourself — let your personality shape how you respond."""
             stoi = {c: i for i, c in enumerate(chars)}
             itos = {i: c for i, c in enumerate(chars)}
 
-            def encode(t):
+            def encode(t) -> dict:
+                """encode."""
                 return [stoi.get(c.lower(), 0) for c in t]
 
-            def decode(ids):
+            def decode(ids) -> dict:
+                """decode."""
                 return "".join(itos.get(i, "?") for i in ids)
 
             enc_prompt = encode(req.prompt)
             if len(enc_prompt) > 128:
                 enc_prompt = enc_prompt[:128]
 
-            async def stream():
+            async def stream() -> AsyncGenerator[str, None]:
+                """stream."""
                 temperature = max(0.1, req.temperature)
                 top_p = max(0.1, min(1.0, req.top_p))
 
@@ -326,7 +333,7 @@ Be yourself — let your personality shape how you respond."""
         req: SwitchRequest,
         checkpoint_name: Optional[str] = None,
         auth_user: dict = Depends(require_auth_if_enabled),
-    ):
+    ) -> dict:
         """Switch to a different soul and update ContextCore system prompt.
 
         If checkpoint_name is provided, also loads the corresponding checkpoint
@@ -394,7 +401,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="switch_soul")
 
-    async def list_souls(self):
+    async def list_souls(self) -> dict:
         """
         List all available souls with name, description, and traits.
 
@@ -438,7 +445,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             raise_error(str(e), "E_DOMAIN")
 
-    async def get_soul(self, soul_name: str):
+    async def get_soul(self, soul_name: str) -> dict:
         """Get details for a specific soul by name."""
         try:
             from domains.inference.slo_manager import get_slo_manager
@@ -472,7 +479,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="get_soul")
 
-    async def get_trait_weights(self):
+    async def get_trait_weights(self) -> dict:
         """
         Get the current trait weight attributes from the active model checkpoint.
 
@@ -496,7 +503,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="soul_handler")
 
-    async def save_trait_weights(self, body: SaveWeightsRequest):
+    async def save_trait_weights(self, body: SaveWeightsRequest) -> dict:
         """
         Save trait weights to the persistent config. Accepts a dict of trait
         groups (personality, cognition, emotion) with trait name → 0.0–1.0 values.
@@ -523,7 +530,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="soul_handler")
 
-    async def get_trait_modes(self):
+    async def get_trait_modes(self) -> dict:
         """
         Return the active manager mode for each of the 4 context managers
         (Personality, Memory, Style, Task) derived from current trait weights.
@@ -555,7 +562,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="soul_handler")
 
-    async def get_current_soul(self):
+    async def get_current_soul(self) -> dict:
         """
         Get the currently active soul's name, path, description, and traits.
 
@@ -579,7 +586,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="soul_handler")
 
-    async def list_weight_snapshots(self):
+    async def list_weight_snapshots(self) -> dict:
         """
         List saved trait weight snapshots.
 
@@ -596,7 +603,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             raise_error(str(e), "E_DOMAIN")
 
-    async def save_weight_snapshot(self, name: str):
+    async def save_weight_snapshot(self, name: str) -> dict:
         """
         Save current trait weights as a named snapshot.
 
@@ -618,7 +625,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="soul_handler")
 
-    async def load_weight_snapshot(self, name: str):
+    async def load_weight_snapshot(self, name: str) -> dict:
         """
         Load trait weights from a named snapshot.
 
@@ -640,7 +647,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="soul_handler")
 
-    async def delete_weight_snapshot(self, name: str):
+    async def delete_weight_snapshot(self, name: str) -> dict:
         """
         Delete a trait weight snapshot.
 
@@ -662,7 +669,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="soul_handler")
 
-    async def get_soul_stats(self):
+    async def get_soul_stats(self) -> dict:
         """
         Get soul manager statistics (counts, last switch time, etc.).
 

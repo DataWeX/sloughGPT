@@ -10,6 +10,7 @@ import time
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
+from typing import AsyncGenerator
 
 
 class SystemRouter:
@@ -33,7 +34,7 @@ class SystemRouter:
         self.router.add_api_route("/executor/{job_id}/cancel", self.cancel_executor_job, methods=["POST"])
         self.router.add_api_route("/inference-pool", self.get_inference_pool_status, methods=["GET"])
 
-    async def get_metrics(self):
+    async def get_metrics(self) -> dict:
         """Get system metrics (cached for 2s).
 
         All sync I/O runs off the event loop via asyncio.to_thread to prevent
@@ -65,8 +66,16 @@ class SystemRouter:
             self._metrics_cache["ts"] = now
         return success_response(data=self._metrics_cache["data"])
 
-    async def get_info(self):
-        """Get system info"""
+    async def get_info(self) -> dict:
+        """Retrieve host system information including platform and CPU details.
+
+        Reads OS, architecture, processor, and CPU count from the platform
+        module and psutil, running I/O off the event loop.
+
+        Returns:
+            Success envelope with platform, platform_release, platform_version,
+            architecture, processor, and cpu_count fields.
+        """
         import asyncio
 
         def _read():
@@ -87,8 +96,15 @@ class SystemRouter:
 
         return success_response(data=await asyncio.to_thread(_read))
 
-    async def get_disk(self):
-        """Get disk usage"""
+    async def get_disk(self) -> dict:
+        """Retrieve disk usage statistics for the root filesystem.
+
+        Reads total, used, and free space in GB along with usage percentage
+        using psutil, running the I/O off the event loop.
+
+        Returns:
+            Success envelope with total_gb, used_gb, free_gb, and percent fields.
+        """
         import asyncio
 
         def _read():
@@ -102,7 +118,7 @@ class SystemRouter:
 
         return success_response(data=await asyncio.to_thread(_read))
 
-    async def get_lifecycle_status(self):
+    async def get_lifecycle_status(self) -> dict:
         """Get the current lifecycle manager state.
 
         Returns the lifecycle phase, active startup profile, uptime,
@@ -120,7 +136,7 @@ class SystemRouter:
                 "error": str(exc),
             })
 
-    async def stream_output(self, request: Request, tail: int = Query(50, ge=0, le=500)):
+    async def stream_output(self, request: Request, tail: int = Query(50, ge=0, le=500)) -> AsyncGenerator[str, None]:
         """SSE stream of all server output (logs, training progress, etc.).
 
         Sends recent history first, then streams new lines as they arrive.
@@ -131,7 +147,8 @@ class SystemRouter:
         buf = get_server_buffer()
         sub = buf.subscribe("http-" + str(id(request)))
 
-        async def generate():
+        async def generate() -> AsyncGenerator[str, None]:
+            """generate."""
             try:
                 for line in buf.tail(tail):
                     yield f"data: {line.to_sse()}\n\n"
@@ -148,13 +165,13 @@ class SystemRouter:
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
-    async def tail_output(self, n: int = Query(100, ge=1, le=1000)):
+    async def tail_output(self, n: int = Query(100, ge=1, le=1000)) -> dict:
         """Get last N lines of server output."""
         from domains.infrastructure.output_buffer import get_server_buffer
         buf = get_server_buffer()
         return success_response(data={"lines": buf.tail_dicts(n), "size": buf.count, "seq": buf.seq})
 
-    async def get_executor_status(self):
+    async def get_executor_status(self) -> dict:
         """Get TrainingExecutor pool status and job list.
 
         Returns active/max worker counts, total tracked jobs, and metadata
@@ -178,7 +195,7 @@ class SystemRouter:
             "jobs": _instance.list_jobs(),
         })
 
-    async def get_executor_job(self, job_id: str):
+    async def get_executor_job(self, job_id: str) -> dict:
         """Get metadata for a single training job by ID."""
         from domains.training.executor import _instance
         if _instance is None:
@@ -188,7 +205,7 @@ class SystemRouter:
             raise_error(f"job {job_id} not found", "E_NOT_FOUND")
         return success_response(data=status)
 
-    async def get_executor_job_result(self, job_id: str):
+    async def get_executor_job_result(self, job_id: str) -> dict:
         """Get shape/dtype summary for a completed job's trained weights.
 
         Returns weight names, shapes, dtypes, and byte sizes.
@@ -209,7 +226,7 @@ class SystemRouter:
         self,
         max_age_s: float = Query(3600.0, gt=0),
         auth_user: dict = Depends(require_auth_if_enabled),
-    ):
+    ) -> dict:
         """Remove completed/failed/cancelled jobs older than max_age_s."""
         from domains.training.executor import _instance
         if _instance is None:
@@ -218,7 +235,7 @@ class SystemRouter:
         safe_audit_log("executor.purge", resource="executor", detail=f"purged={purged} max_age_s={max_age_s}")
         return success_response(data={"purged": purged})
 
-    async def cancel_executor_job(self, job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
+    async def cancel_executor_job(self, job_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Request cancellation for a training job.
 
         For queued jobs the future is cancelled outright.  For running jobs
@@ -232,8 +249,16 @@ class SystemRouter:
         safe_audit_log("executor.cancel", resource=job_id, detail=f"cancelled={cancelled}")
         return success_response(data={"cancelled": cancelled})
 
-    async def get_inference_pool_status(self):
-        """Get InferencePool status."""
+    async def get_inference_pool_status(self) -> dict:
+        """Retrieve the InferencePool worker pool status.
+
+        Returns whether the pool is initialized, the configured max_workers,
+        and queue timeout settings.
+
+        Returns:
+            Success envelope with initialized, max_workers, and queue_timeout
+            fields, or an error message if the pool is unavailable.
+        """
         from infrastructure.inference_pool import InferencePool
         try:
             pool = await InferencePool.get_instance()

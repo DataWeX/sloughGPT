@@ -80,12 +80,22 @@ class CompanionRouter:
             self._companion = get_companion()
         return self._companion
 
-    async def get_companion_info(self):
-        """Get companion info."""
+    async def get_companion_info(self) -> dict:
+        """Return the current companion's full state as a dictionary.
+
+        Returns:
+            Success envelope containing the companion's traits (name,
+            warmth, curiosity, creativity, confidence, humor) and
+            other configuration.
+
+        Side effects:
+            Lazily instantiates the CompanionSystem singleton on first
+            call via get_companion().
+        """
         comp = self._get_companion()
         return success_response(data=comp.to_dict())
 
-    async def set_personality(self, req: SetPersonalityRequest):
+    async def set_personality(self, req: SetPersonalityRequest) -> dict:
         """Set companion personality (full replacement)."""
         comp = self._get_companion()
         comp.set_personality(
@@ -98,7 +108,7 @@ class CompanionRouter:
         )
         return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
 
-    async def patch_personality(self, req: PatchPersonalityRequest):
+    async def patch_personality(self, req: PatchPersonalityRequest) -> dict:
         """Partial update to companion personality (only provided fields are changed)."""
         comp = self._get_companion()
         current = comp.to_dict()["traits"]
@@ -114,14 +124,27 @@ class CompanionRouter:
         )
         return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
 
-    async def reset_companion(self):
+    async def reset_companion(self) -> dict:
         """Reset companion to default personality."""
         from domains.companion import create_companion
         self._companion = create_companion()
         return success_response(data={"status": "ok", "traits": self._companion.to_dict()["traits"]})
 
-    async def use_preset(self, req: PresetRequest):
-        """Use preset personality."""
+    async def use_preset(self, req: PresetRequest) -> dict:
+        """Replace the current companion with a preset personality.
+
+        Args:
+            req: PresetRequest with name (used as the companion's display
+                name) and preset (one of: warm, curious, playful, balanced).
+
+        Returns:
+            Success envelope containing the preset ID and the new traits
+            dictionary.
+
+        Side effects:
+            Replaces the internal CompanionSystem instance with a new
+            one configured to the chosen preset.
+        """
         from domains.companion import create_companion
 
         self._companion = create_companion(name=req.name, personality=req.preset)
@@ -132,12 +155,22 @@ class CompanionRouter:
             "traits": self._companion.to_dict()["traits"],
         })
 
-    async def get_prompt(self):
-        """Get current system prompt."""
+    async def get_prompt(self) -> dict:
+        """Return the system prompt currently used by the companion.
+
+        Returns:
+            Success envelope with a system_prompt string containing the
+            full system prompt derived from the companion's personality
+            traits and configuration.
+
+        Side effects:
+            Lazily instantiates the CompanionSystem singleton on first
+            call via get_companion().
+        """
         comp = self._get_companion()
         return success_response(data={"system_prompt": comp.get_system_prompt()})
 
-    async def chat(self, req: ChatRequest):
+    async def chat(self, req: ChatRequest) -> dict:
         """Chat with companion — generates a response using the active model."""
         comp = self._get_companion()
 
@@ -180,8 +213,18 @@ class CompanionRouter:
             system_prompt=system_prompt,
         )
 
-    async def list_presets(self):
-        """List available presets."""
+    async def list_presets(self) -> dict:
+        """Return the hardcoded list of available companion presets.
+
+        Returns:
+            Success envelope containing a presets array. Each preset
+            has id (warm/curious/playful/balanced), name, description,
+            and a traits dictionary with warmth, curiosity, humor values.
+
+        Side effects:
+            None. The preset list is static and does not read from
+            any external store.
+        """
         presets = [
             {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}},
             {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}},

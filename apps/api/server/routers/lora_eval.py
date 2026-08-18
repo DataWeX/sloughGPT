@@ -20,7 +20,7 @@ class LoraEvalRouter:
         self,
         adapter_path: str = "data/user_adapters/best_aggregated.npz",
         soul: str = "assistant",
-    ):
+    ) -> dict:
         """
         Run LoRA quality evaluation — baseline vs with-adapter comparison.
 
@@ -70,7 +70,7 @@ class LoraEvalRouter:
     async def get_eval_history(
         self,
         limit: int = Query(default=20, ge=1, le=100),
-    ):
+    ) -> dict:
         """
         Retrieve recent evaluation history.
 
@@ -97,7 +97,7 @@ class LoraEvalRouter:
         min_feedback: int = Query(default=5, ge=1),
         output_name: str = Query(default="best_aggregated"),
         run_eval: bool = Query(default=True),
-    ):
+    ) -> dict:
         """
         Trigger aggregation of top-k best user adapters.
 

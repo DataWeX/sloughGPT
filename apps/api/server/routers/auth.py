@@ -121,7 +121,20 @@ class AuthRouter:
     def _register_routes(self):
         current_user_dep = Depends(self._get_current_user)
 
-        async def login(req: LoginRequest):
+        async def login(req: LoginRequest) -> dict:
+            """Authenticate a user with username and password.
+
+            Args:
+                req: LoginRequest containing username and password.
+
+            Returns:
+                AuthResponse with JWT token and UserInfo (id, username, email).
+
+            Side effects:
+                Verifies password against stored hash.
+                Upgrades legacy SHA-256 hashes to PBKDF2 on first login.
+                Raises 401 if credentials are invalid.
+            """
             users = self._load_users()
             for uid, u in users.items():
                 if u["username"] == req.username:
@@ -138,7 +151,21 @@ class AuthRouter:
                     )
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        async def register(req: RegisterRequest):
+        async def register(req: RegisterRequest) -> dict:
+            """Register a new user account with username, email, and password.
+
+            Args:
+                req: RegisterRequest with username (max 100 chars), email
+                    (max 254 chars), and password (max 500 chars).
+
+            Returns:
+                AuthResponse with JWT token and UserInfo.
+
+            Side effects:
+                Creates a new user record in the JSON-backed user store.
+                Hashes the password with PBKDF2 + random salt.
+                Raises 409 if the username already exists.
+            """
             users = self._load_users()
             if any(u["username"] == req.username for u in users.values()):
                 raise HTTPException(status_code=409, detail="Username already exists")
@@ -157,10 +184,39 @@ class AuthRouter:
                 user=UserInfo(id=uid, username=req.username, email=req.email),
             )
 
-        async def get_me(current_user: dict = current_user_dep):
+        async def get_me(current_user: dict = current_user_dep) -> dict:
+            """Return the current authenticated user's profile.
+
+            Args:
+                current_user: Injected by the Depends(get_current_user)
+                    dependency; contains id, username, email.
+
+            Returns:
+                UserInfo with id, username, and email fields.
+
+            Side effects:
+                Raises 401 if the authorization header is missing or the
+                token is invalid or the user no longer exists.
+            """
             return UserInfo(**current_user)
 
-        async def create_token(token_request: TokenRequest, request: Request):
+        async def create_token(token_request: TokenRequest, request: Request) -> dict:
+            """Create a JWT access token from a valid API key.
+
+            Args:
+                token_request: TokenRequest containing the api_key string.
+                request: FastAPI Request used to extract the client IP for
+                    audit logging.
+
+            Returns:
+                TokenResponse with access_token, token_type "bearer", and
+                expires_in (seconds).
+
+            Side effects:
+                Validates the api_key against the configured key list.
+                Logs an audit entry for auth_success or auth_failed.
+                Raises 401 if the API key is not in the valid key list.
+            """
             valid_keys, exp_hours, jwt_auth, audit_logger = self._get_auth_deps()
             client_ip = request.client.host if request.client else "unknown"
             if token_request.api_key not in valid_keys:
@@ -170,7 +226,21 @@ class AuthRouter:
             audit_logger.log("auth_success", client_ip, resource="/auth/token", extra={"action": "token_create", "status": "success"})
             return TokenResponse(access_token=token, token_type="bearer", expires_in=exp_hours * 3600)
 
-        async def verify_token(authorization: Optional[str] = Header(None)):
+        async def verify_token(authorization: Optional[str] = Header(None)) -> dict:
+            """Verify whether a JWT bearer token is valid and not expired.
+
+            Args:
+                authorization: The Authorization header value, expected
+                    format "Bearer <token>". Injected by FastAPI.
+
+            Returns:
+                Success envelope with valid=True, subject (user ID), and
+                expires (epoch timestamp).
+
+            Side effects:
+                Raises 401 if the header is missing, malformed, or the
+                token is invalid or expired.
+            """
             _, _, jwt_auth, _ = self._get_auth_deps()
             if not authorization or not authorization.startswith("Bearer "):
                 raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
@@ -180,7 +250,21 @@ class AuthRouter:
                 raise HTTPException(status_code=401, detail="Invalid or expired token")
             return success_response(data={"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")})
 
-        async def refresh_token(authorization: Optional[str] = Header(None)):
+        async def refresh_token(authorization: Optional[str] = Header(None)) -> dict:
+            """Issue a new JWT token from an existing valid token.
+
+            Args:
+                authorization: The Authorization header value, expected
+                    format "Bearer <token>". Injected by FastAPI.
+
+            Returns:
+                TokenResponse with the new access_token, token_type
+                "bearer", and expires_in (seconds).
+
+            Side effects:
+                Raises 401 if the header is missing, malformed, or the
+                token is invalid or expired.
+            """
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
             if not authorization or not authorization.startswith("Bearer "):
                 raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
