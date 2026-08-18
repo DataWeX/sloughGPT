@@ -42,6 +42,11 @@ class Entity:
     def __hash__(self):
         return hash(self.id)
 
+    def __eq__(self, other):
+        if not isinstance(other, Entity):
+            return NotImplemented
+        return self.id == other.id
+
 
 @dataclass
 class Fact:
@@ -90,6 +95,23 @@ class KnowledgeGraph:
             "avg_degree": 0.0,
         }
 
+    def _resolve_entity_id(self, name: str) -> str:
+        """Resolve an entity name to an existing entity ID using case-insensitive lookup.
+
+        Args:
+            name: Entity name to resolve (e.g. "Paris", "paris", "PARIS").
+
+        Returns:
+            The matching entity ID if found, otherwise the normalized name.
+        """
+        name_lower = name.lower()
+        for eid in self.entities:
+            if eid.lower() == name_lower:
+                return eid
+            if name_lower in [a.lower() for a in self.entities[eid].aliases]:
+                return eid
+        return name
+
     def add_entity(
         self,
         id: str,
@@ -98,7 +120,28 @@ class KnowledgeGraph:
         properties: Optional[Dict[str, Any]] = None,
         aliases: Optional[List[str]] = None,
     ) -> Entity:
-        """Add an entity to the graph."""
+        """Add an entity to the graph.
+
+        If an entity with the same ID (case-insensitive) already exists, the
+        existing entity is returned unchanged.
+
+        Args:
+            id: Unique entity identifier (will be stored as-is).
+            label: Human-readable label.
+            entity_type: Type/category of entity.
+            properties: Optional property dict.
+            aliases: Optional alternative names.
+
+        Returns:
+            The Entity (existing or newly created).
+        """
+        resolved = self._resolve_entity_id(id)
+        if resolved in self.entities:
+            existing = self.entities[resolved]
+            if aliases:
+                existing.aliases.update(aliases)
+            return existing
+
         entity = Entity(
             id=id,
             label=label,
@@ -117,40 +160,68 @@ class KnowledgeGraph:
         obj: str,
         confidence: float = 1.0,
         source: str = "unknown",
-    ) -> Fact:
-        """Add a fact (triple) to the graph."""
+    ) -> Optional[Fact]:
+        """Add a fact (triple) to the graph.
+
+        Deduplicates by (subject, predicate, object) tuple. If the same triple
+        already exists, the higher confidence and newer source are kept.
+
+        Args:
+            subject: Subject entity name (auto-creates if missing).
+            predicate: Relationship type (e.g. "capital_of", "is_a").
+            obj: Object entity name (auto-creates if missing).
+            confidence: Confidence score [0, 1].
+            source: Provenance identifier.
+
+        Returns:
+            The Fact, or None if it was a no-op duplicate.
+        """
+        # Resolve entity IDs (case-insensitive)
+        subj_id = self._resolve_entity_id(subject)
+        obj_id = self._resolve_entity_id(obj)
+
         # Ensure entities exist
-        if subject not in self.entities:
-            self.add_entity(subject, subject, "unknown")
-        if obj not in self.entities:
-            self.add_entity(obj, obj, "unknown")
+        if subj_id not in self.entities:
+            self.add_entity(subj_id, subject, "unknown")
+        if obj_id not in self.entities:
+            self.add_entity(obj_id, obj, "unknown")
+
+        # Use resolved IDs for the triple key
+        key = (subj_id, predicate, obj_id)
+        existing = self.facts.get(key)
+        if existing:
+            # Keep higher confidence, newer source
+            if confidence > existing.confidence:
+                existing.confidence = confidence
+                existing.source = source
+            return None
 
         fact = Fact(
-            subject=subject,
+            subject=subj_id,
             predicate=predicate,
-            object=obj,
+            object=obj_id,
             confidence=confidence,
             source=source,
         )
 
         # Store fact
-        self.facts[(subject, predicate, obj)] = fact
+        self.facts[key] = fact
 
         # Update subject index
-        if subject not in self.subject_index:
-            self.subject_index[subject] = {}
-        if predicate not in self.subject_index[subject]:
-            self.subject_index[subject][predicate] = []
-        if obj not in self.subject_index[subject][predicate]:
-            self.subject_index[subject][predicate].append(obj)
+        if subj_id not in self.subject_index:
+            self.subject_index[subj_id] = {}
+        if predicate not in self.subject_index[subj_id]:
+            self.subject_index[subj_id][predicate] = []
+        if obj_id not in self.subject_index[subj_id][predicate]:
+            self.subject_index[subj_id][predicate].append(obj_id)
 
         # Update object index
-        if obj not in self.object_index:
-            self.object_index[obj] = {}
-        if predicate not in self.object_index[obj]:
-            self.object_index[obj][predicate] = []
-        if subject not in self.object_index[obj][predicate]:
-            self.object_index[obj][predicate].append(subject)
+        if obj_id not in self.object_index:
+            self.object_index[obj_id] = {}
+        if predicate not in self.object_index[obj_id]:
+            self.object_index[obj_id][predicate] = []
+        if subj_id not in self.object_index[obj_id][predicate]:
+            self.object_index[obj_id][predicate].append(subj_id)
 
         self._update_stats()
         return fact
@@ -160,16 +231,25 @@ class KnowledgeGraph:
         entity_id: str,
         predicate: Optional[str] = None,
     ) -> List[Tuple[str, str]]:
-        """Get outgoing edges from entity. Returns [(predicate, target), ...]."""
-        if entity_id not in self.subject_index:
+        """Get outgoing edges from entity. Returns [(predicate, target), ...].
+
+        Args:
+            entity_id: Entity name (case-insensitive lookup).
+            predicate: Optional filter for specific predicate.
+
+        Returns:
+            List of (predicate, target_entity_id) tuples.
+        """
+        resolved = self._resolve_entity_id(entity_id)
+        if resolved not in self.subject_index:
             return []
 
         results = []
-        predicates = [predicate] if predicate else self.subject_index[entity_id].keys()
+        predicates = [predicate] if predicate else self.subject_index[resolved].keys()
 
         for pred in predicates:
-            if pred in self.subject_index[entity_id]:
-                for obj in self.subject_index[entity_id][pred]:
+            if pred in self.subject_index[resolved]:
+                for obj in self.subject_index[resolved][pred]:
                     results.append((pred, obj))
 
         return results
@@ -179,16 +259,25 @@ class KnowledgeGraph:
         entity_id: str,
         predicate: Optional[str] = None,
     ) -> List[Tuple[str, str]]:
-        """Get incoming edges to entity. Returns [(predicate, source), ...]."""
-        if entity_id not in self.object_index:
+        """Get incoming edges to entity. Returns [(predicate, source), ...].
+
+        Args:
+            entity_id: Entity name (case-insensitive lookup).
+            predicate: Optional filter for specific predicate.
+
+        Returns:
+            List of (predicate, source_entity_id) tuples.
+        """
+        resolved = self._resolve_entity_id(entity_id)
+        if resolved not in self.object_index:
             return []
 
         results = []
-        predicates = [predicate] if predicate else self.object_index[entity_id].keys()
+        predicates = [predicate] if predicate else self.object_index[resolved].keys()
 
         for pred in predicates:
-            if pred in self.object_index[entity_id]:
-                for subj in self.object_index[entity_id][pred]:
+            if pred in self.object_index[resolved]:
+                for subj in self.object_index[resolved][pred]:
                     results.append((pred, subj))
 
         return results
@@ -199,42 +288,52 @@ class KnowledgeGraph:
         predicate: Optional[str] = None,
         obj: Optional[str] = None,
     ) -> List[Fact]:
-        """Query facts matching pattern."""
+        """Query facts matching pattern.
+
+        All string parameters are resolved via case-insensitive entity lookup
+        (for subject/object) or exact match (for predicate).
+
+        Args:
+            subject: Subject entity name (fuzzy).
+            predicate: Relationship type (exact).
+            obj: Object entity name (fuzzy).
+
+        Returns:
+            List of matching Facts.
+        """
         results = []
 
-        if subject and predicate and obj:
-            # Exact match
-            fact = self.facts.get((subject, predicate, obj))
+        # Resolve entity IDs
+        subj_id = self._resolve_entity_id(subject) if subject else None
+        obj_id = self._resolve_entity_id(obj) if obj else None
+
+        if subj_id and predicate and obj_id:
+            fact = self.facts.get((subj_id, predicate, obj_id))
             if fact:
                 results.append(fact)
-        elif subject and predicate:
-            # Subject + predicate
-            if subject in self.subject_index and predicate in self.subject_index[subject]:
-                for obj in self.subject_index[subject][predicate]:
-                    results.append(self.facts[(subject, predicate, obj)])
-        elif subject and obj:
-            # Subject + object (any predicate)
-            if subject in self.subject_index:
-                for pred, objs in self.subject_index[subject].items():
-                    if obj in objs:
-                        results.append(self.facts[(subject, pred, obj)])
-        elif predicate and obj:
-            # Predicate + object
-            if obj in self.object_index and predicate in self.object_index[obj]:
-                for subj in self.object_index[obj][predicate]:
-                    results.append(self.facts[(subj, predicate, obj)])
-        elif subject:
-            # All facts about subject
-            if subject in self.subject_index:
-                for pred, objs in self.subject_index[subject].items():
+        elif subj_id and predicate:
+            if subj_id in self.subject_index and predicate in self.subject_index[subj_id]:
+                for ob in self.subject_index[subj_id][predicate]:
+                    results.append(self.facts[(subj_id, predicate, ob)])
+        elif subj_id and obj_id:
+            if subj_id in self.subject_index:
+                for pred, objs in self.subject_index[subj_id].items():
+                    if obj_id in objs:
+                        results.append(self.facts[(subj_id, pred, obj_id)])
+        elif predicate and obj_id:
+            if obj_id in self.object_index and predicate in self.object_index[obj_id]:
+                for sub in self.object_index[obj_id][predicate]:
+                    results.append(self.facts[(sub, predicate, obj_id)])
+        elif subj_id:
+            if subj_id in self.subject_index:
+                for pred, objs in self.subject_index[subj_id].items():
                     for ob in objs:
-                        results.append(self.facts[(subject, pred, ob)])
-        elif obj:
-            # All facts with object
-            if obj in self.object_index:
-                for pred, subjects in self.object_index[obj].items():
+                        results.append(self.facts[(subj_id, pred, ob)])
+        elif obj_id:
+            if obj_id in self.object_index:
+                for pred, subjects in self.object_index[obj_id].items():
                     for sub in subjects:
-                        results.append(self.facts[(sub, pred, obj)])
+                        results.append(self.facts[(sub, predicate, obj_id)])
 
         return results
 

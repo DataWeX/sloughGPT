@@ -13,7 +13,6 @@ the chat pipeline by:
 import json
 import hashlib
 import logging
-from pathlib import Path
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -305,39 +304,75 @@ class KGTrainingPipeline:
 
     Uses Pugqeep TaskQueue for async batch processing. Each triple becomes
     a task that gets embedded and indexed.
+
+    Attributes:
+        _rag: RAGService instance for document ingestion.
+        _queue: Lazily-initialized TaskQueue (None until first use).
     """
 
-    def __init__(self, rag_service: Optional[RAGService] = None):
+    _REQUIRED_TRIPLE_KEYS = {"subject", "predicate", "object"}
+
+    def __init__(self, rag_service: Optional[RAGService] = None) -> None:
         self._rag = rag_service or get_rag_service()
         self._queue = None
 
     def _get_queue(self):
-        """Lazy-init Pugqeep TaskQueue."""
+        """Lazy-init Pugqeep TaskQueue with persistent storage.
+
+        Returns:
+            TaskQueue instance, created on first call.
+        """
         if self._queue is None:
+            from domains.infrastructure.pugqeep.task_queue import TaskQueue
+            storage = Path("data/kg_pipeline")
             try:
-                from domains.infrastructure.pugqeep.task_queue import TaskQueue
-                self._queue = TaskQueue(
-                    name="kg-training",
-                    storage_dir=Path("data/kg_pipeline"),
-                )
-            except Exception:
-                from domains.infrastructure.pugqeep.task_queue import TaskQueue
+                self._queue = TaskQueue(name="kg-training", storage_dir=storage)
+            except TypeError:
                 self._queue = TaskQueue(name="kg-training")
         return self._queue
+
+    def _validate_triple(self, triple: Dict[str, Any]) -> bool:
+        """Check a triple dict has required keys with non-empty string values.
+
+        Args:
+            triple: Dict to validate.
+
+        Returns:
+            True if valid, False otherwise.
+        """
+        if not isinstance(triple, dict):
+            return False
+        for key in self._REQUIRED_TRIPLE_KEYS:
+            val = triple.get(key)
+            if not isinstance(val, str) or not val.strip():
+                return False
+        return True
 
     def submit_triples(self, triples: List[Dict[str, Any]]) -> int:
         """Submit KG triples as batch tasks to the queue.
 
         Args:
-            triples: List of {subject, predicate, object, confidence, source} dicts.
+            triples: List of dicts, each with required keys
+                ``subject``, ``predicate``, ``object`` (strings), and optional
+                ``confidence`` (float, default 0.8) and ``source`` (str, default "kg").
 
         Returns:
-            Number of tasks submitted.
+            Number of tasks successfully submitted.
+
+        Raises:
+            ValueError: If triples list is empty.
         """
+        if not triples:
+            raise ValueError("triples list must not be empty")
+
         from domains.infrastructure.pugqeep.task_queue import Task, TaskPriority
+
         queue = self._get_queue()
-        tasks = []
+        submitted = 0
         for t in triples:
+            if not self._validate_triple(t):
+                logger.warning("KG pipeline: skipping invalid triple %r", t)
+                continue
             content = f"{t['subject']} {t['predicate']} {t['object']}"
             task = Task(
                 name="kg_embed_index",
@@ -346,25 +381,29 @@ class KGTrainingPipeline:
                     "subject": t["subject"],
                     "predicate": t["predicate"],
                     "object": t["object"],
-                    "confidence": t.get("confidence", 0.8),
-                    "source": t.get("source", "kg"),
+                    "confidence": float(t.get("confidence", 0.8)),
+                    "source": str(t.get("source", "kg")),
                 },
                 priority=TaskPriority.NORMAL,
             )
-            tasks.append(task)
-        queue.submit_many(tasks)
-        logger.info("KG pipeline: submitted %d triples for embedding", len(tasks))
-        return len(tasks)
+            queue.submit(task)
+            submitted += 1
+
+        logger.info("KG pipeline: submitted %d/%d triples", submitted, len(triples))
+        return submitted
 
     def process_batch(self, max_tasks: int = 50) -> Dict[str, Any]:
         """Process pending tasks from the queue — embed and index into RAG.
 
         Args:
-            max_tasks: Maximum tasks to process in this batch.
+            max_tasks: Maximum tasks to process in this batch (must be > 0).
 
         Returns:
-            Stats dict with processed/failed/remaining counts.
+            Dict with keys: processed, failed, remaining.
         """
+        if max_tasks <= 0:
+            return {"processed": 0, "failed": 0, "remaining": len(self._get_queue()._pending)}
+
         queue = self._get_queue()
         processed = 0
         failed = 0
@@ -391,7 +430,7 @@ class KGTrainingPipeline:
             except Exception as e:
                 queue.fail(task.id, error=str(e))
                 failed += 1
-                logger.warning("KG pipeline task failed: %s", e)
+                logger.warning("KG pipeline task %s failed: %s", task.id, e)
 
         remaining = len(queue._pending)
         logger.info(
@@ -408,16 +447,17 @@ class KGTrainingPipeline:
         """Full pipeline: export all KG triples → submit → process → RAG index.
 
         Args:
-            kg: KnowledgeGraph instance. Uses RAG service's internal KG if None.
+            kg: KnowledgeGraph instance. If None, uses the RAG service's
+                internal KG (set via ``RAGService._kg`` during document ingestion).
 
         Returns:
-            Stats dict with total_triples, processed, failed.
+            Dict with keys: total_triples, processed, failed.
         """
         if kg is None:
-            svc = self._rag
-            if not hasattr(svc, '_kg'):
+            if not hasattr(self._rag, '_kg') or self._rag._kg is None:
+                logger.info("KG pipeline: no knowledge graph available")
                 return {"total_triples": 0, "processed": 0, "failed": 0}
-            kg = svc._kg
+            kg = self._rag._kg
 
         triples = kg.export_triples()
         if not triples:
@@ -429,7 +469,11 @@ class KGTrainingPipeline:
         return result
 
     def stats(self) -> Dict[str, Any]:
-        """Return pipeline queue stats."""
+        """Return pipeline queue stats.
+
+        Returns:
+            Dict with keys: pending, running, completed.
+        """
         queue = self._get_queue()
         return {
             "pending": len(queue._pending),

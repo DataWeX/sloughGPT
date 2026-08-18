@@ -52,8 +52,9 @@ class TestKGExportTriples:
     def test_export_triples_content(self, kg):
         triples = kg.export_triples()
         subjects = {t["subject"] for t in triples}
-        assert "Paris" in subjects
-        assert "London" in subjects
+        # add_fact resolves to existing entity IDs (lowercase from fixture)
+        assert "paris" in subjects
+        assert "london" in subjects
 
 
 class TestKGTrainingPipeline:
@@ -90,10 +91,10 @@ class TestKGTrainingPipeline:
         query_result = rag_svc.query("capital of France", top_k=3)
         results = query_result.get("results", [])
         assert len(results) > 0
-        # Top result should be the KG triple
+        # Top result should be the KG triple (entity IDs are lowercase)
         top = results[0]
-        assert "Paris" in top["content"]
         assert "capital_of" in top["content"]
+        assert "paris" in top["content"]
 
     def test_kg_triple_metadata(self, pipeline, rag_svc, kg):
         pipeline.sync_kg_to_rag(kg=kg)
@@ -102,7 +103,7 @@ class TestKGTrainingPipeline:
         assert len(results) > 0
         meta = results[0].get("metadata", {})
         assert meta.get("kg_triple") is True
-        assert meta.get("subject") == "Paris"
+        assert meta.get("subject") == "paris"
         assert meta.get("predicate") == "capital_of"
 
     def test_pipeline_stats(self, pipeline, kg):
