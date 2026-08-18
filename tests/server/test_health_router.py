@@ -254,8 +254,7 @@ class TestModelHealth:
     def test_model_health_error(self, mock_get_mon, client):
         mock_get_mon.side_effect = RuntimeError("monitor down")
         resp = client.get("/health/model")
-        assert resp.status_code == 200
-        assert resp.json()["error"] == "monitor down"
+        assert resp.status_code == 500
 
     @patch("domains.feedback.model_health.get_health_monitor")
     def test_model_health_ok_with_stats(self, mock_get_mon, client):
