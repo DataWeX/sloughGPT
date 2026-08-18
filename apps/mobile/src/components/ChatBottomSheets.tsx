@@ -126,7 +126,7 @@ export function ChatBottomSheets({
               paddingHorizontal={20} paddingVertical={14}
               borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Details</Text>
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Details</Text>
               <YStack
                 width={28} height={28} borderRadius={9}
                 alignItems="center" justifyContent="center"
@@ -144,8 +144,8 @@ export function ChatBottomSheets({
               ].map(stat => (
                 <YStack key={stat.label} flex={1} paddingVertical={14} paddingHorizontal={10} borderRadius={14}
                   backgroundColor={colors.primaryAlpha(0.04)} alignItems="center">
-                  <Text fontSize={20} fontWeight="700" color="$color9">{stat.value}</Text>
-                  <Text fontSize={10} fontWeight="500" color="$color10" marginTop={4}>{stat.label}</Text>
+                  <Text fontSize={20} fontWeight="700" color={colors.primary}>{stat.value}</Text>
+                  <Text fontSize={10} fontWeight="500" color={colors.textSecondary} marginTop={4}>{stat.label}</Text>
                 </YStack>
               ))}
             </XStack>
@@ -153,25 +153,25 @@ export function ChatBottomSheets({
             <YStack paddingHorizontal={20} paddingBottom={4}>
               <XStack justifyContent="space-between" paddingVertical={12}
                 borderBottomWidth={0.5} borderBottomColor={colors.border}>
-                <Text fontSize={13} color="$color11">Session</Text>
-                <Text fontSize={13} color="$color" fontWeight="500" numberOfLines={1}>
+                <Text fontSize={13} color={colors.textMuted}>Session</Text>
+                <Text fontSize={13} color={colors.text} fontWeight="500" numberOfLines={1}>
                   {activeSessionId?.slice(0, 12) || 'None'}
                 </Text>
               </XStack>
               {currentSoul && (
                 <XStack justifyContent="space-between" paddingVertical={12}
                   borderBottomWidth={0.5} borderBottomColor={colors.border}>
-                  <Text fontSize={13} color="$color11">Soul</Text>
-                  <Text fontSize={13} color="$color" fontWeight="500">{currentSoul.name}</Text>
+                  <Text fontSize={13} color={colors.textMuted}>Soul</Text>
+                  <Text fontSize={13} color={colors.text} fontWeight="500">{currentSoul.name}</Text>
                 </XStack>
               )}
               <XStack justifyContent="space-between" paddingVertical={12}
                 borderBottomWidth={0.5} borderBottomColor={colors.border}>
-                <Text fontSize={13} color="$color11">Status</Text>
+                <Text fontSize={13} color={colors.textMuted}>Status</Text>
                 <XStack alignItems="center" gap={6}>
                   <YStack width={7} height={7} borderRadius={4}
                     backgroundColor={isConnected ? colors.success : colors.error} />
-                  <Text fontSize={13} fontWeight="500" color="$color">
+                  <Text fontSize={13} fontWeight="500" color={colors.text}>
                     {isConnected ? 'Connected' : 'Offline'}
                   </Text>
                 </XStack>
@@ -179,7 +179,7 @@ export function ChatBottomSheets({
             </YStack>
 
             <YStack paddingHorizontal={20} paddingTop={12} paddingBottom={8}>
-              <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color="$color10" marginBottom={12}>CHAT BACKGROUND</Text>
+              <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color={colors.textSecondary} marginBottom={12}>CHAT BACKGROUND</Text>
               <XStack flexWrap="wrap" gap={10}>
                 {BG_PRESETS.map(p => {
                   const active = chatBackground === p.value;
@@ -189,7 +189,7 @@ export function ChatBottomSheets({
                       width={36} height={36} borderRadius={12}
                       justifyContent="center" alignItems="center"
                       borderWidth={2}
-                      borderColor={active ? '$color9' : 'transparent'}
+                      borderColor={active ? colors.primary : 'transparent'}
                       backgroundColor={p.value ? p.value : colors.background}
                       style={!p.value ? {borderColor: colors.border} : {}}
                       onPress={() => updateTheme({chatBackground: p.value})}
@@ -204,7 +204,7 @@ export function ChatBottomSheets({
             </YStack>
 
             <YStack paddingHorizontal={20} paddingTop={16} paddingBottom={24}>
-              <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color="$color10" marginBottom={12}>LABELS</Text>
+              <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color={colors.textSecondary} marginBottom={12}>LABELS</Text>
               {activeSessionId && (sessionLabels[activeSessionId] || []).length > 0 && (
                 <XStack flexWrap="wrap" gap={6} marginBottom={12}>
                   {(sessionLabels[activeSessionId] || []).map(label => (
@@ -226,8 +226,8 @@ export function ChatBottomSheets({
                           }
                         }
                       }}>
-                      <Text fontSize={12} fontWeight="500" color="$color9">{label}</Text>
-                      <Icon name="x" size={10} color="$color9" />
+                      <Text fontSize={12} fontWeight="500" color={colors.primary}>{label}</Text>
+                      <Icon name="x" size={10} color={colors.primary} />
                     </YStack>
                   ))}
                 </XStack>
@@ -290,7 +290,7 @@ export function ChatBottomSheets({
               paddingHorizontal={20} paddingVertical={14}
               borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Personalities</Text>
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Personalities</Text>
               <YStack
                 width={28} height={28} borderRadius={9}
                 alignItems="center" justifyContent="center"
@@ -307,15 +307,15 @@ export function ChatBottomSheets({
                 borderRadius={14}
                 backgroundColor={colors.primaryAlpha(0.06)}
                 borderWidth={0.5} borderColor={colors.primaryAlpha(0.15)}>
-                <Text fontSize={10} fontWeight="700" letterSpacing={0.6} color="$color9" marginBottom={6}>ACTIVE</Text>
+                <Text fontSize={10} fontWeight="700" letterSpacing={0.6} color={colors.primary} marginBottom={6}>ACTIVE</Text>
                 <XStack alignItems="center" gap={10}>
                   <YStack width={32} height={32} borderRadius={16} backgroundColor={colors.primaryAlpha(0.12)} alignItems="center" justifyContent="center">
-                    <Icon name="check" size={14} color="$color9" />
+                    <Icon name="check" size={14} color={colors.primary} />
                   </YStack>
                   <YStack flex={1}>
-                    <Text fontSize={15} fontWeight="600" color="$color">{currentSoul.name}</Text>
+                    <Text fontSize={15} fontWeight="600" color={colors.text}>{currentSoul.name}</Text>
                     {currentSoul.description && (
-                      <Text fontSize={12} color="$color10" marginTop={1}>{currentSoul.description}</Text>
+                      <Text fontSize={12} color={colors.textSecondary} marginTop={1}>{currentSoul.description}</Text>
                     )}
                   </YStack>
                 </XStack>
@@ -347,9 +347,9 @@ export function ChatBottomSheets({
                       <Icon name="user" size={16} color={isActive ? 'white' : colors.primary} />
                     </YStack>
                     <YStack flex={1}>
-                      <Text fontSize={14} fontWeight={isActive ? '600' : '400'} color="$color">{soul.name}</Text>
+                      <Text fontSize={14} fontWeight={isActive ? '600' : '400'} color={colors.text}>{soul.name}</Text>
                       {soul.description && (
-                        <Text fontSize={11} color="$color10" numberOfLines={1} marginTop={1}>
+                        <Text fontSize={11} color={colors.textSecondary} numberOfLines={1} marginTop={1}>
                           {soul.description}
                         </Text>
                       )}
@@ -371,7 +371,7 @@ export function ChatBottomSheets({
               }}
               ListEmptyComponent={
                 <YStack padding={40} alignItems="center">
-                  <Text fontSize={13} color="$color10">No personalities found</Text>
+                  <Text fontSize={13} color={colors.textSecondary}>No personalities found</Text>
                 </YStack>
               }
             />
@@ -407,7 +407,7 @@ export function ChatBottomSheets({
               paddingHorizontal={20} paddingVertical={16}
               borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Menu</Text>
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Menu</Text>
               <YStack
                 width={28} height={28} borderRadius={9}
                 alignItems="center" justifyContent="center"
@@ -424,11 +424,11 @@ export function ChatBottomSheets({
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
                 <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
-                  <Icon name="plus" size={18} color="$color9" />
+                  <Icon name="plus" size={18} color={colors.primary} />
                 </YStack>
                 <YStack>
-                  <Text fontSize={15} fontWeight="600" color="$color">New Chat</Text>
-                  <Text fontSize={12} color="$color10">Start a fresh conversation</Text>
+                  <Text fontSize={15} fontWeight="600" color={colors.text}>New Chat</Text>
+                  <Text fontSize={12} color={colors.textSecondary}>Start a fresh conversation</Text>
                 </YStack>
               </XStack>
             </YStack>
@@ -440,11 +440,11 @@ export function ChatBottomSheets({
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
                 <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
-                  <Icon name="search" size={18} color="$color9" />
+                  <Icon name="search" size={18} color={colors.primary} />
                 </YStack>
                 <YStack>
-                  <Text fontSize={15} fontWeight="600" color="$color">Search</Text>
-                  <Text fontSize={12} color="$color10">Find messages in this conversation</Text>
+                  <Text fontSize={15} fontWeight="600" color={colors.text}>Search</Text>
+                  <Text fontSize={12} color={colors.textSecondary}>Find messages in this conversation</Text>
                 </YStack>
               </XStack>
             </YStack>
@@ -459,13 +459,13 @@ export function ChatBottomSheets({
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
                 <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
-                  <Icon name={themeMode === 'dark' ? 'sun' : 'moon'} size={18} color="$color9" />
+                  <Icon name={themeMode === 'dark' ? 'sun' : 'moon'} size={18} color={colors.primary} />
                 </YStack>
                 <YStack>
-                  <Text fontSize={15} fontWeight="600" color="$color">
+                  <Text fontSize={15} fontWeight="600" color={colors.text}>
                     {themeMode === 'dark' ? 'Light Mode' : 'Dark Mode'}
                   </Text>
-                  <Text fontSize={12} color="$color10">Currently: {themeMode === 'dark' ? 'Dark' : themeMode === 'light' ? 'Light' : 'System'}</Text>
+                  <Text fontSize={12} color={colors.textSecondary}>Currently: {themeMode === 'dark' ? 'Dark' : themeMode === 'light' ? 'Light' : 'System'}</Text>
                 </YStack>
               </XStack>
             </YStack>
@@ -477,11 +477,11 @@ export function ChatBottomSheets({
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
                 <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
-                  <Icon name="info" size={18} color="$color9" />
+                  <Icon name="info" size={18} color={colors.primary} />
                 </YStack>
                 <YStack>
-                  <Text fontSize={15} fontWeight="600" color="$color">Details</Text>
-                  <Text fontSize={12} color="$color10">Stats, labels, and background</Text>
+                  <Text fontSize={15} fontWeight="600" color={colors.text}>Details</Text>
+                  <Text fontSize={12} color={colors.textSecondary}>Stats, labels, and background</Text>
                 </YStack>
               </XStack>
             </YStack>
@@ -493,11 +493,11 @@ export function ChatBottomSheets({
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
                 <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
-                  <Icon name="settings" size={18} color="$color9" />
+                  <Icon name="settings" size={18} color={colors.primary} />
                 </YStack>
                 <YStack>
-                  <Text fontSize={15} fontWeight="600" color="$color">Generation Settings</Text>
-                  <Text fontSize={12} color="$color10">Temperature, tokens, and sampling</Text>
+                  <Text fontSize={15} fontWeight="600" color={colors.text}>Generation Settings</Text>
+                  <Text fontSize={12} color={colors.textSecondary}>Temperature, tokens, and sampling</Text>
                 </YStack>
               </XStack>
             </YStack>
@@ -509,11 +509,11 @@ export function ChatBottomSheets({
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
                 <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
-                  <Icon name="info" size={18} color="$color9" />
+                  <Icon name="info" size={18} color={colors.primary} />
                 </YStack>
                 <YStack>
-                  <Text fontSize={15} fontWeight="600" color="$color">System Prompt</Text>
-                  <Text fontSize={12} color="$color10">View the active personality prompt</Text>
+                  <Text fontSize={15} fontWeight="600" color={colors.text}>System Prompt</Text>
+                  <Text fontSize={12} color={colors.textSecondary}>View the active personality prompt</Text>
                 </YStack>
               </XStack>
             </YStack>
@@ -524,11 +524,11 @@ export function ChatBottomSheets({
               pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
                 <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
-                  <Icon name="download" size={18} color="$color9" />
+                  <Icon name="download" size={18} color={colors.primary} />
                 </YStack>
                 <YStack>
-                  <Text fontSize={15} fontWeight="600" color="$color">Export</Text>
-                  <Text fontSize={12} color="$color10">Save conversation as markdown</Text>
+                  <Text fontSize={15} fontWeight="600" color={colors.text}>Export</Text>
+                  <Text fontSize={12} color={colors.textSecondary}>Save conversation as markdown</Text>
                 </YStack>
               </XStack>
             </YStack>
@@ -560,7 +560,7 @@ export function ChatBottomSheets({
               paddingHorizontal={20} paddingVertical={14}
               borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Forward to...</Text>
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Forward to...</Text>
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center"
                 onPress={() => setForwardTo(null)} pressStyle={{opacity: 0.6}}>
                 <Icon name="x" size={14} color={colors.textSecondary} />
@@ -574,8 +574,8 @@ export function ChatBottomSheets({
                 borderRadius={12}
                 backgroundColor={colors.primaryAlpha(0.04)}
                 borderWidth={0.5} borderColor={colors.primaryAlpha(0.12)}>
-                <Text fontSize={11} fontWeight="600" color="$color9" marginBottom={2}>MESSAGE</Text>
-                <Text fontSize={13} color="$color10" numberOfLines={2}>{forwardTo.content}</Text>
+                <Text fontSize={11} fontWeight="600" color={colors.primary} marginBottom={2}>MESSAGE</Text>
+                <Text fontSize={13} color={colors.textSecondary} numberOfLines={2}>{forwardTo.content}</Text>
               </YStack>
             )}
 
@@ -598,13 +598,13 @@ export function ChatBottomSheets({
                   pressStyle={{backgroundColor: colors.primaryAlpha(0.06), scale: 0.98}}>
                   <YStack width={36} height={36} borderRadius={12}
                     backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
-                    <Icon name="message-circle" size={16} color="$color9" />
+                    <Icon name="message-circle" size={16} color={colors.primary} />
                   </YStack>
                   <YStack flex={1}>
-                    <Text fontSize={14} fontWeight="500" numberOfLines={1} color="$color">
+                    <Text fontSize={14} fontWeight="500" numberOfLines={1} color={colors.text}>
                       {session.name || 'New conversation'}
                     </Text>
-                    <Text fontSize={11} color="$color10" marginTop={1}>
+                    <Text fontSize={11} color={colors.textSecondary} marginTop={1}>
                       {session.message_count || 0} messages
                     </Text>
                   </YStack>
@@ -612,7 +612,7 @@ export function ChatBottomSheets({
               )}
               ListEmptyComponent={
                 <YStack padding={40} alignItems="center">
-                  <Text fontSize={13} color="$color10">No conversations</Text>
+                  <Text fontSize={13} color={colors.textSecondary}>No conversations</Text>
                 </YStack>
               }
             />
@@ -641,7 +641,7 @@ export function ChatBottomSheets({
               paddingHorizontal={20} paddingVertical={16}
               borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Generation Settings</Text>
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Generation Settings</Text>
               <YStack
                 width={28} height={28} borderRadius={9}
                 alignItems="center" justifyContent="center"
@@ -680,7 +680,7 @@ export function ChatBottomSheets({
               paddingHorizontal={20} paddingVertical={16}
               borderBottomWidth={0.5} borderBottomColor={colors.border}
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">System Prompt</Text>
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>System Prompt</Text>
               <YStack
                 width={28} height={28} borderRadius={9}
                 alignItems="center" justifyContent="center"
@@ -719,8 +719,8 @@ function ChatSettingsContent() {
       {sliders.map(s => (
         <YStack key={s.key}>
           <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
-            <Text fontSize={13} fontWeight="500" color="$color">{s.label}</Text>
-            <Text fontSize={13} fontWeight="600" color="$color9">
+            <Text fontSize={13} fontWeight="500" color={colors.text}>{s.label}</Text>
+            <Text fontSize={13} fontWeight="600" color={colors.primary}>
               {s.key === 'maxTokens' ? Math.round(settings[s.key]) : settings[s.key].toFixed(2)}
             </Text>
           </XStack>
@@ -760,7 +760,7 @@ function ChatSettingsContent() {
         backgroundColor={colors.primaryAlpha(0.08)}
         onPress={() => update({temperature: 0.8, maxTokens: 256, topP: 0.9, topK: 50})}
         pressStyle={{opacity: 0.7, scale: 0.98}}>
-        <Text fontSize={13} fontWeight="600" color="$color9">Reset to Defaults</Text>
+        <Text fontSize={13} fontWeight="600" color={colors.primary}>Reset to Defaults</Text>
       </YStack>
     </YStack>
   );
@@ -790,20 +790,20 @@ function SystemPromptContent() {
   }, []);
 
   if (loading) {
-    return <Text fontSize={13} color="$color10" padding={20}>Loading...</Text>;
+    return <Text fontSize={13} color={colors.textSecondary} padding={20}>Loading...</Text>;
   }
 
   return (
     <YStack gap={12}>
       <XStack alignItems="center" gap={8}>
-        <Text fontSize={13} fontWeight="600" color="$color9">Active Soul:</Text>
-        <Text fontSize={13} color="$color">{currentSoul?.name || 'None'}</Text>
+        <Text fontSize={13} fontWeight="600" color={colors.primary}>Active Soul:</Text>
+        <Text fontSize={13} color={colors.text}>{currentSoul?.name || 'None'}</Text>
       </XStack>
       <YStack
         backgroundColor={colors.primaryAlpha(0.04)}
         borderRadius={10}
         padding={14}>
-        <Text fontSize={13} lineHeight={20} color="$color" selectable>
+        <Text fontSize={13} lineHeight={20} color={colors.text} selectable>
           {prompt || 'No system prompt available.'}
         </Text>
       </YStack>
