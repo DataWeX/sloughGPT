@@ -11,19 +11,15 @@ the chat pipeline by:
 """
 
 import json
-import hashlib
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from domains.cognitive.rag import (
-    ProductionRAG,
-    HybridRetriever,
-    TextChunk,
-)
+from domains.cognitive.rag import ProductionRAG
 from domains.inference.vector_store import simple_embed
 
 logger = logging.getLogger("slo.rag_service")
@@ -47,16 +43,28 @@ class ProductionRAGWithRealEmbeddings(ProductionRAG):
 
 
 class RAGService:
-    """High-level RAG service with document persistence and query."""
+    """High-level RAG service with document persistence, query, and KG integration.
 
-    def __init__(self):
+    Thread-safe singleton via ``get_rag_service()``. Persists documents to
+    ``data/rag_store/documents.jsonl`` so they survive server restarts.
+
+    Attributes:
+        rag: Underlying ProductionRAG instance with real embeddings.
+        _documents: In-memory list of persisted document dicts.
+        _kg: Lazily-created KnowledgeGraph for entity/fact extraction.
+        _lock: Thread lock for document list mutations.
+    """
+
+    def __init__(self) -> None:
         _DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.rag = ProductionRAGWithRealEmbeddings()
         self._documents: List[Dict[str, Any]] = []
+        self._kg = None
+        self._lock = threading.Lock()
         self._load_documents()
 
-    def _load_documents(self):
-        """Load persisted documents from disk."""
+    def _load_documents(self) -> None:
+        """Load persisted documents from the JSONL file into memory and RAG index."""
         if not _DOCUMENTS_FILE.exists():
             return
         try:
@@ -74,16 +82,42 @@ class RAGService:
                         overlap=doc.get("overlap", 50),
                     )
             logger.info("Loaded %d documents from RAG store", len(self._documents))
-        except Exception as e:
+        except (OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to load RAG documents: %s", e)
 
-    def _save_document(self, doc: Dict[str, Any]):
-        """Append a single document to the JSONL file."""
+    def _save_document(self, doc: Dict[str, Any]) -> None:
+        """Append a single document to the JSONL persistence file."""
         try:
             with open(_DOCUMENTS_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps(doc, ensure_ascii=False) + "\n")
-        except Exception as e:
+        except OSError as e:
             logger.warning("Failed to persist RAG document: %s", e)
+
+    def _ensure_kg(self) -> None:
+        """Lazily initialize the knowledge graph on first access."""
+        if self._kg is None:
+            from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph
+            self._kg = KnowledgeGraph()
+
+    def _extract_kg_claims(self, content: str, metadata: Dict[str, Any]) -> None:
+        """Extract entity claims from text and add them to the knowledge graph."""
+        self._ensure_kg()
+        try:
+            detector = self.rag.hallucination_detector
+            claims = detector.citation_tracker.extract_claims(content)
+        except AttributeError:
+            logger.debug("Hallucination detector not available for KG extraction")
+            return
+        source = metadata.get("source", "rag")
+        for claim in claims:
+            obj_text = content[claim["start"]:claim["end"]][:200]
+            self._kg.add_fact(
+                subject=claim["subject"],
+                predicate=claim["predicate"],
+                obj=obj_text,
+                confidence=0.8,
+                source=source,
+            )
 
     def add_document(
         self,
@@ -92,7 +126,7 @@ class RAGService:
         chunk_size: int = 512,
         overlap: int = 50,
     ) -> List[str]:
-        """Ingest a document into the RAG index and persist it.
+        """Ingest a document into the RAG index, persist it, and extract KG facts.
 
         Args:
             content: Raw text to ingest.
@@ -103,6 +137,9 @@ class RAGService:
         Returns:
             List of chunk IDs created.
         """
+        if not content or not content.strip():
+            return []
+
         metadata = metadata or {"source": "user"}
         chunk_ids = self.rag.add_document(
             content=content,
@@ -110,37 +147,25 @@ class RAGService:
             chunk_size=chunk_size,
             overlap=overlap,
         )
-        self._documents.append({
+
+        doc_record = {
             "content": content,
             "metadata": metadata,
             "chunk_size": chunk_size,
             "overlap": overlap,
             "chunk_ids": chunk_ids,
             "added_at": time.time(),
-        })
-        self._save_document(self._documents[-1])
+        }
+        with self._lock:
+            self._documents.append(doc_record)
+        self._save_document(doc_record)
 
-        # Auto-extract entities/facts into knowledge graph
-        try:
-            from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph
-            if not hasattr(self, '_kg'):
-                self._kg = KnowledgeGraph()
-            detector = self.rag.hallucination_detector
-            claims = detector.citation_tracker.extract_claims(content)
-            for claim in claims:
-                self._kg.add_fact(
-                    subject=claim["subject"],
-                    predicate=claim["predicate"],
-                    obj=content[claim["start"]:claim["end"]][:200],
-                    confidence=0.8,
-                    source=metadata.get("source", "rag"),
-                )
-        except Exception:
-            pass
+        self._extract_kg_claims(content, metadata)
 
         logger.info(
             "Ingested document (%d chars → %d chunks) into RAG index",
-            len(content), len(chunk_ids),
+            len(content),
+            len(chunk_ids),
         )
         return chunk_ids
 
@@ -178,30 +203,28 @@ class RAGService:
 
     def list_documents(self) -> List[Dict[str, Any]]:
         """List all ingested documents (metadata only, no content)."""
-        return [
-            {
-                "metadata": doc.get("metadata", {}),
-                "chunk_size": doc.get("chunk_size", 512),
-                "num_chunks": len(doc.get("chunk_ids", [])),
-                "added_at": doc.get("added_at", 0),
-            }
-            for doc in self._documents
-        ]
+        with self._lock:
+            return [
+                {
+                    "metadata": doc.get("metadata", {}),
+                    "chunk_size": doc.get("chunk_size", 512),
+                    "num_chunks": len(doc.get("chunk_ids", [])),
+                    "added_at": doc.get("added_at", 0),
+                }
+                for doc in self._documents
+            ]
 
     def clear(self) -> int:
-        """Clear the entire RAG index and persisted documents.
-
-        Returns:
-            Number of documents removed.
-        """
-        count = len(self._documents)
-        self._documents.clear()
+        """Clear the entire RAG index and persisted documents."""
+        with self._lock:
+            count = len(self._documents)
+            self._documents.clear()
         self.rag = ProductionRAGWithRealEmbeddings()
         try:
             if _DOCUMENTS_FILE.exists():
                 _DOCUMENTS_FILE.unlink()
-        except Exception:
-            pass
+        except OSError as e:
+            logger.warning("Failed to delete RAG persistence file: %s", e)
         logger.info("Cleared RAG index (%d documents removed)", count)
         return count
 
@@ -214,15 +237,7 @@ class RAGService:
         }
 
     def auto_ingest_directory(self, root_path: str, max_files: int = 200) -> int:
-        """Scan a directory and ingest code/docs into RAG.
-
-        Args:
-            root_path: Directory to scan (e.g. the repo root).
-            max_files: Maximum files to ingest (prevents runaway on large repos).
-
-        Returns:
-            Number of files successfully ingested.
-        """
+        """Scan a directory and ingest code/docs into RAG."""
         try:
             from domains.infrastructure.auto_ingest import RepoScanner
         except ImportError:
@@ -233,31 +248,27 @@ class RAGService:
         ingested = 0
         root_resolved = Path(root_path).resolve()
 
-        try:
-            for path, content in scanner.iter_files():
-                if ingested >= max_files:
-                    break
-                try:
-                    if len(content.strip()) < 50:
-                        continue
-                    try:
-                        rel = str(path.relative_to(root_resolved))
-                    except ValueError:
-                        rel = str(path)
-                    self.add_document(
-                        content=content[:8000],
-                        metadata={
-                            "source": "auto-ingest",
-                            "file_path": rel,
-                            "file_type": scanner.get_file_type(path),
-                        },
-                    )
-                    ingested += 1
-                except Exception as e:
-                    logger.debug("auto-ingest file %s failed: %s", path, e)
+        for path, content in scanner.iter_files():
+            if ingested >= max_files:
+                break
+            try:
+                if len(content.strip()) < 50:
                     continue
-        except Exception as e:
-            logger.debug("auto-ingest scan failed: %s", e)
+                try:
+                    rel = str(path.relative_to(root_resolved))
+                except ValueError:
+                    rel = str(path)
+                self.add_document(
+                    content=content[:8000],
+                    metadata={
+                        "source": "auto-ingest",
+                        "file_path": rel,
+                        "file_type": scanner.get_file_type(path),
+                    },
+                )
+                ingested += 1
+            except Exception as e:
+                logger.debug("auto-ingest file %s failed: %s", path, e)
 
         if ingested > 0:
             logger.info("Auto-ingested %d files into RAG from %s", ingested, root_path)
@@ -265,17 +276,22 @@ class RAGService:
 
     def kg_stats(self) -> Dict[str, Any]:
         """Return knowledge graph statistics."""
-        if not hasattr(self, '_kg'):
-            return {"entities": 0, "facts": 0}
+        if self._kg is None:
+            return {"entities": 0, "facts": 0, "avg_degree": 0.0}
         return {
             "entities": len(self._kg.entities),
             "facts": len(self._kg.facts),
-            "stats": self._kg.stats,
+            "avg_degree": self._kg.stats.get("avg_degree", 0.0),
         }
 
-    def kg_query(self, subject: str = "", predicate: str = "", obj: str = "") -> List[Dict[str, Any]]:
+    def kg_query(
+        self,
+        subject: str = "",
+        predicate: str = "",
+        obj: str = "",
+    ) -> List[Dict[str, Any]]:
         """Query the knowledge graph for facts matching the given pattern."""
-        if not hasattr(self, '_kg'):
+        if self._kg is None:
             return []
         results = []
         for fact in self._kg.facts.values():
