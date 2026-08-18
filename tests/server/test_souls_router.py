@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.souls import SoulsRouter
 
 
@@ -18,6 +19,7 @@ def souls_router():
 @pytest.fixture
 def app(souls_router):
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(souls_router.router)
     return _app
 

@@ -12,6 +12,7 @@ from unittest.mock import patch, MagicMock, PropertyMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.health import router
 
 SERVER_DIR = str(Path(__file__).resolve().parents[2] / "apps/api/server")
@@ -24,6 +25,7 @@ import state as _server_state
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 

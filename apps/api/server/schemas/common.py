@@ -207,6 +207,8 @@ def safe_audit_log(
     action: str,
     resource: str = "",
     detail: str = "",
+    user: str = "anonymous",
+    extra: Optional[dict] = None,
     **kwargs: Any,
 ) -> None:
     """Log an audit event without crashing on failure.
@@ -218,16 +220,19 @@ def safe_audit_log(
         action: The action being logged (e.g. 'knowledge.add').
         resource: The resource being acted upon.
         detail: Human-readable detail string.
-        **kwargs: Extra fields forwarded to the audit logger.
+        user: User identifier (default: "anonymous").
+        extra: Optional extra dict to forward to the audit logger.
+        **kwargs: Additional fields merged into ``extra``.
     """
     try:
         from infrastructure.auth import get_audit_logger
-        get_audit_logger().log(action, resource=resource, detail=detail, **kwargs)
+        merged = {**(extra or {}), **kwargs} if kwargs else extra
+        get_audit_logger().log(action, user=user, resource=resource, detail=detail, extra=merged)
     except Exception:
         _audit_logger.info(
             "audit:%s resource=%s detail=%s %s",
             action, resource, detail,
-            " ".join(f"{k}={v}" for k, v in kwargs.items()) if kwargs else "",
+            " ".join(f"{k}={v}" for k, v in (extra or kwargs).items()) if (extra or kwargs) else "",
         )
 
 

@@ -10,6 +10,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from infrastructure.exception_handlers import register_all_handlers
+
 # Add server dir to path for router imports
 _server_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'apps', 'api', 'server')
 if os.path.isdir(_server_dir):
@@ -18,6 +20,7 @@ if os.path.isdir(_server_dir):
 from routers.auto_train import router as auto_train_router
 
 auto_app = FastAPI()
+register_all_handlers(auto_app)
 auto_app.include_router(auto_train_router)
 auto_client = TestClient(auto_app, raise_server_exceptions=False)
 
@@ -68,8 +71,8 @@ class TestAutoTrainStart:
 
     def test_start_requires_data(self):
         resp = auto_client.post("/auto-train/start", json={})
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 422
+        assert "Provide" in resp.json()["error"]
 
     def test_start_with_text(self):
         resp = auto_client.post("/auto-train/start", json={

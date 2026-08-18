@@ -11,8 +11,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from routers.auto_train import router
+from infrastructure.exception_handlers import register_all_handlers
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -22,9 +24,8 @@ class TestAutoTrainStart:
 
     def test_start_requires_data(self):
         resp = client.post("/auto-train/start", json={})
-        assert resp.status_code == 200
+        assert resp.status_code == 422
         data = resp.json()
-        assert "error" in data
         assert "Provide" in data["error"]
 
     def test_start_with_source_text(self):
@@ -194,7 +195,6 @@ def _reset_auto_train_state():
     mod._auto_train_instance.state.config = {}
     mod._auto_train_cancel_event = None
     mod._auto_train_pause_event = None
-    mod._complete_enqueued[0] = False
 
 
 class TestAutoTrainStopPauseResume:
@@ -255,8 +255,7 @@ class TestAutoTrainStartTurbo:
 
     def test_turbo_requires_data_path(self):
         resp = client.post("/auto-train/start-turbo", json={"epochs": 1})
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 422
         assert "No data_path or dataset_id" in resp.json()["error"]
 
     def test_turbo_epochs_validation(self):
@@ -282,7 +281,7 @@ class TestAutoTrainFromSessions:
         import routers.auto_train as mod
         mod._auto_train_instance.state.running = True
         resp = client.post("/auto-train/from-sessions/start", json={"epochs": 3})
-        assert resp.status_code == 200
+        assert resp.status_code == 409
         assert "already" in resp.json()["error"].lower()
 
     def test_start_epochs_validation(self):
@@ -320,8 +319,7 @@ class TestAutoTrainCheckpointValidation:
 
     def test_load_missing_checkpoint(self):
         resp = client.post("/auto-train/checkpoints/definitely_missing_ckpt/load")
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 404
 
     def test_export_mobile_missing_404(self):
         resp = client.get("/auto-train/checkpoints/definitely_missing_ckpt/export-mobile")
