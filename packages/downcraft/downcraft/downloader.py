@@ -11,6 +11,7 @@ Key design:
 import hashlib
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -39,11 +40,27 @@ def _resolve_range_start(part_path: Path) -> int:
     return 0
 
 
-def _expected_size_bytes(expected_size_gb: Optional[float]) -> int:
-    """Convert an optional GB hint to bytes, or 0 if unknown."""
-    if expected_size_gb is not None and expected_size_gb > 0:
-        return int(expected_size_gb * (1024 ** 3))
-    return 0
+def _validate_content_range(
+    headers: dict, expected_start: int, total_size: int,
+) -> bool:
+    """Validate that the Content-Range header matches the requested range.
+
+    Returns True if the response is consistent with the resume request,
+    False if the server returned a mismatched range (caller should restart).
+    """
+    cr = headers.get("Content-Range", "")
+    if not cr:
+        return True
+    m = re.match(r"bytes\s+(\d+)-(\d+)/(\d+|\*)", cr)
+    if not m:
+        return False
+    resp_start = int(m.group(1))
+    resp_total = m.group(3)
+    if resp_start != expected_start:
+        return False
+    if resp_total != "*" and int(resp_total) != total_size:
+        return False
+    return True
 
 
 def download_file(
@@ -62,6 +79,8 @@ def download_file(
         expected_size: Expected total bytes (0 = unknown).
         checksum: SHA-256 hex string to verify after download.
         on_chunk: Called after each chunk with ``(bytes_downloaded, total_bytes)``.
+                  ``total_bytes`` may be 0 if the server provides no
+                  Content-Length and *expected_size* was not given.
         on_complete: Called with final path after successful download.
 
     Returns:
@@ -72,7 +91,7 @@ def download_file(
     """
     part = _part_path(dest)
     resume_at = _resolve_range_start(part)
-    headers = {}
+    headers: dict = {}
 
     if resume_at > 0:
         headers["Range"] = f"bytes={resume_at}-"
@@ -83,7 +102,6 @@ def download_file(
             resp = requests.get(url, headers=headers, stream=True, timeout=30)
             resp.raise_for_status()
 
-            # If server didn't return 206 (Partial Content), start over
             if resume_at > 0 and resp.status_code != 206:
                 logger.warning(
                     "Server doesn't support Range (got %d), restarting %s from 0",
@@ -95,14 +113,27 @@ def download_file(
                 headers.pop("Range", None)
                 continue
 
+            if resume_at > 0 and resp.status_code == 206:
+                full_size = expected_size
+                if full_size <= 0:
+                    cl = resp.headers.get("Content-Length", "0")
+                    full_size = int(cl) + resume_at if cl.isdigit() else 0
+                if full_size > 0 and not _validate_content_range(
+                    resp.headers, resume_at, full_size,
+                ):
+                    logger.warning(
+                        "Content-Range mismatch on %s, restarting from 0",
+                        dest.name,
+                    )
+                    part.unlink(missing_ok=True)
+                    resume_at = 0
+                    headers.pop("Range", None)
+                    continue
+
             mode = "ab" if resume_at > 0 else "wb"
-            # expected_size is the FULL file size; the server's Content-Length
-            # is the remaining bytes on a 206 response, so the resume offset is
-            # added back only when deriving the total from the response header.
             total = expected_size or int(resp.headers.get("Content-Length", 0))
             if expected_size <= 0 and resume_at > 0 and total > 0:
                 total += resume_at
-            total = total or 0
 
             dest.parent.mkdir(parents=True, exist_ok=True)
             with open(part, mode) as f:
@@ -114,9 +145,6 @@ def download_file(
                         bytes_done = part.stat().st_size
                         on_chunk(bytes_done, max(bytes_done, total))
 
-            # Verify checksum over the complete file.  Hashing only the bytes
-            # received in this request would miss bytes written by an earlier
-            # (resumed) attempt, so the whole .sgpart is re-read.
             if checksum:
                 hasher = hashlib.sha256()
                 with open(part, "rb") as f:
@@ -135,7 +163,6 @@ def download_file(
                         f"Checksum mismatch for {dest.name}"
                     )
 
-            # Atomically rename .sgpart → final
             os.replace(str(part), str(dest))
             logger.info("Downloaded %s (%.2f MB)", dest.name, dest.stat().st_size / 1e6)
 
@@ -157,4 +184,4 @@ def download_file(
             else:
                 raise DownloadError(f"Failed to download {dest.name} after {MAX_RETRIES} attempts: {e}") from e
 
-    raise DownloadError(f"Failed to download {dest.name}")  # unreachable
+    raise DownloadError(f"Failed to download {dest.name}")

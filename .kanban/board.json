@@ -24,6 +24,59 @@
   ],
   "cards": [
     {
+      "id": "20260818_054613_mobile-training-suite-losschart-fix-test-model-dialog-per-jo",
+      "title": "Mobile training suite: LossChart fix, Test Model dialog, per-job stop",
+      "description": "Fixed 3 issues in the mobile training suite:\n\n1. **LossChart scope bug** \u2014 Moved LossChart inside TrainingScreen component so it has access to  from useColors() hook. Was referencing module-scope  which didn't exist. Converted to useCallback.\n\n2. **Test Model dialog** \u2014 Added POST /inference/generate integration. After training completes (distill or fine-tune), a 'Test Model' button opens a modal where users type a prompt and see the model's response. Shows loading state and error handling.\n\n3. **Per-job stop for fine-tune** \u2014 training-store.ts stop() now calls POST /training/jobs/{id}/stop when a hfJobId exists. Previously only cleared local state, leaving the server job running.\n\nVerification: npx tsc --noEmit passes (only pre-existing KnowledgeScreen errors). 838/838 mobile tests pass (91 training tests). 1 pre-existing failure in KnowledgeScreen test.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "training",
+        "status:done"
+      ],
+      "created_at": "2026-08-18T05:46:13.596021+00:00",
+      "updated_at": "2026-08-18T05:46:13.596021+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260818_053250_meta-weights-wire-into-generation-pipeline-full-field-suppor",
+      "title": "Meta weights: wire into generation pipeline + full field support",
+      "description": "Wired meta weights into the actual generation pipeline (previously computed but never applied). Extended from 2 fields (temperature, repetition_penalty) to all 6 fields (added top_p, top_k, style_bias, confidence_boost). Generation endpoints now auto-adjust params per-user based on feedback history and similar-message vector search. 24/24 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "feedback",
+        "meta-weights",
+        "api",
+        "status:done"
+      ],
+      "created_at": "2026-08-18T05:32:50.489663+00:00",
+      "updated_at": "2026-08-18T05:32:50.489663+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260818_051610_fix-startuppy-missing-await-lifecycle-fallback",
+      "title": "Fix startup.py missing await + lifecycle fallback",
+      "description": "Fixed two bugs in apps/api/server/infrastructure/startup.py that caused feature routers (agents, meta-weights, user-adapters, etc.) to never register:\n\n1. Missing await: _phase5_model_registry() and _phase6_routers() are async functions but were called without await in the fallback path (line 297-298). Coroutines were created but never executed.\n\n2. Lifecycle failure not handled: When lifecycle.start() returned False (e.g., model load failed), code logged a warning and continued without running fallback phases. Feature routers were never registered.\n\nFix: Both paths now properly await the phase functions, and lifecycle failure triggers the fallback path.\n\nVerified: py_compile passes, git diff clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "api",
+        "startup",
+        "bugfix",
+        "status:done"
+      ],
+      "created_at": "2026-08-18T05:16:10.062375+00:00",
+      "updated_at": "2026-08-18T05:16:10.062375+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260817_112528_decompose-usetrainingsession-into-3-focused-hooks",
       "title": "Decompose useTrainingSession into 3 focused hooks",
       "description": "",

@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { IconSearch, IconX } from '@sloughgpt/strui'
+import { IconSearch, IconX, IconChevronDown } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
 
 export function ChatSearchBar() {
@@ -40,7 +40,7 @@ export function ChatSearchBar() {
             disabled={matchCount === 0}
             aria-label="Next match"
           >
-            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            <IconChevronDown className="h-3 w-3" />
           </button>
           <button
             onClick={onClear}

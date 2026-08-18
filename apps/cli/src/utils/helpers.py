@@ -7,7 +7,9 @@ from pathlib import Path
 
 
 def chat_repository_root() -> Path:
-    return Path(__file__).resolve().parent.parent.parent.parent
+    """Repository root (delegates to shared utility)."""
+    from domains.shared import find_repo_root
+    return find_repo_root(str(Path(__file__).resolve()))
 
 
 def chat_uvicorn_bind_host(client_host: str) -> str:
@@ -103,8 +105,10 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
     log_path = log_f.name
     log_f.close()
 
+    from domains.shared import find_server_python
+    server_python = find_server_python(repo)
     cmd = [
-        sys.executable, "-m", "uvicorn", "main:app",
+        server_python, "-m", "uvicorn", "main:app",
         "--app-dir", str(repo / "apps" / "api" / "server"),
         "--host", bind_host, "--port", str(listen_port),
     ]

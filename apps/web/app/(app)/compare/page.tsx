@@ -6,7 +6,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { IconRefresh, IconDownload } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -189,7 +189,7 @@ export default function ComparePage() {
             <Button variant="outline" size="sm" onClick={saveSnapshot}>Save</Button>
           </div>
           <Button variant="outline" size="sm" onClick={exportResults}>
-            <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            <IconDownload className="h-3.5 w-3.5 mr-1" />
             Export
           </Button>
         </>

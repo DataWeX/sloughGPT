@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, type ReactNode } from 'react'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconUpload } from '@sloughgpt/strui'
 
 const TEXT_EXTENSIONS = new Set([
   'txt', 'md', 'json', 'js', 'jsx', 'ts', 'tsx', 'py', 'rb', 'go', 'rs',
@@ -106,9 +106,7 @@ export function ImageDropZone({ onImageDropped, onTextDropped, onPDFDropped, chi
             'bg-background/90 border-2 border-dashed border-primary/50 shadow-lg',
             'animate-in fade-in zoom-in-95 duration-200',
           )}>
-            <svg className="h-8 w-8 text-primary/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
+            <IconUpload className="h-8 w-8 text-primary/70" />
             <span className="text-sm font-medium">Drop files to attach</span>
             <span className="text-xs text-muted-foreground">
               Images, PDFs, text, and code files supported

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconStar, IconTrash, IconX } from '@sloughgpt/strui'
+import { IconStar, IconTrash, IconX, IconChevronDown } from '@sloughgpt/strui'
 import type { BookmarkedMessage } from '@/features/chat/hooks/useChatBookmarks'
 
 interface ChatBookmarksPanelProps {
@@ -31,9 +31,7 @@ export function ChatBookmarksPanel({ bookmarks, onRemove, onClear, onJumpToMessa
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted">{bookmarks.length}</span>
           )}
         </span>
-        <svg className={cn('h-3 w-3 transition-transform', collapsed && '-rotate-90')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <IconChevronDown className={cn('h-3 w-3 transition-transform', collapsed && '-rotate-90')} />
       </button>
 
       {!collapsed && (

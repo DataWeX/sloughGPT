@@ -1,4 +1,5 @@
 import {create} from 'zustand';
+import {api} from '../services/api-client';
 import {
   startTraining,
   stopTraining,
@@ -10,9 +11,22 @@ import {
   streamTraining,
   startLoraFinetune,
   listTrainingJobs,
+  deleteTrainingJob,
+  stopTrainingJob,
+  listFineTunedModels,
+  loadFineTunedModel,
+  deleteFineTunedModel,
+  loadAdapter,
+  unloadAdapter,
+  importDatasetUrl,
+  importDatasetGithub,
+  importDatasetHuggingface,
+  importDatasetCsv,
   type TrainConfig,
   type Checkpoint,
   type Dataset,
+  type FineTunedModel,
+  type TrainingJob,
 } from '../services/training-service';
 
 export type TrainPhase =
@@ -56,8 +70,10 @@ interface TrainingState {
   method: TrainingMethod;
   hfOpts: HFTrainingOpts;
   hfJobId: string | null;
-  hfJobs: any[];
+  hfJobs: TrainingJob[];
   hfFinetunedPath: string | null;
+  finetunedModels: FineTunedModel[];
+  adapterLoaded: boolean;
 
   setConfig: (partial: Partial<TrainConfig>) => void;
   setHfOpts: (partial: Partial<HFTrainingOpts>) => void;
@@ -66,8 +82,16 @@ interface TrainingState {
   startLoraFinetune: () => Promise<void>;
   stop: () => Promise<void>;
   refresh: () => Promise<void>;
+  refreshFinetunedModels: () => Promise<void>;
   loadCheckpoint: (name: string) => Promise<void>;
   deleteCheckpoint: (name: string) => Promise<void>;
+  deleteJob: (jobId: string) => Promise<void>;
+  stopJob: (jobId: string) => Promise<void>;
+  loadFinetunedModel: (name: string) => Promise<void>;
+  deleteFinetunedModel: (name: string) => Promise<void>;
+  loadAdapterModel: (path: string) => Promise<void>;
+  unloadAdapterModel: () => Promise<void>;
+  importDataset: (source: string, name: string, type: 'url' | 'github' | 'huggingface' | 'csv') => Promise<void>;
   clearError: () => void;
 }
 
@@ -110,6 +134,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   hfJobId: null,
   hfJobs: [],
   hfFinetunedPath: null,
+  finetunedModels: [],
+  adapterLoaded: false,
 
   setConfig: partial => set(s => ({config: {...s.config, ...partial}})),
   setHfOpts: partial => set(s => ({hfOpts: {...s.hfOpts, ...partial}})),
@@ -252,34 +278,49 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       const jobId = result.job_id;
       set({hfJobId: jobId});
 
-      // Poll for completion
       hfPollTimer = setInterval(async () => {
         try {
           const jobs = await listTrainingJobs();
-          const job = (jobs || []).find((j: any) => j.job_id === jobId || j.id === jobId);
+          const job = (jobs || []).find(
+            (j: TrainingJob) => j.job_id === jobId || j.id === jobId,
+          );
           if (!job) return;
 
           const jobStatus = job.status || '';
           const jobPhase = job.phase || 'TRAINING';
           set({
-            phase: jobPhase === 'complete' ? 'COMPLETE' : jobPhase === 'failed' ? 'FAILED' : 'TRAINING' as TrainPhase,
-            steps: job.steps || job.global_step || get().steps,
-            epoch: job.epoch || job.current_epoch || get().epoch,
-            loss: job.loss ?? job.final_loss ?? get().loss,
+            phase:
+              jobPhase === 'complete'
+                ? 'COMPLETE'
+                : jobPhase === 'failed'
+                ? 'FAILED'
+                : ('TRAINING' as TrainPhase),
+            steps: job.global_step || get().steps,
+            epoch: job.current_epoch || get().epoch,
+            loss: job.loss ?? job.eval_loss ?? get().loss,
             hfJobs: jobs || [],
           });
 
-          if (job.model_path) {
-            set({hfFinetunedPath: job.model_path});
+          const path = (job as any).output_dir || (job as any).model_path;
+          if (path) {
+            set({hfFinetunedPath: path});
           }
 
           if (jobStatus === 'completed' || jobPhase === 'complete') {
-            set({phase: 'COMPLETE', running: false, loss: job.final_loss ?? job.loss ?? get().loss});
+            set({
+              phase: 'COMPLETE',
+              running: false,
+              loss: job.eval_loss ?? job.loss ?? get().loss,
+            });
             clearInterval(hfPollTimer!);
             hfPollTimer = null;
             get().refresh();
           } else if (jobStatus === 'failed' || jobPhase === 'failed') {
-            set({phase: 'FAILED', error: job.error || 'Fine-tuning failed', running: false});
+            set({
+              phase: 'FAILED',
+              error: job.error || 'Fine-tuning failed',
+              running: false,
+            });
             clearInterval(hfPollTimer!);
             hfPollTimer = null;
           }
@@ -295,6 +336,12 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       if (hfPollTimer) {
         clearInterval(hfPollTimer);
         hfPollTimer = null;
+      }
+      const jobId = get().hfJobId;
+      if (jobId) {
+        try {
+          await stopTrainingJob(jobId);
+        } catch {}
       }
       set({phase: 'idle', running: false, hfJobId: null});
       return;
@@ -323,6 +370,13 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     } catch {}
   },
 
+  refreshFinetunedModels: async () => {
+    try {
+      const result = await listFineTunedModels();
+      set({finetunedModels: result.models || []});
+    } catch {}
+  },
+
   loadCheckpoint: async (name: string) => {
     try {
       await loadCheckpoint(name);
@@ -338,6 +392,83 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       await get().refresh();
     } catch (err: any) {
       set({error: err.message});
+    }
+  },
+
+  deleteJob: async (jobId: string) => {
+    try {
+      await deleteTrainingJob(jobId);
+      await get().refresh();
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  stopJob: async (jobId: string) => {
+    try {
+      await stopTrainingJob(jobId);
+      await get().refresh();
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  loadFinetunedModel: async (name: string) => {
+    try {
+      await loadFineTunedModel(name);
+      set({adapterLoaded: true});
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  deleteFinetunedModel: async (name: string) => {
+    try {
+      await deleteFineTunedModel(name);
+      await get().refreshFinetunedModels();
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  loadAdapterModel: async (path: string) => {
+    try {
+      await loadAdapter(path);
+      set({adapterLoaded: true});
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  unloadAdapterModel: async () => {
+    try {
+      await unloadAdapter();
+      set({adapterLoaded: false});
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  importDataset: async (source: string, name: string, type: 'url' | 'github' | 'huggingface' | 'csv') => {
+    try {
+      switch (type) {
+        case 'url':
+          await importDatasetUrl(source, name || undefined);
+          break;
+        case 'github':
+          await importDatasetGithub(source, name || undefined);
+          break;
+        case 'huggingface':
+          await importDatasetHuggingface(source, name || undefined);
+          break;
+        case 'csv':
+          await importDatasetCsv(source, name || undefined);
+          break;
+      }
+      await get().refresh();
+    } catch (err: any) {
+      set({error: err.message});
+      throw err;
     }
   },
 

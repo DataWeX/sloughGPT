@@ -56,6 +56,17 @@ beforeEach(() => {
   mockService.streamTraining.mockReturnValue(
     (async function* () {})() as AsyncGenerator<any>,
   );
+  mockService.stopTrainingJob.mockResolvedValue(undefined as any);
+  mockService.deleteTrainingJob.mockResolvedValue(undefined as any);
+  mockService.listFineTunedModels.mockResolvedValue({models: []});
+  mockService.loadFineTunedModel.mockResolvedValue(undefined as any);
+  mockService.deleteFineTunedModel.mockResolvedValue(undefined as any);
+  mockService.loadAdapter.mockResolvedValue(undefined as any);
+  mockService.unloadAdapter.mockResolvedValue(undefined as any);
+  mockService.importDatasetUrl.mockResolvedValue({files_imported: 0, total_chars: 0});
+  mockService.importDatasetGithub.mockResolvedValue({files_imported: 0, total_chars: 0});
+  mockService.importDatasetHuggingface.mockResolvedValue({files_imported: 0, total_chars: 0});
+  mockService.importDatasetCsv.mockResolvedValue({files_imported: 0, total_chars: 0});
 });
 
 afterEach(() => {
@@ -262,10 +273,12 @@ describe('stop', () => {
 
   it('clears HF polling for finetune', async () => {
     useTrainingStore.setState({method: 'finetune', hfJobId: 'hf-1', running: true});
+    mockService.stopTrainingJob.mockResolvedValue(undefined as any);
 
     await useTrainingStore.getState().stop();
     expect(useTrainingStore.getState().hfJobId).toBeNull();
     expect(useTrainingStore.getState().running).toBe(false);
+    expect(mockService.stopTrainingJob).toHaveBeenCalledWith('hf-1');
   });
 });
 

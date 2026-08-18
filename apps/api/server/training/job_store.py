@@ -30,13 +30,28 @@ class JobStore:
     collection journals (``jobs`` and ``job_events``).
     """
 
-    def __init__(self, db_path: str = "data/training_jobs.db"):
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path is None:
+            db_path = str(Path(__file__).resolve().parents[4] / "data" / "training_jobs.db")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._db = MogDB(str(self.db_path))
-        self._jobs = self._db.collection("jobs")
-        self._events = self._db.collection("job_events")
+        self._db = None
+        self._jobs = None
+        self._events = None
+        try:
+            self._db = MogDB(str(self.db_path))
+            self._jobs = self._db.collection("jobs")
+            self._events = self._db.collection("job_events")
+        except Exception:
+            import logging
+            logging.getLogger("slo.training").warning(
+                "JobStore: failed to open MogDB at %s, operating in degraded mode", self.db_path
+            )
+
+    @property
+    def is_available(self) -> bool:
+        return self._db is not None and self._jobs is not None
 
     @staticmethod
     def _new_job_doc(
@@ -84,6 +99,8 @@ class JobStore:
 
     def create(self, job_id: str, name: str, config: Dict[str, Any], dataset: str = "") -> Dict:
         """Create a new job."""
+        if not self.is_available:
+            return {"id": job_id, "status": "error", "error": "Job store unavailable"}
         now = datetime.now().isoformat()
         with self._lock:
             self._jobs.insert_one(self._new_job_doc(job_id, name, config, dataset, now))
@@ -91,11 +108,15 @@ class JobStore:
 
     def get(self, job_id: str) -> Optional[Dict]:
         """Get a job by ID."""
+        if not self.is_available:
+            return None
         doc = self._jobs.find_one({"_id": job_id})
         return self._doc_to_job(doc) if doc else None
 
     def list(self, status: Optional[str] = None, include_crashed: bool = True) -> List[Dict]:
         """List all jobs, optionally filtered by status."""
+        if not self.is_available:
+            return []
         query: Dict[str, Any] = {}
         if status:
             query["status"] = status

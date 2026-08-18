@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { IconAlert, IconRefresh, IconCopy, IconX } from '@sloughgpt/strui'
+import { IconAlert, IconRefresh, IconCopy, IconX, IconChevronLeft } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
 import { reportError } from '@/lib/error-reporter'
 
@@ -112,7 +112,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               className="flex-1"
               size="sm"
             >
-              <svg className="h-3.5 w-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+              <IconChevronLeft className="h-3.5 w-3.5 mr-1.5" />
               Go home
             </Button>
           </div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
-import { IconTrash, IconRefresh } from '@sloughgpt/strui'
+import { IconTrash, IconRefresh, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { trainingJobsController, type FineTunedModel } from '@/lib/training-controller'
@@ -208,9 +208,7 @@ export function FineTunedModelsCard({
                         <Button size="sm" variant="ghost" className="h-6 text-xs" disabled={loadingName !== null} onClick={() => handleUnload(m.name)} aria-label={`Unload ${m.name}`}>
                           {loadingName === m.name ? 'Unloading...' : (
                             <>
-                              <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 110 12.728m0-12.728L12 12m6.364-6.364L12 12" />
-                              </svg>
+                              <IconX className="h-3 w-3 mr-1" />
                               Unload
                             </>
                           )}

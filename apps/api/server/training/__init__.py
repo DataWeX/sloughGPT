@@ -2,7 +2,15 @@
 
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
-from .router import router
+
+try:
+    from .router import router
+except Exception:
+    import logging
+    logging.getLogger("slo.training").warning("Training router failed to import", exc_info=True)
+    from fastapi import APIRouter
+    router = APIRouter()
+
 from .schemas import (
     TrainDatasetRef,
     TrainDataSourceBody,

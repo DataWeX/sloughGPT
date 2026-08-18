@@ -311,11 +311,11 @@ def tui(ctx):
 def shell(ctx, command, tui):
     """Launch the SloughGPT interactive shell REPL."""
     from utils.helpers import ensure_server
-    ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
+    actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
     from domains.shell.repl import ShellREPL
     from domains.shell import DaitRuntime
 
-    os = DaitRuntime()
+    os = DaitRuntime(api_url=actual_url)
     repl = ShellREPL(os, use_tui=True if tui else None)
     if command:
         commands, is_bg, should_time = repl._parse_pipeline(command)

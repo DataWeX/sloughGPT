@@ -18,8 +18,14 @@ const mockSetMethod = jest.fn();
 const mockStart = jest.fn();
 const mockStop = jest.fn();
 const mockRefresh = jest.fn();
+const mockRefreshFinetunedModels = jest.fn();
 const mockLoadCheckpoint = jest.fn();
 const mockDeleteCheckpoint = jest.fn();
+const mockDeleteJob = jest.fn();
+const mockStopJob = jest.fn();
+const mockLoadFinetunedModel = jest.fn();
+const mockDeleteFinetunedModel = jest.fn();
+const mockImportDataset = jest.fn();
 const mockClearError = jest.fn();
 
 const defaultTrainState: any = {
@@ -40,14 +46,22 @@ const defaultTrainState: any = {
   hfJobId: null,
   hfJobs: [],
   hfFinetunedPath: null,
+  finetunedModels: [],
+  adapterLoaded: false,
   setConfig: mockSetConfig,
   setHfOpts: mockSetHfOpts,
   setMethod: mockSetMethod,
   start: mockStart,
   stop: mockStop,
   refresh: mockRefresh,
+  refreshFinetunedModels: mockRefreshFinetunedModels,
   loadCheckpoint: mockLoadCheckpoint,
   deleteCheckpoint: mockDeleteCheckpoint,
+  deleteJob: mockDeleteJob,
+  stopJob: mockStopJob,
+  loadFinetunedModel: mockLoadFinetunedModel,
+  deleteFinetunedModel: mockDeleteFinetunedModel,
+  importDataset: mockImportDataset,
   clearError: mockClearError,
 };
 
@@ -250,7 +264,7 @@ describe('TrainingScreen', () => {
     expect(getByText('Training Complete')).toBeTruthy();
     expect(getByText('Success')).toBeTruthy();
     expect(getByText('Checkpoint: ckpt-v1')).toBeTruthy();
-    expect(getByText('Load Model for Chat')).toBeTruthy();
+    expect(getByText('Load for Chat')).toBeTruthy();
   });
 
   it('shows fine-tune complete card', async () => {

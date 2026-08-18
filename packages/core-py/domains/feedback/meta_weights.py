@@ -115,34 +115,52 @@ class MetaWeightManager:
         return vector
 
     def _aggregate_patterns(self, patterns: List[SimilarPattern]) -> Dict[str, float]:
-        """Aggregate patterns to get adjustment values."""
+        """Aggregate patterns to get adjustment values.
+
+        Each similar message adjusts generation parameters based on
+        whether it received thumbs_up or thumbs_down:
+
+        - temperature: ↑ creativity on good, ↓ on bad
+        - repetition_penalty: ↓ on good (allow some repetition), ↑ on bad
+        - top_p: ↑ (more diverse sampling) on good, ↓ on bad
+        - top_k: ↓ (tighter focus) on good, ↑ (broader) on bad
+        - style_bias: ↑ (creative) on good, ↓ (conservative) on bad
+        - confidence_boost: ↑ on good, ↓ on bad
+        """
         if not patterns:
             return {}
 
-        # Calculate weighted average based on similarity
-        weighted_temp = 0.0
-        weighted_rep = 0.0
+        weighted: Dict[str, float] = {
+            "temperature_boost": 0.0,
+            "repetition_boost": 0.0,
+            "top_p_boost": 0.0,
+            "top_k_boost": 0.0,
+            "style_bias": 0.0,
+            "confidence_boost": 0.0,
+        }
         total_weight = 0.0
 
         for p in patterns:
-            weight = p.similarity
+            w = p.similarity
+            total_weight += w
 
             if p.rating == "thumbs_up":
-                # Good responses: slightly more creative, less repetition
-                weighted_temp += weight * 0.05
-                weighted_rep += weight * -0.05
+                weighted["temperature_boost"] += w * 0.05
+                weighted["repetition_boost"] += w * -0.05
+                weighted["top_p_boost"] += w * 0.03
+                weighted["top_k_boost"] += w * -2
+                weighted["style_bias"] += w * 0.05
+                weighted["confidence_boost"] += w * 0.03
             else:
-                # Bad responses: opposite
-                weighted_temp += weight * -0.05
-                weighted_rep += weight * 0.05
-
-            total_weight += weight
+                weighted["temperature_boost"] += w * -0.05
+                weighted["repetition_boost"] += w * 0.05
+                weighted["top_p_boost"] += w * -0.03
+                weighted["top_k_boost"] += w * 2
+                weighted["style_bias"] += w * -0.05
+                weighted["confidence_boost"] += w * -0.03
 
         if total_weight > 0:
-            return {
-                "temperature_boost": weighted_temp / total_weight,
-                "repetition_boost": weighted_rep / total_weight,
-            }
+            return {k: v / total_weight for k, v in weighted.items()}
         return {}
 
     def get_adjustment(
@@ -154,6 +172,10 @@ class MetaWeightManager:
     ) -> MetaWeights:
         """
         Get meta-weight adjustment based on similar past feedback.
+
+        Combines two signals:
+        1. Per-user accumulated boosts (from all historical feedback)
+        2. Pattern-based adjustments (from k nearest similar messages)
 
         Args:
             user_message: Current user message
@@ -172,46 +194,55 @@ class MetaWeightManager:
         )
 
         try:
-            # Get per-user meta weights first
+            # Layer 1: per-user accumulated boosts
             user_weights = self.db.get_user_meta_weights(user_id)
             if user_weights:
                 weights.temperature += user_weights.get("temperature_boost", 0)
                 weights.repetition_penalty += user_weights.get("repetition_boost", 0)
+                weights.top_p += user_weights.get("top_p_boost", 0)
+                weights.top_k += int(user_weights.get("top_k_boost", 0))
+                weights.style_bias += user_weights.get("style_bias", 0)
+                weights.confidence_boost += user_weights.get("confidence_boost", 0)
 
-            # Generate embedding for the message
+            # Layer 2: pattern-based adjustments from similar messages
             query_embedding = self._embed(user_message)
 
-            # Find similar messages using vector search
             patterns = self.db.find_similar_messages(
                 query_embedding, k=k, rating=rating, min_similarity=0.3
             )
 
-            # If no vector results, fall back to text search
             if not patterns and self.use_simple_search:
                 patterns = self.db.find_similar_by_text(user_message, k=k, rating=rating)
 
-            # Aggregate patterns
             adjustments = self._aggregate_patterns(patterns)
 
-            # Apply adjustments
             weights.temperature += adjustments.get("temperature_boost", 0)
             weights.repetition_penalty += adjustments.get("repetition_boost", 0)
+            weights.top_p += adjustments.get("top_p_boost", 0)
+            weights.top_k += int(adjustments.get("top_k_boost", 0))
+            weights.style_bias += adjustments.get("style_bias", 0)
+            weights.confidence_boost += adjustments.get("confidence_boost", 0)
 
-            # Clamp to reasonable ranges
+            # Clamp to safe ranges
             weights.temperature = max(0.1, min(2.0, weights.temperature))
             weights.repetition_penalty = max(0.8, min(1.5, weights.repetition_penalty))
+            weights.top_p = max(0.1, min(1.0, weights.top_p))
+            weights.top_k = max(1, min(500, weights.top_k))
+            weights.style_bias = max(-1.0, min(1.0, weights.style_bias))
+            weights.confidence_boost = max(-1.0, min(1.0, weights.confidence_boost))
 
             # Store in history
-            self._weight_history.append(
-                {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "temperature": weights.temperature,
-                    "repetition_penalty": weights.repetition_penalty,
-                    "pattern_count": len(patterns),
-                }
-            )
+            self._weight_history.append({
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "temperature": weights.temperature,
+                "repetition_penalty": weights.repetition_penalty,
+                "top_p": weights.top_p,
+                "top_k": weights.top_k,
+                "style_bias": weights.style_bias,
+                "confidence_boost": weights.confidence_boost,
+                "pattern_count": len(patterns),
+            })
 
-            # Keep only recent history
             if len(self._weight_history) > 100:
                 self._weight_history = self._weight_history[-50:]
 
@@ -278,6 +309,10 @@ class MetaWeightManager:
                 rating=rating,
                 temperature_delta=0.02,
                 repetition_delta=0.02,
+                top_p_delta=0.01,
+                top_k_delta=1,
+                style_bias_delta=0.02,
+                confidence_delta=0.01,
             )
         except Exception as e:
             logger.warning("Could not update user meta-weights: %s", e, extra={"tag": "INFRA"})
@@ -310,23 +345,25 @@ class MetaWeightManager:
         db_stats = self.db.get_stats()
         trend = self.get_quality_trend()
 
-        # Calculate average weights from history
-        avg_temp = 0.0
-        avg_rep = 0.0
+        avg = {field: 0.0 for field in (
+            "temperature", "repetition_penalty", "top_p", "top_k",
+            "style_bias", "confidence_boost",
+        )}
         if self._weight_history:
-            avg_temp = sum(w["temperature"] for w in self._weight_history) / len(
-                self._weight_history
-            )
-            avg_rep = sum(w["repetition_penalty"] for w in self._weight_history) / len(
-                self._weight_history
-            )
+            n = len(self._weight_history)
+            for field in avg:
+                avg[field] = sum(w.get(field, 0) for w in self._weight_history) / n
 
         return {
             "db_stats": db_stats,
             "quality_trend": trend,
             "current_weights": {
-                "temperature": avg_temp or self._default_weights.temperature,
-                "repetition_penalty": avg_rep or self._default_weights.repetition_penalty,
+                "temperature": avg["temperature"] or self._default_weights.temperature,
+                "repetition_penalty": avg["repetition_penalty"] or self._default_weights.repetition_penalty,
+                "top_p": avg["top_p"] or self._default_weights.top_p,
+                "top_k": int(avg["top_k"]) or self._default_weights.top_k,
+                "style_bias": avg["style_bias"],
+                "confidence_boost": avg["confidence_boost"],
             },
             "history_length": len(self._weight_history),
         }

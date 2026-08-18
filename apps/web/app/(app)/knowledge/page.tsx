@@ -7,12 +7,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Card, CardContent, CardHeader, CardTitle, EmptyCard } from '@sloughgpt/strui'
+import { Card, CardContent, EmptyCard } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { Chip } from '@sloughgpt/strui'
-import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX } from '@sloughgpt/strui'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@sloughgpt/strui'
+import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX, IconDownload, IconEdit, IconChevronDown } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount } from '@/lib/knowledge-controller'
 import { getRAGStats, clearRAG, listRAGDocuments, syncKGToRAG, type RAGStats, type RAGDocument } from '@/lib/rag-controller'
@@ -21,9 +22,9 @@ import { MemoryCard } from '@/components/knowledge/MemoryCard'
 import { LearnSection } from '@/components/learn/LearnSection'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, MS_PER_SECOND } from '@/lib/format-bytes'
+import { knowledgeSchema } from '@/lib/validation-schemas'
 
 const SEARCH_DEBOUNCE_MS = 300
-import { knowledgeSchema } from '@/lib/validation-schemas'
 
 export default function KnowledgePage() {
   const addToast = useToastStore(s => s.addToast)
@@ -442,21 +443,22 @@ export default function KnowledgePage() {
         Refresh
       </Button>
       {items.length > 0 && (
-        <div className="relative group">
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
-            Export
-          </Button>
-          <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
-            <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
-              <button onClick={handleExport} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
-                Export as JSON
-              </button>
-              <button onClick={handleExportCSV} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
-                Export as CSV
-              </button>
-            </div>
-          </div>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="h-7 text-xs">
+              <IconDownload className="h-3 w-3 mr-1" />
+              Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[140px]">
+            <DropdownMenuItem onClick={handleExport}>
+              Export as JSON
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportCSV}>
+              Export as CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={importing}>
         {importing ? 'Importing...' : 'Import'}
@@ -493,16 +495,19 @@ export default function KnowledgePage() {
           className="h-9 text-sm pl-9"
         />
       </div>
-      <select
-        value={sortBy}
-        onChange={e => setSortBy(e.target.value as typeof sortBy)}
-        className="h-9 text-sm rounded-md border border-border/60 bg-background px-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
-        aria-label="Sort by"
-      >
-        <option value="date">Newest</option>
-        <option value="importance">Importance</option>
-        <option value="topic">Topic</option>
-      </select>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline" className="h-9 text-xs gap-1">
+            {sortBy === 'date' ? 'Newest' : sortBy === 'importance' ? 'Importance' : 'Topic'}
+            <IconChevronDown className="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setSortBy('date')}>Newest</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setSortBy('importance')}>Importance</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setSortBy('topic')}>Topic</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-2">
           <Button
@@ -547,14 +552,7 @@ export default function KnowledgePage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Facts</p>
-                  {items.length > 0 && (
-                    <button onClick={handleExport} className="text-xs text-muted-foreground hover:text-primary transition-colors" aria-label="Export knowledge">
-                      Export
-                    </button>
-                  )}
-                </div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Facts</p>
                 <p className="text-xl font-semibold mt-1">{stats.total_items}</p>
               </CardContent>
             </Card>
@@ -888,7 +886,7 @@ export default function KnowledgePage() {
                           className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-primary p-1 transition-opacity"
                           aria-label="Edit knowledge"
                         >
-                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                          <IconEdit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setPendingDelete(item)}

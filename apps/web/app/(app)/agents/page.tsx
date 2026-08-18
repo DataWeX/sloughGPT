@@ -10,7 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
-import { EmptyCard, KpiGrid, StatCard, IconRefresh } from '@sloughgpt/strui'
+import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy } from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
 import { agentsController, type Agent, type OrchestrateTask, type AgentRun } from '@/lib/agents-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -666,7 +666,7 @@ export default function AgentsPage() {
                         </div>
                         <div className="flex gap-1 shrink-0 ml-2">
                           <Button size="sm" variant="ghost" onClick={() => handleClone(agent)} aria-label={`Clone ${agent.name}`}>
-                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                            <IconCopy className="h-4 w-4" />
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => startEdit(agent)}>Edit</Button>
                            <Button size="sm" variant="destructive" onClick={() => setPendingDelete(agent)} aria-label={`Delete ${agent.name}`}>

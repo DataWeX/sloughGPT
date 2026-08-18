@@ -37,10 +37,10 @@ class TestMetaWeights:
 
     def test_defaults(self):
         w = MetaWeights()
-        assert w.temperature == 0.8
-        assert w.repetition_penalty == 1.0
-        assert w.top_p == 0.9
-        assert w.top_k == 50
+        assert w.temperature == 0.7
+        assert w.repetition_penalty == 1.15
+        assert w.top_p == 0.85
+        assert w.top_k == 40
         assert w.length_penalty == 1.0
         assert w.style_bias == 0.0
         assert w.confidence_boost == 0.0
@@ -59,7 +59,7 @@ class TestMetaWeightManager:
     def test_init(self, manager, mock_db):
         assert manager.db is mock_db
         assert manager._weight_history == []
-        assert manager._default_weights.temperature == 0.8
+        assert manager._default_weights.temperature == 0.7
         assert manager.decay_factor == 0.9
 
     def test_simple_embed(self, manager):
@@ -95,8 +95,12 @@ class TestMetaWeightManager:
         result = manager._aggregate_patterns(patterns)
         assert "temperature_boost" in result
         assert "repetition_boost" in result
+        assert "top_p_boost" in result
+        assert "top_k_boost" in result
         assert result["temperature_boost"] > 0
         assert result["repetition_boost"] < 0
+        assert result["top_p_boost"] > 0
+        assert result["top_k_boost"] < 0
 
     def test_aggregate_patterns_thumbs_down(self, manager):
         patterns = [SimilarPattern(
@@ -106,6 +110,8 @@ class TestMetaWeightManager:
         result = manager._aggregate_patterns(patterns)
         assert result["temperature_boost"] < 0
         assert result["repetition_boost"] > 0
+        assert result["top_p_boost"] < 0
+        assert result["top_k_boost"] > 0
 
     def test_aggregate_patterns_mixed(self, manager):
         patterns = [
@@ -128,8 +134,8 @@ class TestMetaWeightManager:
             "repetition_boost": -0.05,
         }
         weights = manager.get_adjustment("hello", user_id="user1")
-        assert weights.temperature == pytest.approx(0.9, abs=0.1)
-        assert weights.repetition_penalty == pytest.approx(0.95, abs=0.1)
+        assert weights.temperature == pytest.approx(0.8, abs=0.1)
+        assert weights.repetition_penalty == pytest.approx(1.1, abs=0.1)
 
     def test_get_adjustment_clamps_temperature(self, manager, mock_db):
         mock_db.get_user_meta_weights.return_value = {

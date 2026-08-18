@@ -115,7 +115,7 @@ def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
 def train_chat_model(
     pairs: List[Dict[str, str]],
     config: Optional[ChatTrainConfig] = None,
-    on_step: Optional[Callable[[int, float, int], None]] = None,
+    on_step: Optional[Callable] = None,
     cancel_event=None,
 ) -> Tuple[SloTransformer, Dict[str, Any]]:
     """Train a SloTransformer on chat pairs.
@@ -123,7 +123,7 @@ def train_chat_model(
     Args:
         pairs: List of {"user_msg": "...", "assistant_msg": "..."} dicts.
         config: Training configuration.
-        on_step: Callback(step, loss, epoch).
+        on_step: Callback(step, loss, epoch, total_steps=total_steps).
         cancel_event: threading.Event() to cancel.
 
     Returns:
@@ -174,17 +174,65 @@ def train_chat_model(
     start_epoch = config.resume_epoch
     start_step = config.resume_step
     best_loss = float("inf")
+    ckpt_meta = {}
 
     if config.resume_checkpoint and Path(config.resume_checkpoint).exists():
         logger.info("Resuming from: %s", config.resume_checkpoint,
             extra={"tag": "TRAIN"})
         from domains.training.slonet import import_from_sou
         model = import_from_sou(config.resume_checkpoint)
-        if hasattr(model, 'metadata') and model.metadata:
-            meta = model.metadata
-            start_epoch = meta.get("epoch", config.resume_epoch)
-            start_step = meta.get("step", config.resume_step)
-            best_loss = meta.get("best_loss", float("inf"))
+        ckpt_meta = model.metadata if hasattr(model, 'metadata') and model.metadata else {}
+
+        # Validate and restore epoch — must be in [0, config.epochs)
+        raw_epoch = ckpt_meta.get("epoch", config.resume_epoch)
+        if isinstance(raw_epoch, (int, float)) and 0 <= raw_epoch < config.epochs:
+            start_epoch = int(raw_epoch)
+        else:
+            logger.warning(
+                "Checkpoint epoch=%s invalid for %d epochs, starting from 0",
+                raw_epoch, config.epochs, extra={"tag": "TRAIN"})
+            start_epoch = 0
+
+        # Validate and restore step — must be >= 0
+        raw_step = ckpt_meta.get("step", config.resume_step)
+        if isinstance(raw_step, (int, float)) and raw_step >= 0:
+            start_step = int(raw_step)
+        else:
+            logger.warning(
+                "Checkpoint step=%s invalid, starting from 0", raw_step,
+                extra={"tag": "TRAIN"})
+            start_step = 0
+
+        # Validate and restore best_loss — must be finite
+        raw_best = ckpt_meta.get("best_loss", float("inf"))
+        if isinstance(raw_best, (int, float)) and np.isfinite(raw_best) and raw_best > 0:
+            best_loss = float(raw_best)
+        else:
+            best_loss = float("inf")
+
+        # Use checkpoint's vocab if available — prevents mismatch when data changes
+        ckpt_stoi = ckpt_meta.get("stoi")
+        ckpt_itos = ckpt_meta.get("itos")
+        if ckpt_stoi and isinstance(ckpt_stoi, dict) and ckpt_itos and isinstance(ckpt_itos, dict):
+            stoi = ckpt_stoi
+            # JSON serializes int keys as strings — restore int keys for itos
+            itos = {}
+            for k, v in ckpt_itos.items():
+                try:
+                    itos[int(k)] = v
+                except (ValueError, TypeError):
+                    logger.warning("Skipping corrupt itos entry: %s=%s", k, v,
+                        extra={"tag": "TRAIN"})
+            if not itos:
+                logger.warning("itos empty after repair, using vocab from data",
+                    extra={"tag": "TRAIN"})
+            else:
+                vocab_size = len(stoi)
+                logger.info("Using checkpoint vocab: %d chars", vocab_size,
+                    extra={"tag": "TRAIN"})
+        else:
+            logger.warning("Checkpoint missing stoi/itos, using vocab from data",
+                extra={"tag": "TRAIN"})
     else:
         logger.info("Creating model: embed=%d, layers=%d, heads=%d, block=%d",
                     config.n_embed, config.n_layer, config.n_head, config.block_size,
@@ -212,10 +260,21 @@ def train_chat_model(
 
     optimizer = SloAdam(lr=config.lr)
     rng = np.random.default_rng(42)
+    # Restore optimizer state from checkpoint
+    if config.resume_checkpoint and ckpt_meta.get("optimizer_state"):
+        try:
+            optimizer.load_state_dict(ckpt_meta["optimizer_state"], params=list(model.parameters()))
+            logger.info("Restored optimizer state: t=%s",
+                ckpt_meta["optimizer_state"].get("t", "?"), extra={"tag": "TRAIN"})
+        except Exception as e:
+            logger.warning("Could not restore optimizer state (%s), starting fresh",
+                type(e).__name__, extra={"tag": "TRAIN"})
 
     # Training loop
     steps_per_epoch = max(1, len(train_ds) // config.batch_size)
-    total_steps = config.epochs * steps_per_epoch
+    remaining_epochs = max(0, config.epochs - start_epoch)
+    remaining_steps = remaining_epochs * steps_per_epoch
+    total_steps = start_step + remaining_steps
     step = start_step
     train_losses: List[float] = []
     val_losses: List[float] = []
@@ -281,7 +340,7 @@ def train_chat_model(
                            step, total_steps, epoch, avg,
                            extra={"tag": "TRAIN"})
                 if on_step:
-                    on_step(step, avg, epoch)
+                    on_step(step, avg, epoch, total_steps=total_steps)
 
             # Periodic eval
             if val_ds and step % config.eval_interval == 0:
@@ -332,6 +391,7 @@ def train_chat_model(
             "num_chars": len(text),
             "stoi": stoi,
             "itos": itos,
+            "optimizer_state": optimizer.state_dict(params=list(model.parameters())),
         },
     )
     logger.info("Checkpoint saved: %s", ckpt_path,

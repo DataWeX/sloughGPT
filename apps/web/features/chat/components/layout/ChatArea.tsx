@@ -7,7 +7,7 @@ import type { ChatInputProps } from './../input/ChatInput'
 import type { ChatMessage } from './../types'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconChevronDown } from '@sloughgpt/strui'
 
 export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
   messages: ChatMessage[]
@@ -162,9 +162,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
               className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
               aria-label="Jump to latest messages"
             >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
+              <IconChevronDown className="h-3.5 w-3.5" />
               {filteredMessages.length > 0 && (
                 <span className="text-muted-foreground">{filteredMessages.length}</span>
               )}

@@ -43,6 +43,7 @@ vi.mock('@sloughgpt/strui', () => ({
   Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
   IconTrash: () => <span data-testid="icon-trash" />,
   IconRefresh: () => <span data-testid="icon-refresh" />,
+  IconX: () => <span data-testid="icon-x" />,
 }))
 
 import { FineTunedModelsCard } from './FineTunedModelsCard'

@@ -547,7 +547,9 @@ class FeedbackDB:
             "temperature_boost": doc.get("temperature_boost", 0.0),
             "repetition_boost": doc.get("repetition_boost", 0.0),
             "top_p_boost": doc.get("top_p_boost", 0.0),
-            "top_k_boost": doc.get("top_k_boost", 0),
+            "top_k_boost": doc.get("top_k_boost", 0.0),
+            "style_bias": doc.get("style_bias", 0.0),
+            "confidence_boost": doc.get("confidence_boost", 0.0),
             "thumbs_up_count": doc.get("thumbs_up_count", 0),
             "thumbs_down_count": doc.get("thumbs_down_count", 0),
             "last_updated": doc.get("last_updated"),
@@ -560,57 +562,56 @@ class FeedbackDB:
         rating: str,
         temperature_delta: float = 0.01,
         repetition_delta: float = 0.01,
+        top_p_delta: float = 0.005,
+        top_k_delta: float = 1.0,
+        style_bias_delta: float = 0.01,
+        confidence_delta: float = 0.005,
     ) -> Dict:
-        """Update meta weights for a user based on feedback."""
+        """Update meta weights for a user based on feedback.
+
+        Each delta is applied positively for thumbs_up, negatively for
+        thumbs_down (except repetition_delta which is inverted — good
+        responses get lower repetition penalty).
+        """
         now = datetime.now(timezone.utc).isoformat()
+
+        # Compute per-field deltas based on rating
+        is_up = rating == "thumbs_up"
+        d = {
+            "temperature_boost": temperature_delta if is_up else -temperature_delta,
+            "repetition_boost": -repetition_delta if is_up else repetition_delta,
+            "top_p_boost": top_p_delta if is_up else -top_p_delta,
+            "top_k_boost": -top_k_delta if is_up else top_k_delta,
+            "style_bias": style_bias_delta if is_up else -style_bias_delta,
+            "confidence_boost": confidence_delta if is_up else -confidence_delta,
+        }
 
         with self._lock:
             existing = self._meta_weights.find_one({"_id": user_id})
 
             if existing:
-                temp_boost = existing.get("temperature_boost", 0.0) + (
-                    temperature_delta if rating == "thumbs_up" else -temperature_delta
-                )
-                rep_boost = existing.get("repetition_boost", 0.0) + (
-                    -repetition_delta if rating == "thumbs_up" else repetition_delta
-                )
-                up_count = existing.get("thumbs_up_count", 0) + (1 if rating == "thumbs_up" else 0)
-                down_count = existing.get("thumbs_down_count", 0) + (
-                    1 if rating == "thumbs_down" else 0
-                )
+                updated = {}
+                for field, delta in d.items():
+                    updated[field] = existing.get(field, 0.0) + delta
+                updated["thumbs_up_count"] = existing.get("thumbs_up_count", 0) + (1 if is_up else 0)
+                updated["thumbs_down_count"] = existing.get("thumbs_down_count", 0) + (0 if is_up else 1)
+                updated["last_updated"] = now
 
                 self._meta_weights.update_one(
                     {"_id": user_id},
-                    {
-                        "$set": {
-                            "temperature_boost": temp_boost,
-                            "repetition_boost": rep_boost,
-                            "thumbs_up_count": up_count,
-                            "thumbs_down_count": down_count,
-                            "last_updated": now,
-                        }
-                    },
+                    {"$set": updated},
                 )
             else:
-                temp_boost = temperature_delta if rating == "thumbs_up" else -temperature_delta
-                rep_boost = -repetition_delta if rating == "thumbs_up" else repetition_delta
-                up_count = 1 if rating == "thumbs_up" else 0
-                down_count = 1 if rating == "thumbs_down" else 0
-
-                self._meta_weights.insert_one(
-                    {
-                        "_id": user_id,
-                        "user_id": user_id,
-                        "temperature_boost": temp_boost,
-                        "repetition_boost": rep_boost,
-                        "top_p_boost": 0,
-                        "top_k_boost": 0,
-                        "thumbs_up_count": up_count,
-                        "thumbs_down_count": down_count,
-                        "last_updated": now,
-                        "created_at": now,
-                    }
-                )
+                doc = {
+                    "_id": user_id,
+                    "user_id": user_id,
+                    "thumbs_up_count": 1 if is_up else 0,
+                    "thumbs_down_count": 0 if is_up else 1,
+                    "last_updated": now,
+                    "created_at": now,
+                }
+                doc.update(d)
+                self._meta_weights.insert_one(doc)
 
         return self.get_user_meta_weights(user_id)
 

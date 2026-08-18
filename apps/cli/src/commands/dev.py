@@ -136,7 +136,14 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
 
 def _repo_root() -> Path:
     """Get the repository root from this file's location."""
-    return Path(__file__).resolve().parent.parent.parent.parent.parent
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "apps").is_dir() and (parent / "packages").is_dir():
+            return parent
+        if (parent / "pyproject.toml").exists():
+            if (parent / "apps").is_dir():
+                return parent
+    return here.parents[min(5, len(here.parents) - 1)]
 
 
 def cmd_dev(args):

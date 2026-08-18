@@ -6,7 +6,7 @@ import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconMenu } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 import { logger } from '@/lib/dev-log'
@@ -130,7 +130,7 @@ export function StatusBar() {
           aria-label="Toggle server output"
           title="Server output"
         >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+          <IconMenu className="w-3 h-3" />
         </button>
         <button
           onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-whatsnew')) }}

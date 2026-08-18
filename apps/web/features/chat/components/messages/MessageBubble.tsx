@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useEffect, useRef, useState } from 'react'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconStar } from '@sloughgpt/strui'
 import { MS_PER_MINUTE } from '@/lib/format-bytes'
 import { MessageActions } from './MessageActions'
 import { MessageContextMenu } from './MessageContextMenu'
@@ -125,7 +125,7 @@ export const MessageBubble = memo(function MessageBubble({
         {role === 'user' ? 'You' : 'Assistant'}
         {isBookmarked && (
           <span className="ml-1.5 text-warning" aria-label="Bookmarked">
-            <svg className="h-2.5 w-2.5 inline fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <IconStar className="h-2.5 w-2.5 inline" filled />
           </span>
         )}
         {role === 'assistant' && model && !isError && (

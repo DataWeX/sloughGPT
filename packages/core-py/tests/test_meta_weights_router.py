@@ -24,7 +24,8 @@ def mock_manager():
     """Create a mock MetaWeightManager."""
     mgr = MagicMock()
     mgr.get_adjustment.return_value = SimpleNamespace(
-        temperature=0.7, repetition_penalty=1.1, top_p=0.85, top_k=40
+        temperature=0.7, repetition_penalty=1.1, top_p=0.85, top_k=40,
+        style_bias=0.0, confidence_boost=0.0,
     )
     mgr._weight_history = [1, 2, 3]
     mgr.get_stats.return_value = {"total_adjustments": 3, "avg_temperature": 0.75}

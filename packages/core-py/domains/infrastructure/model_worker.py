@@ -282,16 +282,38 @@ def _slo_worker_main(
         token_ids = provider._tokenizer.encode(prompt)
         input_ids = _np.array([token_ids], dtype=_np.int64)
         start = time.time()
-        result = provider._model.generate_numpy(
-            input_ids,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            repetition_penalty=repetition_penalty,
-            eos_token=provider._tokenizer.eos_token_id or 0,
-            extra_stop_ids=getattr(provider._tokenizer, "chat_stop_ids", lambda: ())(),
-        )
+
+        # Send periodic heartbeats during non-streaming generation so the
+        # parent's stall detector knows the worker is alive.  First call to
+        # generate_numpy() may trigger JIT compilation or cache warming that
+        # blocks for >120s with no intermediate messages.
+        import threading as _threading
+        _hb_stop = _threading.Event()
+
+        def _hb_tick():
+            while not _hb_stop.is_set():
+                try:
+                    hb_q.put_nowait(("alive", os.getpid()))
+                except Exception:
+                    pass
+                _hb_stop.wait(timeout=5.0)
+
+        hb_thread = _threading.Thread(target=_hb_tick, daemon=True)
+        hb_thread.start()
+        try:
+            result = provider._model.generate_numpy(
+                input_ids,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                eos_token=provider._tokenizer.eos_token_id or 0,
+                extra_stop_ids=getattr(provider._tokenizer, "chat_stop_ids", lambda: ())(),
+            )
+        finally:
+            _hb_stop.set()
+            hb_thread.join(timeout=2.0)
         elapsed_ms = (time.time() - start) * 1000
         generated = result[0].tolist()
         text = provider._tokenizer.decode(generated)
@@ -820,6 +842,35 @@ class ModelWorkerProcess:
     def alive(self) -> bool:
         return self._process is not None and self._process.is_alive()
 
+    def _drain_heartbeats(self, since: float) -> float:
+        """Drain the heartbeat queue and return the latest heartbeat timestamp.
+
+        If any heartbeats arrived after ``since``, the caller should reset its
+        stall timer — the worker is alive and producing messages.
+        """
+        latest = since
+        if self._hb_q is None:
+            return latest
+        now = time.time()
+        while True:
+            try:
+                msg, _val = self._hb_q.get_nowait()
+            except queue.Empty:
+                break
+            except (OSError, ValueError):
+                break
+            if msg == "alive":
+                self._health.last_heartbeat = now
+                self._health.alive = True
+                latest = now
+            elif msg == "dead":
+                self._health.alive = False
+                self._health.crashed = True
+            elif msg == "ready":
+                self._health.last_heartbeat = now
+                latest = now
+        return latest
+
     def health_check(self) -> WorkerHealth:
         """Return current health snapshot, polling heartbeat queue."""
         now = time.time()
@@ -910,6 +961,13 @@ class ModelWorkerProcess:
                 self._health.crashed = True
                 self._health.crash_count += 1
                 raise RuntimeError(f"Worker[{self.worker_id}] crashed during generation")
+
+            # Drain heartbeat queue — worker pings during loading and long
+            # generation runs.  If we see a heartbeat, the worker is alive
+            # and the stall timer resets even though no resp_q message arrived.
+            hb_time = self._drain_heartbeats(last_activity)
+            if hb_time > last_activity:
+                last_activity = hb_time
 
             try:
                 msg, *rest = self._resp_q.get(timeout=0.2)
@@ -1010,6 +1068,10 @@ class ModelWorkerProcess:
                 raise RuntimeError(
                     f"Worker[{self.worker_id}] crashed during streaming generation"
                 )
+
+            hb_time = self._drain_heartbeats(last_activity)
+            if hb_time > last_activity:
+                last_activity = hb_time
 
             try:
                 msg, *rest = self._resp_q.get(timeout=0.2)

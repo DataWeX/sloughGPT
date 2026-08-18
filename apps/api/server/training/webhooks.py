@@ -61,13 +61,20 @@ class WebhookStore:
 
     _max_log_size: int = 1000
 
-    def __init__(self, db_path: str = "data/webhooks.db"):
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path is None:
+            db_path = str(Path(__file__).resolve().parents[4] / "data" / "webhooks.db")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self.delivery_log: list = []
-        self._db = MogDB(str(self.db_path))
-        self._webhooks = self._db.collection("webhooks")
+        self._db: Optional[MogDB] = None
+        self._webhooks = None
+        try:
+            self._db = MogDB(str(self.db_path))
+            self._webhooks = self._db.collection("webhooks")
+        except Exception:
+            logger.warning("WebhookStore: failed to open MogDB at %s, operating in degraded mode", self.db_path)
 
     @staticmethod
     def _doc_to_webhook(doc: Dict[str, Any]) -> Webhook:
@@ -83,6 +90,11 @@ class WebhookStore:
             headers=doc.get("headers") or {},
         )
 
+    @property
+    def is_available(self) -> bool:
+        """Whether the backing store is usable."""
+        return self._db is not None and self._webhooks is not None
+
     def register(
         self,
         url: str,
@@ -92,6 +104,9 @@ class WebhookStore:
         headers: Optional[Dict[str, str]] = None,
     ) -> str:
         """Register a new webhook."""
+        if not self.is_available:
+            raise RuntimeError("Webhook store unavailable (MogDB failed to initialise)")
+
         webhook_id = hashlib.sha256(f"{url}{time.time()}".encode()).hexdigest()[:16]
 
         # Generate secret if not provided
@@ -119,6 +134,8 @@ class WebhookStore:
 
     def unregister(self, webhook_id: str) -> bool:
         """Unregister a webhook."""
+        if not self.is_available:
+            return False
         with self._lock:
             deleted = self._webhooks.delete_one({"_id": webhook_id}) > 0
 
@@ -128,11 +145,15 @@ class WebhookStore:
 
     def get(self, webhook_id: str) -> Optional[Webhook]:
         """Get a webhook by ID."""
+        if not self.is_available:
+            return None
         doc = self._webhooks.find_one({"_id": webhook_id})
         return self._doc_to_webhook(doc) if doc else None
 
     def list(self, event_filter: Optional[str] = None) -> List[Webhook]:
         """List all webhooks, optionally filtered by event."""
+        if not self.is_available:
+            return []
         docs = self._webhooks.find(
             {"is_active": True},
             sort=[("created_at", -1)],
@@ -271,6 +292,15 @@ class WebhookStore:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get webhook statistics."""
+        if not self.is_available:
+            return {
+                "total_webhooks": 0,
+                "active_webhooks": 0,
+                "total_deliveries": len(self.delivery_log),
+                "successful_deliveries": sum(1 for d in self.delivery_log if d.success),
+                "failed_deliveries": sum(1 for d in self.delivery_log if not d.success),
+                "success_rate": "N/A",
+            }
         with self._lock:
             docs = self._webhooks.find()
             total_webhooks = len(docs)
@@ -292,13 +322,16 @@ class WebhookStore:
         }
 
 
-# Global webhook store
-webhook_store = WebhookStore()
+# Global webhook store (lazy — initialised on first access to avoid import-time crashes)
+_webhook_store: Optional[WebhookStore] = None
 
 
 def get_webhook_store() -> WebhookStore:
-    """Get the global webhook store."""
-    return webhook_store
+    """Get the global webhook store, initialising on first call."""
+    global _webhook_store
+    if _webhook_store is None:
+        _webhook_store = WebhookStore()
+    return _webhook_store
 
 
 # Event types

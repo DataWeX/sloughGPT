@@ -178,7 +178,7 @@ export function ModelDropdown({
               ) : isCached ? (
                 <span className="text-[9px] text-muted-foreground/40 px-1 ml-1 border border-border/30 rounded leading-none">cached</span>
               ) : (
-                <svg className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                <IconChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40 ml-1" />
               )}
             </DropdownMenuItem>
           )

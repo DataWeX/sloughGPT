@@ -197,8 +197,14 @@ class TestAPIServerProcessMisc:
             assert APIServerProcess().is_running is False
 
     def test_is_running_false_when_none(self):
-        with patch("domains.shell.runtime._shared_proc", None):
+        with patch("domains.shell.runtime._shared_proc", None), \
+             patch("domains.shell.runtime._probe_api", return_value={"available": False}):
             assert APIServerProcess().is_running is False
+
+    def test_is_running_probes_http_when_no_proc(self):
+        with patch("domains.shell.runtime._shared_proc", None), \
+             patch("domains.shell.runtime._probe_api", return_value={"available": True}):
+            assert APIServerProcess().is_running is True
 
     def test_repr(self):
         with patch("domains.shell.runtime._shared_proc", None):
@@ -251,8 +257,8 @@ class TestFindRepoRoot:
         return patch("domains.shell.runtime.Path",
                      return_value=self._FakePath(parents))
 
-    def test_finds_pyproject(self):
-        parents = [self._Parent("A"), self._Parent("B", py=True)]
+    def test_finds_pyproject_with_apps(self):
+        parents = [self._Parent("A"), self._Parent("B", py=True, apps=True)]
         with self._patch(parents):
             result = APIServerProcess._find_repo_root()
         assert result.name == "B"
@@ -264,12 +270,26 @@ class TestFindRepoRoot:
             result = APIServerProcess._find_repo_root()
         assert result.name == "B"
 
-    def test_fallback_to_deep_parent(self):
-        parents = [self._Parent("A"), self._Parent("B"),
-                   self._Parent("C"), self._Parent("D")]
+    def test_apps_packages_beats_pyproject(self):
+        parents = [self._Parent("A", apps=True, pkgs=True),
+                   self._Parent("B", py=True, apps=True)]
         with self._patch(parents):
             result = APIServerProcess._find_repo_root()
-        assert result.name == "D"
+        assert result.name == "A"
+
+    def test_pyproject_without_apps_skipped(self):
+        parents = [self._Parent("A"), self._Parent("B", py=True)]
+        with self._patch(parents):
+            result = APIServerProcess._find_repo_root()
+        assert result.name == "B"  # falls through to fallback parents[4]
+
+    def test_fallback_to_deep_parent(self):
+        parents = [self._Parent("A"), self._Parent("B"),
+                   self._Parent("C"), self._Parent("D"),
+                   self._Parent("E")]
+        with self._patch(parents):
+            result = APIServerProcess._find_repo_root()
+        assert result.name == "E"
 
 
 class TestDaitRuntimeStatus:

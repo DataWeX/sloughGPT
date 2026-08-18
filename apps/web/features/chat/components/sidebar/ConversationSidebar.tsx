@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconDownload } from '@sloughgpt/strui'
+import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight, IconDownload, IconDocument, IconCopy } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -438,7 +438,7 @@ function SidebarContent({
                 <span className="text-xs text-muted-foreground/40 font-mono">
                   {archivedCount}
                 </span>
-                <svg className={cn("h-4 w-4 text-muted-foreground/40 transition-transform", archivedExpanded && "rotate-90")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                <IconChevronRight className={cn("h-4 w-4 text-muted-foreground/40 transition-transform", archivedExpanded && "rotate-90")} />
               </button>
               {archivedExpanded && (
                 <div className="space-y-0.5 mt-1">
@@ -703,7 +703,7 @@ function ConvRow({
               aria-label="Export as Markdown"
               title="Export as Markdown"
             >
-              <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <IconDocument className="h-2.5 w-2.5" />
             </button>
           </>
         )}
@@ -714,7 +714,7 @@ function ConvRow({
             aria-label={`Duplicate ${c.name}`}
             title="Duplicate conversation"
           >
-            <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <IconCopy className="h-2.5 w-2.5" />
           </button>
         )}
         {onArchive && !editing && (

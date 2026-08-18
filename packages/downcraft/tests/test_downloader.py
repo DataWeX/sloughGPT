@@ -9,7 +9,6 @@ import pytest
 from downcraft.downloader import (
     _part_path,
     _resolve_range_start,
-    _expected_size_bytes,
     download_file,
     DownloadError,
 )
@@ -39,19 +38,6 @@ class TestUtilityFunctions:
             part = Path(td) / "empty.sgpart"
             part.write_text("")
             assert _resolve_range_start(part) == 0
-
-    def test_expected_size_bytes_none(self):
-        assert _expected_size_bytes(None) == 0
-
-    def test_expected_size_bytes_zero(self):
-        assert _expected_size_bytes(0) == 0
-
-    def test_expected_size_bytes_positive(self):
-        assert _expected_size_bytes(1.0) == 1073741824  # 1 GB in bytes
-
-    def test_expected_size_bytes_fraction(self):
-        assert _expected_size_bytes(0.5) == 536870912
-
 
 class TestDownloadFile:
     """Tests for download_file using a local HTTP server."""

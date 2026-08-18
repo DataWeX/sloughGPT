@@ -14,8 +14,6 @@ import { apiPost } from '@/lib/http-client'
 import { logger } from '@/lib/dev-log'
 import dynamicNext from 'next/dynamic'
 import CapabilitiesCard from '@/components/multimodal/CapabilitiesCard'
-
-const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingCard'), { ssr: false })
 import ImageTrainingCard from '@/components/multimodal/ImageTrainingCard'
 import BatchTrainingCard from '@/components/multimodal/BatchTrainingCard'
 import VisualDatasetCard from '@/components/multimodal/VisualDatasetCard'
@@ -24,6 +22,8 @@ import ImageGenerationCard from '@/components/multimodal/ImageGenerationCard'
 import AudioCard from '@/components/multimodal/AudioCard'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
 import { ImageSection } from '@/components/multimodal/ImageSection'
+
+const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingCard'), { ssr: false })
 
 export default function MultimodalPage() {
   const addToast = useToastStore(s => s.addToast)

@@ -20,16 +20,23 @@ import pytest
 # ---------------------------------------------------------------------------
 
 class RangeHandler(BaseHTTPRequestHandler):
-    """Serves per-path payloads with HTTP Range support.
+    """Serves per-path payloads with HTTP Range + HEAD support.
 
     Class attributes (set per test):
         payloads: ``{path: bytes}`` — any other path returns 404.
+        content_types: ``{path: str}`` — per-path Content-Type override.
+        head_responses: ``{path: dict}`` — per-path HEAD response headers.
     """
 
     payloads: dict = {}
+    content_types: dict = {}
+    head_responses: dict = {}
 
     def _payload_for(self):
         return self.payloads.get(self.path.split("?")[0])
+
+    def _content_type_for(self):
+        return self.content_types.get(self.path.split("?")[0], "application/octet-stream")
 
     def do_GET(self):
         payload = self._payload_for()
@@ -54,11 +61,30 @@ class RangeHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(200)
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Type", self._content_type_for())
         self.send_header("ETag", '"static"')
         self.end_headers()
         for i in range(0, len(data), 2048):
             self.wfile.write(data[i:i + 2048])
+
+    def do_HEAD(self):
+        head = self.head_responses.get(self.path.split("?")[0])
+        if head is not None:
+            self.send_response(head.get("status", 200))
+            for k, v in head.get("headers", {}).items():
+                self.send_header(k, v)
+            self.end_headers()
+            return
+        payload = self._payload_for()
+        if payload is None:
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Content-Type", self._content_type_for())
+        self.end_headers()
 
     def log_message(self, *args):
         pass
@@ -77,6 +103,8 @@ def range_server():
     what each URL path returns; any unregistered path yields a 404.
     """
     RangeHandler.payloads = {}
+    RangeHandler.content_types = {}
+    RangeHandler.head_responses = {}
     server = HTTPServer(("127.0.0.1", 0), RangeHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

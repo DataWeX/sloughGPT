@@ -2,7 +2,7 @@
 
 import { cn, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { IconMore, IconSettings, IconSearch, IconCopy, IconExport, IconDocument } from '@sloughgpt/strui'
+import { IconMore, IconSettings, IconSearch, IconCopy, IconExport, IconDocument, IconPlus, IconCheck, IconBrain } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
 
 function ShortcutHint({ keys }: { keys: string }) {
@@ -22,7 +22,7 @@ export function ChatMoreMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[200px]">
         <DropdownMenuItem onSelect={onNewChat}>
-          <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <IconPlus className="mr-2 h-4 w-4" />
           <span className="flex-1">New Conversation</span>
           <ShortcutHint keys="Ctrl+N" />
         </DropdownMenuItem>
@@ -40,7 +40,7 @@ export function ChatMoreMenu() {
                 <DropdownMenuItem key={a.id || a.name} onSelect={() => ctx.agent.onSelect(a)} className={`flex items-start gap-2 px-3 py-2 ${isActive ? 'bg-primary/8' : ''}`}>
                   <span className={`mt-0.5 h-4 w-4 shrink-0 inline-flex items-center justify-center ${isActive ? 'text-primary' : 'text-muted-foreground/40'}`}>
                     {isActive ? (
-                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                      <IconCheck className="h-3.5 w-3.5" />
                     ) : (
                       <div className="w-3.5 h-3.5 rounded-full border border-current" />
                     )}
@@ -67,7 +67,7 @@ export function ChatMoreMenu() {
             ctx.localEngine.useLocal ? 'bg-primary border-primary' : 'border-muted-foreground/40'
           )}>
             {ctx.localEngine.useLocal && (
-              <svg className="w-2.5 h-2.5 text-primary-foreground" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              <IconCheck className="w-2.5 h-2.5 text-primary-foreground" />
             )}
           </span>
           <span className="flex-1">Local Engine</span>

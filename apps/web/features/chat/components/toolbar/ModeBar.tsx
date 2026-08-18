@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type JSX } from 'react'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconChevronDown } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -134,9 +134,7 @@ export function ModeBar({
           <DropdownMenuTrigger className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-muted-foreground/70 hover:text-foreground hover:bg-muted/20 transition-all border border-transparent hover:border-border/20">
             <span>{current.icon}</span>
             <span>{current.label}</span>
-            <svg className="w-3 h-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
+            <IconChevronDown className="w-3 h-3 opacity-40" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">
             <DropdownMenuLabel className="text-[11px] text-muted-foreground/60">Mode</DropdownMenuLabel>

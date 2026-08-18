@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { cn } from '@sloughgpt/strui'
-import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash } from '@sloughgpt/strui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconPin } from '@sloughgpt/strui'
 
 interface MessageContextMenuProps {
   messageId: string
@@ -126,11 +126,7 @@ export function MessageContextMenu({
     }] : []),
     ...(onSaveToKnowledge ? [{
       label: 'Save to knowledge',
-      icon: (
-        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" />
-        </svg>
-      ),
+      icon: <IconPin className="h-3.5 w-3.5" />,
       onClick: () => { onSaveToKnowledge(messageId, content); setOpen(false) },
     }] : []),
     ...(onDelete ? [{

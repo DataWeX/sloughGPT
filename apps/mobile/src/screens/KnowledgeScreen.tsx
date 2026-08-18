@@ -357,7 +357,7 @@ export function KnowledgeScreen() {
           <YStack paddingHorizontal={16} marginBottom={8}>
             <RNTextInput
               style={{
-                flex: 1, fontSize: 14, color={colors.text},
+                flex: 1, fontSize: 14, color: colors.text,
                 backgroundColor: colors.primaryAlpha(0.04),
                 borderRadius: 10,
                 paddingHorizontal: 14,
@@ -426,7 +426,7 @@ export function KnowledgeScreen() {
         <>
           <RNTextInput
             style={{
-              fontSize: 14, color={colors.text},
+              fontSize: 14, color: colors.text,
               backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
@@ -445,7 +445,7 @@ export function KnowledgeScreen() {
           />
           <RNTextInput
             style={{
-              fontSize: 14, color={colors.text},
+              fontSize: 14, color: colors.text,
               backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
@@ -482,7 +482,7 @@ export function KnowledgeScreen() {
         <>
           <RNTextInput
             style={{
-              fontSize: 14, color={colors.text},
+              fontSize: 14, color: colors.text,
               backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
@@ -500,7 +500,7 @@ export function KnowledgeScreen() {
           />
           <RNTextInput
             style={{
-              fontSize: 14, color={colors.text},
+              fontSize: 14, color: colors.text,
               backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
@@ -540,7 +540,7 @@ export function KnowledgeScreen() {
           </Text>
           <RNTextInput
             style={{
-              fontSize: 14, color={colors.text},
+              fontSize: 14, color: colors.text,
               backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
@@ -559,7 +559,7 @@ export function KnowledgeScreen() {
           />
           <RNTextInput
             style={{
-              fontSize: 14, color={colors.text},
+              fontSize: 14, color: colors.text,
               backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,

@@ -197,6 +197,32 @@ async def training_handler(task) -> dict:
         pause_task.cancel()
 
 
+def _resolve_checkpoint(name: Optional[str], checkpoint_dir: str) -> Optional[str]:
+    """Resolve a checkpoint name to a full .soul file path.
+
+    Args:
+        name: Checkpoint name (e.g. ``"my-run"``) or already a full path.
+        checkpoint_dir: Directory to search in.
+
+    Returns:
+        Full path string if found, else ``None``.
+    """
+    if not name:
+        return None
+    if Path(name).exists():
+        return str(name)
+    ckpt_dir = Path(checkpoint_dir)
+    for candidate in [
+        ckpt_dir / f"{name}.soul",
+        ckpt_dir / name,
+    ]:
+        if candidate.exists():
+            return str(candidate)
+    logger.warning("Checkpoint not found: %s in %s", name, checkpoint_dir,
+        extra={"tag": "TRAIN"})
+    return None
+
+
 async def training_sessions_handler(task) -> dict:
     """
     TaskQueue handler for train_from_sessions (chat-trained method).
@@ -244,17 +270,20 @@ async def training_sessions_handler(task) -> dict:
         soul_name=payload.get("soul_name", "chat-trained"),
         checkpoint_dir=payload.get("checkpoint_dir", "models/auto-training"),
         session_ids=payload.get("session_ids"),
-        resume_checkpoint=payload.get("checkpoint_name"),
+        resume_checkpoint=_resolve_checkpoint(
+            payload.get("checkpoint_name"),
+            payload.get("checkpoint_dir", "models/auto-training"),
+        ),
     )
 
-    def _on_step(step: int, loss: float, epoch: int) -> None:
+    def _on_step(step: int, loss: float, epoch: int, total_steps: int = 0) -> None:
         if cancel_event.is_set():
             raise InterruptedError("Training cancelled by user")
         from domains.api.sse_envelope import sse_event
         enqueue(sse_event(
             "auto-train", "TRAIN", "working",
             data={"step": step, "loss": loss, "done": False},
-            meta={"epoch": epoch, "total_epochs": payload.get("epochs", 5)},
+            meta={"epoch": epoch, "total_epochs": config.epochs, "total_steps": total_steps},
         ))
 
     try:

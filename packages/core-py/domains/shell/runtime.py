@@ -104,7 +104,7 @@ class APIServerProcess:
             result["uptime"] = time.time() - _shared_started_at if _shared_started_at else 0
         return result
 
-    def start(self, timeout: float = 30.0) -> dict:
+    def start(self, timeout: float = 90.0) -> dict:
         """Launch the API server in a subprocess and wait for it to become healthy.
 
         Returns once the health probe succeeds or the timeout elapses.
@@ -127,7 +127,8 @@ class APIServerProcess:
                 return {"ok": True, "message": "already running"}
 
         repo_root = self._find_repo_root()
-        cmd = [sys.executable or "python3", "-m", "apps.api.server.main"]
+        server_python = self._find_server_python(repo_root)
+        cmd = [server_python, "-m", "apps.api.server.main"]
         logger.info("Starting API server: %s (cwd=%s)", " ".join(cmd), repo_root)
 
         try:
@@ -201,24 +202,30 @@ class APIServerProcess:
 
     @property
     def is_running(self) -> bool:
+        """Check whether the API server is running.
+
+        First checks the local subprocess handle (started via ``start()``).
+        If that is None, probes the HTTP health endpoint — the server may
+        have been started externally (e.g. ``ensure_server()``).
+        """
         with _shared_lock:
-            if _shared_proc is None:
-                return False
-            return _shared_proc.poll() is None
+            if _shared_proc is not None:
+                return _shared_proc.poll() is None
+        return _probe_api(self._api_url).get("available", False)
 
     # ── Internal ────────────────────────────────────────────────────────
 
     @staticmethod
     def _find_repo_root() -> Path:
-        """Walk up from this file to find the repo root (contains pyproject.toml or setup.py)."""
-        here = Path(__file__).resolve()
-        for parent in here.parents:
-            if (parent / "pyproject.toml").exists() or (parent / "setup.py").exists():
-                return parent
-            # Also check for slonet.py or apps directory as repo markers
-            if (parent / "apps").is_dir() and (parent / "packages").is_dir():
-                return parent
-        return here.parents[3]  # fallback: domains/shell -> domains -> core-py -> packages -> repo
+        """Repository root (delegates to shared utility)."""
+        from domains.shared import find_repo_root
+        return find_repo_root(str(Path(__file__).resolve()))
+
+    @staticmethod
+    def _find_server_python(repo_root: Path) -> str:
+        """Find the Python executable with the project's dependencies."""
+        from domains.shared import find_server_python
+        return find_server_python(repo_root)
 
     def __repr__(self) -> str:
         return f"APIServerProcess(url={self._api_url}, running={self.is_running})"
@@ -227,7 +234,7 @@ class APIServerProcess:
 class DaitRuntime:
     """Top-level runtime — orchestrates kernel, init, devices, VFS, neural, and API connection."""
 
-    def __init__(self):
+    def __init__(self, api_url: str = ""):
         from .kernel import Kernel
         self.kernel = Kernel()
         self._model_loaded: bool = False
@@ -239,7 +246,7 @@ class DaitRuntime:
         self._devices: Any = None
         self._vfs: Any = None
         self._device_system: Any = None
-        self._api = APIServerProcess()
+        self._api = APIServerProcess(api_url=api_url)
 
     # ── Boot / Shutdown ─────────────────────────────────────────────────
 

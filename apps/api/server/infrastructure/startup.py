@@ -291,11 +291,13 @@ class StartupOrchestrator:
         if self._lifecycle is not None:
             ok = await self._lifecycle.start(timeout=180.0, profile=profile_enum)
             if not ok:
-                logger.warning("Lifecycle startup incomplete — continuing anyway", extra={"tag": "START"})
+                logger.warning("Lifecycle startup incomplete — running fallback phases", extra={"tag": "START"})
+                await self._phase5_model_registry()
+                await self._phase6_routers()
         else:
             # Fallback: run phases directly
-            self._phase5_model_registry()
-            self._phase6_routers()
+            await self._phase5_model_registry()
+            await self._phase6_routers()
 
         await _restore_training_runtime()
         await self._phase_ready()

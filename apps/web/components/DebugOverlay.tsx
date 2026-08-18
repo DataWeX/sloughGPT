@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useErrorStore } from '@/lib/error-store'
 import { PUBLIC_API_URL } from '@/lib/config'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconX } from '@sloughgpt/strui'
 
 interface HealthScore {
   score: number
@@ -176,9 +176,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
             className="p-0.5 rounded hover:bg-muted/60 transition-colors"
             aria-label="Close debug overlay"
           >
-            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <IconX className="h-3 w-3" />
           </button>
         </div>
       </div>

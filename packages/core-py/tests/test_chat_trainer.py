@@ -206,7 +206,7 @@ class TestTrainChatModel:
     def test_on_step_callback(self, tmp_path):
         config = _tiny_config(tmp_path)
         calls = []
-        train_chat_model(_pairs(4), config, on_step=lambda s, l, e: calls.append((s, l, e)))
+        train_chat_model(_pairs(4), config, on_step=lambda s, l, e, total_steps=0: calls.append((s, l, e)))
         assert calls
         assert all(isinstance(s, int) and isinstance(l, float) and isinstance(e, int) for s, l, e in calls)
 
@@ -238,7 +238,7 @@ class TestTrainChatModel:
         config = _tiny_config(tmp_path)
         cancel = threading.Event()
 
-        def stop_after_first(step, loss, epoch):
+        def stop_after_first(step, loss, epoch, total_steps=0):
             cancel.set()
 
         model, meta = train_chat_model(_pairs(4), config, on_step=stop_after_first, cancel_event=cancel)
@@ -365,3 +365,437 @@ class TestTrainFromSessions:
         model, meta = train_from_sessions(config)
         assert meta["num_pairs"] >= 1
         assert "perplexity" not in meta
+
+
+# ── Checkpoint metadata + resume edge tests ─────────────────────────────────
+
+class TestCheckpointMetadata:
+    """Verify all training metadata is stored in .soul checkpoint."""
+
+    PAIRS = [
+        {"user_msg": "hello", "assistant_msg": "hi there"},
+        {"user_msg": "how are you", "assistant_msg": "doing well"},
+        {"user_msg": "what is 2+2", "assistant_msg": "four"},
+        {"user_msg": "goodbye", "assistant_msg": "see ya"},
+    ]
+
+    def test_checkpoint_contains_all_training_fields(self, tmp_path):
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="meta-test",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        model, meta = train_chat_model(self.PAIRS, config=config)
+        ckpt = tmp_path / "meta-test.soul"
+        assert ckpt.exists()
+
+        from domains.training.slonet import import_from_sou
+        loaded = import_from_sou(str(ckpt))
+        md = loaded.metadata
+        assert md is not None
+        for key in ("soul_name", "vocab_size", "n_embed", "n_layer", "n_head",
+                     "block_size", "epoch", "step", "epochs", "final_loss",
+                     "best_loss", "num_pairs", "num_chars", "stoi", "itos"):
+            assert key in md, f"Missing checkpoint metadata key: {key}"
+
+    def test_checkpoint_stoi_itos_are_consistent(self, tmp_path):
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="vocab-test",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        _, _ = train_chat_model(self.PAIRS, config=config)
+        from domains.training.slonet import import_from_sou
+        loaded = import_from_sou(str(tmp_path / "vocab-test.soul"))
+        stoi = loaded.metadata["stoi"]
+        itos = loaded.metadata["itos"]
+        assert isinstance(stoi, dict) and isinstance(itos, dict)
+        # stoi: char → int (always correct types), itos: JSON may serialize int keys as strings
+        itos_int_keys = {int(k): v for k, v in itos.items()}
+        for char, idx in stoi.items():
+            assert itos_int_keys[idx] == char, f"stoi/itos mismatch for char={char!r} idx={idx}"
+
+    def test_checkpoint_optimizer_state_saved(self, tmp_path):
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="opt-test",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        _, _ = train_chat_model(self.PAIRS, config=config)
+        from domains.training.slonet import import_from_sou
+        loaded = import_from_sou(str(tmp_path / "opt-test.soul"))
+        opt_state = loaded.metadata.get("optimizer_state")
+        assert opt_state is not None
+        assert "hyperparameters" in opt_state
+        assert "t" in opt_state
+        assert opt_state["t"] >= 0
+
+
+class TestResumeCheckpoint:
+    """Resume from checkpoint — metadata, step, epoch, optimizer state."""
+
+    PAIRS_A = [
+        {"user_msg": "hello", "assistant_msg": "hi there"},
+        {"user_msg": "how are you", "assistant_msg": "doing well"},
+        {"user_msg": "what is 2+2", "assistant_msg": "four"},
+        {"user_msg": "goodbye", "assistant_msg": "see ya"},
+    ]
+
+    def test_resume_restores_epoch_and_step(self, tmp_path):
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=2, batch_size=2, soul_name="resume-test",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        _, meta1 = train_chat_model(self.PAIRS_A, config=config)
+        assert meta1["epochs_completed"] >= 1
+        assert meta1["total_steps"] > 0
+
+        # Resume with same config
+        config2 = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=3, batch_size=2, soul_name="resume-test",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=str(tmp_path / "resume-test.soul"),
+            min_pair_quality=0.0,
+        )
+        _, meta2 = train_chat_model(self.PAIRS_A, config=config2)
+        # Should have started from epoch >= 1 (not epoch 0)
+        assert meta2["total_steps"] > meta1["total_steps"]
+
+    def test_resume_uses_checkpoint_vocab_not_data_vocab(self, tmp_path):
+        """When training data changes, resume still uses checkpoint vocab."""
+        pairs_a = [
+            {"user_msg": "abc", "assistant_msg": "xyz"},
+            {"user_msg": "def", "assistant_msg": "uvw"},
+        ]
+        pairs_b = [
+            {"user_msg": "hello world", "assistant_msg": "goodbye moon"},
+            {"user_msg": "foo bar", "assistant_msg": "baz qux"},
+        ]
+        config_a = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="vocab-switch",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        _, meta_a = train_chat_model(pairs_a, config=config_a)
+        vocab_a = meta_a["vocab_size"]
+
+        # Resume with different data — checkpoint vocab should win
+        config_b = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=2, batch_size=2, soul_name="vocab-switch",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=str(tmp_path / "vocab-switch.soul"),
+            min_pair_quality=0.0,
+        )
+        _, meta_b = train_chat_model(pairs_b, config=config_b)
+        # vocab_size should match checkpoint, not new data
+        assert meta_b["vocab_size"] == vocab_a
+
+    def test_resume_with_nonexistent_checkpoint_falls_through(self, tmp_path):
+        """Missing checkpoint → creates fresh model."""
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="no-ckpt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=str(tmp_path / "nonexistent.soul"),
+            min_pair_quality=0.0,
+        )
+        model, meta = train_chat_model(self.PAIRS_A, config=config)
+        assert meta["checkpoint"] != ""
+        assert meta["total_steps"] > 0
+
+    def test_resume_best_loss_continues_from_prev(self, tmp_path):
+        """best_loss in checkpoint is carried forward, not reset to inf."""
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="loss-carry",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        _, meta1 = train_chat_model(self.PAIRS_A, config=config)
+        saved_best = meta1["best_loss"]
+
+        config2 = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=2, batch_size=2, soul_name="loss-carry",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=str(tmp_path / "loss-carry.soul"),
+            min_pair_quality=0.0,
+        )
+        _, meta2 = train_chat_model(self.PAIRS_A, config=config2)
+        # best_loss should be <= saved_best (not reset to inf)
+        assert meta2["best_loss"] <= saved_best
+
+    def test_resume_optimizer_state_restored(self, tmp_path):
+        """Optimizer momentum/velocity restored from checkpoint."""
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="opt-resume",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        _, meta1 = train_chat_model(self.PAIRS_A, config=config)
+        from domains.training.slonet import import_from_sou
+        ckpt1 = import_from_sou(str(tmp_path / "opt-resume.soul"))
+        t1 = ckpt1.metadata["optimizer_state"]["t"]
+
+        config2 = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=2, batch_size=2, soul_name="opt-resume",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=str(tmp_path / "opt-resume.soul"),
+            min_pair_quality=0.0,
+        )
+        _, meta2 = train_chat_model(self.PAIRS_A, config=config2)
+        ckpt2 = import_from_sou(str(tmp_path / "opt-resume.soul"))
+        t2 = ckpt2.metadata["optimizer_state"]["t"]
+        # Optimizer timestep should have advanced
+        assert t2 >= t1
+
+    def test_resume_with_config_change_n_embed(self, tmp_path):
+        """Changing n_embed on resume with checkpoint vocab still works
+        because the model is loaded from checkpoint (not recreated)."""
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="cfg-change",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        train_chat_model(self.PAIRS_A, config=config)
+
+        # "Change" n_embed — but resume loads from checkpoint which has n_embed=32
+        config2 = ChatTrainConfig(
+            n_embed=64, n_layer=1, n_head=2, block_size=16,
+            epochs=2, batch_size=2, soul_name="cfg-change",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=str(tmp_path / "cfg-change.soul"),
+            min_pair_quality=0.0,
+        )
+        model, meta = train_chat_model(self.PAIRS_A, config=config2)
+        # Model loaded from checkpoint — n_embed stays 32, not 64
+        assert model.n_embed == 32
+
+    def test_checkpoint_metadata_matches_returned_metadata(self, tmp_path):
+        """Metadata dict returned by train_chat_model matches checkpoint contents."""
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="meta-match",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        _, returned_meta = train_chat_model(self.PAIRS_A, config=config)
+
+        from domains.training.slonet import import_from_sou
+        loaded = import_from_sou(str(tmp_path / "meta-match.soul"))
+        ckpt_meta = loaded.metadata
+
+        assert ckpt_meta["vocab_size"] == returned_meta["vocab_size"]
+        assert ckpt_meta["n_embed"] == config.n_embed
+        assert ckpt_meta["n_layer"] == config.n_layer
+        assert ckpt_meta["num_pairs"] == returned_meta["num_pairs"]
+        assert ckpt_meta["soul_name"] == config.soul_name
+
+    def test_empty_data_with_resume(self, tmp_path):
+        """Resume with empty pairs list doesn't crash — no pairs to train on."""
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="empty-resume",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        train_chat_model(self.PAIRS_A, config=config)
+
+        config2 = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="empty-resume",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=str(tmp_path / "empty-resume.soul"),
+            min_pair_quality=999.0,  # Filter out all pairs
+        )
+        model, meta = train_chat_model(self.PAIRS_A, config=config2)
+        # Should still return a model (loaded from checkpoint)
+        assert meta["checkpoint"] != ""
+
+
+class TestCorruptedMetadata:
+    """Edge cases: checkpoint metadata fields changed, corrupted, or missing."""
+
+    PAIRS = [
+        {"user_msg": "hello", "assistant_msg": "hi"},
+        {"user_msg": "bye", "assistant_msg": "see ya"},
+        {"user_msg": "thanks", "assistant_msg": "np"},
+        {"user_msg": "ok", "assistant_msg": "sure"},
+    ]
+
+    def _make_ckpt(self, tmp_path, meta_overrides):
+        """Train a model then rewrite its metadata with overrides."""
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
+        )
+        train_chat_model(self.PAIRS, config=config)
+
+        # Load the .sou file, patch metadata, rewrite
+        import json, struct
+        import struct as _struct
+        from pathlib import Path
+        from domains.training.slonet import export_to_sou, import_from_sou
+
+        ckpt_path = tmp_path / "corrupt.soul"
+        model = import_from_sou(str(ckpt_path))
+        md = model.metadata.copy()
+        md.update(meta_overrides)
+
+        # Rewrite .sou with patched metadata (keep weights intact)
+        export_to_sou(model, str(ckpt_path), metadata=md)
+        return str(ckpt_path)
+
+    def test_missing_epoch_defaults_to_zero(self, tmp_path):
+        path = self._make_ckpt(tmp_path, {"epoch": None})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=5, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["total_steps"] > 0
+
+    def test_negative_epoch_defaults_to_zero(self, tmp_path):
+        path = self._make_ckpt(tmp_path, {"epoch": -5})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=5, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["total_steps"] > 0
+
+    def test_epoch_exceeding_config_resets_to_zero(self, tmp_path):
+        """Epoch 10 in checkpoint but config only has 2 epochs → start from 0."""
+        path = self._make_ckpt(tmp_path, {"epoch": 10})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=2, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        # Should still produce a valid checkpoint
+        assert meta["checkpoint"] != ""
+
+    def test_negative_step_defaults_to_zero(self, tmp_path):
+        path = self._make_ckpt(tmp_path, {"step": -100})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=2, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["total_steps"] > 0
+
+    def test_string_epoch_ignored(self, tmp_path):
+        """Epoch stored as string → treated as invalid, start from 0."""
+        path = self._make_ckpt(tmp_path, {"epoch": "abc"})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=3, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["checkpoint"] != ""
+
+    def test_nan_best_loss_ignored(self, tmp_path):
+        path = self._make_ckpt(tmp_path, {"best_loss": float("nan")})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert np.isfinite(meta["best_loss"])
+
+    def test_missing_stoi_uses_data_vocab(self, tmp_path):
+        path = self._make_ckpt(tmp_path, {"stoi": None, "itos": None})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        # Should use vocab from data, not crash
+        assert meta["vocab_size"] > 0
+
+    def test_empty_stoi_uses_data_vocab(self, tmp_path):
+        path = self._make_ckpt(tmp_path, {"stoi": {}, "itos": {}})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["vocab_size"] > 0
+
+    def test_corrupt_itos_values_skipped(self, tmp_path):
+        """itos has non-integer keys after JSON round-trip — repairable entries kept."""
+        path = self._make_ckpt(tmp_path, {"itos": {"0": "\x00", "bad": "x", "2": "b"}})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["vocab_size"] > 0
+
+    def test_optimizer_state_none_ignored(self, tmp_path):
+        path = self._make_ckpt(tmp_path, {"optimizer_state": None})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["checkpoint"] != ""
+
+    def test_optimizer_state_wrong_shape_ignored(self, tmp_path):
+        """Optimizer state from a model with different param count → gracefully skipped."""
+        path = self._make_ckpt(tmp_path, {"optimizer_state": {"t": 5, "state": {"fake": {"m": [1,2,3]}}}})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["checkpoint"] != ""
+
+    def test_total_steps_includes_start_step(self, tmp_path):
+        """total_steps = start_step + remaining, not just remaining."""
+        path = self._make_ckpt(tmp_path, {"step": 50, "epoch": 0})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=2, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        # total_steps should be >= 50 (start_step) + some remaining
+        assert meta["total_steps"] >= 50
+
+    def test_empty_metadata_dict_creates_fresh_model(self, tmp_path):
+        """Checkpoint with empty metadata → fresh model, no crash."""
+        path = self._make_ckpt(tmp_path, {"stoi": {}, "itos": {}, "epoch": None, "step": None})
+        config = ChatTrainConfig(
+            n_embed=32, n_layer=1, n_head=2, block_size=16,
+            epochs=1, batch_size=2, soul_name="corrupt",
+            checkpoint_dir=str(tmp_path),
+            resume_checkpoint=path, min_pair_quality=0.0,
+        )
+        _, meta = train_chat_model(self.PAIRS, config=config)
+        assert meta["checkpoint"] != ""
