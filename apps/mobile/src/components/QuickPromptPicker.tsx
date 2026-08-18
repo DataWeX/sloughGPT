@@ -71,7 +71,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <YStack flex={1} backgroundColor={colors.overlay(0.5)} justifyContent="flex-end">
         <YStack
-          backgroundColor="$background"
+          backgroundColor={colors.background}
           borderTopLeftRadius={24}
           borderTopRightRadius={24}
           maxHeight="80%"
@@ -82,7 +82,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             paddingHorizontal={20}
             paddingTop={14}
             paddingBottom={8}>
-            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">
+            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>
               Quick Prompts
             </Text>
             <Pressable onPress={onClose} accessible accessibilityRole="button" accessibilityLabel="Close quick prompts">
@@ -127,9 +127,9 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             contentContainerStyle={{paddingHorizontal: 16, gap: 4}}
             renderItem={({item: p}) => (
               <Pressable onPress={() => handleSelect(p)} onLongPress={() => handleDelete(p.id)}>
-                <YStack backgroundColor="$background" borderRadius={10} padding={12} borderWidth={0.5} borderColor="$borderColor">
+                <YStack backgroundColor={colors.background} borderRadius={10} padding={12} borderWidth={0.5} borderColor={colors.border}>
                   <XStack justifyContent="space-between" alignItems="center" marginBottom={4}>
-                    <Text fontSize={15} fontWeight="600" color="$color">
+                    <Text fontSize={15} fontWeight="600" color={colors.text}>
                       {p.title}
                     </Text>
                     <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color10" textTransform="capitalize">
@@ -140,7 +140,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
                     fontSize={11}
                     fontWeight="500"
                     letterSpacing={0.2}
-                    color="$color11"
+                    color={colors.textMuted}
                     lineHeight={18}
                     numberOfLines={2}>
                     {p.prompt}
