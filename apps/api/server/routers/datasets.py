@@ -115,16 +115,7 @@ class DatasetsRouter:
                     extensions=request.extensions or None,
                 )
                 if result.success:
-                    try:
-                        from infrastructure.auth import get_audit_logger
-                        get_audit_logger().log(
-                            "dataset.import",
-                            resource=request.name,
-                            detail="local",
-                            extra={"files": result.files_imported, "chars": result.total_chars},
-                        )
-                    except Exception:
-                        pass
+                    safe_audit_log("dataset.import", resource=request.name, detail="local", files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=request.name,
@@ -135,9 +126,7 @@ class DatasetsRouter:
             except HTTPException:
                 raise
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="dataset_import_local")
+                classify_and_raise(e, source="dataset_import_local")
                 raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_github(self, request: GitHubImportRequest):
@@ -158,16 +147,7 @@ class DatasetsRouter:
                     max_files=request.max_files,
                 )
                 if result.success:
-                    try:
-                        from infrastructure.auth import get_audit_logger
-                        get_audit_logger().log(
-                            "dataset.import",
-                            resource=result.name or request.name,
-                            detail="github",
-                            extra={"files": result.files_imported, "chars": result.total_chars},
-                        )
-                    except Exception:
-                        pass
+                    safe_audit_log("dataset.import", resource=result.name or request.name, detail="github", files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=result.name or request.name,
@@ -178,9 +158,7 @@ class DatasetsRouter:
             except HTTPException:
                 raise
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="dataset_handler")
+                classify_and_raise(e, source="dataset_handler")
                 raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_huggingface(self, request: HuggingFaceImportRequest):
@@ -200,16 +178,7 @@ class DatasetsRouter:
                     output_dir=str(self._DATASETS_DIR),
                 )
                 if result.success:
-                    try:
-                        from infrastructure.auth import get_audit_logger
-                        get_audit_logger().log(
-                            "dataset.import",
-                            resource=name,
-                            detail="huggingface",
-                            extra={"dataset_id": request.dataset_id, "files": result.files_imported, "chars": result.total_chars},
-                        )
-                    except Exception:
-                        pass
+                    safe_audit_log("dataset.import", resource=name, detail="huggingface", dataset_id=request.dataset_id, files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=name,
@@ -220,9 +189,7 @@ class DatasetsRouter:
             except HTTPException:
                 raise
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="dataset_handler")
+                classify_and_raise(e, source="dataset_handler")
                 raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_url(self, request: URLImportRequest):
@@ -241,16 +208,7 @@ class DatasetsRouter:
                     output_dir=str(self._DATASETS_DIR),
                 )
                 if result.success:
-                    try:
-                        from infrastructure.auth import get_audit_logger
-                        get_audit_logger().log(
-                            "dataset.import",
-                            resource=request.name,
-                            detail="url",
-                            extra={"url": request.url, "chars": result.total_chars},
-                        )
-                    except Exception:
-                        pass
+                    safe_audit_log("dataset.import", resource=request.name, detail="url", url=request.url, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=request.name,
@@ -261,9 +219,7 @@ class DatasetsRouter:
             except HTTPException:
                 raise
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="dataset_handler")
+                classify_and_raise(e, source="dataset_handler")
                 raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_kaggle(self, request: KaggleImportRequest):
@@ -293,16 +249,7 @@ class DatasetsRouter:
             file_count = sum(1 for _ in output_dir.rglob("*") if _.is_file())
             total_size = sum(f.stat().st_size for f in output_dir.rglob("*") if f.is_file())
 
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "dataset.import",
-                    resource=name,
-                    detail="kaggle",
-                    extra={"dataset": request.dataset, "files": file_count},
-                )
-            except Exception:
-                pass
+            safe_audit_log("dataset.import", resource=name, detail="kaggle", dataset=request.dataset, files=file_count)
             return ImportResponse(
                 success=True,
                 dataset_id=name,
@@ -314,9 +261,7 @@ class DatasetsRouter:
         except FileNotFoundError:
             raise HTTPException(status_code=400, detail="Kaggle CLI not found. Install with: pip install kaggle")
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="dataset_handler")
+            classify_and_raise(e, source="dataset_handler")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_csv(self, request: CSVImportRequest):
@@ -352,16 +297,7 @@ class DatasetsRouter:
             with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump({"source": request.url, "columns": headers, "rows": len(rows)}, f, indent=2)
 
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "dataset.import",
-                    resource=name,
-                    detail="csv",
-                    extra={"url": request.url, "rows": len(rows), "columns": len(headers)},
-                )
-            except Exception:
-                pass
+            safe_audit_log("dataset.import", resource=name, detail="csv", url=request.url, rows=len(rows), columns=len(headers))
             return ImportResponse(
                 success=True,
                 dataset_id=name,
@@ -371,9 +307,7 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="dataset_handler")
+            classify_and_raise(e, source="dataset_handler")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def batch_import(self, request: BatchImportRequest):
@@ -410,16 +344,7 @@ class DatasetsRouter:
             except Exception as e:
                 errors.append({"index": i, "error": str(e)})
 
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "dataset.import",
-                resource=f"batch({len(request.sources[:20])})",
-                detail="batch",
-                extra={"imported": len(results), "errors": len(errors)},
-            )
-        except Exception:
-            pass
+        safe_audit_log("dataset.import", resource=f"batch({len(request.sources[:20], detail="batch", imported=len(results), errors=len(errors))
         return success_response(data={"imported": len(results), "errors": errors})
 
     async def search_books(self, q: str = Query(..., description="Search by title or ISBN"), limit: int = Query(10, ge=1, le=50)):
@@ -459,16 +384,7 @@ class DatasetsRouter:
                 name=request.name or f"book_{request.isbn}",
             )
             if result.success:
-                try:
-                    from infrastructure.auth import get_audit_logger
-                    get_audit_logger().log(
-                        "dataset.import",
-                        resource=result.name or request.name or f"book_{request.isbn}",
-                        detail="isbn",
-                        extra={"isbn": request.isbn, "files": result.files_imported},
-                    )
-                except Exception:
-                    pass
+                safe_audit_log("dataset.import", resource=result.name or request.name or f"book_{request.isbn}", detail="isbn", isbn=request.isbn, files=result.files_imported)
                 return ImportResponse(
                     success=True,
                     dataset_id=result.name or request.name or f"book_{request.isbn}",
@@ -481,9 +397,7 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="dataset_handler")
+            classify_and_raise(e, source="dataset_handler")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def search_datasets(self, q: str = Query(..., min_length=1, max_length=500, description="Search query")):
@@ -514,11 +428,7 @@ class DatasetsRouter:
         """Create a new dataset"""
         ctrl = get_datasets_controller()
         dataset = ctrl.create_dataset(req.name, req.description)
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("dataset.create", resource=req.name, detail=req.description or "")
-        except Exception:
-            pass
+        safe_audit_log("dataset.create", resource=req.name, detail=req.description or "")
         return DatasetInfo(**dataset)
 
     async def update_dataset(self, dataset_id: str, req: DatasetUpdate):
@@ -528,11 +438,7 @@ class DatasetsRouter:
         dataset = ctrl.update_dataset(dataset_id, req.model_dump(exclude_none=True))
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("dataset.update", resource=dataset_id, detail=str(req.model_dump(exclude_none=True)))
-        except Exception:
-            pass
+        safe_audit_log("dataset.update", resource=dataset_id, detail=str(req.model_dump(exclude_none=True)
         return DatasetInfo(**dataset)
 
     async def delete_dataset(self, dataset_id: str):
@@ -542,11 +448,7 @@ class DatasetsRouter:
         ok = ctrl.delete_dataset(dataset_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("dataset.delete", resource=dataset_id)
-        except Exception:
-            pass
+        safe_audit_log("dataset.delete", resource=dataset_id)
         return success_response(data={"status": "deleted", "dataset_id": dataset_id})
 
     async def create_version(self, dataset_id: str):
@@ -556,11 +458,7 @@ class DatasetsRouter:
         timestamp = ctrl.create_version_snapshot(dataset_id)
         if not timestamp:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("dataset.version", resource=dataset_id, detail=str(timestamp))
-        except Exception:
-            pass
+        safe_audit_log("dataset.version", resource=dataset_id, detail=str(timestamp)
         return VersionCreateResponse(timestamp=timestamp, message="Version created")
 
     async def list_versions(self, dataset_id: str):
@@ -577,11 +475,7 @@ class DatasetsRouter:
         ok = ctrl.restore_version(dataset_id, timestamp)
         if not ok:
             raise HTTPException(status_code=404, detail="Dataset or version not found")
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("dataset.version.restore", resource=dataset_id, detail=timestamp)
-        except Exception:
-            pass
+        safe_audit_log("dataset.version.restore", resource=dataset_id, detail=timestamp)
         return VersionRestoreResponse(success=True, message="Version restored")
 
     async def add_dataset_data(self, dataset_id: str, req: DatasetDataRequest):
@@ -591,11 +485,7 @@ class DatasetsRouter:
         result = ctrl.add_data(dataset_id, req.data)
         if result is None:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("dataset.data.append", resource=dataset_id, detail=f"rows={result}")
-        except Exception:
-            pass
+        safe_audit_log("dataset.data.append", resource=dataset_id, detail=f"rows={result}")
         return success_response(data={"status": "appended", "rows_added": result})
 
     async def preview_dataset(self, dataset_id: str, limit: int = Query(10, ge=1, le=1000, description="Number of samples")):
@@ -644,16 +534,7 @@ class DatasetsRouter:
                 if msg.role in ("user", "assistant") and msg.content:
                     f.write(json.dumps({"messages": [{"role": msg.role, "content": msg.content}]}) + "\n")
 
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "dataset.create",
-                resource=name,
-                detail=f"from-chat ({len(messages)} messages)",
-                extra={"messages": len(messages)},
-            )
-        except Exception:
-            pass
+        safe_audit_log("dataset.create", resource=name, detail=f"from-chat ({len(messages, messages=len(messages))
         return {
             "status": "created",
             "dataset_id": dataset["id"],
@@ -716,16 +597,7 @@ class DatasetsRouter:
             for entry in messages_out:
                 f.write(json.dumps(entry) + "\n")
 
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "dataset.convert",
-                resource=dataset_id,
-                detail=str(new_ds["id"]),
-                extra={"conversations": len(messages_out)},
-            )
-        except Exception:
-            pass
+        safe_audit_log("dataset.convert", resource=dataset_id, detail=str(new_ds["id"], conversations=len(messages_out))
         return {
             "status": "converted",
             "new_dataset_id": new_ds["id"],

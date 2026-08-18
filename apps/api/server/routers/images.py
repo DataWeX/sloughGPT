@@ -315,9 +315,7 @@ class ImagesRouter:
             )
 
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="images_generate")
+            classify_and_raise(e, source="images_generate")
             logger.error(f"Image generation failed: {e}", extra={"tag": "MODEL"})
             raise HTTPException(status_code=500, detail=f"Failed to generate image: {e}")
 

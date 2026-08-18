@@ -248,17 +248,7 @@ class ModelsRouter:
                 ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
         except Exception as e:
             logger.debug("Failed to record model load event: %s", e)
-        try:
-            from infrastructure.auth import get_audit_logger, audit_user
-            get_audit_logger().log(
-                "model.load",
-                user=audit_user(auth_user),
-                resource=req.model_id,
-                detail=result.get("status", ""),
-                extra={"device": req.device.value, "quantize": req.quantize},
-            )
-        except Exception:
-            pass
+        safe_audit_log("model.load", resource=req.model_id, detail=result.get("status", device=req.device.value, quantize=req.quantize)
         return wrap_controller_result(result)
 
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)):
@@ -279,16 +269,7 @@ class ModelsRouter:
             ss.record_model_event("unload", model_id or "unknown")
         except Exception as e:
             logger.debug("Failed to record model unload event: %s", e)
-        try:
-            from infrastructure.auth import get_audit_logger, audit_user
-            get_audit_logger().log(
-                "model.unload",
-                user=audit_user(auth_user),
-                resource=model_id or "unknown",
-                detail=result.get("status", ""),
-            )
-        except Exception:
-            pass
+        safe_audit_log("model.unload", resource=model_id or "unknown", detail=result.get("status")
         return wrap_controller_result(result)
 
     async def current_model(self):
@@ -419,9 +400,7 @@ class ModelsRouter:
             results = do_export(config, server_state.model, server_state.tokenizer)
             return success_response(data={"format": request.format, "files": results}, message="exported")
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="export_model")
+            classify_and_raise(e, source="export_model")
             raise_error(err.user_message, code=err.code)
 
     async def get_export_formats(self):
@@ -447,17 +426,7 @@ class ModelsRouter:
             return success_response(data={"model_id": req.model_id}, message="already_downloading")
 
         asyncio.create_task(self._run_download(req.model_id, req.total_bytes_hint))
-        try:
-            from infrastructure.auth import get_audit_logger, audit_user
-            get_audit_logger().log(
-                "model.download",
-                user=audit_user(auth_user),
-                resource=req.model_id,
-                detail="started",
-                extra={"total_bytes_hint": req.total_bytes_hint},
-            )
-        except Exception:
-            pass
+        safe_audit_log("model.download", resource=req.model_id, detail="started", total_bytes_hint=req.total_bytes_hint)
         return success_response(data={"model_id": req.model_id}, message="started")
 
     async def _run_download(self, model_id: str, total_bytes_hint: int):
@@ -500,16 +469,7 @@ class ModelsRouter:
 
         mgr = get_download_manager()
         if mgr.cancel(model_id):
-            try:
-                from infrastructure.auth import get_audit_logger, audit_user
-                get_audit_logger().log(
-                    "model.cancel",
-                    user=audit_user(auth_user),
-                    resource=model_id,
-                    detail="cancelled",
-                )
-            except Exception:
-                pass
+            safe_audit_log("model.cancel", resource=model_id, detail="cancelled")
             return success_response(data={"model_id": model_id}, message="cancelled")
         return success_response(data={"model_id": model_id}, message="not_found")
 
@@ -539,9 +499,7 @@ class ModelsRouter:
                 "size_on_disk": size_str,
             }
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="verify_download")
+            classify_and_raise(e, source="verify_download")
             raise_error(err.user_message, code=err.code, details={"model_id": model_id})
 
     async def retry_download(self, model_id: str) -> Dict[str, Any]:
@@ -613,9 +571,7 @@ class ModelsRouter:
             logger.info("GGUF downloaded and cached: %s", cached_path, extra={"tag": "MODEL"})
             return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="download_gguf")
+            classify_and_raise(e, source="download_gguf")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def visual_model_load(self, model_dir: str = "", model_id: str = ""):
@@ -741,17 +697,7 @@ class ModelsRouter:
         except Exception:
             report["avx2_enabled"] = False
 
-        try:
-            from infrastructure.auth import get_audit_logger, audit_user
-            get_audit_logger().log(
-                "model.quantize",
-                user=audit_user(auth_user),
-                resource=self._audit_model_id(provider),
-                detail=f"bits={bits} mode={mode}",
-                extra={"bits": bits, "mode": mode, "layers_quantized": quantized_count, "model_type": model_type},
-            )
-        except Exception:
-            pass
+        safe_audit_log("model.quantize", resource=self._audit_model_id(provider, detail=f"bits={bits} mode={mode}", bits=bits, mode=mode, layers_quantized=quantized_count, model_type=model_type)
 
         return success_response(data=report)
 
@@ -802,17 +748,7 @@ class ModelsRouter:
         # Clear the quantization engine
         provider._quant_engine = None
 
-        try:
-            from infrastructure.auth import get_audit_logger, audit_user
-            get_audit_logger().log(
-                "model.dequantize",
-                user=audit_user(auth_user),
-                resource=self._audit_model_id(provider),
-                detail=f"model_type={model_type}",
-                extra={"layers_reset": len(layers)},
-            )
-        except Exception:
-            pass
+        safe_audit_log("model.dequantize", resource=self._audit_model_id(provider, detail=f"model_type={model_type}", layers_reset=len(layers))
 
         return success_response(data={
             "dequantized": True,
@@ -890,17 +826,7 @@ class ModelsRouter:
             result["fp16_mode"] = acc._fp16_mode
             result["reason"] = f"Accelerator {acc.name} set to {active}"
 
-        try:
-            from infrastructure.auth import get_audit_logger, audit_user
-            get_audit_logger().log(
-                "model.precision",
-                user=audit_user(auth_user),
-                resource=acc.name,
-                detail=str(result.get("precision", "")),
-                extra={"mode": acc_mode},
-            )
-        except Exception:
-            pass
+        safe_audit_log("model.precision", resource=acc.name, detail=str(result.get("precision", mode=acc_mode)
 
         return wrap_controller_result(result)
 

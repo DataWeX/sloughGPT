@@ -202,16 +202,7 @@ class MultimodalRouter:
             import io
             img = Image.open(io.BytesIO(contents)).convert("RGB")
             caption = mgr.caption_image(img, ground_truth=label)
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "multimodal.train",
-                    resource="image",
-                    detail="single",
-                    extra={"supervised": label is not None and label.strip() != "", "accuracy": caption.accuracy},
-                )
-            except Exception:
-                pass
+            safe_audit_log("multimodal.train", resource="image", detail="single", supervised=label is not None and label.strip() != "", accuracy=caption.accuracy)
             return success_response(data={
                 "status": "ok",
                 "caption": caption.text,
@@ -221,9 +212,7 @@ class MultimodalRouter:
                 "supervised": label is not None and label.strip() != "",
             })
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_caption")
+            classify_and_raise(e, source="multimodal_caption")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def train_batch(
@@ -260,16 +249,7 @@ class MultimodalRouter:
             started_at=datetime.datetime.now().isoformat(), finished_at=None,
         )
         asyncio.create_task(self._run_batch_training(mgr, image_paths))
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "multimodal.train",
-                resource=job_id,
-                detail="batch",
-                extra={"total_images": len(image_paths), "dataset_path": dataset_path or ""},
-            )
-        except Exception:
-            pass
+        safe_audit_log("multimodal.train", resource=job_id, detail="batch", total_images=len(image_paths), dataset_path=dataset_path or "")
         return success_response(data={"status": "started", "job_id": job_id, "total_images": len(image_paths)})
 
     async def _run_batch_training(self, mgr, image_sources: list):
@@ -337,16 +317,7 @@ class MultimodalRouter:
         from domains.training.executor import get_training_executor
         executor = get_training_executor()
         executor.submit(_run, f"vtrain_{job_id}")
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log(
-                "multimodal.train",
-                resource=req.data_path or job_id,
-                detail="video",
-                extra={"epochs": req.epochs, "batch_size": req.batch_size},
-            )
-        except Exception:
-            pass
+        safe_audit_log("multimodal.train", resource=req.data_path or job_id, detail="video", epochs=req.epochs, batch_size=req.batch_size)
         return success_response(data={"status": "started", "job_id": job_id, "data_path": req.data_path})
 
     async def video_infer(self, req: VideoInferRequest):
@@ -366,9 +337,7 @@ class MultimodalRouter:
         except HTTPException:
             raise
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_video_generate")
+            classify_and_raise(e, source="multimodal_video_generate")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── DPO ────────────────────────────────────────────────────────────
@@ -397,16 +366,7 @@ class MultimodalRouter:
                     self._dpo_state["accepted_count"] += 1
                 elif result["status"] == "rejected":
                     self._dpo_state["rejected_count"] += 1
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log(
-                    "multimodal.dpo",
-                    resource="hf-model",
-                    detail=result["status"],
-                    extra={"steps": result.get("steps", 0), "pairs_trained": result.get("pairs_trained", 0)},
-                )
-            except Exception:
-                pass
+            safe_audit_log("multimodal.dpo", resource="hf-model", detail=result["status"], steps=result.get("steps", pairs_trained=result.get("pairs_trained")
             return success_response(data={
                 "status": result["status"], "steps": result.get("steps", 0),
                 "avg_loss": result.get("avg_loss"), "ppl_before": result.get("ppl_before"),
@@ -414,9 +374,7 @@ class MultimodalRouter:
                 "pairs_trained": result.get("pairs_trained", 0), "elapsed_seconds": round(elapsed, 1),
             })
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_dpo")
+            classify_and_raise(e, source="multimodal_dpo")
             with self._dpo_lock:
                 self._dpo_state["status"] = "error"
                 self._dpo_state["result"] = {"error": str(e)}
@@ -446,9 +404,7 @@ class MultimodalRouter:
                 "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
             })
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_analyze_image")
+            classify_and_raise(e, source="multimodal_analyze_image")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def analyze_pdf(
@@ -475,9 +431,7 @@ class MultimodalRouter:
                 "method": "vlm" if processor._get_vlm() is not None else "text_extract",
             })
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_analyze_pdf")
+            classify_and_raise(e, source="multimodal_analyze_pdf")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
         finally:
             os.unlink(tmp_path)
@@ -504,9 +458,7 @@ class MultimodalRouter:
             finally:
                 os.unlink(tmp_path)
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_process_video")
+            classify_and_raise(e, source="multimodal_process_video")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Speech ────────────────────────────────────────────────────────
@@ -522,9 +474,7 @@ class MultimodalRouter:
             return success_response(data={"text": result.text, "confidence": result.confidence,
                     "language": result.language or language, "duration": result.duration})
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_transcribe")
+            classify_and_raise(e, source="multimodal_transcribe")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def synthesize_speech(self, text: str = Form(...)):
@@ -544,9 +494,7 @@ class MultimodalRouter:
             return success_response(data={"audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                     "text": text, "duration_sec": len(waveform) / tts.sample_rate})
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_tts")
+            classify_and_raise(e, source="multimodal_tts")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Generation ────────────────────────────────────────────────────
@@ -575,9 +523,7 @@ class MultimodalRouter:
             return success_response(data={"image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                     "prompt": prompt, "steps": steps})
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_generate_image")
+            classify_and_raise(e, source="multimodal_generate_image")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Dataset ───────────────────────────────────────────────────────
@@ -644,18 +590,12 @@ class MultimodalRouter:
                 raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
             trainer = VideoCaptionTrainer()
             trainer.load_checkpoint(match[0]["path"])
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log("multimodal.checkpoint.load", resource=name)
-            except Exception:
-                pass
+            safe_audit_log("multimodal.checkpoint.load", resource=name)
             return success_response(data={"status": "loaded", "checkpoint": name})
         except HTTPException:
             raise
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_load_checkpoint")
+            classify_and_raise(e, source="multimodal_load_checkpoint")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def delete_checkpoint(self, name: str):
@@ -671,18 +611,12 @@ class MultimodalRouter:
             for p in [path, path.with_suffix(".npz"), path.parent / f"{path.stem}_meta.json"]:
                 if p.exists():
                     os.remove(p)
-            try:
-                from infrastructure.auth import get_audit_logger
-                get_audit_logger().log("multimodal.checkpoint.delete", resource=name)
-            except Exception:
-                pass
+            safe_audit_log("multimodal.checkpoint.delete", resource=name)
             return success_response(data={"status": "deleted", "checkpoint": name})
         except HTTPException:
             raise
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="multimodal_delete_checkpoint")
+            classify_and_raise(e, source="multimodal_delete_checkpoint")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Reset ─────────────────────────────────────────────────────────
@@ -695,11 +629,7 @@ class MultimodalRouter:
         if getattr(mgr, "_replay_buffer", None):
             mgr._replay_buffer.clear()
         mgr._multimodal_engine = None
-        try:
-            from infrastructure.auth import get_audit_logger
-            get_audit_logger().log("multimodal.reset", resource="all")
-        except Exception:
-            pass
+        safe_audit_log("multimodal.reset", resource="all")
         return success_response(data={"status": "ok", "message": "Multimodal engine reset"})
 
 

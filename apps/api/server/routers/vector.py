@@ -80,9 +80,7 @@ class VectorRouter:
             logger.debug("Suppressed exception in %s", __name__, exc_info=True)
             return success_response(data={"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"})
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="vector")
+            classify_and_raise(e, source="vector")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_stats(self):

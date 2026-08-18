@@ -107,9 +107,7 @@ class VoiceRouter:
                     backend="hf-model",
                 )
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="voice_tts")
+            classify_and_raise(e, source="voice_tts")
             logger.warning(f"TTS generation failed, falling back to browser: {e}", extra={"tag": "MODEL"})
 
         return TTSResponse(

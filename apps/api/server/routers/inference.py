@@ -437,9 +437,7 @@ class InferenceRouter:
                 logger.debug("Failed to capture conversation: %s", e)
             return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="generate")
+            classify_and_raise(e, source="generate")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def generate_stream(self, req: GenerateRequest, request: Request) -> StreamingResponse:
@@ -505,9 +503,7 @@ class InferenceRouter:
                     yield sse_token("generate", "".join(_batch))
                     _batch = []
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="generate_stream")
+                classify_and_raise(e, source="generate_stream")
                 yield sse_error("generate", "STREAMING", err.user_message)
                 return
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
@@ -904,9 +900,7 @@ class InferenceRouter:
                             logger.info("Client disconnected from chat stream", extra={"tag": "INF", "context": {"session_id": session_id}})
                             return
                     except Exception as e:
-                        from domains.infrastructure.errors import classify_exception, emit_error_event
-                        err = classify_exception(e)
-                        emit_error_event(err, source="chat_stream_provider")
+                        classify_and_raise(e, source="chat_stream_provider")
                         logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e), "error_code": err.code}})
                         yield sse_error("chat", err.code, err.user_message)
                         return
@@ -1042,9 +1036,7 @@ class InferenceRouter:
                 logger.info("Chat stream: generated %d chars", len(full_response), extra={"tag": "INF", "context": {"char_count": len(full_response), "session_id": session_id}})
 
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="chat_stream_outer")
+                classify_and_raise(e, source="chat_stream_outer")
                 yield sse_error("chat", err.code, err.user_message)
                 yield sse_token("chat", "", done=True)
 

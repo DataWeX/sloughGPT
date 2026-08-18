@@ -427,9 +427,7 @@ class KBRouter:
         except HTTPException:
             raise
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="kb_ingest")
+            classify_and_raise(e, source="kb_ingest")
             raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     def batch_delete_knowledge(self, req: BatchDeleteRequest):

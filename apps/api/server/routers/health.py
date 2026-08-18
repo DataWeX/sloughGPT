@@ -90,9 +90,7 @@ class HealthRouter:
             stats = mon.get_stats()
             return success_response(data={"status": "ok", **stats})
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="health_model_health")
+            classify_and_raise(e, source="health_model_health")
             raise_error(str(e), "E_INFRA_REGISTRY")
 
     async def health_summary(self):
@@ -173,9 +171,7 @@ class HealthRouter:
                     snapshot = await asyncio.to_thread(self._build_health_snapshot, ctrl)
                     yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
                 except Exception as e:
-                    from domains.infrastructure.errors import classify_exception, emit_error_event
-                    err = classify_exception(e)
-                    emit_error_event(err, source="health_stream")
+                    classify_and_raise(e, source="health_stream")
                     pass
                 await asyncio.sleep(self.HEALTH_STREAM_INTERVAL)
 
