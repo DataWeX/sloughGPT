@@ -101,7 +101,7 @@ export default function SystemHealthPage() {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
-      const [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
+      const [d, m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
         systemController.getDetailedHealth().catch(() => null),
         systemController.getMetrics().catch(() => null),
         systemController.getInfo().catch(() => null),
@@ -116,7 +116,7 @@ export default function SystemHealthPage() {
         trainingController.getAutoTrainStatus().catch(() => null),
         trainingController.list().catch(() => []),
       ])
-      const ok = [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex, at, tj].some(v => v != null)
+      const ok = [d, m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj].some(v => v != null)
       // Keep last-good data: only overwrite a slice when its fetch succeeded, so a
       // transient failure never blanks previously loaded cards.
       if (d != null) setDetailed(d)
@@ -124,7 +124,7 @@ export default function SystemHealthPage() {
       if (i != null) setInfo(i)
       if (di != null) setDisk(di)
       if (ks != null) setKnowledgeStats(ks)
-      if (as != null) setAdapterStatus(as)
+      if (as_ != null) setAdapterStatus(as_)
       if (bq && 'coherence_score' in bq) {
         setBenchQuality(bq as { status: string; total_responses: number; coherence_score: number; quality_score: number; repetition_rate: number; avg_length: number; empty_rate: number })
       } else if (bq != null) {
@@ -140,17 +140,33 @@ export default function SystemHealthPage() {
       if (at != null) setAutoTrainStatus(at)
       if (Array.isArray(tj)) setTrainingJobs(tj)
       setLastUpdated(new Date().toLocaleTimeString())
-      if (d == null) setError('Failed to load system health')
+      if (d == null) setError('Could not reach the server. Retrying...')
       return ok
     } catch (e: unknown) {
-      setError(extractErrorMessage(e, 'Failed to load system health'))
+      setError(extractErrorMessage(e, 'Could not reach the server. Retrying...'))
       return false
     } finally {
       if (showRefreshing) setRefreshing(false)
     }
   }, [])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  // Retry initial fetchAll up to 3 times on failure so transient startup errors
+  // don't leave the page stuck on skeleton loaders.
+  const initRetriesRef = useRef(0)
+  const MAX_INIT_RETRIES = 3
+  useEffect(() => {
+    let cancelled = false
+    const tryFetch = async () => {
+      const ok = await fetchAll()
+      if (!cancelled && !ok && initRetriesRef.current < MAX_INIT_RETRIES) {
+        initRetriesRef.current++
+        setTimeout(tryFetch, 2000 * initRetriesRef.current)
+      }
+    }
+    initRetriesRef.current = 0
+    tryFetch()
+    return () => { cancelled = true }
+  }, [fetchAll])
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -304,18 +320,25 @@ export default function SystemHealthPage() {
       title="System Health"
       headerRight={headerRight}
     >
-      {/* Loading skeletons */}
+      {/* Loading skeletons — shown until first successful fetchAll */}
       {!loaded && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+            </div></CardContent></Card>
+            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+            </div></CardContent></Card>
+            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+            </div></CardContent></Card>
+          </div>
+          {error && (
+            <Card className="p-4 border-warning/50">
+              <CardContent className="p-0 py-2 text-sm text-muted-foreground">{error}</CardContent>
+            </Card>
+          )}
         </div>
       )}
 
