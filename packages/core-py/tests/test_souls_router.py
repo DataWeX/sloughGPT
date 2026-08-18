@@ -15,11 +15,11 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.souls import SoulsRouter, SloRouterState  # noqa: E402
+from tests.conftest import build_test_app
 
 
 def _mock_manager(**overrides) -> MagicMock:
@@ -49,10 +49,8 @@ def _mock_manager(**overrides) -> MagicMock:
     return mgr
 
 
-def _app(sr: SoulsRouter) -> FastAPI:
-    app = FastAPI()
-    app.include_router(sr.router)
-    return app
+def _app(sr: SoulsRouter):
+    return build_test_app(sr.router)
 
 
 class TestListSouls:
@@ -97,9 +95,11 @@ class TestSwitchSoul:
         mock_get.return_value = mgr
         sr = SoulsRouter()
         sr.state = SloRouterState()
+        sr._load_checkpoint_into_model = MagicMock(return_value={"status": "loaded_into_baby"})
         client = TestClient(_app(sr))
         resp = client.post("/souls/switch", json={"name": "assistant", "checkpoint_name": "ckpt-1"})
         assert resp.status_code == 200
+        sr._load_checkpoint_into_model.assert_called_once_with("ckpt-1")
 
 
 class TestWeightSnapshots:

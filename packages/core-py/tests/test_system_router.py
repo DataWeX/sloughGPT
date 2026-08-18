@@ -17,11 +17,11 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.system import SystemRouter  # noqa: E402
+from tests.conftest import build_test_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,10 +31,8 @@ def _make_system_router() -> SystemRouter:
     return SystemRouter()
 
 
-def _app(sr: SystemRouter) -> FastAPI:
-    app = FastAPI()
-    app.include_router(sr.router)
-    return app
+def _app(sr: SystemRouter):
+    return build_test_app(sr.router)
 
 
 # ---------------------------------------------------------------------------
@@ -142,8 +140,8 @@ class TestExecutor:
         with patch("domains.training.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor/nonexistent")
-        assert resp.status_code == 200
-        assert "not found" in resp.json()["data"]["error"]
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["error"]
 
     def test_executor_job_found(self):
         sr = _make_system_router()
@@ -163,8 +161,8 @@ class TestExecutor:
         with patch("domains.training.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor/j1/result")
-        assert resp.status_code == 200
-        assert "not found" in resp.json()["data"]["error"]
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["error"]
 
     def test_executor_result_no_weight(self):
         sr = _make_system_router()
@@ -174,8 +172,8 @@ class TestExecutor:
         with patch("domains.training.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor/j1/result")
-        assert resp.status_code == 200
-        assert "not completed" in resp.json()["data"]["error"]
+        assert resp.status_code == 400
+        assert "not completed" in resp.json()["error"]
 
     def test_executor_result_ok(self):
         sr = _make_system_router()

@@ -12,11 +12,11 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import apps.api.server.routers.self_train as self_train_mod
 import state as server_state
+from tests.conftest import build_test_app
 
 
 @pytest.fixture(autouse=True)
@@ -32,9 +32,7 @@ def app():
     """Create FastAPI app with self_train router."""
     from apps.api.server.routers.self_train import SelfTrainRouter
     router_instance = SelfTrainRouter()
-    app = FastAPI()
-    app.include_router(router_instance.router)
-    return app
+    return build_test_app(router_instance.router)
 
 
 @pytest.fixture
@@ -154,6 +152,7 @@ class TestStopSelfTrain:
         server_state._self_train_proc = mock_proc
 
         resp = client.post("/self-train/stop")
-        assert resp.json()["data"]["status"] == "killed"
+        assert resp.status_code == 503
+        assert resp.json()["error"] == "process gone"
         mock_proc.kill.assert_called_once()
         assert server_state._self_train_proc is None

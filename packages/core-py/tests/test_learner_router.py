@@ -23,11 +23,11 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.learner import router  # noqa: E402
+from tests.conftest import build_test_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -67,9 +67,7 @@ def _make_learner(**overrides):
 
 
 def _app():
-    app = FastAPI()
-    app.include_router(router)
-    return app
+    return build_test_app(router)
 
 
 # ---------------------------------------------------------------------------
@@ -119,9 +117,8 @@ class TestLearnFeed:
         mock_get.return_value = _make_learner()
         client = TestClient(_app())
         resp = client.post("/learn/feed", params={"action": "subscribe"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == "error"
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "E_VAL_REQUEST"
 
     @patch(MOCK_TARGET)
     def test_unsubscribe_removes_feed(self, mock_get):
@@ -144,8 +141,8 @@ class TestLearnFeed:
         mock_get.return_value = _make_learner()
         client = TestClient(_app())
         resp = client.post("/learn/feed", params={"action": "bogus"})
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "error"
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "E_VAL_REQUEST"
 
 
 class TestLearnIngestUrl:

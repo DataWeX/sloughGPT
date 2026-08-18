@@ -14,11 +14,11 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.models import ModelsRouter  # noqa: E402
+from tests.conftest import build_test_app
 
 
 def _mock_ctrl() -> MagicMock:
@@ -29,10 +29,8 @@ def _mock_ctrl() -> MagicMock:
     return ctrl
 
 
-def _app(mr: ModelsRouter) -> FastAPI:
-    app = FastAPI()
-    app.include_router(mr.router)
-    return app
+def _app(mr: ModelsRouter):
+    return build_test_app(mr.router)
 
 
 class TestGetExportFormats:

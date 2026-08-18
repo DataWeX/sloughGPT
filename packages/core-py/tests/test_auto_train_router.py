@@ -15,17 +15,15 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from tests.conftest import build_test_app
 
 sys.path.insert(0, _server_dir)
 from routers.auto_train import AutoTrainRouter  # noqa: E402
 
 
-def _app(ar: AutoTrainRouter) -> FastAPI:
-    app = FastAPI()
-    app.include_router(ar.router)
-    return app
+def _app(ar: AutoTrainRouter):
+    return build_test_app(ar.router)
 
 
 class TestListCheckpoints:
@@ -80,9 +78,10 @@ class TestCheckpointInfo:
         ar.CHECKPOINTS_DIR = tmp_path
         client = TestClient(_app(ar))
         resp = client.get("/auto-train/checkpoints/missing/info")
-        assert resp.status_code in (200, 404)
+        assert resp.status_code == 404
         body = resp.json()
-        assert body.get("message") == "Checkpoint not found" or body.get("detail") == "Checkpoint not found"
+        assert "error" in body
+        assert "not found" in body["error"].lower()
 
 
 class TestLoadCheckpoint:
@@ -95,7 +94,7 @@ class TestLoadCheckpoint:
         ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
         resp = client.post("/auto-train/checkpoints/missing/load")
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         body = resp.json()
         assert "error" in body
         assert "not found" in body["error"].lower()
@@ -111,10 +110,9 @@ class TestLoadCheckpoint:
         ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
         resp = client.post("/auto-train/checkpoints/bad/load")
-        assert resp.status_code == 200
+        assert resp.status_code in (400, 500)
         body = resp.json()
         assert "error" in body
-        assert body.get("details", {}).get("name") == "bad.soul"
 
 
 class TestDownloadCheckpoint:
@@ -125,4 +123,4 @@ class TestDownloadCheckpoint:
         ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
         resp = client.get("/auto-train/checkpoints/missing/download")
-        assert resp.status_code in (200, 404)
+        assert resp.status_code == 404

@@ -15,11 +15,11 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.kb import KBRouter as KnowledgeRouter  # noqa: E402
+from tests.conftest import build_test_app
 
 
 def _mock_km(**overrides) -> MagicMock:
@@ -35,10 +35,8 @@ def _mock_km(**overrides) -> MagicMock:
     return km
 
 
-def _app(kr: KnowledgeRouter) -> FastAPI:
-    app = FastAPI()
-    app.include_router(kr.router)
-    return app
+def _app(kr: KnowledgeRouter):
+    return build_test_app(kr.router)
 
 
 class TestListKnowledge:

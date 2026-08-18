@@ -19,7 +19,6 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
@@ -31,12 +30,11 @@ from routers.inference import (
     InferenceRouter,
     Message,
 )  # noqa: E402
+from tests.conftest import build_test_app
 
 
-def _app(ir: InferenceRouter) -> FastAPI:
-    app = FastAPI()
-    app.include_router(ir.router)
-    return app
+def _app(ir: InferenceRouter):
+    return build_test_app(ir.router)
 
 
 def _make_ir(tmp_path: Path) -> InferenceRouter:
@@ -308,7 +306,7 @@ class TestContextEndpoints:
         ir._get_context_core = MagicMock(return_value=None)
         client = TestClient(_app(ir))
         resp = client.get("/context/inspect")
-        assert resp.status_code == 200
+        assert resp.status_code == 503
         assert "error" in resp.json()
 
     def test_store_fact_no_core(self, tmp_path):
@@ -316,7 +314,7 @@ class TestContextEndpoints:
         ir._get_context_core = MagicMock(return_value=None)
         client = TestClient(_app(ir))
         resp = client.post("/context/fact", params={"key": "k", "value": "v"})
-        assert resp.status_code == 200
+        assert resp.status_code == 503
         assert "error" in resp.json()
 
     def test_get_facts_no_core(self, tmp_path):
@@ -324,15 +322,15 @@ class TestContextEndpoints:
         ir._get_context_core = MagicMock(return_value=None)
         client = TestClient(_app(ir))
         resp = client.get("/context/facts")
-        assert resp.status_code == 200
-        assert resp.json()["facts"] == []
+        assert resp.status_code == 503
+        assert resp.json()["code"] == "E_INFRA_STARTUP"
 
     def test_reset_context_no_core(self, tmp_path):
         ir = _make_ir(tmp_path)
         ir._get_context_core = MagicMock(return_value=None)
         client = TestClient(_app(ir))
         resp = client.post("/context/reset")
-        assert resp.status_code == 200
+        assert resp.status_code == 503
 
     def test_inspect_context_with_core(self, tmp_path):
         ir = _make_ir(tmp_path)

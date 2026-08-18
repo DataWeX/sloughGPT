@@ -16,11 +16,11 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.health import HealthRouter  # noqa: E402
+from tests.conftest import build_test_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -30,10 +30,8 @@ def _make_health_router() -> HealthRouter:
     return HealthRouter()
 
 
-def _app(hr: HealthRouter) -> FastAPI:
-    app = FastAPI()
-    app.include_router(hr.router)
-    return app
+def _app(hr: HealthRouter):
+    return build_test_app(hr.router)
 
 
 def _mock_ctrl(**overrides) -> MagicMock:
@@ -176,5 +174,5 @@ class TestHealth:
              patch("domains.infrastructure.errors.classify_exception", return_value=MagicMock()), \
              patch("domains.infrastructure.errors.emit_error_event"):
             resp = client.get("/health/model")
-        assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == "error"
+        assert resp.status_code == 503
+        assert resp.json()["error"] == "boom"
