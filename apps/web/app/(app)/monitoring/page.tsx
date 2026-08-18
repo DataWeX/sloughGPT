@@ -101,23 +101,25 @@ export default function SystemHealthPage() {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
-      const [d, m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
-        systemController.getDetailedHealth().catch((e: unknown) => { console.error('[monitoring] detailedHealth:', e); return null }),
-        systemController.getMetrics().catch((e: unknown) => { console.error('[monitoring] metrics:', e); return null }),
-        systemController.getInfo().catch((e: unknown) => { console.error('[monitoring] info:', e); return null }),
-        systemController.getDisk().catch((e: unknown) => { console.error('[monitoring] disk:', e); return null }),
-        knowledgeController.stats().catch((e: unknown) => { console.error('[monitoring] knowledgeStats:', e); return null }),
-        knowledgeController.getAdapterStatus().catch((e: unknown) => { console.error('[monitoring] adapterStatus:', e); return null }),
-        benchmarkController.quality().catch((e: unknown) => { console.error('[monitoring] benchQuality:', e); return null }),
-        benchmarkController.stats().catch((e: unknown) => { console.error('[monitoring] benchStats:', e); return null }),
-        multimodalController.getDPOStatus().catch((e: unknown) => { console.error('[monitoring] dpoStatus:', e); return null }),
-        multimodalController.getStatus().catch((e: unknown) => { console.error('[monitoring] visualStatus:', e); return null }),
-        systemController.getExecutorStatus().catch((e: unknown) => { console.error('[monitoring] executor:', e); return null }),
-        trainingController.getAutoTrainStatus().catch((e: unknown) => { console.error('[monitoring] autoTrain:', e); return null }),
-        trainingController.list().catch((e: unknown) => { console.error('[monitoring] trainingJobs:', e); return [] }),
+      // Critical endpoint — failure means the page cannot render.
+      const d = await systemController.getDetailedHealth()
+      setDetailed(d)
+
+      // Non-critical endpoints — each degrades independently on failure.
+      const [m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
+        systemController.getMetrics().catch(() => null),
+        systemController.getInfo().catch(() => null),
+        systemController.getDisk().catch(() => null),
+        knowledgeController.stats().catch(() => null),
+        knowledgeController.getAdapterStatus().catch(() => null),
+        benchmarkController.quality().catch(() => null),
+        benchmarkController.stats().catch(() => null),
+        multimodalController.getDPOStatus().catch(() => null),
+        multimodalController.getStatus().catch(() => null),
+        systemController.getExecutorStatus().catch(() => null),
+        trainingController.getAutoTrainStatus().catch(() => null),
+        trainingController.list().catch(() => []),
       ])
-      // Keep last-good data: only overwrite a slice when its fetch succeeded.
-      if (d != null) setDetailed(d)
       if (m != null) setMetrics(m)
       if (i != null) setInfo(i)
       if (di != null) setDisk(di)
@@ -125,8 +127,6 @@ export default function SystemHealthPage() {
       if (as_ != null) setAdapterStatus(as_)
       if (bq && 'coherence_score' in bq) {
         setBenchQuality(bq as { status: string; total_responses: number; coherence_score: number; quality_score: number; repetition_rate: number; avg_length: number; empty_rate: number })
-      } else if (bq != null) {
-        setBenchQuality(null)
       }
       if (bs != null) setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
       if (dsRes != null) setDpoStatus(dsRes as typeof dpoStatus)
@@ -138,8 +138,7 @@ export default function SystemHealthPage() {
       if (at != null) setAutoTrainStatus(at)
       if (Array.isArray(tj)) setTrainingJobs(tj)
       setLastUpdated(new Date().toLocaleTimeString())
-      if (d == null) setError('Could not reach the server')
-      return d != null
+      return true
     } catch (e: unknown) {
       setError(extractErrorMessage(e, 'Failed to load system health'))
       return false
@@ -302,26 +301,31 @@ export default function SystemHealthPage() {
       title="System Health"
       headerRight={headerRight}
     >
-      {/* Loading skeletons — shown until first successful fetchAll */}
-      {!loaded && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-            </div></CardContent></Card>
-            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-            </div></CardContent></Card>
-            <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-            </div></CardContent></Card>
-          </div>
-          {error && (
-            <Card className="p-4 border-warning/50">
-              <CardContent className="p-0 py-2 text-sm text-muted-foreground">{error}</CardContent>
-            </Card>
-          )}
+      {/* Loading: skeleton while fetch is in progress */}
+      {!loaded && !error && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+          </div></CardContent></Card>
+          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+          </div></CardContent></Card>
+          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
+            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
+          </div></CardContent></Card>
         </div>
+      )}
+
+      {/* Error: fetch failed — show message with retry */}
+      {!loaded && error && (
+        <Card className="p-6">
+          <CardContent className="p-0 flex flex-col items-center gap-3 text-center">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button size="sm" variant="outline" onClick={() => fetchAll(true)} disabled={refreshing}>
+              {refreshing ? 'Retrying...' : 'Retry'}
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {/* Row 1: Status + Resources + Alerts — essential overview */}
@@ -463,11 +467,6 @@ export default function SystemHealthPage() {
         </FoldSection>
       )}
 
-      {error && (
-        <Card className="p-4 border-destructive/50">
-          <CardContent className="p-0 py-2 text-sm text-destructive">{error}</CardContent>
-        </Card>
-      )}
     </PageContainer>
   )
 }
