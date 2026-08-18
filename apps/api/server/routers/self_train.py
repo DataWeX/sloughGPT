@@ -69,7 +69,6 @@ class SelfTrainRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="self_train_start")
-            raise_error(str(e), "E_INFRA_STARTUP")
 
     async def stop_self_train(self):
         """Stop self-training subprocess."""

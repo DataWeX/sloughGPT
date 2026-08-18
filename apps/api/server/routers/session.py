@@ -88,7 +88,6 @@ class SessionRouter:
             return success_response(data={"session_id": session_id, "messages": msgs})
         except Exception as e:
             classify_and_raise(e, source="session_get_messages")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_session_inspector(self, session_id: str):
         """Return aggregated context state for the UI context inspector.
@@ -179,7 +178,6 @@ class SessionRouter:
 
         except Exception as e:
             classify_and_raise(e, source="session_inspector")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def regenerate_session(self, session_id: str, request: Request) -> StreamingResponse:
         """Regenerate the last assistant response for a session.

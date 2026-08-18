@@ -66,7 +66,6 @@ class LoraEvalRouter:
             })
         except Exception as e:
             classify_and_raise(e, source="lora_eval_run")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_eval_history(
         self,
@@ -145,7 +144,6 @@ class LoraEvalRouter:
             })
         except Exception as e:
             classify_and_raise(e, source="lora_eval_aggregate")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
 
 router = LoraEvalRouter().router

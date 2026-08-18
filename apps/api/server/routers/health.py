@@ -91,7 +91,6 @@ class HealthRouter:
             return success_response(data={"status": "ok", **stats})
         except Exception as e:
             classify_and_raise(e, source="health_model_health")
-            raise_error(str(e), "E_INFRA_REGISTRY")
 
     async def health_summary(self):
         ctrl = get_health_controller()

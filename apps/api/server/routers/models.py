@@ -6,7 +6,8 @@ import asyncio
 import os
 import logging
 import re
-from fastapi import APIRouter, Depends, HTTPException
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -399,7 +400,6 @@ class ModelsRouter:
             return success_response(data={"format": request.format, "files": results}, message="exported")
         except Exception as e:
             classify_and_raise(e, source="export_model")
-            raise_error(err.user_message, code=err.code)
 
     async def get_export_formats(self):
         """Get list of supported export formats."""
@@ -498,7 +498,6 @@ class ModelsRouter:
             }
         except Exception as e:
             classify_and_raise(e, source="verify_download")
-            raise_error(err.user_message, code=err.code, details={"model_id": model_id})
 
     async def retry_download(self, model_id: str) -> Dict[str, Any]:
         """Redownload a cached model (cleanup + fresh download)."""
@@ -570,7 +569,6 @@ class ModelsRouter:
             return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
         except Exception as e:
             classify_and_raise(e, source="download_gguf")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def visual_model_load(self, model_dir: str = "", model_id: str = ""):
         """Load a vision / multimodal model from a local directory.

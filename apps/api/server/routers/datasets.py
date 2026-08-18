@@ -127,7 +127,6 @@ class DatasetsRouter:
                 raise
             except Exception as e:
                 classify_and_raise(e, source="dataset_import_local")
-                raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_github(self, request: GitHubImportRequest):
         """Import dataset from GitHub repository."""
@@ -159,7 +158,6 @@ class DatasetsRouter:
                 raise
             except Exception as e:
                 classify_and_raise(e, source="dataset_handler")
-                raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_huggingface(self, request: HuggingFaceImportRequest):
         """Import dataset from HuggingFace Hub."""
@@ -190,7 +188,6 @@ class DatasetsRouter:
                 raise
             except Exception as e:
                 classify_and_raise(e, source="dataset_handler")
-                raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_url(self, request: URLImportRequest):
         """Import dataset from URL."""
@@ -220,7 +217,6 @@ class DatasetsRouter:
                 raise
             except Exception as e:
                 classify_and_raise(e, source="dataset_handler")
-                raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_kaggle(self, request: KaggleImportRequest):
         """Import dataset from Kaggle."""
@@ -241,13 +237,17 @@ class DatasetsRouter:
                 raise HTTPException(status_code=400, detail=f"Kaggle import failed: {stderr.decode()}")
 
             temp_dir = output_dir / request.dataset.replace("/", "_")
-            if temp_dir.exists():
-                for item in temp_dir.iterdir():
-                    shutil.move(str(item), str(output_dir / item.name))
-                temp_dir.rmdir()
 
-            file_count = sum(1 for _ in output_dir.rglob("*") if _.is_file())
-            total_size = sum(f.stat().st_size for f in output_dir.rglob("*") if f.is_file())
+            def _organize():
+                if temp_dir.exists():
+                    for item in temp_dir.iterdir():
+                        shutil.move(str(item), str(output_dir / item.name))
+                    temp_dir.rmdir()
+                file_count = sum(1 for _ in output_dir.rglob("*") if _.is_file())
+                total_size = sum(f.stat().st_size for f in output_dir.rglob("*") if f.is_file())
+                return file_count, total_size
+
+            file_count, total_size = await asyncio.to_thread(_organize)
 
             safe_audit_log("dataset.import", resource=name, detail="kaggle", dataset=request.dataset, files=file_count)
             return ImportResponse(
@@ -262,7 +262,6 @@ class DatasetsRouter:
             raise HTTPException(status_code=400, detail="Kaggle CLI not found. Install with: pip install kaggle")
         except Exception as e:
             classify_and_raise(e, source="dataset_handler")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def import_from_csv(self, request: CSVImportRequest):
         """Import dataset from CSV URL."""
@@ -288,14 +287,17 @@ class DatasetsRouter:
             rows = list(reader)
 
             jsonl_path = output_dir / f"{name}.jsonl"
-            with open(jsonl_path, "w", encoding="utf-8") as f:
-                for row in rows:
-                    obj = {headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))}
-                    f.write(json.dumps(obj) + "\n")
-
             meta_path = output_dir / "metadata.json"
-            with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump({"source": request.url, "columns": headers, "rows": len(rows)}, f, indent=2)
+
+            def _write_csv():
+                with open(jsonl_path, "w", encoding="utf-8") as f:
+                    for row in rows:
+                        obj = {headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))}
+                        f.write(json.dumps(obj) + "\n")
+                with open(meta_path, "w", encoding="utf-8") as f:
+                    json.dump({"source": request.url, "columns": headers, "rows": len(rows)}, f, indent=2)
+
+            await asyncio.to_thread(_write_csv)
 
             safe_audit_log("dataset.import", resource=name, detail="csv", url=request.url, rows=len(rows), columns=len(headers))
             return ImportResponse(
@@ -308,7 +310,6 @@ class DatasetsRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="dataset_handler")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def batch_import(self, request: BatchImportRequest):
         """Import multiple datasets in one request."""
@@ -398,7 +399,6 @@ class DatasetsRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="dataset_handler")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def search_datasets(self, q: str = Query(..., min_length=1, max_length=500, description="Search query")):
         """Search datasets by name"""

@@ -428,7 +428,6 @@ class KBRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="kb_ingest")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     def batch_delete_knowledge(self, req: BatchDeleteRequest):
         """Delete multiple knowledge items by ID."""

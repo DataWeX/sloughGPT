@@ -213,7 +213,6 @@ class MultimodalRouter:
             })
         except Exception as e:
             classify_and_raise(e, source="multimodal_caption")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def train_batch(
         self,
@@ -338,7 +337,6 @@ class MultimodalRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="multimodal_video_generate")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── DPO ────────────────────────────────────────────────────────────
 
@@ -405,7 +403,6 @@ class MultimodalRouter:
             })
         except Exception as e:
             classify_and_raise(e, source="multimodal_analyze_image")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def analyze_pdf(
         self,
@@ -432,7 +429,6 @@ class MultimodalRouter:
             })
         except Exception as e:
             classify_and_raise(e, source="multimodal_analyze_pdf")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
         finally:
             os.unlink(tmp_path)
 
@@ -459,7 +455,6 @@ class MultimodalRouter:
                 os.unlink(tmp_path)
         except Exception as e:
             classify_and_raise(e, source="multimodal_process_video")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Speech ────────────────────────────────────────────────────────
 
@@ -475,7 +470,6 @@ class MultimodalRouter:
                     "language": result.language or language, "duration": result.duration})
         except Exception as e:
             classify_and_raise(e, source="multimodal_transcribe")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def synthesize_speech(self, text: str = Form(...)):
         try:
@@ -495,7 +489,6 @@ class MultimodalRouter:
                     "text": text, "duration_sec": len(waveform) / tts.sample_rate})
         except Exception as e:
             classify_and_raise(e, source="multimodal_tts")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Generation ────────────────────────────────────────────────────
 
@@ -524,7 +517,6 @@ class MultimodalRouter:
                     "prompt": prompt, "steps": steps})
         except Exception as e:
             classify_and_raise(e, source="multimodal_generate_image")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Dataset ───────────────────────────────────────────────────────
 
@@ -596,7 +588,6 @@ class MultimodalRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="multimodal_load_checkpoint")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def delete_checkpoint(self, name: str):
         try:
@@ -617,7 +608,6 @@ class MultimodalRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="multimodal_delete_checkpoint")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     # ── Reset ─────────────────────────────────────────────────────────
 

@@ -153,6 +153,43 @@ def _extract_user_message(messages: List[Message]) -> Optional[str]:
     return None
 
 
+def _apply_meta_weights(
+    temperature: float,
+    top_p: float,
+    top_k: int,
+    repetition_penalty: float,
+    user_message: str,
+    user_id: str = "default",
+) -> dict:
+    """Apply feedback-driven meta-weight adjustments to generation parameters.
+
+    Looks up similar past messages in the feedback database and adjusts
+    temperature, top_p, top_k, and repetition_penalty accordingly.
+
+    Returns a dict of adjusted parameters to pass to the provider.
+    """
+    try:
+        from domains.feedback.meta_weights import get_meta_weight_manager
+        manager = get_meta_weight_manager()
+        adj = manager.get_adjustment(
+            user_message=user_message, k=5, user_id=user_id,
+        )
+        return {
+            "temperature": adj.temperature,
+            "top_p": adj.top_p,
+            "top_k": adj.top_k,
+            "repetition_penalty": adj.repetition_penalty,
+        }
+    except Exception as e:
+        logger.debug("Meta-weight adjustment failed: %s", e)
+        return {
+            "temperature": temperature,
+            "top_p": top_p,
+            "top_k": top_k,
+            "repetition_penalty": repetition_penalty,
+        }
+
+
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
     """Search learned knowledge + optionally live web search. Returns {facts, source, topics}."""
     try:
@@ -397,13 +434,17 @@ class InferenceRouter:
         provider_messages = [{"role": "user", "content": req.prompt}]
         try:
             _t0 = time.monotonic()
-            result = await provider.chat(
-                provider_messages,
-                max_tokens=req.max_new_tokens,
+            gen_params = _apply_meta_weights(
                 temperature=req.temperature,
                 top_p=req.top_p,
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
+                user_message=req.prompt,
+            )
+            result = await provider.chat(
+                provider_messages,
+                max_tokens=req.max_new_tokens,
+                **gen_params,
             )
             logger.debug(
                 "generate handler",
@@ -438,7 +479,6 @@ class InferenceRouter:
             return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
         except Exception as e:
             classify_and_raise(e, source="generate")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def generate_stream(self, req: GenerateRequest, request: Request) -> StreamingResponse:
         from startup_progress import STARTUP_PHASE
@@ -468,14 +508,18 @@ class InferenceRouter:
             _batch_start = time.time()
             _BATCH_MAX = 5
             _BATCH_INTERVAL_S = 0.005
+            gen_params = _apply_meta_weights(
+                temperature=req.temperature,
+                top_p=req.top_p,
+                top_k=req.top_k,
+                repetition_penalty=req.repetition_penalty,
+                user_message=req.prompt,
+            )
             try:
                 async for token in provider.chat_stream(
                     provider_messages,
                     max_tokens=req.max_new_tokens,
-                    temperature=req.temperature,
-                    top_p=req.top_p,
-                    top_k=req.top_k,
-                    repetition_penalty=req.repetition_penalty,
+                    **gen_params,
                 ):
                     if await request.is_disconnected():
                         logger.info("Client disconnected from generate stream", extra={"tag": "INF"})
@@ -856,15 +900,20 @@ class InferenceRouter:
                     _batch_start = time.time()
                     _BATCH_MAX = 5
                     _BATCH_INTERVAL_S = 0.005
+                    gen_params = _apply_meta_weights(
+                        temperature=req.temperature,
+                        top_p=req.top_p,
+                        top_k=req.top_k,
+                        repetition_penalty=req.repetition_penalty,
+                        user_message=user_msg or "",
+                        user_id=req.user_id or "default",
+                    )
                     try:
                         try:
                             async for token in provider.chat_stream(
                                 provider_messages,
                                 max_tokens=req.max_tokens,
-                                temperature=req.temperature,
-                                top_p=req.top_p,
-                                top_k=req.top_k,
-                                repetition_penalty=req.repetition_penalty,
+                                **gen_params,
                                 cancel_event=cancel_event,
                                 session_id=session_id,
                             ):
@@ -1137,12 +1186,20 @@ class InferenceRouter:
             logger.debug("Knowledge enrichment failed: %s", e)
 
         try:
+            gen_params = _apply_meta_weights(
+                temperature=req.temperature,
+                top_p=req.top_p,
+                top_k=req.top_k,
+                repetition_penalty=req.repetition_penalty,
+                user_message=user_msg,
+                user_id=req.user_id or "default",
+            )
             result = await asyncio.wait_for(
                 chat_domain.respond(
                     messages=messages,
                     model=_chat_state.model_type or req.model,
                     system_prompt=system_prompt,
-                    temperature=req.temperature,
+                    temperature=gen_params["temperature"],
                     max_tokens=req.max_tokens,
                     session_id=req.session_id or "default",
                     user_id=req.user_id or "default",

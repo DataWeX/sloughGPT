@@ -1,6 +1,9 @@
 """
-Meta Weights Router - Feedback-driven weight adaptation
-Migration target for inline /meta-weights/* endpoints from main.py.
+Meta Weights Router - Feedback-driven weight adaptation.
+
+Exposes meta-weight adjustments computed from user feedback history
+and similar-message vector search. Also wired into the inference
+pipeline so generation parameters are automatically tuned per-user.
 """
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
@@ -19,6 +22,8 @@ class MetaWeightResponse(BaseModel):
     repetition_penalty: float = 1.0
     top_p: float = 0.9
     top_k: int = 50
+    style_bias: float = 0.0
+    confidence_boost: float = 0.0
     based_on_samples: int = 0
 
 
@@ -33,7 +38,15 @@ class MetaWeightsRouter:
         self.router.add_api_route("/stats", self.get_meta_weight_stats, methods=["GET"])
 
     async def get_meta_weights(self, request: GetMetaWeightsRequest, req: Request):
-        """Get meta-weight adjustments based on similar past feedback."""
+        """Get meta-weight adjustments based on similar past feedback.
+
+        Combines per-user accumulated boosts with pattern-based adjustments
+        from k nearest similar messages in the feedback database.
+
+        Side effects:
+            - reads from feedback database (vector search)
+            - appends to weight history
+        """
         from domains.feedback import get_meta_weight_manager as _get_manager
         manager = _get_manager()
         if manager is None:
@@ -46,11 +59,20 @@ class MetaWeightsRouter:
             repetition_penalty=weights.repetition_penalty,
             top_p=weights.top_p,
             top_k=weights.top_k,
+            style_bias=weights.style_bias,
+            confidence_boost=weights.confidence_boost,
             based_on_samples=len(manager._weight_history),
         )
 
     async def get_meta_weight_stats(self, req: Request):
-        """Get meta-weight system statistics."""
+        """Get meta-weight system statistics.
+
+        Returns db stats, quality trend, current average weights,
+        and history length.
+
+        Side effects:
+            - reads from feedback database
+        """
         from domains.feedback import get_meta_weight_manager as _get_manager
         manager = _get_manager()
         if manager is None:

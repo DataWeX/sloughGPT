@@ -188,7 +188,6 @@ class InferRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="infer")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def infer_stream(self, req: InferRequest, request: Request):
         """Stream generated tokens as SSE.

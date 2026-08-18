@@ -15,9 +15,12 @@ passed explicitly — callers never need to thread it manually.
 from __future__ import annotations
 
 import contextvars
+import logging
 from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel, Field
+
+_audit_logger = logging.getLogger("audit")
 
 T = TypeVar("T")
 
@@ -208,6 +211,9 @@ def safe_audit_log(
 ) -> None:
     """Log an audit event without crashing on failure.
 
+    Falls back to standard ``logging`` if the audit logger is unavailable,
+    so audit events are never silently lost.
+
     Args:
         action: The action being logged (e.g. 'knowledge.add').
         resource: The resource being acted upon.
@@ -218,7 +224,11 @@ def safe_audit_log(
         from infrastructure.auth import get_audit_logger
         get_audit_logger().log(action, resource=resource, detail=detail, **kwargs)
     except Exception:
-        pass
+        _audit_logger.info(
+            "audit:%s resource=%s detail=%s %s",
+            action, resource, detail,
+            " ".join(f"{k}={v}" for k, v in kwargs.items()) if kwargs else "",
+        )
 
 
 def classify_and_raise(e: Exception, source: str = "router") -> None:
@@ -243,4 +253,8 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
     except _HTTPException:
         raise
     except Exception:
+        _audit_logger.warning(
+            "classify_and_raise fallback: source=%s error=%s",
+            source, e, exc_info=True,
+        )
         raise _HTTPException(status_code=500, detail=str(e))

@@ -81,7 +81,6 @@ class VectorRouter:
             return success_response(data={"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"})
         except Exception as e:
             classify_and_raise(e, source="vector")
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
 
     async def get_stats(self):
         store = await self.get_vector_store()

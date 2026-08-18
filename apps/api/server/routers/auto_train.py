@@ -50,11 +50,11 @@ class AutoTrainState:
     config: dict = field(default_factory=dict)
     student_net: Optional[object] = None
     student_tokenizer: Optional[object] = None
+    complete_enqueued: bool = False
 
 
 _auto_train_cancel_event: Optional[threading.Event] = None
 _auto_train_pause_event: Optional[threading.Event] = None
-_complete_enqueued = [False]
 
 _turbo_lock = threading.Lock()
 _turbo_cancel_event = threading.Event()
@@ -380,74 +380,6 @@ def _describe_checkpoint(ckpt: dict) -> str:
     return " ".join(parts) + "."
 
 
-def _train_chat_trained(cfg_state, cancel_event, enqueue):
-    from domains.training.chat_trainer import ChatTrainConfig, train_from_sessions
-
-    resume_path = cfg_state.config.get("resume_path", "")
-    soul_name = cfg_state.config.get("soul_name", "chat-trained")
-
-    train_config = ChatTrainConfig(
-        n_embed=cfg_state.config.get("n_embed", 128),
-        n_layer=cfg_state.config.get("n_layer", 4),
-        n_head=cfg_state.config.get("n_head", 4),
-        block_size=cfg_state.config.get("block_size", 128),
-        dropout=cfg_state.config.get("dropout", 0.1),
-        epochs=cfg_state.config.get("epochs", 5),
-        lr=cfg_state.config.get("learning_rate", 3e-4),
-        batch_size=cfg_state.config.get("batch_size", 8),
-        soul_name=soul_name,
-        checkpoint_dir=str(CHECKPOINTS_DIR),
-        session_ids=cfg_state.config.get("session_ids"),
-        resume_checkpoint=resume_path if resume_path and resume_path.endswith(".soul") else None,
-    )
-
-    def _on_step(step, loss, epoch):
-        if cancel_event is not None and cancel_event.is_set():
-            raise _AutoTrainCancelled("Training cancelled by user")
-        enqueue(sse_event(
-            "auto-train", "TRAIN", "working",
-            data={"step": step, "loss": loss, "done": False},
-            meta={"epoch": epoch, "total_epochs": cfg_state.config.get("epochs", 5)},
-        ))
-
-    try:
-        enqueue(sse_event(
-            "auto-train", "PAIRS", "working",
-            message="Extracting chat pairs from sessions...",
-        ))
-
-        model, metadata = train_from_sessions(
-            config=train_config,
-            on_step=_on_step,
-            cancel_event=cancel_event,
-        )
-
-        _complete_enqueued[0] = True
-        _enforce_checkpoint_budget()
-
-        enqueue(sse_complete(
-            "auto-train",
-            data={
-                "checkpoint": metadata.get("checkpoint", ""),
-                "final_loss": metadata.get("final_loss"),
-                "num_pairs": metadata.get("num_pairs", 0),
-                "total_pairs": metadata.get("total_pairs", 0),
-                "epochs": metadata.get("epochs_completed", 0),
-                "vocab_size": metadata.get("vocab_size", 0),
-                "perplexity": metadata.get("perplexity"),
-                "samples": metadata.get("samples", []),
-                "avg_response_len": metadata.get("avg_response_len", 0),
-            },
-            message=f"Training complete - {metadata.get('num_pairs', 0)} pairs, loss={metadata.get('final_loss')}",
-        ))
-
-    except _AutoTrainCancelled:
-        enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
-    except Exception as e:
-        autotrain_logger.error("Chat-trained worker error: %s", e, extra={"tag": "TRAIN"})
-        enqueue(sse_error("auto-train", "FAILED", str(e)))
-    finally:
-        cfg_state.running = False
 
 
 class AutoTrainRouter:
@@ -515,9 +447,15 @@ class AutoTrainRouter:
         if req.source_text:
             source_lines = _parse_subtitle_text(req.source_text)
             if source_lines:
-                tmp = self.REPO_ROOT / ".opencode" / "tmp" / f"autotrain_source_{int(time.time())}.txt"
-                tmp.parent.mkdir(parents=True, exist_ok=True)
-                tmp.write_text("\n".join(source_lines), encoding="utf-8")
+                import asyncio as _aio
+
+                def _write_src():
+                    tmp = self.REPO_ROOT / ".opencode" / "tmp" / f"autotrain_source_{int(time.time())}.txt"
+                    tmp.parent.mkdir(parents=True, exist_ok=True)
+                    tmp.write_text("\n".join(source_lines), encoding="utf-8")
+                    return tmp
+
+                tmp = await _aio.to_thread(_write_src)
                 data_path = str(tmp)
                 autotrain_logger.info("Wrote %d source lines to %s", len(source_lines), tmp, extra={"tag": "TRAIN", "context": {"source_lines": len(source_lines), "path": str(tmp)}})
         elif req.dataset_id:
@@ -828,7 +766,7 @@ class AutoTrainRouter:
 
         _auto_train_cancel_event = threading.Event()
         _auto_train_pause_event = threading.Event()
-        _complete_enqueued[0] = False
+        self.state.complete_enqueued = False
         self.state.running = True
 
         task_id = await tq.enqueue(task)
@@ -918,9 +856,8 @@ class AutoTrainRouter:
                 autotrain_logger.error("Auto-train SSE queue timed out - no event for 60s", extra={"tag": "TRAIN"})
                 yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
             except Exception as e:
-                classify_and_raise(e, source="auto_train_stream")
                 autotrain_logger.error("Auto-train SSE stream error: %s", e, extra={"tag": "TRAIN"})
-                if not _complete_enqueued[0]:
+                if not self.state.complete_enqueued:
                     yield sse_error("auto-train", "FAILED", str(e))
             finally:
                 _auto_train_cancel_event = None
@@ -1008,15 +945,20 @@ class AutoTrainRouter:
             raise_error(f"Checkpoint not found: {name}", code="E_NOT_FOUND", details={"name": name})
 
         try:
-            soul_net = import_from_sou(str(cp))
-            soul_meta = soul_net.soul_signature()
+            import asyncio as _aio
 
-            import struct as _struct
-            with open(str(cp), "rb") as f:
-                raw = f.read(12)
-                json_len = _struct.unpack("<I", raw[8:12])[0]
-                meta_bytes = f.read(json_len).rstrip(b"\x00")
-            md = json.loads(meta_bytes.decode())
+            def _load_meta():
+                soul_net = import_from_sou(str(cp))
+                import struct as _struct
+                with open(str(cp), "rb") as f:
+                    raw = f.read(12)
+                    json_len = _struct.unpack("<I", raw[8:12])[0]
+                    meta_bytes = f.read(json_len).rstrip(b"\x00")
+                md = json.loads(meta_bytes.decode())
+                return soul_net, md
+
+            soul_net, md = await _aio.to_thread(_load_meta)
+            soul_meta = soul_net.soul_signature()
 
             stoi = md.get("stoi") or md.get("metadata", {}).get("stoi")
             itos = md.get("itos") or md.get("metadata", {}).get("itos")
@@ -1144,7 +1086,6 @@ class AutoTrainRouter:
             net = import_from_sou(str(fp))
         except Exception as e:
             classify_and_raise(e, source="export_checkpoint_mobile")
-            raise HTTPException(status_code=400, detail=f"Failed to load checkpoint: {e}")
 
         sd = net.state_dict()
         n_embed = net.n_embed
@@ -1248,8 +1189,12 @@ class AutoTrainRouter:
         task.metadata["enqueue"] = _enqueue
 
         global _auto_train_cancel_event
-        _auto_train_cancel_event = threading.Event()
-        _complete_enqueued[0] = False
+        if _auto_train_cancel_event is None:
+            _auto_train_cancel_event = threading.Event()
+        global _auto_train_pause_event
+        if _auto_train_pause_event is None:
+            _auto_train_pause_event = threading.Event()
+        self.state.complete_enqueued = False
         self.state.running = True
 
         task_id = await tq.enqueue(task)
@@ -1337,8 +1282,8 @@ class AutoTrainRouter:
             except TimeoutError:
                 yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
             except Exception as e:
-                classify_and_raise(e, source="auto_train_stream_turbo")
-                if not _complete_enqueued[0]:
+                autotrain_logger.error("From-sessions SSE stream error: %s", e, extra={"tag": "TRAIN"})
+                if not self.state.complete_enqueued:
                     yield sse_error("auto-train", "FAILED", str(e))
             finally:
                 _auto_train_cancel_event = None
@@ -1356,6 +1301,7 @@ class AutoTrainRouter:
         global _auto_train_cancel_event
         if _auto_train_cancel_event is not None:
             _auto_train_cancel_event.set()
+        self.state.running = False
         safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelled")
         return success_response(message="Cancel signal sent")
 

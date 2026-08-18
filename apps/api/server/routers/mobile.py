@@ -874,9 +874,13 @@ class MobileRouter:
 
         ts = int(time.time())
         text_file = train_dir / f"mobile_{ts}.txt"
-        with open(text_file, "w") as f:
-            for pair in body.pairs:
-                f.write(f"User: {pair.user_msg}\nAssistant: {pair.assistant_msg}\n\n")
+
+        def _write_pairs():
+            with open(text_file, "w") as f:
+                for pair in body.pairs:
+                    f.write(f"User: {pair.user_msg}\nAssistant: {pair.assistant_msg}\n\n")
+
+        await asyncio.to_thread(_write_pairs)
 
         checkpoint_name = f"mobile_{ts}"
         output_dir = repo_root / "models" / "auto-training" / checkpoint_name
@@ -1327,7 +1331,8 @@ class MobileRouter:
         ]
 
         try:
-            proc = subprocess.Popen(
+            proc = await asyncio.to_thread(
+                subprocess.Popen,
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

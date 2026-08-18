@@ -68,6 +68,10 @@ sync-notes-to-board                                               # sync notes �
 - This includes `pip install`, `apt install`, HuggingFace model downloads, dataset imports
 - Always ask first: "This will download ~X MB. OK?"
 
+### Question Tool — Always Multi-Select
+- **Always set `multiple: true`** on `question` tool calls unless the question is strictly single-answer
+- Users should be able to select multiple options when asking for direction
+
 ### Engineering Standards — No Shortcuts
 Engineering means building properly, not hackily. Every change must be:
 - **Tested** — Don't assume it works, verify it works
