@@ -199,12 +199,6 @@ class TestLinkExtractor:
 class TestResolvePage:
     """Tests for resolve_page using a local HTTP server."""
 
-    def _make_page(self, html: str) -> str:
-        """Register an HTML page on the range server."""
-        from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = html.encode()
-        return "/page"
-
     def test_finds_download_link(self, range_server):
         from conftest import RangeHandler
         RangeHandler.payloads["/page"] = b'''
@@ -297,7 +291,7 @@ class TestResolvePage:
         )
         assert safetensors_idx < ad_idx
 
-    def test_redirects_tracked(self, range_server):
+    def test_follows_js_redirect_to_download(self, range_server):
         from conftest import RangeHandler
         RangeHandler.payloads["/page"] = b'''
         <html>

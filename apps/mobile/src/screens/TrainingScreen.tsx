@@ -36,8 +36,8 @@ const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
 function LossChart({data}: {data: {step: number; value: number}[]}) {
   if (data.length < 2) {
     return (
-      <YStack height={80} backgroundColor="$background" borderRadius={4} alignItems="center" justifyContent="center">
-        <Text fontSize={13} color="$color10">
+      <YStack height={80} backgroundColor={colors.background} borderRadius={4} alignItems="center" justifyContent="center">
+        <Text fontSize={13} color={colors.textSecondary}>
           Loss curve will appear here
         </Text>
       </YStack>
@@ -53,12 +53,12 @@ function LossChart({data}: {data: {step: number; value: number}[]}) {
 
   return (
     <YStack marginTop={4}>
-      <YStack backgroundColor="$background" borderRadius={4} overflow="hidden" style={{width: W, height: H}}>
+      <YStack backgroundColor={colors.background} borderRadius={4} overflow="hidden" style={{width: W, height: H}}>
         {data.map((point, i) => {
           const x = pad + (i / (data.length - 1)) * (W - pad * 2);
           const y = H - pad - ((point.value - minLoss) / range) * (H - pad * 2);
           const dotSize = i === data.length - 1 ? 6 : 3;
-          const color = i === data.length - 1 ? '#7C52C4' : '#C0AAF4';
+          const color = i === data.length - 1 ? colors.primary : '#C0AAF4';
           return (
             <YStack
               key={i}
@@ -76,9 +76,9 @@ function LossChart({data}: {data: {step: number; value: number}[]}) {
         })}
       </YStack>
       <XStack justifyContent="space-between" marginTop={4}>
-        <Text fontSize={11} color="$color10">{minLoss.toFixed(2)}</Text>
-        <Text fontSize={11} color="$color10">{data.length} points</Text>
-        <Text fontSize={11} color="$color10">{maxLoss.toFixed(2)}</Text>
+        <Text fontSize={11} color={colors.textSecondary}>{minLoss.toFixed(2)}</Text>
+        <Text fontSize={11} color={colors.textSecondary}>{data.length} points</Text>
+        <Text fontSize={11} color={colors.textSecondary}>{maxLoss.toFixed(2)}</Text>
       </XStack>
     </YStack>
   );
@@ -241,7 +241,7 @@ export function TrainingScreen() {
         }>
         <YStack padding={16} gap={12}>
           <XStack alignItems="center" justifyContent="space-between">
-            <Text fontSize={26} fontWeight="700" letterSpacing={-0.3} color="$color">Training</Text>
+            <Text fontSize={26} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Training</Text>
             <StatusBadge
               label={phaseInfo.text}
               variant={phaseInfo.variant as any}
@@ -249,23 +249,23 @@ export function TrainingScreen() {
           </XStack>
 
           {error && (
-            <XStack alignItems="center" justifyContent="space-between" backgroundColor="rgba(239, 68, 68, 0.08)" padding={12} borderRadius={10}>
-              <Text fontSize={13} color="#EF4444" lineHeight={18} flex={1}>{error}</Text>
+            <XStack alignItems="center" justifyContent="space-between" backgroundColor={colors.errorAlpha(0.08)} padding={12} borderRadius={10}>
+              <Text fontSize={13} color={colors.error} lineHeight={18} flex={1}>{error}</Text>
               <Pressable onPress={hapticPress('light', clearError)} accessibilityLabel="Clear error">
-                <Icon name="x" size={16} color="#EF4444" />
+                <Icon name="x" size={16} color={colors.error} />
               </Pressable>
             </XStack>
           )}
 
           {!isTraining && !isDone && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Method</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Method</Text>
               <XStack gap={8} marginBottom={12}>
                 <YStack
                   flex={1}
                   paddingVertical={8}
                   borderRadius={8}
-                  backgroundColor={method === 'distill' ? '#7C52C4' : '$background'}
+                  backgroundColor={method === 'distill' ? colors.primary : '$background'}
                   alignItems="center"
                   borderWidth={0.5}
                   borderColor={method === 'distill' ? accent : '$borderColor'}
@@ -282,7 +282,7 @@ export function TrainingScreen() {
                   backgroundColor={method === 'finetune' ? accent : '$background'}
                   alignItems="center"
                   borderWidth={0.5}
-                  borderColor={method === 'finetune' ? '#7C52C4' : '$borderColor'}
+                  borderColor={method === 'finetune' ? colors.primary : '$borderColor'}
                   onPress={hapticPress('selection', () => setMethod('finetune'))}
                   pressStyle={{opacity: 0.7}}>
                   <Text fontSize={13} color={method === 'finetune' ? '#FFFFFF' : '$color10'} fontWeight="500">
@@ -294,21 +294,21 @@ export function TrainingScreen() {
           )}
 
           {!isTraining && !isDone && method === 'finetune' && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Fine-tune Settings</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Fine-tune Settings</Text>
               <YStack marginBottom={12}>
-                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Base Model</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Base Model</Text>
                 <TextInput
                   value={hfOpts.model}
                   onChangeText={v => setHfOpts({model: v})}
                   placeholder="gpt2, Qwen/Qwen2.5-0.5B, ..."
-                  placeholderTextColor="#827A96"
+                  placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                   style={{
                     fontSize: 15,
                     color: '#1A1625',
-                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
                     paddingVertical: 8,
@@ -319,10 +319,10 @@ export function TrainingScreen() {
                 />
               </YStack>
               <YStack marginBottom={12}>
-                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Dataset</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Dataset</Text>
                 <YStack gap={4}>
                   {datasets.length === 0 ? (
-                    <Text fontSize={13} color="$color10" lineHeight={18} textAlign="center" padding={16}>No datasets found. Import one first.</Text>
+                    <Text fontSize={13} color={colors.textSecondary} lineHeight={18} textAlign="center" padding={16}>No datasets found. Import one first.</Text>
                   ) : (
                     datasets.map(ds => (
                       <XStack
@@ -330,16 +330,16 @@ export function TrainingScreen() {
                         alignItems="center"
                         justifyContent="space-between"
                         padding={12}
-                        backgroundColor="$background"
+                        backgroundColor={colors.background}
                         borderRadius={8}
                         borderWidth={0.5}
-                        borderColor={hfOpts.dataset === ds.id ? '#7C52C4' : '$borderColor'}
-                        style={hfOpts.dataset === ds.id ? {backgroundColor: 'rgba(124, 82, 196, 0.1)'} : undefined}
+                        borderColor={hfOpts.dataset === ds.id ? colors.primary : '$borderColor'}
+                        style={hfOpts.dataset === ds.id ? {backgroundColor: colors.primaryAlpha(0.1)} : undefined}
                         onPress={hapticPress('selection', () => setHfOpts({dataset: ds.id}))}
                         pressStyle={{opacity: 0.7}}>
                         <YStack flex={1}>
-                          <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{ds.name}</Text>
-                          <Text fontSize={11} color="$color10" letterSpacing={0.2}>
+                          <Text fontSize={15} color={colors.text} fontWeight="500" lineHeight={22}>{ds.name}</Text>
+                          <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2}>
                             {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
                           </Text>
                         </YStack>
@@ -347,19 +347,19 @@ export function TrainingScreen() {
                           paddingHorizontal={8}
                           paddingVertical={2}
                           borderRadius={4}
-                          style={{backgroundColor: 'rgba(124, 82, 196, 0.15)'}}
+                          style={{backgroundColor: colors.primaryAlpha(0.15)}}
                           onPress={hapticPress('light', () => fetchPreview(ds.id))}
                           pressStyle={{opacity: 0.7}}>
-                          <Text fontSize={11} color="#7C52C4" fontWeight="500" letterSpacing={0.2}>Preview</Text>
+                          <Text fontSize={11} color={colors.primary} fontWeight="500" letterSpacing={0.2}>Preview</Text>
                         </YStack>
-                        {hfOpts.dataset === ds.id && <Icon name="check" size={18} color="#7C52C4" />}
+                        {hfOpts.dataset === ds.id && <Icon name="check" size={18} color={colors.primary} />}
                       </XStack>
                     ))
                   )}
                 </YStack>
               </YStack>
               <YStack marginBottom={12}>
-                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Epochs</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Epochs</Text>
                 <XStack gap={4} flexWrap="wrap">
                   {[1, 2, 3, 5].map(v => (
                     <YStack
@@ -367,9 +367,9 @@ export function TrainingScreen() {
                       paddingHorizontal={12}
                       paddingVertical={4}
                       borderRadius={999}
-                      backgroundColor={hfOpts.epochs === v ? '#7C52C4' : '$background'}
+                      backgroundColor={hfOpts.epochs === v ? colors.primary : '$background'}
                       borderWidth={0.5}
-                      borderColor={hfOpts.epochs === v ? '#7C52C4' : '$borderColor'}
+                      borderColor={hfOpts.epochs === v ? colors.primary : '$borderColor'}
                       onPress={hapticPress('selection', () => setHfOpts({epochs: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={hfOpts.epochs === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
@@ -378,7 +378,7 @@ export function TrainingScreen() {
                 </XStack>
               </YStack>
               <YStack marginBottom={12}>
-                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Batch Size</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Batch Size</Text>
                 <XStack gap={4} flexWrap="wrap">
                   {[2, 4, 8, 16].map(v => (
                     <YStack
@@ -386,9 +386,9 @@ export function TrainingScreen() {
                       paddingHorizontal={12}
                       paddingVertical={4}
                       borderRadius={999}
-                      backgroundColor={hfOpts.batch_size === v ? '#7C52C4' : '$background'}
+                      backgroundColor={hfOpts.batch_size === v ? colors.primary : '$background'}
                       borderWidth={0.5}
-                      borderColor={hfOpts.batch_size === v ? '#7C52C4' : '$borderColor'}
+                      borderColor={hfOpts.batch_size === v ? colors.primary : '$borderColor'}
                       onPress={hapticPress('selection', () => setHfOpts({batch_size: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={hfOpts.batch_size === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
@@ -397,7 +397,7 @@ export function TrainingScreen() {
                 </XStack>
               </YStack>
               <YStack marginBottom={12}>
-                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Learning Rate</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Learning Rate</Text>
                 <XStack gap={4} flexWrap="wrap">
                   {[1e-5, 2e-5, 5e-5, 1e-4].map(v => (
                     <YStack
@@ -405,9 +405,9 @@ export function TrainingScreen() {
                       paddingHorizontal={12}
                       paddingVertical={4}
                       borderRadius={999}
-                      backgroundColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#7C52C4' : '$background'}
+                      backgroundColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? colors.primary : '$background'}
                       borderWidth={0.5}
-                      borderColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#7C52C4' : '$borderColor'}
+                      borderColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? colors.primary : '$borderColor'}
                       onPress={hapticPress('selection', () => setHfOpts({learning_rate: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v.toExponential()}</Text>
@@ -417,12 +417,12 @@ export function TrainingScreen() {
               </YStack>
               <YStack marginBottom={12}>
                 <XStack alignItems="center" justifyContent="space-between">
-                  <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Use LoRA</Text>
+                  <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Use LoRA</Text>
                   <YStack
                     width={44}
                     height={24}
                     borderRadius={12}
-                    backgroundColor={hfOpts.use_lora ? '#7C52C4' : '$borderColor'}
+                    backgroundColor={hfOpts.use_lora ? colors.primary : '$borderColor'}
                     justifyContent="center"
                     paddingHorizontal={2}
                     onPress={hapticPress('selection', () => setHfOpts({use_lora: !hfOpts.use_lora}))}
@@ -439,7 +439,7 @@ export function TrainingScreen() {
               </YStack>
               {hfOpts.use_lora && (
                 <YStack marginBottom={12}>
-                  <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>LoRA Rank</Text>
+                  <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>LoRA Rank</Text>
                   <XStack gap={4} flexWrap="wrap">
                     {[4, 8, 16, 32].map(v => (
                       <YStack
@@ -447,9 +447,9 @@ export function TrainingScreen() {
                         paddingHorizontal={12}
                         paddingVertical={4}
                         borderRadius={999}
-                        backgroundColor={hfOpts.lora_rank === v ? '#7C52C4' : '$background'}
+                        backgroundColor={hfOpts.lora_rank === v ? colors.primary : '$background'}
                         borderWidth={0.5}
-                        borderColor={hfOpts.lora_rank === v ? '#7C52C4' : '$borderColor'}
+                        borderColor={hfOpts.lora_rank === v ? colors.primary : '$borderColor'}
                         onPress={hapticPress('selection', () => setHfOpts({lora_rank: v}))}
                         pressStyle={{opacity: 0.7}}>
                         <Text fontSize={11} color={hfOpts.lora_rank === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
@@ -462,17 +462,17 @@ export function TrainingScreen() {
           )}
 
           {!isTraining && !isDone && method === 'distill' && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Training Data</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Training Data</Text>
               <XStack gap={8} marginBottom={12}>
                 <YStack
                   flex={1}
                   paddingVertical={8}
                   borderRadius={8}
-                  backgroundColor={inputMode === 'text' ? '#7C52C4' : '$background'}
+                  backgroundColor={inputMode === 'text' ? colors.primary : '$background'}
                   alignItems="center"
                   borderWidth={0.5}
-                  borderColor={inputMode === 'text' ? '#7C52C4' : '$borderColor'}
+                  borderColor={inputMode === 'text' ? colors.primary : '$borderColor'}
                   onPress={hapticPress('selection', () => setInputMode('text'))}
                   pressStyle={{opacity: 0.7}}>
                   <Text fontSize={13} color={inputMode === 'text' ? '#FFFFFF' : '$color10'} fontWeight="500">
@@ -483,10 +483,10 @@ export function TrainingScreen() {
                   flex={1}
                   paddingVertical={8}
                   borderRadius={8}
-                  backgroundColor={inputMode === 'dataset' ? '#7C52C4' : '$background'}
+                  backgroundColor={inputMode === 'dataset' ? colors.primary : '$background'}
                   alignItems="center"
                   borderWidth={0.5}
-                  borderColor={inputMode === 'dataset' ? '#7C52C4' : '$borderColor'}
+                  borderColor={inputMode === 'dataset' ? colors.primary : '$borderColor'}
                   onPress={hapticPress('selection', () => setInputMode('dataset'))}
                   pressStyle={{opacity: 0.7}}>
                   <Text fontSize={13} color={inputMode === 'dataset' ? '#FFFFFF' : '$color10'} fontWeight="500">
@@ -500,13 +500,13 @@ export function TrainingScreen() {
                   value={sourceText}
                   onChangeText={setSourceText}
                   placeholder="Paste training text here (SRT, plain text, or lines)..."
-                  placeholderTextColor="#827A96"
+                  placeholderTextColor={colors.textMuted}
                   multiline
                   textAlignVertical="top"
                   style={{
                     fontSize: 15,
                     color: '#1A1625',
-                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
                     paddingVertical: 12,
@@ -517,7 +517,7 @@ export function TrainingScreen() {
               ) : (
                 <YStack gap={4}>
                   {datasets.length === 0 ? (
-                    <Text fontSize={13} color="$color10" lineHeight={18} textAlign="center" padding={16}>No datasets found</Text>
+                    <Text fontSize={13} color={colors.textSecondary} lineHeight={18} textAlign="center" padding={16}>No datasets found</Text>
                   ) : (
                     datasets.map(ds => (
                       <XStack
@@ -525,16 +525,16 @@ export function TrainingScreen() {
                         alignItems="center"
                         justifyContent="space-between"
                         padding={12}
-                        backgroundColor="$background"
+                        backgroundColor={colors.background}
                         borderRadius={8}
                         borderWidth={0.5}
-                        borderColor={selectedDataset === ds.id ? '#7C52C4' : '$borderColor'}
-                        style={selectedDataset === ds.id ? {backgroundColor: 'rgba(124, 82, 196, 0.1)'} : undefined}
+                        borderColor={selectedDataset === ds.id ? colors.primary : '$borderColor'}
+                        style={selectedDataset === ds.id ? {backgroundColor: colors.primaryAlpha(0.1)} : undefined}
                         onPress={hapticPress('selection', () => setSelectedDataset(ds.id))}
                         pressStyle={{opacity: 0.7}}>
                         <YStack flex={1}>
-                          <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{ds.name}</Text>
-                          <Text fontSize={11} color="$color10" letterSpacing={0.2}>
+                          <Text fontSize={15} color={colors.text} fontWeight="500" lineHeight={22}>{ds.name}</Text>
+                          <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2}>
                             {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
                           </Text>
                         </YStack>
@@ -542,12 +542,12 @@ export function TrainingScreen() {
                           paddingHorizontal={8}
                           paddingVertical={2}
                           borderRadius={4}
-                          style={{backgroundColor: 'rgba(124, 82, 196, 0.15)'}}
+                          style={{backgroundColor: colors.primaryAlpha(0.15)}}
                           onPress={hapticPress('light', () => fetchPreview(ds.id))}
                           pressStyle={{opacity: 0.7}}>
-                          <Text fontSize={11} color="#7C52C4" fontWeight="500" letterSpacing={0.2}>Preview</Text>
+                          <Text fontSize={11} color={colors.primary} fontWeight="500" letterSpacing={0.2}>Preview</Text>
                         </YStack>
-                        {selectedDataset === ds.id && <Icon name="check" size={18} color="#7C52C4" />}
+                        {selectedDataset === ds.id && <Icon name="check" size={18} color={colors.primary} />}
                       </XStack>
                     ))
                   )}
@@ -556,11 +556,11 @@ export function TrainingScreen() {
                     borderRadius={8}
                     borderWidth={1}
                     borderStyle="dashed"
-                    borderColor="$borderColor"
+                    borderColor={colors.border}
                     alignItems="center"
                     onPress={hapticPress('light', () => setShowImportModal(true))}
                     pressStyle={{opacity: 0.7}}>
-                    <Text fontSize={13} color="$color9" fontWeight="500">+ Import Dataset</Text>
+                    <Text fontSize={13} color={colors.primary} fontWeight="500">+ Import Dataset</Text>
                   </YStack>
                 </YStack>
               )}
@@ -568,10 +568,10 @@ export function TrainingScreen() {
           )}
 
           {!isTraining && !isDone && method === 'distill' && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Hyperparameters</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Hyperparameters</Text>
               <YStack marginBottom={12}>
-                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Epochs</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Epochs</Text>
                 <XStack gap={4} flexWrap="wrap">
                   {[3, 5, 10, 20, 50].map(v => (
                     <YStack
@@ -579,9 +579,9 @@ export function TrainingScreen() {
                       paddingHorizontal={12}
                       paddingVertical={4}
                       borderRadius={999}
-                      backgroundColor={config.epochs === v ? '#7C52C4' : '$background'}
+                      backgroundColor={config.epochs === v ? colors.primary : '$background'}
                       borderWidth={0.5}
-                      borderColor={config.epochs === v ? '#7C52C4' : '$borderColor'}
+                      borderColor={config.epochs === v ? colors.primary : '$borderColor'}
                       onPress={hapticPress('selection', () => setConfig({epochs: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={config.epochs === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
@@ -590,7 +590,7 @@ export function TrainingScreen() {
                 </XStack>
               </YStack>
               <YStack marginBottom={12}>
-                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Learning Rate</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Learning Rate</Text>
                 <XStack gap={4} flexWrap="wrap">
                   {[0.0001, 0.001, 0.01].map(v => (
                     <YStack
@@ -598,9 +598,9 @@ export function TrainingScreen() {
                       paddingHorizontal={12}
                       paddingVertical={4}
                       borderRadius={999}
-                      backgroundColor={config.learning_rate === v ? '#7C52C4' : '$background'}
+                      backgroundColor={config.learning_rate === v ? colors.primary : '$background'}
                       borderWidth={0.5}
-                      borderColor={config.learning_rate === v ? '#7C52C4' : '$borderColor'}
+                      borderColor={config.learning_rate === v ? colors.primary : '$borderColor'}
                       onPress={hapticPress('selection', () => setConfig({learning_rate: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={config.learning_rate === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
@@ -609,7 +609,7 @@ export function TrainingScreen() {
                 </XStack>
               </YStack>
               <YStack marginBottom={12}>
-                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Soul</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} marginBottom={4}>Soul</Text>
                 <XStack gap={4} flexWrap="wrap">
                   {['assistant', 'creative', 'coder', 'teacher', 'analyst'].map(v => (
                     <YStack
@@ -617,9 +617,9 @@ export function TrainingScreen() {
                       paddingHorizontal={12}
                       paddingVertical={4}
                       borderRadius={999}
-                      backgroundColor={config.soul_name === v ? '#7C52C4' : '$background'}
+                      backgroundColor={config.soul_name === v ? colors.primary : '$background'}
                       borderWidth={0.5}
-                      borderColor={config.soul_name === v ? '#7C52C4' : '$borderColor'}
+                      borderColor={config.soul_name === v ? colors.primary : '$borderColor'}
                       onPress={hapticPress('selection', () => setConfig({soul_name: v}))}
                       pressStyle={{opacity: 0.7}}>
                       <Text fontSize={11} color={config.soul_name === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
@@ -631,51 +631,51 @@ export function TrainingScreen() {
           )}
 
           {(isTraining || isDone || isFailed) && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Progress</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Progress</Text>
               <XStack justifyContent="space-between" marginBottom={8}>
-                <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>Epoch {epoch}/{totalEpochs}</Text>
-                <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{progress}%</Text>
+                <Text fontSize={15} color={colors.text} fontWeight="500" lineHeight={22}>Epoch {epoch}/{totalEpochs}</Text>
+                <Text fontSize={15} color={colors.text} fontWeight="500" lineHeight={22}>{progress}%</Text>
               </XStack>
-              <YStack height={8} backgroundColor="$borderColor" borderRadius={4} overflow="hidden" marginBottom={12}>
+              <YStack height={8} backgroundColor={colors.border} borderRadius={4} overflow="hidden" marginBottom={12}>
                 <YStack
                   height="100%"
                   borderRadius={4}
-                  backgroundColor={isDone ? '#2E9B7C' : isFailed ? '#D44C56' : '#7C52C4'}
+                  backgroundColor={isDone ? colors.successDark : isFailed ? colors.errorDark : colors.primary}
                   width={`${progress}%`}
                 />
               </YStack>
               <XStack gap={24} marginBottom={12}>
                 <YStack>
-                  <Text fontSize={11} color="$color10" letterSpacing={0.2}>Loss</Text>
-                  <Text fontSize={16} fontWeight="600" color="$color">{loss !== null ? loss.toFixed(4) : '—'}</Text>
+                  <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2}>Loss</Text>
+                  <Text fontSize={16} fontWeight="600" color={colors.text}>{loss !== null ? loss.toFixed(4) : '—'}</Text>
                 </YStack>
                 <YStack>
-                  <Text fontSize={11} color="$color10" letterSpacing={0.2}>Steps</Text>
-                  <Text fontSize={16} fontWeight="600" color="$color">{steps}</Text>
+                  <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2}>Steps</Text>
+                  <Text fontSize={16} fontWeight="600" color={colors.text}>{steps}</Text>
                 </YStack>
               </XStack>
               <LossChart data={lossHistory} />
               {isTraining && (
                 <XStack alignItems="center" gap={8} marginTop={12}>
-                  <ActivityIndicator size="small" color="#7C52C4" />
-                  <Text fontSize={13} color="$color10" lineHeight={18}>{phaseInfo.text}...</Text>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text fontSize={13} color={colors.textSecondary} lineHeight={18}>{phaseInfo.text}...</Text>
                 </XStack>
               )}
             </YStack>
           )}
 
           {isDone && checkpoint && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Training Complete</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Training Complete</Text>
               <StatusBadge label="Success" variant="success" />
-              <Text fontSize={15} color="$color" lineHeight={22} marginTop={12}>Checkpoint: {checkpoint}</Text>
-              <Text fontSize={11} color="$color10" letterSpacing={0.2} marginTop={4}>
+              <Text fontSize={15} color={colors.text} lineHeight={22} marginTop={12}>Checkpoint: {checkpoint}</Text>
+              <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2} marginTop={4}>
                 Final loss: {loss?.toFixed(4) || '—'} · {steps} steps
               </Text>
               <YStack
                 marginTop={12}
-                backgroundColor="#7C52C4"
+                backgroundColor={colors.primary}
                 paddingVertical={8}
                 paddingHorizontal={16}
                 borderRadius={8}
@@ -684,9 +684,9 @@ export function TrainingScreen() {
                 disabled={loadingCheckpoint === checkpoint}
                 pressStyle={{opacity: 0.7}}>
                 {loadingCheckpoint === checkpoint ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.white} />
                 ) : (
-                  <Text fontSize={13} color="#FFFFFF" fontWeight="600" lineHeight={18}>Load Model for Chat</Text>
+                  <Text fontSize={13} color={colors.white} fontWeight="600" lineHeight={18}>Load Model for Chat</Text>
                 )}
               </YStack>
             </YStack>
@@ -695,17 +695,17 @@ export function TrainingScreen() {
           <YStack gap={8}>
             {isTraining ? (
               <YStack
-                backgroundColor="#D44C56"
+                backgroundColor={colors.errorDark}
                 paddingVertical={12}
                 borderRadius={8}
                 alignItems="center"
                 onPress={hapticPress('medium', stop)}
                 pressStyle={{opacity: 0.7}}>
-                <Text fontSize={15} color="#FFFFFF" fontWeight="600" lineHeight={22}>Stop Training</Text>
+                <Text fontSize={15} color={colors.white} fontWeight="600" lineHeight={22}>Stop Training</Text>
               </YStack>
             ) : (
               <YStack
-                backgroundColor="#7C52C4"
+                backgroundColor={colors.primary}
                 paddingVertical={12}
                 borderRadius={8}
                 alignItems="center"
@@ -713,7 +713,7 @@ export function TrainingScreen() {
                 onPress={handleStart}
                 disabled={running}
                 pressStyle={{opacity: 0.7}}>
-                <Text fontSize={15} color="#FFFFFF" fontWeight="600" lineHeight={22}>
+                <Text fontSize={15} color={colors.white} fontWeight="600" lineHeight={22}>
                   {isDone ? 'Train Again' : 'Start Training'}
                 </Text>
               </YStack>
@@ -721,16 +721,16 @@ export function TrainingScreen() {
           </YStack>
 
           {isDone && hfFinetunedPath && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Fine-tune Complete</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Fine-tune Complete</Text>
               <StatusBadge label="Success" variant="success" />
-              <Text fontSize={15} color="$color" lineHeight={22} marginTop={12}>Model saved to: {hfFinetunedPath}</Text>
-              <Text fontSize={11} color="$color10" letterSpacing={0.2} marginTop={4}>
+              <Text fontSize={15} color={colors.text} lineHeight={22} marginTop={12}>Model saved to: {hfFinetunedPath}</Text>
+              <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2} marginTop={4}>
                 Loss: {loss?.toFixed(4) || '—'} · {steps} steps
               </Text>
               <YStack
                 marginTop={12}
-                backgroundColor="#7C52C4"
+                backgroundColor={colors.primary}
                 paddingVertical={8}
                 paddingHorizontal={16}
                 borderRadius={8}
@@ -744,21 +744,21 @@ export function TrainingScreen() {
                   }
                 })}
                 pressStyle={{opacity: 0.7}}>
-                <Text fontSize={13} color="#FFFFFF" fontWeight="600" lineHeight={18}>Load Model for Chat</Text>
+                <Text fontSize={13} color={colors.white} fontWeight="600" lineHeight={18}>Load Model for Chat</Text>
               </YStack>
             </YStack>
           )}
 
           {hfJobs.length > 0 && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Job History</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Job History</Text>
               {hfJobs.slice().reverse().map((job: any, i: number) => (
                 <XStack key={job.job_id || job.id || i} alignItems="center" justifyContent="space-between" paddingVertical={8} borderBottomWidth={1} borderBottomColor="$borderColor">
                   <YStack flex={1} gap={4}>
-                    <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>
+                    <Text fontSize={15} color={colors.text} fontWeight="500" lineHeight={22}>
                       {job.model || 'Model'} · {job.dataset || 'dataset'}
                     </Text>
-                    <Text fontSize={11} color="$color10" letterSpacing={0.2}>
+                    <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2}>
                       Status: {job.status || job.phase || 'unknown'}{' '}
                       {job.loss != null ? `· Loss: ${Number(job.loss).toFixed(4)}` : ''}{' '}
                       {job.epoch != null ? `· Epoch ${job.epoch}` : ''}
@@ -774,13 +774,13 @@ export function TrainingScreen() {
           )}
 
           {checkpoints.length > 0 && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Checkpoints</Text>
+            <YStack backgroundColor={colors.background} borderRadius={12} borderWidth={0.5} borderColor={colors.border} padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color={colors.text} marginBottom={12}>Checkpoints</Text>
               {checkpoints.map(cp => (
                 <XStack key={cp.name} alignItems="center" justifyContent="space-between" paddingVertical={8} borderBottomWidth={1} borderBottomColor="$borderColor">
                   <YStack flex={1} gap={4}>
-                    <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{cp.name}</Text>
-                    <Text fontSize={11} color="$color10" letterSpacing={0.2}>
+                    <Text fontSize={15} color={colors.text} fontWeight="500" lineHeight={22}>{cp.name}</Text>
+                    <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2}>
                       {cp.loss !== null ? `Loss: ${cp.loss.toFixed(3)}` : ''}{' '}
                       {cp.steps > 0 ? `· ${cp.steps} steps` : ''}{' '}
                       {cp.size_mb ? `· ${cp.size_mb} MB` : ''}
@@ -802,14 +802,14 @@ export function TrainingScreen() {
                       paddingHorizontal={12}
                       paddingVertical={4}
                       borderRadius={8}
-                      style={{backgroundColor: 'rgba(124, 82, 196, 0.15)'}}
+                      style={{backgroundColor: colors.primaryAlpha(0.15)}}
                       onPress={() => handleLoadCheckpoint(cp.name)}
                       disabled={loadingCheckpoint === cp.name}
                       pressStyle={{opacity: 0.7}}>
                       {loadingCheckpoint === cp.name ? (
-                        <ActivityIndicator size="small" color="#7C52C4" />
+                        <ActivityIndicator size="small" color={colors.primary} />
                       ) : (
-                        <Text fontSize={11} color="#7C52C4" fontWeight="600" letterSpacing={0.2}>Load</Text>
+                        <Text fontSize={11} color={colors.primary} fontWeight="600" letterSpacing={0.2}>Load</Text>
                       )}
                     </YStack>
                     <YStack
@@ -827,7 +827,7 @@ export function TrainingScreen() {
                       })}
                       pressStyle={{opacity: 0.7}}
                       accessible accessibilityRole="button" accessibilityLabel={`Delete checkpoint ${cp.name}`}>
-                      <Icon name="x" size={16} color="#D44C56" />
+                      <Icon name="x" size={16} color={colors.errorDark} />
                     </YStack>
                   </XStack>
                 </XStack>
@@ -839,9 +839,9 @@ export function TrainingScreen() {
 
       <Modal visible={previewVisible} animationType="slide" transparent>
         <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
-          <YStack backgroundColor="$background" borderTopLeftRadius={24} borderTopRightRadius={24} maxHeight="70%">
+          <YStack backgroundColor={colors.background} borderTopLeftRadius={24} borderTopRightRadius={24} maxHeight="70%">
             <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20} paddingVertical={16} borderBottomWidth={1} borderBottomColor="$borderColor">
-              <Text fontSize={16} fontWeight="600" color="$color">Dataset Preview</Text>
+              <Text fontSize={16} fontWeight="600" color={colors.text}>Dataset Preview</Text>
               <Pressable onPress={hapticPress('light', () => setPreviewVisible(false))} accessibilityLabel="Close preview">
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
                   <Icon name="x" size={16} color={colors.textSecondary} />
@@ -851,12 +851,12 @@ export function TrainingScreen() {
             <ScrollView style={{paddingHorizontal: 20, paddingVertical: 12}}>
               {previewData.map((line, i) => (
                 <XStack key={i} gap={8} paddingVertical={4} borderBottomWidth={1} borderBottomColor="$borderColor">
-                  <Text fontSize={11} color="$color10" letterSpacing={0.2} width={24}>{i + 1}</Text>
-                  <Text fontSize={13} color="$color" lineHeight={18} flex={1} numberOfLines={3}>{line}</Text>
+                  <Text fontSize={11} color={colors.textSecondary} letterSpacing={0.2} width={24}>{i + 1}</Text>
+                  <Text fontSize={13} color={colors.text} lineHeight={18} flex={1} numberOfLines={3}>{line}</Text>
                 </XStack>
               ))}
               {previewData.length === 0 && (
-                <Text fontSize={13} color="$color10" lineHeight={18} textAlign="center" padding={24}>No preview available</Text>
+                <Text fontSize={13} color={colors.textSecondary} lineHeight={18} textAlign="center" padding={24}>No preview available</Text>
               )}
             </ScrollView>
           </YStack>
@@ -865,9 +865,9 @@ export function TrainingScreen() {
 
       <Modal visible={showImportModal} animationType="slide" transparent>
         <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
-          <YStack backgroundColor="$background" borderTopLeftRadius={24} borderTopRightRadius={24}>
+          <YStack backgroundColor={colors.background} borderTopLeftRadius={24} borderTopRightRadius={24}>
             <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20} paddingVertical={16} borderBottomWidth={1} borderBottomColor="$borderColor">
-              <Text fontSize={16} fontWeight="600" color="$color">Import Dataset</Text>
+              <Text fontSize={16} fontWeight="600" color={colors.text}>Import Dataset</Text>
               <Pressable onPress={hapticPress('light', () => setShowImportModal(false))} accessibilityLabel="Close import">
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
                   <Icon name="x" size={16} color={colors.textSecondary} />
@@ -876,18 +876,18 @@ export function TrainingScreen() {
             </XStack>
             <YStack padding={20} gap={16}>
               <YStack gap={4}>
-                <Text fontSize={13} color="$color10">URL or File Path</Text>
+                <Text fontSize={13} color={colors.textSecondary}>URL or File Path</Text>
                 <TextInput
                   value={importUrl}
                   onChangeText={setImportUrl}
                   placeholder="https://example.com/data.txt or /path/to/file"
-                  placeholderTextColor="#827A96"
+                  placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                   style={{
                     fontSize: 15,
                     color: '#1A1625',
-                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
                     paddingVertical: 10,
@@ -895,18 +895,18 @@ export function TrainingScreen() {
                 />
               </YStack>
               <YStack gap={4}>
-                <Text fontSize={13} color="$color10">Name (optional)</Text>
+                <Text fontSize={13} color={colors.textSecondary}>Name (optional)</Text>
                 <TextInput
                   value={importName}
                   onChangeText={setImportName}
                   placeholder="my-dataset"
-                  placeholderTextColor="#827A96"
+                  placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                   style={{
                     fontSize: 15,
                     color: '#1A1625',
-                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
                     paddingVertical: 10,
@@ -917,13 +917,13 @@ export function TrainingScreen() {
                 paddingVertical={12}
                 borderRadius={10}
                 alignItems="center"
-                backgroundColor={importing ? 'rgba(124, 82, 196, 0.3)' : '#7C52C4'}
+                backgroundColor={importing ? 'rgba(124, 82, 196, 0.3)' : colors.primary}
                 onPress={hapticPress('light', handleImport)}
                 pressStyle={{opacity: 0.7}}>
                 {importing ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color={colors.white} />
                 ) : (
-                  <Text fontSize={14} fontWeight="600" color="#FFFFFF">Import</Text>
+                  <Text fontSize={14} fontWeight="600" color={colors.white}>Import</Text>
                 )}
               </YStack>
             </YStack>
