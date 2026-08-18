@@ -20,6 +20,7 @@ import sys
 import time
 
 from . import download, state
+from .resolver import resolve_page
 
 logging.basicConfig(
     level=logging.INFO,
@@ -122,6 +123,33 @@ def cmd_list(args: argparse.Namespace):
 
 
 # ---------------------------------------------------------------------------
+# Resolve — extract real download URL from a page
+# ---------------------------------------------------------------------------
+
+def cmd_resolve(args: argparse.Namespace):
+    """Resolve a page and show ranked download links."""
+    url = args.url
+    limit = args.limit
+
+    print(f"Resolving {url}...")
+    links = resolve_page(url, on_progress=lambda msg: print(f"  {msg}"))
+
+    if not links:
+        print("No download links found.")
+        sys.exit(1)
+
+    print(f"\nFound {len(links)} candidate(s):\n")
+    for i, link in enumerate(links[:limit], 1):
+        marker = " ★" if i == 1 else ""
+        ext = f" ({link.extension})" if link.extension else ""
+        title = f" — {link.title}" if link.title else ""
+        print(f"  {i}. [{link.confidence:.2f}] {link.url}{ext}{title}{marker}")
+
+    if args.best:
+        print(f"\nBest: {links[0].url}")
+
+
+# ---------------------------------------------------------------------------
 # Main dispatcher
 # ---------------------------------------------------------------------------
 
@@ -148,6 +176,13 @@ def main(argv: list = None):
     # list
     p_ls = sub.add_parser("list", help="List all tracked downloads")
     p_ls.set_defaults(func=cmd_list)
+
+    # resolve <url>
+    p_res = sub.add_parser("resolve", help="Extract download links from a page")
+    p_res.add_argument("url", help="Page URL to scrape")
+    p_res.add_argument("-n", "--limit", type=int, default=10, help="Max results to show")
+    p_res.add_argument("-b", "--best", action="store_true", help="Print only the best URL")
+    p_res.set_defaults(func=cmd_resolve)
 
     args = parser.parse_args(argv)
     args.func(args)

@@ -11,14 +11,26 @@ The HuggingFace-specific model download/resume/verify workflows live in
 the application layer (``domains.infrastructure.hf_hub``), composed from
 the generic primitives here (``downloader``, ``state``, ``verify``).
 
+Submodules:
+    - ``downloader``: byte-level resume via Range headers
+    - ``resolver``: extract real download URLs from ad-heavy pages
+    - ``state``: persistent download state across restarts
+    - ``verify``: checksum / size verification
+
 Use cases:
-    1. Download any URL::
+    1. Direct download::
 
         download("https://example.com/bigfile.iso", "/tmp/bigfile.iso")
 
-    2. CLI::
+    2. Resolve + download (scrape page, find real link)::
+
+        from downcraft.resolver import resolve_and_download
+        resolve_and_download("https://example.com/download-page", "/tmp/file.zip")
+
+    3. CLI::
 
         python -m downcraft url https://...
+        python -m downcraft resolve https://example.com/download-page
 """
 
 import logging
@@ -26,14 +38,18 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, Optional, Union
 
-from . import downloader, state, verify
+from . import downloader, resolver, state, verify
+from .resolver import resolve_page, resolve_and_download
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "download",
+    "resolve_page",
+    "resolve_and_download",
     "state",
     "downloader",
+    "resolver",
     "verify",
 ]
 
