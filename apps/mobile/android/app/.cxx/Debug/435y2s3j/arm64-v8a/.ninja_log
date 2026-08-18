@@ -1,6 +1,0 @@
-# ninja log v5
-1	20	0	/home/mana/Documents/Default Project/sloughGPT/apps/mobile/android/app/.cxx/Debug/435y2s3j/arm64-v8a/CMakeFiles/cmake.verify_globs	19e3b69794051242
-6	6283	1787045472950715659	rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/EventEmitters.cpp.o	5818a6a4c31f4051
-18	6372	1787045473075706357	rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/States.cpp.o	448ad6c89ef0408e
-19	8290	1787045474972565264	rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/rnasyncstorage-generated.cpp.o	8f4c399f681d5ce4
-13	12090	1787045478778282713	rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/Props.cpp.o	ed9867025d9c7935

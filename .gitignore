@@ -230,3 +230,12 @@ packages/apps/apps/
 
 # Server-side model artifacts
 apps/api/server/models/
+
+# Android build artifacts
+apps/mobile/android/.gradle/
+apps/mobile/android/.kotlin/
+apps/mobile/android/app/.cxx/
+apps/mobile/android/app/build/
+apps/mobile/android/app/debug.keystore
+apps/mobile/android/gradle/wrapper/gradle-wrapper.jar
+apps/mobile/android/gradlew
