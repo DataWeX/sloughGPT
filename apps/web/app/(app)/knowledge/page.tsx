@@ -15,7 +15,7 @@ import { Chip } from '@sloughgpt/strui'
 import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount } from '@/lib/knowledge-controller'
-import { getRAGStats, clearRAG, listRAGDocuments, type RAGStats, type RAGDocument } from '@/lib/rag-controller'
+import { getRAGStats, clearRAG, listRAGDocuments, syncKGToRAG, type RAGStats, type RAGDocument } from '@/lib/rag-controller'
 import { KnowledgeCategoryChart } from '@/components/knowledge/KnowledgeCategoryChart'
 import { MemoryCard } from '@/components/knowledge/MemoryCard'
 import { LearnSection } from '@/components/learn/LearnSection'
@@ -121,10 +121,8 @@ export default function KnowledgePage() {
   const handleRAGSync = useCallback(async () => {
     setRagSyncing(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/knowledge/kg/sync`, { method: 'POST' })
-      const data = await res.json()
-      const synced = data?.data?.total_triples || 0
-      addToast(`Synced ${synced} KG triples to RAG`, 'success')
+      const result = await syncKGToRAG()
+      addToast(`Synced ${result.total_triples} KG triples to RAG`, 'success')
       await fetchRAGData()
     } catch {
       addToast('Failed to sync KG to RAG', 'error')

@@ -127,3 +127,33 @@ export async function getRAGStats(): Promise<RAGStats> {
 export async function clearRAG(): Promise<{ cleared: number }> {
   return apiPost('/knowledge/rag/clear') as Promise<{ cleared: number }>
 }
+
+/**
+ * Sync all Knowledge Graph triples into the RAG index.
+ */
+export async function syncKGToRAG(): Promise<{
+  total_triples: number
+  processed: number
+  failed: number
+}> {
+  return apiPost('/knowledge/kg/sync') as Promise<{
+    total_triples: number
+    processed: number
+    failed: number
+  }>
+}
+
+/**
+ * Get KG → RAG pipeline queue stats.
+ */
+export async function getKGPipelineStats(): Promise<{
+  pending: number
+  running: number
+  completed: number
+}> {
+  return apiGet('/knowledge/kg/pipeline-stats') as Promise<{
+    pending: number
+    running: number
+    completed: number
+  }>
+}
