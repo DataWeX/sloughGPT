@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise
 
 logger = logging.getLogger("slo.routers.companion")
 

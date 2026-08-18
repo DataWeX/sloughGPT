@@ -25,7 +25,7 @@ import math
 import re
 import time
 
-from schemas.common import success_response, raise_error
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 
 from training.runtime import get_training_runtime
 
@@ -312,8 +312,7 @@ def _load_soul_meta(ckpt_file: Path) -> dict:
         try:
             return json.loads(meta_file.read_text())
         except Exception:
-            pass
-        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            logger.debug("Failed to parse %s", meta_file, exc_info=True)
     if ckpt_file.suffix == ".soul":
         return _read_slo_json_header(ckpt_file)
     if ckpt_file.suffix == ".slo":
@@ -558,8 +557,8 @@ class AutoTrainRouter:
         import state as _srv_state
         _srv_state.training_active = True
         autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs, extra={"tag": "TRAIN"})
-        safe_audit_log("training.start", resource=req.dataset_id or req.checkpoint_name or (req.soul_name if req.source_text else "inline", detail="resume" if resume else "fresh", method=method, epochs=req.epochs, dataset_id=req.dataset_id or "", checkpoint_name=req.checkpoint_name or "")
-        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+        safe_audit_log("training.start", resource=req.dataset_id or req.checkpoint_name or (req.soul_name if req.source_text else "inline"), detail="resume" if resume else "fresh", method=method, epochs=req.epochs, dataset_id=req.dataset_id or "", checkpoint_name=req.checkpoint_name or "")
+        autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
         return {"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": self.state.config}
 
     async def start_turbo(self, req: TurboStartRequest):
@@ -769,9 +768,9 @@ class AutoTrainRouter:
                     _auto_train_pgq.cancel_training(job_id)
                 except Exception:
                     pass
-                logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                    autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
         if _auto_train_cancel_event is not None:
-            safe_audit_log("training.stop", resource=(self.state.config or {}, detail="cancelling", method=(self.state.config or {)
+            safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelling")
             return {"status": "cancelling", "message": "Cancelling auto-training"}
         return {"status": "stopped"}
 
@@ -781,7 +780,7 @@ class AutoTrainRouter:
         if _auto_train_pause_event.is_set():
             return {"success": False, "message": "Training is already paused"}
         _auto_train_pause_event.set()
-        safe_audit_log("training.pause", resource=(self.state.config or {})
+        safe_audit_log("training.pause", resource=(self.state.config or {}).get("soul_name", ""), detail="paused")
         return {"success": True, "message": "Training paused"}
 
     async def resume(self):
@@ -790,7 +789,7 @@ class AutoTrainRouter:
         if not _auto_train_pause_event.is_set():
             return {"success": False, "message": "Training is not paused"}
         _auto_train_pause_event.clear()
-        safe_audit_log("training.resume", resource=(self.state.config or {})
+        safe_audit_log("training.resume", resource=(self.state.config or {}).get("soul_name", ""), detail="resumed")
         return {"success": True, "message": "Training resumed"}
 
     async def status(self):
@@ -902,7 +901,7 @@ class AutoTrainRouter:
                                             job["checkpoint"] = str(soul_files[-1])
                                     except Exception:
                                         pass
-                                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                                    autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                                     get_training_runtime().sync(task_id)
                                 break
                         except json.JSONDecodeError:
@@ -932,7 +931,7 @@ class AutoTrainRouter:
                     _srv_state.training_active = False
                 except Exception:
                     pass
-                logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                 from training.runtime import get_training_runtime
                 job = get_training_runtime().get(task_id)
                 if job is not None and job.get("status") not in ("completed", "failed", "cancelled"):
@@ -996,7 +995,7 @@ class AutoTrainRouter:
                         meta.unlink()
 
         if deleted:
-            safe_audit_log("training.checkpoint.delete", resource=name, detail=")
+            safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
             return success_response(data={"name": deleted}, message="deleted")
         return success_response(data={"name": name}, message="not_found")
 
@@ -1043,7 +1042,7 @@ class AutoTrainRouter:
                 extra={"tag": "TRAIN", "context": {"checkpoint": cp.name, "vocab_size": len(stoi), "params": soul_net.num_parameters()}},
             )
 
-            safe_audit_log("training.checkpoint.load", resource=cp.name, detail="vocab=%d params=%d" % (len(stoi)
+            safe_audit_log("training.checkpoint.load", resource=cp.name, detail=f"vocab={len(stoi)} params={soul_net.num_parameters()}")
 
             return success_response(data={
                 "name": cp.name,
@@ -1322,7 +1321,7 @@ class AutoTrainRouter:
                                             job["checkpoint"] = str(soul_files[-1])
                                     except Exception:
                                         pass
-                                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                                    autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                                     get_training_runtime().sync(task_id)
                                 break
                         except json.JSONDecodeError:
@@ -1357,7 +1356,7 @@ class AutoTrainRouter:
         global _auto_train_cancel_event
         if _auto_train_cancel_event is not None:
             _auto_train_cancel_event.set()
-        safe_audit_log("training.stop", resource=(self.state.config or {}, detail="cancelled")
+        safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelled")
         return success_response(message="Cancel signal sent")
 
     def _load_soul(self, name: str) -> dict:
@@ -1393,8 +1392,6 @@ class AutoTrainRouter:
                    "training_duration_s")
                    if k in meta and meta[k]},
             }
-
-        return {"name": ckpt_file.name, "soul": "unknown", "size_mb": size_mb}
 
         return {"name": ckpt_file.name, "soul": "unknown", "size_mb": size_mb}
 

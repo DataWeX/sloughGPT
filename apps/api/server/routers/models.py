@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 
 from schemas.models import ModelInfo, LoadModelRequest, LoadModelResponse, ModelStatus
-from schemas.common import success_response, raise_error, wrap_controller_result
+from schemas.common import success_response, raise_error, classify_and_raise, wrap_controller_result, safe_audit_log
 from controllers.models import get_models_controller
 from infrastructure.auth import require_auth_if_enabled
 
@@ -248,7 +248,7 @@ class ModelsRouter:
                 ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
         except Exception as e:
             logger.debug("Failed to record model load event: %s", e)
-        safe_audit_log("model.load", resource=req.model_id, detail=result.get("status", device=req.device.value, quantize=req.quantize)
+        safe_audit_log("model.load", resource=req.model_id, detail=result.get("status", "unknown"), device=req.device.value, quantize=req.quantize)
         return wrap_controller_result(result)
 
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)):
@@ -269,7 +269,7 @@ class ModelsRouter:
             ss.record_model_event("unload", model_id or "unknown")
         except Exception as e:
             logger.debug("Failed to record model unload event: %s", e)
-        safe_audit_log("model.unload", resource=model_id or "unknown", detail=result.get("status")
+        safe_audit_log("model.unload", resource=model_id or "unknown", detail=result.get("status", "unknown"))
         return wrap_controller_result(result)
 
     async def current_model(self):
@@ -328,9 +328,7 @@ class ModelsRouter:
                             seen_ids.add(cached_id)
                             all_model_ids.append(cached_id)
                 except Exception:
-                    pass
-
-            from concurrent.futures import ThreadPoolExecutor, as_completed
+                    logger.debug("Failed to scan HF cache", exc_info=True)
             size_results: dict[str, Optional[float]] = {}
             cached_results: dict[str, bool] = {}
 
@@ -697,7 +695,7 @@ class ModelsRouter:
         except Exception:
             report["avx2_enabled"] = False
 
-        safe_audit_log("model.quantize", resource=self._audit_model_id(provider, detail=f"bits={bits} mode={mode}", bits=bits, mode=mode, layers_quantized=quantized_count, model_type=model_type)
+        safe_audit_log("model.quantize", resource=self._audit_model_id(provider), detail=f"bits={bits} mode={mode}", bits=bits, mode=mode, layers_quantized=quantized_count, model_type=model_type)
 
         return success_response(data=report)
 
@@ -748,7 +746,7 @@ class ModelsRouter:
         # Clear the quantization engine
         provider._quant_engine = None
 
-        safe_audit_log("model.dequantize", resource=self._audit_model_id(provider, detail=f"model_type={model_type}", layers_reset=len(layers))
+        safe_audit_log("model.dequantize", resource=self._audit_model_id(provider), detail=f"model_type={model_type}", layers_reset=len(layers))
 
         return success_response(data={
             "dequantized": True,
@@ -826,7 +824,7 @@ class ModelsRouter:
             result["fp16_mode"] = acc._fp16_mode
             result["reason"] = f"Accelerator {acc.name} set to {active}"
 
-        safe_audit_log("model.precision", resource=acc.name, detail=str(result.get("precision", mode=acc_mode)
+        safe_audit_log("model.precision", resource=acc.name, detail=str(result.get("precision", "unknown")), mode=acc_mode)
 
         return wrap_controller_result(result)
 

@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, AsyncIterator
 
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise
 
 logger = logging.getLogger(__name__)
 

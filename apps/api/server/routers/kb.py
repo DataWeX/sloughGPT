@@ -15,7 +15,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response, raise_error, safe_audit_log
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 
 import urllib.parse
 

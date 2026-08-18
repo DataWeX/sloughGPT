@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response, raise_error
+from schemas.common import success_response, raise_error, classify_and_raise
 
 
 def _numpy_perplexity(model, ids):

@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from controllers.health import get_health_controller
 from startup_progress import STARTUP_PHASE
-from schemas.common import success_response, raise_error
+from schemas.common import success_response, raise_error, classify_and_raise
 
 
 class HealthRouter:

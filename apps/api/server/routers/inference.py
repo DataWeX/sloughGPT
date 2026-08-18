@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 
-from schemas.common import success_response, raise_error
+from schemas.common import success_response, raise_error, classify_and_raise
 
 logger = logging.getLogger("slo.inference")
 
@@ -1272,11 +1272,7 @@ class InferenceRouter:
             await self._flush_session_to_disk(session_id)
             return success_response(data={"session_id": session_id}, message="created")
         except Exception as exc:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(exc)
-            emit_error_event(err, source="create_session")
-            logger.error("create_session failed: %s", exc, exc_info=True, extra={"tag": "REQ", "error_code": err.code})
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
+            classify_and_raise(exc, source="create_session")
 
     async def get_session(self, session_id: str):
         data = self._get_session(session_id)

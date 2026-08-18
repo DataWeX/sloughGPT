@@ -386,7 +386,7 @@ Be yourself — let your personality shape how you respond."""
                 from domains.infrastructure.server_state import get_server_state
                 get_server_state().record_model_event("switch", req.name)
             except Exception:
-                pass
+                logger.debug("Failed to record model event", exc_info=True)
 
             safe_audit_log("soul.switch", resource=req.name, detail="checkpoint_loaded" if req.checkpoint_name else "", checkpoint_name=req.checkpoint_name or "")
 

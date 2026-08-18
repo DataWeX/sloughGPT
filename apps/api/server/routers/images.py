@@ -9,7 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise
 
 logger = logging.getLogger("slo.routers.images")
 

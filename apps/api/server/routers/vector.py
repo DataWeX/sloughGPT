@@ -8,7 +8,7 @@ from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise
 
 
 class VectorStoreConfig(BaseModel):

@@ -17,7 +17,7 @@ from schemas.datasets import (
     VersionCreateResponse, VersionListResponse, VersionRestoreResponse,
     FromChatRequest, DatasetExportRequest,
 )
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise, safe_audit_log
 from controllers.datasets import get_datasets_controller
 
 import logging
@@ -344,7 +344,7 @@ class DatasetsRouter:
             except Exception as e:
                 errors.append({"index": i, "error": str(e)})
 
-        safe_audit_log("dataset.import", resource=f"batch({len(request.sources[:20], detail="batch", imported=len(results), errors=len(errors))
+        safe_audit_log("dataset.import", resource=f"batch({len(request.sources)})", detail="batch", imported=len(results), errors=len(errors))
         return success_response(data={"imported": len(results), "errors": errors})
 
     async def search_books(self, q: str = Query(..., description="Search by title or ISBN"), limit: int = Query(10, ge=1, le=50)):
@@ -438,7 +438,7 @@ class DatasetsRouter:
         dataset = ctrl.update_dataset(dataset_id, req.model_dump(exclude_none=True))
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        safe_audit_log("dataset.update", resource=dataset_id, detail=str(req.model_dump(exclude_none=True)
+        safe_audit_log("dataset.update", resource=dataset_id, detail=str(req.model_dump(exclude_none=True)))
         return DatasetInfo(**dataset)
 
     async def delete_dataset(self, dataset_id: str):
@@ -458,7 +458,7 @@ class DatasetsRouter:
         timestamp = ctrl.create_version_snapshot(dataset_id)
         if not timestamp:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        safe_audit_log("dataset.version", resource=dataset_id, detail=str(timestamp)
+        safe_audit_log("dataset.version", resource=dataset_id, detail=str(timestamp))
         return VersionCreateResponse(timestamp=timestamp, message="Version created")
 
     async def list_versions(self, dataset_id: str):
@@ -534,7 +534,7 @@ class DatasetsRouter:
                 if msg.role in ("user", "assistant") and msg.content:
                     f.write(json.dumps({"messages": [{"role": msg.role, "content": msg.content}]}) + "\n")
 
-        safe_audit_log("dataset.create", resource=name, detail=f"from-chat ({len(messages, messages=len(messages))
+        safe_audit_log("dataset.create", resource=name, detail=f"from-chat ({len(messages)} messages)", messages=len(messages))
         return {
             "status": "created",
             "dataset_id": dataset["id"],
@@ -597,7 +597,7 @@ class DatasetsRouter:
             for entry in messages_out:
                 f.write(json.dumps(entry) + "\n")
 
-        safe_audit_log("dataset.convert", resource=dataset_id, detail=str(new_ds["id"], conversations=len(messages_out))
+        safe_audit_log("dataset.convert", resource=dataset_id, detail=str(new_ds["id"]), conversations=len(messages_out))
         return {
             "status": "converted",
             "new_dataset_id": new_ds["id"],

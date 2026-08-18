@@ -17,7 +17,7 @@ import numpy as np
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from pydantic import BaseModel, Field
 from domains.multimodal import get_multimodal_manager
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.multimodal")
 
@@ -366,7 +366,7 @@ class MultimodalRouter:
                     self._dpo_state["accepted_count"] += 1
                 elif result["status"] == "rejected":
                     self._dpo_state["rejected_count"] += 1
-            safe_audit_log("multimodal.dpo", resource="hf-model", detail=result["status"], steps=result.get("steps", pairs_trained=result.get("pairs_trained")
+            safe_audit_log("multimodal.dpo", resource="hf-model", detail=result["status"], steps=result.get("steps", 0), pairs_trained=result.get("pairs_trained", 0))
             return success_response(data={
                 "status": result["status"], "steps": result.get("steps", 0),
                 "avg_loss": result.get("avg_loss"), "ppl_before": result.get("ppl_before"),

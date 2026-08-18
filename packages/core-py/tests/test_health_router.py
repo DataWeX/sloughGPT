@@ -170,9 +170,7 @@ class TestHealth:
         mock_get_ctrl.return_value = _mock_ctrl()
         hr = _make_health_router()
         client = TestClient(_app(hr))
-        with patch("domains.feedback.model_health.get_health_monitor", side_effect=RuntimeError("boom")), \
-             patch("domains.infrastructure.errors.classify_exception", return_value=MagicMock()), \
-             patch("domains.infrastructure.errors.emit_error_event"):
+        with patch("domains.feedback.model_health.get_health_monitor", side_effect=RuntimeError("boom")):
             resp = client.get("/health/model")
-        assert resp.status_code == 503
-        assert resp.json()["error"] == "boom"
+        assert resp.status_code == 500
+        assert resp.json()["error"] == "An unexpected error occurred."
