@@ -83,7 +83,7 @@ export function AdaptersScreen() {
       gap={10}
       alignItems="center">
       <YStack width={36} height={36} borderRadius={8} backgroundColor={colors.primary + '15'} alignItems="center" justifyContent="center">
-        <Icon name="layers" size={18} color={colors.primary} />
+        <Icon name="package" size={18} color={colors.primary} />
       </YStack>
       <YStack flex={1} gap={2}>
         <Text fontSize={14} fontWeight="500" color={colors.text}>{item.name || item.user_id || 'Unknown'}</Text>
@@ -123,7 +123,7 @@ export function AdaptersScreen() {
         </YStack>
       ) : adapters.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center" gap={8}>
-          <Icon name="layers" size={32} color={colors.textMuted} />
+          <Icon name="package" size={32} color={colors.textMuted} />
           <Text fontSize={14} color={colors.textMuted}>No adapters</Text>
           <Text fontSize={12} color={colors.textMuted}>Adapters are created from feedback</Text>
         </YStack>

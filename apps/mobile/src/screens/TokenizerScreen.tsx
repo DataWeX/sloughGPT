@@ -176,7 +176,7 @@ export function TokenizerScreen() {
           padding={14}
           gap={10}>
           <XStack alignItems="center" gap={6}>
-            <Icon name="terminal" size={16} color={colors.primary} />
+            <Icon name="book" size={16} color={colors.primary} />
             <Text fontSize={15} fontWeight="600" color="$color">Playground</Text>
           </XStack>
 

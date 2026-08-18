@@ -173,7 +173,7 @@ export function SoulsScreen() {
                     ) : null}
                   </YStack>
                   <Icon
-                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                    name={isExpanded ? 'arrow-up' : 'arrow-down'}
                     size={16}
                     color={colors.textMuted}
                   />

@@ -11,8 +11,8 @@ import {
   Image,
   Share,
 } from 'react-native';
-import {useTheme} from 'tamagui';
 import {Markdown} from './Markdown';
+import {useColors} from '../theme/colors';
 import {copyToClipboard} from '../services/clipboard';
 import {triggerHaptic} from '../services/haptics';
 import {sounds} from '../services/sounds';
@@ -41,14 +41,7 @@ const DELETE_WIDTH = 72;
 const S = {xs: 4, sm: 8, md: 12, lg: 16, xl: 20};
 const R = {sm: 6, md: 10, lg: 16, xl: 20, full: 9999};
 const T = {body: {fontSize: 15, lineHeight: 22, letterSpacing: 0.1}, small: {fontSize: 11, lineHeight: 15, letterSpacing: 0.2}};
-const COL = {
-  white: '#FFFFFF',
-  error: '#EF4444',
-  overlay: 'rgba(0,0,0,0.4)',
-  userBubble: '#7C52C4',
-  assistantBubble: 'rgba(124, 82, 196, 0.06)',
-  assistantBubbleBorder: 'rgba(124, 82, 196, 0.1)',
-};
+
 
 interface ContextAction {
   icon: IconName;
@@ -76,12 +69,12 @@ interface Props {
 }
 
 export function MessageBubble({message, sessionId, highlight, streaming, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
-  const theme = useTheme();
-  const bg = theme.background?.val || '#FFFFFF';
-  const border = theme.borderColor?.val || '#E4E0F2';
-  const textColor = theme.color?.val || '#1A1625';
-  const textMuted = theme.color10?.val || '#827A96';
-  const primary = theme.color9?.val || '#7C52C4';
+  const colors = useColors();
+  const bg = colors.background;
+  const border = colors.border;
+  const textColor = colors.text;
+  const textMuted = colors.textMuted;
+  const primary = colors.primary;
 
   const styles = useMemo(() => StyleSheet.create({
     row: {
@@ -106,7 +99,7 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: COL.error,
+      backgroundColor: colors.error,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -144,13 +137,13 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
       borderColor: primary + '60',
     },
     userBubble: {
-      backgroundColor: COL.userBubble,
+      backgroundColor: colors.primary,
       borderBottomRightRadius: R.sm,
     },
     assistantBubble: {
-      backgroundColor: COL.assistantBubble,
+      backgroundColor: colors.primaryAlpha(0.06),
       borderWidth: 0.5,
-      borderColor: COL.assistantBubbleBorder,
+      borderColor: colors.primaryAlpha(0.1),
       borderBottomLeftRadius: R.sm,
     },
     pinnedBubble: {
@@ -158,7 +151,7 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
       borderColor: primary + '40',
     },
     userText: {
-      color: COL.white,
+      color: colors.white,
     },
     assistantText: {
       color: textColor,
@@ -252,7 +245,7 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
     },
     overlay: {
       flex: 1,
-      backgroundColor: COL.overlay,
+      backgroundColor: colors.overlay(0.4),
       justifyContent: 'center',
       alignItems: 'center',
       padding: 24,
@@ -301,7 +294,7 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
       fontSize: 15,
     },
     contextLabelDestructive: {
-      color: COL.error,
+      color: colors.error,
     },
   }), [bg, border, textColor, textMuted, primary]);
 
@@ -571,8 +564,8 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
 
       {message.status === 'failed' && (
         <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4}}>
-          <Icon name="triangle-alert" size={14} color={COL.error} />
-          <Text style={[styles.timestamp, {color: COL.error}]}>Failed to send</Text>
+          <Icon name="triangle-alert" size={14} color={colors.error} />
+          <Text style={[styles.timestamp, {color: colors.error}]}>Failed to send</Text>
           {onRetry && (
             <Pressable onPress={onRetry} hitSlop={8}>
               <View style={{flexDirection: 'row', alignItems: 'center', gap: 3}}>

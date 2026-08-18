@@ -1,21 +1,30 @@
 import React from 'react';
 import {Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 
 interface Props {
   label: string;
   variant?: 'default' | 'success' | 'warning' | 'error' | 'info';
 }
 
-const variantColors: Record<string, {bg: string; fg: string}> = {
-  default: {bg: '$background', fg: '$color11'},
-  success: {bg: '#E8F5EE', fg: '#22C55E'},
-  warning: {bg: '#FFF3E0', fg: '#F59E0B'},
-  error: {bg: '#FDE8E8', fg: '#EF4444'},
-  info: {bg: '$background', fg: '$color9'},
-};
+function getVariantColors(variant: string, c: ReturnType<typeof useColors>) {
+  switch (variant) {
+    case 'success':
+      return {bg: c.successLight, fg: c.success};
+    case 'warning':
+      return {bg: c.warning + '20', fg: c.warning};
+    case 'error':
+      return {bg: c.errorLight, fg: c.error};
+    case 'info':
+      return {bg: c.background, fg: c.primary};
+    default:
+      return {bg: c.background, fg: c.textMuted};
+  }
+}
 
 export function StatusBadge({label, variant = 'default'}: Props) {
-  const c = variantColors[variant] || variantColors.default;
+  const c = useColors();
+  const colors = getVariantColors(variant, c);
   return (
     <Text
       fontSize={11}
@@ -25,8 +34,8 @@ export function StatusBadge({label, variant = 'default'}: Props) {
       paddingVertical={3}
       borderRadius={9999}
       alignSelf="flex-start"
-      backgroundColor={c.bg}
-      color={c.fg}
+      backgroundColor={colors.bg}
+      color={colors.fg}
       overflow="hidden">
       {label}
     </Text>

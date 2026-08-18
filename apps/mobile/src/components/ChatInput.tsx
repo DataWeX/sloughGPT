@@ -4,7 +4,8 @@ import {
   Pressable,
   Keyboard,
 } from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {triggerHaptic} from '../services/haptics';
 import {QuickPromptPicker} from './QuickPromptPicker';
 import {SlashCommandPicker} from './SlashCommandPicker';
@@ -31,7 +32,7 @@ interface Props {
 }
 
 export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit, voiceMessageMode, onVoiceMessageToggle, onExecuteCommand}: Props) {
-  const theme = useTheme();
+  const colors = useColors();
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
   const [showSlash, setShowSlash] = useState(false);
@@ -118,22 +119,22 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
   };
 
   const hasText = text.trim().length > 0;
-  const bg = theme.background?.val || '#FFFFFF';
-  const border = theme.borderColor?.val || '#E4E0F2';
-  const textColor = theme.color?.val || '#1A1625';
-  const textSecondary = theme.color11?.val || '#827A96';
-  const textMuted = theme.color10?.val || '#827A96';
-  const primary = theme.color9?.val || '#7C52C4';
+  const bg = colors.background;
+  const border = colors.border;
+  const textColor = colors.text;
+  const textSecondary = colors.textSecondary;
+  const textMuted = colors.textMuted;
+  const primary = colors.primary;
 
   const iconBtnStyle = {
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: 'rgba(124, 82, 196, 0.06)',
+    backgroundColor: colors.primaryAlpha(0.06),
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     borderWidth: 0.5,
-    borderColor: 'rgba(124, 82, 196, 0.12)',
+    borderColor: colors.primaryAlpha(0.12),
   };
 
   const inputStyle = {
@@ -141,14 +142,14 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
     fontSize: 15,
     fontWeight: '400' as const,
     color: textColor,
-    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+    backgroundColor: colors.primaryAlpha(0.04),
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 10,
     maxHeight: 120,
     minHeight: 42,
     borderWidth: 0.5,
-    borderColor: 'rgba(124, 82, 196, 0.1)',
+    borderColor: colors.primaryAlpha(0.1),
   };
 
   const circleBtn = (size: number, color: string) => ({
@@ -158,7 +159,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
     backgroundColor: color,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    shadowColor: '#7C52C4',
+    shadowColor: primary,
     shadowOffset: {width: 0, height: 2} as const,
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -237,7 +238,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
         )}
 
         {disabled ? (
-          <Pressable onPress={onStop} style={circleBtn(40, '#EF4444')} accessibilityLabel="Stop" accessibilityRole="button" accessible={true}>
+          <Pressable onPress={onStop} style={circleBtn(40, colors.error)} accessibilityLabel="Stop" accessibilityRole="button" accessible={true}>
             <Icon name="stop-circle" size={16} color="white" />
           </Pressable>
         ) : hasText ? (
@@ -279,8 +280,8 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
                   borderColor: border,
                 },
                 isRecording && {
-                  backgroundColor: '#FDE8E8',
-                  borderColor: '#EF4444',
+                  backgroundColor: colors.errorLight,
+                  borderColor: colors.error,
                 },
               ]}
               accessibilityLabel={isRecording ? 'Stop recording' : 'Start voice input'}
@@ -294,7 +295,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
 
       {isRecording && (
         <XStack alignItems="center" justifyContent="center" gap={4} marginTop={4}>
-          <YStack width={8} height={8} borderRadius={4} backgroundColor="#EF4444" />
+          <YStack width={8} height={8} borderRadius={4} backgroundColor={colors.error} />
           <TextInput
             value="Recording..."
             editable={false}
@@ -302,7 +303,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
               fontSize: 11,
               fontWeight: '600',
               letterSpacing: 0.2,
-              color: '#EF4444',
+              color: colors.error,
             }}
           />
         </XStack>

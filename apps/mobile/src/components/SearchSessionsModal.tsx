@@ -7,7 +7,8 @@ import {
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {triggerHaptic} from '../services/haptics';
 import {Icon} from '../components/Icon';
@@ -20,7 +21,7 @@ interface Props {
 }
 
 export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) {
-  const theme = useTheme();
+  const colors = useColors();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,8 +38,8 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
     }
   }, [visible]);
 
-  const accent = theme.color9?.val || '#7C52C4';
-  const mutedColor = theme.color10?.val || '#9B95A8';
+  const accent = colors.primary;
+  const mutedColor = colors.textMuted;
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
@@ -90,7 +91,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
+      <YStack flex={1} backgroundColor={colors.overlay(0.4)} justifyContent="flex-end">
         <YStack
           backgroundColor="$background"
           borderTopLeftRadius={24}
@@ -109,7 +110,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
             </Text>
             <Pressable onPress={onClose}>
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={16} color={colors.textSecondary} />
               </YStack>
             </Pressable>
           </XStack>
@@ -125,14 +126,14 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
               autoCapitalize="none"
               autoCorrect={false}
               style={{
-                backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                backgroundColor: colors.primaryAlpha(0.04),
                 borderRadius: 10,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
                 fontSize: 14,
-                color: '#1A1625',
+                color: colors.text,
                 borderWidth: 0.5,
-                borderColor: 'rgba(124, 82, 196, 0.12)',
+                borderColor: colors.primaryAlpha(0.12),
               }}
             />
           </YStack>

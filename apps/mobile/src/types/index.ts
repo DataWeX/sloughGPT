@@ -110,3 +110,37 @@ export interface SearchResult {
   match_count: number;
   matches: SearchMatch[];
 }
+
+export interface Adapter {
+  id: string;
+  user_id: string;
+  name: string;
+  loss: number | null;
+  steps: number | null;
+  traits: Record<string, number>;
+  created_at: string;
+}
+
+export interface BenchmarkResult {
+  model?: string;
+  model_id?: string;
+  timestamp?: string;
+  coherence: number;
+  repetition: number;
+  perplexity: number | null;
+  avg_length?: number;
+  avg_response_length?: number;
+}
+
+export interface Dataset {
+  id: string;
+  name: string;
+  description: string;
+  row_count: number;
+  total_chars: number;
+  format: string;
+  source: string;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}

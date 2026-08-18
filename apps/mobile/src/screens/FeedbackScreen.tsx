@@ -146,7 +146,7 @@ export function FeedbackScreen() {
                 <XStack gap={8}>
                   <Pressable onPress={() => handleTriggerWorkflow('aggregate')} disabled={triggering}>
                     <XStack paddingHorizontal={10} paddingVertical={5} borderRadius={6} backgroundColor={colors.primary + '15'} gap={4} alignItems="center">
-                      <Icon name="layers" size={14} color={colors.primary} />
+                      <Icon name="package" size={14} color={colors.primary} />
                       <Text fontSize={12} fontWeight="500" color={colors.primary}>Aggregate</Text>
                     </XStack>
                   </Pressable>

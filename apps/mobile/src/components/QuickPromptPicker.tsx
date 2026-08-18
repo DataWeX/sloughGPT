@@ -5,7 +5,8 @@ import {
   FlatList,
   TextInput,
 } from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {
   getQuickPromptsByCategory,
   addQuickPrompt,
@@ -24,14 +25,14 @@ interface Props {
 }
 
 export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
-  const theme = useTheme();
+  const colors = useColors();
   const [prompts, setPrompts] = useState<QuickPrompt[]>([]);
   const [category, setCategory] = useState<string>('all');
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newPrompt, setNewPrompt] = useState('');
 
-  const accent = theme.color9?.val || '#7C52C4';
+  const accent = colors.primary;
 
   useEffect(() => {
     if (visible) {
@@ -68,7 +69,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <YStack flex={1} backgroundColor="rgba(0,0,0,0.5)" justifyContent="flex-end">
+      <YStack flex={1} backgroundColor={colors.overlay(0.5)} justifyContent="flex-end">
         <YStack
           backgroundColor="$background"
           borderTopLeftRadius={24}
@@ -86,7 +87,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             </Text>
             <Pressable onPress={onClose} accessible accessibilityRole="button" accessibilityLabel="Close quick prompts">
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={16} color={colors.textSecondary} />
               </YStack>
             </Pressable>
           </XStack>
@@ -171,36 +172,36 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             <YStack paddingHorizontal={16} paddingTop={8} gap={8}>
               <TextInput
                 placeholder="Title"
-                placeholderTextColor="#827A96"
+                placeholderTextColor={colors.textMuted}
                 value={newTitle}
                 onChangeText={setNewTitle}
                 style={{
                   fontSize: 14,
-                  backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                  backgroundColor: colors.primaryAlpha(0.04),
                   borderRadius: 10,
                   paddingHorizontal: 14,
                   paddingVertical: 10,
-                  color: '#1A1625',
+                  color: colors.text,
                   borderWidth: 0.5,
-                  borderColor: 'rgba(124, 82, 196, 0.12)',
+                  borderColor: colors.primaryAlpha(0.12),
                 }}
               />
               <TextInput
                 placeholder="Prompt text (use {variable} for placeholders)"
-                placeholderTextColor="#827A96"
+                placeholderTextColor={colors.textMuted}
                 value={newPrompt}
                 onChangeText={setNewPrompt}
                 multiline
                 numberOfLines={3}
                 style={{
                   fontSize: 14,
-                  backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                  backgroundColor: colors.primaryAlpha(0.04),
                   borderRadius: 10,
                   paddingHorizontal: 14,
                   paddingVertical: 10,
-                  color: '#1A1625',
+                  color: colors.text,
                   borderWidth: 0.5,
-                  borderColor: 'rgba(124, 82, 196, 0.12)',
+                  borderColor: colors.primaryAlpha(0.12),
                   minHeight: 80,
                   textAlignVertical: 'top',
                 }}

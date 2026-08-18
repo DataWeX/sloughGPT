@@ -1,13 +1,14 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Animated} from 'react-native';
 import {XStack, YStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 
 interface Props {
   visible: boolean;
   onDone?: () => void;
 }
 
-function Dot({delay}: {delay: number}) {
+function Dot({delay, color}: {delay: number; color: string}) {
   const bounce = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -28,7 +29,7 @@ function Dot({delay}: {delay: number}) {
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: '$color9',
+        backgroundColor: color,
         transform: [{translateY: bounce}],
       }}
     />
@@ -40,6 +41,7 @@ export function ReasoningPanel({visible, onDone}: Props) {
   const [doneVisible, setDoneVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
+  const c = useColors();
 
   useEffect(() => {
     if (visible) {
@@ -81,8 +83,8 @@ export function ReasoningPanel({visible, onDone}: Props) {
           paddingVertical={8}
           borderRadius={12}
           borderBottomLeftRadius={4}
-          backgroundColor="#E8F5EE">
-          <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="#22C55E">
+          backgroundColor={c.successLight}>
+          <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color={c.success}>
             Reasoning complete ({elapsedStr}s)
           </Text>
         </YStack>
@@ -94,25 +96,22 @@ export function ReasoningPanel({visible, onDone}: Props) {
     <XStack paddingHorizontal={16} marginBottom={8} alignItems="flex-start">
       <XStack
         alignItems="center"
-        backgroundColor="#EEEDFF"
+        backgroundColor={c.primaryAlpha(0.06)}
         paddingHorizontal={12}
         paddingVertical={8}
         borderRadius={12}
         borderBottomLeftRadius={4}
         borderWidth={1}
-        borderColor="#DDD6FE"
+        borderColor={c.primaryAlpha(0.15)}
         gap={8}>
-        <Text fontSize={11} fontWeight="600" letterSpacing={0.2} color="$color9">
+        <Text fontSize={11} fontWeight="600" letterSpacing={0.2} color={c.primary}>
           Reasoning
         </Text>
         <XStack alignItems="center" gap={4}>
-          <Dot delay={0} />
-          <Dot delay={150} />
-          <Dot delay={300} />
+          <Dot delay={0} color={c.primary} />
+          <Dot delay={150} color={c.primary} />
+          <Dot delay={300} color={c.primary} />
         </XStack>
-        <Text fontSize={11} color="$color10" fontVariant={['tabular-nums']}>
-          {elapsedStr}s
-        </Text>
       </XStack>
     </XStack>
   );

@@ -148,7 +148,7 @@ export function WorkflowScreen() {
                   {['aggregate', 'prune', 'export'].map(action => (
                     <Pressable key={action} onPress={() => handleTrigger(action)}>
                       <XStack paddingHorizontal={12} paddingVertical={6} borderRadius={6} backgroundColor={colors.primaryAlpha(0.1)} gap={4} alignItems="center">
-                        <Icon name={action === 'aggregate' ? 'layers' : action === 'prune' ? 'trash-2' : 'download'} size={14} color={colors.primary} />
+                        <Icon name={action === 'aggregate' ? 'package' : action === 'prune' ? 'trash-2' : 'download'} size={14} color={colors.primary} />
                         <Text fontSize={12} fontWeight="500" color={colors.primary}>{action.charAt(0).toUpperCase() + action.slice(1)}</Text>
                       </XStack>
                     </Pressable>

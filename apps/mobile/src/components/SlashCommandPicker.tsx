@@ -1,6 +1,7 @@
 import React, {useMemo, useState, useCallback} from 'react';
 import {Modal, FlatList, Pressable} from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {Icon} from './Icon';
 import {triggerHaptic} from '../services/haptics';
 import {getAllCommands} from '../services/chat-commands';
@@ -29,7 +30,7 @@ function fuzzyScore(query: string, target: string): number {
 }
 
 export function SlashCommandPicker({visible, query, onSelect, onExecute, onClose}: Props) {
-  const theme = useTheme();
+  const colors = useColors();
   const allCommands = useMemo(() => getAllCommands(), []);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -65,17 +66,17 @@ export function SlashCommandPicker({visible, query, onSelect, onExecute, onClose
     [query, onExecute, onClose],
   );
 
-  const bg = theme.background?.val || '#FFFFFF';
-  const border = theme.borderColor?.val || '#E4E0F2';
-  const primary = theme.color9?.val || '#7C52C4';
-  const textMuted = theme.color10?.val || '#827A96';
-  const textColor = theme.color?.val || '#1A1625';
+  const bg = colors.background;
+  const border = colors.border;
+  const primary = colors.primary;
+  const textMuted = colors.textMuted;
+  const textColor = colors.text;
 
   if (!visible || filtered.length === 0) return null;
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
-      <Pressable style={{flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)'}} onPress={onClose}>
+      <Pressable style={{flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay(0.3)}} onPress={onClose}>
         <YStack
           backgroundColor={bg}
           borderTopLeftRadius={16}
@@ -110,7 +111,7 @@ export function SlashCommandPicker({visible, query, onSelect, onExecute, onClose
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 12,
-                    backgroundColor: isActive ? 'rgba(124, 82, 196, 0.08)' : 'transparent',
+                    backgroundColor: isActive ? colors.primaryAlpha(0.08) : 'transparent',
                   }}>
                   <Text
                     style={{

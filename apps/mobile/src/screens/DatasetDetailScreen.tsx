@@ -11,19 +11,7 @@ import {Icon} from '../components/Icon';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
 import {toast} from '../services/toast';
-
-interface Dataset {
-  id: string;
-  name: string;
-  description: string;
-  row_count: number;
-  total_chars: number;
-  format: string;
-  source: string;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-}
+import type {Dataset} from '../types';
 
 interface DatasetStats {
   total_rows: number;
@@ -98,7 +86,7 @@ export function DatasetDetailScreen() {
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
       <XStack paddingHorizontal={16} paddingVertical={12} alignItems="center" gap={12}>
         <Pressable onPress={() => navigation.goBack()}>
-          <Icon name="chevron-down" size={20} color={colors.textMuted} />
+          <Icon name="arrow-down" size={20} color={colors.textMuted} />
         </Pressable>
         <Text fontSize={18} fontWeight="600" color={colors.text} flex={1} numberOfLines={1}>
           {dataset?.name || datasetId}

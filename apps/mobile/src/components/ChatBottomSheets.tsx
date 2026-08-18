@@ -1,6 +1,7 @@
 import React from 'react';
 import {Modal, FlatList, TextInput as RNTextInput, Platform} from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {useChatStore} from '../stores/chat-store';
 import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
@@ -99,7 +100,7 @@ export function ChatBottomSheets({
   handleExportChat,
   setShowSearch,
 }: ChatBottomSheetsProps) {
-  const theme = useTheme();
+  const colors = useColors();
 
   return (
     <>
@@ -108,7 +109,7 @@ export function ChatBottomSheets({
         <YStack flex={1} justifyContent="flex-end">
           <YStack
             flex={1}
-            backgroundColor="rgba(0,0,0,0.3)"
+            backgroundColor={colors.overlay(0.3)}
             onPress={() => setShowInfo(false)}
           />
           <YStack
@@ -131,7 +132,7 @@ export function ChatBottomSheets({
                 alignItems="center" justifyContent="center"
                 onPress={() => setShowInfo(false)}
                 pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={14} color={colors.textSecondary} />
               </YStack>
             </XStack>
 
@@ -142,7 +143,7 @@ export function ChatBottomSheets({
                 {label: 'Characters', value: String(messages.reduce((sum, m) => sum + (m.content?.length || 0), 0))},
               ].map(stat => (
                 <YStack key={stat.label} flex={1} paddingVertical={14} paddingHorizontal={10} borderRadius={14}
-                  backgroundColor="rgba(124, 82, 196, 0.04)" alignItems="center">
+                  backgroundColor={colors.primaryAlpha(0.04)} alignItems="center">
                   <Text fontSize={20} fontWeight="700" color="$color9">{stat.value}</Text>
                   <Text fontSize={10} fontWeight="500" color="$color10" marginTop={4}>{stat.label}</Text>
                 </YStack>
@@ -169,7 +170,7 @@ export function ChatBottomSheets({
                 <Text fontSize={13} color="$color11">Status</Text>
                 <XStack alignItems="center" gap={6}>
                   <YStack width={7} height={7} borderRadius={4}
-                    backgroundColor={isConnected ? '#22C55E' : '#EF4444'} />
+                    backgroundColor={isConnected ? colors.success : colors.error} />
                   <Text fontSize={13} fontWeight="500" color="$color">
                     {isConnected ? 'Connected' : 'Offline'}
                   </Text>
@@ -189,8 +190,8 @@ export function ChatBottomSheets({
                       justifyContent="center" alignItems="center"
                       borderWidth={2}
                       borderColor={active ? '$color9' : 'transparent'}
-                      backgroundColor={p.value ? p.value : (theme.background?.val || '#FFFFFF')}
-                      style={!p.value ? {borderColor: (theme.borderColor?.val || '#E5E7EB')} : {}}
+                      backgroundColor={p.value ? p.value : colors.background}
+                      style={!p.value ? {borderColor: colors.border} : {}}
                       onPress={() => updateTheme({chatBackground: p.value})}
                       pressStyle={{scale: 0.88}}>
                       {active && (
@@ -210,7 +211,7 @@ export function ChatBottomSheets({
                     <YStack
                       key={label}
                       flexDirection="row" alignItems="center" gap={4}
-                      backgroundColor="rgba(124, 82, 196, 0.08)"
+                      backgroundColor={colors.primaryAlpha(0.08)}
                       paddingHorizontal={10} paddingVertical={5} borderRadius={999}
                       onPress={async () => {
                         if (activeSessionId) {
@@ -235,16 +236,16 @@ export function ChatBottomSheets({
                 <RNTextInput
                   style={{
                     flex: 1, fontSize: 13,
-                    color: (theme.color?.val || '#111827'),
-                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    color: colors.text,
+                    backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 12,
                     paddingHorizontal: 12, paddingVertical: 9,
-                    borderWidth: 0.5, borderColor: (theme.borderColor?.val || '#E5E7EB'),
+                    borderWidth: 0.5, borderColor: colors.border,
                   }}
                   value={labelInput}
                   onChangeText={setLabelInput}
                   placeholder="Add a label..."
-                  placeholderTextColor={(theme.color10?.val || '#9CA3AF')}
+                  placeholderTextColor={colors.textMuted}
                   returnKeyType="done"
                   onSubmitEditing={async () => {
                     if (labelInput.trim() && activeSessionId) {
@@ -272,7 +273,7 @@ export function ChatBottomSheets({
         <YStack flex={1} justifyContent="flex-end">
           <YStack
             flex={1}
-            backgroundColor="rgba(0,0,0,0.3)"
+            backgroundColor={colors.overlay(0.3)}
             onPress={() => setShowSoulPicker(false)}
           />
           <YStack
@@ -295,7 +296,7 @@ export function ChatBottomSheets({
                 alignItems="center" justifyContent="center"
                 onPress={() => setShowSoulPicker(false)}
                 pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={14} color={colors.textSecondary} />
               </YStack>
             </XStack>
 
@@ -304,11 +305,11 @@ export function ChatBottomSheets({
                 marginHorizontal={16} marginTop={12} marginBottom={4}
                 paddingHorizontal={16} paddingVertical={14}
                 borderRadius={14}
-                backgroundColor="rgba(124, 82, 196, 0.06)"
-                borderWidth={0.5} borderColor="rgba(124, 82, 196, 0.15)">
+                backgroundColor={colors.primaryAlpha(0.06)}
+                borderWidth={0.5} borderColor={colors.primaryAlpha(0.15)}>
                 <Text fontSize={10} fontWeight="700" letterSpacing={0.6} color="$color9" marginBottom={6}>ACTIVE</Text>
                 <XStack alignItems="center" gap={10}>
-                  <YStack width={32} height={32} borderRadius={16} backgroundColor="rgba(124, 82, 196, 0.12)" alignItems="center" justifyContent="center">
+                  <YStack width={32} height={32} borderRadius={16} backgroundColor={colors.primaryAlpha(0.12)} alignItems="center" justifyContent="center">
                     <Icon name="check" size={14} color="$color9" />
                   </YStack>
                   <YStack flex={1}>
@@ -333,17 +334,17 @@ export function ChatBottomSheets({
                     marginVertical={2}
                     borderRadius={12}
                     alignItems="center" gap={12}
-                    backgroundColor={isActive ? 'rgba(124, 82, 196, 0.08)' : 'transparent'}
+                    backgroundColor={isActive ? colors.primaryAlpha(0.08) : 'transparent'}
                     onPress={() => {
                       switchSoul(soul.name);
                       setShowSoulPicker(false);
                     }}
-                    pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.06)', scale: 0.98}}>
+                    pressStyle={{backgroundColor: colors.primaryAlpha(0.06), scale: 0.98}}>
                     <YStack
                       width={36} height={36} borderRadius={18}
-                      backgroundColor={isActive ? '$color9' : 'rgba(124, 82, 196, 0.08)'}
+                      backgroundColor={isActive ? '$color9' : colors.primaryAlpha(0.08)}
                       alignItems="center" justifyContent="center">
-                      <Icon name="user" size={16} color={isActive ? 'white' : (theme.color9?.val || '#7C52C4')} />
+                      <Icon name="user" size={16} color={isActive ? 'white' : colors.primary} />
                     </YStack>
                     <YStack flex={1}>
                       <Text fontSize={14} fontWeight={isActive ? '600' : '400'} color="$color">{soul.name}</Text>
@@ -390,7 +391,7 @@ export function ChatBottomSheets({
         <YStack flex={1} justifyContent="flex-end">
           <YStack
             flex={1}
-            backgroundColor="rgba(0,0,0,0.3)"
+            backgroundColor={colors.overlay(0.3)}
             onPress={() => setShowSettings(false)}
           />
           <YStack
@@ -412,7 +413,7 @@ export function ChatBottomSheets({
                 alignItems="center" justifyContent="center"
                 onPress={() => setShowSettings(false)}
                 pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={14} color={colors.textSecondary} />
               </YStack>
             </XStack>
 
@@ -420,9 +421,9 @@ export function ChatBottomSheets({
               paddingVertical={14} paddingHorizontal={20}
               borderBottomWidth={0.5} borderBottomColor="$borderColor"
               onPress={() => { createSession(); setShowSettings(false); }}
-              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
-                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                   <Icon name="plus" size={18} color="$color9" />
                 </YStack>
                 <YStack>
@@ -436,9 +437,9 @@ export function ChatBottomSheets({
               paddingVertical={14} paddingHorizontal={20}
               borderBottomWidth={0.5} borderBottomColor="$borderColor"
               onPress={() => { setShowSettings(false); setShowSearch(true); }}
-              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
-                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                   <Icon name="search" size={18} color="$color9" />
                 </YStack>
                 <YStack>
@@ -455,9 +456,9 @@ export function ChatBottomSheets({
                 setShowSettings(false);
                 updateTheme({theme: themeMode === 'dark' ? 'light' : 'dark'});
               }}
-              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
-                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                   <Icon name={themeMode === 'dark' ? 'sun' : 'moon'} size={18} color="$color9" />
                 </YStack>
                 <YStack>
@@ -473,9 +474,9 @@ export function ChatBottomSheets({
               paddingVertical={14} paddingHorizontal={20}
               borderBottomWidth={0.5} borderBottomColor="$borderColor"
               onPress={() => { setShowSettings(false); setShowInfo(true); }}
-              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
-                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                   <Icon name="info" size={18} color="$color9" />
                 </YStack>
                 <YStack>
@@ -489,9 +490,9 @@ export function ChatBottomSheets({
               paddingVertical={14} paddingHorizontal={20}
               borderBottomWidth={0.5} borderBottomColor="$borderColor"
               onPress={() => { setShowSettings(false); setShowChatSettings(true); }}
-              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
-                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                   <Icon name="settings" size={18} color="$color9" />
                 </YStack>
                 <YStack>
@@ -505,9 +506,9 @@ export function ChatBottomSheets({
               paddingVertical={14} paddingHorizontal={20}
               borderBottomWidth={0.5} borderBottomColor="$borderColor"
               onPress={() => { setShowSettings(false); setShowSystemPrompt(true); }}
-              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
-                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                   <Icon name="info" size={18} color="$color9" />
                 </YStack>
                 <YStack>
@@ -520,9 +521,9 @@ export function ChatBottomSheets({
             <YStack
               paddingVertical={14} paddingHorizontal={20}
               onPress={() => { setShowSettings(false); handleExportChat(); }}
-              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={14}>
-                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                <YStack width={36} height={36} borderRadius={12} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                   <Icon name="download" size={18} color="$color9" />
                 </YStack>
                 <YStack>
@@ -544,7 +545,7 @@ export function ChatBottomSheets({
         animationType="slide"
         onRequestClose={() => setForwardTo(null)}>
         <YStack flex={1} justifyContent="flex-end">
-          <YStack flex={1} backgroundColor="rgba(0,0,0,0.3)" onPress={() => setForwardTo(null)} />
+          <YStack flex={1} backgroundColor={colors.overlay(0.3)} onPress={() => setForwardTo(null)} />
           <YStack
             backgroundColor="$background"
             borderTopLeftRadius={24}
@@ -562,7 +563,7 @@ export function ChatBottomSheets({
               <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Forward to...</Text>
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center"
                 onPress={() => setForwardTo(null)} pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={14} color={colors.textSecondary} />
               </YStack>
             </XStack>
 
@@ -571,8 +572,8 @@ export function ChatBottomSheets({
                 marginHorizontal={16} marginTop={10} marginBottom={6}
                 paddingHorizontal={14} paddingVertical={10}
                 borderRadius={12}
-                backgroundColor="rgba(124, 82, 196, 0.04)"
-                borderWidth={0.5} borderColor="rgba(124, 82, 196, 0.12)">
+                backgroundColor={colors.primaryAlpha(0.04)}
+                borderWidth={0.5} borderColor={colors.primaryAlpha(0.12)}>
                 <Text fontSize={11} fontWeight="600" color="$color9" marginBottom={2}>MESSAGE</Text>
                 <Text fontSize={13} color="$color10" numberOfLines={2}>{forwardTo.content}</Text>
               </YStack>
@@ -594,9 +595,9 @@ export function ChatBottomSheets({
                     }
                     setForwardTo(null);
                   }}
-                  pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.06)', scale: 0.98}}>
+                  pressStyle={{backgroundColor: colors.primaryAlpha(0.06), scale: 0.98}}>
                   <YStack width={36} height={36} borderRadius={12}
-                    backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                    backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                     <Icon name="message-circle" size={16} color="$color9" />
                   </YStack>
                   <YStack flex={1}>
@@ -624,7 +625,7 @@ export function ChatBottomSheets({
         <YStack flex={1} justifyContent="flex-end">
           <YStack
             flex={1}
-            backgroundColor="rgba(0,0,0,0.3)"
+            backgroundColor={colors.overlay(0.3)}
             onPress={() => setShowChatSettings(false)}
           />
           <YStack
@@ -646,7 +647,7 @@ export function ChatBottomSheets({
                 alignItems="center" justifyContent="center"
                 onPress={() => setShowChatSettings(false)}
                 pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={14} color={colors.textSecondary} />
               </YStack>
             </XStack>
 
@@ -663,7 +664,7 @@ export function ChatBottomSheets({
         <YStack flex={1} justifyContent="flex-end">
           <YStack
             flex={1}
-            backgroundColor="rgba(0,0,0,0.3)"
+            backgroundColor={colors.overlay(0.3)}
             onPress={() => setShowSystemPrompt(false)}
           />
           <YStack
@@ -685,7 +686,7 @@ export function ChatBottomSheets({
                 alignItems="center" justifyContent="center"
                 onPress={() => setShowSystemPrompt(false)}
                 pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={14} color={colors.textSecondary} />
               </YStack>
             </XStack>
 
@@ -702,7 +703,7 @@ export function ChatBottomSheets({
 }
 
 function ChatSettingsContent() {
-  const theme = useTheme();
+  const colors = useColors();
   const settings = useSettingsStore();
   const update = useSettingsStore(s => s.update);
 
@@ -725,7 +726,7 @@ function ChatSettingsContent() {
           </XStack>
           <YStack
             height={44}
-            backgroundColor="rgba(124, 82, 196, 0.04)"
+            backgroundColor={colors.primaryAlpha(0.04)}
             borderRadius={10}
             paddingHorizontal={12}
             alignItems="center"
@@ -735,7 +736,7 @@ function ChatSettingsContent() {
                 width: '100%',
                 height: 44,
                 fontSize: 14,
-                color: theme.color?.val || '#1A1625',
+                color: colors.text,
                 textAlign: 'center',
               }}
               keyboardType="numeric"
@@ -756,7 +757,7 @@ function ChatSettingsContent() {
         paddingVertical={12}
         borderRadius={10}
         alignItems="center"
-        backgroundColor="rgba(124, 82, 196, 0.08)"
+        backgroundColor={colors.primaryAlpha(0.08)}
         onPress={() => update({temperature: 0.8, maxTokens: 256, topP: 0.9, topK: 50})}
         pressStyle={{opacity: 0.7, scale: 0.98}}>
         <Text fontSize={13} fontWeight="600" color="$color9">Reset to Defaults</Text>
@@ -766,6 +767,7 @@ function ChatSettingsContent() {
 }
 
 function SystemPromptContent() {
+  const colors = useColors();
   const currentSoul = useModelStore(s => s.currentSoul);
   const [prompt, setPrompt] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -798,7 +800,7 @@ function SystemPromptContent() {
         <Text fontSize={13} color="$color">{currentSoul?.name || 'None'}</Text>
       </XStack>
       <YStack
-        backgroundColor="rgba(124, 82, 196, 0.04)"
+        backgroundColor={colors.primaryAlpha(0.04)}
         borderRadius={10}
         padding={14}>
         <Text fontSize={13} lineHeight={20} color="$color" selectable>

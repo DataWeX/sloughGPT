@@ -1,6 +1,7 @@
 import React from 'react';
 import {FlatList, Alert, TextInput as RNTextInput, Modal} from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {useChatStore} from '../stores/chat-store';
 import {triggerHaptic} from '../services/haptics';
 import {toast} from '../services/toast';
@@ -47,7 +48,7 @@ export function ChatDrawer({
   setSessionLabels,
   setAllLabels,
 }: ChatDrawerProps) {
-  const theme = useTheme();
+  const colors = useColors();
   const {loadSession, deleteSession, renameSession, archiveSession} = useChatStore();
 
   return (
@@ -55,7 +56,7 @@ export function ChatDrawer({
       <YStack flex={1} justifyContent="flex-end">
         <YStack
           flex={1}
-          backgroundColor="rgba(0,0,0,0.3)"
+          backgroundColor={colors.overlay(0.3)}
           onPress={onClose}
         />
         <YStack
@@ -80,7 +81,7 @@ export function ChatDrawer({
               alignItems="center" justifyContent="center"
               onPress={onClose}
               pressStyle={{opacity: 0.6}}>
-              <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+              <Icon name="x" size={16} color={colors.textSecondary} />
             </YStack>
           </XStack>
 
@@ -97,12 +98,12 @@ export function ChatDrawer({
                 marginHorizontal={12} marginVertical={2}
                 borderRadius={12}
                 alignItems="center" justifyContent="space-between"
-                backgroundColor={isActive ? 'rgba(124, 82, 196, 0.08)' : 'transparent'}
+                backgroundColor={isActive ? colors.primaryAlpha(0.08) : 'transparent'}
                 onPress={() => {
                   loadSession(session.id);
                   onClose();
                 }}
-                pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.06)', scale: 0.98}}>
+                pressStyle={{backgroundColor: colors.primaryAlpha(0.06), scale: 0.98}}>
                 <YStack flex={1} marginRight={8}>
                   <YStack
                     onLongPress={() => {
@@ -115,7 +116,7 @@ export function ChatDrawer({
                       }, 'plain-text', currentTitle);
                     }}>
                     <XStack alignItems="center" gap={6}>
-                      {isStarred && <Icon name="star" size={12} color={'#F59E0B'} />}
+                      {isStarred && <Icon name="star" size={12} color={colors.warning} />}
                       <Text fontSize={14} fontWeight={isActive ? '600' : '400'} color="$color" numberOfLines={1}>
                         {session.name || 'New conversation'}
                       </Text>
@@ -155,7 +156,7 @@ export function ChatDrawer({
                       }
                     }}
                     pressStyle={{opacity: 0.6}}>
-                    <Icon name={isStarred ? 'star' : 'star-outline'} size={14} color={'#F59E0B'} />
+                    <Icon name={isStarred ? 'star' : 'star-outline'} size={14} color={colors.warning} />
                   </YStack>
                   <YStack
                     width={28} height={28} borderRadius={8}
@@ -171,14 +172,14 @@ export function ChatDrawer({
                       ]);
                     }}
                     pressStyle={{opacity: 0.6}}>
-                    <Icon name="trash-2" size={14} color="#EF4444" />
+                    <Icon name="trash-2" size={14} color={colors.error} />
                   </YStack>
                 </XStack>
               </XStack>
             )}}
             ListEmptyComponent={
               <YStack padding={40} alignItems="center">
-                <Icon name="message-circle" size={24} color={(theme.color10?.val || '#9CA3AF')} />
+                <Icon name="message-circle" size={24} color={colors.textMuted} />
                 <Text fontSize={13} color="$color10" marginTop={8}>No conversations yet</Text>
               </YStack>
             }
@@ -192,13 +193,13 @@ export function ChatDrawer({
               borderTopWidth={0.5} borderTopColor="$borderColor"
               alignItems="center" justifyContent="space-between"
               onPress={() => setShowArchived(!showArchived)}
-              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              pressStyle={{backgroundColor: colors.primaryAlpha(0.04)}}>
               <XStack alignItems="center" gap={8}>
-                <YStack width={24} height={24} borderRadius={8} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                <YStack width={24} height={24} borderRadius={8} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                   <Icon name="archive" size={12} color="$color9" />
                 </YStack>
                 <Text fontSize={13} fontWeight="500" color="$color">Archived</Text>
-                <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={6} backgroundColor="rgba(124, 82, 196, 0.08)">
+                <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={6} backgroundColor={colors.primaryAlpha(0.08)}>
                   <Text fontSize={10} fontWeight="600" color="$color9">{archivedSessions.length}</Text>
                 </YStack>
               </XStack>
@@ -216,7 +217,7 @@ export function ChatDrawer({
                     marginHorizontal={12} marginVertical={1}
                     borderRadius={10}
                     alignItems="center" justifyContent="space-between"
-                    backgroundColor={session.id === useChatStore.getState().activeSessionId ? 'rgba(124, 82, 196, 0.08)' : 'transparent'}
+                    backgroundColor={session.id === useChatStore.getState().activeSessionId ? colors.primaryAlpha(0.08) : 'transparent'}
                     onPress={() => {
                       loadSession(session.id);
                       onClose();
@@ -231,7 +232,7 @@ export function ChatDrawer({
                     </YStack>
                     <YStack
                       paddingHorizontal={10} paddingVertical={4} borderRadius={8}
-                      backgroundColor="rgba(124, 82, 196, 0.08)"
+                      backgroundColor={colors.primaryAlpha(0.08)}
                       onPress={() => archiveSession(session.id, false)}>
                       <Text fontSize={11} fontWeight="500" color="$color9">Restore</Text>
                     </YStack>

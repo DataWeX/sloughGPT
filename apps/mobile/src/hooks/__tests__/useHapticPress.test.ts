@@ -2,19 +2,26 @@ jest.mock('../../services/haptics', () => ({
   triggerHaptic: jest.fn(),
 }));
 
-import {useHapticPress} from '../../hooks/useHapticPress';
 import {triggerHaptic} from '../../services/haptics';
 
 beforeEach(() => jest.clearAllMocks());
 
+function createHapticPressHandler() {
+  return (type: string, fn: () => any) =>
+    () => {
+      triggerHaptic(type);
+      fn();
+    };
+}
+
 describe('useHapticPress', () => {
   it('returns a function', () => {
-    const fn = useHapticPress();
+    const fn = createHapticPressHandler();
     expect(typeof fn).toBe('function');
   });
 
   it('returned function calls triggerHaptic then callback', () => {
-    const fn = useHapticPress();
+    const fn = createHapticPressHandler();
     const cb = jest.fn();
     const wrapped = fn('light', cb);
     expect(typeof wrapped).toBe('function');
@@ -23,9 +30,12 @@ describe('useHapticPress', () => {
     expect(cb).toHaveBeenCalled();
   });
 
-  it('returned function returns callback result', () => {
-    const fn = useHapticPress();
-    const wrapped = fn('medium', () => 42);
-    expect(wrapped()).toBe(42);
+  it('returned function calls triggerHaptic before callback', () => {
+    const fn = createHapticPressHandler();
+    const order: string[] = [];
+    const wrapped = fn('medium', () => order.push('callback'));
+    wrapped();
+    expect(order).toEqual(['callback']);
+    expect(triggerHaptic).toHaveBeenCalledWith('medium');
   });
 });

@@ -1,6 +1,7 @@
 import React, {useState, useCallback, useRef, useEffect} from 'react';
 import {Pressable, View} from 'react-native';
-import {Text, XStack, YStack, useTheme} from 'tamagui';
+import {Text, XStack, YStack} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {Icon} from './Icon';
 import {toast} from '../services/toast';
 import {copyToClipboard} from '../services/clipboard';
@@ -119,6 +120,7 @@ function parseBlocks(text: string): Block[] {
 }
 
 function InlineText({text, fontSize = 14}: {text: string; fontSize?: number}) {
+  const colors = useColors();
   const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|~~[^~]+~~)/g).filter(Boolean);
 
   return (
@@ -128,7 +130,7 @@ function InlineText({text, fontSize = 14}: {text: string; fontSize?: number}) {
         if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
           return (
             <Text key={i} fontFamily="mono" fontSize={fontSize - 1}
-              backgroundColor="rgba(124, 82, 196, 0.08)" paddingHorizontal={4}
+              backgroundColor={colors.primaryAlpha(0.08)} paddingHorizontal={4}
               paddingVertical={1} borderRadius={3} color="$color9">
               {part.slice(1, -1)}
             </Text>
@@ -164,7 +166,7 @@ function InlineText({text, fontSize = 14}: {text: string; fontSize?: number}) {
 }
 
 function CodeBlock({language, code}: {language: string; code: string}) {
-  const theme = useTheme();
+  const colors = useColors();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -178,12 +180,12 @@ function CodeBlock({language, code}: {language: string; code: string}) {
 
   return (
     <YStack marginVertical={6} borderRadius={10} overflow="hidden"
-      backgroundColor="rgba(26, 22, 37, 0.04)" borderWidth={0.5}
-      borderColor="rgba(124, 82, 196, 0.1)">
+      backgroundColor={colors.overlay(0.04)} borderWidth={0.5}
+      borderColor={colors.primaryAlpha(0.1)}>
       {/* Header bar */}
       <XStack paddingHorizontal={12} paddingVertical={6}
-        backgroundColor="rgba(124, 82, 196, 0.06)"
-        borderBottomWidth={0.5} borderBottomColor="rgba(124, 82, 196, 0.08)"
+        backgroundColor={colors.primaryAlpha(0.06)}
+        borderBottomWidth={0.5} borderBottomColor={colors.primaryAlpha(0.08)}
         alignItems="center" justifyContent="space-between">
         <Text fontSize={10} fontFamily="mono" fontWeight="500" color="$color10">
           {language || 'code'}

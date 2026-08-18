@@ -68,8 +68,8 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
 
   useEffect(() => {
     if (modals.showInfo && activeSessionId) {
-      labelsService.getLabels(activeSessionId).then(labels => {
-        labels.setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
+      labelsService.getLabels(activeSessionId).then(fetchedLabels => {
+        labels.setSessionLabels(prev => ({...prev, [activeSessionId]: fetchedLabels}));
       });
     }
   }, [modals.showInfo, activeSessionId]);

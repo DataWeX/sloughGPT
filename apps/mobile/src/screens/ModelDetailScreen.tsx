@@ -12,14 +12,7 @@ import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
 import {toast} from '../services/toast';
 import {useModelStore} from '../stores/model-store';
-import type {ModelInfo} from '../types';
-
-interface BenchmarkResult {
-  coherence: number;
-  repetition: number;
-  perplexity: number;
-  avg_length: number;
-}
+import type {ModelInfo, BenchmarkResult} from '../types';
 
 export function ModelDetailScreen() {
   const route = useRoute();
@@ -99,7 +92,7 @@ export function ModelDetailScreen() {
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
       <XStack paddingHorizontal={16} paddingVertical={12} alignItems="center" gap={12}>
         <Pressable onPress={() => navigation.goBack()}>
-          <Icon name="chevron-down" size={20} color={colors.textMuted} />
+          <Icon name="arrow-down" size={20} color={colors.textMuted} />
         </Pressable>
         <Text fontSize={18} fontWeight="600" color={colors.text} flex={1} numberOfLines={1}>
           {model?.name || modelId}
@@ -197,8 +190,8 @@ export function ModelDetailScreen() {
                     {[
                       {label: 'Coherence', value: benchmark.coherence.toFixed(2)},
                       {label: 'Repetition', value: `${(benchmark.repetition * 100).toFixed(1)}%`},
-                      {label: 'Perplexity', value: benchmark.perplexity.toFixed(2)},
-                      {label: 'Avg Length', value: benchmark.avg_length.toFixed(0)},
+                      {label: 'Perplexity', value: benchmark.perplexity != null ? String(benchmark.perplexity) : '—'},
+                      {label: 'Avg Length', value: String(benchmark.avg_length ?? 0)},
                     ].map(item => (
                       <YStack key={item.label} flex={1} alignItems="center" gap={2}>
                         <Text fontSize={16} fontWeight="700" color={colors.primary}>{item.value}</Text>

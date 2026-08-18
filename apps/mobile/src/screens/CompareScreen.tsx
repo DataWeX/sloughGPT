@@ -8,14 +8,7 @@ import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
 import {toast} from '../services/toast';
-import type {ModelInfo} from '../types';
-
-interface BenchmarkResult {
-  coherence: number;
-  repetition: number;
-  avg_response_length: number;
-  perplexity: number | null;
-}
+import type {ModelInfo, BenchmarkResult} from '../types';
 
 function formatSize(mb: number): string {
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
@@ -117,7 +110,7 @@ export function CompareScreen() {
           padding={14}
           gap={10}>
           <XStack alignItems="center" gap={6}>
-            <Icon name="layers" size={16} color={colors.primary} />
+            <Icon name="package" size={16} color={colors.primary} />
             <Text fontSize={15} fontWeight="600" color="$color">Select Models</Text>
           </XStack>
           <Text fontSize={12} color="$color10">Tap to select 2–4 models for comparison</Text>
@@ -242,7 +235,7 @@ export function CompareScreen() {
                 label: 'Avg Length',
                 getValue: (m: ModelInfo) => {
                   const b = benchmarks[m.id];
-                  return b ? `${b.avg_response_length.toFixed(0)}` : '—';
+                  return b ? `${Number(b.avg_response_length ?? 0).toFixed(0)}` : '—';
                 },
               },
             ].map((row, i) => (
@@ -274,7 +267,7 @@ export function CompareScreen() {
             padding={32}
             alignItems="center"
             gap={8}>
-            <Icon name="layers" size={28} color={colors.textMuted} />
+            <Icon name="package" size={28} color={colors.textMuted} />
             <Text fontSize={14} color="$color11" textAlign="center">
               Select 2 or more models to compare
             </Text>
