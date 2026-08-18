@@ -1,433 +1,166 @@
 # SloughGPT
 
-Self-hosted LLM infrastructure with local model training, inference, and experimentation.
+Self-hosted LLM infrastructure with local model training, inference, and a web UI.
 
-## Features
+## Prerequisites
 
-- **Local Model Training** - Train SloughGPTModel from scratch or fine-tune HuggingFace models
-- **Soul Engine** - Every model IS a soul (.sou format) with personality and cognitive capabilities
-- **Production Inference** - High-performance inference engine with streaming
-- **GGUF Export** - Mobile deployment via llama.rn (iOS/Android)
-- **ONNX Export** - Cross-platform deployment (server, web, mobile)
-- **Quantization** - FP16, INT8, INT4, Q4_K_M, Q5_K_M support
-- **Experiment Tracking** - MLflow-style metrics and parameter logging
-- **Federated Learning** - Privacy-preserving distributed training
-- **Benchmarking** - Performance metrics and model comparison
-- **Optimizations** - KV cache inference, Quantine quantization, threshold-gated accelerator dispatch
-- **API Security** - JWT auth, rate limiting, input validation, audit logging
-- **Batch Processing** - Process up to 50 prompts in one request
-- **Response Caching** - TTL-based caching with hit/miss stats
-- **Kubernetes Ready** - Helm charts, health probes, Prometheus metrics
-- **Docker Ready** - Docker Compose with API, GPU, monitoring stacks
-- **TypeScript SDK** - Full-featured SDK with webhooks, billing, caching
-- **Feedback System** - User feedback collection with per-user LoRA adapters for personalized model adaptation
+- Python >= 3.9
+- Node.js >= 20
 
 ## Quick Start
 
-### CLI Commands
 ```bash
-# Quick train + generate (auto-optimized)
-./sloughgpt quick --steps 100 --prompt "Hello world"
-
-# Char-level training: merges config.yaml with flags (see apps/cli/README.md)
-./sloughgpt train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
-
-# Char-LM perplexity (fair when stoi/itos/chars are on the checkpoint, e.g. sloughgpt train step_*.soul)
-./sloughgpt eval --checkpoint models/sloughgpt.soul --data datasets/shakespeare/input.txt
-# python3 -m domains.training.lm_eval_char --checkpoint PATH --data PATH [--json]
-# docs/policies/CONTRIBUTING.md — Checkpoint vocabulary (char LM)
-
-# Benchmark inference (pure-numpy SloNet .soul checkpoints)
-./sloughgpt benchmark -m models/sloughgpt.soul
-
-# Check optimizations
-./sloughgpt optimize
-
-# System info
-./sloughgpt system
-
-# Generate text (local: models/sloughgpt.soul, else newest models/*.soul)
-./sloughgpt generate "Hello world"
-./sloughgpt gen "Hello world"   # alias
-
-# Interactive chat (starts the API with uvicorn if it is not already running)
-./sloughgpt chat
-
-# Interactive chat + auto-load a model first
-./sloughgpt chat --auto-model gpt2
-
-# Same, but pin HF local load device (forwarded to POST /models/load)
-./sloughgpt chat --auto-model gpt2 --device mps --load-mode local
+git clone git@github.com:DataWeX/sloughGPT.git
+cd sloughGPT
+python3 -m pip install -e ".[dev]"
 ```
 
-### Start Server
+Start the API server and web UI:
+
 ```bash
-# CPU mode (default for Intel Macs)
+# Terminal 1 — API
 python3 apps/api/server/main.py
 
-# With uvicorn (from repo root)
-python3 -m uvicorn main:app --app-dir apps/api/server --host 0.0.0.0 --port 8000
+# Terminal 2 — Web UI
+cd apps/web && npm install && npm run dev
+# → http://localhost:3000
+
+# Or both in one command
+./scripts/dev-stack.sh
 ```
 
-**Web UI** (another terminal): `cd apps/web && npm install && npm run dev` → http://localhost:3000
+## CLI
 
-**API + web in one terminal** (from repo root): `./scripts/dev-stack.sh`, `make dev-stack`, or `npm install && npm run dev:stack` — see **QUICKSTART.md**. Root **`package.json`** checks: **`npm run test:repo-root`**, **`make test-repo-root`**, or **`python3 -m pytest tests/test_repo_root_package_json.py -q`**.
-
-### Docker
-```bash
-# Start with Docker (run from repo root)
-./scripts/deploy/docker-manage.sh start
-
-# Development mode
-./scripts/deploy/docker-manage.sh dev
-
-# GPU mode
-./scripts/deploy/docker-manage.sh gpu
-```
-
-### Feedback & Adaptation System
-```bash
-# The feedback system runs automatically when the server starts
-# It collects user feedback and creates per-user LoRA adapters
-
-# View feedback stats
-curl http://localhost:8000/meta-weights/stats
-
-# View user adapters
-curl http://localhost:8000/user-adapters
-
-# View workflow status
-curl http://localhost:8000/workflow/status
-
-# Export training data (DPO format)
-curl -X POST http://localhost:8000/feedback/export-training \
-  -H "Content-Type: application/json" \
-  -d '{"format": "dpo"}'
-```
-
-See **Training page** in the web UI for admin controls (aggregation, pruning, export).
-
-### Verify install (optional)
-From the repo root, `verify.sh` checks core paths and (if **`ruff`** is available) runs the same lint smoke as CI; if **`node`** is available and **`apps/web/node_modules`** exists, it runs **`npm run ci`** there (lint + typecheck + Vitest + **`npm run build:clean`** — clean **`.next`** then **`next build`**). It prints **root `package.json`** contract commands (**`npm run test:repo-root`**, **`make test-repo-root`**, etc.) and other commands that mirror CI (**`test-web`**, **`test-sdk-ts`**, **`sdk-test-py`**, **`standards-schemas`** in **`.github/workflows/ci_cd.yml`**). See **QUICKSTART.md** for the full install flow.
+The `sloughgpt` CLI provides training, inference, chat, and model management:
 
 ```bash
-python3 -m pip install -e ".[dev]"   # optional; includes ruff + pytest among dev tools
-./verify.sh
-# ./run.sh puts .venv/bin on PATH when present — e.g. ./run.sh python3 -m pytest tests/ -q
+# Train from scratch (SloNet)
+sloughgpt train start --dataset shakespeare --epochs 3
+
+# Train a native transformer
+sloughgpt train native --dataset shakespeare --epochs 10 --embed 128
+
+# Quick train + generate (auto-optimized)
+sloughgpt train quick --steps 100 --prompt "Hello world"
+
+# Distill from a teacher model
+sloughgpt train distill datasets/shakespeare/input.txt --epochs 10
+
+# Interactive chat
+sloughgpt chat
+
+# Generate text
+sloughgpt generate "The meaning of life is" --model gpt2
+
+# Evaluate perplexity
+sloughgpt train eval --checkpoint models/sloughgpt.soul --data datasets/shakespeare/input.txt
+
+# Export a model
+sloughgpt model export models/sloughgpt.soul -f gguf_q4_k_m
+
+# Run the interactive shell
+sloughgpt shell
+
+# System status
+sloughgpt system status
 ```
 
-### Google Colab
-Use `sloughgpt_colab.ipynb` in the repo root. After the runtime can see the repo (clone or upload), run the dependency cell: it installs base packages plus **`python3 -m pip install -e .`** so **`cli.py`** and **`domains`** imports resolve.
+## Project Structure
 
-Recommended order: **§2** (dataset; default Shakespeare → `datasets/shakespeare.txt` via Karpathy URL), **§3** (device + imports), **§4–§6** (CONFIG, model, exploration). Train with exactly one path: manual **§7** loop or the **`SloughGPTTrainer`** cell (skip the others). Then **§8+** (generation / Soul).
-
-Then a typical one-shot chat + model load is:
-
-```bash
-./sloughgpt chat --auto-model gpt2
 ```
-
-If your editor reformats the notebook JSON on save, prefer small cell edits or restore with `git checkout -- sloughgpt_colab.ipynb` to avoid large diffs.
-
-For a **fast local execute** (CPU, capped §7 batches), run [`scripts/run_colab_notebook_smoke.sh`](scripts/run_colab_notebook_smoke.sh) or **`make colab-smoke`** (`./scripts/run_colab_notebook_smoke.sh --help` lists env defaults; **`make help`** lists Makefile shortcuts); it writes `sloughgpt_colab.executed.ipynb` (ignored by git). **`make colab-test`** runs only the Colab regression pytest module. Override `SLOUGH_NOTEBOOK_TRAIN_CAP` or `SLOUGH_NOTEBOOK_FORCE_CPU` as needed. The script calls **`jupyter nbconvert`** when available, otherwise **`python3 -m nbconvert`**. Install tools with **`python3 -m pip install jupyter nbclient nbformat`** or **`python3 -m pip install -e ".[notebook]"`** (see **`pyproject.toml`** optional-deps **`notebook`**).
-
-### Documentation map
-
-- **Structure & conventions:** [docs/STRUCTURE.md](docs/STRUCTURE.md)
-- **Roadmap:** [docs/TODO.md](docs/TODO.md)
-- **Installation details:** [docs/INSTALL.md](docs/INSTALL.md)
-- **Extra reference notes** (stack comparisons, API drafts, reports): [docs/misc/](docs/misc/)
-- **Standalone Python tools** (benchmarks, GGUF helpers, …): [scripts/tools/README.md](scripts/tools/README.md)
-- **Deploy / Docker shell scripts**: [scripts/deploy/README.md](scripts/deploy/README.md)
-- **Extra config samples** (`datasets.yaml` sketch, conda env, prod env example): [config/README.md](config/README.md)
-- **Runtime data** (experiments, feature store, tuning, vector DB): [data/README.md](data/README.md)
-- **Full local setup** (conda/venv/Docker): [scripts/setup.sh](scripts/setup.sh)
-
-## GPU Support
-
-| Hardware | Support | Speed |
-|----------|---------|-------|
-| NVIDIA GPU (CUDA) | ✅ Full | Fast |
-| Apple Silicon (MPS) | ✅ Full | Good |
-| AMD GPU (ROCm) | ✅ Linux only | Good |
-| Intel Mac + AMD | ❌ CPU only | Slow |
-
-## Industry Standard Optimizations
-
-```python
-from domains.training.optimized_trainer import Presets
-
-# Auto-detect best settings
-config = Presets.auto()
-
-# Or specific hardware
-config = Presets.high_end_gpu()   # A100, H100, RTX 4090
-config = Presets.apple_silicon()  # M1/M2/M3
-config = Presets.cpu_only()        # CPU training
+sloughGPT/
+├── apps/
+│   ├── api/server/            # FastAPI backend
+│   ├── web/                   # Next.js frontend
+│   ├── cli/                   # CLI implementation
+│   ├── mobile/                # React Native app
+│   ├── gateway/               # API gateway
+│   └── data/                  # Data utilities
+├── packages/
+│   ├── core-py/domains/       # Core Python logic
+│   │   ├── training/          # SloNet, training pipelines, distillation
+│   │   ├── inference/         # Vector store, context, model loading
+│   │   ├── feedback/          # LoRA adapters, DPO, workflow manager
+│   │   ├── multimodal/        # Vision encoder, cross-attention
+│   │   ├── shell/             # Interactive REPL
+│   │   └── infrastructure/    # Config, errors, rate-limiter, lifecycle
+│   ├── strui/                 # @sloughgpt/strui component library
+│   ├── mogdb/                 # Document database
+│   ├── sdk-py/                # Python SDK
+│   ├── sdk-ts/                # TypeScript SDK
+│   └── standards/             # Shared schemas
+├── datasets/                  # Training data
+├── models/                    # Saved checkpoints
+├── tests/                     # Test suite
+└── scripts/                   # Build, deploy, benchmarks
 ```
-
-Optimizations:
-- KV cache inference - faster multi-turn decoding
-- Quantine per-tensor quantization - INT8/INT4 on CPU
-- Threshold-gated accelerator dispatch (Metal/CUDA/OpenCL)
 
 ## API Endpoints
 
-### Health & Status
-```bash
-# Basic health
-curl http://localhost:8000/health
+Start the server and visit `http://localhost:8000/docs` for the full interactive API reference.
 
-# Liveness probe (Kubernetes)
-curl http://localhost:8000/health/live
+Core endpoints:
 
-# Readiness probe (Kubernetes)
-curl http://localhost:8000/health/ready
-
-# Detailed health
-curl http://localhost:8000/health/detailed
-```
-
-### Authentication
-```bash
-# Create JWT token from API key
-curl -X POST http://localhost:8000/auth/token \
-  -H "Content-Type: application/json" \
-  -d '{"api_key": "your-api-key"}'
-
-# Verify token
-curl -X POST http://localhost:8000/auth/verify \
-  -H "Authorization: Bearer <token>"
-
-# Refresh token
-curl -X POST http://localhost:8000/auth/refresh \
-  -H "Authorization: Bearer <token>"
-```
-
-### Rate Limiting
-```bash
-# Check rate limit status
-curl http://localhost:8000/rate-limit/status
-
-# Check your current usage
-curl http://localhost:8000/rate-limit/check
-```
-
-### Caching
-```bash
-# Cache statistics
-curl http://localhost:8000/cache/stats
-
-# Clear cache
-curl -X DELETE http://localhost:8000/cache
-```
-
-### Metrics
-```bash
-# JSON metrics
-curl http://localhost:8000/metrics
-
-# Prometheus format
-curl http://localhost:8000/metrics/prometheus
-
-# Security audit logs
-curl http://localhost:8000/security/audit
-```
-
-### Models (Hugging Face local load)
-```bash
-curl -s -X POST http://localhost:8000/models/load \
-  -H "Content-Type: application/json" \
-  -d '{"model_id":"gpt2","mode":"local","device":"cpu"}'
-# Response includes effective_device when weights attach to inference globals.
-```
-
-### Inference
-```bash
-# Generate text
-curl -X POST http://localhost:8000/inference/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello world", "max_new_tokens": 50}'
-
-# Streaming (SSE)
-curl -X POST http://localhost:8000/inference/generate/stream \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello", "max_new_tokens": 100}'
-
-# Batch processing (up to 50 prompts)
-curl -X POST http://localhost:8000/inference/batch \
-  -H "Content-Type: application/json" \
-  -d '{"prompts": ["Hello", "Hi there", "Good morning"], "max_new_tokens": 50}'
-
-# Inference stats
-curl http://localhost:8000/inference/stats
-```
-
-### Training
-
-Native trainer `step_*.soul` on the API host includes `stoi` / `itos` / `chars` for fair `sloughgpt eval`; see **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
-
-```bash
-# Start training
-curl -X POST http://localhost:8000/train \
-  -H "Content-Type: application/json" \
-  -d '{"dataset": "shakespeare", "epochs": 5, "batch_size": 32}'
-
-# List training jobs
-curl http://localhost:8000/training/jobs
-```
-
-### Experiments
-```bash
-# Create experiment
-curl -X POST "http://localhost:8000/experiments?name=test&description=Testing"
-
-# Log metrics
-curl -X POST "http://localhost:8000/experiments/{id}/log_metric?metric_name=loss&value=2.5&step=0"
-```
-
-### Benchmarking
-```bash
-# Run benchmark
-curl -X POST http://localhost:8000/benchmark/run \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello world", "max_new_tokens": 20}'
-
-# Compare quantization levels
-curl http://localhost:8000/benchmark/compare
-```
-
-### Model Export
-
-Export artifacts (API or `sloughgpt export`) are for deployment; char-LM perplexity parity uses native trainer `step_*.soul` — **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
-
-```bash
-# Export model (.soul, SafeTensors, GGUF, ONNX)
-curl -X POST http://localhost:8000/model/export \
-  -H "Content-Type: application/json" \
-  -d '{"output_path": "models/exported", "format": "safetensors"}'
-
-# List formats
-curl http://localhost:8000/model/export/formats
-
-# CLI export examples (see sloughgpt export --help; -f is an alias for --format)
-./sloughgpt export models/sloughgpt.soul -f safetensors
-./sloughgpt export models/sloughgpt.soul -f gguf_q4_k_m --quantize Q4_K_M  # mobile
-./sloughgpt export models/sloughgpt.soul -f onnx --seq-len 128             # cross-platform
-```
-
-### Soul Engine
-```bash
-# Load a soul (.sou model)
-curl -X POST http://localhost:8000/load-soul \
-  -H "Content-Type: application/json" \
-  -d '{"soul_path": "models/slough.sou"}'
-
-# Get current soul profile
-curl http://localhost:8000/soul
-
-# Generate with soul (uses personality + reasoning)
-curl -X POST http://localhost:8000/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello", "use_soul": true}'
-```
-
-### Datasets
-
-Multi-source dataset import, export, and management:
-
-```bash
-# List datasets
-curl http://localhost:8000/datasets
-
-# Import from various sources
-curl -X POST http://localhost:8000/datasets/import/github \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/user/repo", "name": "my-dataset"}'
-
-curl -X POST http://localhost:8000/datasets/import/huggingface \
-  -H "Content-Type: application/json" \
-  -d '{"dataset_id": "username/dataset"}'
-
-curl -X POST http://localhost:8000/datasets/import/kaggle \
-  -H "Content-Type: application/json" \
-  -d '{"dataset": "username/dataset-name"}'
-
-curl -X POST http://localhost:8000/datasets/import/csv \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com/data.csv", "name": "my-csv-data"}'
-
-# Export datasets
-curl -X POST http://localhost:8000/datasets/my-dataset/export \
-  -H "Content-Type: application/json" \
-  -d '{"format": "json"}'
-
-# Combine datasets
-curl -X POST http://localhost:8000/datasets/combine \
-  -H "Content-Type: application/json" \
-  -d '{"dataset_ids": ["ds1", "ds2"], "name": "combined"}'
-
-# Preview dataset
-curl http://localhost:8000/datasets/my-dataset/preview
-```
-
-**Web UI**: http://localhost:3000/datasets - Import, combine, export datasets with UI.
-
-## Architecture
-
-```
-SloughGPT/
-├── apps/
-│   ├── api/server/main.py   # FastAPI app (primary API)
-│   ├── cli/                 # CLI implementation
-│   └── web/                 # Next.js UI — app/(app)/
-├── packages/
-│   ├── core-py/domains/     # Soul engine, training, inference, etc.
-│   ├── sdk-py/sloughgpt_sdk/
-│   ├── sdk-ts/typescript-sdk/
-│   └── standards/
-├── infra/docker/            # Dockerfiles & docker-compose.yml
-├── infra/k8s/               # Kubernetes & Helm
-├── tests/
-├── cli.py                   # CLI entry (wrapper)
-└── pyproject.toml
-```
-
-## Supported Models
-
-| Model | Size | Context | Recommended |
-|-------|------|---------|-------------|
-| GPT-2 | 124M | 1K | FP16 |
-| GPT-2 Medium | 355M | 1K | FP16 |
-| GPT-2 Large | 774M | 1K | FP16 |
-| Phi-2 | 2.7B | 2K | Q4_K |
-| Mistral 7B | 7.3B | 32K | Q4_K |
-| LLaMA-2 7B | 7B | 4K | Q4_K |
-| Qwen2 1.5B | 1.5B | 32K | Q4_K |
-| Gemma 2B | 2B | 8K | Q4_K |
-
-## Installation
-
-```bash
-python3 -m pip install transformers fastapi uvicorn
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/chat` | Chat with a loaded model |
+| `POST` | `/chat/stream` | Streaming chat (SSE) |
+| `POST` | `/inference/generate` | Text generation |
+| `POST` | `/inference/generate/stream` | Streaming generation (SSE) |
+| `POST` | `/auto-train/start` | Start training (SSE progress) |
+| `POST` | `/training/start` | HuggingFace fine-tuning |
+| `GET` | `/health` | Server and model health |
+| `GET` | `/models` | List available models |
+| `GET` | `/souls` | List available souls |
+| `POST` | `/souls/switch` | Switch active soul |
+| `GET` | `/datasets` | List datasets |
 
 ## Development
 
 ```bash
-# Run server
-python3 apps/api/server/main.py
+# Python tests (parallel)
+cd packages/core-py && python -m pytest -n auto -x -q
 
-# Train a model (after `pip install -e .`; same as packages/core-py `domains.training.train_pipeline`)
-python3 -m domains.training.train_pipeline --data datasets/shakespeare/input.txt --epochs 5
-# Periodic step_*.soul embeds stoi/itos/chars for sloughgpt eval — docs/policies/CONTRIBUTING.md (Checkpoint vocabulary)
+# Frontend tests
+cd apps/web && npm run test
+
+# TypeScript check
+cd apps/web && npm run typecheck
+
+# Lint
+cd apps/web && npm run lint
 ```
 
-## Contributing & security
+## GPU Support
 
-- **Contributing** — [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Security** — [SECURITY.md](SECURITY.md)
-- **Agents / automation** — [AGENTS.md](AGENTS.md) (links [`.agents/skills/SKILL.md`](.agents/skills/SKILL.md) and structure docs)
+| Hardware | Status | Notes |
+|----------|--------|-------|
+| NVIDIA (CUDA) | Supported | Fastest |
+| Apple Silicon (MPS) | Supported | M1/M2/M3/M4 |
+| AMD (ROCm) | Supported | Linux only |
+| Intel Mac | CPU only | Stable, slower |
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [QUICKSTART.md](QUICKSTART.md) | Get started in 5 minutes |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
+| [SECURITY.md](SECURITY.md) | Security policy |
+| [AGENTS.md](AGENTS.md) | AI agent workflow and conventions |
+| [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Pre-LLM infrastructure layers |
+| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Developer reference |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment guide |
+| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | Environment configuration |
+| [docs/STRUCTURE.md](docs/STRUCTURE.md) | Project structure and conventions |
+| [docs/SHELL.md](docs/SHELL.md) | Shell REPL documentation |
+
+## Docker
+
+```bash
+./scripts/deploy/docker-manage.sh start    # API + web
+./scripts/deploy/docker-manage.sh gpu      # with GPU support
+```
 
 ## License
 

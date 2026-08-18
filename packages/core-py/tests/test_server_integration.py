@@ -28,14 +28,51 @@ from domains.infrastructure.event_bus import get_event_bus, set_event_bus
 # ── Mock model (torch-free) ──────────────────────────────────────────
 
 
+class _FakeTensor:
+    """Minimal tensor stand-in for MockModel forward passes."""
+    def __init__(self, data, device="cpu"):
+        import numpy as np
+        self.data = np.array(data)
+        self.device = device
+        self.shape = self.data.shape
+        self.dtype = self.data.dtype
+
+    def to(self, device):
+        self.device = device
+        return self
+
+    def cpu(self):
+        return self.to("cpu")
+
+    def numpy(self):
+        return self.data
+
+    def item(self):
+        return self.data.item()
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return _FakeTensor(self.data[idx], device=self.device)
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __eq__(self, other):
+        if isinstance(other, _FakeTensor):
+            return self.data == other.data
+        return NotImplemented
+
+
 class MockTokenizer:
     eos_token_id = 0
     pad_token_id = 0
 
     def __call__(self, prompt, return_tensors="pt", **kwargs):
         return {
-            "input_ids": [[1, 2, 3]],
-            "attention_mask": [[1, 1, 1]],
+            "input_ids": _FakeTensor([[1, 2, 3]]),
+            "attention_mask": _FakeTensor([[1, 1, 1]]),
         }
 
     def decode(self, tokens, skip_special_tokens=True):
@@ -54,7 +91,7 @@ class MockModel:
             raise RuntimeError("mock generation failure")
         if self._slow:
             time.sleep(3)
-        return [[1, 2, 3, 4, 5]]
+        return _FakeTensor([[1, 2, 3, 4, 5]])
 
     def parameters(self):
         return []

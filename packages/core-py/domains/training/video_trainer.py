@@ -22,6 +22,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+from domains.shared import find_repo_root
 from domains.training.slonet import (
     Tensor, SloEmbedding, SloLinear, SloLayerNorm, SloRMSNorm,
     SloTransformerBlock,
@@ -31,7 +32,7 @@ from domains.training.slonet import (
 
 logger = logging.getLogger("slo.video_trainer")
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = find_repo_root(Path(__file__).resolve())
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "models" / "video-training"
 CHECKPOINT_DIR = REPO_ROOT / "models" / "video-training" / "checkpoints"
 

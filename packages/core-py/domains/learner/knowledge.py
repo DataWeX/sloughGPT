@@ -31,13 +31,14 @@ from pathlib import Path
 from dataclasses import dataclass, field, asdict
 
 import numpy as np
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.learner.knowledge")
 # Anchor to the repository root so data paths resolve deterministically
 # regardless of the process CWD. A CWD-relative path silently reads/writes
 # a different directory when the server is launched from anywhere else,
 # which previously produced a stray data/ dir and "missing facts" bugs.
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 KNOWLEDGE_DIR = _REPO_ROOT / "data" / "knowledge"
 KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -13,6 +13,8 @@ vi.mock('@sloughgpt/strui', () => {
     IconX: () => <span data-testid="icon-x">x</span>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     IconSettings: () => <span data-testid="icon-settings">settings</span>,
+    IconSpeaker: () => <span data-testid="icon-speaker">speaker</span>,
+    IconMicFilled: () => <span data-testid="icon-mic-filled">mic-filled</span>,
     Slider: ({ value, onValueChange, min, max, step }: any) => (
       <input type="range" value={value?.[0]} onChange={(e) => onValueChange?.([Number(e.target.value)])} min={min} max={max} step={step} data-testid="slider" />
     ),

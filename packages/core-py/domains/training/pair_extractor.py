@@ -13,10 +13,11 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.pair_extractor")
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _SESSIONS_DIR = _REPO_ROOT / "data" / "chat_sessions"
 _RESPONSE_LOGS_DIR = _REPO_ROOT / "data" / "response_logs"
 _CAPTURED_DIR = _REPO_ROOT / "datasets" / "api_conversations"

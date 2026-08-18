@@ -68,6 +68,7 @@ QUALITY_NN_K = 3                 # nearest-neighbour count for n-gram agreement 
 # ---------------------------------------------------------------------------
 
 from contextlib import contextmanager
+from domains.shared import find_repo_root
 
 @contextmanager
 def _no_accel():
@@ -81,7 +82,7 @@ def _no_accel():
         _slonet._ACCELERATOR = prev
 
 # Where the trained embedder lives
-_EMBEDDER_DIR = Path(__file__).resolve().parents[4] / "data" / "models"
+_EMBEDDER_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "models"
 _EMBEDDER_PATH = _EMBEDDER_DIR / "text-embedder.soul"
 _TOKENIZER_PATH = _EMBEDDER_DIR / "text-embedder-tokenizer.json"
 

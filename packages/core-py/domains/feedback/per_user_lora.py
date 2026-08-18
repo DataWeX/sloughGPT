@@ -17,10 +17,11 @@ from dataclasses import dataclass
 import logging
 
 from mogdb import MogDB
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.feedback.per_user_lora")
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 
 
 @dataclass

@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, EmptyCard } from '@sloughgpt/
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
-import { IconRefresh, IconPlus, IconTrash, IconChevronDown, IconDownload } from '@sloughgpt/strui'
+import { IconRefresh, IconPlus, IconTrash, IconChevronDown, IconDownload, IconPlay } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController, type Dataset, type DatasetPreview as PreviewData } from '@/lib/dataset-controller'
 import { formatBytes } from '@/lib/format-bytes'
@@ -387,7 +387,7 @@ export default function DatasetsPage() {
                         onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
                         aria-label={`Train with ${ds.name}`}
                       >
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                        <IconPlay className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"

@@ -20,10 +20,11 @@ import threading
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.training_queue")
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 
 
 def _json_safe_payload(o: Any) -> Any:

@@ -29,7 +29,7 @@ vi.mock('@sloughgpt/strui', () => {
       <input value={value} onChange={onChange} className={className} placeholder={placeholder} />
     ),
     Skeleton: ({ className }: any) => <div className={className} />,
-    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconChevronDown: iconMock('chevron-down'), IconDownload: iconMock('download'),
+    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconChevronDown: iconMock('chevron-down'), IconDownload: iconMock('download'), IconPlay: iconMock('play'),
     AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,

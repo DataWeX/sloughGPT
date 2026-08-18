@@ -2,7 +2,7 @@
 
 import { cn, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { IconMore, IconSettings, IconSearch, IconCopy, IconExport, IconDocument, IconPlus, IconCheck, IconBrain } from '@sloughgpt/strui'
+import { IconMore, IconSettings, IconSearch, IconCopy, IconExport, IconDocument, IconPlus, IconCheck, IconBrain, IconMicFilled } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
 
 function ShortcutHint({ keys }: { keys: string }) {
@@ -77,10 +77,7 @@ export function ChatMoreMenu() {
         <DropdownMenuSeparator />
 
         <DropdownMenuItem onSelect={onVoiceMode}>
-          <svg className="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-          </svg>
+          <IconMicFilled className="mr-2 h-4 w-4" />
           Voice Mode
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onToggleTools}>

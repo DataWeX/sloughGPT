@@ -18,10 +18,11 @@ import logging
 from typing import Optional
 from pathlib import Path
 from dataclasses import dataclass, asdict
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.learner.filter")
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 FILTER_CONFIG_PATH = _REPO_ROOT / "data" / "knowledge" / "filter_config.json"
 
 # ─── Default config ─────────────────────────────────────────────────────────

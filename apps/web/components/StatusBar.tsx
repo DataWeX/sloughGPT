@@ -6,7 +6,7 @@ import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
-import { cn, IconMenu } from '@sloughgpt/strui'
+import { cn, IconMenu, IconGrid } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 import { logger } from '@/lib/dev-log'
@@ -138,7 +138,7 @@ export function StatusBar() {
           aria-label={unseenCount > 0 ? `${unseenCount} new feature${unseenCount === 1 ? '' : 's'}` : "What's new"}
           title="What's new"
         >
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M13 11h-2v-2h2v2zm0 6h-2v-6h2v6zm1-15H6v2h8V2zm4 4H2v14h16V6zM4 18V8h12v10H4z"/></svg>
+          <IconGrid className="w-3 h-3" />
           {unseenCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium leading-none">
               {unseenCount > 9 ? '9+' : unseenCount}

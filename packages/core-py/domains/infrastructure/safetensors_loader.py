@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.safetensors_loader")
 
@@ -30,7 +31,7 @@ def _get_model_dir(model_id: str) -> Path:
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
     candidates = [
         Path(hf_home) / "hub" / f"models--{cache_id}",
-        Path(__file__).resolve().parents[4] / "models" / "hf-cache" / "hub" / f"models--{cache_id}",
+        find_repo_root(Path(__file__).resolve()) / "models" / "hf-cache" / "hub" / f"models--{cache_id}",
         Path("models/hf-cache/hub") / f"models--{cache_id}",
     ]
     for candidate in candidates:
@@ -248,7 +249,7 @@ def list_cached_models() -> list:
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
     hub_dirs = [
         Path(hf_home) / "hub",
-        Path(__file__).resolve().parents[4] / "models" / "hf-cache" / "hub",
+        find_repo_root(Path(__file__).resolve()) / "models" / "hf-cache" / "hub",
     ]
 
     models = {}

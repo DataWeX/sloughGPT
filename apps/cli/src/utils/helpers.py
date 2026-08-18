@@ -9,7 +9,7 @@ from pathlib import Path
 def chat_repository_root() -> Path:
     """Repository root (delegates to shared utility)."""
     from domains.shared import find_repo_root
-    return find_repo_root(str(Path(__file__).resolve()))
+    return find_repo_root(Path(__file__).resolve())
 
 
 def chat_uvicorn_bind_host(client_host: str) -> str:

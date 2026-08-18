@@ -12,6 +12,7 @@ vi.mock('@sloughgpt/strui', () => {
     IconStar: (p: any) => <svg data-testid="icon-star" {...p} />,
     IconTrash: (p: any) => <svg data-testid="icon-trash" {...p} />,
     IconX: (p: any) => <svg data-testid="icon-x" {...p} />,
+    IconChevronDown: (p: any) => <svg data-testid="icon-chevron-down" {...p} />,
   }
 })
 

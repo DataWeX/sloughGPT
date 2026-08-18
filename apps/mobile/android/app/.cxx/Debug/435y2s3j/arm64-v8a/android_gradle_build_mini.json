@@ -1,0 +1,70 @@
+{
+  "buildFiles": [
+    "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/@react-native-async-storage/async-storage/android/build/generated/source/codegen/jni/CMakeLists.txt",
+    "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/react-native-safe-area-context/android/src/main/jni/CMakeLists.txt",
+    "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/react-native-screens/android/src/main/jni/CMakeLists.txt",
+    "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/react-native-svg/android/src/main/jni/CMakeLists.txt",
+    "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/react-native/ReactAndroid/cmake-utils/default-app-setup/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/home/mana/android-sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/android/app/.cxx/Debug/435y2s3j/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/home/mana/android-sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/android/app/.cxx/Debug/435y2s3j/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "react_codegen_safeareacontext::@7984cd80db47aa7b952a": {
+      "artifactName": "react_codegen_safeareacontext",
+      "abi": "arm64-v8a",
+      "output": "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/android/app/build/intermediates/cxx/Debug/435y2s3j/obj/arm64-v8a/libreact_codegen_safeareacontext.so",
+      "runtimeFiles": [
+        "/home/mana/.gradle/caches/8.13/transforms/1c50bd473f95dfa25c59ea4ee2aadfa5/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
+        "/home/mana/.gradle/caches/8.13/transforms/3b090324050a037c1bec317ebc768f3a/transformed/react-android-0.86.0-debug/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/home/mana/.gradle/caches/8.13/transforms/3b090324050a037c1bec317ebc768f3a/transformed/react-android-0.86.0-debug/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so"
+      ]
+    },
+    "react_codegen_rnscreens::@25bcbd507e98d3a854ad": {
+      "artifactName": "react_codegen_rnscreens",
+      "abi": "arm64-v8a",
+      "output": "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/android/app/build/intermediates/cxx/Debug/435y2s3j/obj/arm64-v8a/libreact_codegen_rnscreens.so",
+      "runtimeFiles": [
+        "/home/mana/.gradle/caches/8.13/transforms/3b090324050a037c1bec317ebc768f3a/transformed/react-android-0.86.0-debug/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so",
+        "/home/mana/.gradle/caches/8.13/transforms/3b090324050a037c1bec317ebc768f3a/transformed/react-android-0.86.0-debug/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/home/mana/.gradle/caches/8.13/transforms/1c50bd473f95dfa25c59ea4ee2aadfa5/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so"
+      ]
+    },
+    "appmodules::@6890427a1f51a3e7e1df": {
+      "artifactName": "appmodules",
+      "abi": "arm64-v8a",
+      "output": "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/android/app/build/intermediates/cxx/Debug/435y2s3j/obj/arm64-v8a/libappmodules.so",
+      "runtimeFiles": [
+        "/home/mana/.gradle/caches/8.13/transforms/1c50bd473f95dfa25c59ea4ee2aadfa5/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
+        "/home/mana/.gradle/caches/8.13/transforms/3b090324050a037c1bec317ebc768f3a/transformed/react-android-0.86.0-debug/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/home/mana/.gradle/caches/8.13/transforms/3b090324050a037c1bec317ebc768f3a/transformed/react-android-0.86.0-debug/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so"
+      ]
+    },
+    "react_codegen_rnsvg::@4f40eb209d0c0b4a3b65": {
+      "artifactName": "react_codegen_rnsvg",
+      "abi": "arm64-v8a",
+      "output": "/home/mana/Documents/Default Project/sloughGPT/apps/mobile/android/app/build/intermediates/cxx/Debug/435y2s3j/obj/arm64-v8a/libreact_codegen_rnsvg.so",
+      "runtimeFiles": [
+        "/home/mana/.gradle/caches/8.13/transforms/3b090324050a037c1bec317ebc768f3a/transformed/react-android-0.86.0-debug/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so",
+        "/home/mana/.gradle/caches/8.13/transforms/3b090324050a037c1bec317ebc768f3a/transformed/react-android-0.86.0-debug/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/home/mana/.gradle/caches/8.13/transforms/1c50bd473f95dfa25c59ea4ee2aadfa5/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so"
+      ]
+    },
+    "react_codegen_rnasyncstorage::@1596841e19ec5b9eeffe": {
+      "artifactName": "react_codegen_rnasyncstorage",
+      "abi": "arm64-v8a",
+      "runtimeFiles": []
+    }
+  }
+}

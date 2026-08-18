@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.response_tracker")
 
@@ -61,7 +62,7 @@ class ResponseTracker:
 
     def __init__(self, log_dir: str = "data/response_logs"):
         # Navigate from domains/feedback to repo root
-        repo_root = Path(__file__).resolve().parents[4]
+        repo_root = find_repo_root(Path(__file__).resolve())
         self.log_dir = repo_root / log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.current_file = self.log_dir / f"responses_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"

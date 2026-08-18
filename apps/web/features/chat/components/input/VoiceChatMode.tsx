@@ -5,7 +5,7 @@ import { useVoiceChat, VoiceExchange, VoiceSettings } from '@/features/chat/hook
 import { VoiceWaveform, VoiceOrb, ListeningIndicator, ListeningBars } from '@/features/chat/components/input/VoiceWaveform'
 import { Slider } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { IconX, IconRefresh, IconSettings } from '@sloughgpt/strui'
+import { IconX, IconRefresh, IconSettings, IconSpeaker, IconMicFilled } from '@sloughgpt/strui'
 
 interface VoiceChatModeProps {
   onMessage: (text: string) => void
@@ -248,14 +248,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             {isProcessing ? (
               <IconRefresh className="h-8 w-8 animate-spin" />
             ) : isSpeaking ? (
-              <svg className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-              </svg>
+              <IconSpeaker className="h-10 w-10" />
             ) : (
-              <svg className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-              </svg>
+              <IconMicFilled className="h-10 w-10" />
             )}
           </button>
         </VoiceOrb>

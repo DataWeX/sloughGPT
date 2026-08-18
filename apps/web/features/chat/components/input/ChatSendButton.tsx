@@ -1,7 +1,7 @@
 'use client'
 
 import { cn, Button } from '@sloughgpt/strui'
-import { IconSend } from '@sloughgpt/strui'
+import { IconSend, IconStop } from '@sloughgpt/strui'
 
 interface ChatSendButtonProps {
   loading: boolean
@@ -29,9 +29,7 @@ export function ChatSendButton({ loading, hasContent, onSend, onStop, disabled }
       data-send-button="true"
     >
       {loading ? (
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6h12v12H6z" />
-        </svg>
+        <IconStop className="h-4 w-4" />
       ) : (
         <IconSend className="h-4 w-4" />
       )}

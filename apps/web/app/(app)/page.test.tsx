@@ -22,6 +22,9 @@ vi.mock('@sloughgpt/strui', () => {
     IconChevronRight: iconMock('chevron-right'),
     IconMessage: iconMock('message'),
     IconSearch: iconMock('search'),
+    IconBolt: iconMock('bolt'),
+    IconChart: iconMock('chart'),
+    LossCurve: (props: Record<string, unknown>) => null,
   }
 })
 

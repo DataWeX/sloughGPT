@@ -10,10 +10,11 @@ import logging
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.benchmark")
 
-_RESPONSES_DIR = Path(__file__).resolve().parents[3] / "data" / "logged_responses"
+_RESPONSES_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "logged_responses"
 
 # Global singleton
 _benchmark_domain: Optional["BenchmarkDomain"] = None

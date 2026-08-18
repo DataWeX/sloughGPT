@@ -8,6 +8,11 @@ vi.mock('@sloughgpt/strui', () => ({
   IconEye: () => <span data-testid="icon-eye">eye</span>,
   IconStar: () => <span data-testid="icon-star">star</span>,
   IconTrash: () => <span data-testid="icon-trash">trash</span>,
+  IconSettings: () => <span data-testid="icon-settings">settings</span>,
+  IconDocument: () => <span data-testid="icon-document">document</span>,
+  IconSparkle: () => <span data-testid="icon-sparkle">sparkle</span>,
+  IconCode: () => <span data-testid="icon-code">code</span>,
+  IconBolt: () => <span data-testid="icon-bolt">bolt</span>,
   Button: ({ children, onClick, variant, size, className, ...rest }: any) => (
     <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),
@@ -156,7 +161,7 @@ describe('ChatToolPanel', () => {
   it('calls onOpenSettings from footer', () => {
     render(<ChatToolPanel open={true} onClose={onClose} sessionId="s1" />)
     const settingsBtns = screen.getAllByText('Settings')
-    const footerBtn = settingsBtns.find(b => b.closest('[id="chat-tool-panel"]')?.querySelector('svg'))
+    const footerBtn = settingsBtns.find(b => b.closest('[id="chat-tool-panel"]')?.querySelector('[data-testid="icon-settings"]'))
     fireEvent.click(footerBtn!)
     expect(defaultCtx.onOpenSettings).toHaveBeenCalled()
   })

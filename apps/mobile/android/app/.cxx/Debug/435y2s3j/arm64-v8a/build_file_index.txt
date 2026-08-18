@@ -1,0 +1,5 @@
+/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/@react-native-async-storage/async-storage/android/build/generated/source/codegen/jni/CMakeLists.txt
+/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/react-native-safe-area-context/android/src/main/jni/CMakeLists.txt
+/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/react-native-screens/android/src/main/jni/CMakeLists.txt
+/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/react-native-svg/android/src/main/jni/CMakeLists.txt
+/home/mana/Documents/Default Project/sloughGPT/apps/mobile/node_modules/react-native/ReactAndroid/cmake-utils/default-app-setup/CMakeLists.txt

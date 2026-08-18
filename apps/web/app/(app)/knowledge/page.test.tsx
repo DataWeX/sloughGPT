@@ -63,6 +63,7 @@ vi.mock('@sloughgpt/strui', () => {
     IconFilter: iconMock('filter'), IconFolder: iconMock('folder'), IconSettings: iconMock('settings'),
     IconClock: iconMock('clock'), IconDownload: iconMock('download'), IconUpload: iconMock('upload'),
     IconChevronDown: iconMock('chevron-down'), IconEdit: iconMock('edit'),
+    IconMapPin: iconMock('map-pin'),
     FoldSection: ({ heading, children }: any) => <details><summary>{heading}</summary>{children}</details>,
     AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: passthrough, AlertDialogHeader: passthrough, AlertDialogTitle: passthrough,

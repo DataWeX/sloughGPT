@@ -13,7 +13,7 @@ import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { Chip } from '@sloughgpt/strui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@sloughgpt/strui'
-import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX, IconDownload, IconEdit, IconChevronDown } from '@sloughgpt/strui'
+import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX, IconDownload, IconEdit, IconChevronDown, IconMapPin } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount } from '@/lib/knowledge-controller'
 import { getRAGStats, clearRAG, listRAGDocuments, syncKGToRAG, type RAGStats, type RAGDocument } from '@/lib/rag-controller'
@@ -524,7 +524,7 @@ export default function KnowledgePage() {
             className="h-8 text-xs"
             onClick={() => setShowBulkTopic(true)}
           >
-            <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+            <IconMapPin className="h-3.5 w-3.5 mr-1" />
             Move to topic ({selectedIds.size})
           </Button>
           <Button

@@ -11,9 +11,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from domains.shared import find_repo_root
+
 logger = logging.getLogger("slo.shell.commands")
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 
 from .config import get_api_base
 

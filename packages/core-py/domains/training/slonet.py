@@ -17,6 +17,7 @@ import numpy as np
 from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
 from pathlib import Path
 import logging
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.slonet")
 
@@ -3308,7 +3309,7 @@ class SloNet:
         try:
             from pathlib import Path
             if data_dir is None:
-                data_dir = Path(__file__).resolve().parents[4] / "data"
+                data_dir = find_repo_root(Path(__file__).resolve()) / "data"
             path = Path(data_dir) / "user_adapters" / f"{user_id}_adapter.npz"
             if path.exists():
                 data = np.load(str(path))

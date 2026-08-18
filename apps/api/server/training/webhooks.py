@@ -18,6 +18,7 @@ from datetime import datetime
 import httpx
 
 from mogdb import MogDB
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.webhooks")
 
@@ -63,7 +64,7 @@ class WebhookStore:
 
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            db_path = str(Path(__file__).resolve().parents[4] / "data" / "webhooks.db")
+            db_path = str(find_repo_root(Path(__file__).resolve()) / "data" / "webhooks.db")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()

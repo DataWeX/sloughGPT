@@ -1393,6 +1393,7 @@ class ModelServer:
             elapsed_ms = (time.time() - start) * 1000
             tokens = result.get("tokens_generated", 0)
             with self._metrics_lock:
+                self.metrics.requests_total += 1
                 self.metrics.record_success(elapsed_ms, tokens)
             with self._warmup_lock:
                 self._warmup_completed = True

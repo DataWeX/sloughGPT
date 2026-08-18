@@ -22,6 +22,7 @@ vi.mock('@sloughgpt/strui', () => {
       <input value={value} onChange={onChange} placeholder={placeholder} />
     ),
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
+    IconDownload: () => <span data-testid="icon-download">download</span>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })

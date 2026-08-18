@@ -21,10 +21,11 @@ import numpy as np
 
 from domains.cognitive.rag import ProductionRAG
 from domains.inference.vector_store import simple_embed
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.rag_service")
 
-_DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "rag_store"
+_DATA_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "rag_store"
 _DOCUMENTS_FILE = _DATA_DIR / "documents.jsonl"
 
 

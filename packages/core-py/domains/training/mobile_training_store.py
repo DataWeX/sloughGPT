@@ -18,6 +18,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.mobile_store")
 
@@ -289,7 +290,7 @@ def get_training_store(db_path: Optional[str] = None) -> MobileTrainingStore:
     global _store
     if _store is None:
         if db_path is None:
-            repo_root = Path(__file__).resolve().parents[4]
+            repo_root = find_repo_root(Path(__file__).resolve())
             db_path = str(repo_root / "packages" / "data" / "mobile_training")
         _store = MobileTrainingStore(db_path)
     return _store

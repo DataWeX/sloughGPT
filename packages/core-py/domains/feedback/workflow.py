@@ -22,6 +22,7 @@ from .meta_weights import MetaWeightManager, get_meta_weight_manager
 from .online_train import OnlineLoRAUpdater, get_online_lora_updater
 from .per_user_lora import PerUserLoRAStore, get_per_user_lora
 from domains.infrastructure.training_pipeline import TrainingDataPipeline, get_pipeline
+from domains.shared import find_repo_root
 
 
 @dataclass
@@ -597,7 +598,7 @@ class FeedbackWorkflowManager:
                         f"User adapter rejected: PPL increased {ppl_delta:+.1f}%", extra={"tag": "INFRA"}
                     )
 
-            adapter_path = Path(__file__).resolve().parents[4] / "data" / "user_adapters" / f"{user_id}_adapter.npz"
+            adapter_path = find_repo_root(Path(__file__).resolve()) / "data" / "user_adapters" / f"{user_id}_adapter.npz"
             adapter_path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(
                 str(adapter_path),

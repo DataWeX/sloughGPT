@@ -7,7 +7,7 @@ import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { VoiceWaveform } from './VoiceWaveform'
 
-import { cn, Button } from '@sloughgpt/strui'
+import { cn, Button, IconMic, AudioWaveform } from '@sloughgpt/strui'
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList
@@ -59,23 +59,11 @@ interface VoiceInputProps {
 }
 
 function MicrophoneIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-    </svg>
-  )
+  return <IconMic className={className} />
 }
 
 function WaveformIcon({ className, isActive }: { className?: string; isActive: boolean }) {
-  return (
-    <svg className={cn(className, isActive && "animate-pulse")} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <rect x="4" y="10" width="2" height="4" rx="1" className={isActive ? "animate-pulse" : ""} />
-      <rect x="8" y="7" width="2" height="10" rx="1" className={isActive ? "animate-pulse [animation-delay:100ms]" : ""} />
-      <rect x="12" y="4" width="2" height="16" rx="1" className={isActive ? "animate-pulse [animation-delay:200ms]" : ""} />
-      <rect x="16" y="7" width="2" height="10" rx="1" className={isActive ? "animate-pulse [animation-delay:300ms]" : ""} />
-      <rect x="20" y="10" width="2" height="4" rx="1" className={isActive ? "animate-pulse [animation-delay:400ms]" : ""} />
-    </svg>
-  )
+  return <AudioWaveform className={className} isActive={isActive} />
 }
 
 export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) {

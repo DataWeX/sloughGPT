@@ -46,6 +46,7 @@ from .webhooks import (
 )
 from .job_store import get_job_store
 from domains.training.executor import get_training_executor
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo")
 
@@ -698,7 +699,7 @@ async def start_visual_training(request: VisualTrainRequest):
     import uuid
     job_id = str(uuid.uuid4())[:8]
 
-    datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
+    datasets_dir = find_repo_root(Path(__file__).resolve()) / "datasets"
     data_path = datasets_dir / request.dataset
     if not data_path.exists():
         data_path = datasets_dir / f"{request.dataset}.jsonl"
@@ -707,7 +708,7 @@ async def start_visual_training(request: VisualTrainRequest):
     data_path_str = str(data_path)
 
     out_stem = request.name or f"vlm_{job_id}"
-    output_dir = Path(__file__).resolve().parents[4] / "models" / "video-training" / "checkpoints"
+    output_dir = find_repo_root(Path(__file__).resolve()) / "models" / "video-training" / "checkpoints"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     job: dict[str, Any] = {
@@ -795,7 +796,7 @@ async def start_distillation(request: DistillStartRequest):
     import uuid
     job_id = str(uuid.uuid4())[:8]
 
-    datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
+    datasets_dir = find_repo_root(Path(__file__).resolve()) / "datasets"
     data_path = datasets_dir / request.dataset
     if not data_path.exists():
         data_path = datasets_dir / f"{request.dataset}.jsonl"
@@ -814,7 +815,7 @@ async def start_distillation(request: DistillStartRequest):
         raise HTTPException(status_code=400, detail="Training data is empty")
 
     out_stem = request.name or f"distill_{job_id}"
-    _REPO_ROOT = Path(__file__).resolve().parents[4]
+    _REPO_ROOT = find_repo_root(Path(__file__).resolve())
     output_dir = _REPO_ROOT / "models" / "auto-training"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1051,7 +1052,7 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
     # Validate model path
     model_path = Path(request.model_path)
     if not model_path.is_file():
-        repo_root = Path(__file__).resolve().parents[4]
+        repo_root = find_repo_root(Path(__file__).resolve())
         alt_path = repo_root / "models" / request.model_path
         if alt_path.is_file():
             model_path = alt_path
@@ -1062,7 +1063,7 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
             )
 
     # Validate dataset
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = find_repo_root(Path(__file__).resolve())
     datasets_dir = repo_root / "datasets"
     data_dir = datasets_dir / request.dataset
     data_path = None
@@ -1294,7 +1295,7 @@ def _resolve_adapter_path(raw: str) -> Path:
     p = Path(raw)
     if p.is_file():
         return p
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = find_repo_root(Path(__file__).resolve())
     for base in [repo_root / "models", repo_root / "data" / "user_adapters"]:
         alt = base / raw
         if alt.is_file():
@@ -1573,7 +1574,7 @@ async def train_from_feedback():
 
         # Export feedback data
         timestamp = int(time.time())
-        export_dir = Path(__file__).resolve().parents[4] / "data" / "training_exports"
+        export_dir = find_repo_root(Path(__file__).resolve()) / "data" / "training_exports"
         export_dir.mkdir(parents=True, exist_ok=True)
 
         # Export as SFT format for training
@@ -2099,7 +2100,7 @@ async def list_builds():
       - HF fine-tuned model directories under ``models/hf-finetuned/``
     """
     from routers.auto_train import _load_soul, _load_lora_soul
-    _repo_root = Path(__file__).resolve().parents[4]
+    _repo_root = find_repo_root(Path(__file__).resolve())
     _checkpoints_dir = _repo_root / "models" / "auto-training"
     _lora_dir = _repo_root / "data" / "user_adapters"
     _hf_finetuned_dir = _repo_root / "models" / "hf-finetuned"
@@ -2167,7 +2168,7 @@ async def list_builds():
 
 def _finetuned_dir() -> Path:
     """Absolute path to the HF fine-tuned models directory."""
-    return Path(__file__).resolve().parents[4] / "models" / "hf-finetuned"
+    return find_repo_root(Path(__file__).resolve()) / "models" / "hf-finetuned"
 
 
 def _write_finetuned_metadata(model_dir: str | Path, model: str, dataset: str,

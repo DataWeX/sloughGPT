@@ -86,8 +86,9 @@ def cmd_chat(args):
         log_f.close()
 
         server_dir = repo / "apps" / "api" / "server"
+        from domains.shared import find_server_python
         cmd = [
-            sys.executable,
+            find_server_python(repo),
             "-m",
             "uvicorn",
             "main:app",

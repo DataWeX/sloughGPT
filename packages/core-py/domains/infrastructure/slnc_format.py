@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.slnc_format")
 
@@ -221,7 +222,7 @@ def convert_to_slnc(
 
     # Determine output path
     if output_path is None:
-        repo_root = Path(__file__).resolve().parents[4]
+        repo_root = find_repo_root(Path(__file__).resolve())
         models_dir = repo_root / "models"
         models_dir.mkdir(exist_ok=True)
         output_path = str(models_dir / f"{model_id.replace('/', '_')}.slnc")

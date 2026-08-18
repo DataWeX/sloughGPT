@@ -12,6 +12,7 @@ from pathlib import Path
 from collections import deque
 
 from domains.logging import get_global
+from domains.shared import find_server_python
 from utils.formatting import format_time
 
 log = get_global()
@@ -136,14 +137,8 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
 
 def _repo_root() -> Path:
     """Get the repository root from this file's location."""
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "apps").is_dir() and (parent / "packages").is_dir():
-            return parent
-        if (parent / "pyproject.toml").exists():
-            if (parent / "apps").is_dir():
-                return parent
-    return here.parents[min(5, len(here.parents) - 1)]
+    from domains.shared import find_repo_root
+    return find_repo_root(str(Path(__file__).resolve()))
 
 
 def cmd_dev(args):
@@ -173,7 +168,7 @@ def cmd_dev(args):
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
 
-    python = Path(sys.executable)
+    python = Path(find_server_python(root))
     api_proc = subprocess.Popen(
         [str(python), "-m", "uvicorn", "apps.api.server.main:app",
          "--host", "0.0.0.0", "--port", str(api_port), "--reload"],
@@ -389,7 +384,7 @@ def _cmd_api_only(args):
     api_lines: deque = deque(maxlen=_LOG_BUF)
     stop_event = threading.Event()
 
-    python = Path(sys.executable)
+    python = Path(find_server_python(root))
     api_proc = subprocess.Popen(
         [str(python), "-m", "uvicorn", "apps.api.server.main:app",
          "--host", args.host, "--port", str(api_port)],
@@ -495,7 +490,7 @@ def _cmd_api_and_mobile(args):
     mobile_lines: deque = deque(maxlen=_LOG_BUF)
     stop_event = threading.Event()
 
-    python = Path(sys.executable)
+    python = Path(find_server_python(root))
     api_proc = subprocess.Popen(
         [str(python), "-m", "uvicorn", "apps.api.server.main:app",
          "--host", args.host, "--port", str(api_port)],
@@ -662,7 +657,7 @@ def _cmd_api_and_web(args):
     stop_event = threading.Event()
 
     # ── Start FastAPI server ─────────────────────────────────────
-    python = Path(sys.executable)
+    python = Path(find_server_python(root))
     api_proc = subprocess.Popen(
         [str(python), "-m", "uvicorn", "apps.api.server.main:app",
          "--host", args.host, "--port", str(api_port)],

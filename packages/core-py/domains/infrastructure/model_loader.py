@@ -21,8 +21,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
+from domains.shared import find_repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 
 logger = logging.getLogger("slo.infrastructure.model_loader")
 

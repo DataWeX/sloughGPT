@@ -10,6 +10,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from domains.shared import find_repo_root
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class ChatDomain:
     def __init__(self, log_dir: str = "data/response_logs", engine: Optional[Any] = None):
         # Anchor relative to repo root, matching response_tracker.py, so the
         # log location does not depend on the process CWD.
-        self.log_dir = Path(__file__).resolve().parents[4] / log_dir
+        self.log_dir = find_repo_root(Path(__file__).resolve()) / log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self._engine = engine
 

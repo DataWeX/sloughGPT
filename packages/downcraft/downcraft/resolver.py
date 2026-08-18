@@ -350,7 +350,7 @@ def _find_main_content(html: str) -> Tuple[int, int]:
         gaps.append((prev_end, html_len))
 
     if not gaps:
-        return 0, html_len
+        return 0, 0
 
     # Pick the largest gap (most content)
     best = max(gaps, key=lambda g: g[1] - g[0])
@@ -365,11 +365,12 @@ def _is_in_main_content(href: str, html: str, main_range: Optional[Tuple[int, in
     typically contains relative paths (e.g. ``/file.zip``).
     """
     start, end = main_range if main_range is not None else _find_main_content(html)
-    idx = html.find(href, start)
-    if idx != -1 and idx <= end:
-        return True
+    if len(href) > 1:
+        idx = html.find(href, start)
+        if idx != -1 and idx <= end:
+            return True
     parsed = urllib.parse.urlparse(href)
-    if parsed.path:
+    if parsed.path and len(parsed.path) > 1:
         idx = html.find(parsed.path, start)
         if idx != -1 and idx <= end:
             return True
@@ -443,8 +444,7 @@ def _score_link(
     if len(text) < 2:
         score -= 0.05
 
-    parsed = urllib.parse.urlparse(href)
-    if len(parsed.query) > 100:
+    if len(parsed_url.query) > 100:
         score -= 0.1
 
     return max(0.0, min(1.0, score))

@@ -35,6 +35,7 @@ vi.mock('@sloughgpt/strui', () => {
     IconTrash: () => <span>trash</span>,
     IconChevronDown: () => <span>v</span>,
     IconDownload: () => <span>d</span>,
+    IconPlay: () => <span>play</span>,
   }
 })
 

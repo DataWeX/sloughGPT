@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import logging
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.soul_manager")
 
@@ -62,7 +63,7 @@ class SloManager:
         self.slos_dir = Path(souls_dir)
         self._current_soul: Optional[str] = None
         self._souls_cache: Dict[str, SloInfo] = {}
-        self._preference_file = Path(__file__).resolve().parents[4] / "data" / ".soul_preference"
+        self._preference_file = find_repo_root(Path(__file__).resolve()) / "data" / ".soul_preference"
 
         # Load cached souls
         self._scan_souls()

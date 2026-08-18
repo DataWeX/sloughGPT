@@ -18,8 +18,9 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
+from domains.shared import find_repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _DEFAULT_DIR = _REPO_ROOT / "datasets" / "api_conversations"
 
 

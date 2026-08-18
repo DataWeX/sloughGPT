@@ -31,8 +31,10 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from domains.shared import find_repo_root
+
 # ── Path bootstrapping (must happen before any domain imports) ────────
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _SERVER_ROOT = Path(__file__).resolve().parent
 _CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
@@ -154,7 +156,7 @@ async def lifespan(app_inst: FastAPI):
                 import threading
                 def _rag_auto_ingest():
                     try:
-                        _rag.auto_ingest_directory(str(Path(__file__).resolve().parents[3]), max_files=150)
+                        _rag.auto_ingest_directory(str(find_repo_root(Path(__file__).resolve())), max_files=150)
                     except Exception as e:
                         logger.debug("RAG auto-ingest failed: %s", e)
                 threading.Thread(target=_rag_auto_ingest, daemon=True).start()

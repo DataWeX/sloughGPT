@@ -27,6 +27,8 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+from domains.shared import find_repo_root, find_server_python
+
 logger = logging.getLogger("slo.shell.runtime")
 
 _REPO_ROOT = None  # lazy
@@ -126,8 +128,8 @@ class APIServerProcess:
             if _shared_proc is not None:
                 return {"ok": True, "message": "already running"}
 
-        repo_root = self._find_repo_root()
-        server_python = self._find_server_python(repo_root)
+        repo_root = find_repo_root(Path(__file__).resolve())
+        server_python = find_server_python(repo_root)
         cmd = [server_python, "-m", "apps.api.server.main"]
         logger.info("Starting API server: %s (cwd=%s)", " ".join(cmd), repo_root)
 
@@ -214,18 +216,6 @@ class APIServerProcess:
         return _probe_api(self._api_url).get("available", False)
 
     # ── Internal ────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _find_repo_root() -> Path:
-        """Repository root (delegates to shared utility)."""
-        from domains.shared import find_repo_root
-        return find_repo_root(str(Path(__file__).resolve()))
-
-    @staticmethod
-    def _find_server_python(repo_root: Path) -> str:
-        """Find the Python executable with the project's dependencies."""
-        from domains.shared import find_server_python
-        return find_server_python(repo_root)
 
     def __repr__(self) -> str:
         return f"APIServerProcess(url={self._api_url}, running={self.is_running})"

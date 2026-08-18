@@ -17,7 +17,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_CORE_DIR = str(Path(__file__).resolve().parents[4] / "packages" / "core-py")
+from domains.shared import find_repo_root
+
+_CORE_DIR = str(find_repo_root(Path(__file__).resolve()) / "packages" / "core-py")
 if _CORE_DIR not in sys.path:
     sys.path.insert(0, _CORE_DIR)
 

@@ -33,6 +33,7 @@ from pathlib import Path
 
 import numpy as np
 
+from domains.shared import find_repo_root
 from domains.training.slonet import (
     SloTransformer, SloAdam,
     cross_entropy, tensor, export_to_sou, import_from_sou,
@@ -46,7 +47,7 @@ ITOS = {i: c for i, c in enumerate(CHAR_SET)}
 UNK = 0
 VOCAB = len(CHAR_SET)
 
-LEARNER_STATE_DIR = Path(__file__).resolve().parents[4] / "data" / "learner"
+LEARNER_STATE_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "learner"
 LEARNER_STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_PATH = LEARNER_STATE_DIR / "continual.soul"
 

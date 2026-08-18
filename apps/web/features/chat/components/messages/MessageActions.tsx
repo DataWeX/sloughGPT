@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
-import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconThumbUp, IconThumbDown } from '@sloughgpt/strui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconThumbUp, IconThumbDown, IconSpeaker, IconRewrite, IconExplain, IconTranslate, IconPlay, IconMapPin, IconCheckCircle } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
@@ -254,10 +254,11 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           aria-label={savedToKnowledge ? 'Already saved to knowledge' : 'Save to knowledge'}
           disabled={savedToKnowledge}
         >
-          <svg className={cn('h-3.5 w-3.5', savedToKnowledge && 'text-success')} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" />
-            {savedToKnowledge && <path d="M9 12l2 2 4-4" />}
-          </svg>
+          {savedToKnowledge ? (
+            <IconCheckCircle className={cn('h-3.5 w-3.5 text-success')} aria-hidden="true" />
+          ) : (
+            <IconMapPin className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
         </Button>
       )}
 
@@ -270,13 +271,9 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           aria-label={speaking ? 'Stop reading aloud' : 'Read aloud'}
         >
           {speaking ? (
-            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
-            </svg>
+            <IconPlay className="h-3.5 w-3.5" />
           ) : (
-            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.5v7a4.49 4.49 0 002.5-3.5zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-            </svg>
+            <IconSpeaker className="h-3.5 w-3.5" />
           )}
         </Button>
       )}
@@ -314,9 +311,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             aria-label="Rewrite this message"
             title="Rewrite"
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
+            <IconRewrite className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
@@ -325,9 +320,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             aria-label="Explain this message"
             title="Explain"
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
+            <IconExplain className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
@@ -336,9 +329,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             aria-label="Translate to Spanish"
             title="Translate"
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <IconTranslate className="h-3.5 w-3.5" />
           </Button>
         </>
       )}

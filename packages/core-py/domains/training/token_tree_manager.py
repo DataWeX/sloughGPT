@@ -23,8 +23,9 @@ from typing import List, Optional, Sequence
 import numpy as np
 
 from domains.training.token_tree import TokenTree
+from domains.shared import find_repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _SAVE_DIR = _REPO_ROOT / "data" / "token_trees"
 
 DEFAULT_CORPUS: List[str] = [

@@ -1596,3 +1596,44 @@ class TestExtractJsRedirectsOnclick:
         html = "onclick=\"location('https://example.com/loc.zip')\""
         urls = _extract_js_redirects(html)
         assert any("loc.zip" in u for u in urls)
+
+
+# ---------------------------------------------------------------------------
+# Bug fix: _is_in_main_content root path false positive
+# ---------------------------------------------------------------------------
+
+class TestIsInMainContentRootPath:
+    def test_root_path_not_false_positive(self):
+        html = "<html><body><a href='/file.zip'>Download</a></body></html>"
+        assert not _is_in_main_content("/", html)
+
+    def test_empty_path_always_false(self):
+        html = "<html><body><a href='/file.zip'>Download</a></body></html>"
+        assert not _is_in_main_content("", html)
+
+    def test_long_path_still_works(self):
+        html = "<html><body><a href='/downloads/file.zip'>Download</a></body></html>"
+        assert _is_in_main_content("/downloads/file.zip", html)
+
+    def test_root_path_in_main_tag_also_short(self):
+        html = "<html><body><main><a href='/'>Home</a></main></body></html>"
+        assert not _is_in_main_content("/", html)
+
+
+# ---------------------------------------------------------------------------
+# Bug fix: _score_link no redundant parse
+# ---------------------------------------------------------------------------
+
+class TestScoreLinkNoRedundantParse:
+    def test_long_query_string_penalty(self):
+        long_q = "a" * 200
+        href = f"https://example.com/dl?ref={long_q}"
+        s = _score_link(href, "Download", {}, "https://example.com")
+        assert s < 0.5
+
+    def test_short_query_no_penalty(self):
+        href = "https://example.com/file.zip?ref=home"
+        s_long_q = _score_link(href, "Download", {}, "https://example.com")
+        href_short = "https://example.com/file.zip"
+        s_no_q = _score_link(href_short, "Download", {}, "https://example.com")
+        assert s_long_q == s_no_q

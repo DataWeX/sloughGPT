@@ -16,10 +16,11 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
 import numpy as np
+from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.knowledge_weight_integrator")
 
-_ADAPTER_DIR = Path(__file__).resolve().parents[4] / "data" / "knowledge_adapter"
+_ADAPTER_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "knowledge_adapter"
 _ADAPTER_DIR.mkdir(parents=True, exist_ok=True)
 _ADAPTER_PATH = _ADAPTER_DIR / "knowledge_lora"
 _DELTA_PATH = _ADAPTER_DIR / "knowledge_delta.npz"

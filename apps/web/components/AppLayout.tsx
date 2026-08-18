@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-import { cn, Button } from '@sloughgpt/strui'
+import { cn, Button, IconChevronRight } from '@sloughgpt/strui'
 import { IconMenu } from '@/components/icons/NavIcons'
 import { Sidebar } from '@/components/Sidebar'
 import { ErrorPanel } from '@sloughgpt/strui'
@@ -162,22 +162,12 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
               'hover:shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1),0_0_12px_-2px_rgba(var(--primary)/0.3)]',
             )}
           >
-            <svg
-              className={cn(
-                'h-3 w-3 text-primary-foreground transition-transform duration-300',
-                'drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]',
-                navCollapsed ? 'rotate-0' : 'rotate-180',
-                'group-hover/tab:scale-110',
-              )}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
+            <IconChevronRight className={cn(
+              'h-3 w-3 text-primary-foreground transition-transform duration-300',
+              'drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]',
+              navCollapsed ? 'rotate-0' : 'rotate-180',
+              'group-hover/tab:scale-110',
+            )} />
           </button>
         </div>
 

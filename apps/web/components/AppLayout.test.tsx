@@ -25,6 +25,7 @@ vi.mock('@sloughgpt/strui', () => ({
   ErrorPanel: () => <div data-testid="error-panel" />,
   IconX: (props: any) => <svg {...props} />,
   IconMenu: (props: any) => <svg {...props} />,
+  IconChevronRight: () => null,
 }))
 vi.mock('@/components/OutputPanel', () => ({ OutputPanel: () => <div data-testid="output-panel" /> }))
 vi.mock('@/features/chat/components/feedback/Toast', () => ({ ToastContainer: () => <div data-testid="toast-container" />, RadixToastContainer: () => <div data-testid="toast-container" /> }))

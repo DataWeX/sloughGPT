@@ -28,6 +28,10 @@ vi.mock('@sloughgpt/strui', () => {
     IconCopy: () => <span data-testid="icon-copy">copy</span>,
     IconExport: () => <span data-testid="icon-export">export</span>,
     IconDocument: () => <span data-testid="icon-document">document</span>,
+    IconPlus: () => <span data-testid="icon-plus">+</span>,
+    IconCheck: () => <span data-testid="icon-check">✓</span>,
+    IconBrain: () => <span data-testid="icon-brain">brain</span>,
+    IconMicFilled: () => <span data-testid="icon-mic-filled">mic-filled</span>,
   }
 })
 

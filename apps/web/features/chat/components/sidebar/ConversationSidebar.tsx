@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight, IconDownload, IconDocument, IconCopy } from '@sloughgpt/strui'
+import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight, IconDownload, IconDocument, IconCopy, IconDot, IconDotOutline } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -632,9 +632,9 @@ function ConvRow({
             aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
           >
             {c.unread ? (
-              <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></svg>
+              <IconDot className="h-2.5 w-2.5" />
             ) : (
-              <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" strokeWidth="2"/></svg>
+              <IconDotOutline className="h-2.5 w-2.5" />
             )}
           </button>
           <button

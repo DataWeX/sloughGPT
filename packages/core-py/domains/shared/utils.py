@@ -7,7 +7,9 @@ import json
 import hashlib
 import random
 import string
+import sys as _sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import logging
 
@@ -226,19 +228,13 @@ def find_available_port(host: str = "", start_port: int = 8000, max_attempts: in
     raise RuntimeError(f"Could not find available port in range {start_port}-{start_port + max_attempts}")
 
 
-def find_repo_root(start: str = "") -> "Path":
+def find_repo_root(start: "Path | str" = "") -> "Path":
     """Walk up from *start* (or this file) to find the repository root.
 
     The root is identified by having both ``apps/`` and ``packages/``
     subdirectories.  Falls back to ``pyproject.toml`` + ``apps/``.
     """
-    import sys as _sys
-    from pathlib import Path
-
-    if start:
-        here = Path(start).resolve()
-    else:
-        here = Path(__file__).resolve()
+    here = Path(start).resolve() if start else Path(__file__).resolve()
     for parent in here.parents:
         if (parent / "apps").is_dir() and (parent / "packages").is_dir():
             return parent
@@ -253,9 +249,6 @@ def find_server_python(repo_root: "Path | str" = "") -> str:
     Checks ``<repo_root>/.venv/bin/python3`` first, then ``.venv/bin/python``,
     then falls back to the currently running interpreter.
     """
-    from pathlib import Path
-    import sys as _sys
-
     root = Path(repo_root) if repo_root else find_repo_root()
     for name in (".venv/bin/python3", ".venv/bin/python"):
         venv_py = root / name

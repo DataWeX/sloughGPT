@@ -13,7 +13,7 @@ import {
   IconChat,
   IconModels,
 } from '@/components/icons/NavIcons'
-import { IconChevronRight, IconMessage, IconSearch } from '@sloughgpt/strui'
+import { IconChevronRight, IconMessage, IconSearch, IconBolt, IconChart, LossCurve } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -140,13 +140,7 @@ export default function HomePage() {
     >
       {/* Decorative training loss curve — signature element */}
       <div className="absolute top-0 right-0 w-48 h-32 opacity-[0.06] pointer-events-none overflow-hidden hidden sm:block" aria-hidden="true">
-        <svg viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-          <path d="M10 20 Q 30 100, 60 70 T 110 50 T 160 35 T 200 25" stroke="rgb(var(--accent))" strokeWidth="2.5" strokeLinecap="round" />
-          <path d="M10 30 Q 40 90, 70 65 T 120 48 T 170 32 T 200 22" stroke="rgb(var(--primary))" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="4 3" />
-          <circle cx="110" cy="50" r="3" fill="rgb(var(--accent))" />
-          <circle cx="160" cy="35" r="2.5" fill="rgb(var(--accent))" />
-          <text x="60" y="120" fill="rgb(var(--muted-foreground))" fontSize="9" fontFamily="var(--font-mono, monospace)" opacity="0.5">loss</text>
-        </svg>
+        <LossCurve className="w-full h-full" />
       </div>
 
       {apiStatus === 'offline' ? (
@@ -600,7 +594,7 @@ export default function HomePage() {
         >
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/10 text-accent">
-              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <IconBolt className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">Teach me</p>
@@ -617,7 +611,7 @@ export default function HomePage() {
         >
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-success/10 text-success">
-              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              <IconChart className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">System Health</p>

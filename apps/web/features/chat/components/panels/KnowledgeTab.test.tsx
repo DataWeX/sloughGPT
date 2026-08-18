@@ -41,6 +41,7 @@ vi.mock('@sloughgpt/strui', () => ({
     <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),
   IconX: () => <span data-testid="icon-x">x</span>,
+  IconEdit: () => <span data-testid="icon-edit">edit</span>,
 }))
 
 import { KnowledgeTab } from './KnowledgeTab'

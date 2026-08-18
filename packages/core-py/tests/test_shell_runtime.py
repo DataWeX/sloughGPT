@@ -13,6 +13,7 @@ from domains.shell.runtime import (
     Resource,
     _probe_api,
 )
+from domains.shared import find_repo_root
 
 
 class _FakeProc:
@@ -254,33 +255,33 @@ class TestFindRepoRoot:
             return self
 
     def _patch(self, parents):
-        return patch("domains.shell.runtime.Path",
+        return patch("domains.shared.utils.Path",
                      return_value=self._FakePath(parents))
 
     def test_finds_pyproject_with_apps(self):
         parents = [self._Parent("A"), self._Parent("B", py=True, apps=True)]
         with self._patch(parents):
-            result = APIServerProcess._find_repo_root()
+            result = find_repo_root()
         assert result.name == "B"
 
     def test_finds_apps_packages_marker(self):
         parents = [self._Parent("A"),
                    self._Parent("B", apps=True, pkgs=True)]
         with self._patch(parents):
-            result = APIServerProcess._find_repo_root()
+            result = find_repo_root()
         assert result.name == "B"
 
     def test_apps_packages_beats_pyproject(self):
         parents = [self._Parent("A", apps=True, pkgs=True),
                    self._Parent("B", py=True, apps=True)]
         with self._patch(parents):
-            result = APIServerProcess._find_repo_root()
+            result = find_repo_root()
         assert result.name == "A"
 
     def test_pyproject_without_apps_skipped(self):
         parents = [self._Parent("A"), self._Parent("B", py=True)]
         with self._patch(parents):
-            result = APIServerProcess._find_repo_root()
+            result = find_repo_root()
         assert result.name == "B"  # falls through to fallback parents[4]
 
     def test_fallback_to_deep_parent(self):
@@ -288,7 +289,7 @@ class TestFindRepoRoot:
                    self._Parent("C"), self._Parent("D"),
                    self._Parent("E")]
         with self._patch(parents):
-            result = APIServerProcess._find_repo_root()
+            result = find_repo_root()
         assert result.name == "E"
 
 

@@ -103,7 +103,7 @@ export { Chip, Chips, TagInput } from './components/ui/tags'
 
 // Icons (50+ from our components/ui/icons)
 export {
-  IconSearch, IconPlus, IconChevronLeft, IconChevronDown, IconChevronRight,
+  IconSearch, IconPlus, IconChevronLeft, IconChevronDown, IconChevronRight, IconChevronUp,
   IconMenu, IconX, IconCheck, IconChat, IconStar, IconPin, IconClock,
   IconSettings, IconCopy, IconRefresh, IconTrash, IconEdit, IconMessage,
   IconSend, IconUser, IconHome, IconCog, IconFolder, IconDocument,
@@ -113,6 +113,11 @@ export {
   IconMoon, IconSun, IconActivity, IconCompare, IconTraining, IconBenchmark,
   IconTokenizer, IconExport, IconLabs, IconAgents, IconLogin, IconVision,
   IconFile, IconChangelog,
+  IconPlay, IconMapPin, IconBolt, IconChart, IconDot, IconDotOutline,
+  IconSparkle, IconCode, IconBeaker, IconBookmark, IconSpeaker,
+  IconMic, IconMicFilled, IconStop, IconImage, IconGrid, IconCloudOff,
+  IconRewrite, IconExplain, IconTranslate,
+  AudioWaveform, LossCurve,
 } from './components/ui/icons'
 
 // Error store + panel
