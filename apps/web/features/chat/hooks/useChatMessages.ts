@@ -84,8 +84,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const userIdRef = useRef<string>('default')
   const lastSaveRef = useRef<number>(0)
   const sendMessageRef = useRef<(overrideText?: string) => Promise<void>>(async () => {})
-  const handleRegenerateRef = useRef<() => Promise<void>>(null as unknown as () => Promise<void>)
-  const newChatRef = useRef<() => void>(null as unknown as () => void)
+  const handleRegenerateRef = useRef<(() => Promise<void>) | null>(null)
+  const newChatRef = useRef<(() => void) | null>(null)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Session operations (delegated) ──────────────────────────────────────

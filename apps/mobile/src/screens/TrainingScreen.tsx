@@ -9,7 +9,8 @@ import {
   Pressable,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {useTrainingStore, type TrainPhase, type TrainingMethod} from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
@@ -84,6 +85,7 @@ function LossChart({data}: {data: {step: number; value: number}[]}) {
 }
 
 export function TrainingScreen() {
+  const colors = useColors();
   const {
     phase,
     running,
@@ -111,7 +113,6 @@ export function TrainingScreen() {
     deleteCheckpoint,
     clearError,
   } = useTrainingStore();
-  const theme = useTheme();
   const modelStore = useModelStore();
   const [sourceText, setSourceText] = useState('');
   const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
@@ -227,7 +228,7 @@ export function TrainingScreen() {
     phase === 'EVALUATE' || phase === 'DEPLOY';
   const isDone = phase === 'COMPLETE';
   const isFailed = phase === 'FAILED';
-  const accent = theme.color9?.val || '#7C52C4';
+  const accent = colors.primary;
   const progress =
     totalEpochs > 0 ? Math.round((epoch / totalEpochs) * 100) : 0;
   const phaseInfo = PHASE_LABELS[phase] || PHASE_LABELS.idle;
@@ -843,7 +844,7 @@ export function TrainingScreen() {
               <Text fontSize={16} fontWeight="600" color="$color">Dataset Preview</Text>
               <Pressable onPress={hapticPress('light', () => setPreviewVisible(false))} accessibilityLabel="Close preview">
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                  <Icon name="x" size={16} color={colors.textSecondary} />
                 </YStack>
               </Pressable>
             </XStack>
@@ -869,7 +870,7 @@ export function TrainingScreen() {
               <Text fontSize={16} fontWeight="600" color="$color">Import Dataset</Text>
               <Pressable onPress={hapticPress('light', () => setShowImportModal(false))} accessibilityLabel="Close import">
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                  <Icon name="x" size={16} color={colors.textSecondary} />
                 </YStack>
               </Pressable>
             </XStack>

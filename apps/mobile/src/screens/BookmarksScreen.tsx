@@ -1,14 +1,15 @@
 import React, {useEffect, useState} from 'react';
 import {FlatList, Alert} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {useChatStore} from '../stores/chat-store';
 import {getBookmarks, removeBookmark, type Bookmark} from '../services/bookmarks';
 import {triggerHaptic} from '../services/haptics';
 import {Icon} from '../components/Icon';
 
 export function BookmarksScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const {loadSession} = useChatStore();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
@@ -75,7 +76,7 @@ export function BookmarksScreen() {
           )}
           ListEmptyComponent={
             <YStack alignItems="center" paddingTop={96} paddingHorizontal={32}>
-              <Icon name="star" size={48} color={(theme.color10?.val || '#827A96')} />
+              <Icon name="star" size={48} color={colors.textMuted} />
               <Text fontSize={20} fontWeight="600" color="$color" marginBottom={8} textAlign="center">
                 No bookmarks yet
               </Text>

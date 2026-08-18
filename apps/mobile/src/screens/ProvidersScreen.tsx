@@ -8,7 +8,8 @@ import {
   Platform,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, Input, Button, useTheme} from 'tamagui';
+import {YStack, XStack, Text, Input, Button} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {useProvidersStore} from '../stores/providers-store';
 import {useHybridStore} from '../stores/hybrid-inference-store';
 import {PROVIDER_REGISTRY, PROVIDER_MODELS} from '../types/providers';
@@ -28,7 +29,7 @@ function _maskKey(key: string): string {
 }
 
 export function ProvidersScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const providers = useProvidersStore(s => s.providers);
   const activeProviderId = useProvidersStore(s => s.activeProviderId);
   const setActiveProvider = useProvidersStore(s => s.setActiveProvider);
@@ -76,7 +77,6 @@ export function ProvidersScreen() {
       return;
     }
     triggerHaptic('light');
-    // Simple test: try to list models (OpenAI-compatible) or just validate the key format
     if (id === 'anthropic') {
       if (config.apiKey.startsWith('sk-ant-')) {
         toast.success('Key format looks valid');
@@ -125,10 +125,10 @@ export function ProvidersScreen() {
         <ScrollView contentContainerStyle={{padding: 16}}>
           {/* Header */}
           <YStack marginBottom={16}>
-            <Text fontSize={22} fontWeight="600" color={theme.color}>
+            <Text fontSize={22} fontWeight="600" color={colors.text}>
               Providers
             </Text>
-            <Text fontSize={13} color={theme.color10} marginTop={4}>
+            <Text fontSize={13} color={colors.textMuted} marginTop={4}>
               Connect third-party AI providers for remote inference
             </Text>
           </YStack>
@@ -150,7 +150,7 @@ export function ProvidersScreen() {
                   borderRadius={4}
                   backgroundColor="$green10"
                 />
-                <Text fontSize={13} fontWeight="500" color={theme.color}>
+                <Text fontSize={13} fontWeight="500" color={colors.text}>
                   Active: {providers[activeProviderId]?.name || activeProviderId}
                 </Text>
               </XStack>
@@ -188,7 +188,7 @@ export function ProvidersScreen() {
                 >
                   <YStack flex={1}>
                     <XStack alignItems="center" gap={8}>
-                      <Text fontSize={15} fontWeight="600" color={theme.color}>
+                      <Text fontSize={15} fontWeight="600" color={colors.text}>
                         {config.name}
                       </Text>
                       {isActive && (
@@ -216,13 +216,13 @@ export function ProvidersScreen() {
                         </YStack>
                       )}
                     </XStack>
-                    <Text fontSize={12} color={theme.color10} marginTop={2}>
+                    <Text fontSize={12} color={colors.textMuted} marginTop={2}>
                       {hasKey ? _maskKey(config.apiKey) : 'No API key'}
                       {' · '}
                       {config.defaultModel}
                     </Text>
                   </YStack>
-                  <Text fontSize={18} color={theme.color10}>
+                  <Text fontSize={18} color={colors.textMuted}>
                     {isExpanded ? '▾' : '▸'}
                   </Text>
                 </XStack>
@@ -232,7 +232,7 @@ export function ProvidersScreen() {
                   <YStack padding={12} paddingTop={0} gap={12}>
                     {/* Base URL */}
                     <YStack gap={4}>
-                      <Text fontSize={11} fontWeight="500" color={theme.color10} textTransform="uppercase" letterSpacing={0.5}>
+                      <Text fontSize={11} fontWeight="500" color={colors.textMuted} textTransform="uppercase" letterSpacing={0.5}>
                         Base URL
                       </Text>
                       <Input
@@ -242,7 +242,7 @@ export function ProvidersScreen() {
                         fontSize={13}
                         backgroundColor="$color3"
                         borderColor="$color5"
-                        color={theme.color}
+                        color={colors.text}
                         autoCapitalize="none"
                         autoCorrect={false}
                       />
@@ -250,7 +250,7 @@ export function ProvidersScreen() {
 
                     {/* API Key */}
                     <YStack gap={4}>
-                      <Text fontSize={11} fontWeight="500" color={theme.color10} textTransform="uppercase" letterSpacing={0.5}>
+                      <Text fontSize={11} fontWeight="500" color={colors.textMuted} textTransform="uppercase" letterSpacing={0.5}>
                         API Key
                       </Text>
                       {editingKey === id ? (
@@ -262,7 +262,7 @@ export function ProvidersScreen() {
                             fontSize={13}
                             backgroundColor="$color3"
                             borderColor="$color8"
-                            color={theme.color}
+                            color={colors.text}
                             secureTextEntry
                             autoCapitalize="none"
                             autoCorrect={false}
@@ -298,7 +298,7 @@ export function ProvidersScreen() {
                             fontSize={13}
                             backgroundColor="$color3"
                             borderColor="$color5"
-                            color={theme.color10}
+                            color={colors.textMuted}
                             flex={1}
                             readOnly
                           />
@@ -331,7 +331,7 @@ export function ProvidersScreen() {
 
                     {/* Default model */}
                     <YStack gap={4}>
-                      <Text fontSize={11} fontWeight="500" color={theme.color10} textTransform="uppercase" letterSpacing={0.5}>
+                      <Text fontSize={11} fontWeight="500" color={colors.textMuted} textTransform="uppercase" letterSpacing={0.5}>
                         Default Model
                       </Text>
                       <XStack gap={8} flexWrap="wrap">
@@ -363,7 +363,7 @@ export function ProvidersScreen() {
                           fontSize={12}
                           backgroundColor="$color3"
                           borderColor="$color5"
-                          color={theme.color}
+                          color={colors.text}
                           flex={1}
                           autoCapitalize="none"
                           autoCorrect={false}
@@ -428,7 +428,7 @@ export function ProvidersScreen() {
             marginTop={4}
             marginBottom={32}
           >
-            <Text fontSize={12} color={theme.color10} lineHeight={18}>
+            <Text fontSize={12} color={colors.textMuted} lineHeight={18}>
               API keys are stored locally on your device and never sent to our servers.
               Each provider requires its own account and billing.
             </Text>

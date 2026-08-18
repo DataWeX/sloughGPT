@@ -9,7 +9,8 @@ import {
   RefreshControl,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {useChatActions} from '../hooks/useChatActions';
 import {ChatDrawer} from '../components/ChatDrawer';
 import {ChatBottomSheets} from '../components/ChatBottomSheets';
@@ -25,7 +26,7 @@ const SUGGESTIONS = [
 ];
 
 export function ChatScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const flatListRef = useRef<FlatList>(null);
   const a = useChatActions(flatListRef);
 
@@ -60,7 +61,7 @@ export function ChatScreen() {
               onPress={() => a.setShowDrawer(true)}
               pressStyle={{opacity: 0.6, scale: 0.95}}
               accessible accessibilityRole="button" accessibilityLabel="Open menu">
-              <Icon name="menu" size={18} color={(theme.color11?.val || '#6B7280')} />
+              <Icon name="menu" size={18} color={colors.textSecondary} />
             </YStack>
             <YStack
               alignItems="flex-start"
@@ -109,7 +110,7 @@ export function ChatScreen() {
                 onPress={a.handleExportChat}
                 pressStyle={{opacity: 0.6, scale: 0.95}}
                 accessible accessibilityRole="button" accessibilityLabel="Export conversation">
-                <Icon name="share-2" size={18} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="share-2" size={18} color={colors.textSecondary} />
               </YStack>
             )}
             <YStack
@@ -118,7 +119,7 @@ export function ChatScreen() {
               onPress={() => a.setShowSettings(true)}
               pressStyle={{opacity: 0.6, scale: 0.95}}
               accessible accessibilityRole="button" accessibilityLabel="Settings">
-              <Icon name="more-vertical" size={18} color={(theme.color11?.val || '#6B7280')} />
+              <Icon name="more-vertical" size={18} color={colors.textSecondary} />
             </YStack>
           </XStack>
         </XStack>
@@ -158,16 +159,16 @@ export function ChatScreen() {
             <RNTextInput
               style={{
                 flex: 1, fontSize: 13,
-                color: (theme.color?.val || '#111827'),
+                color: colors.text,
                 backgroundColor: 'rgba(124, 82, 196, 0.06)',
                 borderRadius: 10,
                 paddingHorizontal: 12, paddingVertical: 7,
-                borderWidth: 0.5, borderColor: (theme.borderColor?.val || '#E5E7EB'),
+                borderWidth: 0.5, borderColor: colors.border,
               }}
               value={a.searchQuery}
               onChangeText={a.setSearchQuery}
               placeholder="Search messages..."
-              placeholderTextColor={(theme.color10?.val || '#9CA3AF')}
+              placeholderTextColor={colors.textMuted}
               autoFocus
             />
             <YStack
@@ -177,7 +178,7 @@ export function ChatScreen() {
               onPress={() => { a.setShowSearch(false); a.setSearchQuery(''); }}
               pressStyle={{opacity: 0.6}}
               accessible accessibilityRole="button" accessibilityLabel="Close search">
-              <Icon name="x" size={14} color={(theme.color10?.val || '#9CA3AF')} />
+              <Icon name="x" size={14} color={colors.textMuted} />
             </YStack>
           </XStack>
         )}
@@ -198,7 +199,7 @@ export function ChatScreen() {
                 width={56} height={56} borderRadius={28}
                 backgroundColor="rgba(124, 82, 196, 0.1)"
                 alignItems="center" justifyContent="center">
-                <Icon name="message-circle" size={26} color={(theme.color9?.val || '#7C52C4')} />
+                <Icon name="message-circle" size={26} color={colors.primary} />
               </YStack>
             </YStack>
 
@@ -251,7 +252,7 @@ export function ChatScreen() {
                 <RefreshControl
                   refreshing={a.refreshing}
                   onRefresh={a.onPullRefresh}
-                  tintColor={(theme.color9?.val || '#7C52C4')}
+                  tintColor={colors.primary}
                 />
               }
               onContentSizeChange={() => {

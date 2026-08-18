@@ -1,7 +1,8 @@
 import React, {useEffect, useState, useCallback} from 'react';
 import {Pressable, RefreshControl} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {ScrollView, YStack, XStack, Text, useTheme} from 'tamagui';
+import {ScrollView, YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {Icon, type IconName} from '../components/Icon';
 import {StatusBadge} from '../components/StatusBadge';
 import {useHapticPress} from '../hooks/useHapticPress';
@@ -32,12 +33,12 @@ function formatUptime(seconds: number): string {
 }
 
 export function ToolsScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const navigation = useNavigation<any>();
-  const accent = theme.color9?.val || '#7C52C4';
-  const muted = theme.color10?.val || '#827A96';
-  const bgCard = theme.background?.val || '#FFFFFF';
-  const borderColor = theme.borderColor?.val || '#E4E0F2';
+  const accent = colors.primary;
+  const muted = colors.textMuted;
+  const bgCard = colors.background;
+  const borderColor = colors.border;
   const hapticPress = useHapticPress();
 
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -66,7 +67,7 @@ export function ToolsScreen() {
     <SafeAreaView style={{flex: 1}} edges={['top']}>
       <ScrollView
         flex={1}
-        backgroundColor={theme.background?.val || '#F8F6FC'}
+        backgroundColor={colors.background}
         contentContainerStyle={{padding: 16, gap: 12}}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <Text

@@ -7,7 +7,8 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useModelStore} from '../stores/model-store';
 import {useHybridStore} from '../stores/hybrid-inference-store';
@@ -18,7 +19,7 @@ import type {ModelInfo} from '../types';
 import type {ActiveEngine} from '../types/local-inference';
 
 export function ModelsScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const {
     models,
     currentModel,
@@ -39,7 +40,7 @@ export function ModelsScreen() {
   const [detailModel, setDetailModel] = useState<ModelInfo | null>(null);
   const [search, setSearch] = useState('');
 
-  const accent = theme.color9?.val || '#7C52C4';
+  const accent = colors.primary;
 
   const filteredModels = useMemo(() => {
     if (!search.trim()) return models;
@@ -445,7 +446,7 @@ export function ModelsScreen() {
               </Text>
               <Pressable onPress={() => setDetailModel(null)} accessible={true} accessibilityRole="button" accessibilityLabel="Close modal">
                 <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                  <Icon name="x" size={16} color={(theme.color11?.val || '#827A96')} />
+                  <Icon name="x" size={16} color={colors.textSecondary} />
                 </YStack>
               </Pressable>
             </XStack>

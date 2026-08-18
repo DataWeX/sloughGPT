@@ -31,19 +31,20 @@ describe('benchmarkController.run', () => {
 describe('benchmarkController.history', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /benchmark/metrics with limit', async () => {
-    apiClient.apiGet.mockResolvedValue({ results: [{ model: 'gpt2', latency_ms: 100, throughput: 50, num_parameters: 124_000_000, memory_mb: 500, throughput_tokens_per_sec: 1000, inference_time_ms: 90 }] })
+  it('GETs /benchmark/responses with limit', async () => {
+    apiClient.apiGet.mockResolvedValue({ responses: [{ timestamp: '2026-01-01', user_message: 'hi', assistant_response: 'hello', model: 'gpt2', tokens_generated: 5, duration_ms: 100 }], count: 1 })
 
     const result = await benchmarkController.history()
     expect(result).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/metrics?limit=10')
+    expect(result[0].user_message).toBe('hi')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/responses?limit=10')
   })
 
-  it('returns empty array on missing results', async () => {
+  it('returns empty array on missing responses', async () => {
     apiClient.apiGet.mockResolvedValue({})
     const result = await benchmarkController.history(5)
     expect(result).toEqual([])
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/metrics?limit=5')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/responses?limit=5')
   })
 })
 
@@ -85,8 +86,8 @@ describe('benchmarkController.history with custom limit', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('passes custom limit', async () => {
-    apiClient.apiGet.mockResolvedValue({ results: [] })
+    apiClient.apiGet.mockResolvedValue({ responses: [] })
     await benchmarkController.history(25)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/metrics?limit=25')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/responses?limit=25')
   })
 })

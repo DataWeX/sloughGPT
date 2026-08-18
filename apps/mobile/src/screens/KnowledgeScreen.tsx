@@ -9,7 +9,8 @@ import {
   Share,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
 import {triggerHaptic} from '../services/haptics';
@@ -17,7 +18,7 @@ import {pickDocument} from '../services/file-upload';
 import type {KnowledgeItem} from '../types';
 
 export function KnowledgeScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -209,7 +210,7 @@ export function KnowledgeScreen() {
     setImporting(false);
   };
 
-  const accent = theme.color9?.val || '#7C52C4';
+  const accent = colors.primary;
   const bgMuted = `rgba(124, 82, 196, 0.06)`;
 
   const renderItem = ({item}: {item: KnowledgeItem}) => {
@@ -298,7 +299,7 @@ export function KnowledgeScreen() {
             <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">{title}</Text>
             <Pressable onPress={onClose} accessibilityLabel="Close">
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                <Icon name="x" size={14} color={(theme.color11?.val || '#827A96')} />
+                <Icon name="x" size={14} color={colors.textSecondary} />
               </YStack>
             </Pressable>
           </XStack>
@@ -414,7 +415,7 @@ export function KnowledgeScreen() {
           }
           ListEmptyComponent={
             <YStack alignItems="center" paddingVertical={64}>
-              <Icon name="book-open" size={48} color={(theme.color10?.val || '#827A96')} />
+              <Icon name="book-open" size={48} color={colors.textMuted} />
               <Text fontSize={14} color="$color10">No knowledge items yet</Text>
             </YStack>
           }

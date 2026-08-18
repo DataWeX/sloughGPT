@@ -1,5 +1,6 @@
 import React from 'react';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {ScreenShell} from '../components/ScreenShell';
 import {Icon} from '../components/Icon';
 
@@ -19,8 +20,8 @@ const SHORTCUTS = [
 ];
 
 export function AboutScreen() {
-  const theme = useTheme();
-  const accent = theme.color9?.val || '#7C52C4';
+  const colors = useColors();
+  const accent = colors.primary;
 
   return (
     <ScreenShell title="About">

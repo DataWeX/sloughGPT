@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {Icon, type IconName} from '../components/Icon';
 import {useHapticPress} from '../hooks/useHapticPress';
 import {getApiUrl, setApiUrl} from '../services/api-client';
@@ -66,7 +67,7 @@ interface Props {
 }
 
 export function OnboardingScreen({onComplete}: Props) {
-  const theme = useTheme();
+  const colors = useColors();
   const [step, setStep] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
   const panRef = useRef({startX: 0});
@@ -76,9 +77,9 @@ export function OnboardingScreen({onComplete}: Props) {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
   const [connectionError, setConnectionError] = useState('');
 
-  const accent = theme.color9?.val || '#7C52C4';
-  const bgBase = theme.background?.val || '#F5F0FF';
-  const muted = theme.color10?.val || '#827A96';
+  const accent = colors.primary;
+  const bgBase = colors.background;
+  const muted = colors.textMuted;
 
   const hapticPress = useHapticPress();
 
@@ -200,17 +201,17 @@ export function OnboardingScreen({onComplete}: Props) {
                         autoCorrect={false}
                         keyboardType="url"
                         style={{
-                          backgroundColor: theme.background?.val || '#F5F0FF',
+                          backgroundColor: colors.background,
                           borderWidth: 1,
                           borderColor: connectionStatus === 'ok'
                             ? '#34B07D'
                             : connectionStatus === 'fail'
                               ? '#DC505A'
-                              : theme.borderColor?.val || '#E4E0F2',
+                              : colors.border,
                           borderRadius: 10,
                           padding: 14,
                           fontSize: 15,
-                          color: theme.color?.val || '#1A1625',
+                          color: colors.text,
                         }}
                         onSubmitEditing={testConnection}
                         returnKeyType="go"
@@ -263,7 +264,7 @@ export function OnboardingScreen({onComplete}: Props) {
                 width={i === step ? 24 : 8}
                 height={8}
                 borderRadius={4}
-                backgroundColor={i === step ? accent : theme.borderColor?.val || '#E4E0F2'}
+                backgroundColor={i === step ? accent : colors.border}
               />
             ))}
           </XStack>

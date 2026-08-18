@@ -4,27 +4,18 @@ import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { benchmarkController } from '@/lib/benchmark-controller'
+import { benchmarkController, type BenchmarkResult, type LoggedBenchmarkResponse } from '@/lib/benchmark-controller'
 import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 
 type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity'
 
-interface LoggedResponse {
-  timestamp: string
-  user_message: string
-  assistant_response: string
-  model: string
-  tokens_generated: number
-  duration_ms: number
-}
-
 export default function BenchmarkPage() {
   const [tab, setTab] = useState<Tab>('metrics')
-  const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null)
+  const [metrics, setMetrics] = useState<BenchmarkResult | null>(null)
   const [quality, setQuality] = useState<{ coherence_score: number; quality_score: number; repetition_rate: number } | null>(null)
-  const [responses, setResponses] = useState<LoggedResponse[]>([])
+  const [responses, setResponses] = useState<LoggedBenchmarkResponse[]>([])
   const [stats, setStats] = useState<{ total: number; avg_tokens: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
@@ -37,11 +28,11 @@ export default function BenchmarkPage() {
 
   useEffect(() => {
     Promise.all([
-      benchmarkController.history(1).then(r => r[0] ?? null).catch(() => null),
+      benchmarkController.run({ model: 'gpt2' }).catch(() => null),
       benchmarkController.quality().catch(() => null),
       benchmarkController.stats().catch(() => null),
     ]).then(([m, q, s]) => {
-      setMetrics(m as Record<string, unknown> | null)
+      setMetrics(m)
       setQuality(q)
       setStats(s)
       if (!m && !q && !s) setLoadError('Could not load benchmark data. Is the server running?')
@@ -52,7 +43,7 @@ export default function BenchmarkPage() {
     setRunning(true)
     try {
       const m = await benchmarkController.run({ model: 'gpt2' })
-      setMetrics(m as unknown as Record<string, unknown>)
+      setMetrics(m)
     } catch {
       addToast('Failed to run benchmark', 'error')
     } finally {
@@ -63,7 +54,7 @@ export default function BenchmarkPage() {
   const handleLoadResponses = async () => {
     try {
       const data = await benchmarkController.history(20)
-      setResponses(data as unknown as LoggedResponse[])
+      setResponses(data)
     } catch {
       addToast('Failed to load responses', 'error')
     }

@@ -1,7 +1,8 @@
 import React, {useState, useCallback} from 'react';
 import {FlatList, TextInput, Keyboard, Pressable} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {useChatStore} from '../stores/chat-store';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
@@ -16,12 +17,12 @@ interface SearchResult {
 }
 
 export function SearchScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const {loadSession} = useChatStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const accent = theme.color9?.val || '#7C52C4';
+  const accent = colors.primary;
   const hapticPress = useHapticPress();
 
   const handleSearch = useCallback(async (text: string) => {
@@ -80,7 +81,7 @@ export function SearchScreen() {
           borderWidth={0.5}
           borderColor="rgba(124, 82, 196, 0.12)"
           alignItems="center">
-          <Icon name="search" size={16} color={(theme.color10?.val || '#827A96')} />
+          <Icon name="search" size={16} color={colors.textMuted} />
           <TextInput
             style={{flex: 1, fontSize: 14, color: '#1A1625', paddingVertical: 10, marginLeft: 8}}
             value={query}
@@ -92,7 +93,7 @@ export function SearchScreen() {
           />
           {query.length > 0 && (
             <Pressable onPress={hapticPress('light', () => handleSearch(''))} accessible={true} accessibilityRole="button" accessibilityLabel="Clear search">
-              <Icon name="x" size={16} color={(theme.color10?.val || '#827A96')} />
+              <Icon name="x" size={16} color={colors.textMuted} />
             </Pressable>
           )}
         </YStack>
