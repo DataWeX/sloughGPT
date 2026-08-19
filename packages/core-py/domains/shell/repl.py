@@ -1764,8 +1764,6 @@ class ShellREPL(LinuxCommandsMixin):
                 "metrics": "  metrics  — Show CPU/memory/disk metrics from server",
                 "datasets": "  datasets  — List datasets (tab-completes names)",
                 "knowledge": "  knowledge [query]  — List/search knowledge base entries",
-                "remember": "  remember <fact>  — Store a fact in the knowledge base",
-                "recall": "  recall <query>  — Search the knowledge base",
                 "checkpoints": "  checkpoints  — List training checkpoints (tab-completes names)",
                 "finetuned": "  finetuned  — List fine-tuned models (load <name> | rm <name>)",
                 "protect": "  protect <model>  — Protect model files from accidental deletion (read-only + manifest)",
@@ -1798,8 +1796,8 @@ class ShellREPL(LinuxCommandsMixin):
                 "events": "  events [filter] [n]  — Show recent EventBus events",
                 "note": '  note [new|list|show|edit|delete|search|today|export]  — Development journal',
                 "read": "  read [-p prompt] VARNAME  — Read stdin into a variable",
-                "logs": '  logs [-l LEVEL] [-s SOURCE] [-n LINES] [-f] [--stats] [-e FILE] [--explain]  — Show/log panel. --explain: AI analysis of errors',
-                "console": '  logs [-l LEVEL] [-s SOURCE] [-n LINES] [-f] [--stats] [-e FILE] [--explain]  — Same as "logs"',
+                "logs": '  logs [-l LEVEL] [-s SOURCE] [-n LINES] [-f] [--stats] [-e FILE] [--explain] [--last]  — View logs. --explain: AI analysis of errors',
+                "console": '  logs  — Alias for "logs"',
                 "tui": '  tui  — Launch three-pane TUI (console logs + shell output + input line)',
                 "clear": "  clear  — Clear the terminal screen",
                 "sleep": "  sleep <seconds>  — Sleep for N seconds (default 1)",
@@ -1807,7 +1805,6 @@ class ShellREPL(LinuxCommandsMixin):
                 "cal": "  cal [[month] year]  — Show a calendar",
                 "ln": "  ln [-s] <target> <link_name>  — Create hard or symbolic links",
                 "render": "  render [sphere|cube|plane|light|mat|cam|go|neural|clear|preset]  — Path tracer + neural scene",
-                "tui": '  tui  — Launch split-panel TUI (console + shell + input)',
             }
             if args in cmd_help:
                 self._print(cmd_help[args])
