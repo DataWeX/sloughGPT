@@ -3,7 +3,11 @@ import re
 import sys
 import os
 import time
+import logging
+import threading
 from pathlib import Path
+
+logger = logging.getLogger("slo.cli.helpers")
 
 
 def chat_repository_root() -> Path:
@@ -65,77 +69,107 @@ def local_soul_candidate_paths(models_dir: Path, *, default_name: str = "sloughg
 
 
 def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = True) -> tuple[str, object | None]:
-    """Check if server is running, optionally auto-start it.
+    """Check if the API server is running; optionally auto-start it.
 
-    Returns (base_url, server_proc_or_None).
-    If auto_start=True and server is down, spawns uvicorn and waits for health.
+    Singleton pattern: if a server is already running on *port*, reuse it.
+    If the port is occupied by a loading server (unhealthy), wait for it.
+    Only spawns a new subprocess if the port is genuinely free.
+
+    Server stderr is routed to the LogBuffer (via ``LogBufferHandler``) so
+    shell line-mode can display a status badge and the ``logs`` command
+    without polluting the terminal.
+
+    Returns:
+        (base_url, proc_or_None) -- proc is the subprocess handle (or None
+        if the server was already running).
     """
+    import socket
     import subprocess
-    import tempfile
     import requests
-    from requests.exceptions import ConnectionError as RequestsConnectionError
 
     base_url = f"http://{host}:{port}"
 
-    def _reachable() -> bool:
-        try:
-            r = requests.get(f"{base_url}/health", timeout=3)
-            return r.status_code == 200
-        except Exception:
-            return False
-
-    if _reachable():
-        return base_url, None
+    # Already healthy?
+    try:
+        r = requests.get(f"{base_url}/health", timeout=3)
+        if r.status_code == 200:
+            return base_url, None
+    except Exception:
+        pass
 
     if not auto_start:
         return base_url, None
 
+    # Port occupied? Check if it's a loading server
+    _port_busy = False
+    try:
+        with socket.create_connection((host, port), timeout=1.0):
+            _port_busy = True
+    except (ConnectionRefusedError, OSError, TimeoutError):
+        pass
+
+    if _port_busy:
+        # Something is listening but not healthy yet -- wait for it
+        if chat_wait_for_health(base_url, timeout_sec=120):
+            return base_url, None
+        return base_url, None
+
+    # Port is free -> spawn the server via main.py
     repo = chat_repository_root()
     marker = repo / "apps" / "api" / "server" / "main.py"
     if not marker.is_file():
         return base_url, None
 
-    bind_host = chat_uvicorn_bind_host(host)
-    try:
-        listen_port = chat_find_available_port(bind_host, port)
-    except RuntimeError:
-        return base_url, None
-
-    log_f = tempfile.NamedTemporaryFile(prefix="sloughgpt-", suffix=".log", delete=False)
-    log_path = log_f.name
-    log_f.close()
-
     from domains.shared import find_server_python
     server_python = find_server_python(repo)
-    cmd = [
-        server_python, "-m", "uvicorn", "main:app",
-        "--app-dir", str(repo / "apps" / "api" / "server"),
-        "--host", bind_host, "--port", str(listen_port),
-    ]
+    cmd = [server_python, "-m", "apps.api.server.main"]
 
     try:
-        with open(log_path, "wb") as out:
-            proc = subprocess.Popen(cmd, cwd=str(repo), stdout=out, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(repo),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+        )
     except OSError:
-        try:
-            os.unlink(log_path)
-        except OSError:
-            pass
         return base_url, None
 
-    actual_url = f"http://{host}:{listen_port}"
-    if chat_wait_for_health(actual_url):
-        return actual_url, proc
+    # Stream stderr in background — route into LogBuffer for the shell's
+    # status badge and ``logs`` command, never print to terminal.
+    def _log_stderr():
+        if proc.stderr:
+            try:
+                from domains.shell.log_buffer import get_log_buffer, LogEntry
+                buf = get_log_buffer()
+                for line in proc.stderr:
+                    line = line.rstrip()
+                    if not line:
+                        continue
+                    # Classify level from common uvicorn/logging prefixes
+                    level = "INFO"
+                    upper = line.upper()
+                    if "WRN" in upper or "WARNING" in upper:
+                        level = "WARNING"
+                    elif "ERR" in upper or "ERROR" in upper or "CRITICAL" in upper:
+                        level = "ERROR"
+                    elif "DBG" in upper or "DEBUG" in upper:
+                        level = "DEBUG"
+                    buf.append(LogEntry(
+                        timestamp=time.time(),
+                        level=level,
+                        source="api.server",
+                        message=line,
+                    ))
+            except Exception:
+                # LogBuffer unavailable — discard silently
+                pass
+    threading.Thread(target=_log_stderr, daemon=True).start()
 
-    # Failed to start
-    if proc.poll() is None:
-        proc.terminate()
-        try:
-            proc.wait(timeout=8)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-    try:
-        os.unlink(log_path)
-    except OSError:
-        pass
-    return actual_url, None
+    # Wait for health -- generous timeout covers model loading
+    if chat_wait_for_health(base_url, timeout_sec=180):
+        return base_url, proc
+
+    # Timed out -- leave the server running (it may still be loading)
+    return base_url, None

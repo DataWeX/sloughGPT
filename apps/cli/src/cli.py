@@ -186,11 +186,11 @@ def _show_server_status(console):
         # Try to connect to the server
         response = requests.get("http://localhost:8000/health", timeout=2)
         if response.status_code == 200:
-            data = response.json()
-            status = data.get("data", {})
+            raw = response.json()
+            data = raw.get("data", raw)
 
-            if status.get("model_loaded"):
-                model = status.get("model_type", "unknown")
+            if data.get("model_loaded"):
+                model = data.get("model_type", "unknown")
                 console.print(f"    [green]✓[/] Server running (model: {model})")
             else:
                 console.print("    [yellow]![/] Server running (no model loaded)")
