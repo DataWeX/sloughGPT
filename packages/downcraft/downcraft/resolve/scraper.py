@@ -37,6 +37,10 @@ DOWNLOAD_EXTENSIONS: Set[str] = {
     ".pt", ".pth", ".ckpt",
 }
 
+_HTML_EXTENSIONS: FrozenSet[str] = frozenset({
+    ".html", ".htm", ".php", ".asp", ".aspx", ".jsp",
+})
+
 DOWNLOAD_SIGNALS: Set[str] = {
     "download", "dl", "fetch", "get", "save", "grab", "acquire",
     "install", "setup", "release", "latest", "stable",
@@ -75,6 +79,9 @@ _DATA_ATTR_TAGS: Set[str] = {"a", "button", "div", "span"}
 
 _OBFUSCATED_DATA_ATTRS: Tuple[str, ...] = (
     "data-download-url", "data-real-url", "data-file", "data-link-url",
+    "data-countdown-url", "data-timer-url", "data-final-url",
+    "data-popunder", "data-pop", "data-href-real",
+    "data-action-url", "data-redirect", "data-target",
 )
 
 _BINARY_CONTENT_TYPES: Set[str] = {
@@ -115,6 +122,36 @@ class ResolvedLink:
     confidence: float = 0.0
     source: str = ""
     redirects: List[str] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# URL utilities
+# ---------------------------------------------------------------------------
+
+def _get_extension(url: str) -> str:
+    """Extract file extension from URL, handling compound extensions."""
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path.lower()
+    for compound in (".tar.gz", ".tar.bz2", ".tar.xz"):
+        if path.endswith(compound):
+            return compound
+    _, ext = os.path.splitext(path)
+    return ext
+
+
+def _is_same_domain(url: str, page_url: str) -> bool:
+    """Check if two URLs are on the same domain."""
+    try:
+        u = urllib.parse.urlparse(url)
+        p = urllib.parse.urlparse(page_url)
+        return u.netloc == p.netloc or u.netloc.endswith("." + p.netloc)
+    except Exception:
+        return False
+
+
+def _resolve_relative(url: str, base: str) -> str:
+    """Resolve a relative URL against a base URL."""
+    return urllib.parse.urljoin(base, url)
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +302,42 @@ def _decode_obfuscated_urls(html: str) -> List[str]:
     return urls
 
 
+def _extract_js_variable_urls(html: str) -> List[str]:
+    """Extract URLs from JS variable assignments.
+
+    Catches countdown/download page patterns:
+      - ``var downloadUrl = "https://..."``
+      - ``let realUrl = 'https://...'``
+      - ``window.finalUrl = "https://..."``
+    """
+    urls: List[str] = []
+    for pat in (
+        r'(?:var|let|const)\s+\w*(?:url|link|download|href|file|src|target)\w*\s*=\s*["\']([^"\']+)["\']',
+        r'window\.\w*(?:url|link|download|href|file|src|target)\w*\s*=\s*["\']([^"\']+)["\']',
+    ):
+        for m in re.finditer(pat, html, re.IGNORECASE):
+            url = m.group(1).strip()
+            if url and not url.startswith(("javascript:", "#", "void")):
+                urls.append(url)
+    return urls
+
+
+def _extract_json_blob_urls(html: str) -> List[str]:
+    """Extract URLs from embedded JSON blobs (framework state, config)."""
+    urls: List[str] = []
+    for pat in (
+        r'window\.__(?:INITIAL_STATE|NUXT|NEXT_DATA|APP_DATA)__\s*=\s*(\{.+?\});',
+        r'(?:var|let|const)\s+config\s*=\s*(\{.+?\});',
+    ):
+        for m in re.finditer(pat, html, re.IGNORECASE | re.DOTALL):
+            try:
+                data = json.loads(m.group(1))
+                _collect_urls_from_dict(data, urls)
+            except (json.JSONDecodeError, ValueError):
+                pass
+    return urls
+
+
 def _extract_json_ld_urls(html: str) -> List[str]:
     """Extract download URLs from JSON-LD structured data."""
     urls: List[str] = []
@@ -319,7 +392,6 @@ def _find_main_content(html: str) -> Tuple[int, int]:
 
     html_len = len(html)
 
-    # Collect exclusion zones from skip tags
     skip_regions: List[Tuple[int, int]] = []
     for tag in _SKIP_TAGS:
         for m in _SKIP_TAG_START_RES[tag].finditer(html):
@@ -330,7 +402,6 @@ def _find_main_content(html: str) -> Tuple[int, int]:
     if not skip_regions:
         return 0, html_len
 
-    # Merge overlapping/adjacent regions
     skip_regions.sort()
     merged: List[Tuple[int, int]] = [skip_regions[0]]
     for start, end in skip_regions[1:]:
@@ -339,7 +410,6 @@ def _find_main_content(html: str) -> Tuple[int, int]:
         else:
             merged.append((start, end))
 
-    # Find gaps between exclusion zones
     gaps: List[Tuple[int, int]] = []
     prev_end = 0
     for start, end in merged:
@@ -352,12 +422,13 @@ def _find_main_content(html: str) -> Tuple[int, int]:
     if not gaps:
         return 0, 0
 
-    # Pick the largest gap (most content)
     best = max(gaps, key=lambda g: g[1] - g[0])
     return best
 
 
-def _is_in_main_content(href: str, html: str, main_range: Optional[Tuple[int, int]] = None) -> bool:
+def _is_in_main_content(
+    href: str, html: str, main_range: Optional[Tuple[int, int]] = None,
+) -> bool:
     """Check if *href* appears in the main content area.
 
     Searches for both the full URL and the path portion, since the
@@ -375,6 +446,15 @@ def _is_in_main_content(href: str, html: str, main_range: Optional[Tuple[int, in
         if idx != -1 and idx <= end:
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# HTML page filter
+# ---------------------------------------------------------------------------
+
+def _is_html_link(link: ResolvedLink) -> bool:
+    """Return True if a link points to an HTML page, not a downloadable file."""
+    return not link.extension or link.extension in _HTML_EXTENSIONS
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +477,9 @@ def _score_link(
     text_lower = text.lower()
 
     ext = _get_extension(href)
-    if ext in DOWNLOAD_EXTENSIONS:
+    if ext in _HTML_EXTENSIONS:
+        score -= 0.5
+    elif ext in DOWNLOAD_EXTENSIONS:
         score += 0.4
 
     for pat in _DOWNLOAD_RES.values():
@@ -478,43 +560,18 @@ def _verify_content_type(url: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# URL utilities
-# ---------------------------------------------------------------------------
-
-def _get_extension(url: str) -> str:
-    """Extract file extension from URL, handling compound extensions."""
-    parsed = urllib.parse.urlparse(url)
-    path = parsed.path.lower()
-    for compound in (".tar.gz", ".tar.bz2", ".tar.xz"):
-        if path.endswith(compound):
-            return compound
-    _, ext = os.path.splitext(path)
-    return ext
-
-
-def _is_same_domain(url: str, page_url: str) -> bool:
-    """Check if two URLs are on the same domain."""
-    try:
-        u = urllib.parse.urlparse(url)
-        p = urllib.parse.urlparse(page_url)
-        return u.netloc == p.netloc or u.netloc.endswith("." + p.netloc)
-    except Exception:
-        return False
-
-
-def _resolve_relative(url: str, base: str) -> str:
-    """Resolve a relative URL against a base URL."""
-    return urllib.parse.urljoin(base, url)
-
-
-# ---------------------------------------------------------------------------
-# Core resolve
+# Candidate extraction
 # ---------------------------------------------------------------------------
 
 def _extract_candidates(
     html: str, final_url: str, max_links: int,
 ) -> List[Tuple[str, str, Dict[str, str], str]]:
-    """Extract all link candidates from HTML."""
+    """Extract all link candidates from HTML.
+
+    Returns list of (resolved_url, text, attrs, source_label) tuples.
+    """
+    from .patterns import extract_all
+
     candidates: List[Tuple[str, str, Dict[str, str], str]] = []
 
     parser = _LinkExtractor()
@@ -525,17 +582,8 @@ def _extract_candidates(
     for href, text, attrs in parser.links[:max_links]:
         candidates.append((_resolve_relative(href, final_url), text, attrs, "html_link"))
 
-    for url in _extract_js_redirects(html)[:20]:
-        candidates.append((_resolve_relative(url, final_url), "[js-redirect]", {}, "js_redirect"))
-
-    for url in _extract_meta_urls(html)[:10]:
-        candidates.append((_resolve_relative(url, final_url), "[meta]", {}, "meta_tag"))
-
-    for url in _decode_obfuscated_urls(html)[:15]:
-        candidates.append((_resolve_relative(url, final_url), "[decoded]", {}, "obfuscated"))
-
-    for url in _extract_json_ld_urls(html)[:10]:
-        candidates.append((_resolve_relative(url, final_url), "[json-ld]", {}, "json_ld"))
+    for ex in extract_all(html):
+        candidates.append((_resolve_relative(ex.url, final_url), f"[{ex.source}]", {}, ex.source))
 
     return candidates
 
@@ -569,6 +617,66 @@ def _score_and_deduplicate(
     results.sort(key=lambda r: r.confidence, reverse=True)
     return results
 
+
+# ---------------------------------------------------------------------------
+# Intermediate page follow
+# ---------------------------------------------------------------------------
+
+def _follow_intermediate(
+    url: str,
+    session: requests.Session,
+    headers: Dict[str, str],
+    timeout: int,
+    original_page_url: str,
+    depth: int,
+    on_progress: Optional[Callable[[str], None]] = None,
+) -> List[ResolvedLink]:
+    """Follow an intermediate redirect page to find the real download."""
+    if depth <= 0:
+        return []
+
+    if on_progress:
+        on_progress(f"Following intermediate page: {url}")
+
+    try:
+        resp = session.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+        resp.raise_for_status()
+    except requests.RequestException:
+        return []
+
+    html = resp.text
+    final_url = resp.url
+
+    ct = resp.headers.get("Content-Type", "").lower()
+    if "text/html" not in ct and "text/plain" not in ct:
+        return [ResolvedLink(
+            url=final_url, title="[direct file]",
+            extension=_get_extension(final_url),
+            confidence=0.6, source="intermediate_direct",
+        )]
+
+    candidates = _extract_candidates(html, final_url, max_links=50)
+    candidates = [(h, t, a, f"intermediate_{s}") for h, t, a, s in candidates]
+    results = _score_and_deduplicate(candidates, original_page_url, html, [])
+
+    if results and results[0].confidence < 0.4 and not results[0].extension:
+        deeper = _follow_intermediate(
+            results[0].url, session, headers, timeout,
+            original_page_url, depth - 1, on_progress,
+        )
+        if deeper:
+            existing_urls = {r.url for r in results}
+            for dl in deeper:
+                if dl.url not in existing_urls:
+                    results.append(dl)
+            results.sort(key=lambda r: r.confidence, reverse=True)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 def resolve_page(
     page_url: str,
@@ -643,6 +751,8 @@ def resolve_page(
                         existing_urls.add(fl.url)
                 results.sort(key=lambda r: r.confidence, reverse=True)
 
+    results = [r for r in results if not _is_html_link(r)]
+
     if on_progress:
         top = results[0] if results else None
         if top:
@@ -669,66 +779,6 @@ def resolve_page(
 
     return results
 
-
-# ---------------------------------------------------------------------------
-# Intermediate page follow
-# ---------------------------------------------------------------------------
-
-def _follow_intermediate(
-    url: str,
-    session: requests.Session,
-    headers: Dict[str, str],
-    timeout: int,
-    original_page_url: str,
-    depth: int,
-    on_progress: Optional[Callable[[str], None]] = None,
-) -> List[ResolvedLink]:
-    """Follow an intermediate redirect page to find the real download."""
-    if depth <= 0:
-        return []
-
-    if on_progress:
-        on_progress(f"Following intermediate page: {url}")
-
-    try:
-        resp = session.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        resp.raise_for_status()
-    except requests.RequestException:
-        return []
-
-    html = resp.text
-    final_url = resp.url
-
-    ct = resp.headers.get("Content-Type", "").lower()
-    if "text/html" not in ct and "text/plain" not in ct:
-        return [ResolvedLink(
-            url=final_url, title="[direct file]",
-            extension=_get_extension(final_url),
-            confidence=0.6, source="intermediate_direct",
-        )]
-
-    candidates = _extract_candidates(html, final_url, max_links=50)
-    candidates = [(h, t, a, f"intermediate_{s}") for h, t, a, s in candidates]
-    results = _score_and_deduplicate(candidates, original_page_url, html, [])
-
-    if results and results[0].confidence < 0.4 and not results[0].extension:
-        deeper = _follow_intermediate(
-            results[0].url, session, headers, timeout,
-            original_page_url, depth - 1, on_progress,
-        )
-        if deeper:
-            existing_urls = {r.url for r in results}
-            for dl in deeper:
-                if dl.url not in existing_urls:
-                    results.append(dl)
-            results.sort(key=lambda r: r.confidence, reverse=True)
-
-    return results
-
-
-# ---------------------------------------------------------------------------
-# Public: resolve + download
-# ---------------------------------------------------------------------------
 
 def resolve_and_download(
     page_url: str,
@@ -758,7 +808,7 @@ def resolve_and_download(
         ValueError: If no link meets the confidence threshold.
         downloader.DownloadError: If download fails.
     """
-    from . import downloader
+    from downcraft.download import http as downloader
 
     links = resolve_page(
         page_url, session=session, headers=headers,
@@ -777,9 +827,9 @@ def resolve_and_download(
     if on_progress:
         on_progress(f"Downloading {best.url} (confidence={best.confidence})")
 
-    dest_path = downloader.Path(dest)
     return downloader.download_file(
-        best.url, dest_path,
+        best.url,
+        Path(dest),
         on_chunk=lambda done, total: on_progress(
             f"Downloaded {done}/{total} bytes"
         ) if on_progress else None,

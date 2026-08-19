@@ -3,11 +3,13 @@
 import base64
 import pytest
 
-from downcraft.resolver import (
+from downcraft.resolve.scraper import (
     _collect_urls_from_dict,
     _decode_obfuscated_urls,
     _extract_candidates,
     _extract_js_redirects,
+    _extract_js_variable_urls,
+    _extract_json_blob_urls,
     _extract_json_ld_urls,
     _extract_meta_urls,
     _find_main_content,
@@ -287,20 +289,17 @@ class TestResolvePage:
         from conftest import RangeHandler
         RangeHandler.payloads["/page"] = b'''
         <html>
-        <a href="/ad/sponsor-click" class="sponsor">Sponsor</a>
+        <a href="/ad/sponsor-click.html" class="sponsor">Sponsor</a>
         <a href="/real/model.safetensors" class="download-btn">Download Model</a>
         </html>
         '''
         url = _range_url(range_server, "/page")
         links = resolve_page(url)
-        # The .safetensors link should rank higher than the ad
-        safetensors_idx = next(
-            (i for i, l in enumerate(links) if "safetensors" in l.url), -1
-        )
-        ad_idx = next(
-            (i for i, l in enumerate(links) if "sponsor" in l.url), -1
-        )
-        assert safetensors_idx < ad_idx
+        # Ad link (.html) filtered out as HTML page; .safetensors should be top result
+        safetensors_links = [l for l in links if "safetensors" in l.url]
+        ad_links = [l for l in links if "sponsor" in l.url]
+        assert len(safetensors_links) >= 1
+        assert len(ad_links) == 0  # filtered as HTML page
 
     def test_follows_js_redirect_to_download(self, range_server):
         from conftest import RangeHandler
@@ -1215,7 +1214,7 @@ class TestResolveAndDownload:
     def test_raises_on_low_confidence(self, range_server):
         from conftest import RangeHandler
         RangeHandler.payloads["/page"] = b'''
-        <html><a href="/ad/sponsor">Sponsor</a></html>
+        <html><a href="/files/model.zip" class="sponsor">Sponsor</a></html>
         '''
         url = _range_url(range_server, "/page")
         with pytest.raises(ValueError, match="confidence too low"):
@@ -1637,3 +1636,197 @@ class TestScoreLinkNoRedundantParse:
         href_short = "https://example.com/file.zip"
         s_no_q = _score_link(href_short, "Download", {}, "https://example.com")
         assert s_long_q == s_no_q
+
+
+# ---------------------------------------------------------------------------
+# _extract_js_variable_urls
+# ---------------------------------------------------------------------------
+
+class TestExtractJsVariableUrls:
+    def test_var_download_url(self):
+        html = 'var downloadUrl = "https://cdn.example.com/file.zip";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == ["https://cdn.example.com/file.zip"]
+
+    def test_let_real_url(self):
+        html = "let realUrl = 'https://real-host.com/model.safetensors';"
+        urls = _extract_js_variable_urls(html)
+        assert urls == ["https://real-host.com/model.safetensors"]
+
+    def test_const_href(self):
+        html = 'const finalHref = "https://final.com/data.bin";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == ["https://final.com/data.bin"]
+
+    def test_window_variable(self):
+        html = 'window.downloadUrl = "https://window.com/file.zip";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == ["https://window.com/file.zip"]
+
+    def test_window_download_link(self):
+        html = 'window.realLink = "https://window.com/real.bin";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == ["https://window.com/real.bin"]
+
+    def test_multiple_variables(self):
+        html = '''
+        var url1 = "https://a.com/1.zip";
+        let url2 = "https://b.com/2.bin";
+        window.url3 = "https://c.com/3.tar";
+        '''
+        urls = _extract_js_variable_urls(html)
+        assert len(urls) == 3
+        assert "https://a.com/1.zip" in urls
+        assert "https://b.com/2.bin" in urls
+        assert "https://c.com/3.tar" in urls
+
+    def test_ignores_javascript_prefix(self):
+        html = 'var url = "javascript:alert(1)";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == []
+
+    def test_ignores_hash(self):
+        html = 'var url = "#section";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == []
+
+    def test_ignores_void(self):
+        html = 'var url = "void(0)";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == []
+
+    def test_ignores_unrelated_variables(self):
+        html = 'var userName = "John"; let count = 42;'
+        urls = _extract_js_variable_urls(html)
+        assert urls == []
+
+    def test_relative_url(self):
+        html = 'var downloadUrl = "/files/model.bin";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == ["/files/model.bin"]
+
+    def test_case_insensitive(self):
+        html = 'VAR DownloadUrl = "https://a.com/f.zip";'
+        urls = _extract_js_variable_urls(html)
+        assert urls == ["https://a.com/f.zip"]
+
+
+# ---------------------------------------------------------------------------
+# _extract_json_blob_urls
+# ---------------------------------------------------------------------------
+
+class TestExtractJsonBlobUrls:
+    def test_initial_state(self):
+        html = '''
+        <script>
+        window.__INITIAL_STATE__ = {"download": {"url": "https://state.com/file.bin"}};
+        </script>
+        '''
+        urls = _extract_json_blob_urls(html)
+        assert urls == ["https://state.com/file.bin"]
+
+    def test_nuxt(self):
+        html = '''
+        <script>
+        window.__NUXT__ = {"config": {"downloadUrl": "https://nuxt.com/data.zip"}};
+        </script>
+        '''
+        urls = _extract_json_blob_urls(html)
+        assert urls == ["https://nuxt.com/data.zip"]
+
+    def test_next_data(self):
+        html = '''
+        <script>
+        window.__NEXT_DATA__ = {"props": {"contentUrl": "https://next.com/file.tar"}};
+        </script>
+        '''
+        urls = _extract_json_blob_urls(html)
+        assert urls == ["https://next.com/file.tar"]
+
+    def test_config_variable(self):
+        html = '''
+        <script>
+        var config = {"downloadUrl": "https://cfg.com/model.onnx"};
+        </script>
+        '''
+        urls = _extract_json_blob_urls(html)
+        assert urls == ["https://cfg.com/model.onnx"]
+
+    def test_nested_urls(self):
+        html = '''
+        <script>
+        window.__INITIAL_STATE__ = {
+            "files": [
+                {"downloadUrl": "https://a.com/1.zip"},
+                {"url": "https://b.com/2.bin"}
+            ]
+        };
+        </script>
+        '''
+        urls = _extract_json_blob_urls(html)
+        assert len(urls) == 2
+        assert "https://a.com/1.zip" in urls
+        assert "https://b.com/2.bin" in urls
+
+    def test_invalid_json_ignored(self):
+        html = '''
+        <script>
+        window.__INITIAL_STATE__ = {invalid json};
+        </script>
+        '''
+        urls = _extract_json_blob_urls(html)
+        assert urls == []
+
+    def test_no_blob_returns_empty(self):
+        html = '<p>No script tags here</p>'
+        urls = _extract_json_blob_urls(html)
+        assert urls == []
+
+    def test_relative_urls_in_blob(self):
+        html = '''
+        <script>
+        window.__INITIAL_STATE__ = {"fileUrl": "/files/model.bin"};
+        </script>
+        '''
+        urls = _extract_json_blob_urls(html)
+        assert urls == ["/files/model.bin"]
+
+
+# ---------------------------------------------------------------------------
+# Integration: _extract_candidates picks up all layers
+# ---------------------------------------------------------------------------
+
+class TestExtractCandidatesCountdownPopunder:
+    def test_picks_up_js_variables(self):
+        html = '<script>var downloadUrl = "https://cdn.com/f.zip";</script>'
+        candidates = _extract_candidates(html, "https://example.com", 100)
+        urls = [c[0] for c in candidates]
+        assert "https://cdn.com/f.zip" in urls
+
+    def test_picks_up_data_countdown_url(self):
+        html = '<div data-countdown-url="https://hidden.com/after.zip"></div>'
+        candidates = _extract_candidates(html, "https://example.com", 100)
+        urls = [c[0] for c in candidates]
+        assert "https://hidden.com/after.zip" in urls
+
+    def test_picks_up_json_blob(self):
+        html = '''
+        <script>
+        window.__INITIAL_STATE__ = {"downloadUrl": "https://state.com/f.bin"};
+        </script>
+        '''
+        candidates = _extract_candidates(html, "https://example.com", 100)
+        urls = [c[0] for c in candidates]
+        assert "https://state.com/f.bin" in urls
+
+    def test_all_layers_combined(self):
+        html = '''
+        <a href="https://example.com/file.zip">Download</a>
+        <script>var realUrl = "https://real.com/model.bin";</script>
+        <div data-real-url="https://actual.com/data.tar"></div>
+        '''
+        candidates = _extract_candidates(html, "https://example.com", 100)
+        urls = [c[0] for c in candidates]
+        assert "https://example.com/file.zip" in urls
+        assert "https://real.com/model.bin" in urls
+        assert "https://actual.com/data.tar" in urls

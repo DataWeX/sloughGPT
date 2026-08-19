@@ -13,7 +13,7 @@ from conftest import RangeHandler, _range_url
 class TestDownload:
     def test_download_already_complete(self):
         with tempfile.TemporaryDirectory() as td:
-            with patch("downcraft.state.get_state") as mock_state:
+            with patch("downcraft.download.state.get_state") as mock_state:
                 st = MagicMock()
                 existing = MagicMock()
                 existing.status = "complete"
@@ -59,7 +59,7 @@ class TestDownload:
             assert result["status"] == "complete"
 
     def test_download_with_checksum_mismatch(self, range_server):
-        from downcraft.downloader import DownloadError
+        from downcraft.download.http import DownloadError
         content = b"data"
         RangeHandler.payloads["/badchecksum.bin"] = content
 
