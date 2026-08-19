@@ -52,6 +52,10 @@ export default function HomePage() {
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   const [startup, setStartup] = useState<{phase: string; step: number; total: number; message: string} | null>(null)
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('onboarding_dismissed') === '1'
+  })
 
   const [convStats, setConvStats] = useState<{ totalConversations: number; totalMessages: number; totalWords: number; activeDays: number; mostActiveHour: number | null } | null>(null)
 
@@ -103,6 +107,15 @@ export default function HomePage() {
     }).catch(() => { /* dataset stats non-critical */ })
     return () => { cancelled = true }
   }, [apiStatus])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (onboardingDismissed) {
+      localStorage.setItem('onboarding_dismissed', '1')
+    } else {
+      localStorage.removeItem('onboarding_dismissed')
+    }
+  }, [onboardingDismissed])
 
   useEffect(() => {
     if (apiStatus !== 'offline') return
@@ -338,6 +351,20 @@ export default function HomePage() {
         </div>
       )}
 
+      {apiStatus === 'online' && !modelStatus.loaded && (
+        <Card className="border-dashed border-border/60 bg-muted/20">
+          <CardContent className="py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">No model loaded</p>
+              <p className="text-xs text-muted-foreground">Load a model in Personalities to start chatting</p>
+            </div>
+            <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => router.push('/models')}>
+              Open Models
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {apiStatus === 'online' && modelStatus.loaded && (
         <Card>
           <CardContent className="py-3">
@@ -378,26 +405,23 @@ export default function HomePage() {
         </Card>
       )}
 
-      {!apiStatus || apiStatus === 'loading' || apiStatus === 'offline' ? null : (() => {
-        const dismissed = typeof window !== 'undefined' && localStorage.getItem('onboarding_dismissed')
-        if (dismissed) return null
-        return (
-          <Card className="border-dashed border-primary/20 bg-primary/[0.02]">
-            <CardContent className="py-3 flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">New here?</span>{' '}
-                Start chatting, then train the model on your conversations. The more you chat, the better it gets.
-              </p>
-              <button
-                className="text-xs text-muted-foreground hover:text-foreground shrink-0 transition-colors"
-                onClick={(e) => { localStorage.setItem('onboarding_dismissed', '1'); e.currentTarget.closest('.space-y-4 > div')?.remove() }}
-              >
-                Got it
-              </button>
-            </CardContent>
-          </Card>
-        )
-      })()}
+      {!onboardingDismissed && (
+        <Card className="border-dashed border-primary/20 bg-primary/[0.02]">
+          <CardContent className="py-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">New here?</span>{' '}
+              Start chatting, then train the model on your conversations. The more you chat, the better it gets.
+            </p>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+              onClick={() => setOnboardingDismissed(true)}
+            >
+              Got it
+            </button>
+          </CardContent>
+        </Card>
+      )}
 
       {recentSessions.length > 0 && (
         <button
