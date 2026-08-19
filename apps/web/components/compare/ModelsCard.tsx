@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
@@ -20,6 +21,7 @@ interface ModelsCardProps {
 
 export default function ModelsCard({ models, loading, results, running, onBenchmark, onClear }: ModelsCardProps) {
   const [search, setSearch] = useState('')
+  const router = useRouter()
   const filtered = search
     ? models.filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.id.toLowerCase().includes(search.toLowerCase()))
     : models
@@ -45,7 +47,12 @@ export default function ModelsCard({ models, loading, results, running, onBenchm
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-lg" />)}
           </div>
         ) : models.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">No models available. Load one in the Models page first.</p>
+          <div className="text-center py-6 text-sm text-muted-foreground space-y-2">
+            <div>No models available. Load one in the Models page first.</div>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/models')}>
+              Open Models
+            </Button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {filtered.map(m => {
