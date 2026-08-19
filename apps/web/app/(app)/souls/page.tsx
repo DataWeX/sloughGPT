@@ -755,9 +755,14 @@ export default function SoulsPage() {
               <CardTitle className="text-base">Soul Overview</CardTitle>
             </CardHeader>
             <CardContent>
-              {souls.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No souls available for analysis.</p>
-              ) : (
+               {souls.length === 0 ? (
+                 <div className="text-center py-8 space-y-2">
+                   <p className="text-sm text-muted-foreground">No souls available for analysis.</p>
+                   <p className="text-xs text-muted-foreground">
+                     Register a soul from a <code className="bg-muted px-1 rounded">.soul</code> file to see analytics here.
+                   </p>
+                 </div>
+               ) : (
                 <div className="space-y-4">
                   {/* Per-soul summary */}
                   <div className="space-y-2">
