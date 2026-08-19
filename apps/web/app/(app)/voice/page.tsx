@@ -79,36 +79,27 @@ export default function VoicePage() {
   }
 
   return (
-    <PageContainer title="Voice" subtitle="Text-to-speech settings">
+    <PageContainer title="Voice" subtitle="Text-to-speech via browser speech synthesis">
       <KpiGrid>
-        <StatCard label="Server TTS" value={status?.server_tts ? 'Available' : 'Unavailable'} />
-        <StatCard label="Model" value={status?.model ?? 'None'} />
+        <StatCard label="Server TTS" value="Not supported" />
+        <StatCard label="Engine" value="Browser SpeechSynthesis" />
         <StatCard label="TTS Calls" value={ttsCount} />
       </KpiGrid>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">TTS Backend</CardTitle>
+          <CardTitle className="text-base">Text-to-Speech</CardTitle>
           <Button size="sm" variant="ghost" onClick={handleRefreshStatus}>
             <IconRefresh className="h-4 w-4" />
           </Button>
         </CardHeader>
         <CardContent>
-          {status ? (
-            <div className="space-y-3">
-              <KpiGrid columns={4}>
-                <StatCard label="Server" value={<span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>{status.server_tts ? 'Online' : 'Offline'}</span>} />
-                <StatCard label="Model" value={status.model ?? '—'} />
-                <StatCard label="Fallback" value="Browser" />
-                <StatCard label="Status" value={<span className={status.error ? 'text-destructive' : 'text-success'}>{status.error ? 'Error' : 'Ready'}</span>} />
-              </KpiGrid>
-              {status.error && (
-                <div className="text-xs text-destructive bg-destructive/5 rounded-md p-2">{status.error}</div>
-              )}
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
+              Server-side TTS requires the transformers library (not available).
+              Text is spoken using your browser&apos;s built-in speech synthesis.
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Could not load TTS status.</p>
-          )}
+          </div>
         </CardContent>
       </Card>
 

@@ -163,6 +163,23 @@ export default function TrainingPage() {
       className="items-start"
       headerRight={
         <div className="flex items-center gap-2">
+          {runningJob && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={async () => {
+                try {
+                  await trainingJobsController.stop(runningJob.id)
+                  addToast('Training stopped', 'success')
+                  void checkpoints.fetchJobs()
+                } catch {
+                  addToast('Failed to stop training', 'error')
+                }
+              }}
+            >
+              Stop training
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={handleExportMetrics}>Export metrics</Button>
           <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchJobs(); void checkpoints.fetchCheckpoints() }}>Refresh</Button>
         </div>

@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, K
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { benchmarkController, type BenchmarkResult, type LoggedBenchmarkResponse } from '@/lib/benchmark-controller'
+import { modelController } from '@/lib/model-controller'
 import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -22,6 +23,7 @@ export default function BenchmarkPage() {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [currentModel, setCurrentModel] = useState<string>('gpt2')
 
   const [pplxText, setPplxText] = useState('')
   const [pplxResult, setPplxResult] = useState<{ perplexity: number; loss: number; tokens: number } | null>(null)
@@ -29,8 +31,12 @@ export default function BenchmarkPage() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
+    modelController.getHealth().then(h => {
+      if (h?.model_type) setCurrentModel(h.model_type)
+    }).catch(() => {})
+
     Promise.all([
-      benchmarkController.run({ model: 'gpt2' }).catch(() => null),
+      benchmarkController.run({ model: currentModel }).catch(() => null),
       benchmarkController.quality().catch(() => null),
       benchmarkController.stats().catch(() => null),
     ]).then(([m, q, s]) => {
@@ -44,7 +50,7 @@ export default function BenchmarkPage() {
   const handleRefreshMetrics = async () => {
     setRunning(true)
     try {
-      const m = await benchmarkController.run({ model: 'gpt2' })
+      const m = await benchmarkController.run({ model: currentModel })
       setMetrics(m)
     } catch {
       addToast('Failed to run benchmark', 'error')
