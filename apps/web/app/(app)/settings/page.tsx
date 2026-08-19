@@ -312,16 +312,9 @@ export default function SettingsPage() {
         {/* Chat defaults */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Chat defaults</CardTitle>
-                <CardDescription>Default model and generation settings</CardDescription>
-              </div>
-              {(settings.defaultTemp !== DEFAULT_SETTINGS.defaultTemp || settings.defaultMaxTokens !== DEFAULT_SETTINGS.defaultMaxTokens || settings.defaultTopP !== DEFAULT_SETTINGS.defaultTopP || settings.defaultTopK !== DEFAULT_SETTINGS.defaultTopK) && (
-                <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => updateSettings({ defaultTemp: DEFAULT_SETTINGS.defaultTemp, defaultMaxTokens: DEFAULT_SETTINGS.defaultMaxTokens, defaultTopP: DEFAULT_SETTINGS.defaultTopP, defaultTopK: DEFAULT_SETTINGS.defaultTopK })}>
-                  Reset
-                </Button>
-              )}
+            <div>
+              <CardTitle className="text-base">Chat defaults</CardTitle>
+              <CardDescription>Default model and generation settings</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -382,6 +375,12 @@ export default function SettingsPage() {
                 step={50}
                 formatValue={(v) => v === 0 ? 'Disabled' : `${v} chars`}
               />
+            </div>
+            <div className="flex items-center justify-between pt-3 border-t border-border/40">
+              <p className="text-xs text-muted-foreground">Reset generation defaults</p>
+              <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => updateSettings({ defaultTemp: DEFAULT_SETTINGS.defaultTemp, defaultMaxTokens: DEFAULT_SETTINGS.defaultMaxTokens, defaultTopP: DEFAULT_SETTINGS.defaultTopP, defaultTopK: DEFAULT_SETTINGS.defaultTopK })}>
+                Reset
+              </Button>
             </div>
           </CardContent>
         </Card>
