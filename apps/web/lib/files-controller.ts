@@ -24,14 +24,6 @@ export interface SearchResult {
   count?: number
 }
 
-export interface ExtractResult {
-  text: string
-  filename: string
-  chars: number
-  pages?: number
-  extension?: string
-}
-
 class FilesController {
   async list(): Promise<FileEntry[]> {
     const data = await apiGet<{ files?: FileEntry[] } | FileEntry[]>('/files/')
@@ -61,12 +53,6 @@ class FilesController {
     )
     if (!data) return []
     return Array.isArray(data) ? data : data.results ?? []
-  }
-
-  async extract(file: File): Promise<ExtractResult> {
-    const formData = new FormData()
-    formData.append('file', file)
-    return apiPost('/files/extract', formData, { raw: true })
   }
 }
 

@@ -79,13 +79,4 @@ describe('filesController', () => {
     const result = await filesController.search('test')
     expect(result).toEqual([])
   })
-
-  it('extract calls apiPost with FormData and raw option', async () => {
-    const file = new File(['content'], 'test.txt', { type: 'text/plain' })
-    const expected = { text: 'content', filename: 'test.txt', chars: 7 }
-    apiPost.mockResolvedValue(expected)
-    const result = await filesController.extract(file)
-    expect(result).toEqual(expected)
-    expect(apiPost).toHaveBeenCalledWith('/files/extract', expect.any(FormData), { raw: true })
-  })
 })

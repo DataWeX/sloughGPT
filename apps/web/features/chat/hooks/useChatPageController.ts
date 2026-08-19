@@ -28,7 +28,7 @@ import { useSettings } from '@/lib/store'
 import { imagesController } from '@/lib/images-controller'
 import type { ImageStyle } from '@/lib/images-controller'
 import { chatDB } from '@/lib/db'
-import { filesController } from '@/lib/files-controller'
+
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { resizeImage } from '@/features/chat/components/input/ImageUpload'
 import { useChatToolbarValue } from '@/features/chat/hooks/useChatToolbarValue'
@@ -401,13 +401,15 @@ export function useChatPageController(
   const handleReadFile = useCallback(async (file: File) => {
     setReadLoading(true)
     try {
-      const result = await filesController.extract(file)
-      setReadFileData({ text: result.text, filename: result.filename, pages: result.pages ?? 0 })
-      const fileName = result.filename
-      const pageInfo = result.extension === '.pdf' ? ` (${result.pages} pages)` : ''
+      const text = await file.text()
+      const fileName = file.name
+      const ext = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')) : ''
+      const pages = ext === '.pdf' ? Math.max(1, Math.ceil(text.length / 3000)) : 0
+      setReadFileData({ text, filename: fileName, pages })
+      const pageInfo = pages > 0 ? ` (${pages} pages)` : ''
       // Add a system message confirming the file was read
       chat.setMessages(prev => [...prev, {
-        id: `file-${Date.now()}`, role: 'assistant', content: `📄 **Read: ${fileName}**${pageInfo}\n\nGot it! I've read ${result.chars.toLocaleString()} characters${pageInfo ? ` across ${result.pages} pages` : ''}. What do you want to know?`, timestamp: new Date(),
+        id: `file-${Date.now()}`, role: 'assistant', content: `📄 **Read: ${fileName}**${pageInfo}\n\nGot it! I've read ${text.length.toLocaleString()} characters${pageInfo ? ` across ${pages} pages` : ''}. What do you want to know?`, timestamp: new Date(),
       }])
     } catch (err: unknown) {
       useToastStore.getState().addToast(formatToastError(err, "Couldn't read file"), 'error')

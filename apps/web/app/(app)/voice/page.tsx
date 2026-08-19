@@ -16,6 +16,7 @@ export default function VoicePage() {
   const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string; sample_rate: number } | null>(null)
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [ttsCount, setTtsCount] = useState(0)
+  const [activePreset, setActivePreset] = useState<{ rate: number; pitch: number; voice: string } | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
@@ -53,7 +54,16 @@ export default function VoicePage() {
         audio.play().catch(() => {}) // autoplay policy — expected
       } else if (data.backend === 'browser-fallback') {
         if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel()
           const utterance = new SpeechSynthesisUtterance(ttsText)
+          if (activePreset) {
+            utterance.rate = activePreset.rate
+            utterance.pitch = activePreset.pitch
+            if (activePreset.voice) {
+              const match = window.speechSynthesis.getVoices().find(v => v.name === activePreset.voice)
+              if (match) utterance.voice = match
+            }
+          }
           window.speechSynthesis.speak(utterance)
         }
       }
@@ -103,7 +113,7 @@ export default function VoicePage() {
         </CardContent>
       </Card>
 
-      <VoicePresetCard />
+      <VoicePresetCard onApply={(p) => setActivePreset(p)} />
 
       <Card>
         <CardHeader>
