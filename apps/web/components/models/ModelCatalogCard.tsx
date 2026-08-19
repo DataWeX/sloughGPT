@@ -101,7 +101,14 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
             ))}
           </div>
         ) : models.length === 0 ? (
-          <div className="text-center py-8 text-sm text-muted-foreground">No models available</div>
+          <div className="text-center py-8 text-sm text-muted-foreground">
+            No models available
+            <div className="mt-2">
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/models')}>
+                Browse models
+              </Button>
+            </div>
+          </div>
         ) : (
           <>
             {models.length > 3 && (
