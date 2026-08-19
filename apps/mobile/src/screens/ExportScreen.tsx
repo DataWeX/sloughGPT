@@ -1,9 +1,9 @@
 import React, {useEffect, useState, useCallback} from 'react';
-import {FlatList, Pressable, RefreshControl, Alert} from 'react-native';
+import {FlatList, Pressable, RefreshControl, Alert, Share} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
-import {api} from '../services/api-client';
+import {api, getApiUrl} from '../services/api-client';
 import {Icon} from '../components/Icon';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
@@ -75,9 +75,17 @@ export function ExportScreen() {
 
   const handleDownloadCheckpoint = async (name: string) => {
     try {
-      const blob = await api.get<Blob>(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`);
-      triggerHaptic('success');
-      toast.success(`Downloaded ${name}`);
+      const baseUrl = await getApiUrl();
+      const url = `${baseUrl}/auto-train/checkpoints/${encodeURIComponent(name)}/download`;
+      const result = await Share.share({
+        title: `Download ${name}`,
+        url,
+        message: `Download checkpoint: ${name}`,
+      });
+      if (result.action === Share.sharedAction) {
+        triggerHaptic('success');
+        toast.success(`Shared ${name}`);
+      }
     } catch {
       toast.error('Download failed');
     }

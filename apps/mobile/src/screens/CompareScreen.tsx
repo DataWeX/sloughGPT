@@ -34,9 +34,9 @@ export function CompareScreen() {
 
   const loadData = useCallback(async () => {
     await refresh();
-    // Fetch benchmarks for all models
+    const currentModels = useModelStore.getState().models;
     const results: Record<string, BenchmarkResult> = {};
-    for (const m of models) {
+    for (const m of currentModels) {
       try {
         const b = await api.get<BenchmarkResult>(`/benchmark/${m.id}`);
         results[m.id] = b;
@@ -45,7 +45,7 @@ export function CompareScreen() {
       }
     }
     setBenchmarks(results);
-  }, [models, refresh]);
+  }, [refresh]);
 
   useEffect(() => {
     loadData().finally(() => setLoading(false));

@@ -27,7 +27,9 @@ jest.mock('../../services/api-client', () => ({
 }));
 
 jest.mock('../../stores/model-store', () => ({
-  useModelStore: jest.fn(() => mockStoreValue),
+  useModelStore: Object.assign(jest.fn(() => mockStoreValue), {
+    getState: () => mockStoreValue,
+  }),
 }));
 
 jest.mock('../../services/toast', () => ({

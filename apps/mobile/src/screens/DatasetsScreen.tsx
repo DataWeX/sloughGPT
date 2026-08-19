@@ -43,17 +43,10 @@ export function DatasetsScreen() {
   };
 
   const handleImportLocal = async () => {
-    try {
-      setImporting(true);
-      await api.post('/datasets/import/local', {path: '', name: 'mobile-import'});
-      triggerHaptic('success');
-      toast.success('Dataset imported');
-      await fetchDatasets();
-    } catch {
-      toast.error('Import failed');
-    } finally {
-      setImporting(false);
-    }
+    Alert.alert('Import Dataset', 'On mobile, import a dataset by URL. Server-local file paths are not accessible from mobile.', [
+      {text: 'Cancel', style: 'cancel'},
+      {text: 'Import from URL', onPress: () => setUrlModalVisible(true)},
+    ]);
   };
 
   const handleImportURL = async () => {
