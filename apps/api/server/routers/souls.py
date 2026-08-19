@@ -5,7 +5,7 @@ Encapsulates router state in ``SloRouterState`` dataclass rather than module-lev
 mutable globals. Actual soul state lives in ``SloManager`` singleton.
 """
 from dataclasses import dataclass
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict, AsyncGenerator
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ import re
 import json, asyncio, numpy as np, logging
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from domains.infrastructure.errors import AppError
 from infrastructure.auth import require_auth_if_enabled, audit_user
 
 try:
@@ -473,8 +474,8 @@ Be yourself — let your personality shape how you respond."""
                         "emotion": getattr(s, "emotion", {}),
                         "generation_params": getattr(s, "generation_params", {}),
                     })
-            raise HTTPException(status_code=404, detail=f"Soul '{soul_name}' not found")
-        except HTTPException:
+            raise_error(f"Soul '{soul_name}' not found", "E_NOT_FOUND", status_code=404)
+        except AppError:
             raise
         except Exception as e:
             classify_and_raise(e, source="get_soul")

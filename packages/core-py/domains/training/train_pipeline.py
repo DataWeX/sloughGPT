@@ -587,6 +587,7 @@ class SloughGPTTrainer:
         lora_alpha: int = 16,
         device: Optional[str] = None,
         soul_name: Optional[str] = None,
+        personality: Optional[dict] = None,
         log_interval: int = 10,
         eval_interval: int = 100,
         experiment_tracker: Optional["ExperimentTracker"] = None,
@@ -627,6 +628,7 @@ class SloughGPTTrainer:
 
         self.data_path = data_path
         self.soul_name = soul_name or "sloughgpt"
+        self._personality = personality
         self.tokenizer = tokenizer
         self._experiment_tracker = experiment_tracker
         self._best_val_loss = float("inf")
@@ -1430,6 +1432,7 @@ class SloughGPTTrainer:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
         from domains.inference import create_soul_profile, save_soul
+        from domains.inference.slo_format import PersonalityCore
 
         # Honest metadata: only claim a loss that was actually observed. A save
         # before any training step has neither a train loss nor an eval loss,
@@ -1453,6 +1456,7 @@ class SloughGPTTrainer:
             epochs_trained=epochs_trained,
             final_train_loss=final_train_loss,
             final_val_loss=final_val_loss,
+            personality=PersonalityCore(**self._personality) if self._personality else None,
             lineage="sloughgpt",
             tags=["sloughgpt", "trained", "soul"],
         )
