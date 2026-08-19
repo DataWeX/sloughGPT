@@ -5,7 +5,7 @@ import {useColors} from '../theme/colors';
 import {useChatStore} from '../stores/chat-store';
 import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
-import {getApiUrl} from '../services/api-client';
+import {api} from '../services/api-client';
 import {toast} from '../services/toast';
 import * as labelsService from '../services/labels';
 import {Icon} from './Icon';
@@ -776,12 +776,8 @@ function SystemPromptContent() {
   React.useEffect(() => {
     const fetchPrompt = async () => {
       try {
-        const baseUrl = await getApiUrl();
-        const res = await fetch(`${baseUrl}/souls/current`);
-        if (res.ok) {
-          const data = await res.json();
-          setPrompt(data.system_prompt || data.description || 'No system prompt available for this soul.');
-        }
+        const data = await api.get<{system_prompt?: string; description?: string}>('/souls/current');
+        setPrompt(data.system_prompt || data.description || 'No system prompt available for this soul.');
       } catch {
         setPrompt('Unable to load system prompt.');
       } finally {
