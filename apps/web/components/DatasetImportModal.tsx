@@ -464,9 +464,12 @@ export function DatasetImportModal({
                   onChange={(e) => setKaggleDataset(e.target.value)}
                   className="mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Examples: <code className="font-mono text-[10px]">zillow/zecon</code>, <code className="font-mono text-[10px]">nlp-datasets/tinyshakespeare</code>, <code className="font-mono text-[10px]">datasets/opensubtitles</code>
+                </p>
               </div>
               <p className="text-xs text-muted-foreground">
-                Requires Kaggle CLI installed and authenticated
+                Requires Kaggle CLI installed and authenticated (<code className="font-mono text-[10px]">kaggle config</code>)
               </p>
             </div>
           )}
