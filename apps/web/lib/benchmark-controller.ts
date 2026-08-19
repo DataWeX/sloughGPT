@@ -31,6 +31,11 @@ export interface LoggedBenchmarkResponse {
 }
 
 export const benchmarkController = {
+  async metrics(model?: string): Promise<BenchmarkResult> {
+    const q = model ? `?model=${encodeURIComponent(model)}` : ''
+    return apiGet<BenchmarkResult>(`/benchmark/metrics${q}`)
+  },
+
   async run(config: { model?: string; dataset?: string }): Promise<BenchmarkResult> {
     return apiPost<BenchmarkResult>('/benchmark/run', config)
   },

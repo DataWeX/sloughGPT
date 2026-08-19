@@ -36,7 +36,7 @@ export default function BenchmarkPage() {
     }).catch(() => {})
 
     Promise.all([
-      benchmarkController.run({ model: currentModel }).catch(() => null),
+      benchmarkController.metrics(currentModel).catch(() => null),
       benchmarkController.quality().catch(() => null),
       benchmarkController.stats().catch(() => null),
     ]).then(([m, q, s]) => {

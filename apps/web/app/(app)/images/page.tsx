@@ -5,16 +5,10 @@ import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { apiGet, apiPost } from '@/lib/http-client'
+import { imagesController, type GalleryImage } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
-
-interface GalleryImage {
-  id: string
-  path: string
-  created: number
-}
 
 interface Style {
   key: string
@@ -38,11 +32,11 @@ export default function ImagesPage() {
     try {
       setLoadError(null)
       const [galleryRes, stylesRes] = await Promise.all([
-        apiGet<{ data?: { images?: GalleryImage[] } }>('/images/gallery').catch(() => null),
-        apiGet<{ data?: { styles?: Array<[string, string]> } }>('/images/styles').catch(() => null),
+        imagesController.gallery().catch(() => null),
+        imagesController.styles().catch(() => null),
       ])
-      setGallery(galleryRes?.data?.images ?? [])
-      setStyles((stylesRes?.data?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+      setGallery(galleryRes?.images ?? [])
+      setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
       if (!galleryRes && !stylesRes) setLoadError('Could not load image data. Is the server running?')
     } catch {
       setLoadError('Failed to load image data')
@@ -59,11 +53,7 @@ export default function ImagesPage() {
     setGenError(null)
     setLastGenerated(null)
     try {
-      const data = await apiPost<{ detail?: string; image?: string }>('/images/generate', { prompt, style: selectedStyle })
-      if (data.detail) {
-        setGenError(data.detail)
-        return
-      }
+      const data = await imagesController.generate(prompt, selectedStyle as any)
       setLastGenerated(data.image ?? null)
       await fetchData()
     } catch (err) {
