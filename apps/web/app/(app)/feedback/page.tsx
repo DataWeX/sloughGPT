@@ -15,6 +15,7 @@ type Tab = 'stats' | 'conversations' | 'training'
 export default function FeedbackPage() {
   const [tab, setTab] = useState<Tab>('stats')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
   const [stats, setStats] = useState<FeedbackStats | null>(null)
@@ -33,6 +34,7 @@ export default function FeedbackPage() {
       setStats(s)
       setWorkflow(w)
       setTrainStats(t)
+      if (!s && !w && !t) setLoadError('Could not load feedback data. Is the server running?')
     }).finally(() => setLoading(false))
   }, [])
 
@@ -105,7 +107,7 @@ export default function FeedbackPage() {
   }
 
   return (
-    <PageContainer title="Feedback" subtitle="Analytics & management">
+    <PageContainer title="Feedback" subtitle="Analytics & management" error={loadError} onRetry={handleRefreshStats}>
       <div className="flex gap-1 border-b border-border/30 pb-0">
         {(['stats', 'conversations', 'training'] as Tab[]).map(t => (
           <button

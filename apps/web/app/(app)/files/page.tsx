@@ -11,6 +11,7 @@ import { useToastStore } from '@/lib/toast-store'
 export default function FilesPage() {
   const [files, setFiles] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
@@ -22,9 +23,10 @@ export default function FilesPage() {
 
   const fetchFiles = async () => {
     try {
+      setLoadError(null)
       setFiles(await filesController.list())
     } catch {
-      addToast('Failed to load files', 'error')
+      setLoadError('Failed to load files. Is the server running?')
     } finally {
       setLoading(false)
     }
@@ -142,6 +144,8 @@ export default function FilesPage() {
     <PageContainer
       title="Files"
       subtitle={`${files.length} files`}
+      error={loadError}
+      onRetry={fetchFiles}
     >
         <FileStatsCard files={files} />
 

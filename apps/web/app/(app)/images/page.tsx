@@ -26,6 +26,7 @@ export default function ImagesPage() {
   const [gallery, setGallery] = useState<GalleryImage[]>([])
   const [styles, setStyles] = useState<Style[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [selectedStyle, setSelectedStyle] = useState('realistic')
   const [generating, setGenerating] = useState(false)
@@ -35,14 +36,16 @@ export default function ImagesPage() {
 
   const fetchData = async () => {
     try {
+      setLoadError(null)
       const [galleryRes, stylesRes] = await Promise.all([
         apiGet<{ data?: { images?: GalleryImage[] } }>('/images/gallery').catch(() => null),
         apiGet<{ data?: { styles?: Array<[string, string]> } }>('/images/styles').catch(() => null),
       ])
       setGallery(galleryRes?.data?.images ?? [])
       setStyles((stylesRes?.data?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+      if (!galleryRes && !stylesRes) setLoadError('Could not load image data. Is the server running?')
     } catch {
-      addToast('Failed to load image data', 'error')
+      setLoadError('Failed to load image data')
     } finally {
       setLoading(false)
     }
@@ -75,6 +78,8 @@ export default function ImagesPage() {
       title="Images"
       subtitle={`${gallery.length} images generated`}
       loading={loading}
+      error={loadError}
+      onRetry={fetchData}
     >
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

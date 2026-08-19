@@ -23,7 +23,7 @@ export default function ComposableLayersCard({ modelsCount, soulsCount, checkpoi
       <CardContent>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {layers.map(layer => (
-            <div key={layer.title} className="rounded-lg border border-border/60 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm">
+            <div key={layer.title} className="rounded-lg border border-border/60 p-3">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-base">{layer.icon}</span>
                 <span className="text-sm font-medium">{layer.title}</span>
