@@ -7,6 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { companionController, type CompanionTraits, type CompanionPreset } from '@/lib/companion-controller'
 import { CompanionInsightsCard } from '@/components/companion/CompanionInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 const TRAIT_LABELS: Record<string, { label: string; color: string }> = {
   warmth: { label: 'Warmth', color: 'bg-orange-500/15 text-orange-600 dark:text-orange-400' },
@@ -40,8 +41,8 @@ export default function CompanionPage() {
       setTraits(info.traits)
       setPresets(presetRes.presets)
       setSystemPrompt(promptRes.system_prompt)
-    }).catch(() => {
-      if (!ignore) setError('Failed to load companion data')
+    }).catch((err) => {
+      if (!ignore) setError(extractErrorMessage(err, 'Failed to load companion data'))
     }).finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
   }, [])
@@ -59,8 +60,8 @@ export default function CompanionPage() {
       setTraits(res.traits)
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
-    } catch {
-      addToast('Failed to save personality', 'error')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Failed to save personality'), 'error')
     } finally {
       setSaving(false)
     }
@@ -72,8 +73,8 @@ export default function CompanionPage() {
       setTraits(res.traits)
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
-    } catch {
-      addToast('Failed to apply preset', 'error')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Failed to apply preset'), 'error')
     }
   }
 
@@ -83,8 +84,8 @@ export default function CompanionPage() {
       setTraits(res.traits)
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
-    } catch {
-      addToast('Failed to reset companion', 'error')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Failed to reset companion'), 'error')
     }
   }
 
@@ -94,8 +95,8 @@ export default function CompanionPage() {
     try {
       const res = await companionController.chat(chatInput)
       setChatResponse(res.response)
-    } catch {
-      setChatResponse('[Error: could not reach model]')
+    } catch (err) {
+      setChatResponse(`[Error: ${extractErrorMessage(err, 'could not reach model')}]`)
     } finally {
       setChatLoading(false)
       setChatInput('')

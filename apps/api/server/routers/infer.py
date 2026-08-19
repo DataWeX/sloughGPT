@@ -227,7 +227,9 @@ class InferRouter:
                         token_count += 1
                         yield self._sse_token("infer", token)
             except Exception as e:
-                classify_and_raise(e, source="infer_stream")
+                from domains.infrastructure.errors import classify_exception, emit_error_event
+                err = classify_exception(e)
+                emit_error_event(err, source="infer_stream")
                 yield self._sse_error("infer", err.code, err.user_message)
                 return
             elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
