@@ -38,8 +38,10 @@ describe('TrainStep', () => {
 
   it('displays epochs and batch size', () => {
     render(<TrainStep form={form} datasets={datasets} onNext={vi.fn()} onBack={vi.fn()} />)
-    expect(screen.getByText('Epochs:')).toBeDefined()
-    expect(screen.getByText('Batch size:')).toBeDefined()
+    expect(screen.getByText('Epochs')).toBeDefined()
+    expect(screen.getByText('10')).toBeDefined()
+    expect(screen.getByText('Batch size')).toBeDefined()
+    expect(screen.getByText('32')).toBeDefined()
   })
 
   it('shows LoRA enabled when set', () => {
@@ -55,24 +57,25 @@ describe('TrainStep', () => {
 
   it('displays learning rate', () => {
     render(<TrainStep form={form} datasets={datasets} onNext={vi.fn()} onBack={vi.fn()} />)
-    expect(screen.getByText('Learning rate:')).toBeDefined()
+    expect(screen.getByText('Learning rate')).toBeDefined()
+    expect(screen.getByText('0.001')).toBeDefined()
   })
 
   it('hides dataset when not selected', () => {
     const ds = { ...datasets, selectedDataset: '' }
     render(<TrainStep form={form} datasets={ds} onNext={vi.fn()} onBack={vi.fn()} />)
-    expect(screen.queryByText(/Dataset:/)).toBeNull()
+    expect(screen.queryByText(/Dataset/)).toBeNull()
   })
 
   it('shows native architecture rows for native method', () => {
     const nativeForm = { ...form, method: 'native' as const, nativeEmbed: 256, nativeLayers: 4, nativeHeads: 8, nativeBlockSize: 128 }
     render(<TrainStep form={nativeForm} datasets={datasets} onNext={vi.fn()} onBack={vi.fn()} />)
     expect(screen.getByText('Native SloNet')).toBeDefined()
-    expect(screen.getByText('Embed dim:')).toBeDefined()
+    expect(screen.getByText('Embed dim')).toBeDefined()
     expect(screen.getByText('256')).toBeDefined()
-    expect(screen.getByText('Layers:')).toBeDefined()
-    expect(screen.getByText('Heads:')).toBeDefined()
-    expect(screen.getByText('Block size:')).toBeDefined()
+    expect(screen.getByText('Layers')).toBeDefined()
+    expect(screen.getByText('Heads')).toBeDefined()
+    expect(screen.getByText('Block size')).toBeDefined()
   })
 
   it('shows vision params and hides batch/LR for vlm method', () => {
@@ -86,25 +89,25 @@ describe('TrainStep', () => {
     }
     render(<TrainStep form={vlmForm} datasets={datasets} onNext={vi.fn()} onBack={vi.fn()} />)
     expect(screen.getByText('Vision (image + text)')).toBeDefined()
-    expect(screen.getByText('Vision encoder:')).toBeDefined()
-    expect(screen.getByText('Language model:')).toBeDefined()
-    expect(screen.getByText('Stage 1 epochs:')).toBeDefined()
-    expect(screen.getByText('Stage 2 epochs:')).toBeDefined()
-    expect(screen.queryByText('Batch size:')).toBeNull()
-    expect(screen.queryByText('Learning rate:')).toBeNull()
+    expect(screen.getByText('Vision encoder')).toBeDefined()
+    expect(screen.getByText('Language model')).toBeDefined()
+    expect(screen.getByText('Stage 1 epochs')).toBeDefined()
+    expect(screen.getByText('Stage 2 epochs')).toBeDefined()
+    expect(screen.queryByText('Batch size')).toBeNull()
+    expect(screen.queryByText('Learning rate')).toBeNull()
   })
 
   it('shows base model for finetune method', () => {
     const finetuneForm = { ...form, method: 'finetune' as const, selectedModel: 'gpt2' }
     render(<TrainStep form={finetuneForm} datasets={datasets} onNext={vi.fn()} onBack={vi.fn()} />)
     expect(screen.getByText('Continue training')).toBeDefined()
-    expect(screen.getByText('Base model:')).toBeDefined()
+    expect(screen.getByText('Base model')).toBeDefined()
   })
 
   it('shows pasted-text source and length in text mode', () => {
     const textForm = { ...form, inputMode: 'text' as const, textInput: 'some text' }
     render(<TrainStep form={textForm} datasets={{ ...datasets, selectedDataset: '' }} onNext={vi.fn()} onBack={vi.fn()} />)
-    expect(screen.getByText('Source:')).toBeDefined()
+    expect(screen.getByText('Source')).toBeDefined()
     expect(screen.getByText(/Pasted text \(9 chars\)/)).toBeDefined()
   })
 })
