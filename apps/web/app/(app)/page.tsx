@@ -47,7 +47,7 @@ export default function HomePage() {
   const { t } = useLocale()
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
   const addToast = useToastStore(s => s.addToast)
-  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, healthSummary, feedbackStats, ...data } = useHomePageData(health)
+  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, recentDatasets, healthSummary, feedbackStats, ...data } = useHomePageData(health)
 
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
@@ -399,6 +399,31 @@ export default function HomePage() {
                   <span className="text-xs truncate flex-1">{j.name || j.id}</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'}`}>{j.status}</span>
                 </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {apiStatus === 'online' && recentDatasets.length > 0 && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-medium">Recent datasets</p>
+              <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+            </div>
+            <div className="space-y-1.5">
+              {recentDatasets.map(ds => (
+                <button
+                  key={ds.id}
+                  onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
+                  className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
+                  <span className="text-xs truncate flex-1">{ds.name}</span>
+                  {ds.samples != null && <span className="text-xs text-muted-foreground shrink-0">{ds.samples.toLocaleString()} samples</span>}
+                  <span className="text-[10px] text-primary shrink-0">Train →</span>
+                </button>
               ))}
             </div>
           </CardContent>
