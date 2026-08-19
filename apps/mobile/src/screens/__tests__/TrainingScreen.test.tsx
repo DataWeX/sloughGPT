@@ -108,6 +108,7 @@ jest.mock('../../stores/training-store', () => ({
     if (typeof selector === 'function') return selector(mockTrainState);
     return mockTrainState;
   },
+  cleanupTraining: jest.fn(),
 }));
 
 jest.mock('../../stores/model-store', () => ({

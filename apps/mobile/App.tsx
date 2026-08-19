@@ -1,5 +1,9 @@
 import React, {useEffect, useState} from 'react';
-import {StatusBar, useColorScheme} from 'react-native';
+import {LogBox, StatusBar, useColorScheme} from 'react-native';
+
+if (__DEV__) {
+  LogBox.ignoreAllLogs();
+}
 import {NavigationContainer, DefaultTheme, DarkTheme} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';

@@ -1,7 +1,5 @@
 import React from 'react';
-import {Pressable} from 'react-native';
-import {YStack, Text} from 'tamagui';
-import {useColors} from '../theme/colors';
+import {Pressable, View, Text as RNText, StyleSheet} from 'react-native';
 
 interface ErrorFallbackProps {
   error: Error | null;
@@ -9,26 +7,59 @@ interface ErrorFallbackProps {
 }
 
 function ErrorFallback({error, onRetry}: ErrorFallbackProps) {
-  const c = useColors();
   return (
-    <YStack flex={1} backgroundColor={c.background} alignItems="center" justifyContent="center" padding={32}>
-      <Text fontSize={48} marginBottom={16} color={c.warningDark} fontWeight="700">!</Text>
-      <Text fontSize={20} fontWeight="600" color={c.text} marginBottom={8}>
-        Something went wrong
-      </Text>
-      <Text fontSize={13} color={c.textMuted} textAlign="center" lineHeight={18} marginBottom={24}>
+    <View style={styles.container}>
+      <RNText style={styles.icon}>!</RNText>
+      <RNText style={styles.title}>Something went wrong</RNText>
+      <RNText style={styles.message}>
         {error?.message}
-      </Text>
-      <Pressable onPress={onRetry}>
-        <YStack backgroundColor={c.primary} paddingHorizontal={20} paddingVertical={12} borderRadius={12}>
-          <Text fontSize={15} fontWeight="600" color={c.textOnPrimary}>
-            Try Again
-          </Text>
-        </YStack>
+      </RNText>
+      <Pressable onPress={onRetry} style={styles.button}>
+        <RNText style={styles.buttonText}>Try Again</RNText>
       </Pressable>
-    </YStack>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#110F18',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  icon: {
+    fontSize: 48,
+    marginBottom: 16,
+    color: '#E85D04',
+    fontWeight: '700',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#F0ECF5',
+    marginBottom: 8,
+  },
+  message: {
+    fontSize: 13,
+    color: '#968CAC',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  button: {
+    backgroundColor: '#7C52C4',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  buttonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+});
 
 interface Props {
   children: React.ReactNode;

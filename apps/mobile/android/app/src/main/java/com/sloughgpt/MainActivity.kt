@@ -17,5 +17,5 @@ class MainActivity : ReactActivity() {
      * fabricEnabled=false to avoid loading C++ feature flags lib on old arch.
      */
     override fun createReactActivityDelegate(): ReactActivityDelegate =
-        DefaultReactActivityDelegate(this, mainComponentName, false)
+        DefaultReactActivityDelegate(this, mainComponentName, true /* fabricEnabled */)
 }

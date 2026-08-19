@@ -32,6 +32,12 @@ export function ConnectionStatusBar({onRetry}: Props) {
   const {state, latencyMs, retryCount} = useConnectionStatus();
   const insets = useSafeAreaInsets();
   const c = useColors();
+
+  // Hide during initial connecting state (first poll hasn't completed yet)
+  if (state === 'connecting' && retryCount === 0) {
+    return null;
+  }
+
   const config = getStateConfig(state, c);
 
   const bar = (

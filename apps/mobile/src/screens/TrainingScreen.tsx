@@ -13,6 +13,7 @@ import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
 import {
   useTrainingStore,
+  cleanupTraining,
   type TrainPhase,
 } from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
@@ -117,11 +118,18 @@ export function TrainingScreen() {
 
   const prevErrorRef = useRef(error);
   useEffect(() => {
-    if (error && error !== prevErrorRef.current) {
+    if (prevErrorRef.current !== error && error) {
       triggerHaptic('error');
     }
     prevErrorRef.current = error;
   }, [error]);
+
+  // Cleanup SSE + poll timers on unmount (BUG 1 fix)
+  useEffect(() => {
+    return () => {
+      cleanupTraining();
+    };
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -244,8 +252,9 @@ export function TrainingScreen() {
         );
       }
 
-      const maxLoss = Math.max(...data.map(d => d.value));
-      const minLoss = Math.min(...data.map(d => d.value));
+      // Use reduce instead of spread to avoid call-stack overflow on large arrays (BUG 4 fix)
+      const maxLoss = data.reduce((max, d) => (d.value > max ? d.value : max), data[0].value);
+      const minLoss = data.reduce((min, d) => (d.value < min ? d.value : min), data[0].value);
       const range = maxLoss - minLoss || 1;
       const W = 280;
       const H = 80;
@@ -639,7 +648,7 @@ export function TrainingScreen() {
                       width={20}
                       height={20}
                       borderRadius={10}
-                      backgroundColor="transparent"
+                      backgroundColor="white"
                       alignSelf={
                         hfOpts.use_lora ? 'flex-end' : 'flex-start'
                       }

@@ -47,6 +47,7 @@ const appConfig = createTamagui({
       borderColorFocus: '#7C52C4',
       borderColorPress: '#7C52C4',
       placeholderColor: '#827A96',
+      outlineColor: '#7C52C4',
     },
     dark: {
       ...config.themes.dark,
@@ -63,6 +64,7 @@ const appConfig = createTamagui({
       borderColorFocus: '#C0AAF4',
       borderColorPress: '#C0AAF4',
       placeholderColor: '#968CAC',
+      outlineColor: '#C0AAF4',
     },
     purple: {
       ...config.themes.light,
