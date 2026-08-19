@@ -2264,17 +2264,25 @@ Examples:
             return
         if not self._require_api("load"):
             return
-        import sys
-        import time
         model_name = args.strip()
+
+        def _print_result(result):
+            if result is None:
+                self._print(f"  ✗ Load failed")
+                return
+            status = result.get("status", "?")
+            if status == "loaded":
+                self._print(f"  ✓ {model_name} loaded on {result.get('device', 'cpu')}")
+            elif status == "error":
+                self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
         try:
             from domains.infrastructure.conversion_tracker import get_tracker
             from apps.cli.src.utils.progress import ProgressBar
-            tracker = get_tracker()
-
-            result_holder = [None]
             import threading
+
+            tracker = get_tracker()
+            result_holder = [None]
 
             def _load():
                 result_holder[0] = self.cmds.load_model(model_name)
@@ -2305,30 +2313,12 @@ Examples:
 
             t.join()
             bar.finish()
-
-            result = result_holder[0]
-            if result is None:
-                self._print(f"  ✗ Load failed")
-                return
-
-            status = result.get("status", "?")
-            if status == "loaded":
-                self._print(f"  ✓ {model_name} loaded on {result.get('device', 'cpu')}")
-            elif status == "error":
-                self._print(f"  ✗ {result.get('error', 'Unknown error')}")
+            _print_result(result_holder[0])
 
         except ImportError:
             self._print(f"  Loading {model_name}...")
             self._print("  (this may take 30-120s on CPU)")
-            result = self.cmds.load_model(model_name)
-            if result is None:
-                self._print(f"  ✗ Load failed")
-                return
-            status = result.get("status", "?")
-            if status == "loaded":
-                self._print(f"  ✓ {model_name} loaded on {result.get('device', 'cpu')}")
-            elif status == "error":
-                self._print(f"  ✗ {result.get('error', 'Unknown error')}")
+            _print_result(self.cmds.load_model(model_name))
 
     def _cmd_uptime(self, args: str = "") -> None:
         """Print how long Dait has been running (like Unix uptime)."""
