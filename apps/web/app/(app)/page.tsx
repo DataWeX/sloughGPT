@@ -604,7 +604,12 @@ export default function HomePage() {
               <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm font-semibold">Datasets</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs sm:text-sm font-semibold">Datasets</p>
+                {datasetStats && datasetStats.totalDatasets > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
+                )}
+              </div>
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Manage training data</p>
             </div>
           </div>
@@ -621,7 +626,12 @@ export default function HomePage() {
               <IconBolt className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm font-semibold">Teach me</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs sm:text-sm font-semibold">Teach me</p>
+                {datasetStats && datasetStats.totalDatasets > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
+                )}
+              </div>
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Train from your writing</p>
             </div>
           </div>
