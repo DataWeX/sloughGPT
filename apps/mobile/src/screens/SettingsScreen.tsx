@@ -18,6 +18,7 @@ import {StatusBadge} from '../components/StatusBadge';
 import {useHybridStore} from '../stores/hybrid-inference-store';
 import {useProvidersStore} from '../stores/providers-store';
 import {api, getApiUrl, setApiUrl} from '../services/api-client';
+import {APP_VERSION} from '../constants';
 import {
   registerForPushNotifications,
   unregisterPushNotifications,
@@ -564,7 +565,7 @@ export function SettingsScreen() {
           </YStack>
 
           <YStack alignItems="center" paddingVertical={24}>
-            <Text fontSize={11} color="$color11" opacity={0.4}>SloughGPT v1.0.0</Text>
+            <Text fontSize={11} color="$color11" opacity={0.4}>SloughGPT v{APP_VERSION}</Text>
           </YStack>
         </ScrollView>
       </KeyboardAvoidingView>
