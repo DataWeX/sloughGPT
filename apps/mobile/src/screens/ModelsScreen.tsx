@@ -80,7 +80,7 @@ export function ModelsScreen() {
 
         {error && (
           <XStack
-            backgroundColor="rgba(239, 68, 68, 0.08)"
+            backgroundColor={colors.errorAlpha(0.08)}
             padding={12}
             borderRadius={10}
             alignItems="center"
@@ -151,7 +151,7 @@ export function ModelsScreen() {
                 marginTop={12}
                 paddingVertical={8}
                 paddingHorizontal={12}
-                backgroundColor="rgba(239, 68, 68, 0.08)"
+                backgroundColor={colors.errorAlpha(0.08)}
                 borderRadius={8}
                 alignItems="center">
                 <Text fontSize={13} color="#EF4444" fontWeight="600">
@@ -217,7 +217,7 @@ export function ModelsScreen() {
             </YStack>
             {hybrid.slonet.loaded ? (
               <Pressable onPress={hybrid.unloadSloNet} accessible={true} accessibilityRole="button">
-                <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)">
+                <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor={colors.errorAlpha(0.08)}>
                   <Text fontSize={13} color="#EF4444" fontWeight="600">Unload</Text>
                 </YStack>
               </Pressable>
@@ -252,7 +252,7 @@ export function ModelsScreen() {
             </YStack>
             {hybrid.qwen.loaded ? (
               <Pressable onPress={async () => hybrid.unloadQwen()} accessible={true} accessibilityRole="button">
-                <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)">
+                <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor={colors.errorAlpha(0.08)}>
                   <Text fontSize={13} color="#EF4444" fontWeight="600">Unload</Text>
                 </YStack>
               </Pressable>
@@ -366,18 +366,18 @@ export function ModelsScreen() {
               value={search}
               onChangeText={setSearch}
               placeholder="Search models..."
-              placeholderTextColor="#827A96"
+              placeholderTextColor={colors.textMuted}
               returnKeyType="search"
               style={{
                 fontSize: 14,
-                color: '#1A1625',
-                backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                color: colors.text,
+                backgroundColor: colors.primaryAlpha(0.04),
                 borderRadius: 10,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
                 marginBottom: 12,
                 borderWidth: 0.5,
-                borderColor: 'rgba(124, 82, 196, 0.12)',
+                borderColor: colors.primaryAlpha(0.12),
               }}
             />
           )}
@@ -428,7 +428,7 @@ export function ModelsScreen() {
 
       {/* Model detail bottom sheet */}
       <Modal visible={!!detailModel} animationType="slide" transparent>
-        <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
+        <YStack flex={1} backgroundColor={colors.overlay(0.4)} justifyContent="flex-end">
           <YStack
             backgroundColor="$background"
             borderTopLeftRadius={24}
@@ -506,7 +506,7 @@ export function ModelsScreen() {
               borderTopColor="$borderColor">
               {detailModel?.loaded ? (
                 <Pressable onPress={() => { triggerHaptic('medium'); unloadModel(); setDetailModel(null); }} accessible={true} accessibilityRole="button">
-                  <YStack backgroundColor="rgba(239, 68, 68, 0.08)" paddingVertical={12} borderRadius={10} alignItems="center">
+                  <YStack backgroundColor={colors.errorAlpha(0.08)} paddingVertical={12} borderRadius={10} alignItems="center">
                     <Text fontSize={15} color="#EF4444" fontWeight="600">Unload Model</Text>
                   </YStack>
                 </Pressable>

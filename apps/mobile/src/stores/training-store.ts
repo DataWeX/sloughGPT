@@ -208,7 +208,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             lossHistory: [
               ...s.lossHistory,
               {step: Number(step), value: Number(rawData.loss)},
-            ],
+            ].slice(-200),
           }));
         }
 

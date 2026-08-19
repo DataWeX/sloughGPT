@@ -652,7 +652,7 @@ export function TrainingScreen() {
                       width={20}
                       height={20}
                       borderRadius={10}
-                      backgroundColor="white"
+                      backgroundColor={colors.white}
                       alignSelf={
                         hfOpts.use_lora ? 'flex-end' : 'flex-start'
                       }
@@ -1484,7 +1484,7 @@ export function TrainingScreen() {
       <Modal visible={previewVisible} animationType="slide" transparent>
         <YStack
           flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
+          backgroundColor={colors.overlay(0.4)}
           justifyContent="flex-end">
           <YStack
             backgroundColor={colors.background}
@@ -1562,7 +1562,7 @@ export function TrainingScreen() {
       <Modal visible={showImportModal} animationType="slide" transparent>
         <YStack
           flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
+          backgroundColor={colors.overlay(0.4)}
           justifyContent="flex-end">
           <YStack
             backgroundColor={colors.background}
@@ -1671,7 +1671,7 @@ export function TrainingScreen() {
                 alignItems="center"
                 backgroundColor={
                   importing || !importSource.trim()
-                    ? 'rgba(124, 82, 196, 0.3)'
+                    ? colors.primaryAlpha(0.3)
                     : colors.primary
                 }
                 onPress={hapticPress('light', handleImport)}
@@ -1697,7 +1697,7 @@ export function TrainingScreen() {
       <Modal visible={testModalVisible} animationType="slide" transparent>
         <YStack
           flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
+          backgroundColor={colors.overlay(0.4)}
           justifyContent="flex-end">
           <YStack
             backgroundColor={colors.background}
@@ -1763,7 +1763,7 @@ export function TrainingScreen() {
                 alignItems="center"
                 backgroundColor={
                   testLoading || !testPrompt.trim()
-                    ? 'rgba(124, 82, 196, 0.3)'
+                    ? colors.primaryAlpha(0.3)
                     : colors.primary
                 }
                 onPress={hapticPress('light', handleTestModel)}

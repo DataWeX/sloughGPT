@@ -4,6 +4,7 @@
  */
 
 import {Alert, Linking} from 'react-native';
+import {getApiUrl} from './api-client';
 
 let Audio: any;
 try {
@@ -11,6 +12,9 @@ try {
 } catch {
   Audio = null;
 }
+
+const MIN_RECORDING_DURATION_MS = 2000;
+const TRANSCRIBE_TIMEOUT_MS = 30000;
 
 export interface VoiceRecording {
   uri: string;
@@ -54,7 +58,12 @@ export async function startRecording(): Promise<{stop: () => Promise<VoiceRecord
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
         const duration = Math.round((Date.now() - startTime) / 1000);
-        return uri ? {uri, duration} : null;
+        if (!uri) return null;
+        if (duration * 1000 < MIN_RECORDING_DURATION_MS) {
+          Alert.alert('Recording too short', 'Please record for at least 2 seconds.');
+          return null;
+        }
+        return {uri, duration};
       } catch (e) {
         if (__DEV__) console.warn('[voice-input] stop recording failed:', e);
         return null;
@@ -65,32 +74,40 @@ export async function startRecording(): Promise<{stop: () => Promise<VoiceRecord
 
 /**
  * Transcribe a voice recording via the backend.
+ * Throws on network/server errors; returns '' when no speech detected.
  */
 export async function transcribeAudio(uri: string): Promise<string> {
-  try {
-    const {getApiUrl} = require('./api-client');
-    const baseUrl = await getApiUrl();
-    const formData = new FormData();
-    formData.append('audio', {
-      uri,
-      type: 'audio/m4a',
-      name: 'recording.m4a',
-    } as any);
+  const baseUrl = await getApiUrl();
+  const formData = new FormData();
+  formData.append('audio', {
+    uri,
+    type: 'audio/m4a',
+    name: 'recording.m4a',
+  } as any);
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TRANSCRIBE_TIMEOUT_MS);
+
+  try {
     const res = await fetch(`${baseUrl}/multimodal/transcribe`, {
       method: 'POST',
       body: formData,
       headers: {'Content-Type': 'multipart/form-data'},
+      signal: controller.signal,
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      return data.text || '';
+    if (!res.ok) {
+      throw new Error(`Transcription failed (${res.status})`);
     }
-  } catch (e) {
-    if (__DEV__) console.warn('[voice-input] transcription failed:', e);
-    // backend unavailable
-  }
 
-  return '';
+    const data = await res.json();
+    return data.text || '';
+  } catch (e: any) {
+    if (e.name === 'AbortError') {
+      throw new Error('Transcription timed out');
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

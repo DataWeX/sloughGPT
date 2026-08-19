@@ -76,12 +76,12 @@ export function ChatScreen() {
                 <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Chat</Text>
                 {a.currentSoul && (
                   <YStack
-                    backgroundColor="rgba(124, 82, 196, 0.1)"
+                    backgroundColor={colors.primaryAlpha(0.1)}
                     paddingHorizontal={10}
                     paddingVertical={3}
                     borderRadius={999}
                     borderWidth={0.5}
-                    borderColor="rgba(124, 82, 196, 0.18)"
+                    borderColor={colors.primaryAlpha(0.18)}
                     onPress={() => a.setShowSoulPicker(true)}
                     pressStyle={{opacity: 0.7, scale: 0.95}}>
                     <Text fontSize={11} fontWeight="600" color="$color9">{a.currentSoul.name}</Text>
@@ -89,12 +89,12 @@ export function ChatScreen() {
                 )}
                 {a.health?.model_name && (
                   <YStack
-                    backgroundColor="rgba(52, 176, 125, 0.1)"
+                    backgroundColor={colors.successAlpha(0.1)}
                     paddingHorizontal={8}
                     paddingVertical={3}
                     borderRadius={999}
                     borderWidth={0.5}
-                    borderColor="rgba(52, 176, 125, 0.18)">
+                    borderColor={colors.successAlpha(0.18)}>
                     <Text fontSize={10} fontWeight="600" color="#34B07D">{a.health.model_name}</Text>
                   </YStack>
                 )}
@@ -127,8 +127,8 @@ export function ChatScreen() {
         {a.error && (
           <XStack
             paddingHorizontal={16} paddingVertical={10}
-            backgroundColor="rgba(239, 68, 68, 0.06)"
-            borderBottomWidth={0.5} borderBottomColor="rgba(239, 68, 68, 0.12)"
+            backgroundColor={colors.errorAlpha(0.06)}
+            borderBottomWidth={0.5} borderBottomColor={colors.errorAlpha(0.12)}
             alignItems="center" gap={8}
             onPress={a.clearError}>
             <YStack width={6} height={6} borderRadius={3} backgroundColor="#EF4444" />
@@ -160,7 +160,7 @@ export function ChatScreen() {
               style={{
                 flex: 1, fontSize: 13,
                 color: colors.text,
-                backgroundColor: 'rgba(124, 82, 196, 0.06)',
+                backgroundColor: colors.primaryAlpha(0.06),
                 borderRadius: 10,
                 paddingHorizontal: 12, paddingVertical: 7,
                 borderWidth: 0.5, borderColor: colors.border,
@@ -174,7 +174,7 @@ export function ChatScreen() {
             <YStack
               width={28} height={28} borderRadius={9}
               alignItems="center" justifyContent="center"
-              backgroundColor="rgba(124, 82, 196, 0.06)"
+              backgroundColor={colors.primaryAlpha(0.06)}
               onPress={() => { a.setShowSearch(false); a.setSearchQuery(''); }}
               pressStyle={{opacity: 0.6}}
               accessible accessibilityRole="button" accessibilityLabel="Close search">
@@ -190,14 +190,14 @@ export function ChatScreen() {
             backgroundColor={a.chatBackground || 'var(--background)'}>
             <YStack
               width={80} height={80} borderRadius={40}
-              backgroundColor="rgba(124, 82, 196, 0.08)"
+              backgroundColor={colors.primaryAlpha(0.08)}
               alignItems="center" justifyContent="center"
               marginBottom={24}
               borderWidth={0.5}
-              borderColor="rgba(124, 82, 196, 0.15)">
+              borderColor={colors.primaryAlpha(0.15)}>
               <YStack
                 width={56} height={56} borderRadius={28}
-                backgroundColor="rgba(124, 82, 196, 0.1)"
+                backgroundColor={colors.primaryAlpha(0.1)}
                 alignItems="center" justifyContent="center">
                 <Icon name="message-circle" size={26} color={colors.primary} />
               </YStack>
@@ -219,9 +219,9 @@ export function ChatScreen() {
                   key={s}
                   paddingHorizontal={18} paddingVertical={10}
                   borderRadius={999}
-                  backgroundColor="rgba(124, 82, 196, 0.06)"
+                  backgroundColor={colors.primaryAlpha(0.06)}
                   borderWidth={0.5}
-                  borderColor="rgba(124, 82, 196, 0.12)"
+                  borderColor={colors.primaryAlpha(0.12)}
                   onPress={() => a.handleSuggestion(s)}
                   pressStyle={{opacity: 0.7, scale: 0.96}}>
                   <Text fontSize={13} fontWeight="500" color="$color9">{s}</Text>
@@ -275,7 +275,7 @@ export function ChatScreen() {
               }
             }}
             pressStyle={{opacity: 0.7}}>
-            <YStack width={24} height={24} borderRadius={8} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+            <YStack width={24} height={24} borderRadius={8} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
               <Icon name="pin" size={12} color="$color9" />
             </YStack>
             <Text fontSize={11} fontWeight="500" color="$color9">
@@ -289,7 +289,7 @@ export function ChatScreen() {
             paddingHorizontal={16} paddingVertical={10}
             borderTopWidth={0.5} borderTopColor="$borderColor"
             alignItems="center" justifyContent="space-between"
-            backgroundColor="rgba(124, 82, 196, 0.04)">
+            backgroundColor={colors.primaryAlpha(0.04)}>
             <YStack onPress={() => {
               if (a.selectedIds.size === a.messages.length) {
                 a.setSelectedIds(new Set());
@@ -304,7 +304,7 @@ export function ChatScreen() {
             <XStack gap={12} alignItems="center">
               <Text fontSize={12} color="$color10">{a.selectedIds.size} selected</Text>
               <YStack paddingHorizontal={10} paddingVertical={5} borderRadius={8}
-                backgroundColor={a.selectedIds.size > 0 ? 'rgba(239, 68, 68, 0.1)' : 'transparent'}
+                backgroundColor={a.selectedIds.size > 0 ? colors.errorAlpha(0.1) : 'transparent'}
                 opacity={a.selectedIds.size === 0 ? 0.4 : 1}
                 onPress={a.deleteSelected}
                 disabled={a.selectedIds.size === 0}>
@@ -312,7 +312,7 @@ export function ChatScreen() {
                   color={a.selectedIds.size > 0 ? '#EF4444' : '$color10'}>Delete</Text>
               </YStack>
               <YStack paddingHorizontal={10} paddingVertical={5} borderRadius={8}
-                backgroundColor="rgba(124, 82, 196, 0.08)" onPress={a.toggleSelectMode}>
+                backgroundColor={colors.primaryAlpha(0.08)} onPress={a.toggleSelectMode}>
                 <Text fontSize={13} fontWeight="600" color="$color9">Done</Text>
               </YStack>
             </XStack>
@@ -325,7 +325,7 @@ export function ChatScreen() {
           <XStack
             paddingHorizontal={16} paddingVertical={8}
             gap={10} alignItems="center"
-            backgroundColor="rgba(124, 82, 196, 0.04)"
+            backgroundColor={colors.primaryAlpha(0.04)}
             borderTopWidth={0.5} borderTopColor="$borderColor">
             <YStack width={3} height={32} borderRadius={2} backgroundColor="$color9" />
             <YStack flex={1}>
@@ -338,7 +338,7 @@ export function ChatScreen() {
             </YStack>
             <YStack
               width={24} height={24} borderRadius={8}
-              backgroundColor="rgba(124, 82, 196, 0.06)"
+              backgroundColor={colors.primaryAlpha(0.06)}
               alignItems="center" justifyContent="center"
               onPress={() => a.setReplyTo(null)}
               pressStyle={{opacity: 0.6}}>
@@ -371,9 +371,9 @@ export function ChatScreen() {
             width={40}
             height={40}
             borderRadius={20}
-            backgroundColor="rgba(124, 82, 196, 0.15)"
+            backgroundColor={colors.primaryAlpha(0.15)}
             borderWidth={0.5}
-            borderColor="rgba(124, 82, 196, 0.25)"
+            borderColor={colors.primaryAlpha(0.25)}
             alignItems="center"
             justifyContent="center"
             shadowColor="$color9"
