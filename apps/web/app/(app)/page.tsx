@@ -560,6 +560,22 @@ export default function HomePage() {
         </div>
       )}
 
+      {apiStatus === 'online' && datasetStats && datasetStats.totalDatasets > 0 && modelStatus.loaded && (
+        <Card className="border-accent/25 bg-accent/[0.03]">
+          <CardContent className="py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Ready to train</p>
+              <p className="text-xs text-muted-foreground">
+                {datasetStats.totalDatasets} dataset{datasetStats.totalDatasets === 1 ? '' : 's'} available · {formatBytes(datasetStats.totalSize)}
+              </p>
+            </div>
+            <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => router.push('/training')}>
+              Start training
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
         <Link
           href="/chat"
