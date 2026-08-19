@@ -22,9 +22,17 @@ const POPULAR_KAGGLE = [
   { id: 'heliosbrahma/mental-health-chatbot-dataset', label: 'Mental Health Chat' },
 ]
 
+const POPULAR_HF = [
+  { id: 'HuggingFaceH4/tinyshakespeare', label: 'Tiny Shakespeare' },
+  { id: 'HuggingFaceH4/ultrachat_200k', label: 'UltraChat 200K' },
+  { id: 'HuggingFaceH4/cosmopedia', label: 'Cosmopedia' },
+  { id: 'HuggingFaceH4/smollm-corpus', label: 'SmolLM Corpus' },
+]
+
 export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
   const canAdvance = !!datasets.selectedDataset || (form.inputMode === 'text' && form.textInput.trim().length > 0)
   const [importingKaggle, setImportingKaggle] = useState<string | null>(null)
+  const [importingHF, setImportingHF] = useState<string | null>(null)
 
   const handleQuickKaggle = useCallback(async (datasetId: string) => {
     setImportingKaggle(datasetId)
@@ -40,6 +48,23 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
       addToast?.(`Failed to import ${datasetId}`, 'error')
     } finally {
       setImportingKaggle(null)
+    }
+  }, [addToast, datasets])
+
+  const handleQuickHF = useCallback(async (datasetId: string) => {
+    setImportingHF(datasetId)
+    try {
+      const result = await datasetController.importFromHuggingFace({
+        dataset_id: datasetId,
+        name: datasetId.split('/').pop() || datasetId,
+      })
+      addToast?.(`Imported ${datasetId}`, 'success')
+      await datasets.fetchDatasets()
+      datasets.setSelectedDataset(result.dataset_id)
+    } catch {
+      addToast?.(`Failed to import ${datasetId}`, 'error')
+    } finally {
+      setImportingHF(null)
     }
   }, [addToast, datasets])
 
@@ -78,6 +103,27 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
           </div>
           <p className="text-[10px] text-muted-foreground/70">
             One-click import popular NLP datasets. Requires Kaggle API credentials configured on the server.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Quick import from HuggingFace</div>
+          <div className="flex flex-wrap gap-1.5">
+            {POPULAR_HF.map(ds => (
+              <Button
+                key={ds.id}
+                size="sm"
+                variant="secondary"
+                className="h-7 text-[11px]"
+                disabled={importingHF === ds.id}
+                onClick={() => handleQuickHF(ds.id)}
+              >
+                {importingHF === ds.id ? 'Importing...' : ds.label}
+              </Button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground/70">
+            One-click import from HuggingFace Hub. No extra server setup required.
           </p>
         </div>
 
