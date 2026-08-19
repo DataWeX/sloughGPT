@@ -3454,7 +3454,7 @@ class Simulation:
             results.append(result)
 
             if self.verbose:
-                logger.info(
+                logger.debug(
                     f"tick={self.scene.tick} baby={baby.entity.id} "
                     f"energy={baby.energy:.1f} "
                     f"delta={net_delta:+.1f} "

@@ -7,11 +7,11 @@ This router just exposes manager methods as HTTP endpoints.
 
 import urllib.request
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from domains.training.tokenizer_manager import get_tokenizer_manager
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 
 class TokenizeRequest(BaseModel):
@@ -93,7 +93,7 @@ class TokenizerRouter:
         try:
             return success_response(data=mgr.decompose_token(req.text))
         except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise_error(str(e), "E_NOT_FOUND", status_code=404)
 
     async def analyze_corpus(self, req: AnalyzeRequest) -> dict:
         """Compute token frequency and compression stats on a corpus."""

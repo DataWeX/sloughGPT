@@ -644,7 +644,7 @@ class DatasetsRouter:
         safe_audit_log("dataset.data.append", resource=dataset_id, detail=f"rows={result}")
         return success_response(data={"status": "appended", "rows_added": result})
 
-    async def preview_dataset(self, dataset_id: str, limit: int = Query(10, ge=1, le=1000, description="Number of samples")) -> dict:
+    async def preview_dataset(self, dataset_id: str, limit: int = Query(10, ge=1, le=1000, description="Number of samples")):
         """Return the first N rows of a dataset for preview.
 
         Args:

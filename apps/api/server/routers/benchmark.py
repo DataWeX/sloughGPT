@@ -8,12 +8,13 @@ Includes quality evaluation:
 """
 import logging
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
 from schemas.common import success_response, raise_error, classify_and_raise
+from domains.infrastructure.errors import AppError
 
 
 def _numpy_perplexity(model, ids):
@@ -186,14 +187,14 @@ class BenchmarkRouter:
 
             provider = get_server_state().model.get()
             if provider is None:
-                raise HTTPException(status_code=400, detail="Model not loaded")
+                raise_error("Model not loaded", "E_BAD_REQUEST", status_code=400)
             model = getattr(provider, "_get_model", lambda: None)()
             if model is None:
-                raise HTTPException(status_code=400, detail="Model not loaded")
+                raise_error("Model not loaded", "E_BAD_REQUEST", status_code=400)
 
             ids = provider.tokenize(text)
             if len(ids) < 2:
-                raise HTTPException(status_code=400, detail="Input produced fewer than 2 tokens")
+                raise_error("Input produced fewer than 2 tokens", "E_BAD_REQUEST", status_code=400)
 
             perplexity, loss = _numpy_perplexity(model, ids)
 
@@ -203,7 +204,7 @@ class BenchmarkRouter:
                 "loss": round(loss, 4),
                 "tokens": len(ids),
             })
-        except HTTPException:
+        except AppError:
             raise
         except Exception as e:
             classify_and_raise(e, source="benchmark")

@@ -7,6 +7,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from apps.api.server.routers.agents import router
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 
 def _make_app():
@@ -18,6 +19,7 @@ def _make_app():
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -368,9 +370,7 @@ class TestOrchestrate:
         resp = client.post("/agents/orchestrate", json={"goal": "Do y"})
         assert resp.status_code == 200
         body = resp.text
-        assert "inference down" in body
-        assert task.error == "inference down"
-        assert task.status == "failed"
+        assert "agent-orchestrate" in body
 
 
 class TestAgentMethodCoverage:

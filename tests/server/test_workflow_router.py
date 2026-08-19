@@ -9,9 +9,11 @@ from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.workflow import router
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -186,7 +188,7 @@ class TestWorkflowTrigger:
 
         resp = client.post("/workflow/trigger/invalid")
         assert resp.status_code == 400
-        assert "Unknown action" in resp.json()["detail"]
+        assert "Unknown action" in resp.json()["error"]
 
     @patch(WF_TARGET)
     def test_trigger_foobar(self, mock_get_wf):
@@ -194,7 +196,7 @@ class TestWorkflowTrigger:
 
         resp = client.post("/workflow/trigger/foobar")
         assert resp.status_code == 400
-        assert "foobar" in resp.json()["detail"]
+        assert "foobar" in resp.json()["error"]
 
     @patch(WF_TARGET)
     def test_trigger_aggregate_error(self, mock_get_wf):

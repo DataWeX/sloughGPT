@@ -668,6 +668,43 @@ def export_to_sou(
     return output_path
 
 
+def export_model(config: ExportConfig, model: Any, tokenizer: Any) -> list:
+    """Export a model using the given config.
+
+    Dispatches to format-specific exporters and returns a list of
+    exported file paths.
+
+    Args:
+        config: ExportConfig with output_path, format, etc.
+        model: The model object to export.
+        tokenizer: The tokenizer object (used for format-specific exports).
+
+    Returns:
+        List of file paths that were created.
+    """
+    results = []
+    output_path = config.output_path
+    fmt = config.format
+
+    if fmt == "sou" or fmt == "all":
+        path = export_to_sou(model, output_path, tokenizer)
+        results.append(path)
+
+    if fmt == "gguf_q4_k_m" or fmt == "all":
+        path = export_to_gguf_q4_k_m(model, output_path, n_ctx=config.n_ctx)
+        results.append(path)
+
+    if fmt == "gguf_fp16" or fmt == "all":
+        path = export_to_gguf_fp16(model, output_path, n_ctx=config.n_ctx)
+        results.append(path)
+
+    if not results:
+        path = export_to_sou(model, output_path, tokenizer)
+        results.append(path)
+
+    return results
+
+
 def list_export_formats() -> Dict[str, str]:
     """List supported export formats with descriptions.
 

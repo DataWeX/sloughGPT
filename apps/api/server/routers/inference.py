@@ -1,7 +1,7 @@
 """
 Inference Router - Chat and text generation endpoints
 """
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from fastapi import APIRouter, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncIterator
@@ -11,6 +11,7 @@ import logging
 import threading
 
 from schemas.common import success_response, raise_error, classify_and_raise
+from domains.infrastructure.errors import AppError
 
 logger = logging.getLogger("slo.inference")
 
@@ -432,11 +433,11 @@ class InferenceRouter:
         import state as _gen_state
 
         if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            raise HTTPException(status_code=503, detail="Model still loading — please wait.")
+            raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
 
         provider = get_provider("default")
         if provider is None:
-            raise HTTPException(status_code=503, detail="No provider available")
+            raise_error("No provider available", "E_BAD_REQUEST", status_code=503)
 
         provider_messages = [{"role": "user", "content": req.prompt}]
         try:
@@ -501,10 +502,19 @@ class InferenceRouter:
         async def generate() -> AsyncIterator[str]:
             """generate."""
             from domains.models.provider import get_provider
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
             provider = get_provider("default")
             if provider is None:
                 yield sse_error("generate", "IDLE", "No provider available")
                 return
+
+            cancel_event = threading.Event()
+            _mgr = get_cancel_manager()
+            _op_id = _mgr.register(
+                OpType.INFERENCE, f"generate:{req.prompt[:40]}",
+                cancel_fn=lambda: cancel_event.set(),
+            )
+            _mgr.start(_op_id)
 
             provider_messages = [{"role": "user", "content": req.prompt}]
             start = datetime.datetime.now()
@@ -529,10 +539,13 @@ class InferenceRouter:
                 async for token in provider.chat_stream(
                     provider_messages,
                     max_tokens=req.max_new_tokens,
+                    cancel_event=cancel_event,
                     **gen_params,
                 ):
-                    if await request.is_disconnected():
+                    if cancel_event.is_set() or await request.is_disconnected():
+                        cancel_event.set()
                         logger.info("Client disconnected from generate stream", extra={"tag": "INF"})
+                        _mgr.finish(_op_id)
                         return
                     if token:
                         _token_gen_start = time.time()
@@ -551,12 +564,15 @@ class InferenceRouter:
                     elapsed_since_token = time.time() - _token_gen_start
                     if elapsed_since_token > _max_token_wait_s:
                         logger.warning("Generate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
+                        cancel_event.set()
+                        _mgr.finish(_op_id, "timeout")
                         yield sse_error("generate", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
                         return
                 if _batch:
                     yield sse_token("generate", "".join(_batch))
                     _batch = []
             except Exception as e:
+                _mgr.finish(_op_id, str(e))
                 classify_and_raise(e, source="generate_stream")
                 yield sse_error("generate", "STREAMING", err.user_message)
                 return
@@ -580,6 +596,7 @@ class InferenceRouter:
                 )
             except Exception as e:
                 logger.debug("Failed to capture conversation: %s", e)
+            _mgr.finish(_op_id)
             yield sse_token("generate", "", done=True, meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)})
 
         return StreamingResponse(generate(), media_type="text/event-stream")
@@ -696,11 +713,19 @@ class InferenceRouter:
         async def generate() -> AsyncIterator[str]:
             """generate."""
             logger.debug("chat_stream.generate() ENTERED")
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
             cancel_event = threading.Event()
             user_msg = _extract_user_message(req.messages)
             if not user_msg:
                 yield sse_error("chat", "IDLE", "No user message")
                 return
+
+            _mgr = get_cancel_manager()
+            _op_id = _mgr.register(
+                OpType.INFERENCE, f"chat:{user_msg[:40]}",
+                cancel_fn=lambda: cancel_event.set(),
+            )
+            _mgr.start(_op_id)
 
             start_time = datetime.datetime.now()
 
@@ -937,6 +962,7 @@ class InferenceRouter:
                                 if await request.is_disconnected():
                                     cancel_event.set()
                                     logger.info("Client disconnected from chat stream (request)", extra={"tag": "INF", "context": {"session_id": session_id}})
+                                    _mgr.finish(_op_id)
                                     return
                                 if token:
                                     _token_gen_start = time.time()
@@ -955,6 +981,7 @@ class InferenceRouter:
                                 if elapsed_since_token > _max_token_wait_s:
                                     logger.warning("Token generation stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
                                     cancel_event.set()
+                                    _mgr.finish(_op_id, "timeout")
                                     yield sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
                                     return
                             if _batch:
@@ -963,9 +990,11 @@ class InferenceRouter:
                             yield sse_token("chat", "", done=True)
                         except GeneratorExit:
                             cancel_event.set()
+                            _mgr.finish(_op_id)
                             logger.info("Client disconnected from chat stream", extra={"tag": "INF", "context": {"session_id": session_id}})
                             return
                     except Exception as e:
+                        _mgr.finish(_op_id, str(e))
                         classify_and_raise(e, source="chat_stream_provider")
                         logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e), "error_code": err.code}})
                         yield sse_error("chat", err.code, err.user_message)
@@ -1100,8 +1129,10 @@ class InferenceRouter:
                     logger.debug("Entity extraction failed: %s", e)
 
                 logger.info("Chat stream: generated %d chars", len(full_response), extra={"tag": "INF", "context": {"char_count": len(full_response), "session_id": session_id}})
+                _mgr.finish(_op_id)
 
             except Exception as e:
+                _mgr.finish(_op_id, str(e))
                 classify_and_raise(e, source="chat_stream_outer")
                 yield sse_error("chat", err.code, err.user_message)
                 yield sse_token("chat", "", done=True)
@@ -1151,7 +1182,7 @@ class InferenceRouter:
         import state as _chat_state
 
         if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            raise HTTPException(status_code=503, detail="Model still loading — please wait.")
+            raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
 
         try:
             from domains.models.provider import get_provider
@@ -1160,15 +1191,15 @@ class InferenceRouter:
             if _server is not None:
                 _cb = getattr(_server, '_circuit_breaker', None)
                 if _cb is not None and _cb.state.value == "open":
-                    raise HTTPException(status_code=503, detail="Model is degraded — circuit breaker open. Please wait or reload the model.")
-        except HTTPException:
+                    raise_error("Model is degraded — circuit breaker open. Please wait or reload the model.", "E_BAD_REQUEST", status_code=503)
+        except AppError:
             raise
         except Exception as e:
             logger.debug("Circuit breaker check failed: %s", e)
 
         user_msg = _extract_user_message(req.messages)
         if not user_msg:
-            raise HTTPException(status_code=400, detail="No user message")
+            raise_error("No user message", "E_BAD_REQUEST", status_code=400)
 
         system_prompt = req.system_prompt or ""
 
@@ -1271,12 +1302,12 @@ class InferenceRouter:
     ) -> dict:
         """send_voice_message."""
         if not file.content_type or not file.content_type.startswith("audio/"):
-            raise HTTPException(status_code=400, detail="Only audio files accepted")
+            raise_error("Only audio files accepted", "E_BAD_REQUEST", status_code=400)
 
         msg_id = str(uuid.uuid4())
         session_msg_dir = (self._VOICE_DIR / session_id).resolve()
         if not str(session_msg_dir).startswith(str(self._VOICE_DIR.resolve())):
-            raise HTTPException(status_code=400, detail="Invalid session ID")
+            raise_error("Invalid session ID", "E_BAD_REQUEST", status_code=400)
         session_msg_dir.mkdir(parents=True, exist_ok=True)
         ext = Path(file.filename or "audio.m4a").suffix or ".m4a"
         audio_path = session_msg_dir / f"{msg_id}{ext}"
@@ -1306,7 +1337,7 @@ class InferenceRouter:
         base = self._VOICE_DIR.resolve()
         audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
         if not str(audio_path).startswith(str(base)):
-            raise HTTPException(status_code=403, detail="Invalid path")
+            raise_error("Invalid path", "E_AUTH_FORBIDDEN", status_code=403)
         if not audio_path.exists():
             for ext in [".m4a", ".wav", ".mp3", ".ogg", ".webm"]:
                 candidate = audio_path.parent / f"{audio_path.stem}{ext}"
@@ -1314,7 +1345,7 @@ class InferenceRouter:
                     audio_path = candidate
                     break
             else:
-                raise HTTPException(status_code=404, detail="Audio not found")
+                raise_error("Audio not found", "E_NOT_FOUND", status_code=404)
         return FileResponse(str(audio_path), media_type="audio/m4a")
 
     async def list_sessions(self, archived: Optional[bool] = None) -> dict:
@@ -1364,7 +1395,7 @@ class InferenceRouter:
         """get_session."""
         data = self._get_session(session_id)
         if not data.get("messages"):
-            raise HTTPException(status_code=404, detail="Session not found")
+            raise_error("Session not found", "E_NOT_FOUND", status_code=404)
         return success_response(data=data)
 
     async def delete_session(self, session_id: str) -> dict:
@@ -1375,7 +1406,7 @@ class InferenceRouter:
             self._session_deleted.add(session_id)
             self._clear_session_kv(session_id)
             return success_response(data={"session_id": session_id}, message="deleted")
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise_error("Session not found", "E_NOT_FOUND", status_code=404)
 
     def _clear_session_kv(self, session_id: str):
         """Drop cross-turn KV state for a deleted session.
@@ -1432,6 +1463,80 @@ class InferenceRouter:
                 result[name] = {"error": "provider not found"}
         return success_response(data=result)
 
+    # ── Operations (CancelManager) ──
+
+    async def list_operations(self, type: Optional[str] = None) -> dict:
+        """List all tracked operations (active + recently finished).
+
+        Args:
+            type: Optional filter by operation type (training, inference, download, etc.)
+
+        Returns:
+            Dict with 'operations' list and 'counts' by status.
+        """
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+
+        mgr = get_cancel_manager()
+        op_type = OpType(type) if type else None
+        all_ops = mgr.list_all(op_type=op_type)
+        return success_response(data={
+            "operations": [op.to_dict() for op in all_ops],
+            "counts": mgr.count(op_type=op_type),
+        })
+
+    async def cancel_operation(self, op_id: str) -> dict:
+        """Cancel a single operation by ID.
+
+        Args:
+            op_id: The operation ID to cancel.
+
+        Returns:
+            Dict with cancel result.
+        """
+        from domains.infrastructure.cancel_manager import get_cancel_manager
+
+        mgr = get_cancel_manager()
+        found = mgr.get(op_id)
+        if not found:
+            raise_error("Operation not found", "E_NOT_FOUND", status_code=404)
+        if mgr.cancel(op_id):
+            return success_response(data=found.to_dict(), message="cancelled")
+        raise_error(
+            f"Cannot cancel operation in '{found.status.value}' state",
+            "E_CANCEL_FAILED",
+            status_code=409,
+        )
+
+    async def cancel_all_operations(self, type: Optional[str] = None) -> dict:
+        """Cancel all active operations, optionally filtered by type.
+
+        Args:
+            type: Optional filter by operation type.
+
+        Returns:
+            Dict with list of cancelled operation IDs.
+        """
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+
+        mgr = get_cancel_manager()
+        op_type = OpType(type) if type else None
+        cancelled = mgr.cancel_all(op_type=op_type)
+        return success_response(data={"cancelled": cancelled, "count": len(cancelled)})
+
+    async def purge_operations(self, max_age_s: float = 3600.0) -> dict:
+        """Remove finished operations older than max_age_s.
+
+        Args:
+            max_age_s: Max age in seconds. Default 1 hour.
+
+        Returns:
+            Dict with count of purged operations.
+        """
+        from domains.infrastructure.cancel_manager import get_cancel_manager
+
+        removed = get_cancel_manager().purge(max_age_s=max_age_s)
+        return success_response(data={"purged": removed})
+
     # ── Route registration ──
 
     def _register_routes(self):
@@ -1460,6 +1565,10 @@ class InferenceRouter:
         r.add_api_route("/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/chat/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/providers", self.list_model_providers, methods=["GET"])
+        r.add_api_route("/operations", self.list_operations, methods=["GET"])
+        r.add_api_route("/cancel/{op_id}", self.cancel_operation, methods=["POST"])
+        r.add_api_route("/cancel-all", self.cancel_all_operations, methods=["POST"])
+        r.add_api_route("/operations/purge", self.purge_operations, methods=["POST"])
 
 
 _instance = InferenceRouter()

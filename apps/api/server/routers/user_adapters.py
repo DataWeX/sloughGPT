@@ -1,11 +1,11 @@
 """
 User Adapters Router - Per-user LoRA adapter management
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from typing import Optional
 
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled, audit_user
 
 
@@ -60,7 +60,7 @@ class UserAdaptersRouter:
             stats = store.get_stats()
             return success_response(data={"adapters": adapters, "stats": stats})
         except ImportError:
-            raise HTTPException(status_code=503, detail="Per-user LoRA not available")
+            raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
 
     async def get_adapter(self, user_id: str) -> dict:
         """Retrieve a specific user's LoRA adapter metadata.
@@ -83,7 +83,7 @@ class UserAdaptersRouter:
                 return success_response(data={"user_id": user_id, "exists": False})
             return success_response(data={"user_id": user_id, "exists": True, "feedback_count": adapter.feedback_count})
         except ImportError:
-            raise HTTPException(status_code=503, detail="Not available")
+            raise_error("Not available", "E_BAD_REQUEST", status_code=503)
 
     async def update_adapter(self, user_id: str, req: AdapterUpdateRequest) -> dict:
         """Update a user's LoRA adapter with new feedback rating.
@@ -109,7 +109,7 @@ class UserAdaptersRouter:
             safe_audit_log("adapter.update", resource=user_id, detail=f"rating={req.rating}")
             return success_response(data={"status": "updated", "user_id": user_id})
         except ImportError:
-            raise HTTPException(status_code=503, detail="Not available")
+            raise_error("Not available", "E_BAD_REQUEST", status_code=503)
 
     async def reset_adapter(self, user_id: str) -> dict:
         """Reset a user's LoRA adapter to its initial zero-weight state.
@@ -137,7 +137,7 @@ class UserAdaptersRouter:
             safe_audit_log("adapter.reset", resource=user_id)
             return success_response(data={"status": "reset", "user_id": user_id})
         except ImportError:
-            raise HTTPException(status_code=503, detail="Not available")
+            raise_error("Not available", "E_BAD_REQUEST", status_code=503)
 
     async def merge_adapters(self) -> dict:
         """Merge all per-user LoRA adapters into a single combined adapter.
@@ -162,7 +162,7 @@ class UserAdaptersRouter:
             safe_audit_log("adapter.merge", resource="all")
             return success_response(data={"status": "merged"})
         except ImportError:
-            raise HTTPException(status_code=503, detail="Not available")
+            raise_error("Not available", "E_BAD_REQUEST", status_code=503)
 
     async def aggregate_best(self, req: AggregateBestRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Aggregate top-k best user adapters with auto-evaluation."""
@@ -192,7 +192,7 @@ class UserAdaptersRouter:
                 })
             return success_response(data={"status": "aggregated", "count": result.get("user_count", 0)})
         except ImportError:
-            raise HTTPException(status_code=503, detail="Per-user LoRA not available")
+            raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
 
     async def get_quality(self, min_feedback_count: int = 3, max_age_days: Optional[int] = None) -> dict:
         """Retrieve quality metrics report for all eligible adapters.
@@ -223,7 +223,7 @@ class UserAdaptersRouter:
                 )
             )
         except ImportError:
-            raise HTTPException(status_code=503, detail="Not available")
+            raise_error("Not available", "E_BAD_REQUEST", status_code=503)
 
     async def delete_user_adapter(self, user_id: str, req: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete a user's LoRA adapter."""
@@ -234,7 +234,7 @@ class UserAdaptersRouter:
             safe_audit_log("adapter.delete", resource=user_id)
             return success_response(data={"status": "deleted", "user_id": user_id})
         except ImportError:
-            raise HTTPException(status_code=503, detail="Per-user LoRA not available")
+            raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
 
     async def prune_low_quality_adapters(self, request: PruneAdaptersRequest, req: Request) -> dict:
         """Remove adapters with too few feedback or too old."""
@@ -252,7 +252,7 @@ class UserAdaptersRouter:
                 "deleted_users": deleted,
             })
         except ImportError:
-            raise HTTPException(status_code=503, detail="Per-user LoRA not available")
+            raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
 
 
 router = UserAdaptersRouter().router

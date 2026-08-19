@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 import httpx
 
 from schemas.common import success_response, raise_error, classify_and_raise
+from domains.infrastructure.errors import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -846,10 +847,9 @@ class MobileRouter:
         """
         import time
         from pathlib import Path
-        from fastapi import HTTPException
 
         if len(body.pairs) < 5:
-            raise HTTPException(400, "Need at least 5 training pairs")
+            raise_error("Need at least 5 training pairs", "E_BAD_REQUEST", status_code=400)
 
         t0 = int(time.time() * 1000)
 
@@ -891,7 +891,7 @@ class MobileRouter:
         train_script = repo_root / "scripts" / "hf_train.py"
 
         if not venv_python.exists():
-            raise HTTPException(500, "Training environment not found (.venv missing)")
+            raise_error("Training environment not found (.venv missing)", "E_INFRA_STARTUP", status_code=500)
 
         try:
             proc = await asyncio.to_thread(
@@ -916,12 +916,12 @@ class MobileRouter:
 
             if proc.returncode != 0:
                 logger.error("Training subprocess failed: %s", proc.stderr[-500:], extra={"tag": "REQ"})
-                raise HTTPException(500, f"Training failed: {proc.stderr[-200:]}")
+                raise_error(f"Training failed: {proc.stderr[-200:]}", "E_INFRA_STARTUP", status_code=500)
 
             result = json.loads(proc.stdout.strip().split("\n")[-1])
 
             if not result.get("success"):
-                raise HTTPException(500, f"Training failed: {result.get('error', 'unknown')}")
+                raise_error(f"Training failed: {result.get('error', 'unknown')}", "E_INFRA_STARTUP", status_code=500)
 
             # Mark pairs as used for training
             store.mark_used(pair_ids)
@@ -938,16 +938,16 @@ class MobileRouter:
             )
 
         except subprocess.TimeoutExpired:
-            raise HTTPException(504, "Training timed out (300s limit)")
+            raise_error("Training timed out (300s limit)", "E_TIMEOUT", status_code=504)
         except json.JSONDecodeError as e:
             logger.error("Failed to parse training output: %s", e, extra={"tag": "REQ"})
-            raise HTTPException(500, "Training produced invalid output")
-        except HTTPException:
+            raise_error("Training produced invalid output", "E_INFRA_STARTUP", status_code=500)
+        except AppError:
             raise
         except Exception as e:
             classify_and_raise(e, source="mobile_train")
             logger.error("Mobile training failed: %s", e, extra={"tag": "REQ"})
-            raise HTTPException(500, f"Training failed: {e}")
+            raise_error(f"Training failed: {e}", "E_INFRA_STARTUP", status_code=500)
 
     async def get_training_stats(self) -> dict:
         """
@@ -1149,8 +1149,8 @@ class MobileRouter:
         store = get_training_store()
         updated = store.update_quality(pair_id, body.quality)
         if not updated:
-            from fastapi import HTTPException
-            raise HTTPException(404, "Pair not found")
+
+            raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
         return {"status": "updated", "pair_id": pair_id, "quality": body.quality}
 
     async def delete_pair(self, pair_id: str) -> dict:
@@ -1171,8 +1171,8 @@ class MobileRouter:
         store = get_training_store()
         deleted = store.delete_pair(pair_id)
         if not deleted:
-            from fastapi import HTTPException
-            raise HTTPException(404, "Pair not found")
+
+            raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
         return {"status": "deleted", "pair_id": pair_id}
 
     async def delete_synced_pairs(self) -> dict:

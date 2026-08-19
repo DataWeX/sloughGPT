@@ -22,11 +22,11 @@ This router just exposes manager methods as HTTP endpoints:
 - ``POST /token-tree/compare`` — diff two saved trees (overlap + examples).
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from domains.training.token_tree_manager import get_token_tree_manager
-from schemas.common import success_response
+from schemas.common import raise_error, success_response
 
 
 class TrainTreeRequest(BaseModel):
@@ -164,7 +164,7 @@ class TokenTreeRouter:
         try:
             return success_response(data=get_token_tree_manager().save(req.name))
         except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            raise_error(str(e), "E_VAL_REQUEST", status_code=422)
 
     def load_tree(self, req: TreeNameRequest) -> dict:
         """Load a saved tree and make it the current tree.
@@ -182,9 +182,9 @@ class TokenTreeRouter:
         try:
             return success_response(data=get_token_tree_manager().load(req.name))
         except FileNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise_error(str(e), "E_NOT_FOUND", status_code=404)
         except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            raise_error(str(e), "E_VAL_REQUEST", status_code=422)
 
     def delete_saved_tree(self, name: str) -> dict:
         """Delete a saved tree's sidecar files.
@@ -202,9 +202,9 @@ class TokenTreeRouter:
         try:
             deleted = get_token_tree_manager().delete_saved(name)
         except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            raise_error(str(e), "E_VAL_REQUEST", status_code=422)
         if not deleted:
-            raise HTTPException(status_code=404, detail=f"No saved token tree named {name!r}")
+            raise_error(f"No saved token tree named {name!r}", "E_NOT_FOUND", status_code=404)
         return success_response(data={"name": name, "deleted": True})
 
     def train_tree(self, req: TrainTreeRequest) -> dict:
@@ -253,7 +253,7 @@ class TokenTreeRouter:
         try:
             data = get_token_tree_manager().similar(req.token, top_k=req.top_k)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=f"Token not in vocabulary: {e}")
+            raise_error(f"Token not in vocabulary: {e}", "E_NOT_FOUND", status_code=404)
         return success_response(data=data)
 
     def embedding(self, req: EmbeddingRequest) -> dict:
@@ -274,9 +274,9 @@ class TokenTreeRouter:
                 req.token, top_k=req.top_k
             )
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=f"Token not in vocabulary: {e}")
+            raise_error(f"Token not in vocabulary: {e}", "E_NOT_FOUND", status_code=404)
         except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            raise_error(str(e), "E_VAL_REQUEST", status_code=422)
         return success_response(data=data)
 
     def encode(self, req: TokenTextRequest) -> dict:
@@ -328,7 +328,7 @@ class TokenTreeRouter:
         try:
             data = get_token_tree_manager().lineage(req.token)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=f"Token not in vocabulary: {e}")
+            raise_error(f"Token not in vocabulary: {e}", "E_NOT_FOUND", status_code=404)
         return success_response(data=data)
 
     def matrix(
@@ -367,9 +367,9 @@ class TokenTreeRouter:
         try:
             data = get_token_tree_manager().compare(req.a, req.b, top_n=req.top_k)
         except FileNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise_error(str(e), "E_NOT_FOUND", status_code=404)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise_error(str(e), "E_BAD_REQUEST", status_code=400)
         return success_response(data=data)
 
 

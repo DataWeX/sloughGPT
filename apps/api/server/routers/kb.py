@@ -8,7 +8,7 @@ import json
 import logging
 import re
 import asyncio
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import time
@@ -16,6 +16,7 @@ import time
 logger = logging.getLogger(__name__)
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from domains.infrastructure.errors import AppError
 
 import urllib.parse
 
@@ -291,7 +292,7 @@ class KBRouter:
                 target = item
                 break
         if not target:
-            raise HTTPException(status_code=404, detail="Item not found")
+            raise_error("Item not found", "E_NOT_FOUND", status_code=404)
 
         # Build updated fact
         from domains.learner.knowledge import KnowledgeFact
@@ -385,11 +386,11 @@ class KBRouter:
         try:
             parsed = urllib.parse.urlparse(req.url)
             if parsed.scheme.lower() in self._BLOCKED_SCHEMES:
-                raise HTTPException(status_code=400, detail=f"URL scheme '{parsed.scheme}' not allowed")
+                raise_error(f"URL scheme '{parsed.scheme}' not allowed", "E_BAD_REQUEST", status_code=400)
             if parsed.hostname and parsed.hostname in self._ALLOWED_HOSTS:
-                raise HTTPException(status_code=400, detail="Internal host URLs not allowed")
+                raise_error("Internal host URLs not allowed", "E_BAD_REQUEST", status_code=400)
             if not parsed.scheme or parsed.scheme.lower() not in ("http", "https"):
-                raise HTTPException(status_code=400, detail="Only HTTP/HTTPS URLs allowed")
+                raise_error("Only HTTP/HTTPS URLs allowed", "E_BAD_REQUEST", status_code=400)
             from domains.learner.knowledge import get_knowledge_ingestor
             ingestor = get_knowledge_ingestor()
             result = ingestor.ingest_url(req.url)
@@ -426,7 +427,7 @@ class KBRouter:
                 "rejected": result.get("rejected", False),
                 "reason": result.get("reason"),
             })
-        except HTTPException:
+        except AppError:
             raise
         except Exception as e:
             classify_and_raise(e, source="kb_ingest")
@@ -452,7 +453,7 @@ class KBRouter:
         if memory.delete_by_id(item_id):
             safe_audit_log("knowledge.delete", resource=item_id)
             return success_response(data={"status": "deleted"})
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise_error("Item not found", "E_NOT_FOUND", status_code=404)
 
     def train_knowledge_adapter_route(self) -> dict:
         """Train a LoRA adapter on all knowledge facts to bake them into model weights."""
@@ -488,7 +489,7 @@ class KBRouter:
                 target = item
                 break
         if not target:
-            raise HTTPException(status_code=404, detail="Item not found")
+            raise_error("Item not found", "E_NOT_FOUND", status_code=404)
         results = memory.search(target.get("content", ""), top_k=top_k + 1)
         related = [r for r in results if r.get("id") != item_id][:top_k]
         return success_response(data={"items": [self._fact_from_entry(r) for r in related], "count": len(related)})
@@ -515,9 +516,9 @@ class KBRouter:
         Each chunk is stored as a separate knowledge fact.
         """
         if chunk_size <= overlap:
-            raise HTTPException(status_code=400, detail="chunk_size must exceed overlap")
+            raise_error("chunk_size must exceed overlap", "E_BAD_REQUEST", status_code=400)
         if chunk_size < 100 or chunk_size > 10000:
-            raise HTTPException(status_code=400, detail="chunk_size must be 100–10000")
+            raise_error("chunk_size must be 100–10000", "E_BAD_REQUEST", status_code=400)
 
         raw = await file.read()
         try:
@@ -536,7 +537,7 @@ class KBRouter:
                 else:
                     raise ValueError("JSON must be an array of strings or a dict of strings")
             except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Invalid JSON file: {e}")
+                raise_error(f"Invalid JSON file: {e}", "E_BAD_REQUEST", status_code=400)
         else:
             chunks = self._chunk_text(text, chunk_size, overlap)
 

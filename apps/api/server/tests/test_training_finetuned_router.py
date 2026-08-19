@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for the /training/finetuned-models endpoints (list, load, delete).
 
@@ -15,6 +16,7 @@ from fastapi import FastAPI
 from training import router as training_router
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(training_router)
 client = TestClient(app)
 

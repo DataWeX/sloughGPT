@@ -5,8 +5,8 @@ Previously used an in-memory dict that lost data on restart and was disconnected
 from the actual model serving layer. Now delegates to get_model_registry() so all
 registry operations reflect the real state of loaded models.
 """
-from fastapi import APIRouter, HTTPException
-from schemas.common import success_response
+from fastapi import APIRouter
+from schemas.common import raise_error, success_response
 
 
 class RegistryRouter:
@@ -38,7 +38,7 @@ class RegistryRouter:
         models = reg.list_models()
         found = next((m for m in models if m.get("model_id") == model_id), None)
         if not found:
-            raise HTTPException(status_code=404, detail="Model not found")
+            raise_error("Model not found", "E_NOT_FOUND", status_code=404)
         return success_response(data=found)
 
     async def get_best_model(self) -> dict:

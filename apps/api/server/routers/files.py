@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Optional
 import re
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, Form, Query
 from pydantic import BaseModel
 
-from schemas.common import success_response
+from schemas.common import raise_error, success_response
 
 logger = logging.getLogger("slo.routers.files")
 
@@ -167,11 +167,11 @@ class FilesRouter:
     ) -> dict:
         """Upload a file and save it to the server."""
         if not file.filename:
-            raise HTTPException(status_code=400, detail="No filename provided")
+            raise_error("No filename provided", "E_BAD_REQUEST", status_code=400)
 
         ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
         if not ext:
-            raise HTTPException(status_code=400, detail="File must have an extension")
+            raise_error("File must have an extension", "E_BAD_REQUEST", status_code=400)
 
         contents = await file.read()
         fid = self._file_id(file.filename)
@@ -251,11 +251,11 @@ class FilesRouter:
         meta = self._load_metadata()
         m = meta.get(file_id)
         if not m:
-            raise HTTPException(status_code=404, detail="File not found")
+            raise_error("File not found", "E_NOT_FOUND", status_code=404)
 
         file_path = self.UPLOADS_DIR / m["filename"]
         if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found on disk")
+            raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
 
         content = file_path.read_bytes()
         text, pages = self._extract_text(content, m.get("extension", ""))
@@ -282,7 +282,7 @@ class FilesRouter:
         meta = self._load_metadata()
         m = meta.pop(file_id, None)
         if not m:
-            raise HTTPException(status_code=404, detail="File not found")
+            raise_error("File not found", "E_NOT_FOUND", status_code=404)
 
         file_path = self.UPLOADS_DIR / m["filename"]
         if file_path.exists():
@@ -295,11 +295,11 @@ class FilesRouter:
         meta = self._load_metadata()
         m = meta.get(file_id)
         if not m:
-            raise HTTPException(status_code=404, detail="File not found")
+            raise_error("File not found", "E_NOT_FOUND", status_code=404)
 
         file_path = self.UPLOADS_DIR / m["filename"]
         if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found on disk")
+            raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
 
         content = file_path.read_bytes()
         text, pages = self._extract_text(content, m.get("extension", ""))
@@ -330,7 +330,7 @@ class FilesRouter:
                 facts_stored=stored,
             )
         except ImportError:
-            raise HTTPException(status_code=501, detail="Knowledge base not available")
+            raise_error("Knowledge base not available", "E_INFRA_STARTUP", status_code=501)
 
     # ── Helpers ──
 

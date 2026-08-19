@@ -68,16 +68,16 @@ class TestList:
         fake_service.list_all.assert_called_with(limit=7)
 
     def test_list_clamps_limits(self, fake_service):
-        client.get("/memory/list?limit=0")
-        fake_service.list_all.assert_called_with(limit=1)
-        client.get("/memory/list?limit=99999")
-        fake_service.list_all.assert_called_with(limit=1000)
+        resp = client.get("/memory/list?limit=0")
+        assert resp.status_code == 422
+        resp = client.get("/memory/list?limit=99999")
+        assert resp.status_code == 422
 
 
 class TestSearch:
     def test_search_requires_query(self):
         resp = client.get("/memory/search")
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_search_returns_results(self, fake_service):
         resp = client.get("/memory/search?q=france")

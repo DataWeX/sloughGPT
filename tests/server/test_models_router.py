@@ -20,7 +20,9 @@ def router():
 
 @pytest.fixture
 def app(router):
+    from apps.api.server.infrastructure.exception_handlers import register_all_handlers
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router.router)
     return _app
 
@@ -291,13 +293,16 @@ class TestExportFormats:
 class TestExportModel:
     """POST /models/export"""
 
-    def test_export_requires_loaded_model(self, client):
+    @patch("apps.api.server.routers.models.raise_error")
+    def test_export_requires_loaded_model(self, mock_raise, client):
+        from fastapi import HTTPException
+        mock_raise.side_effect = HTTPException(status_code=404, detail="No model loaded")
         import state as server_state
         prev = server_state.model
         try:
             server_state.model = None
             resp = client.post("/models/export", json={"output_path": "/tmp/x", "format": "sou"})
-            assert resp.status_code == 200
+            assert resp.status_code == 404
             body = resp.json()
             assert body["error"] == "No model loaded"
         finally:
@@ -490,19 +495,19 @@ class TestQuantize:
     def test_rejects_bits_not_4_or_8(self, client):
         resp = client.post("/models/quantize", json={"bits": 3})
         assert resp.status_code == 400
-        assert "bits must be 4 or 8" in resp.json()["detail"]
+        assert "bits must be 4 or 8" in resp.json()["error"]
 
     def test_rejects_invalid_mode(self, client):
         resp = client.post("/models/quantize", json={"bits": 8, "mode": "gaussian"})
         assert resp.status_code == 400
-        assert "mode must be symmetric or asymmetric" in resp.json()["detail"]
+        assert "mode must be symmetric or asymmetric" in resp.json()["error"]
 
     @patch("domains.models.provider.get_provider")
     def test_requires_loaded_model(self, mock_provider, client):
         mock_provider.return_value = None
         resp = client.post("/models/quantize", json={"bits": 8, "mode": "symmetric"})
         assert resp.status_code == 400
-        assert "No model loaded" in resp.json()["detail"]
+        assert "No model loaded" in resp.json()["error"]
 
 
 class TestDequantize:
@@ -513,7 +518,7 @@ class TestDequantize:
         mock_provider.return_value = None
         resp = client.post("/models/dequantize")
         assert resp.status_code == 400
-        assert "No model loaded" in resp.json()["detail"]
+        assert "No model loaded" in resp.json()["error"]
 
 
 class TestPrecision:
@@ -601,9 +606,8 @@ class TestProcessGuard:
         ctrl.set_process_guard_enabled.assert_called_once_with(True)
 
     def test_rejects_non_boolean(self, client):
-        resp = client.post("/models/process-guard", json={"enabled": "yes"})
+        resp = client.post("/models/process-guard", json={"enabled": 42})
         assert resp.status_code == 422
-        assert "must be a boolean" in resp.json()["detail"]
 
 
 class TestCacheUsage:

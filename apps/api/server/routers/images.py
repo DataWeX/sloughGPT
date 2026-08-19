@@ -6,10 +6,10 @@ import logging
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
-from schemas.common import success_response, classify_and_raise
+from schemas.common import raise_error, success_response, classify_and_raise
 
 logger = logging.getLogger("slo.routers.images")
 
@@ -67,7 +67,7 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required for image generation")
+            raise_error("Pillow library required for image generation", "E_INFRA_STARTUP", status_code=500)
 
         prompt_lower = prompt.lower()
         colors = []
@@ -124,7 +124,7 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw, ImageFont
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required")
+            raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
         img = Image.new("RGB", (width, height), color="#f0f0f0")
         draw = ImageDraw.Draw(img)
@@ -153,7 +153,7 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required")
+            raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
         img = Image.new("RGBA", (width, height), color=(255, 255, 255, 0))
         draw = ImageDraw.Draw(img)
@@ -186,7 +186,7 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required")
+            raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
         img = Image.new("RGB", (width, height), color="#fdfbf7")
         draw = ImageDraw.Draw(img)
@@ -217,7 +217,7 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw, ImageFilter
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required")
+            raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
         img = Image.new("RGB", (width, height), color="#1a1a2e")
         draw = ImageDraw.Draw(img)
@@ -317,7 +317,7 @@ class ImagesRouter:
         except Exception as e:
             classify_and_raise(e, source="images_generate")
             logger.error(f"Image generation failed: {e}", extra={"tag": "MODEL"})
-            raise HTTPException(status_code=500, detail=f"Failed to generate image: {e}")
+            raise_error(f"Failed to generate image: {e}", "E_INFRA_STARTUP", status_code=500)
 
     async def list_gallery(self) -> dict:
         """List all generated images in the gallery."""

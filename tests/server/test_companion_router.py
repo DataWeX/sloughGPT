@@ -8,8 +8,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.companion import router
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -267,9 +269,9 @@ class TestChat:
 
         with patch("domains.models.provider.get_provider", side_effect=Exception("model crash")):
             resp = client.post("/companion/chat", json={"message": "Hello"})
-            assert resp.status_code == 200
+            assert resp.status_code == 500
             data = resp.json()
-            assert "Error" in data["response"] or "error" in data["response"].lower()
+            assert "error" in data
 
 
 class TestListPresets:

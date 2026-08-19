@@ -1225,8 +1225,8 @@ class TestDownloadHfModelEdges:
 
     def test_download_error_marks_failed(self, tmp_path, monkeypatch):
         import domains.infrastructure.hf_hub as hub_mod
-        from downcraft import state as state_mod
-        from downcraft.downloader import DownloadError
+        from downcraft.download import state as state_mod
+        from downcraft.download.http import DownloadError
 
         model_id = "org/model"
         hf_home = str(tmp_path / "hub")
@@ -1276,7 +1276,7 @@ class TestMakeHfChunkCb:
 
     def test_uses_state_total_when_available(self, monkeypatch):
         import domains.infrastructure.hf_hub as hub_mod
-        from downcraft.state import FileProgress, ModelState
+        from downcraft.download.state import FileProgress, ModelState
 
         monkeypatch.setattr(hub_mod.time, "time", lambda: 100.0)
 
@@ -1623,7 +1623,7 @@ class TestVerifyModel:
 class TestListMissingFilesWithSnapshot:
     def test_reports_missing_and_bad_checksums(self, tmp_path, monkeypatch):
         import domains.infrastructure.hf_hub as hub_mod
-        from downcraft.verify import _sha256_of
+        from downcraft.download.verify import _sha256_of
 
         model_id = "org/model"
         hf_home = str(tmp_path / "hub")

@@ -51,6 +51,7 @@
     "recharts": "^2.5.0",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
+    "v86": "^0.5.432",
     "zod": "^4.4.3",
     "zustand": "^4.3.0"
   },

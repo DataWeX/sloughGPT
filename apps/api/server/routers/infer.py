@@ -12,13 +12,14 @@ Single language-agnostic entrypoint for all inference operations:
 
 Thin adapter: delegates to provider/domain logic, no business logic here.
 """
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncIterator, AsyncGenerator
 import datetime
 import logging
 from schemas.common import success_response, raise_error, classify_and_raise
+from domains.infrastructure.errors import AppError
 
 logger = logging.getLogger("slo.infer")
 
@@ -156,11 +157,11 @@ class InferRouter:
         from domains.models.provider import get_provider
 
         if self._get_model() is None:
-            raise HTTPException(status_code=503, detail="Model still loading — please wait.")
+            raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
 
         provider = get_provider("default")
         if provider is None:
-            raise HTTPException(status_code=503, detail="No provider available")
+            raise_error("No provider available", "E_BAD_REQUEST", status_code=503)
 
         provider_messages = [{"role": "user", "content": req.prompt}]
         start = datetime.datetime.now()
@@ -184,7 +185,7 @@ class InferRouter:
             model = self._get_model()
             model_name = req.model or (getattr(model, 'model_id', None) or type(model).__name__ if model else 'unknown')
             return InferResponse(text=result, model=model_name, tokens_generated=tokens, elapsed_ms=round(elapsed_ms, 1))
-        except HTTPException:
+        except AppError:
             raise
         except Exception as e:
             classify_and_raise(e, source="infer")
@@ -274,7 +275,7 @@ class InferRouter:
             model_name = req.model or "ngram-tfidf"
             return EmbedResponse(embedding=vec, dimensions=len(vec), model=model_name)
         except ImportError:
-            raise HTTPException(status_code=503, detail="No embedding backend available")
+            raise_error("No embedding backend available", "E_BAD_REQUEST", status_code=503)
 
     async def infer_tokenize(self, req: TokenizeRequest) -> TokenizeResponse:
         """Tokenize text into token IDs and strings.
@@ -344,7 +345,7 @@ class InferRouter:
         """Metadata about the currently loaded model."""
         model = self._get_model_interface()
         if model is None:
-            raise HTTPException(status_code=503, detail="No model loaded")
+            raise_error("No model loaded", "E_BAD_REQUEST", status_code=503)
 
         info = model.info() if hasattr(model, 'info') else None
         if info is None:

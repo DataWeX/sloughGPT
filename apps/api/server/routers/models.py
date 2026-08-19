@@ -7,7 +7,7 @@ import os
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -548,7 +548,7 @@ class ModelsRouter:
         Returns the GGUF file as a streaming download.  The mobile app calls this
         to get the model for llama.rn inference.
         """
-        from downcraft.downloader import download_file
+        from downcraft.download.http import download_file
 
         repo_id = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
         filename = "qwen2.5-0.5b-instruct-q4_k_m.gguf"

@@ -69,25 +69,19 @@ class TestLearnFeed:
     def test_feed_subscribe_missing_url(self, mock_get_learner, client):
         learner = mock_get_learner.return_value
         resp = client.post("/learn/feed?action=subscribe")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "url required" in body["error"]
+        assert resp.status_code == 422
 
     @patch("domains.learner.get_learner")
     def test_feed_unknown_action(self, mock_get_learner, client):
         learner = mock_get_learner.return_value
         resp = client.post("/learn/feed?action=invalid_action")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "unknown action" in body["error"]
+        assert resp.status_code == 422
 
     @patch("domains.learner.get_learner")
     def test_feed_unsubscribe_missing_url(self, mock_get_learner, client):
         learner = mock_get_learner.return_value
         resp = client.post("/learn/feed?action=unsubscribe")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "url required" in body["error"]
+        assert resp.status_code == 422
 
 
 class TestLearnKnowledge:

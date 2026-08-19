@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.mobile import MobileRouter, router
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 
 @pytest.fixture
@@ -19,6 +20,7 @@ def mobile_router():
 @pytest.fixture
 def app(mobile_router):
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(mobile_router.router)
     return _app
 
@@ -203,10 +205,12 @@ class TestMobileKnowledgeCreate:
             assert body["content"] == "new fact"
 
     def test_empty_content_returns_error(self, client):
-        resp = client.post("/mobile/knowledge", json={"content": ""})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "error" in body
+        with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = None
+            resp = client.post("/mobile/knowledge", json={"content": ""})
+            assert resp.status_code == 400
+            body = resp.json()
+            assert "error" in body
 
 
 # ── GET /mobile/sync/status ───────────────────────────────────────────────────
@@ -513,7 +517,7 @@ class TestMobileKnowledgeUpdate:
         with patch.object(MobileRouter, "_internal_patch", new_callable=AsyncMock) as mock_patch:
             mock_patch.return_value = None
             resp = client.patch("/mobile/knowledge/k1", json={"content": "x"})
-            assert resp.status_code == 200
+            assert resp.status_code == 400
             assert "error" in resp.json()
 
     def test_update_only_sends_provided_fields(self, client):

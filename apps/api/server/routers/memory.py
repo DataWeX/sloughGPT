@@ -6,10 +6,11 @@ manage the memory store the chat loop writes to automatically.
 """
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from domains.memory.memory_service import get_memory_service
+from schemas.common import raise_error
 
 
 class StoreRequest(BaseModel):
@@ -164,7 +165,7 @@ class MemoryRouter:
         """
         content = req.content.strip()
         if not content:
-            raise HTTPException(status_code=400, detail="content is required")
+            raise_error("content is required", "E_BAD_REQUEST", status_code=400)
         topic = req.topic or "manual"
         source = req.source or "api"
         stored = self._service().store(content, topic, source)
@@ -186,7 +187,7 @@ class MemoryRouter:
         user_message = req.user_message.strip()
         assistant_response = req.assistant_response.strip()
         if not user_message or not assistant_response:
-            raise HTTPException(status_code=400, detail="user_message and assistant_response are required")
+            raise_error("user_message and assistant_response are required", "E_BAD_REQUEST", status_code=400)
         stored = self._service().remember(user_message, assistant_response)
         reason = "stored" if stored else "skipped (disabled, too short, or nothing new)"
         return {"stored": stored, "reason": reason}
@@ -242,7 +243,7 @@ class MemoryRouter:
             - removes the matching fact from the knowledge store (persisted).
         """
         if not item_id or not item_id.strip():
-            raise HTTPException(status_code=400, detail="item_id is required")
+            raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
         removed = self._service().delete([item_id.strip()])
         return {"deleted": removed}
 
@@ -262,9 +263,9 @@ class MemoryRouter:
             - replaces the fact's text/embedding in the knowledge store.
         """
         if not item_id or not item_id.strip():
-            raise HTTPException(status_code=400, detail="item_id is required")
+            raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
         if not req.content or not req.content.strip():
-            raise HTTPException(status_code=400, detail="content is required")
+            raise_error("content is required", "E_BAD_REQUEST", status_code=400)
         updated = self._service().update(item_id.strip(), req.content, topic=req.topic, importance=req.importance)
         return {"updated": 1 if updated else 0, "duplicate": not updated}
 

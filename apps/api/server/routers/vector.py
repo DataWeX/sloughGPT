@@ -2,13 +2,13 @@
 Vector Store Router - Embedding/vector operations
 """
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response, classify_and_raise
+from schemas.common import raise_error, success_response, classify_and_raise
 
 
 class VectorStoreConfig(BaseModel):
@@ -95,7 +95,7 @@ class VectorRouter:
         """upsert_vectors."""
         store = await self.get_vector_store()
         if not store:
-            raise HTTPException(status_code=500, detail="Vector store not connected")
+            raise_error("Vector store not connected", "E_INFRA_STARTUP", status_code=500)
         from domains.inference.vector_store import VectorEntry, simple_embed
         entries = []
         for i, text in enumerate(request.texts):

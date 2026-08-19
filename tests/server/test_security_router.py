@@ -98,10 +98,8 @@ class TestSecurityAudit:
 
     @patch("infrastructure.auth.get_audit_logger")
     def test_limit_zero_returns_all(self, mock_get_logger, client):
-        logger = mock_get_logger.return_value
-        logger.logs = [{"event_type": "a", "timestamp": str(i)} for i in range(4)]
         resp = client.get("/security/audit?limit=0")
-        assert resp.json()["data"]["count"] == 4
+        assert resp.status_code == 422
 
     @patch("infrastructure.auth.get_audit_logger")
     def test_combined_limit_and_filter(self, mock_get_logger, client):
@@ -122,11 +120,9 @@ class TestSecurityAudit:
         assert resp.status_code == 422
 
     @patch("infrastructure.auth.get_audit_logger")
-    def test_negative_limit_slices_from_end(self, mock_get_logger, client):
-        logger = mock_get_logger.return_value
-        logger.logs = [{"event_type": "a", "timestamp": str(i)} for i in range(6)]
+    def test_negative_limit_rejected(self, mock_get_logger, client):
         resp = client.get("/security/audit?limit=-2")
-        assert resp.json()["data"]["count"] == 4
+        assert resp.status_code == 422
 
     def test_wrong_method_returns_405(self, client):
         resp = client.post("/security/audit")

@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for the POST /training/recovery/recover/{job_id} endpoint.
 
@@ -19,6 +20,7 @@ from fastapi.testclient import TestClient
 router_mod = importlib.import_module("training.router")
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(router_mod.router)
 client = TestClient(app)
 

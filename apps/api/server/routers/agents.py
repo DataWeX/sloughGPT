@@ -5,14 +5,14 @@ Agents Router - Full CRUD for AI agent definitions with execution and orchestrat
 import asyncio
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncGenerator
 
 from domains.api.sse_envelope import sse_event, sse_complete, sse_error
 
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -109,7 +109,7 @@ class AgentsRouter:
         agent_id = req.id or req.name.lower().replace(" ", "-").replace("_", "-")[:32]
         system = self._get_system()
         if system.get(agent_id):
-            raise HTTPException(status_code=409, detail="Agent ID already exists")
+            raise_error("Agent ID already exists", "E_INFRA_BUSY", status_code=409)
         result = system.create(
             agent_id=agent_id,
             name=req.name,
@@ -125,7 +125,7 @@ class AgentsRouter:
         """Get a specific agent by ID."""
         result = self._get_system().get(agent_id)
         if result is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
         return AgentOut(**result)
 
     async def update_agent(self, agent_id: str, req: AgentUpdate) -> dict:
@@ -154,7 +154,7 @@ class AgentsRouter:
             avatar=req.avatar,
         )
         if result is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("agent.update", resource=agent_id)
         return AgentOut(**result)
 
@@ -173,7 +173,7 @@ class AgentsRouter:
             Raises 404 if no agent with the given ID is found.
         """
         if not self._get_system().delete(agent_id):
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("agent.delete", resource=agent_id)
         return success_response(data={"status": "deleted"})
 
@@ -186,7 +186,7 @@ class AgentsRouter:
             user_id=req.user_id,
         )
         if "error" in result:
-            raise HTTPException(status_code=404, detail=result["error"])
+            raise_error(result["error"], "E_NOT_FOUND", status_code=404)
         safe_audit_log("agent.execute", resource=agent_id, user_id=req.user_id or "", session_id=req.session_id or "")
         return result
 
@@ -387,7 +387,7 @@ class AgentsRouter:
 
         record = get_agent_run_store().get(run_id)
         if record is None:
-            raise HTTPException(status_code=404, detail="Run not found")
+            raise_error("Run not found", "E_NOT_FOUND", status_code=404)
         return record
 
 

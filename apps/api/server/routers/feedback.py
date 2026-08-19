@@ -1,11 +1,11 @@
 """
 Feedback Router - MVC View layer
 """
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Query, Request
 
 from pydantic import BaseModel, Field
 from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
-from schemas.common import success_response
+from schemas.common import raise_error, success_response
 from controllers.feedback import get_feedback_controller
 
 
@@ -128,7 +128,7 @@ class FeedbackRouter:
         ctrl = get_feedback_controller()
         conv = ctrl.get_conversation(conv_id)
         if not conv:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+            raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
         return conv
 
     async def update_conversation(self, conv_id: str, req: ConversationUpdate) -> dict:
@@ -147,7 +147,7 @@ class FeedbackRouter:
         ctrl = get_feedback_controller()
         conv = ctrl.update_conversation(conv_id, req.model_dump(exclude_unset=True))
         if not conv:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+            raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
         return conv
 
     async def delete_conversation(self, conv_id: str) -> dict:
@@ -171,7 +171,7 @@ class FeedbackRouter:
         ctrl = get_feedback_controller()
         feedback = ctrl.get_feedback(message_id)
         if not feedback:
-            raise HTTPException(status_code=404, detail="Feedback not found")
+            raise_error("Feedback not found", "E_NOT_FOUND", status_code=404)
         return feedback
 
 

@@ -8,11 +8,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.kb import router
+from infrastructure.exception_handlers import register_all_handlers
 
 
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -20,6 +22,14 @@ def app():
 @pytest.fixture
 def client(app):
     return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture(autouse=True)
+def _mock_rag_service():
+    """Prevent real RAG service initialization in any kb test that hits an add/ingest path."""
+    with patch("domains.cognitive.rag_service.get_rag_service") as m:
+        m.return_value = MagicMock()
+        yield m
 
 
 class TestListKnowledge:

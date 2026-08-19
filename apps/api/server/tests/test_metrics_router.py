@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for metrics router — /metrics and /metrics/prometheus.
 """
@@ -7,6 +8,7 @@ from fastapi import FastAPI
 from routers.metrics import router as metrics_router
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(metrics_router)
 client = TestClient(app)
 

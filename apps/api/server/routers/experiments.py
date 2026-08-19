@@ -1,7 +1,7 @@
 """
 Experiments Router - ML experiment tracking
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, Any
 from datetime import datetime, timezone
@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 
 class ExperimentCreate(BaseModel):
@@ -93,20 +93,20 @@ class ExperimentsRouter:
             404 if the experiment directory is not found.
         """
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
         if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-            raise HTTPException(status_code=404, detail="Experiment not found")
+            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
         return success_response(data={"id": experiment_id, "path": str(path)})
 
     async def delete_experiment(self, experiment_id: str) -> dict:
         """Delete an experiment and all its data."""
         import shutil
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
         if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-            raise HTTPException(status_code=404, detail="Experiment not found")
+            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
         shutil.rmtree(path)
         safe_audit_log("experiment.delete", resource=experiment_id)
         return success_response(data={"id": experiment_id, "deleted": True})
@@ -114,10 +114,10 @@ class ExperimentsRouter:
     async def get_experiment_runs(self, experiment_id: str) -> dict:
         """Get runs for an experiment"""
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
         if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-            raise HTTPException(status_code=404, detail="Experiment not found")
+            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
         runs = list(path.glob("*.json"))
         return success_response(data={"runs": len(runs)})
 
@@ -125,7 +125,7 @@ class ExperimentsRouter:
         """Get logged metrics and params for an experiment."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         metrics_file = self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl"
         params_file = self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl"
         status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
@@ -162,7 +162,7 @@ class ExperimentsRouter:
         """Mark experiment as complete and persist status to disk."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
         status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
         status_data = {
@@ -179,7 +179,7 @@ class ExperimentsRouter:
         e_id = experiment_id
         self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
         with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
             f.write(json.dumps(entry) + "\n")
@@ -190,7 +190,7 @@ class ExperimentsRouter:
         e_id = experiment_id
         self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
         with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
             f.write(json.dumps(entry) + "\n")

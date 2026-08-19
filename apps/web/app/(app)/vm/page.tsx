@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge } fro
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { useV86 } from '@/hooks/useV86'
 
 const DEFAULT_MAX_STEPS = 5000
 const MAX_STEPS_LIMIT = 1_000_000
@@ -519,7 +520,69 @@ MOV [0x5004], EAX
 HLT`,
 }
 
+function LinuxTab() {
+  const { isBooted, stateSaved, error, save, restore, reset, init } = useV86()
+  const screenRef = useRef<HTMLDivElement>(null)
+  const initialized = useRef(false)
+
+  useEffect(() => {
+    if (screenRef.current && !initialized.current) {
+      initialized.current = true
+      init(screenRef.current)
+    }
+  }, [init])
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex gap-1">
+              <Button size="sm" variant="ghost" onClick={save} disabled={!isBooted}>
+                Save State
+              </Button>
+              <Button size="sm" variant="ghost" onClick={restore} disabled={!stateSaved}>
+                Restore
+              </Button>
+              <Button size="sm" variant="ghost" onClick={reset} disabled={!isBooted}>
+                Reset
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
+              <span className={`inline-block h-2 w-2 rounded-full ${isBooted ? 'bg-success' : 'bg-warning animate-pulse'}`} />
+              {isBooted ? 'Running' : 'Booting...'}
+              {stateSaved && <span className="text-success ml-1">Saved</span>}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/30 text-destructive text-xs p-2 rounded">
+          {error}
+        </div>
+      )}
+
+      <Card>
+        <CardContent className="p-0">
+          <div
+            ref={screenRef}
+            className="bg-black rounded-lg overflow-hidden"
+            style={{ minHeight: 480 }}
+          />
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted-foreground">
+        Full Linux OS running in your browser via v86. Click the screen to focus keyboard input.
+        State auto-saves every 30 seconds.
+      </p>
+    </div>
+  )
+}
+
 export default function VMPage() {
+  const [mode, setMode] = useState<'assembly' | 'linux'>('assembly')
   const [source, setSource] = useState(DEFAULT_PROGRAMS.hello)
   const [result, setResult] = useState<VMRunResult | null>(null)
   const [running, setRunning] = useState(false)
@@ -730,7 +793,32 @@ export default function VMPage() {
   )
 
   return (
-    <PageContainer title="VM Console" subtitle="x86-32 assembly sandbox — write, run, inspect" maxWidth="max-w-6xl">
+    <PageContainer title="VM Console" subtitle="x86 assembly sandbox and Linux VM" maxWidth="max-w-6xl">
+        {/* Mode selector */}
+        <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+          <button
+            type="button"
+            onClick={() => setMode('assembly')}
+            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              mode === 'assembly' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Assembly
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('linux')}
+            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              mode === 'linux' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Linux
+          </button>
+        </div>
+
+        {mode === 'linux' && <LinuxTab />}
+
+        {mode === 'assembly' && (<>
         {/* Top bar: program selector + run */}
         <Card>
           <CardContent className="p-3">
@@ -1403,6 +1491,7 @@ export default function VMPage() {
             </CardContent>
           </Card>
         )}
+        </>)}
     </PageContainer>
   )
 }

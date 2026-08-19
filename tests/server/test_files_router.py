@@ -7,6 +7,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.files import FilesRouter
 
 
@@ -22,6 +23,7 @@ def isolated_router(tmp_path):
 @pytest.fixture
 def app(isolated_router):
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(isolated_router.router)
     return _app
 

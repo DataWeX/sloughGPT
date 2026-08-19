@@ -11,11 +11,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.voice import router
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -133,8 +135,8 @@ class TestTTSSuccessPath:
     def test_backend_failure_falls_back(self, client, _backend):
         _backend.generate.side_effect = RuntimeError("boom")
         resp = client.post("/voice/tts", json={"text": "hello"})
-        assert resp.status_code == 200
-        assert resp.json()["backend"] == "browser-fallback"
+        assert resp.status_code == 500
+        assert "error" in resp.json()
 
     def test_load_failure_falls_back(self, client, _backend):
         _backend.load.return_value = False
@@ -262,7 +264,6 @@ class TestTTSErrorAfterLoad:
         backend.generate.return_value = b"not-a-real-wav"
         with patch.object(_voice_router_instance(), "_tts_backend", backend):
             resp = client.post("/voice/tts", json={"text": "hello"})
-        assert resp.status_code == 200
+        assert resp.status_code == 500
         data = resp.json()
-        assert data["backend"] == "browser-fallback"
-        assert data["audio"] == ""
+        assert "error" in data

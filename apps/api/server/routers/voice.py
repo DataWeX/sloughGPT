@@ -6,10 +6,10 @@ import io
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from schemas.common import success_response, classify_and_raise
+from schemas.common import raise_error, success_response, classify_and_raise
 
 logger = logging.getLogger("slo.routers.voice")
 
@@ -90,7 +90,7 @@ class VoiceRouter:
         can use native speechSynthesis instead.
         """
         if not request.text.strip():
-            raise HTTPException(status_code=400, detail="No text provided")
+            raise_error("No text provided", "E_BAD_REQUEST", status_code=400)
 
         try:
             if self._tts_backend.load():

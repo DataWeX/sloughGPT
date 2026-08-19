@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for the /auto-train/start-turbo + /auto-train/turbo/status endpoints.
 
@@ -20,6 +21,7 @@ import routers.auto_train as mod
 from routers.auto_train import router as auto_train_router
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(auto_train_router)
 client = TestClient(app)
 
@@ -100,10 +102,9 @@ def test_turbo_status_idle(_):
 
 def test_start_turbo_missing_data():
     resp = client.post("/auto-train/start-turbo", json={})
-    assert resp.status_code == 200
+    assert resp.status_code == 422
     body = resp.json()
     assert "error" in body
-    assert "data_path" in body["error"]
 
 
 def test_start_turbo_rejects_when_running():

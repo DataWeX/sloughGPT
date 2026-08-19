@@ -2,7 +2,7 @@
 Self-Train Router - Start/stop/status for self-training subprocess.
 """
 import re
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 import state as server_state
 import subprocess
@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from domains.infrastructure.errors import AppError
 
 
 class SelfTrainRequest(BaseModel):
@@ -55,7 +56,7 @@ class SelfTrainRouter:
             cmd = [sys.executable, str(script)]
             if req and req.model:
                 if not self._model_name_re.match(req.model):
-                    raise HTTPException(status_code=422, detail="Invalid model name — only alphanumeric, dots, hyphens, slashes, underscores allowed")
+                    raise_error("Invalid model name — only alphanumeric, dots, hyphens, slashes, underscores allowed", "E_VAL_REQUEST", status_code=422)
                 cmd.extend(["--model", req.model])
             if req and req.temperature is not None:
                 cmd.extend(["--temperature", str(req.temperature)])
@@ -65,7 +66,7 @@ class SelfTrainRouter:
             server_state._self_train_proc = proc
             safe_audit_log("self_train.start", resource=req.model if req and req.model else "default", detail=f"pid={proc.pid}", temperature=req.temperature if req and req.temperature is not None else None, forever=bool(req and req.forever))
             return success_response(data={"status": "started", "pid": proc.pid})
-        except HTTPException:
+        except AppError:
             raise
         except Exception as e:
             classify_and_raise(e, source="self_train_start")

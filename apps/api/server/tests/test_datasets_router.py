@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for datasets router — CRUD, search, stats, data, preview, export, versioning.
 
@@ -17,6 +18,7 @@ from routers.datasets import router as datasets_router, DatasetsRouter
 from controllers.datasets import DatasetsController
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(datasets_router)
 client = TestClient(app)
 

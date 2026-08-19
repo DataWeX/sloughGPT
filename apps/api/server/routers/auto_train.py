@@ -15,7 +15,7 @@ from dataclasses import dataclass, field, is_dataclass, asdict
 import threading
 from typing import Any, Dict, Optional, AsyncGenerator
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi import Request
 from pydantic import BaseModel, Field
@@ -533,6 +533,20 @@ class AutoTrainRouter:
             }
             _turbo_cancel_event = threading.Event()
 
+        # Register with CancelManager
+        try:
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            _mgr = get_cancel_manager()
+            _cm_op_id = _mgr.register(
+                op_type=OpType.TRAINING,
+                label=f"auto-turbo:{req.method}",
+                cancel_fn=lambda: _turbo_cancel_event.set(),
+            )
+            _mgr.start(_cm_op_id)
+            _turbo_state["_cm_op_id"] = _cm_op_id
+        except Exception:
+            pass
+
         output_dir = Path(self.REPO_ROOT / "models" / "turbo-trained")
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -585,6 +599,15 @@ class AutoTrainRouter:
     def _run_turbo(self, req: TurboStartRequest, data_path: str, output_dir: str, job_id: str) -> None:
         """Run SloughGPTTrainer on a daemon thread, publishing progress to _turbo_state."""
         from domains.training.train_pipeline import SloughGPTTrainer
+
+        def _finish_cm(status: str, error: str = "") -> None:
+            op_id = _turbo_state.get("_cm_op_id")
+            if op_id:
+                try:
+                    from domains.infrastructure.cancel_manager import get_cancel_manager
+                    get_cancel_manager().finish(op_id, error=error if status != "completed" else "")
+                except Exception:
+                    pass
 
         def on_progress(info: Dict[str, Any]) -> None:
             """on_progress."""
@@ -640,6 +663,7 @@ class AutoTrainRouter:
                     job["status"] = "cancelled"
                     job["error"] = "Training cancelled"
                     get_training_runtime().sync(job_id)
+                _finish_cm("cancelled", "Training cancelled")
                 return
 
             if isinstance(result, dict) and result.get("status") == "error":
@@ -651,6 +675,7 @@ class AutoTrainRouter:
                     job["status"] = "failed"
                     job["error"] = result.get("message") or "Training failed"
                     get_training_runtime().sync(job_id)
+                _finish_cm("failed", result.get("message") or "Training failed")
                 return
 
             safe_audit_log("training.start", resource=data_path or req.dataset_id or "turbo", detail="turbo", method=req.method or "", epochs=req.epochs)
@@ -666,6 +691,7 @@ class AutoTrainRouter:
                 if soul_files:
                     job["checkpoint"] = str(soul_files[-1])
                 get_training_runtime().sync(job_id)
+            _finish_cm("completed")
         except Exception as e:
             classify_and_raise(e, source="auto_train_turbo")
             autotrain_logger.error("SloughGPTTrainer failed: %s", e, extra={"tag": "TRAIN"})
@@ -677,6 +703,7 @@ class AutoTrainRouter:
                 job["status"] = "failed"
                 job["error"] = str(e)
                 get_training_runtime().sync(job_id)
+            _finish_cm("failed", str(e))
 
     def _run_turbo_pgq(
         self, job_id: str, tree_id: str, point_library: Any,
@@ -714,6 +741,11 @@ class AutoTrainRouter:
                 except Exception:
                     pass
                     autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+        try:
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
+        except Exception:
+            pass
         if _auto_train_cancel_event is not None:
             safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelling")
             return {"status": "cancelling", "message": "Cancelling auto-training"}
@@ -780,6 +812,20 @@ class AutoTrainRouter:
         self.state.complete_enqueued = False
         self.state.running = True
 
+        # Register with CancelManager
+        _stream_cm_op_id: Optional[str] = None
+        try:
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            _mgr = get_cancel_manager()
+            _stream_cm_op_id = _mgr.register(
+                op_type=OpType.TRAINING,
+                label="auto-train",
+                cancel_fn=lambda: _auto_train_cancel_event.set(),
+            )
+            _mgr.start(_stream_cm_op_id)
+        except Exception:
+            pass
+
         task_id = await tq.enqueue(task)
         autotrain_logger.info("Training task enqueued via task queue: %s", task_id, extra={"tag": "TRAIN"})
 
@@ -807,6 +853,15 @@ class AutoTrainRouter:
         async def event_generator() -> AsyncGenerator[str, None]:
             """event_generator."""
             global _auto_train_cancel_event, _auto_train_pause_event
+
+            def _finish_cm(status: str, error: str = "") -> None:
+                if _stream_cm_op_id:
+                    try:
+                        from domains.infrastructure.cancel_manager import get_cancel_manager
+                        get_cancel_manager().finish(_stream_cm_op_id, error=error if status != "complete" else "")
+                    except Exception:
+                        pass
+
             deadline = time.time() + 3600
             heartbeat_interval = 10.0
             last_yield = time.time()
@@ -815,11 +870,13 @@ class AutoTrainRouter:
                     if time.time() > deadline:
                         autotrain_logger.error("Auto-train SSE timed out after 1 hour - no completion event received", extra={"tag": "TRAIN"})
                         yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out")
+                        _finish_cm("failed", "SSE timeout")
                         return
                     if await request.is_disconnected():
                         await tq.cancel(task_id)
                         _auto_train_cancel_event.set()
                         self.state.running = False
+                        _finish_cm("cancelled", "client disconnected")
                         autotrain_logger.info("Client disconnected from auto-train stream", extra={"tag": "TRAIN"})
                         return
                     remaining = heartbeat_interval - (time.time() - last_yield)
@@ -853,6 +910,10 @@ class AutoTrainRouter:
                                         pass
                                     autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                                     get_training_runtime().sync(task_id)
+                                _finish_cm(
+                                    "complete" if ev.get("status") == "complete" else "failed",
+                                    str(ev.get("message") or ev.get("data") or "") if ev.get("status") != "complete" else "",
+                                )
                                 break
                         except json.JSONDecodeError:
                             pass
@@ -866,9 +927,11 @@ class AutoTrainRouter:
 
             except TimeoutError:
                 autotrain_logger.error("Auto-train SSE queue timed out - no event for 60s", extra={"tag": "TRAIN"})
+                _finish_cm("failed", "SSE queue timeout")
                 yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
             except Exception as e:
                 autotrain_logger.error("Auto-train SSE stream error: %s", e, extra={"tag": "TRAIN"})
+                _finish_cm("failed", str(e))
                 if not self.state.complete_enqueued:
                     yield sse_error("auto-train", "FAILED", str(e))
             finally:
@@ -1021,20 +1084,20 @@ class AutoTrainRouter:
     async def download_checkpoint(self, name: str) -> dict:
         """download_checkpoint."""
         if not _VALID_CKPT_NAME.match(name) or '..' in name:
-            raise HTTPException(status_code=400, detail="Invalid checkpoint name")
+            raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
         for d in (self.CHECKPOINTS_DIR, self.TURBO_DIR, self.LORA_DIR):
             fp = (d / name).resolve()
             if fp.exists() and fp.suffix in (".soul", ".slo") and str(fp).startswith(str(d.resolve())):
                 return FileResponse(str(fp), media_type="application/octet-stream", filename=name)
-        raise HTTPException(status_code=404, detail="Checkpoint not found")
+        raise_error("Checkpoint not found", "E_NOT_FOUND", status_code=404)
 
     async def checkpoint_info(self, name: str) -> dict:
         """Read-only checkpoint metadata — does NOT load the model."""
         if not _VALID_CKPT_NAME.match(name) or '..' in name:
-            raise HTTPException(status_code=400, detail="Invalid checkpoint name")
+            raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
         info = self._load_soul(name)
         if not info or info.get("soul") == "unknown":
-            raise HTTPException(status_code=404, detail="Checkpoint not found")
+            raise_error("Checkpoint not found", "E_NOT_FOUND", status_code=404)
         return success_response(data=info)
 
     async def export_metrics(self) -> dict:
@@ -1097,7 +1160,7 @@ class AutoTrainRouter:
             if fp.exists() and fp.suffix == ".soul":
                 break
         else:
-            raise HTTPException(status_code=404, detail="Checkpoint not found")
+            raise_error("Checkpoint not found", "E_NOT_FOUND", status_code=404)
 
         try:
             net = import_from_sou(str(fp))
@@ -1324,6 +1387,11 @@ class AutoTrainRouter:
         if _auto_train_cancel_event is not None:
             _auto_train_cancel_event.set()
         self.state.running = False
+        try:
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
+        except Exception:
+            pass
         safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelled")
         return success_response(message="Cancel signal sent")
 

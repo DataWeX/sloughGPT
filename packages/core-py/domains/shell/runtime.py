@@ -64,12 +64,14 @@ def _probe_api(api_url: str, timeout: float = 2.0) -> dict:
     try:
         req = urllib.request.Request(f"{api_url}/health", method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode())
+            raw = json.loads(resp.read().decode())
+            # Health endpoint wraps in {"status":"success","data":{...}}; unwrap.
+            data = raw.get("data", raw)
             return {
                 "available": True,
                 "status": data.get("status", "unknown"),
                 "model_loaded": data.get("model_loaded", False),
-                "model_id": data.get("model_id"),
+                "model_id": data.get("model_type") or data.get("model_id"),
                 "engine_type": data.get("engine_type"),
             }
     except Exception as e:
@@ -94,6 +96,8 @@ class APIServerProcess:
 
     def __init__(self, api_url: str = ""):
         self._api_url = api_url or _default_api_url()
+        from urllib.parse import urlparse
+        self._port = urlparse(self._api_url).port or 8000
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -106,32 +110,70 @@ class APIServerProcess:
             result["uptime"] = time.time() - _shared_started_at if _shared_started_at else 0
         return result
 
-    def start(self, timeout: float = 90.0) -> dict:
-        """Launch the API server in a subprocess and wait for it to become healthy.
+    def start(self, timeout: float = 180.0) -> dict:
+        """Launch the API server subprocess and wait for it to become healthy.
 
-        Returns once the health probe succeeds or the timeout elapses.
+        Three-phase flow:
+        1. Health probe -- if a server is already healthy, return immediately.
+        2. Port detection -- if something occupies the port but isn't healthy yet,
+           wait for it (server is still loading from a previous invocation).
+        3. Spawn subprocess -- start ``apps.api.server.main`` and poll health
+           until the timeout elapses.
 
         Args:
-            timeout: seconds to wait for the API to come up before giving up.
+            timeout: seconds to wait for the API to become healthy (default 180s,
+            covers model loading on slow hardware).
 
         Returns:
-            dict: ``{"ok": True, "message": "ready (<model_id>)"}`` on success,
-            ``{"ok": False, "error": ...}`` if launch fails or health times out.
+            ``{"ok": True, "message": ...}`` on success,
+            ``{"ok": False, "error": ...}`` on failure.
 
         Side effects:
-            - spawns ``apps.api.server.main`` as a shared subprocess (singleton)
-            - sets ``_shared_proc`` / ``_shared_started_at`` module globals
+            - Spawns ``apps.api.server.main`` as a shared subprocess (singleton).
+            - Sets ``_shared_proc`` / ``_shared_started_at`` module globals.
         """
         global _shared_proc, _shared_started_at
 
+        # ── Phase 0: already spawned by this process? ────────────────
         with _shared_lock:
             if _shared_proc is not None:
-                return {"ok": True, "message": "already running"}
+                if _shared_proc.poll() is None:
+                    return {"ok": True, "message": "already running"}
+                # Previous process exited -- clear stale handle
+                _shared_proc = None
+                _shared_started_at = 0.0
 
+        # ── Phase 1: is a healthy server already listening? ───────────
+        probe = _probe_api(self._api_url)
+        if probe.get("available"):
+            model_id = probe.get("model_id")
+            return {"ok": True, "message": f"connected ({model_id})" if model_id else "connected"}
+
+        # ── Phase 2: port occupied but not healthy -> loading server? ──
+        import socket as _sock
+        _port_busy = False
+        try:
+            with _sock.create_connection(("127.0.0.1", self._port), timeout=1.0):
+                _port_busy = True
+        except (ConnectionRefusedError, OSError, TimeoutError):
+            pass
+
+        if _port_busy:
+            logger.debug("Port %d occupied but unhealthy -- waiting for server to finish loading", self._port, extra={"tag": "START"})
+            deadline = time.time() + min(timeout, 60.0)
+            while time.time() < deadline:
+                probe = _probe_api(self._api_url)
+                if probe.get("available"):
+                    model_id = probe.get("model_id")
+                    return {"ok": True, "message": f"connected ({model_id})" if model_id else "connected"}
+                time.sleep(1.0)
+            return {"ok": False, "error": f"Port {self._port} occupied but server not healthy after {timeout:.0f}s"}
+
+        # ── Phase 3: port is free -> spawn the server ─────────────────
         repo_root = find_repo_root(Path(__file__).resolve())
         server_python = find_server_python(repo_root)
         cmd = [server_python, "-m", "apps.api.server.main"]
-        logger.info("Starting API server: %s (cwd=%s)", " ".join(cmd), repo_root)
+        logger.debug("Starting API server: %s (cwd=%s)", " ".join(cmd), repo_root, extra={"tag": "START"})
 
         try:
             proc = subprocess.Popen(
@@ -149,24 +191,45 @@ class APIServerProcess:
             _shared_proc = proc
             _shared_started_at = time.time()
 
-        # Stream stderr to logger so user sees boot progress
+        # Stream stderr into LogBuffer — never print to terminal.
         def _log_stderr():
             if _shared_proc and _shared_proc.stderr:
-                for line in _shared_proc.stderr:
-                    logger.info("[api] %s", line.rstrip())
+                try:
+                    from domains.shell.log_buffer import get_log_buffer, LogEntry
+                    buf = get_log_buffer()
+                    for line in _shared_proc.stderr:
+                        stripped = line.rstrip()
+                        if not stripped:
+                            continue
+                        level = "INFO"
+                        upper = stripped.upper()
+                        if "WRN" in upper or "WARNING" in upper:
+                            level = "WARNING"
+                        elif "ERR" in upper or "ERROR" in upper or "CRITICAL" in upper:
+                            level = "ERROR"
+                        elif "DBG" in upper or "DEBUG" in upper:
+                            level = "DEBUG"
+                        buf.append(LogEntry(
+                            timestamp=time.time(),
+                            level=level,
+                            source="api.server",
+                            message=stripped,
+                        ))
+                except Exception:
+                    pass
         threading.Thread(target=_log_stderr, daemon=True).start()
 
-        # Wait for the API to become healthy (bounded by timeout)
-        deadline = time.time() + max(timeout, 0.0)
+        # Poll health until ready
+        deadline = time.time() + timeout
         model_id = None
         while time.time() < deadline:
             probe = _probe_api(self._api_url)
             if probe.get("available"):
                 model_id = probe.get("model_id")
                 break
-            time.sleep(0.25)
+            time.sleep(0.5)
         else:
-            return {"ok": False, "error": f"Timed out waiting for API ({timeout:.1f}s)"}
+            return {"ok": False, "error": f"Timed out waiting for API ({timeout:.0f}s)"}
 
         return {"ok": True, "message": f"ready ({model_id})" if model_id else "ready"}
 

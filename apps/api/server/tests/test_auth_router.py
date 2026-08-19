@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for auth router — login, register, me, token, verify, refresh.
 
@@ -14,6 +15,7 @@ from fastapi import FastAPI
 from routers.auth import router as auth_router
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(auth_router)
 client = TestClient(app)
 

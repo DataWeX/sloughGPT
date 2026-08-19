@@ -149,6 +149,37 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
+def register_app_error_handler(app: FastAPI):
+    """Register only the AppError handler — minimal handler for test clients.
+
+    Unlike ``register_all_handlers``, this does NOT override FastAPI's default
+    handlers for ``RequestValidationError`` or ``HTTPException``, so existing
+    test assertions against ``resp.json()["detail"]`` remain valid.
+    """
+    try:
+        from domains.infrastructure.errors import AppError
+
+        async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+            cid = _corr_id(request)
+            try:
+                from domains.infrastructure.errors import emit_error_event
+                emit_error_event(exc, source=f"{request.method} {request.url.path}")
+            except Exception:
+                pass
+            return JSONResponse(
+                status_code=exc.http_status,
+                content=error_response(
+                    exc.user_message,
+                    exc.code,
+                    details=exc.details if logger.isEnabledFor(logging.DEBUG) else None,
+                ),
+            )
+
+        app.add_exception_handler(AppError, _app_error_handler)
+    except ImportError:
+        pass
+
+
 def register_all_handlers(app: FastAPI):
     """Register all exception handlers on a FastAPI instance."""
     # AppError — structured taxonomy with codes, user messages, EventBus events

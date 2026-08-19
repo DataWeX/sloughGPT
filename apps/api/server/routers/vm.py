@@ -10,9 +10,10 @@ from __future__ import annotations
 import time
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from pydantic import model_validator
+from schemas.common import raise_error
 
 logger = logging.getLogger("slo.api.vm")
 router = APIRouter(prefix="/vm", tags=["vm"])
@@ -102,14 +103,14 @@ async def run_assembly(req: VMRunRequest) -> dict:
         from domains.shell.vm import X86VirtualSystem, X86CPU, InsFault, MemFault
         from domains.shell.vm_permissions import Role
     except ImportError as e:
-        raise HTTPException(status_code=503, detail=f"VM module not available: {e}")
+        raise_error(f"VM module not available: {e}", "E_BAD_REQUEST", status_code=503)
 
     if req.program:
         try:
             from vm_builtins import get_builtin
             req_source = get_builtin(req.program)
         except (KeyError, ImportError) as e:
-            raise HTTPException(status_code=404, detail=f"Unknown builtin program: {req.program}")
+            raise_error(f"Unknown builtin program: {req.program}", "E_NOT_FOUND", status_code=404)
     else:
         req_source = req.source
 
@@ -316,16 +317,16 @@ async def training_job_status(job_id: str) -> dict:
     try:
         job_num = int(job_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Training job not found")
+        raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
     try:
         from domains.shell.vm_training_bridge import get_bridge
     except ImportError as e:
-        raise HTTPException(status_code=503, detail=f"VM training bridge unavailable: {e}")
+        raise_error(f"VM training bridge unavailable: {e}", "E_BAD_REQUEST", status_code=503)
 
     bridge = get_bridge()
     status = bridge.status(job_num)
     if status["status"] == "not_found":
-        raise HTTPException(status_code=404, detail="Training job not found")
+        raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
 
     info = bridge.job_info(job_num) or {}
     result = None
@@ -352,16 +353,16 @@ async def training_job_stop(job_id: str) -> dict:
     try:
         job_num = int(job_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Training job not found")
+        raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
     try:
         from domains.shell.vm_training_bridge import get_bridge
     except ImportError as e:
-        raise HTTPException(status_code=503, detail=f"VM training bridge unavailable: {e}")
+        raise_error(f"VM training bridge unavailable: {e}", "E_BAD_REQUEST", status_code=503)
 
     bridge = get_bridge()
     ok = bridge.stop(job_num)
     if not ok:
-        raise HTTPException(status_code=404, detail="Training job not found or not stoppable")
+        raise_error("Training job not found or not stoppable", "E_NOT_FOUND", status_code=404)
     return {"status": "stopping", "job_id": job_num}
 
 

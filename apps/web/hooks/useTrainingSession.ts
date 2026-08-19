@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { trainingJobsController } from '@/lib/controllers'
+import { operationsStore } from '@/lib/operations-store'
 import { appShellStore, readTraining, writeTraining, isTrainingActive, type TrainingShellState, type TrainingToastFn } from '@/lib/app-shell'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -143,6 +144,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const stopTraining = useCallback(() => {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
+    operationsStore.getState().cancelAll('training').catch(() => {})
     resetTraining()
   }, [resetTraining])
 
@@ -172,6 +174,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       const jobId = resp.job_id as string
       addToast('LoRA training queued', 'info')
       writeTraining({ totalEpochs: params.epochs, jobId })
+      operationsStore.getState().fetch().catch(() => {})
       startStandardPoll(jobId, { addToast, onComplete })
     }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [startStandardPoll])
@@ -190,6 +193,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       const jobId = resp.job_id as string
       addToast(resp.message || 'Image model training queued', 'info')
       writeTraining({ totalEpochs: params.stage1Epochs + params.stage2Epochs, jobId })
+      operationsStore.getState().fetch().catch(() => {})
       startStandardPoll(jobId, {
         addToast, completeMessage: 'Image model training complete',
         onComplete: (job) => {
@@ -216,12 +220,14 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     }).then(result => {
       if (result.status === 'error') { writeTraining({ error: result.message || 'Training failed', phase: 'error' }); return }
       addToast('Turbo training started', 'info')
+      operationsStore.getState().fetch().catch(() => {})
       startTurboPoll(addToast)
     }).catch((e: unknown) => { writeTraining({ error: extractErrorMessage(e, 'Training request failed'), phase: 'error' }) })
   }, [clearAllPolls, startTurboPoll])
 
   const stopTurboTrain = useCallback(() => {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop turbo training', e))
+    operationsStore.getState().cancelAll('training').catch(() => {})
     resetTraining()
   }, [resetTraining])
 

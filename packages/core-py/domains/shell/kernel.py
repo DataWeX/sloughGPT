@@ -143,7 +143,7 @@ class Kernel:
         )
 
         msg = f"Kernel booted (pid={init_proc.pid}, memory={self._memory.capacity // (1024 * 1024)}MB)"
-        logger.info(msg)
+        logger.debug(msg)
         return msg
 
     def shutdown(self) -> str:
@@ -166,7 +166,7 @@ class Kernel:
             self._memory.free_pid(pid)
 
         msg = f"Kernel shut down (uptime={self.uptime:.1f}s, ticks={self._tick_count})"
-        logger.info(msg)
+        logger.debug(msg)
         return msg
 
     @property

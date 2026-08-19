@@ -1,9 +1,9 @@
 """
 LoRA Evaluation Router - Trigger adapter quality evaluation.
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 
 class LoraEvalRouter:
@@ -89,7 +89,7 @@ class LoraEvalRouter:
             results = evaluator.get_history(limit=limit)
             return success_response(data={"results": [r.to_dict() for r in results]})
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise_error(str(e), "E_INFRA_STARTUP", status_code=500)
 
     async def trigger_aggregation(
         self,

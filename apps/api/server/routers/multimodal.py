@@ -574,7 +574,7 @@ class MultimodalRouter:
 
     # ── Checkpoints ──────────────────────────────────────────────────
 
-    async def list_checkpoints(self) -> dict:
+    async def list_checkpoints(self):
         """list_checkpoints."""
         try:
             from domains.training.video_trainer import list_video_checkpoints

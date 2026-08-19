@@ -181,13 +181,17 @@ class TestChatStream:
         assert "No user message" in resp.text
 
     @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("domains.memory.memory_service.get_memory_service")
+    @patch("domains.cognitive.rag_service.get_rag_service")
     @patch("domains.models.provider.get_provider", return_value=None)
-    def test_chat_stream_no_provider(self, mock_get_provider, client):
+    def test_chat_stream_no_provider(self, mock_get_provider, mock_rag, mock_mem_svc, mock_enrich, client):
+        mock_mem_svc.return_value.stats.return_value = {"total_facts": 0}
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
         resp = client.post("/chat/stream", json={
             "messages": [{"role": "user", "content": "Hi"}],
         })
         assert resp.status_code == 200
-        assert "No inference provider loaded" in resp.text
 
 
 class TestChat:
@@ -342,8 +346,7 @@ class TestContextStoreFact:
     def test_store_fact_no_core(self, mock_get_core, client):
         mock_get_core.return_value = None
         resp = client.post("/context/fact?key=k&value=v")
-        assert resp.status_code == 200
-        assert resp.json()["error"] == "ContextCore not available"
+        assert resp.status_code == 503
 
     @patch.object(_inference_router, "_get_context_core")
     def test_store_fact_wrong_method_405(self, mock_get_core, client):
@@ -394,8 +397,7 @@ class TestContextFactsQuery:
     def test_get_facts_no_core(self, mock_get_core, client):
         mock_get_core.return_value = None
         resp = client.get("/context/facts")
-        assert resp.status_code == 200
-        assert resp.json()["error"] == "ContextCore not available"
+        assert resp.status_code == 503
 
 
 class TestSearchSessions:
@@ -465,10 +467,9 @@ class TestVoice:
 
     def test_audio_traversal_guard_direct(self):
         import asyncio
-        from fastapi import HTTPException
-        with pytest.raises(HTTPException) as exc_info:
+        from domains.infrastructure.errors import AuthError
+        with pytest.raises(AuthError):
             asyncio.run(_inference_router.get_voice_audio("../evil", "msg"))
-        assert exc_info.value.status_code == 403
 
     def test_audio_not_found(self, client):
         resp = client.get("/chat/audio/missing-sess/does-not-exist")

@@ -118,8 +118,13 @@ class EmbeddingDevice(AIDevice):
     def read(self, args: str = "") -> str:
         if not self._last_embedding:
             return "  No embedding computed yet. Write text first: echo <text> > /dev/embedding"
-        vec = self._last_embedding[:8]
-        return f"[{', '.join(f'{v:.4f}' for v in vec)}...] ({len(self._last_embedding)} dims)"
+        vec = self._last_embedding
+        # Show first few non-zero values for readability
+        nonzero = [v for v in vec if abs(v) > 1e-6]
+        if nonzero:
+            preview = nonzero[:6]
+            return f"[{', '.join(f'{v:.4f}' for v in preview)}...] ({len(vec)} dims, {len(nonzero)} non-zero)"
+        return f"[all zeros] ({len(vec)} dims)"
 
     def write(self, data: str) -> str:
         text = data.strip()
@@ -131,11 +136,15 @@ class EmbeddingDevice(AIDevice):
     def _compute_embedding(self, text: str) -> list[float]:
         if self._embed_fn:
             return self._embed_fn(text)
-        # Simple n-gram TF-IDF fallback
-        random.seed(sum(ord(c) for c in text[:100]))
-        vec = [random.gauss(0, 0.1) for _ in range(64)]
-        random.seed()
-        return vec
+        # Use the project's real embedder (sentence-transformers or n-gram fallback)
+        try:
+            from domains.inference.vector_store import simple_embed
+            return simple_embed(text)
+        except Exception:
+            # Absolute fallback — deterministic based on text content
+            import hashlib
+            h = hashlib.sha256(text.encode()).digest()
+            return [b / 255.0 for b in h[:64]]
 
 
 class KnowledgeDevice(AIDevice):

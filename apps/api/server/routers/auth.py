@@ -3,13 +3,13 @@ Auth Router - JWT token management + login/register/me/logout endpoints
 """
 import uuid, json, os, hashlib, secrets, logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Header, Request, Depends
+from fastapi import APIRouter, Header, Request, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response
+from schemas.common import success_response, raise_error
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 USERS_FILE = os.path.join(_REPO_ROOT, "data", "users.json")
@@ -103,17 +103,17 @@ class AuthRouter:
 
     def _get_current_user(self, authorization: Optional[str] = Header(None)) -> dict:
         if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+            raise_error("Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401)
         _, _, jwt_auth, _ = self._get_auth_deps()
         token = authorization[7:]
         payload = jwt_auth.verify_token(token)
         if not payload:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
+            raise_error("Invalid or expired token", "E_AUTH_MISSING", status_code=401)
         user_id = payload.get("sub", "")
         users = self._load_users()
         user = users.get(user_id)
         if not user:
-            raise HTTPException(status_code=401, detail="User not found")
+            raise_error("User not found", "E_AUTH_MISSING", status_code=401)
         return {"id": user_id, "username": user["username"], "email": user["email"]}
 
     # ---------- route registration ----------
@@ -139,7 +139,7 @@ class AuthRouter:
             for uid, u in users.items():
                 if u["username"] == req.username:
                     if not self._verify_password(req.password, u.get("password_hash", "")):
-                        raise HTTPException(status_code=401, detail="Invalid credentials")
+                        raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
                     if not u.get("password_hash", "").startswith("v1:"):
                         u["password_hash"] = self._hash_password(req.password)
                         self._save_users(users)
@@ -149,7 +149,7 @@ class AuthRouter:
                         token=token,
                         user=UserInfo(id=uid, username=u["username"], email=u["email"]),
                     )
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
 
         async def register(req: RegisterRequest) -> dict:
             """Register a new user account with username, email, and password.
@@ -168,7 +168,7 @@ class AuthRouter:
             """
             users = self._load_users()
             if any(u["username"] == req.username for u in users.values()):
-                raise HTTPException(status_code=409, detail="Username already exists")
+                raise_error("Username already exists", "E_INFRA_BUSY", status_code=409)
             uid = str(uuid.uuid4())
             users[uid] = {
                 "username": req.username,
@@ -221,7 +221,7 @@ class AuthRouter:
             client_ip = request.client.host if request.client else "unknown"
             if token_request.api_key not in valid_keys:
                 audit_logger.log("auth_failed", client_ip, resource="/auth/token", extra={"action": "token_create", "status": "failure"})
-                raise HTTPException(status_code=401, detail="Invalid API key")
+                raise_error("Invalid API key", "E_AUTH_MISSING", status_code=401)
             token = jwt_auth.create_token(user_id=token_request.api_key[:8])
             audit_logger.log("auth_success", client_ip, resource="/auth/token", extra={"action": "token_create", "status": "success"})
             return TokenResponse(access_token=token, token_type="bearer", expires_in=exp_hours * 3600)
@@ -243,11 +243,11 @@ class AuthRouter:
             """
             _, _, jwt_auth, _ = self._get_auth_deps()
             if not authorization or not authorization.startswith("Bearer "):
-                raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+                raise_error("Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401)
             token = authorization[7:]
             payload = jwt_auth.verify_token(token)
             if not payload:
-                raise HTTPException(status_code=401, detail="Invalid or expired token")
+                raise_error("Invalid or expired token", "E_AUTH_MISSING", status_code=401)
             return success_response(data={"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")})
 
         async def refresh_token(authorization: Optional[str] = Header(None)) -> dict:
@@ -267,11 +267,11 @@ class AuthRouter:
             """
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
             if not authorization or not authorization.startswith("Bearer "):
-                raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+                raise_error("Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401)
             token = authorization[7:]
             new_token = jwt_auth.refresh_token(token)
             if not new_token:
-                raise HTTPException(status_code=401, detail="Invalid or expired token")
+                raise_error("Invalid or expired token", "E_AUTH_MISSING", status_code=401)
             return TokenResponse(access_token=new_token, token_type="bearer", expires_in=exp_hours * 3600)
 
         self.router.add_api_route("/login", login, methods=["POST"], response_model=AuthResponse)

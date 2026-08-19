@@ -271,12 +271,9 @@ class TestConversations:
         client.get("/feedback/conversations")
         ctrl.list_conversations.assert_called_once_with(limit=50)
 
-    def test_list_conversations_zero_limit_passthrough(self, mock_get_ctrl, client):
-        ctrl = MagicMock()
-        ctrl.list_conversations.return_value = []
-        mock_get_ctrl.return_value = ctrl
-        client.get("/feedback/conversations?limit=0")
-        ctrl.list_conversations.assert_called_once_with(limit=0)
+    def test_list_conversations_zero_limit_rejected(self, mock_get_ctrl, client):
+        resp = client.get("/feedback/conversations?limit=0")
+        assert resp.status_code == 422
 
     def test_get_conversation_found(self, mock_get_ctrl, client):
         ctrl = MagicMock()

@@ -2,7 +2,6 @@ package com.sloughgpt
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
-import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 class MainActivity : ReactActivity() {
@@ -15,7 +14,8 @@ class MainActivity : ReactActivity() {
 
     /**
      * Returns the instance of the [ReactActivityDelegate].
+     * fabricEnabled=false to avoid loading C++ feature flags lib on old arch.
      */
     override fun createReactActivityDelegate(): ReactActivityDelegate =
-        DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
+        DefaultReactActivityDelegate(this, mainComponentName, false)
 }

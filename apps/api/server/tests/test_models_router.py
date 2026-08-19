@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for models router — list, current, hf, cache-usage, export-formats.
 
@@ -15,6 +16,7 @@ from fastapi import FastAPI
 from routers.models import router as models_router
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(models_router)
 client = TestClient(app)
 

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.benchmark import router
 
 
@@ -54,6 +55,7 @@ def _patch_server(provider):
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 

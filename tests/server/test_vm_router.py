@@ -7,12 +7,14 @@ from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.vm import router
 
 
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -48,7 +50,7 @@ class TestVmRun:
         try:
             resp = client.post("/vm/run", json={"source": "mov eax, 1"})
             assert resp.status_code == 503
-            assert "VM module not available" in resp.json()["detail"]
+            assert "VM module not available" in resp.json()["error"]
         finally:
             builtins.__import__ = real_import
 

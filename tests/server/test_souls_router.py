@@ -238,14 +238,14 @@ class TestSoulChat:
             "prompt": "Hello",
             "max_new_tokens": 10,
         })
-        assert resp.status_code in (200, 500)
+        assert resp.status_code == 404
 
     def test_chat_invalid_checkpoint_name(self, client):
         resp = client.post("/souls/chat", json={
             "checkpoint_name": "../evil",
             "prompt": "Hello",
         })
-        assert resp.status_code == 200
+        assert resp.status_code == 422
         assert resp.json()["error"] == "Invalid checkpoint name"
 
     def test_chat_missing_checkpoint_name(self, client):
@@ -283,7 +283,7 @@ class TestSaveTraitWeights:
     def test_save_propagates_error(self, mock_get_config, client):
         mock_get_config.side_effect = RuntimeError("boom")
         resp = client.post("/souls/weights", json={"personality": {"warmth": 0.5}})
-        assert resp.status_code == 200
+        assert resp.status_code == 500
         assert resp.json()["error"] == "An unexpected error occurred."
 
 
@@ -334,7 +334,7 @@ class TestWeightSnapshotLifecycle:
     def test_snapshot_error_propagates(self, mock_get_config, client):
         mock_get_config.side_effect = RuntimeError("disk full")
         resp = client.post("/souls/weights/snapshot/x")
-        assert resp.status_code == 200
+        assert resp.status_code == 500
         assert resp.json()["error"] == "An unexpected error occurred."
 
 
@@ -371,7 +371,7 @@ class TestGetTraitWeightsPatched:
     def test_error_propagates(self, mock_get_mgr, client):
         mock_get_mgr.side_effect = RuntimeError("boom")
         resp = client.get("/souls/weights")
-        assert resp.status_code == 200
+        assert resp.status_code == 500
         assert resp.json()["error"] == "An unexpected error occurred."
 
 
@@ -426,7 +426,7 @@ class TestGetSoulStatsPatched:
     def test_error_propagates(self, mock_get_mgr, client):
         mock_get_mgr.side_effect = RuntimeError("boom")
         resp = client.get("/souls/stats")
-        assert resp.status_code == 200
+        assert resp.status_code == 500
         assert resp.json()["error"] == "An unexpected error occurred."
 
 

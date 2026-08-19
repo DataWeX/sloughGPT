@@ -5,10 +5,10 @@ Exposes meta-weight adjustments computed from user feedback history
 and similar-message vector search. Also wired into the inference
 pipeline so generation parameters are automatically tuned per-user.
 """
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from schemas.common import success_response
+from schemas.common import raise_error, success_response
 
 
 class GetMetaWeightsRequest(BaseModel):
@@ -50,7 +50,7 @@ class MetaWeightsRouter:
         from domains.feedback import get_meta_weight_manager as _get_manager
         manager = _get_manager()
         if manager is None:
-            raise HTTPException(status_code=503, detail="Meta-weight system not available")
+            raise_error("Meta-weight system not available", "E_BAD_REQUEST", status_code=503)
         weights = manager.get_adjustment(
             user_message=request.user_message, k=request.k or 5, user_id=request.user_id or "default"
         )
@@ -76,7 +76,7 @@ class MetaWeightsRouter:
         from domains.feedback import get_meta_weight_manager as _get_manager
         manager = _get_manager()
         if manager is None:
-            raise HTTPException(status_code=503, detail="Meta-weight system not available")
+            raise_error("Meta-weight system not available", "E_BAD_REQUEST", status_code=503)
         return success_response(data=manager.get_stats())
 
     async def ping(self) -> dict:

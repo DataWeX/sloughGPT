@@ -5,9 +5,9 @@ Delegates to the canonical FeedbackWorkflowManager from the feedback domain.
 """
 from typing import Dict, Any
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
-from schemas.common import success_response
+from schemas.common import raise_error, success_response
 
 
 class WorkflowStartRequest(BaseModel):
@@ -34,7 +34,7 @@ class WorkflowRouter:
             from domains.feedback import get_feedback_workflow
             return get_feedback_workflow()
         except ImportError:
-            raise HTTPException(status_code=503, detail="Workflow module not available")
+            raise_error("Workflow module not available", "E_BAD_REQUEST", status_code=503)
 
     async def get_workflow_status(self) -> Dict[str, Any]:
         """Get current workflow status and statistics."""
@@ -70,7 +70,7 @@ class WorkflowRouter:
         elif action == "export":
             return workflow.trigger_export()
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+            raise_error(f"Unknown action: {action}", "E_BAD_REQUEST", status_code=400)
 
 
 _workflow_router = WorkflowRouter()

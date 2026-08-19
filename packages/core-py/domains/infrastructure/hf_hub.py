@@ -34,9 +34,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import requests
 
-from downcraft import state as dc_state
-from downcraft.downloader import DownloadError, download_file
-from downcraft.verify import _sha256_of, verify_file
+from downcraft.download import state as dc_state
+from downcraft.download.http import DownloadError, download_file
+from downcraft.download.verify import _sha256_of, verify_file
 
 logger = logging.getLogger(__name__)
 

@@ -484,6 +484,12 @@ if __name__ == "__main__":
         default=False,
         help="Run as daemon (detach from terminal)",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Kill existing process on port and start fresh (default: connect to existing)",
+    )
     args = parser.parse_args()
 
     # Daemonize if requested — use subprocess to avoid fork() issues
@@ -492,6 +498,8 @@ if __name__ == "__main__":
         cmd = [sys.executable, __file__]
         if args.port:
             cmd += ["--port", str(args.port)]
+        if args.force:
+            cmd += ["--force"]
         proc = sp.Popen(
             cmd,
             stdin=sp.DEVNULL,
@@ -502,16 +510,67 @@ if __name__ == "__main__":
         logger.info("Server started as daemon (PID %s)", proc.pid)
         sys.exit(0)
 
-    # Kill orphan processes on target port to avoid port conflicts
     bind_port = args.port or cfg.port
+
+    # ── Singleton gate ────────────────────────────────────────────────
+    # Detect whether the port is in use.  If it is, determine whether
+    # the occupant is a healthy SloughGPT server or something else.
+    # Without --force: healthy server -> exit 0 (reuse); non-server -> exit 1.
+    # With --force: kill everything on the port and proceed.
+    import socket as _sock
+    _port_open = True
     try:
-        orphans = subprocess.check_output(["lsof", "-ti", f":{bind_port}"], timeout=5).decode().strip().split()
-        for pid in orphans:
-            if pid and pid != str(os.getpid()):
-                os.kill(int(pid), 9)
-                logger.warning("Killed orphan process %s on port %d", pid, bind_port, extra={"tag": "START"})
-    except Exception:
+        with _sock.create_connection(("127.0.0.1", bind_port), timeout=1.0):
+            _port_open = False
+    except (ConnectionRefusedError, OSError, TimeoutError):
         pass
+
+    if not _port_open:
+        # Something is listening -- is it a SloughGPT server?
+        import urllib.request as _urllib_request
+        _is_server = False
+        try:
+            req = _urllib_request.Request(f"http://127.0.0.1:{bind_port}/health", method="GET")
+            with _urllib_request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    _is_server = True
+        except Exception:
+            pass
+
+        if _is_server and not args.force:
+            logger.info(
+                "Server already running on port %d -- exiting (use --force to replace)",
+                bind_port, extra={"tag": "START"},
+            )
+            sys.exit(0)
+
+        if args.force:
+            try:
+                pids = subprocess.check_output(
+                    ["lsof", "-ti", f":{bind_port}"], timeout=5,
+                ).decode().strip().split()
+                for pid in pids:
+                    if pid and pid != str(os.getpid()):
+                        os.kill(int(pid), 9)
+                        logger.warning("Killed process %s on port %d (--force)", pid, bind_port, extra={"tag": "START"})
+            except Exception:
+                pass
+        elif not _is_server:
+            # Port occupied by a non-server process
+            try:
+                pids = subprocess.check_output(
+                    ["lsof", "-ti", f":{bind_port}"], timeout=5,
+                ).decode().strip().split()
+                pids = [p for p in pids if p and p != str(os.getpid())]
+                if pids:
+                    logger.error(
+                        "Port %d occupied by process %s (not a SloughGPT server). "
+                        "Use --force to kill it.",
+                        bind_port, ",".join(pids), extra={"tag": "START"},
+                    )
+                    sys.exit(1)
+            except Exception:
+                pass
 
     # Background daemons start AFTER uvicorn binds (moved from pre-uvicorn)
     # They are now started in the lifespan context below.
