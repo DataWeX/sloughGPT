@@ -50,6 +50,9 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/agents', labelKey: 'nav.agents', shortcut: '5', icon: '🤖', description: 'Manage agents' },
       { path: '/multimodal', labelKey: 'nav.multimodal', shortcut: '9', icon: '🎨', description: 'Vision & speech' },
       { path: '/souls', labelKey: 'nav.souls', shortcut: '6', icon: '👻', description: 'Personalities & voice' },
+      { path: '/benchmark', labelKey: 'nav.benchmark', icon: '📈', description: 'Model evaluation' },
+      { path: '/compare', labelKey: 'nav.compare', icon: '⚖️', description: 'Compare models' },
+      { path: '/tokenizer', labelKey: 'nav.tokenizer', icon: '🔤', description: 'Tokenizer explorer' },
     ],
   },
   {
@@ -58,6 +61,8 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/monitoring', labelKey: 'nav.monitoring', shortcut: '7', icon: '💓', description: 'System status' },
       { path: '/settings', labelKey: 'nav.settings', shortcut: 'shift+A', icon: '⚙️', description: 'App settings' },
       { path: '/export', labelKey: 'nav.export', icon: '📦', description: 'Export models & data' },
+      { path: '/files', labelKey: 'nav.files', icon: '📁', description: 'File management' },
+      { path: '/images', labelKey: 'nav.images', icon: '🖼️', description: 'Image generation' },
     ],
   },
   {
@@ -65,6 +70,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     routes: [
       { path: '/feedback', labelKey: 'nav.feedback', icon: '💬', description: 'Feedback analytics' },
       { path: '/adapters', labelKey: 'nav.adapters', icon: '🔧', description: 'LoRA adapter management' },
+      { path: '/learn', labelKey: 'nav.learn', icon: '📖', description: 'Learning pipeline' },
     ],
   },
 ]
@@ -90,9 +96,15 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/agents': IconAgents,
   '/multimodal': IconVision,
   '/souls': IconBrain,
+  '/benchmark': IconActivity,
+  '/compare': IconBrain,
+  '/tokenizer': IconBrain,
   '/monitoring': IconActivity,
   '/settings': IconSettings,
   '/export': IconDownload,
+  '/files': IconBrain,
+  '/images': IconVision,
   '/feedback': IconActivity,
   '/adapters': IconSettings,
+  '/learn': IconBrain,
 }

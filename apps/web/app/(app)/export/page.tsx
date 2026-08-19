@@ -2,9 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
-import { IconDownload } from '@/components/icons/NavIcons'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Badge, IconDownload, IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -116,15 +114,6 @@ export default function ExportPage() {
     }
   }
 
-  const handleDownloadFeedbackExport = async () => {
-    try {
-      const blob = await trainingJobsController.downloadTrainingJob('latest')
-      downloadBlob(blob, `feedback-export-${Date.now()}.json`)
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Feedback export not available')
-    }
-  }
-
   const fmtBytes = (bytes?: number) => {
     if (!bytes) return ''
     if (bytes < 1024) return `${bytes} B`
@@ -223,16 +212,6 @@ export default function ExportPage() {
                   Download Training Pairs (JSONL)
                 </span>
               )}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadFeedbackExport}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <IconDownload className="h-3.5 w-3.5" />
-                Download Feedback Export
-              </span>
             </Button>
           </div>
         </CardContent>
