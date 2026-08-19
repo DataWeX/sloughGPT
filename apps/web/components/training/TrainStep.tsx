@@ -55,18 +55,32 @@ export function TrainStep({ form, datasets, onBack }: StepProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-md bg-muted/30 border border-border/40 p-3 text-xs text-muted-foreground space-y-1">
-          <div>Method: <span className="font-medium text-foreground">{METHOD_LABELS[form.method]}</span></div>
-          {datasetName && <div>Dataset: <span className="font-medium text-foreground">{datasetName}</span></div>}
+          <div className="flex items-center justify-between">
+            <span>Method</span>
+            <span className="font-medium text-foreground">{METHOD_LABELS[form.method]}</span>
+          </div>
+          {datasetName && (
+            <div className="flex items-center justify-between">
+              <span>Dataset</span>
+              <span className="font-medium text-foreground truncate ml-4">{datasetName}</span>
+            </div>
+          )}
           {form.inputMode === 'text' && form.textInput.trim() && (
-            <div>Source: <span className="font-medium text-foreground">Pasted text ({form.textInput.length.toLocaleString()} chars)</span></div>
+            <div className="flex items-center justify-between">
+              <span>Source</span>
+              <span className="font-medium text-foreground">Pasted text ({form.textInput.length.toLocaleString()} chars)</span>
+            </div>
           )}
           {rows.map(row => (
-            <div key={row.label}>{row.label}: <span className="font-medium text-foreground">{row.value}</span></div>
+            <div key={row.label} className="flex items-center justify-between">
+              <span>{row.label}</span>
+              <span className="font-medium text-foreground">{row.value}</span>
+            </div>
           ))}
         </div>
 
         <div className="flex items-center gap-2">
-          <Button size="sm" disabled={!form.canStart} onClick={() => form.startTraining()}>
+          <Button size="sm" disabled={!form.canStart} onClick={() => form.startTraining()} className="h-8">
             {form.method === 'distill' && form.inputMode === 'text' && form.textInput.trim()
               ? 'Train on pasted text'
               : form.method === 'vlm' ? 'Start vision training' : 'Start training'}

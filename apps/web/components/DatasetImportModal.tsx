@@ -449,6 +449,9 @@ export function DatasetImportModal({
                   onChange={(e) => setDatasetId(e.target.value)}
                   className="mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Examples: <code className="font-mono text-[10px]">HuggingFaceH4/tinyshakespeare</code>, <code className="font-mono text-[10px]">HuggingFaceH4/ultrachat_200k</code>
+                </p>
               </div>
             </div>
           )}
@@ -467,10 +470,10 @@ export function DatasetImportModal({
                 <p className="text-xs text-muted-foreground mt-1">
                   Examples: <code className="font-mono text-[10px]">zillow/zecon</code>, <code className="font-mono text-[10px]">nlp-datasets/tinyshakespeare</code>, <code className="font-mono text-[10px]">datasets/opensubtitles</code>
                 </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Requires Kaggle CLI installed and authenticated (<code className="font-mono text-[10px]">kaggle config</code>)
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Requires Kaggle CLI installed and authenticated (<code className="font-mono text-[10px]">kaggle config</code>)
-              </p>
             </div>
           )}
 
