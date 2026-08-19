@@ -31,20 +31,31 @@ export default function BenchmarkPage() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
-    modelController.getHealth().then(h => {
-      if (h?.model_type) setCurrentModel(h.model_type)
-    }).catch(() => {})
+    const loadBenchmark = async () => {
+      let model = 'gpt2'
+      try {
+        const h = await modelController.getHealth()
+        model = h?.model_type ?? 'gpt2'
+        setCurrentModel(model)
+      } catch { /* use default */ }
 
-    Promise.all([
-      benchmarkController.metrics(currentModel).catch(() => null),
-      benchmarkController.quality().catch(() => null),
-      benchmarkController.stats().catch(() => null),
-    ]).then(([m, q, s]) => {
-      setMetrics(m)
-      setQuality(q)
-      setStats(s)
-      if (!m && !q && !s) setLoadError('Could not load benchmark data. Is the server running?')
-    }).finally(() => setLoading(false))
+      try {
+        const [m, q, s] = await Promise.all([
+          benchmarkController.metrics(model).catch(() => null),
+          benchmarkController.quality().catch(() => null),
+          benchmarkController.stats().catch(() => null),
+        ])
+        setMetrics(m)
+        setQuality(q)
+        setStats(s)
+        if (!m && !q && !s) setLoadError('Could not load benchmark data. Is the server running?')
+      } catch {
+        setLoadError('Could not load benchmark data. Is the server running?')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadBenchmark()
   }, [])
 
   const handleRefreshMetrics = async () => {
