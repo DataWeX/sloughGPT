@@ -3,6 +3,7 @@ import {
   TextInput,
   Pressable,
   Keyboard,
+  Alert,
 } from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
@@ -10,6 +11,7 @@ import {triggerHaptic} from '../services/haptics';
 import {QuickPromptPicker} from './QuickPromptPicker';
 import {SlashCommandPicker} from './SlashCommandPicker';
 import {pickDocument, isTextFile, formatFileSize} from '../services/file-upload';
+import {takePhoto, pickImage, imageDataUrl} from '../services/image-upload';
 import {getDraft, saveDraft, clearDraft} from '../services/drafts';
 import {toast} from '../services/toast';
 import {Icon} from './Icon';
@@ -17,6 +19,7 @@ import type {ChatCommand} from '../services/chat-commands';
 
 interface Props {
   onSend: (text: string) => void;
+  onSendWithImages?: (text: string, images: string[]) => void;
   onImage?: () => void;
   onVoice?: () => void;
   onFile?: (content: string, name: string) => void;
@@ -31,7 +34,7 @@ interface Props {
   onExecuteCommand?: (command: ChatCommand, args: string[]) => void;
 }
 
-export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit, voiceMessageMode, onVoiceMessageToggle, onExecuteCommand}: Props) {
+export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit, voiceMessageMode, onVoiceMessageToggle, onExecuteCommand}: Props) {
   const colors = useColors();
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
@@ -95,27 +98,61 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
 
   const handlePlus = async () => {
     await triggerHaptic('light');
-    try {
-      const file = await pickDocument();
-      if (file) {
-        if (isTextFile(file) && onFile) {
+    Alert.alert('Add Attachment', 'Choose an option', [
+      {
+        text: 'Camera',
+        onPress: async () => {
           try {
-            const RNFS = require('react-native-fs');
-            const content = await RNFS.readFile(decodeURIComponent(file.uri.replace('file://', '')));
-            onFile(content, file.name);
-          } catch {
-            toast.warn('File reading not available — install react-native-fs');
-            return;
+            const photo = await takePhoto();
+            if (photo) {
+              const dataUrl = imageDataUrl(photo);
+              if (onSendWithImages) {
+                onSendWithImages('What do you see in this image?', [dataUrl]);
+              } else if (onImage) {
+                onImage();
+              }
+            }
+          } catch (e: any) {
+            toast.error(e.message || 'Failed to take photo');
           }
-        } else if (file.mimeType.startsWith('image/') && onImage) {
-          onImage();
-        } else {
-          toast.warn(`${file.name} (${formatFileSize(file.size)}) — text files only for now`);
-        }
-      }
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to pick file');
-    }
+        },
+      },
+      {
+        text: 'Gallery',
+        onPress: async () => {
+          if (onImage) {
+            onImage();
+          }
+        },
+      },
+      {
+        text: 'File',
+        onPress: async () => {
+          try {
+            const file = await pickDocument();
+            if (file) {
+              if (isTextFile(file) && onFile) {
+                try {
+                  const RNFS = require('react-native-fs');
+                  const content = await RNFS.readFile(decodeURIComponent(file.uri.replace('file://', '')));
+                  onFile(content, file.name);
+                } catch {
+                  toast.warn('File reading not available — install react-native-fs');
+                  return;
+                }
+              } else if (file.mimeType.startsWith('image/') && onImage) {
+                onImage();
+              } else {
+                toast.warn(`${file.name} (${formatFileSize(file.size)}) — text files only for now`);
+              }
+            }
+          } catch (e: any) {
+            toast.error(e.message || 'Failed to pick file');
+          }
+        },
+      },
+      {text: 'Cancel', style: 'cancel'},
+    ]);
   };
 
   const hasText = text.trim().length > 0;

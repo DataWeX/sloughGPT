@@ -349,6 +349,7 @@ export function ChatScreen() {
 
         <ChatInput
           onSend={a.handleSend}
+          onSendWithImages={a.handleSendWithImages}
           onImage={a.handleImage}
           onVoice={a.handleVoice}
           onFile={a.handleFile}

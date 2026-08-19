@@ -129,6 +129,13 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     }
   }, [sendMessage]);
 
+  const handleSendWithImages = useCallback(
+    (text: string, images: string[]) => {
+      sendMessage(text, images);
+    },
+    [sendMessage],
+  );
+
   const handleSuggestion = useCallback(
     (s: string) => {
       sendMessage(s);
@@ -251,6 +258,7 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     handleFile,
     handleSend,
     handleImage,
+    handleSendWithImages,
     handleVoice: voice.handleVoice,
     handleSuggestion,
     handleSelectSearchSession,
