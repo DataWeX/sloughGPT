@@ -160,10 +160,6 @@ export default function SoulsPage() {
   // ── Dialogs ──
   const [detailSoul, setDetailSoul] = useState<Soul | null>(null)
   const [compareSoul, setCompareSoul] = useState<Soul | null>(null)
-  const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const [createPath, setCreatePath] = useState('')
-  const [createName, setCreateName] = useState('')
-  const [creating, setCreating] = useState(false)
   const [checkpointDetail, setCheckpointDetail] = useState<Checkpoint | null>(null)
 
   const addToast = useToastStore(s => s.addToast)
@@ -204,23 +200,6 @@ export default function SoulsPage() {
       addToast('Failed to switch soul', 'error')
     } finally {
       setSwitching(null)
-    }
-  }
-
-  const handleCreate = async () => {
-    if (!createPath.trim()) return
-    setCreating(true)
-    try {
-      const result = await soulsController.list()
-      setSouls(result.souls)
-      setCreateDialogOpen(false)
-      setCreatePath('')
-      setCreateName('')
-      addToast('Soul registered', 'success')
-    } catch {
-      addToast('Failed to register soul', 'error')
-    } finally {
-      setCreating(false)
     }
   }
 
@@ -390,14 +369,9 @@ export default function SoulsPage() {
       <AppRouteHeader
         left={<AppRouteHeaderLead title="Souls" subtitle={`${souls.length} personalities · ${currentSoul ?? 'none'} active`} />}
         right={
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setCreateDialogOpen(true)}>
-              <IconPlus className="h-3.5 w-3.5 mr-1" /> Register
-            </Button>
-            <Button size="sm" variant="ghost" onClick={handleRefresh}>
-              <IconRefresh className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button size="sm" variant="ghost" onClick={handleRefresh}>
+            <IconRefresh className="h-4 w-4" />
+          </Button>
         }
       />
 
@@ -442,7 +416,6 @@ export default function SoulsPage() {
                   {!searchQuery && (
                     <p className="text-xs text-muted-foreground">
                       Souls are loaded from <code className="bg-muted px-1 rounded">.soul</code> files in <code className="bg-muted px-1 rounded">models/</code>.
-                      Click &quot;Register&quot; to add a soul from a file path.
                     </p>
                   )}
                 </div>
@@ -1045,44 +1018,6 @@ export default function SoulsPage() {
               </div>
             )
           })()}
-        </DialogContent>
-      </Dialog>
-
-      {/* Register Soul Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={(open) => { if (!open) setCreateDialogOpen(false) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Register Soul</DialogTitle>
-            <DialogDescription>
-              Register an existing .soul file from disk. The file must be in the models/ directory.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">File Path</label>
-              <Input
-                value={createPath}
-                onChange={e => setCreatePath(e.target.value)}
-                placeholder="/absolute/path/to/soul.soul"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Name (optional)</label>
-              <Input
-                value={createName}
-                onChange={e => setCreateName(e.target.value)}
-                placeholder="Override soul name"
-                className="mt-1"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleCreate} disabled={!createPath.trim() || creating}>
-                {creating ? 'Registering...' : 'Register'}
-              </Button>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
 
