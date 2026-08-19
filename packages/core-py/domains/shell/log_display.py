@@ -109,38 +109,47 @@ class LineModeLogDisplay:
         self.unread_warnings = 0
         self.unread_errors = 0
 
-    def render_recent(self, n: int = 20, level: str | None = None) -> str:
+    @staticmethod
+    def _format_entry(entry: LogEntry) -> str:
+        """Format a single log entry as a coloured string.
+
+        Args:
+            entry: The log entry to format.
+
+        Returns:
+            Formatted string with timestamp, level badge, source, and message.
+        """
+        ts = datetime.fromtimestamp(entry.timestamp).strftime("%H:%M:%S")
+        color = _LEVEL_COLORS.get(entry.level, "")
+        label = _LEVEL_LABELS.get(entry.level, entry.level[:3].upper())
+        src = entry.source.split(".")[-1] if entry.source else ""
+        msg = entry.message[:120]
+        return f"  {_C_DIM}{ts}{_C_RESET} {color}{label}{_C_RESET} {_C_DIM}{src}{_C_RESET} {msg}"
+
+    def render_recent(
+        self,
+        n: int = 20,
+        level: str | None = None,
+        source: str | None = None,
+    ) -> str:
         """Render the last *n* log entries as a formatted string.
 
         Args:
             n: Maximum entries to show.
             level: Optional filter — ``"WARNING"``, ``"ERROR"``, ``"INFO"``, etc.
+            source: Optional source substring filter.
 
         Returns:
             Multi-line string suitable for printing.
         """
-        entries = self._buffer.get(level=level, limit=n)
+        entries = self._buffer.get(level=level, source=source, limit=n)
         if not entries:
             return f"  {_C_DIM}No log entries{_C_RESET}"
-
-        lines = []
-        for entry in entries:
-            ts = datetime.fromtimestamp(entry.timestamp).strftime("%H:%M:%S")
-            color = _LEVEL_COLORS.get(entry.level, "")
-            label = _LEVEL_LABELS.get(entry.level, entry.level[:3].upper())
-            src = entry.source.split(".")[-1] if entry.source else ""
-            msg = entry.message[:120]
-            lines.append(f"  {_C_DIM}{ts}{_C_RESET} {color}{label}{_C_RESET} {_C_DIM}{src}{_C_RESET} {msg}")
-
-        return "\n".join(lines)
+        return "\n".join(self._format_entry(e) for e in entries)
 
     def render_last(self) -> str:
         """Render just the most recent log entry (for ``--last`` flag)."""
         entries = self._buffer.get(limit=1)
         if not entries:
             return f"  {_C_DIM}No log entries{_C_RESET}"
-        entry = entries[0]
-        ts = datetime.fromtimestamp(entry.timestamp).strftime("%H:%M:%S")
-        color = _LEVEL_COLORS.get(entry.level, "")
-        label = _LEVEL_LABELS.get(entry.level, entry.level[:3].upper())
-        return f"  {_C_DIM}{ts}{_C_RESET} {color}{label}{_C_RESET} {entry.message}"
+        return self._format_entry(entries[0])

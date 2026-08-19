@@ -2565,16 +2565,7 @@ Examples:
             return
 
         if show_last:
-            entries = self._log_buffer.get(limit=1)
-            if not entries:
-                self._print("  No log entries.")
-                return
-            e = entries[0]
-            from datetime import datetime as _dt
-            ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
-            color = _C_RED if e.level in ("ERROR", "CRITICAL") else \
-                    _C_YELLOW if e.level == "WARNING" else _C_DIM
-            self._print(f"  {_C_DIM}{ts}{_C_RESET} {color}{e.level}{_C_RESET} {_C_DIM}{e.source}{_C_RESET} {e.message}")
+            self._print(self._log_display.render_last())
             return
 
         if export_path:
@@ -2593,29 +2584,7 @@ Examples:
                 self._print(f"  Error writing to {export_path}: {ex}")
             return
 
-        def _render(entries):
-            from datetime import datetime as _dt
-            lines = []
-            for e in entries:
-                ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
-                color = _C_DIM
-                if e.level == "ERROR" or e.level == "CRITICAL":
-                    color = _C_RED
-                elif e.level == "WARNING":
-                    color = _C_YELLOW
-                elif e.level == "INFO":
-                    color = _C_GREEN
-                elif e.level == "DEBUG":
-                    color = _C_CYAN
-                lines.append(f"  {_C_DIM}{ts}{_C_RESET} {color}{e.level:<7s}{_C_RESET} {_C_DIM}{e.source}{_C_RESET}  {e.message}")
-            return lines
-
-        entries = self._log_buffer.get(level=level_filter, source=source_filter, limit=count)
-        if not entries:
-            self._print("  No log entries.")
-            return
-
-        lines = _render(entries)
+        output = self._log_display.render_recent(n=count, level=level_filter, source=source_filter)
         sep = f"  {_C_DIM}{'─' * 40}{_C_RESET}"
         self._print(
             f"  {_C_BOLD}Console Logs{_C_RESET} {_C_DIM}({len(self._log_buffer)} buffered)"
@@ -2624,13 +2593,11 @@ Examples:
             f"{_C_RESET}"
         )
         self._print(sep)
-        for line in lines:
-            self._print(line)
+        self._print(output)
         self._print(sep)
 
         if follow:
             self._print(f"  {_C_DIM}Following — press Ctrl+C to stop{_C_RESET}")
-            from datetime import datetime as _dt
             try:
                 offset = len(self._log_buffer)
                 while True:
@@ -2639,11 +2606,7 @@ Examples:
                         level=level_filter, source=source_filter, offset=offset
                     )
                     for e in new_entries:
-                        ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
-                        color = _C_RED if e.level in ("ERROR", "CRITICAL") else \
-                                _C_YELLOW if e.level == "WARNING" else \
-                                _C_GREEN if e.level == "INFO" else _C_CYAN
-                        self._print(f"  {_C_DIM}{ts}{_C_RESET} {color}{e.level:<7s}{_C_RESET} {_C_DIM}{e.source}{_C_RESET}  {e.message}")
+                        self._print(self._log_display._format_entry(e))
                     offset += len(new_entries)
             except KeyboardInterrupt:
                 self._print()
