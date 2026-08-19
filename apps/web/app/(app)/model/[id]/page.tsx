@@ -18,6 +18,7 @@ import { trainingJobsController } from '@/lib/training-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { generationConfigController, type GenerationConfig } from '@/lib/generation-config-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { apiGet } from '@/lib/http-client'
 
 export default function ModelDetailPage() {
@@ -118,9 +119,9 @@ export default function ModelDetailPage() {
       const device = (result as { device?: string }).device || 'cpu'
       setHealth(prev => prev ? { ...prev, model_loaded: true, model_type: modelId, device } : null)
       addToast(`Model ready: ${modelId} (${device})`, 'success')
-    } catch {
+    } catch (err) {
       setLoadState('error')
-      addToast(`Something went wrong loading ${modelId}`, 'error')
+      addToast(extractErrorMessage(err, `Failed to load ${modelId}`), 'error')
     }
   }
 
@@ -130,8 +131,8 @@ export default function ModelDetailPage() {
       setLoadState('idle')
       setHealth(prev => prev ? { ...prev, model_loaded: false, model_type: '' } : null)
       addToast('Model stopped', 'info')
-    } catch {
-      addToast('Something went wrong', 'error')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Failed to stop model'), 'error')
     }
   }
 
@@ -140,8 +141,8 @@ export default function ModelDetailPage() {
     try {
       await generationConfigController.update(genConfig)
       addToast('Generation config updated', 'success')
-    } catch {
-      addToast('Failed to save config', 'error')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Failed to save config'), 'error')
     } finally {
       setConfigSaving(false)
     }
@@ -153,9 +154,9 @@ export default function ModelDetailPage() {
     try {
       const result = await benchmarkController.run({ model: modelId })
       setBenchmark(result)
-    } catch {
-      setBenchmark({ error: 'Benchmark failed' } as BenchmarkResult)
-      addToast('Performance test failed', 'error')
+    } catch (err) {
+      setBenchmark({ error: extractErrorMessage(err, 'Benchmark failed') } as BenchmarkResult)
+      addToast(extractErrorMessage(err, 'Performance test failed'), 'error')
     } finally {
       setBenchmarking(false)
     }
@@ -388,7 +389,7 @@ export default function ModelDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Recent Activity</CardTitle>
-              <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => /* activity log refresh failed */ {})}>
+              <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => { logger.debug('Activity log refresh failed') })}>
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>

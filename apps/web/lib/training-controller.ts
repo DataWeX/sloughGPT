@@ -3,6 +3,7 @@
  */
 
 import { apiGet, apiPost, apiDelete, apiPatch, authFetch, streamSSE } from './http-client'
+import { extractErrorMessage } from '@/lib/error-utils'
 import type { Checkpoint } from './souls-controller'
 
 export interface TrainingJob {
@@ -211,10 +212,8 @@ export const trainingJobsController = {
   },
 
   async getTrainingLog(): Promise<string[]> {
-    try {
-      const data = await apiGet<{ lines: string[] }>('/auto-train/log')
-      return data.lines ?? []
-    } catch { return [] }
+    const data = await apiGet<{ lines: string[] }>('/auto-train/log')
+    return data.lines ?? []
   },
 
   async resumeTraining(): Promise<{ success: boolean }> {
@@ -245,10 +244,8 @@ export const trainingJobsController = {
   },
 
   async listFineTuned(): Promise<FineTunedModel[]> {
-    try {
-      const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>('/training/finetuned-models')
-      return Array.isArray(data) ? data : (data?.models ?? [])
-    } catch { return [] }
+    const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>('/training/finetuned-models')
+    return Array.isArray(data) ? data : (data?.models ?? [])
   },
 
   async loadFineTuned(name: string): Promise<FineTunedModelLoadResponse> {
@@ -262,8 +259,9 @@ export const trainingJobsController = {
   async get(id: string): Promise<TrainingJob | null> {
     try {
       return await apiGet<TrainingJob>(`/training/jobs/${id}`)
-    } catch {
-      return null
+    } catch (err) {
+      if (extractErrorMessage(err).includes('404')) return null
+      throw err
     }
   },
 

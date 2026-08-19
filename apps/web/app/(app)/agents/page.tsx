@@ -304,7 +304,10 @@ export default function AgentsPage() {
       await agentsController.delete(id)
       addToast('Agent deleted', 'success', undefined, () => {
         setAgents(prev => [deleted, ...prev])
-        agentsController.create({ name: deleted.name, description: deleted.description, instructions: deleted.instructions, tools: deleted.tools }).catch(() => {})
+        agentsController.create({ name: deleted.name, description: deleted.description, instructions: deleted.instructions, tools: deleted.tools }).catch(() => {
+          addToast('Failed to restore agent', 'error')
+          fetchAgents()
+        })
       })
     } catch {
       setAgents(prev => [deleted, ...prev])
