@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
@@ -11,6 +12,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function AdaptersPage() {
+  const router = useRouter()
   const [stats, setStats] = useState<UserAdapterStats | null>(null)
   const [adapters, setAdapters] = useState<UserAdapterInfo[]>([])
   const [quality, setQuality] = useState<{ count: number; adapters: UserAdapterInfo[] } | null>(null)
@@ -206,8 +208,10 @@ export default function AdaptersPage() {
           {adapters.length === 0 ? (
             <div className="text-center py-6 space-y-2">
               <p className="text-sm text-muted-foreground">No adapters yet.</p>
-              <a href="/chat" className="text-sm text-primary hover:underline">Start a chat</a>
-              <span className="text-sm text-muted-foreground"> and give feedback to create adapters.</span>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+                Start a chat
+              </Button>
+              <p className="text-xs text-muted-foreground">and give feedback to create adapters.</p>
             </div>
           ) : (
             <div className="space-y-2">
