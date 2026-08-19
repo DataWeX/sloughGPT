@@ -147,7 +147,14 @@ export default function BenchmarkPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No metrics available. Is a model loaded?</p>
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                No metrics available. Is a model loaded?
+                <div className="mt-2">
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/models')}>
+                    Open Models
+                  </Button>
+                </div>
+              </div>
             )}
             {stats && (
               <div className="mt-3 text-xs text-muted-foreground">

@@ -242,7 +242,14 @@ export default function FeedbackPage() {
                   <StatCard label="Quality Score" value={trainStats.quality_score != null ? `${(trainStats.quality_score * 100).toFixed(1)}%` : '—'} />
                 </KpiGrid>
               ) : (
-                <p className="text-sm text-muted-foreground">No training data available.</p>
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  No training data available.
+                  <div className="mt-2">
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/training')}>
+                      Go to Training
+                    </Button>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
