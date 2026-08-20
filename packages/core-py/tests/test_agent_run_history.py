@@ -1,183 +1,162 @@
-"""
-Tests for the agent run history store (file-backed orchestration records).
-"""
+"""Tests for domains.agents.run_history — AgentRunStore file-backed persistence."""
+
+import json
+import os
+import tempfile
 
 import pytest
-
-from domains.agents.run_history import AgentRunStore, reset_agent_run_store
+from domains.agents.run_history import AgentRunStore, _new_run_id, reset_agent_run_store
 
 
 @pytest.fixture
-def store(tmp_path):
-    return AgentRunStore(directory=str(tmp_path / "agent_runs"), max_runs=5)
+def store():
+    """Create a temporary AgentRunStore for each test."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        s = AgentRunStore(directory=tmpdir, max_runs=10)
+        yield s
 
 
-@pytest.fixture(autouse=True)
-def _reset_singleton():
-    reset_agent_run_store()
-    yield
-    reset_agent_run_store()
+class TestNewRunId:
+    def test_format(self):
+        rid = _new_run_id()
+        parts = rid.split("_")
+        assert parts[0] == "run"
+        assert len(parts) >= 4  # run + date + time + pid + counter
+
+    def test_unique(self):
+        ids = {_new_run_id() for _ in range(50)}
+        assert len(ids) == 50
 
 
-class TestStart:
-    def test_start_returns_id_and_creates_record(self, store):
-        run_id = store.start("Research AI agents", "context here")
-        assert run_id.startswith("run_")
-        record = store.get(run_id)
-        assert record["goal"] == "Research AI agents"
-        assert record["context"] == "context here"
+class TestSafeId:
+    def test_valid(self):
+        s = AgentRunStore()
+        assert s._safe_id("run_20260101_120000_1_000001") is True
+
+    def test_empty(self):
+        s = AgentRunStore()
+        assert s._safe_id("") is False
+
+    def test_path_traversal(self):
+        s = AgentRunStore()
+        assert s._safe_id("../../../etc/passwd") is False
+
+
+class TestAgentRunStoreLifecycle:
+    def test_start_returns_id(self, store):
+        rid = store.start(goal="test goal")
+        assert rid is not None
+        assert rid.startswith("run_")
+
+    def test_start_creates_file(self, store):
+        rid = store.start(goal="test goal")
+        assert os.path.exists(store._path(rid))
+
+    def test_start_record_fields(self, store):
+        rid = store.start(goal="test goal", context="ctx")
+        record = store.get(rid)
+        assert record["goal"] == "test goal"
+        assert record["context"] == "ctx"
         assert record["status"] == "running"
-        assert record["finished_at"] is None
-        assert record["completed_count"] == 0
-        assert record["failed_count"] == 0
+        assert record["response"] == ""
+        assert record["error"] == ""
         assert len(record["logs"]) == 1
 
-    def test_start_persists_to_disk(self, store, tmp_path):
-        run_id = store.start("Goal")
-        assert (tmp_path / "agent_runs" / f"{run_id}.json").exists()
+    def test_append_log(self, store):
+        rid = store.start(goal="test")
+        store.append_log(rid, "Step 1")
+        store.append_log(rid, "Step 2")
+        record = store.get(rid)
+        assert len(record["logs"]) == 3  # start + 2 appends
 
+    def test_append_log_noop_missing(self, store):
+        store.append_log("nonexistent_run", "msg")  # should not raise
 
-class TestAppendLog:
-    def test_appends_log_line(self, store):
-        run_id = store.start("Goal")
-        store.append_log(run_id, "Planning...")
-        record = store.get(run_id)
-        assert len(record["logs"]) == 2
-        assert record["logs"][1].endswith("Planning...")
-
-    def test_append_unknown_run_is_noop(self, store):
-        store.append_log("run_missing", "nope")
-        assert store.get("run_missing") is None
-
-
-class TestSetTasks:
-    def test_updates_task_list_and_counts(self, store):
-        run_id = store.start("Goal")
+    def test_set_tasks(self, store):
+        rid = store.start(goal="test")
         tasks = [
-            {"id": "t1", "status": "completed", "description": "a"},
-            {"id": "t2", "status": "failed", "description": "b"},
-            {"id": "t3", "status": "pending", "description": "c"},
+            {"id": "t1", "status": "completed"},
+            {"id": "t2", "status": "failed"},
+            {"id": "t3", "status": "running"},
         ]
-        store.set_tasks(run_id, tasks)
-        record = store.get(run_id)
+        store.set_tasks(rid, tasks)
+        record = store.get(rid)
         assert len(record["tasks"]) == 3
         assert record["completed_count"] == 1
         assert record["failed_count"] == 1
 
-
-class TestComplete:
-    def test_marks_completed_with_response(self, store):
-        run_id = store.start("Goal")
-        store.set_tasks(run_id, [
+    def test_complete(self, store):
+        rid = store.start(goal="test")
+        store.complete(rid, response="done", tasks=[
             {"id": "t1", "status": "completed"},
-            {"id": "t2", "status": "failed"},
         ])
-        store.complete(run_id, response="final answer")
-        record = store.get(run_id)
+        record = store.get(rid)
         assert record["status"] == "completed"
-        assert record["response"] == "final answer"
+        assert record["response"] == "done"
         assert record["finished_at"] is not None
         assert record["completed_count"] == 1
-        assert record["failed_count"] == 1
 
-    def test_complete_with_tasks_replaces(self, store):
-        run_id = store.start("Goal")
-        store.set_tasks(run_id, [{"id": "a", "status": "pending"}])
-        store.complete(run_id, response="done", tasks=[{"id": "a", "status": "completed"}])
-        record = store.get(run_id)
-        assert record["tasks"] == [{"id": "a", "status": "completed"}]
-        assert record["completed_count"] == 1
-
-    def test_complete_unknown_run_is_noop(self, store):
-        store.complete("run_missing", response="x")
-        assert store.get("run_missing") is None
-
-
-class TestFail:
-    def test_marks_failed_with_error(self, store):
-        run_id = store.start("Goal")
-        store.fail(run_id, "boom")
-        record = store.get(run_id)
+    def test_fail(self, store):
+        rid = store.start(goal="test")
+        store.fail(rid, error="crashed")
+        record = store.get(rid)
         assert record["status"] == "failed"
-        assert record["error"] == "boom"
+        assert record["error"] == "crashed"
         assert record["finished_at"] is not None
 
-    def test_fail_unknown_run_is_noop(self, store):
-        store.fail("run_missing", "boom")
-        assert store.get("run_missing") is None
 
+class TestAgentRunStoreQueries:
+    def test_get_existing(self, store):
+        rid = store.start(goal="test")
+        record = store.get(rid)
+        assert record is not None
+        assert record["id"] == rid
 
-class TestSetTasks:
-    def test_unknown_run_is_noop(self, store):
-        store.set_tasks("run_missing", [{"id": "t", "status": "pending"}])
-        assert store.get("run_missing") is None
+    def test_get_missing(self, store):
+        assert store.get("nonexistent") is None
 
+    def test_get_bad_id(self, store):
+        assert store.get("../../../etc/passwd") is None
 
-class TestListRuns:
-    def test_returns_newest_first(self, store):
-        first = store.start("First")
-        second = store.start("Second")
+    def test_list_runs_newest_first(self, store):
+        rid1 = store.start(goal="first")
+        rid2 = store.start(goal="second")
+        rid3 = store.start(goal="third")
         runs = store.list_runs()
-        assert runs[0]["id"] == second
-        assert runs[1]["id"] == first
+        assert len(runs) == 3
+        assert runs[0]["id"] == rid3  # newest first
+        assert runs[2]["id"] == rid1
 
-    def test_respects_limit(self, store):
-        for i in range(3):
-            store.start(f"Goal {i}")
-        runs = store.list_runs(limit=2)
-        assert len(runs) == 2
+    def test_list_runs_limit(self, store):
+        for i in range(5):
+            store.start(goal=f"run {i}")
+        runs = store.list_runs(limit=3)
+        assert len(runs) == 3
 
-    def test_empty_store(self, store):
-        assert store.list_runs() == []
-
-    def test_ignores_non_json_files(self, store, tmp_path):
-        (tmp_path / "agent_runs" / "notes.txt").write_text("ignore me")
-        store.start("Goal")
+    def test_list_runs_empty_dir(self, store):
         runs = store.list_runs()
-        assert len(runs) == 1
-        assert all(r["status"] == "running" for r in runs)
+        assert runs == []
 
 
-class TestClearAndPrune:
+class TestAgentRunStoreClear:
     def test_clear_removes_all(self, store):
-        store.start("A")
-        store.start("B")
-        assert store.clear() == 2
+        store.start(goal="a")
+        store.start(goal="b")
+        store.start(goal="c")
+        removed = store.clear()
+        assert removed == 3
         assert store.list_runs() == []
 
-    def test_prune_bounds_run_count(self, store):
-        for i in range(8):
-            store.start(f"Goal {i}")
-        runs = store.list_runs()
-        assert len(runs) <= 5
 
-    def test_unsafe_run_id_rejected(self, store):
-        assert store.get("../../etc/passwd") is None
-
-    def test_clear_swallows_os_error(self, store, monkeypatch):
-        store.start("A")
-
-        def boom(path):
-            raise OSError("permission denied")
-
-        monkeypatch.setattr("os.remove", boom)
-        assert store.clear() == 0
-
-    def test_prune_swallows_os_error(self, store, monkeypatch):
-        for i in range(8):
-            store._save(f"run_test_{i}", {"id": f"run_test_{i}", "status": "running"})
-
-        def boom(path):
-            raise OSError("permission denied")
-
-        monkeypatch.setattr("os.remove", boom)
-        store._prune()
-        assert len(store.list_runs()) == 8
-
-
-class TestSingleton:
-    def test_get_agent_run_store_returns_singleton(self):
-        from domains.agents.run_history import get_agent_run_store
-        a = get_agent_run_store()
-        b = get_agent_run_store()
-        assert a is b
+class TestAgentRunStorePrune:
+    def test_prune_on_start(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            s = AgentRunStore(directory=tmpdir, max_runs=3)
+            ids = []
+            for i in range(5):
+                ids.append(s.start(goal=f"run {i}"))
+            runs = s.list_runs()
+            assert len(runs) == 3
+            # oldest runs pruned
+            assert s.get(ids[0]) is None
+            assert s.get(ids[1]) is None

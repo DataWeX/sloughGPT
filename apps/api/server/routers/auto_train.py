@@ -1283,6 +1283,20 @@ class AutoTrainRouter:
         task_id = await tq.enqueue(task)
         autotrain_logger.info("From-sessions training task enqueued: %s", task_id, extra={"tag": "TRAIN"})
 
+        # Register with CancelManager
+        _sess_cm_op_id: Optional[str] = None
+        try:
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            _mgr = get_cancel_manager()
+            _sess_cm_op_id = _mgr.register(
+                op_type=OpType.TRAINING,
+                label="auto-train-sessions",
+                cancel_fn=lambda: _auto_train_cancel_event.set() if _auto_train_cancel_event else None,
+            )
+            _mgr.start(_sess_cm_op_id)
+        except Exception:
+            pass
+
         from training.runtime import get_training_runtime
         runtime_job = {
             "id": task_id,
@@ -1307,18 +1321,29 @@ class AutoTrainRouter:
         async def event_generator() -> AsyncGenerator[str, None]:
             """event_generator."""
             global _auto_train_cancel_event
+
+            def _finish_cm(status: str, error: str = "") -> None:
+                if _sess_cm_op_id:
+                    try:
+                        from domains.infrastructure.cancel_manager import get_cancel_manager
+                        get_cancel_manager().finish(_sess_cm_op_id, error=error if status != "complete" else "")
+                    except Exception:
+                        pass
+
             deadline = time.time() + 3600
             heartbeat_interval = 10.0
             last_yield = time.time()
             try:
                 while True:
                     if time.time() > deadline:
+                        _finish_cm("failed", "SSE timeout")
                         yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out")
                         return
                     if await request.is_disconnected():
                         await tq.cancel(task_id)
                         _auto_train_cancel_event.set()
                         self.state.running = False
+                        _finish_cm("cancelled", "client disconnected")
                         autotrain_logger.info("Client disconnected from from-sessions stream", extra={"tag": "TRAIN"})
                         return
                     remaining = heartbeat_interval - (time.time() - last_yield)
@@ -1352,6 +1377,10 @@ class AutoTrainRouter:
                                         pass
                                     autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                                     get_training_runtime().sync(task_id)
+                                _finish_cm(
+                                    "complete" if ev.get("status") == "complete" else "failed",
+                                    str(ev.get("message") or ev.get("data") or "") if ev.get("status") != "complete" else "",
+                                )
                                 break
                         except json.JSONDecodeError:
                             pass
@@ -1364,9 +1393,11 @@ class AutoTrainRouter:
                         break
 
             except TimeoutError:
+                _finish_cm("failed", "SSE queue timeout")
                 yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
             except Exception as e:
                 autotrain_logger.error("From-sessions SSE stream error: %s", e, extra={"tag": "TRAIN"})
+                _finish_cm("failed", str(e))
                 if not self.state.complete_enqueued:
                     yield sse_error("auto-train", "FAILED", str(e))
             finally:

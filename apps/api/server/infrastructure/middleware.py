@@ -29,6 +29,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from schemas.common import error_response, set_correlation_id
+from domains.logging.config import set_request_id
 
 logger = logging.getLogger("slo.middleware")
 
@@ -91,6 +92,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         corr_id = request.headers.get(self.HEADER) or request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
         request.scope["correlation_id"] = corr_id
         set_correlation_id(corr_id)
+        set_request_id(corr_id)  # also set for logging contextvars
         response = await call_next(request)
         response.headers[self.HEADER] = corr_id
         return response

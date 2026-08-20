@@ -1449,6 +1449,8 @@ import { modelController, trainingController, sessionController } from '@/lib/co
 - `packages/core-py/domains/feedback/lora_eval.py`: BLEU, perplexity, personality scoring; `export_adapter_as_sou()` method creates `.sou` from `.npz` adapter
 - `packages/core-py/domains/core/soul.py`: `SoulEngine.set_system_prompt()` hot-reloads without model restart
 - `packages/core-py/domains/inference/sou_format.py`: `SoulProfile` + `PersonalityCore`; export_to_sou/import_from_sou
+- `packages/core-py/domains/logging/config.py`: Centralized logging config — `setup_logging()`, `HumanFormatter`, `JSONFormatter`, correlation IDs via `contextvars`, file rotation (`RotatingFileHandler`, 10MB × 5 backups), third-party logger suppression
+- `packages/core-py/tests/test_logging_config.py`: 48 tests for logging config (formatters, correlation IDs, context, file handler, setup_logging)
 
 ---
 

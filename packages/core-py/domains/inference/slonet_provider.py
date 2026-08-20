@@ -1154,6 +1154,9 @@ class SloNetChatProvider:
         load is deferred until the model is actually needed; a per-provider
         lock serializes concurrent first-access loads.
 
+        When the parent materializes weights, any attached ProcessGuard is
+        stopped to release the subprocess copy and avoid double-memory OOM.
+
         Returns:
             The SloTransformer model, or None if not loadable.
         """
@@ -1182,6 +1185,24 @@ class SloNetChatProvider:
             if self._meta is not None:
                 self._meta["quantized"] = eager._quant_engine is not None
                 self._meta["lazy"] = True
+            # Stop the ProcessGuard to release its subprocess copy — parent
+            # now holds the weights and would OOM with both copies resident.
+            try:
+                server = getattr(self, "_server", None)
+                if server is not None:
+                    guard = getattr(server, "_process_guard", None)
+                    if guard is not None and getattr(guard, "alive", False):
+                        guard.stop()
+                        logger.info(
+                            "Stopped ProcessGuard after parent materialization "
+                            "(subprocess copy released)",
+                            extra={"tag": "INF"},
+                        )
+            except Exception as exc:
+                logger.debug(
+                    "Guard stop after materialization failed (non-fatal): %s",
+                    exc, extra={"tag": "INF"},
+                )
             logger.info(
                 "SloNetChatProvider: %s weights now resident in parent (lazy load)",
                 self._model_id, extra={"tag": "INF"},

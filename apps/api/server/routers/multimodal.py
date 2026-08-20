@@ -14,10 +14,10 @@ from pathlib import Path
 from threading import Lock
 import numpy as np
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from domains.multimodal import get_multimodal_manager
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.multimodal")
 
@@ -196,7 +196,7 @@ class MultimodalRouter:
     async def train_on_image(self, file: UploadFile = File(...), label: Optional[str] = Form(None)) -> dict:
         """train_on_image."""
         if not file.content_type or not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="Only image files accepted")
+            raise_error("Only image files accepted", "E_BAD_REQUEST")
         mgr = self._ensure_initialized()
         try:
             contents = await file.read()
@@ -224,25 +224,25 @@ class MultimodalRouter:
         """train_batch."""
         mgr = self._ensure_initialized()
         if self._background_job["running"]:
-            raise HTTPException(status_code=409, detail="Training job already running")
+            raise_error("Training job already running", "E_INFRA_BUSY")
 
         image_paths = []
         if dataset_path:
             import glob
             dataset_path = os.path.expanduser(dataset_path)
             if not os.path.isdir(dataset_path):
-                raise HTTPException(status_code=400, detail=f"Directory not found: {dataset_path}")
+                raise_error(f"Directory not found: {dataset_path}", "E_BAD_REQUEST")
             for ext in ("*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"):
                 image_paths.extend(glob.glob(os.path.join(dataset_path, ext)))
                 image_paths.extend(glob.glob(os.path.join(dataset_path, "**", ext), recursive=True))
             if not image_paths:
-                raise HTTPException(status_code=400, detail=f"No images found in {dataset_path}")
+                raise_error(f"No images found in {dataset_path}", "E_BAD_REQUEST")
         if files:
             for f in files:
                 if f.content_type and f.content_type.startswith("image/"):
                     image_paths.append(("upload", f))
         if not image_paths:
-            raise HTTPException(status_code=400, detail="No images provided")
+            raise_error("No images provided", "E_BAD_REQUEST")
 
         job_id = f"batch_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self._background_job.update(
@@ -286,7 +286,7 @@ class MultimodalRouter:
         """train_video."""
         with self._video_training_lock:
             if self._video_training_state["status"] == "running":
-                raise HTTPException(status_code=409, detail="Video training already in progress")
+                raise_error("Video training already in progress", "E_INFRA_BUSY")
             self._video_training_state["status"] = "running"
             self._video_training_state["error"] = None
             self._video_training_state["result"] = None
@@ -331,7 +331,7 @@ class MultimodalRouter:
             if not checkpoints:
                 checkpoints = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
             if not checkpoints:
-                raise HTTPException(status_code=400, detail="No trained video model. Train via /multimodal/train-video first.")
+                raise_error("No trained video model. Train via /multimodal/train-video first.", "E_BAD_REQUEST")
             latest = checkpoints[0]
             trainer = VideoCaptionTrainer()
             trainer.load_checkpoint(latest["path"])
@@ -349,10 +349,10 @@ class MultimodalRouter:
         """trigger_dpo."""
         model, tokenizer = self._get_active_model_and_tokenizer()
         if model is None or tokenizer is None:
-            raise HTTPException(status_code=400, detail="No model loaded.")
+            raise_error("No model loaded.", "E_BAD_REQUEST")
         with self._dpo_lock:
             if self._dpo_state["status"] == "running":
-                raise HTTPException(status_code=409, detail="DPO already in progress")
+                raise_error("DPO already in progress", "E_INFRA_BUSY")
             self._dpo_state["status"] = "running"
             self._dpo_state["result"] = None
         try:
@@ -382,14 +382,14 @@ class MultimodalRouter:
             with self._dpo_lock:
                 self._dpo_state["status"] = "error"
                 self._dpo_state["result"] = {"error": str(e)}
-            raise HTTPException(status_code=err.http_status, detail=err.user_message)
+            raise_error(err.user_message, status_code=err.http_status)
 
     # ── Analysis ──────────────────────────────────────────────────────
 
     async def analyze_image(self, file: UploadFile = File(...)) -> dict:
         """analyze_image."""
         if not file.content_type or not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="Only image files accepted")
+            raise_error("Only image files accepted", "E_BAD_REQUEST")
         mgr = self._ensure_initialized()
         try:
             contents = await file.read()
@@ -454,7 +454,7 @@ class MultimodalRouter:
                 mgr = get_multimodal_manager()
                 engine = getattr(mgr, "_multimodal_engine", None)
                 if engine is None:
-                    raise HTTPException(status_code=500, detail="Multimodal engine not initialized")
+                    raise_error("Multimodal engine not initialized", "E_INTERNAL", status_code=500)
                 video_embedding = processor.encode_video(frames, engine.vision)
                 first_frame = frames[0].reshape(1, 224, 224, 3)
                 caption = engine.generate(first_frame, max_len=20, temperature=0.8)
@@ -470,10 +470,10 @@ class MultimodalRouter:
     async def transcribe_audio(self, file: UploadFile = File(...), language: str = Form("en")) -> dict:
         """transcribe_audio."""
         if not file.content_type or not file.content_type.startswith("audio/"):
-            raise HTTPException(status_code=400, detail="Only audio files accepted")
+            raise_error("Only audio files accepted", "E_BAD_REQUEST")
         mgr = self._ensure_initialized()
         if not mgr.capabilities.speech_to_text:
-            raise HTTPException(status_code=501, detail="Server ASR not available.")
+            raise_error("Server ASR not available.", "E_NOT_IMPLEMENTED", status_code=501)
         try:
             result = mgr.recognize_speech(await file.read(), language=language)
             return success_response(data={"text": result.text, "confidence": result.confidence,
@@ -538,13 +538,13 @@ class MultimodalRouter:
         _REPO_ROOT = Path(__file__).resolve().parents[4]
         allowed_bases = {_REPO_ROOT / "datasets", _REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
         if not any(image_dir == base or str(image_dir).startswith(str(base) + "/") for base in allowed_bases):
-            raise HTTPException(status_code=403, detail=f"Directory not in allowed paths: {req.image_dir}")
+                    raise_error(f"Directory not in allowed paths: {req.image_dir}", "E_AUTH_FORBIDDEN")
         if not image_dir.exists():
-            raise HTTPException(status_code=400, detail=f"Directory not found: {req.image_dir}")
+            raise_error(f"Directory not found: {req.image_dir}", "E_BAD_REQUEST")
         extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         image_files = sorted([f for f in image_dir.iterdir() if f.suffix.lower() in extensions])
         if not image_files:
-            raise HTTPException(status_code=400, detail=f"No images in {req.image_dir}")
+            raise_error(f"No images in {req.image_dir}", "E_BAD_REQUEST")
         datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
         datasets_dir.mkdir(parents=True, exist_ok=True)
         output_path = datasets_dir / f"{req.name}.jsonl"
@@ -594,7 +594,7 @@ class MultimodalRouter:
                 ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
             match = [c for c in ckpts if c["name"] == name]
             if not match:
-                raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
+                raise_error(f"Checkpoint '{name}' not found", "E_NOT_FOUND")
             trainer = VideoCaptionTrainer()
             trainer.load_checkpoint(match[0]["path"])
             safe_audit_log("multimodal.checkpoint.load", resource=name)
@@ -613,7 +613,7 @@ class MultimodalRouter:
                 ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
             match = [c for c in ckpts if c["name"] == name]
             if not match:
-                raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
+                raise_error(f"Checkpoint '{name}' not found", "E_NOT_FOUND")
             path = Path(match[0]["path"])
             for p in [path, path.with_suffix(".npz"), path.parent / f"{path.stem}_meta.json"]:
                 if p.exists():

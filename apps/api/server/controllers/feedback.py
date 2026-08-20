@@ -1,10 +1,14 @@
 """
 Feedback Controller - Business logic for user feedback
+
+Storage backed by MogDB (the project's embedded document DB).
+Conversations and feedback records are stored in indexed collections
+instead of raw JSON/JSONL files.
 """
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-import json
+import os
 import uuid
 import logging
 
@@ -29,17 +33,42 @@ def _trigger_hf_dpo():
         logger.debug("HF DPO background skipped: %s", e)
 
 
-class FeedbackController:
-    """Controller for user feedback management"""
+def _get_mogdb(db_path: str):
+    """Create a MogDB instance at the given path."""
+    from mogdb import MogDB
+    return MogDB(db_path)
 
-    def __init__(self, repo_root: Path):
+
+class FeedbackController:
+    """Controller for user feedback management.
+
+    Uses MogDB collections for feedback records and conversations
+    instead of raw JSON/JSONL file I/O.
+    """
+
+    def __init__(self, repo_root: Path, db_path: Optional[str] = None):
         self.repo_root = repo_root
-        self.feedback_dir = repo_root / "data" / "training_exports"
-        self.conversations_dir = repo_root / "data" / "conversations"
-        self.conversations_dir.mkdir(parents=True, exist_ok=True)
-        self.feedback_dir.mkdir(parents=True, exist_ok=True)
+        if db_path is None:
+            db_path = str(repo_root / "data" / "feedback_mogdb")
+        self._db = _get_mogdb(db_path)
+        self._feedback = self._db.collection("feedback_records")
+        self._conversations = self._db.collection("feedback_conversations")
+        self._feedback.create_index("message_id")
+        self._feedback.create_index("rating")
+        self._feedback.create_sorted_index("timestamp")
+        self._conversations.create_sorted_index("updated_at")
         self._workflow = None
         self._lora_updater = None
+
+    @property
+    def feedback_collection(self):
+        """Expose the feedback collection for testing."""
+        return self._feedback
+
+    @property
+    def conversations_collection(self):
+        """Expose the conversations collection for testing."""
+        return self._conversations
 
     def _get_workflow(self):
         """Lazy-load feedback workflow and wire the current model."""
@@ -87,7 +116,24 @@ class FeedbackController:
         user_message: Optional[str] = None,
         assistant_response: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Record user feedback and pipe into learning systems."""
+        """Record user feedback and pipe into learning systems.
+
+        Args:
+            message_id: The ID of the message being rated.
+            rating: 'thumbs_up', 'thumbs_down', or 'neutral'.
+            session_id: Optional session ID.
+            message_content: The assistant message content.
+            user_message: The user's message.
+            assistant_response: The assistant's response.
+
+        Returns:
+            Dict with status, feedback_id, message_id, rating, timestamp.
+
+        Side effects:
+            - Inserts a feedback record into MogDB.
+            - Pipes into learning pipeline (workflow + LoRA updater).
+            - Triggers HF DPO on thumbs-down.
+        """
         feedback_id = f"fb_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
 
         feedback = {
@@ -98,13 +144,10 @@ class FeedbackController:
             "message_content": message_content,
             "user_message": user_message,
             "assistant_response": assistant_response,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-        self.feedback_dir.mkdir(parents=True, exist_ok=True)
-        feedback_file = self.feedback_dir / "feedback.jsonl"
-        with open(feedback_file, "a") as f:
-            f.write(json.dumps(feedback) + "\n")
+        self._feedback.insert_one(feedback)
 
         # Pipe into learning pipeline
         if user_message and assistant_response:
@@ -141,48 +184,28 @@ class FeedbackController:
         }
 
     def get_feedback(self, message_id: str) -> Optional[Dict[str, Any]]:
-        """Get feedback for a message"""
-        feedback_file = self.feedback_dir / "feedback.jsonl"
-        if not feedback_file.exists():
-            return None
+        """Get feedback for a message.
 
-        with open(feedback_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    fb = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if fb.get("message_id") == message_id:
-                    return fb
-        return None
+        Args:
+            message_id: The message ID to look up.
+
+        Returns:
+            The feedback record dict, or None if not found.
+        """
+        return self._feedback.find_one({"message_id": message_id})
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get feedback statistics"""
-        feedback_file = self.feedback_dir / "feedback.jsonl"
-        if not feedback_file.exists():
-            return {"thumbs_up": 0, "thumbs_down": 0, "total": 0}
+        """Get feedback statistics.
 
-        thumbs_up = 0
-        thumbs_down = 0
-        total = 0
+        Returns:
+            Dict with thumbs_up, thumbs_down, total, up_ratio.
+        """
+        total = self._feedback.count()
+        if total == 0:
+            return {"thumbs_up": 0, "thumbs_down": 0, "total": 0, "up_ratio": 0}
 
-        with open(feedback_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    fb = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                total += 1
-                if fb.get("rating") == "thumbs_up":
-                    thumbs_up += 1
-                elif fb.get("rating") == "thumbs_down":
-                    thumbs_down += 1
+        thumbs_up = self._feedback.count({"rating": "thumbs_up"})
+        thumbs_down = self._feedback.count({"rating": "thumbs_down"})
 
         return {
             "thumbs_up": thumbs_up,
@@ -191,24 +214,18 @@ class FeedbackController:
             "up_ratio": thumbs_up / total if total > 0 else 0,
         }
 
-    def _load_conversations(self) -> Dict[str, Any]:
-        """Load all conversations from disk"""
-        conv_file = self.conversations_dir / "conversations.json"
-        if conv_file.exists():
-            with open(conv_file) as f:
-                return json.load(f)
-        return {}
-
-    def _save_conversations(self, data: Dict[str, Any]) -> None:
-        """Save conversations to disk"""
-        conv_file = self.conversations_dir / "conversations.json"
-        with open(conv_file, "w") as f:
-            json.dump(data, f, indent=2)
-
     def create_conversation(self, name: str, session_id: Optional[str] = None) -> Dict[str, Any]:
-        """Create a new conversation"""
+        """Create a new conversation.
+
+        Args:
+            name: Conversation name.
+            session_id: Optional session ID to associate.
+
+        Returns:
+            Dict with id, name, session_id, created_at, updated_at, pinned, starred, message_count.
+        """
         conv_id = str(uuid.uuid4())
-        now = datetime.now().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         conv = {
             "id": conv_id,
             "name": name,
@@ -219,46 +236,87 @@ class FeedbackController:
             "starred": False,
             "message_count": 0,
         }
-        data = self._load_conversations()
-        data[conv_id] = conv
-        self._save_conversations(data)
+        self._conversations.insert_one(conv)
         return conv
 
     def list_conversations(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """List all conversations, sorted by updated_at"""
-        data = self._load_conversations()
-        convs = sorted(data.values(), key=lambda x: x.get("updated_at", ""), reverse=True)
-        return convs[:limit]
+        """List conversations sorted by most recently updated.
+
+        Args:
+            limit: Maximum number of conversations to return.
+
+        Returns:
+            List of conversation dicts, newest first.
+        """
+        return self._conversations.find(
+            sort=[("updated_at", -1)],
+            limit=limit,
+        )
 
     def get_conversation(self, conv_id: str) -> Optional[Dict[str, Any]]:
-        """Get a conversation by ID"""
-        data = self._load_conversations()
-        return data.get(conv_id)
+        """Get a conversation by ID.
+
+        Args:
+            conv_id: The conversation UUID.
+
+        Returns:
+            Conversation dict or None if not found.
+        """
+        return self._conversations.find_one({"id": conv_id})
 
     def update_conversation(self, conv_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Update a conversation"""
-        data = self._load_conversations()
-        if conv_id not in data:
-            return None
-        data[conv_id].update(updates)
-        data[conv_id]["updated_at"] = datetime.now().isoformat()
-        self._save_conversations(data)
-        return data[conv_id]
+        """Update a conversation's fields.
+
+        Args:
+            conv_id: The conversation UUID.
+            updates: Dict of fields to update.
+
+        Returns:
+            Updated conversation dict, or None if not found.
+        """
+        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return self._conversations.find_one_and_update(
+            {"id": conv_id},
+            {"$set": updates},
+            return_document="after",
+        )
 
     def delete_conversation(self, conv_id: str) -> None:
-        """Delete a conversation"""
-        data = self._load_conversations()
-        if conv_id in data:
-            del data[conv_id]
-            self._save_conversations(data)
+        """Delete a conversation by ID.
+
+        Args:
+            conv_id: The conversation UUID.
+        """
+        self._conversations.delete_one({"id": conv_id})
 
 
 _feedback_controller: Optional[FeedbackController] = None
 
 
 def get_feedback_controller() -> FeedbackController:
+    """Get or create the global FeedbackController singleton.
+
+    The database path defaults to ``<repo>/data/feedback_mogdb`` and
+    can be overridden via ``MOGDB_FEEDBACK_PATH`` environment variable.
+    """
     global _feedback_controller
     if _feedback_controller is None:
         repo_root = Path(__file__).parent.parent.parent.parent
-        _feedback_controller = FeedbackController(repo_root)
+        db_path = os.environ.get("MOGDB_FEEDBACK_PATH")
+        _feedback_controller = FeedbackController(repo_root, db_path=db_path)
     return _feedback_controller
+
+
+def set_feedback_controller(controller: FeedbackController) -> None:
+    """Replace the global FeedbackController singleton.
+
+    Used by tests to inject a controller backed by a temporary database.
+    """
+    global _feedback_controller
+    _feedback_controller = controller
+
+
+def reset_feedback_controller() -> None:
+    """Reset the global singleton so the next call creates a fresh instance."""
+    global _feedback_controller
+    _feedback_controller = None

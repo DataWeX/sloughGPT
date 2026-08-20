@@ -1,13 +1,98 @@
-import React, {useEffect, useState, useRef} from 'react';
+import React, {useEffect, useState, useRef, useCallback} from 'react';
+import {FlatList, Pressable, RefreshControl} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
-import {ScreenShell} from '../components/ScreenShell';
+import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
-import type {DetailedHealth} from '../types';
+import {Icon} from '../components/Icon';
+
+interface DetailedHealth {
+  status: string;
+  uptime_seconds: number;
+  timestamp: string;
+  request_count: number;
+  error_count: number;
+  avg_latency_ms: number;
+  requests_per_minute: number;
+  inference_count: number;
+  total_tokens: number;
+  tokens_per_sec: number;
+  avg_tokens_per_request: number;
+  model_loaded: boolean;
+  model_loading: boolean;
+  model_type: string | null;
+  device: string | null;
+  soul: string | null;
+  system: {
+    cpu_percent: number;
+    memory_percent: number;
+    memory_available_mb: number;
+    open_files?: number;
+    threads?: number;
+    process_cpu_percent?: number;
+    rss_mb?: number;
+  };
+  gpu: {
+    backend: string;
+    device_type?: string;
+    vram_gb?: number;
+    tier?: string;
+    error?: string;
+  };
+  health_score: {
+    score: number;
+    status: string;
+    summary?: string;
+    diagnoses?: string[];
+  };
+  kv_sessions: {
+    enabled: boolean;
+    active_sessions: number;
+    cached_tokens: number;
+    ttl_seconds?: number;
+  };
+  training_pool: {
+    active_jobs: number;
+    max_workers: number;
+    total_tracked: number;
+  };
+  lifecycle: {
+    phase: string;
+    is_running: boolean;
+    in_flight: number;
+  };
+  recent_errors: Array<{timestamp: string; message: string; path?: string}>;
+  status_message: string;
+}
+
+function Card({children, style}: {children: React.ReactNode; style?: any}) {
+  return (
+    <YStack
+      padding={14}
+      borderRadius={12}
+      backgroundColor="white"
+      borderWidth={0.5}
+      borderColor="#E4E0F2"
+      gap={8}
+      {...style}>
+      {children}
+    </YStack>
+  );
+}
+
+function Stat({label, value, color}: {label: string; value: string; color?: string}) {
+  return (
+    <YStack gap={2}>
+      <Text fontSize={10} color="#968CAC" letterSpacing={0.3}>{label}</Text>
+      <Text fontSize={14} fontWeight="600" color={color || '#1A1625'}>{value}</Text>
+    </YStack>
+  );
+}
 
 function ProgressBar({value, color}: {value: number; color: string}) {
   return (
-    <YStack height={6} backgroundColor="$borderColor" borderRadius={3} overflow="hidden">
+    <YStack height={5} backgroundColor="#E4E0F2" borderRadius={3} overflow="hidden">
       <YStack height="100%" width={`${Math.min(value, 100)}%`} backgroundColor={color} borderRadius={3} />
     </YStack>
   );
@@ -18,15 +103,34 @@ function formatUptime(seconds: number): string {
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
   const h = Math.floor(seconds / 3600);
   const m = Math.round((seconds % 3600) / 60);
-  return `${h}h ${m}m`;
+  if (h < 24) return `${h}h ${m}m`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h`;
+}
+
+function HealthScoreBadge({score, status}: {score: number; status: string}) {
+  const variant = score >= 80 ? 'success' : score >= 50 ? 'warning' : 'error';
+  return (
+    <XStack alignItems="center" gap={8}>
+      <Text fontSize={28} fontWeight="700" color={variant === 'success' ? '#34B07D' : variant === 'warning' ? '#F0935C' : '#DC505A'}>
+        {score}
+      </Text>
+      <YStack gap={2}>
+        <Text fontSize={11} color="#968CAC">/ 100</Text>
+        <StatusBadge label={status} variant={variant} />
+      </YStack>
+    </XStack>
+  );
 }
 
 export function HealthScreen() {
+  const colors = useColors();
   const [health, setHealth] = useState<DetailedHealth | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchHealth = async () => {
+  const fetchHealth = useCallback(async () => {
     try {
       const data = await api.get<DetailedHealth>('/health/detailed');
       setHealth(data);
@@ -34,29 +138,42 @@ export function HealthScreen() {
       try {
         const basic = await api.get<any>('/health');
         setHealth({
-          api: {status: basic.status, model_loaded: basic.model_loaded, model_name: basic.model_name},
-          system: {
-            cpu_percent: 0,
-            memory_percent: 0,
-            memory_used_gb: 0,
-            memory_total_gb: 0,
-            disk_used_gb: 0,
-            disk_free_gb: 0,
-            disk_total_gb: 0,
-            uptime: basic.uptime || 0,
-          },
+          status: basic.status || 'unknown',
+          uptime_seconds: basic.uptime || 0,
+          timestamp: new Date().toISOString(),
+          request_count: 0,
+          error_count: 0,
+          avg_latency_ms: 0,
+          requests_per_minute: 0,
+          inference_count: 0,
+          total_tokens: 0,
+          tokens_per_sec: 0,
+          avg_tokens_per_request: 0,
+          model_loaded: basic.model_loaded || false,
+          model_loading: false,
+          model_type: basic.model_name || null,
+          device: null,
+          soul: null,
+          system: {cpu_percent: 0, memory_percent: 0, memory_available_mb: 0},
+          gpu: {backend: 'unknown'},
+          health_score: {score: 0, status: 'unknown'},
+          kv_sessions: {enabled: false, active_sessions: 0, cached_tokens: 0},
+          training_pool: {active_jobs: 0, max_workers: 0, total_tracked: 0},
+          lifecycle: {phase: 'unknown', is_running: false, in_flight: 0},
+          recent_errors: [],
+          status_message: basic.status || 'Unknown',
         });
       } catch {}
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchHealth();
+    fetchHealth().finally(() => setLoading(false));
     intervalRef.current = setInterval(fetchHealth, 5000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, []);
+  }, [fetchHealth]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -64,131 +181,222 @@ export function HealthScreen() {
     setRefreshing(false);
   };
 
-  const sys = health?.system;
-  const api_ = health?.api;
-
-  return (
-    <ScreenShell title="System Health" refreshing={refreshing} onRefresh={onRefresh}>
-      <XStack gap={12}>
-        <YStack flex={1} backgroundColor="$background" borderRadius={12} padding={14} alignItems="center" gap={8} borderWidth={0.5} borderColor="$borderColor">
-          <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase">
-            API
-          </Text>
-          <StatusBadge label={api_?.status === 'healthy' ? 'Healthy' : 'Offline'} variant={api_?.status === 'healthy' ? 'success' : 'error'} />
+  if (loading) {
+    return (
+      <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
+        <YStack flex={1} alignItems="center" justifyContent="center">
+          <StatusBadge label="Loading..." variant="info" />
         </YStack>
-        <YStack flex={1} backgroundColor="$background" borderRadius={12} padding={14} alignItems="center" gap={8} borderWidth={0.5} borderColor="$borderColor">
-          <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase">
-            Model
-          </Text>
-          <StatusBadge label={api_?.model_loaded ? 'Loaded' : 'None'} variant={api_?.model_loaded ? 'success' : 'default'} />
+      </SafeAreaView>
+    );
+  }
+
+  const s = health?.system;
+  const g = health?.gpu;
+  const hs = health?.health_score;
+  const kv = health?.kv_sessions;
+  const tp = health?.training_pool;
+  const lc = health?.lifecycle;
+
+  const sections: React.ReactNode[] = [];
+
+  // Health Score
+  if (hs && hs.score > 0) {
+    sections.push(
+      <Card key="score">
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text fontSize={13} fontWeight="600" color={colors.text}>Health Score</Text>
+          <HealthScoreBadge score={hs.score} status={hs.status} />
+        </XStack>
+        {hs.diagnoses && hs.diagnoses.length > 0 && (
+          <YStack gap={4} marginTop={4}>
+            {hs.diagnoses.slice(0, 3).map((d, i) => (
+              <XStack key={i} gap={6} alignItems="center">
+                <Icon name="triangle-alert" size={12} color={colors.warning} />
+                <Text fontSize={11} color={colors.textMuted} flex={1}>{d}</Text>
+              </XStack>
+            ))}
+          </YStack>
+        )}
+      </Card>,
+    );
+  }
+
+  // Status Row
+  sections.push(
+    <Card key="status">
+      <XStack gap={8}>
+        <YStack flex={1} alignItems="center" gap={4}>
+          <Text fontSize={10} color={colors.textMuted} letterSpacing={0.3}>API</Text>
+          <StatusBadge label={health?.status === 'healthy' ? 'Healthy' : health?.status || 'Unknown'} variant={health?.status === 'healthy' ? 'success' : 'error'} />
+        </YStack>
+        <YStack flex={1} alignItems="center" gap={4}>
+          <Text fontSize={10} color={colors.textMuted} letterSpacing={0.3}>MODEL</Text>
+          <StatusBadge label={health?.model_loaded ? 'Loaded' : health?.model_loading ? 'Loading' : 'None'} variant={health?.model_loaded ? 'success' : health?.model_loading ? 'warning' : 'default'} />
+        </YStack>
+        <YStack flex={1} alignItems="center" gap={4}>
+          <Text fontSize={10} color={colors.textMuted} letterSpacing={0.3}>LIFECYCLE</Text>
+          <StatusBadge label={lc?.phase || '—'} variant={lc?.is_running ? 'success' : 'default'} />
         </YStack>
       </XStack>
+    </Card>,
+  );
 
-      {api_?.model_name && (
-        <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
-          <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
-            Active Model
-          </Text>
-          <Text fontSize={16} fontWeight="600" color="$color" marginBottom={8}>
-            {api_.model_name}
-          </Text>
-        </YStack>
-      )}
+  // Model Info
+  if (health?.model_type || health?.soul || health?.device) {
+    sections.push(
+      <Card key="model">
+        <Text fontSize={13} fontWeight="600" color={colors.text}>Model</Text>
+        <XStack gap={16} flexWrap="wrap">
+          {health.model_type && <Stat label="Type" value={health.model_type} />}
+          {health.soul && <Stat label="Soul" value={health.soul} color={colors.primary} />}
+          {health.device && <Stat label="Device" value={health.device} />}
+        </XStack>
+      </Card>,
+    );
+  }
 
-      {sys && (
-        <>
-          <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
-            <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
-              CPU
-            </Text>
-            <Text fontSize={16} fontWeight="600" color="$color" marginBottom={8}>
-              {sys.cpu_percent.toFixed(1)}%
-            </Text>
-            <ProgressBar value={sys.cpu_percent} color="#7C52C4" />
+  // CPU + Memory
+  if (s) {
+    sections.push(
+      <Card key="resources">
+        <Text fontSize={13} fontWeight="600" color={colors.text}>Resources</Text>
+        <YStack gap={10}>
+          <YStack gap={4}>
+            <XStack justifyContent="space-between">
+              <Text fontSize={12} color={colors.textMuted}>CPU</Text>
+              <Text fontSize={12} fontWeight="500" color={colors.text}>{s.cpu_percent.toFixed(1)}%</Text>
+            </XStack>
+            <ProgressBar value={s.cpu_percent} color={colors.primary} />
           </YStack>
-
-          <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
-            <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
-              Memory
-            </Text>
-            <Text fontSize={16} fontWeight="600" color="$color" marginBottom={8}>
-              {sys.memory_used_gb.toFixed(1)} / {sys.memory_total_gb.toFixed(1)} GB ({sys.memory_percent.toFixed(1)}%)
-            </Text>
-            <ProgressBar value={sys.memory_percent} color="#F0935C" />
+          <YStack gap={4}>
+            <XStack justifyContent="space-between">
+              <Text fontSize={12} color={colors.textMuted}>Memory</Text>
+              <Text fontSize={12} fontWeight="500" color={colors.text}>{s.memory_percent.toFixed(1)}%</Text>
+            </XStack>
+            <ProgressBar value={s.memory_percent} color="#F0935C" />
           </YStack>
-
-          {sys.disk_total_gb > 0 && (
-            <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
-              <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
-                Disk
-              </Text>
-              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={8}>
-                {sys.disk_used_gb.toFixed(1)} / {sys.disk_total_gb.toFixed(1)} GB ({((sys.disk_used_gb / sys.disk_total_gb) * 100).toFixed(1)}%)
-              </Text>
-              <ProgressBar value={(sys.disk_used_gb / (sys.disk_used_gb + sys.disk_free_gb)) * 100} color="#E8A83C" />
-            </YStack>
-          )}
-
-          <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
-            <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
-              Uptime
-            </Text>
-            <Text fontSize={16} fontWeight="600" color="$color" marginBottom={8}>
-              {formatUptime(sys.uptime)}
-            </Text>
-          </YStack>
-        </>
-      )}
-
-      {health?.inference && (
-        <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
-          <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={8}>
-            Inference
-          </Text>
           <XStack gap={16}>
-            <YStack flex={1}>
-              <Text fontSize={12} color="$color10">Requests</Text>
-              <Text fontSize={16} fontWeight="600" color="$color">{health.inference.inference_count}</Text>
-            </YStack>
-            <YStack flex={1}>
-              <Text fontSize={12} color="$color10">Tokens/sec</Text>
-              <Text fontSize={16} fontWeight="600" color="$color">{health.inference.avg_tokens_per_sec.toFixed(1)}</Text>
-            </YStack>
-            <YStack flex={1}>
-              <Text fontSize={12} color="$color10">Total tokens</Text>
-              <Text fontSize={16} fontWeight="600" color="$color">{health.inference.total_tokens.toLocaleString()}</Text>
-            </YStack>
+            {s.open_files != null && <Stat label="Open files" value={String(s.open_files)} />}
+            {s.threads != null && <Stat label="Threads" value={String(s.threads)} />}
+            {s.rss_mb != null && <Stat label="RSS" value={`${(s.rss_mb / 1024).toFixed(1)} GB`} />}
           </XStack>
         </YStack>
-      )}
+      </Card>,
+    );
+  }
 
-      {health?.services && (
-        <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
-          <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={8}>
-            Services
-          </Text>
-          <YStack gap={10}>
-            {health.services.training_pool && (
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text fontSize={14} color="$color">Training Pool</Text>
-                <StatusBadge
-                  label={`${health.services.training_pool.active}/${health.services.training_pool.max} active`}
-                  variant={health.services.training_pool.active > 0 ? 'warning' : 'success'}
-                />
-              </XStack>
-            )}
-            {health.services.inference_pool && (
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text fontSize={14} color="$color">Inference Pool</Text>
-                <StatusBadge
-                  label={`${health.services.inference_pool.workers} workers`}
-                  variant={health.services.inference_pool.active > 0 ? 'warning' : 'success'}
-                />
-              </XStack>
-            )}
-          </YStack>
+  // GPU
+  if (g && g.backend !== 'unknown') {
+    sections.push(
+      <Card key="gpu">
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text fontSize={13} fontWeight="600" color={colors.text}>GPU</Text>
+          <StatusBadge label={g.tier || g.backend} variant={g.tier ? 'success' : 'default'} />
+        </XStack>
+        <XStack gap={16}>
+          <Stat label="Backend" value={g.backend} />
+          {g.vram_gb != null && <Stat label="VRAM" value={`${g.vram_gb} GB`} />}
+          {g.device_type && <Stat label="Device" value={g.device_type} />}
+        </XStack>
+      </Card>,
+    );
+  }
+
+  // Inference
+  if (health && health.inference_count > 0) {
+    sections.push(
+      <Card key="inference">
+        <Text fontSize={13} fontWeight="600" color={colors.text}>Inference</Text>
+        <XStack gap={16} flexWrap="wrap">
+          <Stat label="Requests" value={String(health.inference_count)} />
+          <Stat label="Tokens/sec" value={health.tokens_per_sec.toFixed(1)} />
+          <Stat label="Total tokens" value={health.total_tokens.toLocaleString()} />
+          {health.avg_latency_ms > 0 && <Stat label="Avg latency" value={`${health.avg_latency_ms.toFixed(0)}ms`} />}
+        </XStack>
+      </Card>,
+    );
+  }
+
+  // KV Cache
+  if (kv && kv.enabled) {
+    sections.push(
+      <Card key="kv">
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text fontSize={13} fontWeight="600" color={colors.text}>KV Cache</Text>
+          <StatusBadge label={kv.active_sessions > 0 ? `${kv.active_sessions} sessions` : 'Idle'} variant={kv.active_sessions > 0 ? 'info' : 'default'} />
+        </XStack>
+        <XStack gap={16}>
+          <Stat label="Cached tokens" value={kv.cached_tokens.toLocaleString()} />
+          {kv.ttl_seconds != null && <Stat label="TTL" value={`${kv.ttl_seconds}s`} />}
+        </XStack>
+      </Card>,
+    );
+  }
+
+  // Training Pool
+  if (tp && tp.max_workers > 0) {
+    sections.push(
+      <Card key="training">
+        <Text fontSize={13} fontWeight="600" color={colors.text}>Training Pool</Text>
+        <XStack gap={16}>
+          <Stat label="Active" value={`${tp.active_jobs} / ${tp.max_workers}`} color={tp.active_jobs > 0 ? colors.warning : colors.text} />
+          <Stat label="Tracked" value={String(tp.total_tracked)} />
+        </XStack>
+      </Card>,
+    );
+  }
+
+  // Recent Errors
+  if (health?.recent_errors && health.recent_errors.length > 0) {
+    sections.push(
+      <Card key="errors">
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text fontSize={13} fontWeight="600" color={colors.text}>Recent Errors</Text>
+          <StatusBadge label={`${health.recent_errors.length}`} variant="error" />
+        </XStack>
+        <YStack gap={6}>
+          {health.recent_errors.slice(0, 3).map((err, i) => (
+            <YStack key={i} padding={8} borderRadius={6} backgroundColor={colors.errorAlpha(0.05)} gap={2}>
+              <Text fontSize={11} color={colors.error} numberOfLines={1}>{err.message}</Text>
+              {err.path && <Text fontSize={10} color={colors.textMuted}>{err.path}</Text>}
+            </YStack>
+          ))}
         </YStack>
-      )}
-    </ScreenShell>
+      </Card>,
+    );
+  }
+
+  // Uptime
+  sections.push(
+    <Card key="uptime">
+      <XStack justifyContent="space-between" alignItems="center">
+        <Text fontSize={13} fontWeight="600" color={colors.text}>Uptime</Text>
+        <Text fontSize={14} fontWeight="500" color={colors.text}>{formatUptime(health?.uptime_seconds || 0)}</Text>
+      </XStack>
+      <XStack gap={16}>
+        <Stat label="Requests" value={String(health?.request_count || 0)} />
+        <Stat label="Errors" value={String(health?.error_count || 0)} color={health?.error_count ? colors.error : colors.text} />
+        {health && health.requests_per_minute > 0 && <Stat label="Req/min" value={health.requests_per_minute.toFixed(1)} />}
+      </XStack>
+    </Card>,
+  );
+
+  return (
+    <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
+      <XStack paddingHorizontal={16} paddingVertical={12} alignItems="center" justifyContent="space-between">
+        <Text fontSize={20} fontWeight="600" color={colors.text}>System Health</Text>
+        <Pressable onPress={onRefresh}>
+          <Icon name="refresh-cw" size={18} color={colors.primary} />
+        </Pressable>
+      </XStack>
+      <FlatList
+        data={sections}
+        renderItem={({item}) => item as React.ReactElement}
+        keyExtractor={(_, i) => String(i)}
+        contentContainerStyle={{padding: 16, gap: 12, paddingBottom: 32}}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      />
+    </SafeAreaView>
   );
 }

@@ -1,7 +1,30 @@
-"""Tests for feedback router endpoints."""
-import pytest
+"""Tests for feedback router endpoints.
 
+All tests use a temporary MogDB instance per test to ensure isolation.
+The autouse fixture injects a fresh FeedbackController backed by a temp
+directory, and resets the global singleton on teardown.
+"""
+import pytest
+import tempfile
+import shutil
+
+from controllers.feedback import (
+    FeedbackController,
+    set_feedback_controller,
+    reset_feedback_controller,
+)
 from tests.test_support import get_test_client
+
+
+@pytest.fixture(autouse=True)
+def _isolated_feedback_controller(tmp_path):
+    """Create a FeedbackController backed by a temp MogDB, inject it, clean up."""
+    db_path = str(tmp_path / "feedback_mogdb")
+    controller = FeedbackController(tmp_path, db_path=db_path)
+    set_feedback_controller(controller)
+    yield controller
+    reset_feedback_controller()
+
 
 client = get_test_client()
 
@@ -56,6 +79,16 @@ class TestRecordFeedback:
         resp = client.post("/feedback", json={"rating": "thumbs_up"})
         assert resp.status_code == 422
 
+    def test_record_feedback_returns_id_and_timestamp(self):
+        resp = client.post("/feedback", json={
+            "message_id": "msg-ts-1",
+            "rating": "thumbs_up",
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["feedback_id"].startswith("fb_")
+        assert "T" in body["timestamp"]
+
 
 class TestFeedbackStats:
     def test_get_stats(self):
@@ -67,11 +100,35 @@ class TestFeedbackStats:
         assert "total" in body
         assert "up_ratio" in body
 
+    def test_stats_reflect_actual_records(self):
+        client.post("/feedback", json={"message_id": "s1", "rating": "thumbs_up"})
+        client.post("/feedback", json={"message_id": "s2", "rating": "thumbs_up"})
+        client.post("/feedback", json={"message_id": "s3", "rating": "thumbs_down"})
+        resp = client.get("/feedback/stats/summary")
+        body = resp.json()
+        assert body["total"] == 3
+        assert body["thumbs_up"] == 2
+        assert body["thumbs_down"] == 1
+        assert abs(body["up_ratio"] - 2 / 3) < 0.01
+
 
 class TestGetFeedback:
     def test_get_feedback_nonexistent(self):
         resp = client.get("/feedback/nonexistent-msg-id")
         assert resp.status_code == 404
+
+    def test_get_feedback_after_record(self):
+        client.post("/feedback", json={
+            "message_id": "lookup-msg",
+            "rating": "thumbs_down",
+            "session_id": "sess-lookup",
+        })
+        resp = client.get("/feedback/lookup-msg")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["message_id"] == "lookup-msg"
+        assert body["rating"] == "thumbs_down"
+        assert body["session_id"] == "sess-lookup"
 
 
 class TestConversations:
@@ -126,3 +183,24 @@ class TestConversations:
     def test_delete_conversation_not_found(self):
         resp = client.delete("/feedback/conversations/nonexistent")
         assert resp.status_code == 200
+
+    def test_list_conversations_sorted_by_updated(self):
+        c1 = client.post("/feedback/conversations", json={"name": "First"})
+        c2 = client.post("/feedback/conversations", json={"name": "Second"})
+        resp = client.get("/feedback/conversations")
+        names = [c["name"] for c in resp.json()]
+        assert "Second" in names
+        assert "First" in names
+
+    def test_conversation_has_required_fields(self):
+        resp = client.post("/feedback/conversations", json={"name": "Field Check"})
+        body = resp.json()
+        for key in ("id", "name", "session_id", "created_at", "updated_at", "pinned", "starred"):
+            assert key in body
+
+    def test_update_conversation_pinned(self):
+        create_resp = client.post("/feedback/conversations", json={"name": "Pinning"})
+        conv_id = create_resp.json()["id"]
+        resp = client.patch(f"/feedback/conversations/{conv_id}", json={"pinned": True})
+        assert resp.status_code == 200
+        assert resp.json()["pinned"] is True

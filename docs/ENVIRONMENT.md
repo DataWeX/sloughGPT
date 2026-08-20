@@ -242,6 +242,24 @@ JSON output example:
 {"ts":"2026-07-15T03:33:03.454Z","level":"INFO","logger":"man.api","msg":"Server started","tag":"START","ctx":{"port":8000}}
 ```
 
+### SLO_LOG_DIR
+**Optional**
+
+Directory for log file output. Defaults to `logs/` in the repo root. A `sloughgpt.log` file is created with rotation (10 MB per file, 5 backups).
+
+```bash
+SLO_LOG_DIR=/var/log/sloughgpt
+```
+
+### SLO_LOG_NO_FILE
+**Optional**
+
+Disable file-based log output entirely (logs go to stderr only).
+
+```bash
+SLO_LOG_NO_FILE=1   # no sloughgpt.log file created
+```
+
 ### SLO_LOG_COLOR
 **Optional**
 

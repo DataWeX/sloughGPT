@@ -2148,7 +2148,7 @@ Examples:
         granted = self._perms.list_granted()
         if granted:
             self._print(f"  Granted commands: {', '.join(granted)}")
-        self._print(f"  Config: {self._perms._config_path}")
+        self._print(f"  Config: MogDB (shell_permissions)")
 
     def _cmd_confirm(self, args: str = "") -> None:
         """confirm [on|off] — toggle auto-download (skip download confirmations).
@@ -2796,6 +2796,50 @@ Examples:
             self._print(f"  Training started: {r.get('status', r)}")
             if job_id:
                 self._stream_train_progress(job_id)
+
+    def _cmd_ops(self, args: str = "") -> None:
+        """Operations: ops [type] | ops cancel <op_id> | ops cancel-all [type]"""
+        parts = args.strip().split()
+        sub = parts[0] if parts else ""
+
+        if sub == "cancel":
+            if len(parts) < 2:
+                self._print("  Usage: ops cancel <op_id>")
+                return
+            r = self._spinner_call("Cancelling operation", lambda: self.cmds.cancel_operation(parts[1]))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                op = r.get("data", r)
+                self._print(f"  Cancelled: {op.get('label', parts[1])}")
+            return
+
+        if sub == "cancel-all":
+            op_type = parts[1] if len(parts) > 1 else ""
+            r = self._spinner_call("Cancelling all", lambda: self.cmds.cancel_all_operations(op_type))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                data = r.get("data", r)
+                self._print(f"  Cancelled {data.get('count', 0)} operation(s)")
+            return
+
+        if not self._require_api("ops"):
+            return
+
+        op_type = sub if sub else ""
+        ops = self.cmds.operations(op_type)
+        if not ops:
+            self._print("  No active operations")
+            return
+        rows = []
+        for o in ops:
+            oid = o.get("id", "")[:8]
+            otype = o.get("type", "?")
+            status = o.get("status", "?")
+            label = o.get("label", "")
+            rows.append([oid, otype, status, label[:40]])
+        self._table(rows, ["ID", "Type", "Status", "Label"])
 
     def _stream_train_progress(self, job_id: str) -> None:
         """Stream training progress for a job with live progress bar."""
@@ -4574,6 +4618,8 @@ _shell_commands = {
     "events": ShellREPL._cmd_events,
     "metrics": ShellREPL._cmd_metrics,
     "train": ShellREPL._cmd_train,
+    "ops": ShellREPL._cmd_ops,
+    "operations": ShellREPL._cmd_ops,
     "gen": ShellREPL._cmd_gen,
     "chat": ShellREPL._cmd_chat,
     "ai": ShellREPL._cmd_ai,

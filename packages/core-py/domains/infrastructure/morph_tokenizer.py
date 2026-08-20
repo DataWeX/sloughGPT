@@ -21,6 +21,7 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import numpy as np
 from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.morph_tokenizer")
@@ -185,6 +186,36 @@ def _bytes_to_unicode() -> Tuple[Dict[int, str], Dict[str, int]]:
 _BYTE2UNICODE, _UNICODE2BYTE = _bytes_to_unicode()
 
 
+class _NumpyTokenTensor:
+    """Minimal tensor wrapper exposing ``.to(device)`` and ``.shape``.
+
+    Used by :meth:`MorphTokenizer.__call__` to return HF-compatible token
+    tensors backed by numpy arrays.  ``.to()`` is a no-op (CPU-only); callers
+    that need the actual array can access ``._data``.
+    """
+    __slots__ = ("_data",)
+
+    def __init__(self, data: "np.ndarray") -> None:
+        self._data = data
+
+    def to(self, _device: str) -> "_NumpyTokenTensor":
+        return self
+
+    @property
+    def shape(self) -> tuple:
+        return self._data.shape
+
+    @property
+    def dtype(self) -> Any:
+        return self._data.dtype
+
+    def __getitem__(self, key: Any) -> Any:
+        return self._data[key]
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+
 class MorphTokenizer:
     """Own BPE tokenizer + morphological analysis. No external dependencies."""
 
@@ -193,6 +224,7 @@ class MorphTokenizer:
         vocab: Dict[str, int],
         merges: List[Tuple[str, str]],
         eos_token_id: int = 50256,
+        pad_token_id: Optional[int] = None,
         byte_level: bool = False,
         byte_fallback: bool = False,
         model_id: str = "",
@@ -203,6 +235,7 @@ class MorphTokenizer:
         self.merges = merges
         self.bpe_ranks = {m: i for i, m in enumerate(merges)}
         self.eos_token_id = eos_token_id
+        self.pad_token_id = pad_token_id if pad_token_id is not None else eos_token_id
         self.byte_level = byte_level
         self.byte_fallback = byte_fallback
         self.model_id = model_id
@@ -568,6 +601,33 @@ class MorphTokenizer:
             return result.decode("utf-8", errors="replace")
         else:
             return "".join(tokens)
+
+    # ── HuggingFace-compatible __call__ API ──────────────────────────────
+
+    def __call__(
+        self,
+        text: str,
+        return_tensors: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """HuggingFace-compatible tokenizer call.
+
+        Accepts ``text`` (str) and returns a dict with ``input_ids`` and
+        ``attention_mask`` wrapped in :class:`_NumpyTokenTensor` objects
+        that expose ``.to(device)`` (no-op for numpy/CPU) and ``.shape``.
+
+        Args:
+            text: Input text to tokenize.
+            return_tensors: Ignored (always returns numpy-backed tensors).
+
+        Returns:
+            ``{"input_ids": _NumpyTokenTensor, "attention_mask": _NumpyTokenTensor}``
+        """
+        ids = self.encode(text)
+        mask = [1] * len(ids)
+        input_ids = _NumpyTokenTensor(np.array([ids], dtype=np.int64))
+        attention_mask = _NumpyTokenTensor(np.array([mask], dtype=np.int64))
+        return {"input_ids": input_ids, "attention_mask": attention_mask}
 
     def tokenize(self, text: str) -> List[str]:
         """Return the string tokens (not IDs) for inspection."""

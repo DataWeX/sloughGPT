@@ -7,6 +7,9 @@ configurable quality, relevance, and topic criteria.
 Flow:
   Raw article → LengthGate → QualityScore → RelevanceGate → ToxicityFilter → TopicGate → Store
                     reject        score≥N       score≥N         reject        match
+
+Config is stored in a MogDB ``data_filter_config`` collection (single document
+keyed by ``_id: "config"``).
 """
 
 from __future__ import annotations
@@ -18,12 +21,44 @@ import logging
 from typing import Optional
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.learner.filter")
 
-_REPO_ROOT = find_repo_root(Path(__file__).resolve())
-FILTER_CONFIG_PATH = _REPO_ROOT / "data" / "knowledge" / "filter_config.json"
+# ─── MogDB config storage ────────────────────────────────────────────────
+
+_db = None
+_collection = None
+
+
+def _get_collection(db_path: Optional[str] = None):
+    """Return the ``data_filter_config`` collection, creating it on first call."""
+    global _db, _collection
+    if _collection is not None:
+        return _collection
+    from mogdb import MogDB
+    if db_path is None:
+        from domains.shared import find_repo_root
+        repo = find_repo_root(Path(__file__).resolve())
+        db_path = str(repo / "data" / "data_filter_mogdb")
+    _db = MogDB(db_path)
+    _collection = _db.collection("data_filter_config")
+    return _collection
+
+
+def set_data_filter_db(db_path: str) -> None:
+    """Replace the module-level collection (for tests)."""
+    global _db, _collection
+    from mogdb import MogDB
+    _db = MogDB(db_path)
+    _collection = _db.collection("data_filter_config")
+
+
+def reset_data_filter_db() -> None:
+    """Clear the module-level collection reference."""
+    global _db, _collection
+    _db = None
+    _collection = None
+
 
 # ─── Default config ─────────────────────────────────────────────────────────
 
@@ -166,17 +201,29 @@ def _matches_whitelist(text: str, whitelist: list[str]) -> bool:
 # ─── Config ─────────────────────────────────────────────────────────────────
 
 def _load_config() -> dict:
-    if FILTER_CONFIG_PATH.exists():
-        try:
-            return json.loads(FILTER_CONFIG_PATH.read_text())
-        except Exception as e:
-            logger.warning(f"Failed to load filter config: {e}", extra={"tag": "INF"})
-    return dict(DEFAULT_CONFIG)
+    """Load filter config from MogDB."""
+    col = _get_collection()
+    doc = col.find_one({"_id": "config"})
+    if doc is None:
+        return dict(DEFAULT_CONFIG)
+    try:
+        cfg = dict(doc)
+        cfg.pop("_id", None)
+        return cfg
+    except Exception as e:
+        logger.warning("Failed to load filter config: %s", e, extra={"tag": "INF"})
+        return dict(DEFAULT_CONFIG)
 
 
 def _save_config(cfg: dict):
-    FILTER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    FILTER_CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
+    """Persist filter config to MogDB."""
+    col = _get_collection()
+    data = {"_id": "config", **cfg}
+    existing = col.find_one({"_id": "config"})
+    if existing is not None:
+        col.update_one({"_id": "config"}, {"$set": cfg})
+    else:
+        col.insert_one(data)
 
 
 # ─── Filter ─────────────────────────────────────────────────────────────────
@@ -213,7 +260,7 @@ class DataFilter:
     def update_config(self, **kwargs):
         self.config.update(kwargs)
         _save_config(self.config)
-        logger.info(f"Filter config updated: {kwargs}", extra={"tag": "INF"})
+        logger.info("Filter config updated: %s", kwargs, extra={"tag": "INF"})
 
     def get_config(self) -> dict:
         return dict(self.config)

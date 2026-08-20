@@ -4,7 +4,6 @@ Tests for DataFilter (domains/learner/data_filter.py).
 
 import os
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -16,19 +15,18 @@ from domains.learner.data_filter import (
     _matches_blacklist,
     _matches_whitelist,
     DEFAULT_CONFIG,
-    FILTER_CONFIG_PATH,
+    set_data_filter_db,
+    reset_data_filter_db,
 )
 
 
 @pytest.fixture(autouse=True)
-def backup_config(tmp_path):
-    """Redirect filter config to a temp file so tests don't interfere."""
-    from unittest.mock import patch
-    fake_path = tmp_path / "filter_config.json"
-    if fake_path.exists():
-        fake_path.unlink()
-    with patch("domains.learner.data_filter.FILTER_CONFIG_PATH", fake_path):
-        yield
+def _temp_mogdb(tmp_path):
+    """Redirect filter config to a temp MogDB so tests don't interfere."""
+    db_path = str(tmp_path / "test_data_filter")
+    set_data_filter_db(db_path)
+    yield
+    reset_data_filter_db()
 
 
 class TestScoreQuality:

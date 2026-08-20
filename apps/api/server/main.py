@@ -55,46 +55,16 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="urllib3")
 warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
 warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 
-# ── Structured logging ───────────────────────────────────────────────
-from domains.logging import ConsoleLogger, BridgeHandler, set_global, LogLevel  # noqa: E402
+# ── Structured logging (centralized) ─────────────────────────────────
+from domains.logging.config import setup_logging  # noqa: E402
 
-_log_level_name = os.environ.get("SLO_LOG_LEVEL", "INFO").upper()
-_log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
-_log_format = os.environ.get("SLO_LOG_FORMAT", "human").lower()  # "human" or "json"
-
-_console_logger = ConsoleLogger("slo", level=_log_level, format=_log_format)
-set_global(_console_logger)
-
-_bridge = BridgeHandler(_console_logger)
-_bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
-logging.root.addHandler(_bridge)
-logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
-
-# ── Suppress noisy third-party loggers ────────────────────────────────
-for _noisy in ("httpx", "httpcore", "uvicorn.access", "urllib3"):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
-
+_log_setup = setup_logging()
 logger = logging.getLogger("slo")
-
-# Log bridge → output buffer (for SSE streaming via /system/stream)
-try:
-    from domains.infrastructure.output_buffer import install_log_bridge, install_stdio_bridge
-    _buf_handler = install_log_bridge()
-    install_stdio_bridge()
-    logger.info("Output buffer bridge installed (handler=%s)", _buf_handler, extra={"tag": "START"})
-except Exception as exc:
-    logger.warning("Output buffer bridge install failed: %s", exc, extra={"tag": "START"})
-
-# ── Filter client-side extension errors ────────────────────────────────
-class _ClientExtensionFilter(logging.Filter):
-    """Suppress noisy client errors from browser extensions (crypto wallets, etc.)."""
-    _PATTERNS = ("CLIENT ERROR", "0 0", "chrome-extension://", "moz-extension://")
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        return not any(p in msg for p in self._PATTERNS)
-
-logging.root.addFilter(_ClientExtensionFilter())
+logger.info(
+    "Logging: level=%s format=%s log_dir=%s",
+    _log_setup["level"], _log_setup["format"], _log_setup["log_dir"],
+    extra={"tag": "START"},
+)
 
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -149,19 +119,21 @@ async def lifespan(app_inst: FastAPI):
             logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
 
         # Auto-ingest repo docs into production RAG (if empty)
-        try:
-            from domains.cognitive.rag_service import get_rag_service
-            _rag = get_rag_service()
-            if _rag.stats().get("total_chunks", 0) == 0:
-                import threading
-                def _rag_auto_ingest():
+        # Moved to background thread: importing rag_service chains through
+        # rag.py → HybridRetriever and blocks the lifespan.
+        import threading
+        def _rag_init_and_ingest():
+            try:
+                from domains.cognitive.rag_service import get_rag_service
+                _rag = get_rag_service()
+                if _rag.stats().get("total_chunks", 0) == 0:
                     try:
                         _rag.auto_ingest_directory(str(find_repo_root(Path(__file__).resolve())), max_files=150)
                     except Exception as e:
                         logger.debug("RAG auto-ingest failed: %s", e)
-                threading.Thread(target=_rag_auto_ingest, daemon=True).start()
-        except Exception as e:
-            logger.debug("RAG auto-ingest skipped: %s", e)
+            except Exception as e:
+                logger.debug("RAG init skipped: %s", e)
+        threading.Thread(target=_rag_init_and_ingest, daemon=True, name="rag-init").start()
 
         # Start background daemons (moved from pre-uvicorn to post-startup)
         _start_feedback_workflow()

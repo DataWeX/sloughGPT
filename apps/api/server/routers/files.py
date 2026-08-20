@@ -11,7 +11,7 @@ import re
 from fastapi import APIRouter, UploadFile, File, Form, Query
 from pydantic import BaseModel
 
-from schemas.common import raise_error, success_response
+from schemas.common import raise_error, success_response, classify_and_raise
 
 logger = logging.getLogger("slo.routers.files")
 
@@ -331,6 +331,8 @@ class FilesRouter:
             )
         except ImportError:
             raise_error("Knowledge base not available", "E_INFRA_STARTUP", status_code=501)
+        except Exception as exc:
+            classify_and_raise(exc, source="files.ingest")
 
     # ── Helpers ──
 

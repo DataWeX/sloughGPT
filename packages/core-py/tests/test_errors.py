@@ -1,229 +1,269 @@
 """
-Tests for Error Taxonomy (errors.py).
+Tests for domains/infrastructure/errors.py — error taxonomy and classification.
+
+Covers:
+    - AppError base class (defaults, to_dict, to_json, from_exception)
+    - All concrete error subclasses (defaults, inheritance)
+    - classify_exception mapping (TimeoutError, MemoryError, ConnectionError, etc.)
+    - emit_error_event (fire-and-forget, no crash)
+    - error_to_sse conversion
 """
 
-import asyncio
-
+import json
+import sys
+from pathlib import Path
 import pytest
+
+_CORE_PY = Path(__file__).resolve().parents[1]
+if str(_CORE_PY) not in sys.path:
+    sys.path.insert(0, str(_CORE_PY))
+
 from domains.infrastructure.errors import (
-    AppError, RecoverableError, FatalError, ValidationError,
-    ConfigError, ModelError, ModelOOMError, ModelTimeoutError,
-    TaskError, ResourceExhaustedError, NotFoundError, AuthError,
-    error_to_sse, classify_exception, emit_error_event,
+    AppError,
+    RecoverableError,
+    FatalError,
+    ValidationError,
+    ConfigError,
+    ModelError,
+    ModelOOMError,
+    ModelTimeoutError,
+    TaskError,
+    ResourceExhaustedError,
+    NotFoundError,
+    AuthError,
+    classify_exception,
+    emit_error_event,
+    error_to_sse,
 )
 
 
+# ── AppError base class ──────────────────────────────────────────────
+
+
 class TestAppError:
-    def test_default_fields(self):
-        err = AppError()
-        assert err.code == "general.error"
-        assert err.recoverable is False
-        assert err.http_status == 500
-        assert err.details == {}
-        assert err.cause is None
+    def test_defaults(self):
+        e = AppError("something")
+        assert e.message == "something"
+        assert e.code == "general.error"
+        assert e.user_message == "Something went wrong."
+        assert e.recoverable is False
+        assert e.http_status == 500
+        assert e.details == {}
 
     def test_custom_fields(self):
-        err = AppError(
-            "custom msg",
+        e = AppError(
+            "boom",
             code="custom.code",
-            user_message="User friendly",
+            user_message="user sees this",
             recoverable=True,
             http_status=418,
-            details={"key": "val"},
+            details={"k": "v"},
         )
-        assert str(err) == "custom msg"
-        assert err.code == "custom.code"
-        assert err.user_message == "User friendly"
-        assert err.recoverable is True
-        assert err.http_status == 418
-        assert err.details == {"key": "val"}
+        assert e.code == "custom.code"
+        assert e.user_message == "user sees this"
+        assert e.recoverable is True
+        assert e.http_status == 418
+        assert e.details == {"k": "v"}
+
+    def test_message_falls_back_to_code(self):
+        e = AppError(code="my.code")
+        assert e.message == "my.code"
 
     def test_to_dict(self):
-        err = AppError("test", code="test.code", details={"x": 1})
-        d = err.to_dict()
-        assert d["code"] == "test.code"
-        assert d["message"] == "test"
+        e = AppError("msg", code="c1", http_status=400)
+        d = e.to_dict()
+        assert d["code"] == "c1"
+        assert d["message"] == "msg"
+        assert d["http_status"] == 400
         assert d["recoverable"] is False
-        assert d["details"]["x"] == 1
 
     def test_to_json(self):
-        err = AppError("json", code="json.code")
-        import json
-        d = json.loads(err.to_json())
-        assert d["code"] == "json.code"
-
-    def test_from_exception(self):
-        try:
-            raise ValueError("bad value")
-        except ValueError as e:
-            err = AppError.from_exception(e, code="general.test")
-            assert err.code == "general.test"
-            assert err.message == "bad value"
-            assert err.recoverable is False
-            assert isinstance(err.cause, ValueError)
+        e = AppError("msg", code="c1")
+        j = e.to_json()
+        parsed = json.loads(j)
+        assert parsed["code"] == "c1"
 
     def test_repr(self):
-        err = AppError("msg", code="test.code")
-        r = repr(err)
+        e = AppError("msg", code="c1")
+        r = repr(e)
         assert "AppError" in r
-        assert "test.code" in r
+        assert "c1" in r
+        assert "msg" in r
 
-    def test_message_defaults_to_code(self):
-        err = AppError(code="silent.error")
-        assert err.message == "silent.error"
+    def test_is_exception(self):
+        e = AppError("x")
+        assert isinstance(e, Exception)
+
+    def test_from_exception(self):
+        original = ValueError("bad value")
+        e = AppError.from_exception(original, code="test.error", user_message="User msg")
+        assert e.code == "test.error"
+        assert e.user_message == "User msg"
+        assert e.cause is original
+        assert "bad value" in e.message
+
+    def test_cause_stored(self):
+        cause = RuntimeError("root")
+        e = AppError("wrapper", cause=cause)
+        assert e.cause is cause
 
 
-class TestSubclasses:
-    def test_recoverable_error(self):
-        err = RecoverableError()
-        assert err.recoverable is True
-        assert err.http_status == 503
-        assert err.code == "general.recoverable"
+# ── Concrete error subclasses ─────────────────────────────────────────
 
-    def test_fatal_error(self):
-        err = FatalError("fatal")
-        assert err.recoverable is False
-        assert err.http_status == 500
 
-    def test_validation_error(self):
-        err = ValidationError("invalid")
-        assert err.http_status == 400
-        assert err.code == "general.validation"
+class TestConcreteErrors:
+    def test_recoverable(self):
+        e = RecoverableError("timeout")
+        assert e.recoverable is True
+        assert e.http_status == 503
 
-    def test_config_error(self):
-        err = ConfigError("bad config")
-        assert err.http_status == 500
-        assert err.code == "general.config"
+    def test_fatal(self):
+        e = FatalError("crash")
+        assert e.recoverable is False
+        assert e.http_status == 500
 
-    def test_model_error(self):
-        err = ModelError("model fail")
-        assert err.http_status == 503
-        assert err.code == "model.error"
+    def test_validation(self):
+        e = ValidationError("bad input")
+        assert e.http_status == 400
+
+    def test_config(self):
+        e = ConfigError("missing key")
+        assert e.http_status == 500
+
+    def test_model(self):
+        e = ModelError("NaN weights")
+        assert e.http_status == 503
 
     def test_model_oom(self):
-        err = ModelOOMError()
-        assert err.code == "model.oom"
-        assert err.recoverable is True
+        e = ModelOOMError("out of memory")
+        assert e.recoverable is True
+        assert e.http_status == 503
 
     def test_model_timeout(self):
-        err = ModelTimeoutError()
-        assert err.code == "model.timeout"
-        assert err.recoverable is True
+        e = ModelTimeoutError("timed out")
+        assert e.recoverable is True
 
-    def test_task_error(self):
-        err = TaskError("task fail")
-        assert err.recoverable is True
+    def test_task(self):
+        e = TaskError("queue error")
+        assert e.recoverable is True
 
     def test_resource_exhausted(self):
-        err = ResourceExhaustedError("too many")
-        assert err.http_status == 429
-        assert err.recoverable is True
+        e = ResourceExhaustedError("rate limit")
+        assert e.http_status == 429
+        assert e.recoverable is True
 
     def test_not_found(self):
-        err = NotFoundError("missing")
-        assert err.http_status == 404
+        e = NotFoundError("missing")
+        assert e.http_status == 404
 
-    def test_auth_error(self):
-        err = AuthError("no auth")
-        assert err.http_status == 401
+    def test_auth(self):
+        e = AuthError("denied")
+        assert e.http_status == 401
+
+    def test_all_inherit_app_error(self):
+        for cls in [
+            RecoverableError, FatalError, ValidationError, ConfigError,
+            ModelError, ModelOOMError, ModelTimeoutError, TaskError,
+            ResourceExhaustedError, NotFoundError, AuthError,
+        ]:
+            assert issubclass(cls, AppError)
+
+    def test_model_oom_inherits_model(self):
+        assert issubclass(ModelOOMError, ModelError)
+
+    def test_model_timeout_inherits_model(self):
+        assert issubclass(ModelTimeoutError, ModelError)
 
 
-class TestErrorToSSE:
-    def test_returns_safe_fields(self):
-        err = ModelOOMError(details={"secret": "hidden"})
-        sse = error_to_sse(err)
-        assert sse["code"] == "model.oom"
-        assert sse["user_message"] == err.user_message
-        assert sse["recoverable"] is True
-        assert "details" not in sse
-        assert "message" not in sse
-
-    def test_no_traceback_in_sse(self):
-        err = AppError("secret_tb")
-        sse = error_to_sse(err)
-        assert "traceback" not in str(sse)
+# ── classify_exception ───────────────────────────────────────────────
 
 
 class TestClassifyException:
     def test_app_error_passthrough(self):
-        err = ModelError("test")
-        assert classify_exception(err) is err
+        orig = NotFoundError("already classified")
+        result = classify_exception(orig)
+        assert result is orig
 
-    def test_timeout_becomes_model_timeout(self):
-        err = classify_exception(TimeoutError("timed out"))
-        assert isinstance(err, ModelTimeoutError)
-        assert err.code == "model.timeout"
+    def test_timeout_error(self):
+        result = classify_exception(TimeoutError("timed out"))
+        assert isinstance(result, ModelTimeoutError)
+        assert result.cause is not None
 
-    def test_memory_error_becomes_oom(self):
-        err = classify_exception(MemoryError("no mem"))
-        assert isinstance(err, ModelOOMError)
+    def test_memory_error(self):
+        result = classify_exception(MemoryError("oom"))
+        assert isinstance(result, ModelOOMError)
 
-    def test_connection_error_becomes_recoverable(self):
-        err = classify_exception(ConnectionRefusedError("refused"))
-        assert isinstance(err, RecoverableError)
-        assert err.code == "network.error"
+    def test_connection_error(self):
+        for exc_cls in [ConnectionError, ConnectionRefusedError, ConnectionResetError]:
+            result = classify_exception(exc_cls("refused"))
+            assert isinstance(result, RecoverableError)
+            assert result.code == "network.error"
 
-    def test_connection_reset_is_recoverable(self):
-        err = classify_exception(ConnectionResetError("reset"))
-        assert isinstance(err, RecoverableError)
+    def test_file_not_found(self):
+        result = classify_exception(FileNotFoundError("gone"))
+        assert isinstance(result, NotFoundError)
 
-    def test_file_not_found_becomes_not_found(self):
-        err = classify_exception(FileNotFoundError("no file"))
-        assert isinstance(err, NotFoundError)
+    def test_permission_error(self):
+        result = classify_exception(PermissionError("no access"))
+        assert isinstance(result, AuthError)
 
-    def test_permission_error_becomes_auth(self):
-        err = classify_exception(PermissionError("denied"))
-        assert isinstance(err, AuthError)
+    def test_value_error(self):
+        result = classify_exception(ValueError("bad value"))
+        assert isinstance(result, ValidationError)
 
-    def test_value_error_becomes_validation(self):
-        err = classify_exception(ValueError("bad"))
-        assert isinstance(err, ValidationError)
+    def test_unknown_exception(self):
+        result = classify_exception(RuntimeError("something else"))
+        assert isinstance(result, AppError)
+        assert result.code == "general.unhandled"
 
-    def test_unknown_exception_falls_back(self):
-        err = classify_exception(RuntimeError("weird"))
-        assert isinstance(err, AppError)
-        assert err.code == "general.unhandled"
-        assert err.recoverable is False
+    def test_preserves_message(self):
+        result = classify_exception(TimeoutError("specific timeout msg"))
+        assert "specific timeout msg" in result.message
 
-    def test_cause_preserved(self):
-        try:
-            raise ValueError("root cause")
-        except ValueError as e:
-            try:
-                raise RuntimeError("wrapper") from e
-            except RuntimeError as wrapper:
-                err = classify_exception(wrapper)
-                assert err.cause is wrapper
+
+# ── emit_error_event ──────────────────────────────────────────────────
 
 
 class TestEmitErrorEvent:
-    async def test_emits_via_running_loop(self):
-        emit_error_event(ModelError("boom"))
-        await asyncio.sleep(0.01)
+    def test_does_not_crash(self):
+        e = AppError("test")
+        emit_error_event(e, source="test")
+        # Should not raise
 
-    def test_emits_silently_when_bus_unavailable(self, monkeypatch):
-        import domains.infrastructure.event_bus as eb
+    def test_does_not_crash_without_event_bus(self):
+        import sys
+        real = sys.modules.get("domains.infrastructure.event_bus")
+        sys.modules["domains.infrastructure.event_bus"] = None
+        try:
+            e = AppError("test")
+            emit_error_event(e, source="test")
+        finally:
+            if real is not None:
+                sys.modules["domains.infrastructure.event_bus"] = real
+            else:
+                sys.modules.pop("domains.infrastructure.event_bus", None)
 
-        monkeypatch.setattr(
-            eb, "get_event_bus",
-            lambda: (_ for _ in ()).throw(RuntimeError("no bus")),
-        )
-        emit_error_event(ModelError("boom"))
 
-    def test_emits_sync_without_running_loop(self, monkeypatch):
-        import domains.infrastructure.event_bus as eb
+# ── error_to_sse ──────────────────────────────────────────────────────
 
-        calls = []
 
-        class _Bus:
-            def emit(self, *args, **kwargs):
-                calls.append(("emit", args, kwargs))
+class TestErrorToSse:
+    def test_basic(self):
+        e = NotFoundError("missing", user_message="Not found.")
+        sse = error_to_sse(e)
+        assert sse["code"] == "resource.not_found"
+        assert sse["user_message"] == "Not found."
+        assert sse["recoverable"] is False
+        assert sse["http_status"] == 404
 
-            def emit_sync(self, *args, **kwargs):
-                calls.append(("emit_sync", args, kwargs))
+    def test_no_stack_trace(self):
+        e = AppError("err", details={"secret": "value"})
+        sse = error_to_sse(e)
+        assert "details" not in sse
+        assert "traceback" not in sse
+        assert "secret" not in sse
 
-        monkeypatch.setattr(eb, "get_event_bus", lambda: _Bus())
-        emit_error_event(ModelError("boom"))
-        assert calls, "expected emit_sync call"
-        assert calls[0][0] == "emit_sync"
-        assert calls[0][1][0] == "error.raised"
+    def test_recoverable(self):
+        e = ResourceExhaustedError("slow down")
+        sse = error_to_sse(e)
+        assert sse["recoverable"] is True

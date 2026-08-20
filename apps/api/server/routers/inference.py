@@ -156,6 +156,10 @@ def _extract_user_message(messages: List[Message]) -> Optional[str]:
     return None
 
 
+_META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
+_META_WEIGHT_CACHE_TTL = 5.0  # seconds
+
+
 def _apply_meta_weights(
     temperature: float,
     top_p: float,
@@ -168,21 +172,35 @@ def _apply_meta_weights(
 
     Looks up similar past messages in the feedback database and adjusts
     temperature, top_p, top_k, and repetition_penalty accordingly.
+    Results are cached for 5 seconds to avoid repeated similarity searches.
 
     Returns a dict of adjusted parameters to pass to the provider.
     """
+    import time
+    cache_key = f"{user_id}:{hash(user_message)}"
+    now = time.monotonic()
+
+    if cache_key in _META_WEIGHT_CACHE:
+        cached_time, cached_params = _META_WEIGHT_CACHE[cache_key]
+        if now - cached_time < _META_WEIGHT_CACHE_TTL:
+            return cached_params
+
     try:
         from domains.feedback.meta_weights import get_meta_weight_manager
         manager = get_meta_weight_manager()
         adj = manager.get_adjustment(
             user_message=user_message, k=5, user_id=user_id,
         )
-        return {
+        result = {
             "temperature": adj.temperature,
             "top_p": adj.top_p,
             "top_k": adj.top_k,
             "repetition_penalty": adj.repetition_penalty,
         }
+        _META_WEIGHT_CACHE[cache_key] = (now, result)
+        if len(_META_WEIGHT_CACHE) > 1000:
+            _META_WEIGHT_CACHE.clear()
+        return result
     except Exception as e:
         logger.debug("Meta-weight adjustment failed: %s", e)
         return {
@@ -528,6 +546,7 @@ class InferenceRouter:
             _batch_start = time.time()
             _BATCH_MAX = 5
             _BATCH_INTERVAL_S = 0.005
+            _token_count = 0
             gen_params = _apply_meta_weights(
                 temperature=req.temperature,
                 top_p=req.top_p,
@@ -550,9 +569,10 @@ class InferenceRouter:
                     if token:
                         _token_gen_start = time.time()
                         token_count += 1
+                        _token_count += 1
                         collected.append(token)
                         _batch.append(token)
-                        if len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
+                        if _token_count == 1 or len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
                             yield sse_token("generate", "".join(_batch))
                             _batch = []
                             _batch_start = time.time()
@@ -942,6 +962,7 @@ class InferenceRouter:
                     _batch_start = time.time()
                     _BATCH_MAX = 5
                     _BATCH_INTERVAL_S = 0.005
+                    _token_count = 0
                     gen_params = _apply_meta_weights(
                         temperature=req.temperature,
                         top_p=req.top_p,
@@ -968,7 +989,8 @@ class InferenceRouter:
                                     _token_gen_start = time.time()
                                     full_response_parts.append(token)
                                     _batch.append(token)
-                                    if len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
+                                    _token_count += 1
+                                    if _token_count == 1 or len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
                                         yield sse_token("chat", "".join(_batch))
                                         _batch = []
                                         _batch_start = time.time()

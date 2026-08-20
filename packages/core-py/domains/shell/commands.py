@@ -317,3 +317,31 @@ class ShellCommands:
     def dequantize_model() -> dict[str, Any]:
         """Restore quantized model to float32."""
         return _api_post("/models/dequantize")
+
+    # ── Operations ───────────────────────────────────────────────────────
+
+    @staticmethod
+    def operations(op_type: str = "") -> list[dict[str, Any]]:
+        """List active and recent operations (training, inference, download, import)."""
+        path = "/operations"
+        if op_type:
+            path += f"?type={op_type}"
+        result = _api_get(path)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict):
+            return result.get("data", result).get("operations", []) if isinstance(result.get("data"), dict) else result.get("operations", [])
+        return []
+
+    @staticmethod
+    def cancel_operation(op_id: str) -> dict[str, Any]:
+        """Cancel a running operation by ID."""
+        return _api_post(f"/cancel/{op_id}")
+
+    @staticmethod
+    def cancel_all_operations(op_type: str = "") -> dict[str, Any]:
+        """Cancel all active operations, optionally filtered by type."""
+        path = "/cancel-all"
+        if op_type:
+            path += f"?type={op_type}"
+        return _api_post(path)

@@ -90,6 +90,41 @@ _FORCE_PATTERNS = {
     "chmod": {"777", "000", "a+rwx", "a-rwx", "a+rw", "a-rw"},
 }
 
+# ── MogDB persistence ────────────────────────────────────────────
+
+_db = None
+_collection = None
+
+
+def _get_collection(db_path: Optional[str] = None):
+    """Return the ``shell_permissions`` collection, creating it on first call."""
+    global _db, _collection
+    if _collection is not None:
+        return _collection
+    from mogdb import MogDB
+    if db_path is None:
+        from domains.shared import find_repo_root
+        repo = find_repo_root(Path(__file__).resolve())
+        db_path = str(repo / "data" / "shell_permissions_mogdb")
+    _db = MogDB(db_path)
+    _collection = _db.collection("shell_permissions")
+    return _collection
+
+
+def set_permissions_db(db_path: str) -> None:
+    """Replace the module-level collection (for tests)."""
+    global _db, _collection
+    from mogdb import MogDB
+    _db = MogDB(db_path)
+    _collection = _db.collection("shell_permissions")
+
+
+def reset_permissions_db() -> None:
+    """Clear the module-level collection reference."""
+    global _db, _collection
+    _db = None
+    _collection = None
+
 
 class ShellPermissions:
     """Gate destructive shell operations by risk level.
@@ -100,13 +135,11 @@ class ShellPermissions:
       DANGEROUS → blocked until granted
       CRITICAL  → blocked until granted
 
-    Grants persist to ``~/.config/shell_permissions.json`` when
+    Grants persist to a MogDB ``shell_permissions`` collection when
     ``persist=True``.
     """
 
-    _config_path = Path.home() / ".config" / "shell_permissions.json"
-
-    def __init__(self) -> None:
+    def __init__(self, db_path: Optional[str] = None) -> None:
         self._granted: set[str] = set()
         self._denied: set[str] = set()
         self._policy: dict[str, str] = {
@@ -115,6 +148,7 @@ class ShellPermissions:
             Risk.DANGEROUS: "deny",
             Risk.CRITICAL: "deny",
         }
+        self._col = _get_collection(db_path)
         self._load_persistent()
 
     # ── Core API ─────────────────────────────────────────────────
@@ -183,21 +217,25 @@ class ShellPermissions:
     # ── Persistence ──────────────────────────────────────────────
 
     def _load_persistent(self) -> None:
-        if self._config_path.exists():
-            try:
-                data = json.loads(self._config_path.read_text())
-                self._granted = set(data.get("granted", []))
-                self._policy.update(data.get("policy", {}))
-            except Exception:
-                pass
+        doc = self._col.find_one({"_id": "permissions"})
+        if doc is None:
+            return
+        try:
+            self._granted = set(doc.get("granted", []))
+            self._policy.update(doc.get("policy", {}))
+        except Exception:
+            pass
 
     def _save_persistent(self) -> None:
         try:
-            self._config_path.parent.mkdir(parents=True, exist_ok=True)
             data = {
                 "granted": sorted(self._granted),
                 "policy": self._policy,
             }
-            self._config_path.write_text(json.dumps(data, indent=2))
+            existing = self._col.find_one({"_id": "permissions"})
+            if existing is not None:
+                self._col.update_one({"_id": "permissions"}, {"$set": data})
+            else:
+                self._col.insert_one({"_id": "permissions", **data})
         except Exception:
             pass

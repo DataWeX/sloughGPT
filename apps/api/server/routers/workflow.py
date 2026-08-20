@@ -7,7 +7,7 @@ from typing import Dict, Any
 from pydantic import BaseModel
 from fastapi import APIRouter
 
-from schemas.common import raise_error, success_response
+from schemas.common import raise_error, success_response, classify_and_raise
 
 
 class WorkflowStartRequest(BaseModel):
@@ -35,6 +35,8 @@ class WorkflowRouter:
             return get_feedback_workflow()
         except ImportError:
             raise_error("Workflow module not available", "E_BAD_REQUEST", status_code=503)
+        except Exception as exc:
+            classify_and_raise(exc, source="workflow")
 
     async def get_workflow_status(self) -> Dict[str, Any]:
         """Get current workflow status and statistics."""

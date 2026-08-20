@@ -48,11 +48,30 @@ class MogDB:
                 names.add(f.stem)
         return sorted(names)
 
-    def collection(self, name: str) -> Collection:
-        """Get or create a named collection."""
+    def collection(
+        self,
+        name: str,
+        max_size_bytes: Optional[int] = None,
+        max_count: Optional[int] = None,
+    ) -> Collection:
+        """Get or create a named collection.
+
+        Parameters
+        ----------
+        name:
+            Collection name.
+        max_size_bytes:
+            Maximum size in bytes for capped collections (None = uncapped).
+        max_count:
+            Maximum document count for capped collections (None = unlimited).
+        """
         with self._lock:
             if name not in self._collections:
-                self._collections[name] = Collection(name, self._root)
+                self._collections[name] = Collection(
+                    name, self._root,
+                    max_size_bytes=max_size_bytes,
+                    max_count=max_count,
+                )
             return self._collections[name]
 
     def drop_collection(self, name: str) -> None:

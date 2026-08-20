@@ -30,7 +30,7 @@ class LearnerRouter:
 
     def _register_routes(self):
         self.router.add_api_route("/search", self.learn_search, methods=["POST"])
-        self.router.add_api_route("/feed", self.learn_feed, methods=["POST"])
+        self.router.add_api_route("/feed", self.learn_feed, methods=["GET", "POST"])
         self.router.add_api_route("/ingest-url", self.learn_ingest_url, methods=["POST"])
         self.router.add_api_route("/knowledge", self.learn_knowledge, methods=["GET"])
         self.router.add_api_route("/ingest", self.learn_ingest, methods=["POST"])

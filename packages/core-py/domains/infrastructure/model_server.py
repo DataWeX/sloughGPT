@@ -703,8 +703,21 @@ def _mps_oom_recovery() -> None:
         pass
 
 
+_GC_COUNTER = 0
+_GC_INTERVAL = 10  # Run GC every N generations
+
+
 def _schedule_gc() -> None:
-    """Schedule gc.collect() in a background thread to avoid blocking the event loop."""
+    """Schedule gc.collect() in a background thread, throttled to every N generations.
+
+    Python's generational GC handles most cleanup automatically. Manual
+    gc.collect() is only needed for large object graphs (KV caches, model weights).
+    Throttling reduces GIL contention from frequent thread creation.
+    """
+    global _GC_COUNTER
+    _GC_COUNTER += 1
+    if _GC_COUNTER % _GC_INTERVAL != 0:
+        return
     try:
         Thread(target=gc.collect, daemon=True).start()
     except Exception:
@@ -1075,9 +1088,9 @@ class LocalBackend(GenerateBackend):
             if _error:
                 raise _error[0]
             try:
-                text = streamer.text_queue.get(timeout=0.02)
+                text = streamer.text_queue.get(timeout=0.005)
             except queue.Empty:
-                time.sleep(0.005)
+                time.sleep(0.001)
                 continue
             if text == streamer.stop_signal:
                 break

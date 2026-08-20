@@ -14,7 +14,7 @@ Quick start::
 """
 
 from .database import MogDB
-from .collection import Collection
+from .collection import Collection, ASCENDING, DESCENDING
 from .document import Document, ObjectId
 from .query import match_document
 from .index import Index, SortedIndex
@@ -27,4 +27,6 @@ __all__ = [
     "match_document",
     "Index",
     "SortedIndex",
+    "ASCENDING",
+    "DESCENDING",
 ]

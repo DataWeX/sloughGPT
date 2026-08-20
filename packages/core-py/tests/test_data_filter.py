@@ -17,6 +17,8 @@ from domains.learner.data_filter import (
     _load_config,
     _save_config,
     get_data_filter,
+    set_data_filter_db,
+    reset_data_filter_db,
 )
 
 
@@ -29,11 +31,15 @@ GOOD_ARTICLE = (
 )
 
 
-@pytest.fixture
-def config_path(tmp_path, monkeypatch):
-    path = tmp_path / "filter_config.json"
-    monkeypatch.setattr(df, "FILTER_CONFIG_PATH", path)
-    return path
+@pytest.fixture(autouse=True)
+def _temp_mogdb(tmp_path):
+    """Point the data filter module at a temporary MogDB for every test."""
+    db_path = str(tmp_path / "test_data_filter")
+    set_data_filter_db(db_path)
+    yield
+    reset_data_filter_db()
+    # Clear the singleton so each test gets a fresh DataFilter
+    df._filter = None
 
 
 @pytest.fixture
@@ -134,65 +140,66 @@ class TestBlacklistWhitelist:
 
 
 class TestConfigIO:
-    def test_load_missing_returns_defaults(self, config_path):
+    def test_load_missing_returns_defaults(self):
         cfg = _load_config()
         assert cfg == DEFAULT_CONFIG
         assert cfg["enabled"] is True
 
-    def test_save_then_load_roundtrip(self, config_path):
+    def test_save_then_load_roundtrip(self):
         cfg = dict(DEFAULT_CONFIG)
         cfg["min_quality_score"] = 0.9
         _save_config(cfg)
         assert _load_config()["min_quality_score"] == 0.9
 
-    def test_load_invalid_json_returns_defaults(self, config_path, caplog):
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text("{not valid json")
-        assert _load_config() == DEFAULT_CONFIG
-        assert any("Failed to load filter config" in r.message for r in caplog.records)
+    def test_save_overwrites(self):
+        cfg = dict(DEFAULT_CONFIG)
+        cfg["min_quality_score"] = 0.1
+        _save_config(cfg)
+        cfg["min_quality_score"] = 0.8
+        _save_config(cfg)
+        assert _load_config()["min_quality_score"] == 0.8
 
 
 # ── DataFilter ─────────────────────────────────────────────────────────
 
 
 class TestDataFilter:
-    def test_default_config_loaded(self, config_path):
+    def test_default_config_loaded(self):
         f = DataFilter()
         assert f.get_config() == DEFAULT_CONFIG
 
-    def test_custom_config_merged_and_saved(self, config_path):
+    def test_custom_config_merged_and_saved(self):
         f = DataFilter({"min_quality_score": 0.8, "min_content_length": 500})
         assert f.get_config()["min_quality_score"] == 0.8
         assert f.get_config()["min_content_length"] == 500
-        assert config_path.exists()
 
-    def test_update_config_persists(self, config_path):
+    def test_update_config_persists(self):
         f = DataFilter()
         f.update_config(enabled=False)
         assert f.get_config()["enabled"] is False
         assert _load_config()["enabled"] is False
 
-    def test_get_stats_returns_copy(self, config_path):
+    def test_get_stats_returns_copy(self):
         f = DataFilter()
         stats = f.get_stats()
         stats["passed"] = 999
         assert f.get_stats()["passed"] == 0
 
-    def test_disabled_always_passes(self, config_path):
+    def test_disabled_always_passes(self):
         f = DataFilter({"enabled": False})
         ok, reason = f.filter_article("u", "t", "short")
         assert ok is True
         assert reason == ""
         assert f.get_stats()["passed"] == 1
 
-    def test_too_short_rejected(self, config_path):
+    def test_too_short_rejected(self):
         f = DataFilter()
         ok, reason = f.filter_article("u", "t", "tiny")
         assert ok is False
         assert reason == "too_short"
         assert f.get_stats()["rejected_short"] == 1
 
-    def test_low_quality_rejected(self, config_path):
+    def test_low_quality_rejected(self):
         f = DataFilter()
         content = "SUPERCALIFRAGILISTICEXPIALIDOCIOUS " * 6
         ok, reason = f.filter_article("u", "t", content)
@@ -200,7 +207,7 @@ class TestDataFilter:
         assert reason.startswith("low_quality_")
         assert f.get_stats()["rejected_quality"] == 1
 
-    def test_blacklist_rejected(self, config_path):
+    def test_blacklist_rejected(self):
         f = DataFilter()
         content = GOOD_ARTICLE + " A nearby casino offers free money gambling bonuses."
         ok, reason = f.filter_article("u", "t", content)
@@ -208,33 +215,33 @@ class TestDataFilter:
         assert reason == "blacklisted"
         assert f.get_stats()["rejected_blacklist"] == 1
 
-    def test_whitelist_hard_gate_rejects(self, config_path):
+    def test_whitelist_hard_gate_rejects(self):
         f = DataFilter({"topic_whitelist": ["artificial intelligence"], "whitelist_is_hard_gate": True})
         ok, reason = f.filter_article("u", "t", GOOD_ARTICLE)
         assert ok is False
         assert reason == "not_in_whitelist"
         assert f.get_stats()["rejected_whitelist"] == 1
 
-    def test_whitelist_hard_gate_passes_with_match(self, config_path):
+    def test_whitelist_hard_gate_passes_with_match(self):
         f = DataFilter({"topic_whitelist": ["river"], "whitelist_is_hard_gate": True})
         ok, reason = f.filter_article("u", "About the river", GOOD_ARTICLE)
         assert ok is True
         assert reason == ""
 
-    def test_whitelist_without_hard_gate_does_not_block(self, config_path):
+    def test_whitelist_without_hard_gate_does_not_block(self):
         f = DataFilter({"topic_whitelist": ["artificial intelligence"], "whitelist_is_hard_gate": False})
         ok, reason = f.filter_article("u", "t", GOOD_ARTICLE)
         assert ok is True
         assert reason == ""
 
-    def test_near_duplicate_rejected(self, config_path):
+    def test_near_duplicate_rejected(self):
         f = DataFilter()
         ok, reason = f.filter_article("u", "t", GOOD_ARTICLE, existing_facts=[GOOD_ARTICLE])
         assert ok is False
         assert reason == "near_duplicate"
         assert f.get_stats()["rejected_dup"] == 1
 
-    def test_passes_good_article(self, config_path):
+    def test_passes_good_article(self):
         f = DataFilter()
         ok, reason = f.filter_article("u", "t", GOOD_ARTICLE)
         assert ok is True
@@ -242,32 +249,32 @@ class TestDataFilter:
         assert f.get_stats()["total_seen"] == 1
         assert f.get_stats()["passed"] == 1
 
-    def test_filter_chunk_blacklist(self, config_path):
+    def test_filter_chunk_blacklist(self):
         f = DataFilter()
         assert f.filter_chunk("win free money at this casino", "promo") is False
 
-    def test_filter_chunk_whitelist_hard_gate(self, config_path):
+    def test_filter_chunk_whitelist_hard_gate(self):
         f = DataFilter({"topic_whitelist": ["river"], "whitelist_is_hard_gate": True})
         assert f.filter_chunk("oak tree by the stream", "nature") is False
         assert f.filter_chunk("river flow in spring", "nature") is True
 
-    def test_filter_chunk_whitelist_soft_gate(self, config_path):
+    def test_filter_chunk_whitelist_soft_gate(self):
         f = DataFilter({"topic_whitelist": ["river"], "whitelist_is_hard_gate": False})
         assert f.filter_chunk("anything at all", "topic") is True
 
-    def test_filter_chunk_disabled(self, config_path):
+    def test_filter_chunk_disabled(self):
         f = DataFilter({"enabled": False})
         assert f.filter_chunk("gambling casino", "promo") is True
 
 
 class TestGetDataFilter:
-    def test_singleton_shared(self, config_path, fresh_singleton):
+    def test_singleton_shared(self, fresh_singleton):
         a = get_data_filter()
         b = get_data_filter()
         assert a is b
         assert isinstance(a, DataFilter)
 
-    def test_singleton_created_once(self, config_path, fresh_singleton, monkeypatch):
+    def test_singleton_created_once(self, fresh_singleton, monkeypatch):
         calls = []
         monkeypatch.setattr(df, "DataFilter", lambda *a, **k: calls.append(1) or object())
         get_data_filter()

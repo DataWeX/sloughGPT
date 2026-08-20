@@ -55,6 +55,7 @@ class TokenizerRouter:
         self.router.add_api_route("/merges", self.get_merges, methods=["GET"])
         self.router.add_api_route("/train", self.train_tokenizer, methods=["POST"])
         self.router.add_api_route("/sample", self.get_tokenization_sample, methods=["GET"])
+        self.router.add_api_route("/samples", self.get_tokenization_sample, methods=["GET"])
 
     def _require_trained(self):
         mgr = get_tokenizer_manager()

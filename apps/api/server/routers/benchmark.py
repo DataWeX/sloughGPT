@@ -94,6 +94,7 @@ class BenchmarkRouter:
         self.router.add_api_route("/responses", self.get_logged_responses, methods=["GET"])
         self.router.add_api_route("/stats", self.get_tracker_stats, methods=["GET"])
         self.router.add_api_route("/history/clear", self.clear_history, methods=["POST"])
+        self.router.add_api_route("/{model_id}", self.get_benchmark_by_id, methods=["GET"])
 
     def _get_model_metrics(self, model: str) -> Dict[str, Any]:
         """Get real model metrics from the active SloNet provider.
@@ -165,6 +166,22 @@ class BenchmarkRouter:
             Returns model_loaded=False if no provider is resident.
         """
         return success_response(data=self._get_model_metrics(model))
+
+    async def get_benchmark_by_id(self, model_id: str) -> dict:
+        """Return benchmark results for a specific model.
+
+        Args:
+            model_id: Model identifier (e.g. "gpt2", "Qwen/Qwen2.5-0.5B-Instruct").
+
+        Returns:
+            Success envelope containing model metrics including
+            coherence, repetition, perplexity, avg_length, and
+            inference stats.
+
+        Side effects:
+            Reads the ServerState singleton for the active provider.
+        """
+        return success_response(data=self._get_model_metrics(model_id))
 
     async def calculate_perplexity(self, text: str = "Sample text for evaluation") -> dict:
         """Calculate next-token perplexity on text using the active SloNet model.

@@ -188,6 +188,7 @@ async def train(request: TrainRequest):
 
     def train_model(job_id: str) -> None:
         try:
+            training_jobs[job_id]["status"] = "running"
             trainer = SloughGPTTrainer(
                 data_path=data_path_str,
                 **_sloughgpt_trainer_kwds(req_snapshot),
@@ -587,7 +588,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             op_type=OpType.TRAINING,
             label=str(req_snapshot.get("name") or job_id),
             cancel_fn=lambda: cancel_event.set(),
-            meta={"job_id": job_id, "method": "slnet"},
+            meta={"job_id": job_id, "method": "slonet"},
             op_id=job_id,
         )
         get_cancel_manager().start(job_id)
@@ -914,6 +915,7 @@ async def start_distillation(request: DistillStartRequest):
     def _run_distill(job_id_: str = job_id):
         """Background thread that runs distillation."""
         try:
+            training_jobs[job_id_]["status"] = "running"
             import numpy as np
             import random as _random
             _random.seed(42)
@@ -1385,28 +1387,6 @@ def _resolve_adapter_path(raw: str) -> Path:
             return alt
     raise_error(f"Adapter not found: {raw}", "E_BAD_REQUEST", status_code=400)
 
-def _is_slonet_model(model) -> bool:
-    """Check if a model is a SloNet SloTransformer."""
-    try:
-        from domains.models import SloughGPTModel
-        return isinstance(model, SloughGPTModel)
-    except Exception:
-        return hasattr(model, '__class__') and 'SloTransformer' in type(model).__name__
-
-
-def _is_hf_model(model) -> bool:
-    """Check if a model is a HuggingFace transformers model."""
-    try:
-        import torch.nn as nn
-        return isinstance(model, nn.Module) and not _is_slonet_model(model)
-    except ImportError:
-        return False
-
-
-def _is_per_layer_adapter(adapter) -> bool:
-    """Check if adapter has per-layer keys (from hf_lora_finetune) vs flat W_a/W_b."""
-    return any(k.startswith("layers.") for k in adapter.files)
-
 
 @router.post("/training/load-adapter")
 async def load_adapter(request: LoadAdapterRequest):
@@ -1438,112 +1418,6 @@ async def load_adapter(request: LoadAdapterRequest):
         logger.exception("Failed to load adapter: %s", exc, extra={"tag": "TRAIN"})
         raise_error(f"Failed to load adapter: {exc}", "E_INFRA_STARTUP", status_code=500)
 
-def _load_adapter_slonet(model, adapter, adapter_path: Path, request) -> dict:
-    """Apply LoRA adapter to a SloNet model."""
-    rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
-    alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
-
-    target_modules = []
-    n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
-    for i in range(n_modules):
-        key = f"_config/target_module_{i}"
-        if key in adapter:
-            chars = adapter[key].tolist()
-            target_modules.append("".join(chr(c) for c in chars))
-    if not target_modules:
-        target_modules = ["W_q", "W_k", "W_v", "W_o"]
-
-    from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
-    from domains.training.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
-
-    lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
-    new_model = apply_lora_to_model(model, lora_config)
-    load_lora_adapter(new_model, str(adapter_path))
-    n_params = count_lora_parameters(new_model)
-
-    result = {
-        "status": "loaded",
-        "model_type": "slonet",
-        "adapter_path": str(adapter_path),
-        "rank": rank,
-        "alpha": alpha,
-        "target_modules": target_modules,
-        "n_params": n_params,
-        "merged": False,
-    }
-
-    if request.merge:
-        merged_model = merge_lora_adapter(new_model)
-        new_model = merged_model
-        result["merged"] = True
-
-    logger.info("Loaded SloNet LoRA adapter %s (rank=%d, alpha=%.1f, %d params)",
-        adapter_path, rank, alpha, n_params, extra={"tag": "TRAIN"})
-    return result
-
-
-def _load_adapter_hf(model, adapter, adapter_path: Path, request) -> dict:
-    """Apply LoRA adapter to a HuggingFace model via peft."""
-    rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
-    alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
-
-    target_modules = []
-    n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
-    for i in range(n_modules):
-        key = f"_config/target_module_{i}"
-        if key in adapter:
-            chars = adapter[key].tolist()
-            target_modules.append("".join(chr(c) for c in chars))
-    if not target_modules:
-        target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
-
-    try:
-        from peft import LoraConfig, get_peft_model, TaskType
-        import torch
-    except ImportError:
-        raise_error("peft library not installed. Install with: pip install peft", "E_INFRA_STARTUP", status_code=500)
-    lora_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,
-        r=rank,
-        lora_alpha=alpha,
-        target_modules=target_modules,
-        lora_dropout=0.0,
-        bias="none",
-    )
-
-    hf_model = get_peft_model(model, lora_config)
-
-    loaded_keys = 0
-    for name, param in hf_model.named_parameters():
-        if name in adapter:
-            param.data = torch.tensor(adapter[name], dtype=param.dtype)
-            loaded_keys += 1
-
-    n_params = sum(p.numel() for p in hf_model.parameters() if p.requires_grad)
-
-    import state as server_state
-    server_state.model = hf_model
-
-    result = {
-        "status": "loaded",
-        "model_type": "huggingface",
-        "adapter_path": str(adapter_path),
-        "rank": rank,
-        "alpha": alpha,
-        "target_modules": target_modules,
-        "n_params": n_params,
-        "loaded_keys": loaded_keys,
-        "merged": False,
-    }
-
-    if request.merge:
-        hf_model = hf_model.merge_and_unload()
-        server_state.model = hf_model
-        result["merged"] = True
-
-    logger.info("Loaded HF LoRA adapter %s (rank=%d, alpha=%.1f, %d params, %d keys)",
-        adapter_path, rank, alpha, n_params, loaded_keys, extra={"tag": "TRAIN"})
-    return result
 
 
 @router.post("/training/unload-adapter")
@@ -1571,58 +1445,7 @@ async def unload_adapter():
         logger.exception("Failed to unload adapter: %s", exc, extra={"tag": "TRAIN"})
         raise_error(f"Failed to unload adapter: {exc}", "E_INFRA_STARTUP", status_code=500)
 
-def _unload_adapter_slonet(model, server=None) -> dict:
-    """Unload LoRA from a SloNet model by reloading base .slnc."""
-    has_lora = any(
-        hasattr(mod, 'lora_A') or hasattr(mod, 'lora_B')
-        for _, mod in model.named_modules() if hasattr(mod, 'named_modules')
-    ) if hasattr(model, 'named_modules') else False
 
-    if not has_lora:
-        return {"status": "no_adapter", "message": "No LoRA adapter loaded — model is already base weights."}
-
-    slnc_path = getattr(model, '_slnc_path', None)
-    if slnc_path is None:
-        raise_error("Cannot determine base model path — reload via POST /models/load.", "E_BAD_REQUEST", status_code=400)
-    from domains.inference.slonet_provider import SloNetChatProvider
-    base_provider = SloNetChatProvider.from_slnc(slnc_path, model_id="base")
-
-    if server is not None:
-        server.swap_model(base_provider._model)
-    else:
-        import state as server_state
-        server_state.model = base_provider._model
-
-    logger.info("Unloaded SloNet LoRA adapter, reverted to: %s", slnc_path, extra={"tag": "TRAIN"})
-    return {"status": "unloaded", "model_type": "slonet", "message": f"Reverted to base: {Path(slnc_path).name}"}
-
-
-def _unload_adapter_hf(model, server=None) -> dict:
-    """Unload LoRA from an HF model by reloading the original base model."""
-    model_path = getattr(model, '_slnc_path', None)
-    if model_path is None:
-        base_model_name = getattr(getattr(model, 'config', None), '_name_or_path', None)
-        if base_model_name:
-            model_path = base_model_name
-    if model_path is None:
-        raise_error("Cannot determine base model path. Load base model via POST /models/load.", "E_BAD_REQUEST", status_code=400)
-    try:
-        from transformers import AutoModelForCausalLM
-        import torch
-        base_model = AutoModelForCausalLM.from_pretrained(
-            str(model_path), torch_dtype=torch.float32, device_map="cpu"
-        )
-
-        if server is not None:
-            server.swap_model(base_model)
-        else:
-            import state as server_state
-            server_state.model = base_model
-
-        logger.info("Unloaded HF LoRA adapter, reverted to: %s", model_path, extra={"tag": "TRAIN"})
-        return {"status": "unloaded", "model_type": "huggingface", "message": f"Reverted to base: {model_path}"}
-    except Exception as exc:
-        raise_error(f"Failed to reload base model: {exc}", "E_INFRA_STARTUP", status_code=500)
 
 @router.post("/training/from-feedback")
 async def train_from_feedback():
@@ -1659,6 +1482,7 @@ async def train_from_feedback():
         data_path = str(sft_path)
         out_stem = f"feedback_model_{timestamp}"
 
+        cancel_event = threading.Event()
         training_jobs[jid] = {
             "id": jid,
             "name": f"Feedback Training {timestamp}",
@@ -1669,7 +1493,22 @@ async def train_from_feedback():
             "epochs": 3,
             "checkpoint_interval": 100,
             "output_checkpoint_stem": out_stem,
+            "_cancel_event": cancel_event,
         }
+
+        # Register with CancelManager
+        try:
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            _mgr = get_cancel_manager()
+            op_id = _mgr.register(
+                op_type=OpType.TRAINING,
+                label=f"feedback:{out_stem}",
+                cancel_fn=lambda: cancel_event.set(),
+            )
+            _mgr.start(op_id)
+            training_jobs[jid]["_cancel_manager_op_id"] = op_id
+        except Exception:
+            pass
 
         # Update global training controller
         get_training_controller().start(jid, f"Feedback Training {timestamp}")

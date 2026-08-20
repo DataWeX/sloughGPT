@@ -1,7 +1,10 @@
 """
 Auth Router - JWT token management + login/register/me/logout endpoints
+
+Storage backed by MogDB (the project's embedded document DB). User
+records are stored in a ``users`` collection instead of a raw JSON file.
 """
-import uuid, json, os, hashlib, secrets, logging
+import uuid, os, hashlib, secrets, logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Header, Request, Depends
 from pydantic import BaseModel, Field
@@ -10,9 +13,6 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from schemas.common import success_response, raise_error
-
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-USERS_FILE = os.path.join(_REPO_ROOT, "data", "users.json")
 
 
 # ---------- request / response models ----------
@@ -51,29 +51,65 @@ class AuthResponse(BaseModel):
 
 # ---------- router class ----------
 
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+
+
+def _get_mogdb(db_path: str):
+    """Create a MogDB instance at the given path."""
+    from mogdb import MogDB
+    return MogDB(db_path)
+
+
 class AuthRouter:
-    def __init__(self):
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path is None:
+            db_path = os.path.join(_REPO_ROOT, "data", "auth_mogdb")
+        self._db = _get_mogdb(db_path)
+        self._users = self._db.collection("users")
+        self._users.create_index("username")
         self.router = APIRouter(prefix="/auth", tags=["auth"])
         self._register_routes()
 
-    # ---------- in-memory user store (persisted to JSON) ----------
+    @property
+    def users_collection(self):
+        """Expose the users collection for testing."""
+        return self._users
 
-    @staticmethod
-    def _load_users() -> dict:
-        if not os.path.exists(USERS_FILE):
-            return {}
-        try:
-            with open(USERS_FILE) as f:
-                return json.load(f)
-        except Exception as exc:
-            logger.warning("Failed to parse %s: %s", USERS_FILE, exc)
-            return {}
+    # ---------- user store backed by MogDB ----------
 
-    @staticmethod
-    def _save_users(users: dict) -> None:
-        os.makedirs(os.path.dirname(USERS_FILE) or ".", exist_ok=True)
-        with open(USERS_FILE, "w") as f:
-            json.dump(users, f, indent=2, default=str)
+    def _load_users(self) -> dict:
+        """Load all users from MogDB, returned as a dict keyed by user ID.
+
+        Returns:
+            Dict mapping user IDs to user record dicts.
+        """
+        results = {}
+        for doc in self._users.find():
+            uid = doc["_id"]
+            results[uid] = {k: v for k, v in doc.items() if k != "_id"}
+        return results
+
+    def _save_user(self, uid: str, user_data: dict) -> None:
+        """Insert or update a single user record in MogDB.
+
+        Args:
+            uid: The user ID (document _id).
+            user_data: Dict of user fields (username, email, etc.).
+        """
+        doc = {"_id": uid, **user_data}
+        existing = self._users.find_one({"_id": uid})
+        if existing:
+            self._users.update_one({"_id": uid}, {"$set": user_data})
+        else:
+            self._users.insert_one(doc)
+
+    def _delete_user(self, uid: str) -> None:
+        """Delete a single user record from MogDB.
+
+        Args:
+            uid: The user ID to remove.
+        """
+        self._users.delete_one({"_id": uid})
 
     @staticmethod
     def _hash_password(password: str) -> str:
@@ -110,8 +146,7 @@ class AuthRouter:
         if not payload:
             raise_error("Invalid or expired token", "E_AUTH_MISSING", status_code=401)
         user_id = payload.get("sub", "")
-        users = self._load_users()
-        user = users.get(user_id)
+        user = self._users.find_one({"_id": user_id})
         if not user:
             raise_error("User not found", "E_AUTH_MISSING", status_code=401)
         return {"id": user_id, "username": user["username"], "email": user["email"]}
@@ -135,21 +170,21 @@ class AuthRouter:
                 Upgrades legacy SHA-256 hashes to PBKDF2 on first login.
                 Raises 401 if credentials are invalid.
             """
-            users = self._load_users()
-            for uid, u in users.items():
-                if u["username"] == req.username:
-                    if not self._verify_password(req.password, u.get("password_hash", "")):
-                        raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
-                    if not u.get("password_hash", "").startswith("v1:"):
-                        u["password_hash"] = self._hash_password(req.password)
-                        self._save_users(users)
-                    _, exp_hours, jwt_auth, _ = self._get_auth_deps()
-                    token = jwt_auth.create_token(user_id=uid)
-                    return AuthResponse(
-                        token=token,
-                        user=UserInfo(id=uid, username=u["username"], email=u["email"]),
-                    )
-            raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
+            user = self._users.find_one({"username": req.username})
+            if not user:
+                raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
+            uid = user["_id"]
+            if not self._verify_password(req.password, user.get("password_hash", "")):
+                raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
+            if not user.get("password_hash", "").startswith("v1:"):
+                user["password_hash"] = self._hash_password(req.password)
+                self._save_user(uid, user)
+            _, exp_hours, jwt_auth, _ = self._get_auth_deps()
+            token = jwt_auth.create_token(user_id=uid)
+            return AuthResponse(
+                token=token,
+                user=UserInfo(id=uid, username=user["username"], email=user["email"]),
+            )
 
         async def register(req: RegisterRequest) -> dict:
             """Register a new user account with username, email, and password.
@@ -162,21 +197,21 @@ class AuthRouter:
                 AuthResponse with JWT token and UserInfo.
 
             Side effects:
-                Creates a new user record in the JSON-backed user store.
+                Creates a new user record in the MogDB user store.
                 Hashes the password with PBKDF2 + random salt.
                 Raises 409 if the username already exists.
             """
-            users = self._load_users()
-            if any(u["username"] == req.username for u in users.values()):
+            existing = self._users.find_one({"username": req.username})
+            if existing:
                 raise_error("Username already exists", "E_INFRA_BUSY", status_code=409)
             uid = str(uuid.uuid4())
-            users[uid] = {
+            user_data = {
                 "username": req.username,
                 "email": req.email,
                 "password_hash": self._hash_password(req.password),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
-            self._save_users(users)
+            self._save_user(uid, user_data)
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
             token = jwt_auth.create_token(user_id=uid)
             return AuthResponse(
@@ -284,21 +319,49 @@ class AuthRouter:
 
 # ---------- module-level backward-compat shims ----------
 
-_auth_instance = AuthRouter()
-router = _auth_instance.router
+_auth_instance: Optional[AuthRouter] = None
+router = None
+
+
+def _get_auth_router() -> AuthRouter:
+    """Get or create the global AuthRouter singleton."""
+    global _auth_instance, router
+    if _auth_instance is None:
+        db_path = os.environ.get("MOGDB_AUTH_PATH")
+        _auth_instance = AuthRouter(db_path=db_path)
+        router = _auth_instance.router
+    return _auth_instance
 
 
 def _load_users() -> dict:
-    return _auth_instance._load_users()
+    return _get_auth_router()._load_users()
 
 
-def _save_users(users: dict) -> None:
-    return _auth_instance._save_users(users)
+def _save_user(uid: str, user_data: dict) -> None:
+    return _get_auth_router()._save_user(uid, user_data)
 
 
 def _hash_password(password: str) -> str:
-    return _auth_instance._hash_password(password)
+    return AuthRouter._hash_password(password)
 
 
 def _get_auth_deps():
-    return _auth_instance._get_auth_deps()
+    return AuthRouter._get_auth_deps()
+
+
+def set_auth_router(auth_router: AuthRouter) -> None:
+    """Replace the global AuthRouter singleton (for testing)."""
+    global _auth_instance, router
+    _auth_instance = auth_router
+    router = auth_router.router
+
+
+def reset_auth_router() -> None:
+    """Reset the global singleton so the next call creates a fresh instance."""
+    global _auth_instance, router
+    _auth_instance = None
+    router = None
+
+
+# Initialize on import
+_get_auth_router()

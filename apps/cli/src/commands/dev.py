@@ -105,11 +105,17 @@ def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
         time.sleep(1)
 
     bar.desc = "Timed out"
-    bar.finish()
+    # Don't use bar.finish() — it forces 100% which is misleading on failure.
+    # Just render the current state and print the line.
+    bar._render()
+    if bar._is_tty:
+        sys.stdout.write(f"\r\033[2K{bar._last_rendered}\n")
+        sys.stdout.flush()
+    bar._last_rendered = ""
     return False
 
 
-def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True):
+def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True, echo_event: threading.Event = None):
     """Read lines from a subprocess stream into a deque until stop is set.
 
     Args:
@@ -117,7 +123,10 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
         lines: deque to accumulate lines (for later inspection on failure).
         stop: threading.Event to signal shutdown.
         echo: if True, print each line to stdout in real-time.
+        echo_event: if provided, suppress echo until this event is set.
+                    Useful for suppressing output during progress bar display.
     """
+    waiting = echo_event is not None and not echo_event.is_set()
     try:
         for line in iter(stream.readline, ""):
             if stop.is_set():
@@ -125,7 +134,10 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
             if line:
                 clean = line.rstrip("\n\r")
                 lines.append(clean)
-                if echo:
+                # Check if echo should be enabled now
+                if waiting and echo_event and echo_event.is_set():
+                    waiting = False
+                if echo and not waiting:
                     print(clean, flush=True)
             else:
                 break
@@ -655,6 +667,7 @@ def _cmd_api_and_web(args):
     api_lines: deque = deque(maxlen=_LOG_BUF)
     web_lines: deque = deque(maxlen=_LOG_BUF)
     stop_event = threading.Event()
+    api_ready_event = threading.Event()  # suppress echo until API is ready
 
     # ── Start FastAPI server ─────────────────────────────────────
     python = Path(find_server_python(root))
@@ -668,7 +681,8 @@ def _cmd_api_and_web(args):
         text=True,
     )
     api_thread = threading.Thread(
-        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event),
+        kwargs={"echo_event": api_ready_event}, daemon=True,
     )
     api_thread.start()
 
@@ -760,7 +774,8 @@ def _cmd_api_and_web(args):
         )
 
     web_thread = threading.Thread(
-        target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
+        target=_read_stream, args=(web_proc.stdout, web_lines, stop_event),
+        kwargs={"echo_event": api_ready_event}, daemon=True,
     )
     web_thread.start()
 
@@ -774,6 +789,8 @@ def _cmd_api_and_web(args):
         _cleanup(api_proc, web_proc, api_port, web_port)
         return
 
+    # API ready — enable echo on stream threads
+    api_ready_event.set()
     log.success("API ready")
 
     # ── Wait for web readiness ────────────────────────────────────

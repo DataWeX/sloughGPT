@@ -322,11 +322,19 @@ class DownloadManager:
 
     async def _download_worker(self, model_id: str, total_bytes_hint: int):
         """Run the downcraft in a thread executor, updating progress."""
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            if entry and entry.status == DownloadStatus.CANCELLED:
+                return {"status": "cancelled", "model_id": model_id}
         self._set_progress(model_id, status=DownloadStatus.DOWNLOADING)
         self._notify_callbacks(model_id)
         start_time = time.time()
 
         def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
+            with self._lock:
+                cur = self._downloads.get(mid)
+                if cur and cur.status == DownloadStatus.CANCELLED:
+                    return
             pct = (downloaded / total * 100) if total > 0 else 0
             self._set_progress(
                 mid,
@@ -351,6 +359,11 @@ class DownloadManager:
             )
 
         await asyncio.to_thread(_do_download)
+
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            if entry and entry.status == DownloadStatus.CANCELLED:
+                return {"status": "cancelled", "model_id": model_id}
 
         elapsed = time.time() - start_time
         cache_dir = _cache_dir(model_id)

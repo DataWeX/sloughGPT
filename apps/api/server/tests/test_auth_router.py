@@ -2,25 +2,30 @@ from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for auth router — login, register, me, token, verify, refresh.
 
-Only registers the auth router to avoid pulling in heavy dependencies
-(transformers, torch, peft) that would slow test startup.
+Uses a temporary MogDB instance per test for user storage isolation.
 """
 
-import json
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from routers.auth import router as auth_router
-
-app = FastAPI()
-register_app_error_handler(app)
-app.include_router(auth_router)
-client = TestClient(app)
+from routers.auth import AuthRouter, set_auth_router, reset_auth_router, _get_auth_deps
 
 
-# ── Fixtures ───────────────────────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _isolated_auth(tmp_path):
+    """Create an AuthRouter backed by a temp MogDB, inject it, clean up."""
+    db_path = str(tmp_path / "auth_mogdb")
+    auth = AuthRouter(db_path=db_path)
+    set_auth_router(auth)
+    app = FastAPI()
+    register_app_error_handler(app)
+    app.include_router(auth.router)
+    test_client = TestClient(app)
+    yield test_client, auth
+    reset_auth_router()
+
 
 @pytest.fixture(autouse=True)
 def mock_auth_deps():
@@ -37,21 +42,12 @@ def mock_auth_deps():
         yield
 
 
-@pytest.fixture(autouse=True)
-def mock_users_file(tmp_path):
-    """Redirect USERS_FILE to a temp path so tests don't touch real data."""
-    users_path = tmp_path / "users.json"
-    users_path.parent.mkdir(parents=True, exist_ok=True)
-    users_path.write_text("{}")
-    with patch("routers.auth.USERS_FILE", str(users_path)):
-        yield
-
-
 # ── POST /auth/register ────────────────────────────────────────────────────
 
 class TestRegister:
 
-    def test_register_creates_user(self):
+    def test_register_creates_user(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.post("/auth/register", json={
             "username": "alice",
             "email": "alice@example.com",
@@ -64,7 +60,8 @@ class TestRegister:
         assert data["user"]["email"] == "alice@example.com"
         assert "id" in data["user"]
 
-    def test_register_duplicate_username_returns_409(self):
+    def test_register_duplicate_username_returns_409(self, _isolated_auth):
+        client, _ = _isolated_auth
         client.post("/auth/register", json={
             "username": "bob",
             "email": "bob@example.com",
@@ -78,41 +75,30 @@ class TestRegister:
         assert resp.status_code == 409
         assert "already exists" in resp.text
 
-    def test_register_persists_password_hash(self):
-        client.post("/auth/register", json={
+    def test_register_persists_password_hash(self, _isolated_auth):
+        client, auth = _isolated_auth
+        resp = client.post("/auth/register", json={
             "username": "carol",
             "email": "carol@example.com",
             "password": "mypassword",
         })
-        # Read back the users file
-        import hashlib
-        hashed = hashlib.sha256("mypassword".encode()).hexdigest()
-
-        with patch("routers.auth._load_users") as mock_load:
-            mock_load.return_value = {
-                "some-id": {
-                    "username": "carol",
-                    "email": "carol@example.com",
-                    "password_hash": hashed,
-                }
-            }
-            users = mock_load()
-            assert users["some-id"]["password_hash"] == hashed
+        uid = resp.json()["user"]["id"]
+        user = auth.users_collection.find_one({"_id": uid})
+        assert user is not None
+        assert user["password_hash"].startswith("v1:")
 
 
 # ── POST /auth/login ───────────────────────────────────────────────────────
 
 class TestLogin:
 
-    @pytest.fixture(autouse=True)
-    def _register_user(self):
+    def test_login_valid_credentials(self, _isolated_auth):
+        client, _ = _isolated_auth
         client.post("/auth/register", json={
             "username": "dave",
             "email": "dave@example.com",
             "password": "pass123",
         })
-
-    def test_login_valid_credentials(self):
         resp = client.post("/auth/login", json={
             "username": "dave",
             "password": "pass123",
@@ -122,7 +108,13 @@ class TestLogin:
         assert data["token"] == "mock-jwt-token"
         assert data["user"]["username"] == "dave"
 
-    def test_login_wrong_password(self):
+    def test_login_wrong_password(self, _isolated_auth):
+        client, _ = _isolated_auth
+        client.post("/auth/register", json={
+            "username": "dave",
+            "email": "dave@example.com",
+            "password": "pass123",
+        })
         resp = client.post("/auth/login", json={
             "username": "dave",
             "password": "wrongpass",
@@ -130,7 +122,8 @@ class TestLogin:
         assert resp.status_code == 401
         assert "Invalid" in resp.text
 
-    def test_login_nonexistent_user(self):
+    def test_login_nonexistent_user(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.post("/auth/login", json={
             "username": "nonexistent",
             "password": "pass123",
@@ -142,25 +135,19 @@ class TestLogin:
 
 class TestMe:
 
-    def test_me_with_valid_token(self):
-        # Register to create a real user in the file
+    def test_me_with_valid_token(self, _isolated_auth):
+        client, auth = _isolated_auth
         reg = client.post("/auth/register", json={
             "username": "eve",
             "email": "eve@example.com",
             "password": "pass",
         }).json()
 
-        # The mock jwt returns sub="test-user-id" regardless. We need to
-        # add that user ID to the users file.
         uid = reg["user"]["id"]
-        from routers.auth import _load_users, _save_users, _hash_password
-        users = _load_users()
-        users["test-user-id"] = users.pop(uid, {
-            "username": "eve",
-            "email": "eve@example.com",
-            "password_hash": _hash_password("pass"),
-        })
-        _save_users(users)
+        user = auth.users_collection.find_one({"_id": uid})
+        auth.users_collection.delete_one({"_id": uid})
+        user["_id"] = "test-user-id"
+        auth.users_collection.insert_one(user)
 
         resp = client.get("/auth/me", headers={"Authorization": "Bearer fake-token"})
         assert resp.status_code == 200
@@ -168,21 +155,22 @@ class TestMe:
         assert data["username"] == "eve"
         assert data["email"] == "eve@example.com"
 
-    def test_me_without_token_returns_401(self):
+    def test_me_without_token_returns_401(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.get("/auth/me")
         assert resp.status_code == 401
         assert "Missing" in resp.text
 
-    def test_me_with_invalid_token_returns_401(self):
-        from routers.auth import _get_auth_deps
+    def test_me_with_invalid_token_returns_401(self, _isolated_auth):
+        client, _ = _isolated_auth
         _, _, jwt_auth, _ = _get_auth_deps()
         jwt_auth.verify_token.return_value = None
 
         resp = client.get("/auth/me", headers={"Authorization": "Bearer bad-token"})
         assert resp.status_code == 401
 
-    def test_me_with_missing_user_returns_401(self):
-        from routers.auth import _get_auth_deps
+    def test_me_with_missing_user_returns_401(self, _isolated_auth):
+        client, _ = _isolated_auth
         _, _, jwt_auth, _ = _get_auth_deps()
         jwt_auth.verify_token.return_value = {"sub": "nonexistent-user-id", "exp": 999}
 
@@ -194,7 +182,8 @@ class TestMe:
 
 class TestCreateToken:
 
-    def test_token_with_valid_api_key(self):
+    def test_token_with_valid_api_key(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.post("/auth/token", json={"api_key": "test-api-key"})
         assert resp.status_code == 200
         data = resp.json()
@@ -202,11 +191,13 @@ class TestCreateToken:
         assert data["token_type"] == "bearer"
         assert data["expires_in"] == 24 * 3600
 
-    def test_token_with_invalid_api_key_returns_401(self):
+    def test_token_with_invalid_api_key_returns_401(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.post("/auth/token", json={"api_key": "bad-key"})
         assert resp.status_code == 401
 
-    def test_token_audit_logged_on_success(self):
+    def test_token_audit_logged_on_success(self, _isolated_auth):
+        client, _ = _isolated_auth
         _, _, _, audit_logger = _get_auth_deps_helper()
         audit_logger.log.reset_mock()
 
@@ -218,7 +209,8 @@ class TestCreateToken:
             extra={"action": "token_create", "status": "success"},
         )
 
-    def test_token_audit_logged_on_failure(self):
+    def test_token_audit_logged_on_failure(self, _isolated_auth):
+        client, _ = _isolated_auth
         _, _, _, audit_logger = _get_auth_deps_helper()
         audit_logger.log.reset_mock()
 
@@ -233,7 +225,6 @@ class TestCreateToken:
 
 def _get_auth_deps_helper():
     """Get the mocked auth deps for assertion purposes."""
-    from routers.auth import _get_auth_deps
     return _get_auth_deps()
 
 
@@ -241,7 +232,8 @@ def _get_auth_deps_helper():
 
 class TestVerify:
 
-    def test_verify_valid_token(self):
+    def test_verify_valid_token(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.post("/auth/verify", headers={"Authorization": "Bearer valid-token"})
         assert resp.status_code == 200
         data = resp.json()
@@ -249,12 +241,13 @@ class TestVerify:
         assert inner.get("valid") is True
         assert inner.get("subject") == "test-user-id"
 
-    def test_verify_missing_header_returns_401(self):
+    def test_verify_missing_header_returns_401(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.post("/auth/verify")
         assert resp.status_code == 401
 
-    def test_verify_invalid_token_returns_401(self):
-        from routers.auth import _get_auth_deps
+    def test_verify_invalid_token_returns_401(self, _isolated_auth):
+        client, _ = _isolated_auth
         _, _, jwt_auth, _ = _get_auth_deps()
         jwt_auth.verify_token.return_value = None
 
@@ -266,19 +259,21 @@ class TestVerify:
 
 class TestRefresh:
 
-    def test_refresh_valid_token(self):
+    def test_refresh_valid_token(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.post("/auth/refresh", headers={"Authorization": "Bearer valid-token"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["access_token"] == "mock-refreshed-jwt-token"
         assert data["token_type"] == "bearer"
 
-    def test_refresh_missing_header_returns_401(self):
+    def test_refresh_missing_header_returns_401(self, _isolated_auth):
+        client, _ = _isolated_auth
         resp = client.post("/auth/refresh")
         assert resp.status_code == 401
 
-    def test_refresh_failed_returns_401(self):
-        from routers.auth import _get_auth_deps
+    def test_refresh_failed_returns_401(self, _isolated_auth):
+        client, _ = _isolated_auth
         _, _, jwt_auth, _ = _get_auth_deps()
         jwt_auth.refresh_token.return_value = None
 

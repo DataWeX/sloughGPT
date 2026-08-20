@@ -20,30 +20,20 @@ for _p in [_CLI_DIR, str(_CORE_PY_DIR)]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-# ── Structured logging (mirrors server setup in main.py) ────────────────
-from domains.logging import CLILogger, BridgeHandler, set_global, LogLevel  # noqa: E402
-from domains.infrastructure.output_buffer import install_log_bridge  # noqa: E402
+# ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
+from domains.logging.config import setup_logging  # noqa: E402
+from domains.logging import CLILogger, BridgeHandler, set_global, get_global  # noqa: E402
 
-_log_level_name = os.environ.get("SLO_LOG_LEVEL", "INFO").upper()
-_log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
+# Setup stdlib logging (file + correlation IDs), but skip console handler
+# because CLI uses CLILogger (Rich-powered) via BridgeHandler instead.
+setup_logging(enable_console=False, enable_output_buffer=False)
 
-_cli_logger = CLILogger("slo", level=_log_level)
+_cli_logger = CLILogger("slo")
 set_global(_cli_logger)
 
+# Bridge stdlib logging → CLILogger (Rich-powered terminal output)
 _bridge = BridgeHandler(_cli_logger)
-_bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
 logging.root.addHandler(_bridge)
-logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
-
-# Suppress noisy third-party loggers
-for _noisy in ("httpx", "httpcore", "urllib3"):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
-
-# Wire log output into the shared OutputBuffer (for TUI pager / SSE)
-try:
-    _buf_handler = install_log_bridge()
-except Exception:
-    pass
 
 logger = logging.getLogger("slo")
 

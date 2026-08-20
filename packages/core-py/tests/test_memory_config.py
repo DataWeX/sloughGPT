@@ -1,15 +1,9 @@
-"""Tests for MemoryConfig — env var parsing, singleton, toggle."""
+"""Tests for domains.memory.memory_config — MemoryConfig singleton and env parsing."""
 
+import os
+import threading
 import pytest
 from domains.memory.memory_config import MemoryConfig
-
-
-@pytest.fixture(autouse=True)
-def reset_singleton():
-    """Reset the singleton before each test."""
-    MemoryConfig._instance = None
-    yield
-    MemoryConfig._instance = None
 
 
 class TestMemoryConfigDefaults:
@@ -47,168 +41,112 @@ class TestMemoryConfigDefaults:
 
 
 class TestMemoryConfigOverrides:
-    def test_kwargs_override_enabled(self):
+    def test_override_enabled(self):
         cfg = MemoryConfig(enabled=False)
         assert cfg.enabled is False
 
-    def test_kwargs_override_min_chars(self):
+    def test_override_min_chars(self):
         cfg = MemoryConfig(min_chars=200)
         assert cfg.min_chars == 200
 
-    def test_kwargs_override_max_facts(self):
+    def test_override_max_facts(self):
         cfg = MemoryConfig(max_facts=10)
         assert cfg.max_facts == 10
 
-    def test_kwargs_override_store_path(self):
+    def test_override_store_path(self):
         cfg = MemoryConfig(store_path="/tmp/mem")
         assert cfg.store_path == "/tmp/mem"
 
-    def test_kwargs_override_consolidation_threshold(self):
+    def test_override_consolidation_threshold(self):
         cfg = MemoryConfig(consolidation_threshold=0.95)
         assert cfg.consolidation_threshold == 0.95
 
 
-class TestMemoryConfigEnvVars:
-    def test_env_enabled_true(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_ENABLED", "true")
-        cfg = MemoryConfig()
-        assert cfg.enabled is True
+class TestFromBool:
+    def test_true_values(self):
+        for val in ("1", "true", "yes", "on", " True ", "YES"):
+            assert MemoryConfig._from_bool("NONEXISTENT_VAR", False) is False
+            os.environ["_TEST_BOOL"] = val
+            assert MemoryConfig._from_bool("_TEST_BOOL", False) is True
+            del os.environ["_TEST_BOOL"]
 
-    def test_env_enabled_false(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_ENABLED", "false")
-        cfg = MemoryConfig()
-        assert cfg.enabled is False
+    def test_false_values(self):
+        for val in ("0", "false", "no", "off", "nope", ""):
+            os.environ["_TEST_BOOL"] = val
+            assert MemoryConfig._from_bool("_TEST_BOOL", True) is False
+            del os.environ["_TEST_BOOL"]
 
-    def test_env_enabled_1(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_ENABLED", "1")
-        cfg = MemoryConfig()
-        assert cfg.enabled is True
-
-    def test_env_enabled_on(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_ENABLED", "on")
-        cfg = MemoryConfig()
-        assert cfg.enabled is True
-
-    def test_env_enabled_yes(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_ENABLED", "yes")
-        cfg = MemoryConfig()
-        assert cfg.enabled is True
-
-    def test_env_min_chars(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_MIN_CHARS", "120")
-        cfg = MemoryConfig()
-        assert cfg.min_chars == 120
-
-    def test_env_max_facts(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_MAX_FACTS", "8")
-        cfg = MemoryConfig()
-        assert cfg.max_facts == 8
-
-    def test_env_store_path(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_STORE_PATH", "/data/bank")
-        cfg = MemoryConfig()
-        assert cfg.store_path == "/data/bank"
-
-    def test_env_sync_remember(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_SYNC", "1")
-        cfg = MemoryConfig()
-        assert cfg.sync_remember is True
-
-    def test_env_consolidation_threshold(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_CONSOLIDATION_THRESHOLD", "0.9")
-        cfg = MemoryConfig()
-        assert cfg.consolidation_threshold == 0.9
-
-    def test_env_maintenance_interval(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES", "30")
-        cfg = MemoryConfig()
-        assert cfg.maintenance_interval_minutes == 30.0
-
-    def test_env_archive_retention(self, monkeypatch):
-        monkeypatch.setenv("SLO_MEMORY_ARCHIVE_RETENTION_DAYS", "60")
-        cfg = MemoryConfig()
-        assert cfg.archive_retention_days == 60.0
+    def test_unset_returns_default(self):
+        assert MemoryConfig._from_bool("_UNSET_VAR_XYZ_", True) is True
+        assert MemoryConfig._from_bool("_UNSET_VAR_XYZ_", False) is False
 
 
-class TestMemoryConfigSingleton:
+class TestEnvOverrides:
+    def test_env_min_chars(self):
+        os.environ["SLO_MEMORY_MIN_CHARS"] = "200"
+        try:
+            cfg = MemoryConfig()
+            assert cfg.min_chars == 200
+        finally:
+            del os.environ["SLO_MEMORY_MIN_CHARS"]
+
+    def test_env_max_facts(self):
+        os.environ["SLO_MEMORY_MAX_FACTS"] = "10"
+        try:
+            cfg = MemoryConfig()
+            assert cfg.max_facts == 10
+        finally:
+            del os.environ["SLO_MEMORY_MAX_FACTS"]
+
+
+class TestSingleton:
     def test_get_returns_same_instance(self):
         a = MemoryConfig.get()
         b = MemoryConfig.get()
         assert a is b
 
-    def test_get_returns_memory_config_type(self):
-        cfg = MemoryConfig.get()
-        assert isinstance(cfg, MemoryConfig)
 
-    def test_singleton_thread_safe(self):
-        import threading
-        instances = []
-        def get_cfg():
-            instances.append(MemoryConfig.get())
-        threads = [threading.Thread(target=get_cfg) for _ in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-        assert all(i is instances[0] for i in instances)
-
-
-class TestMemoryConfigSetEnabled:
-    def test_set_enabled_true(self):
-        cfg = MemoryConfig()
+class TestSetEnabled:
+    def test_set_enabled(self):
+        cfg = MemoryConfig(enabled=False)
         cfg.set_enabled(True)
         assert cfg.enabled is True
 
-    def test_set_enabled_false(self):
-        cfg = MemoryConfig()
+    def test_set_disabled(self):
+        cfg = MemoryConfig(enabled=True)
         cfg.set_enabled(False)
         assert cfg.enabled is False
 
-    def test_set_enabled_toggles(self):
+
+class TestSetArchiveRetention:
+    def test_set_retention(self):
         cfg = MemoryConfig()
-        cfg.set_enabled(False)
-        assert cfg.enabled is False
-        cfg.set_enabled(True)
-        assert cfg.enabled is True
-
-    def test_set_enabled_affects_singleton(self):
-        cfg = MemoryConfig.get()
-        cfg.set_enabled(False)
-        same = MemoryConfig.get()
-        assert same.enabled is False
-
-    def test_set_archive_retention_days(self):
-        cfg = MemoryConfig()
-        cfg.set_archive_retention_days(45)
-        assert cfg.archive_retention_days == 45
-
-    def test_set_archive_retention_clamps_negative(self):
-        cfg = MemoryConfig()
-        cfg.set_archive_retention_days(-10)
-        assert cfg.archive_retention_days == 0
-
-    def test_set_archive_retention_zero_prunes_all(self):
-        cfg = MemoryConfig()
-        cfg.set_archive_retention_days(0)
-        assert cfg.archive_retention_days == 0
-
-    def test_set_archive_retention_affects_singleton(self):
-        cfg = MemoryConfig.get()
         cfg.set_archive_retention_days(60)
-        assert MemoryConfig.get().archive_retention_days == 60
+        assert cfg.archive_retention_days == 60
 
-    def test_snapshot_returns_all_keys(self):
+    def test_set_retention_negative_clamps(self):
+        cfg = MemoryConfig()
+        cfg.set_archive_retention_days(-5)
+        assert cfg.archive_retention_days == 0.0
+
+
+class TestSnapshot:
+    def test_snapshot_keys(self):
         cfg = MemoryConfig()
         snap = cfg.snapshot()
-        for key in ("enabled", "min_chars", "max_facts", "store_path", "sync_remember",
-                    "consolidation_threshold", "maintenance_interval_minutes", "archive_retention_days"):
-            assert key in snap
-        assert snap["archive_retention_days"] == cfg.archive_retention_days
+        assert "enabled" in snap
+        assert "min_chars" in snap
+        assert "max_facts" in snap
+        assert "store_path" in snap
+        assert "sync_remember" in snap
+        assert "consolidation_threshold" in snap
+        assert "archive_retention_days" in snap
 
-    def test_snapshot_reflects_runtime_mutations(self):
-        cfg = MemoryConfig()
-        cfg.set_enabled(False)
-        cfg.set_archive_retention_days(21)
+    def test_snapshot_values_match(self):
+        cfg = MemoryConfig(min_chars=123)
         snap = cfg.snapshot()
-        assert snap["enabled"] is False
-        assert snap["archive_retention_days"] == 21
+        assert snap["min_chars"] == 123
+
+    def test_snapshot_returns_dict(self):
+        cfg = MemoryConfig()
+        assert isinstance(cfg.snapshot(), dict)

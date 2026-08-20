@@ -6,8 +6,9 @@ import asyncio
 import os
 import logging
 import re
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -278,7 +279,7 @@ class ModelsRouter:
         ctrl = get_models_controller()
         model = ctrl.get_current_model()
         if not model:
-            raise HTTPException(status_code=404, detail="No model loaded")
+            raise_error("No model loaded", "E_NOT_FOUND")
         return success_response(data=model)
 
     async def list_hf_models(self, q: Optional[str] = None) -> dict:
@@ -430,17 +431,54 @@ class ModelsRouter:
     async def _run_download(self, model_id: str, total_bytes_hint: int):
         """Background task that runs the actual download."""
         from domains.infrastructure.download_manager import get_download_manager
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
         from controllers.models import get_models_controller
 
         mgr = get_download_manager()
-        result = await mgr.download(model_id, total_bytes_hint)
+        cm_op: Optional[str] = None
+        try:
+            cm = get_cancel_manager()
+            cm_op = cm.register(
+                op_type=OpType.DOWNLOAD,
+                label=f"download:{model_id}",
+                cancel_fn=lambda: mgr.cancel(model_id),
+            )
+            cm.start(cm_op)
+        except Exception:
+            pass
 
-        if result.get("status") == "complete":
-            ctrl = get_models_controller()
-            try:
-                ctrl.load_model(model_id)
-            except Exception as e:
-                logger.warning("Auto-load after download failed for %s: %s", model_id, e, extra={"tag": "MODEL"})
+        try:
+            result = await mgr.download(model_id, total_bytes_hint)
+
+            if result.get("status") == "complete":
+                ctrl = get_models_controller()
+                try:
+                    ctrl.load_model(model_id)
+                except Exception as e:
+                    logger.warning("Auto-load after download failed for %s: %s", model_id, e, extra={"tag": "MODEL"})
+                if cm_op:
+                    try:
+                        get_cancel_manager().finish(cm_op)
+                    except Exception:
+                        pass
+            elif result.get("status") == "cancelled":
+                if cm_op:
+                    try:
+                        get_cancel_manager().finish(cm_op, error="cancelled")
+                    except Exception:
+                        pass
+            else:
+                if cm_op:
+                    try:
+                        get_cancel_manager().finish(cm_op, error=result.get("error", "download failed"))
+                    except Exception:
+                        pass
+        except Exception as e:
+            if cm_op:
+                try:
+                    get_cancel_manager().finish(cm_op, error=str(e))
+                except Exception:
+                    pass
 
     async def get_download_status(self, model_id: str) -> Dict[str, Any]:
         """Get download progress for a specific model."""
@@ -583,7 +621,7 @@ class ModelsRouter:
         elif model_id:
             result = ctrl.load_model(model_id)
         else:
-            raise HTTPException(status_code=400, detail="Either model_dir or model_id required")
+            raise_error("Either model_dir or model_id required", "E_BAD_REQUEST")
         return wrap_controller_result(result)
 
     async def quantize_model(self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -608,9 +646,9 @@ class ModelsRouter:
         mode = req.mode
 
         if bits not in (4, 8):
-            raise HTTPException(status_code=400, detail=f"bits must be 4 or 8, got {bits}")
+            raise_error(f"bits must be 4 or 8, got {bits}", "E_BAD_REQUEST")
         if mode not in ("symmetric", "asymmetric"):
-            raise HTTPException(status_code=400, detail=f"mode must be symmetric or asymmetric, got {mode}")
+            raise_error(f"mode must be symmetric or asymmetric, got {mode}", "E_BAD_REQUEST")
 
         # Find the active provider (try SloNet first, then HuggingFace)
         from domains.models.provider import get_provider
@@ -623,11 +661,11 @@ class ModelsRouter:
             model_type = "huggingface"
 
         if provider is None:
-            raise HTTPException(status_code=400, detail="No model loaded")
+            raise_error("No model loaded", "E_BAD_REQUEST")
 
         model = getattr(provider, "_model", None)
         if model is None:
-            raise HTTPException(status_code=400, detail="Provider has no model")
+            raise_error("Provider has no model", "E_BAD_REQUEST")
 
         # Walk linear layers using the appropriate walker
         if model_type == "slonet":
@@ -716,11 +754,11 @@ class ModelsRouter:
             model_type = "huggingface"
 
         if provider is None:
-            raise HTTPException(status_code=400, detail="No model loaded")
+            raise_error("No model loaded", "E_BAD_REQUEST")
 
         model = getattr(provider, "_model", None)
         if model is None:
-            raise HTTPException(status_code=400, detail="Provider has no model")
+            raise_error("Provider has no model", "E_BAD_REQUEST")
 
         # Clear quantization state
         if model_type == "slonet":
