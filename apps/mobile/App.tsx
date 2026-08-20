@@ -51,6 +51,7 @@ import {ToolsScreen} from './src/screens/ToolsScreen';
 import {SidebarProvider, useSidebar} from './src/contexts/SidebarContext';
 import {SidebarDrawer} from './src/components/SidebarDrawer';
 import {registerForPushNotifications, onNotification} from './src/services/push-notifications';
+import type {ToolsStackParamList, SettingsStackParamList} from './src/navigation/types';
 
 const Stack = createStackNavigator();
 

@@ -204,9 +204,9 @@ export function OnboardingScreen({onComplete}: Props) {
                           backgroundColor: colors.background,
                           borderWidth: 1,
                           borderColor: connectionStatus === 'ok'
-                            ? '#34B07D'
+                            ? colors.success
                             : connectionStatus === 'fail'
-                              ? '#DC505A'
+                              ? colors.error
                               : colors.border,
                           borderRadius: 10,
                           padding: 14,

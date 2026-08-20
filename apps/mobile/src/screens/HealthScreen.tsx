@@ -67,13 +67,14 @@ interface DetailedHealth {
 }
 
 function Card({children, style}: {children: React.ReactNode; style?: any}) {
+  const colors = useColors();
   return (
     <YStack
       padding={14}
       borderRadius={12}
-      backgroundColor="white"
+      backgroundColor={colors.white}
       borderWidth={0.5}
-      borderColor="#E4E0F2"
+      borderColor={colors.border}
       gap={8}
       {...style}>
       {children}
@@ -82,17 +83,19 @@ function Card({children, style}: {children: React.ReactNode; style?: any}) {
 }
 
 function Stat({label, value, color}: {label: string; value: string; color?: string}) {
+  const colors = useColors();
   return (
     <YStack gap={2}>
-      <Text fontSize={10} color="#968CAC" letterSpacing={0.3}>{label}</Text>
-      <Text fontSize={14} fontWeight="600" color={color || '#1A1625'}>{value}</Text>
+      <Text fontSize={10} color={colors.textMuted} letterSpacing={0.3}>{label}</Text>
+      <Text fontSize={14} fontWeight="600" color={color || colors.text}>{value}</Text>
     </YStack>
   );
 }
 
 function ProgressBar({value, color}: {value: number; color: string}) {
+  const colors = useColors();
   return (
-    <YStack height={5} backgroundColor="#E4E0F2" borderRadius={3} overflow="hidden">
+    <YStack height={5} backgroundColor={colors.border} borderRadius={3} overflow="hidden">
       <YStack height="100%" width={`${Math.min(value, 100)}%`} backgroundColor={color} borderRadius={3} />
     </YStack>
   );
@@ -109,14 +112,15 @@ function formatUptime(seconds: number): string {
 }
 
 function HealthScoreBadge({score, status}: {score: number; status: string}) {
+  const colors = useColors();
   const variant = score >= 80 ? 'success' : score >= 50 ? 'warning' : 'error';
   return (
     <XStack alignItems="center" gap={8}>
-      <Text fontSize={28} fontWeight="700" color={variant === 'success' ? '#34B07D' : variant === 'warning' ? '#F0935C' : '#DC505A'}>
+      <Text fontSize={28} fontWeight="700" color={variant === 'success' ? colors.success : variant === 'warning' ? colors.warning : colors.error}>
         {score}
       </Text>
       <YStack gap={2}>
-        <Text fontSize={11} color="#968CAC">/ 100</Text>
+        <Text fontSize={11} color={colors.textMuted}>/ 100</Text>
         <StatusBadge label={status} variant={variant} />
       </YStack>
     </XStack>
@@ -274,7 +278,7 @@ export function HealthScreen() {
               <Text fontSize={12} color={colors.textMuted}>Memory</Text>
               <Text fontSize={12} fontWeight="500" color={colors.text}>{s.memory_percent.toFixed(1)}%</Text>
             </XStack>
-            <ProgressBar value={s.memory_percent} color="#F0935C" />
+            <ProgressBar value={s.memory_percent} color={colors.warning} />
           </YStack>
           <XStack gap={16}>
             {s.open_files != null && <Stat label="Open files" value={String(s.open_files)} />}
