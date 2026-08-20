@@ -68,15 +68,13 @@ export const feedbackController = {
   },
 
   async getTrainingStats(): Promise<TrainingStats> {
-    const data = await apiGet<{
-      jobs?: Array<{ id: string; status: string; progress?: number; loss?: number; created_at?: string }>
-      total_tracked_jobs?: number
-    }>('/training/jobs')
-    const jobs = data.jobs ?? []
+    const data = await apiGet<Array<{ id: string; status: string; progress?: number; loss?: number; created_at?: string }> | { jobs?: Array<{ id: string; status: string; progress?: number; loss?: number; created_at?: string }>; total_tracked_jobs?: number }>('/training/jobs')
+    const jobs = Array.isArray(data) ? data : (data.jobs ?? [])
+    const totalTracked = Array.isArray(data) ? jobs.length : (data.total_tracked_jobs ?? jobs.length)
     const completed = jobs.filter(j => j.status === 'completed')
     const lastJob = completed.length > 0 ? completed[completed.length - 1] : null
     return {
-      feedback_pairs: data.total_tracked_jobs ?? jobs.length,
+      feedback_pairs: totalTracked,
       last_training: lastJob?.created_at ?? null,
       quality_score: lastJob?.loss ?? null,
     }
