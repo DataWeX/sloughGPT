@@ -3,6 +3,10 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import React from 'react'
 import { act } from 'react'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => {
     const C = () => <span data-testid={`icon-${name}`}>{name}</span>

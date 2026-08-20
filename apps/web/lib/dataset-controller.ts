@@ -56,6 +56,7 @@ export interface Dataset {
   size: number
   samples?: number
   created_at: string
+  updated_at?: string
   tags?: string[]
   vlm_metadata?: {
     type: string

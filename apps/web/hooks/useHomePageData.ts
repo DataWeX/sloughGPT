@@ -8,6 +8,7 @@ import { sessionController } from '@/lib/session-controller'
 import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { feedbackController, type FeedbackStats } from '@/lib/feedback-controller'
+import { datasetController } from '@/lib/dataset-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { useApiReady } from '@/hooks/useLiveStatus'
 

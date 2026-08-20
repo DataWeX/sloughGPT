@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -23,6 +24,7 @@ import { useToastStore } from '@/lib/toast-store'
 type Tab = 'playground' | 'vocab' | 'samples' | 'train'
 
 export default function TokenizerPage() {
+  const router = useRouter()
   const [stats, setStats] = useState<TokenizerStats | null>(null)
   const [tab, setTab] = useState<Tab>('playground')
   const [loading, setLoading] = useState(true)

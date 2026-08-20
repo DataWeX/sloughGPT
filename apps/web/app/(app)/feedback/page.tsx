@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -13,6 +14,7 @@ import { useToastStore } from '@/lib/toast-store'
 type Tab = 'stats' | 'conversations' | 'training'
 
 export default function FeedbackPage() {
+  const router = useRouter()
   const [tab, setTab] = useState<Tab>('stats')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)

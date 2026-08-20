@@ -23,6 +23,7 @@ export default function ExperimentsPage() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
