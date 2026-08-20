@@ -8,6 +8,8 @@ import { sessionController } from '@/lib/session-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { NAV_SECTIONS } from '@/lib/navigation'
+import { chatDB } from '@/lib/db'
+import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
 
 interface CommandAction {
   id: string
@@ -72,7 +74,7 @@ export function CommandPalette() {
       { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: '🔍', category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
       { id: 'act-export', label: 'Export Chat', description: 'Download current chat as markdown', icon: '📥', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('export-chat')); setOpen(false) } },
       { id: 'act-theme', label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`, description: 'Toggle theme', icon: '🌓', category: 'action', run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }) },
-      { id: 'act-clear', label: 'Clear Chat History', description: 'Remove all saved conversations', icon: '🗑️', category: 'action', run: () => { localStorage.removeItem('man_current_conversation'); window.location.reload() } },
+      { id: 'act-clear', label: 'Clear Chat History', description: 'Remove all saved conversations', icon: '🗑️', category: 'action', run: () => { chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {}); window.location.reload() } },
       { id: 'act-shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', icon: '⌨️', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('open-shortcuts')); setOpen(false) } },
     ]
 
