@@ -62,7 +62,9 @@ import {ModelsScreen} from './src/screens/ModelsScreen';
 import {ToolsScreen} from './src/screens/ToolsScreen';
 import {SidebarProvider, useSidebar} from './src/contexts/SidebarContext';
 import {SidebarDrawer} from './src/components/SidebarDrawer';
-import {registerForPushNotifications, onNotification} from './src/services/push-notifications';
+import {registerForPushNotifications, onNotification, onNotificationResponse} from './src/services/push-notifications';
+import {navigateTo} from './src/services/navigation';
+import {Linking} from 'react-native';
 import type {ToolsStackParamList, SettingsStackParamList} from './src/navigation/types';
 
 const Stack = createStackNavigator();
@@ -182,7 +184,23 @@ function AppInner() {
     const unsub = onNotification((_title, _body, _data) => {
       if (__DEV__) console.log('[Push]', _title, _body);
     });
-    return unsub;
+    const unsubResponse = onNotificationResponse((data) => {
+      const screen = data?.screen;
+      if (screen) navigateTo(screen);
+    });
+    // Handle URL schemes (sloughgpt://chat)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        const path = url.replace('sloughgpt://', '').replace('https://sloughgpt.app/', '');
+        if (path) navigateTo(path);
+      }
+    }).catch(() => {});
+    // Listen for URLs while app is open
+    const linkingSub = Linking.addEventListener('url', (event) => {
+      const path = event.url.replace('sloughgpt://', '').replace('https://sloughgpt.app/', '');
+      if (path) navigateTo(path);
+    });
+    return () => { unsub(); unsubResponse(); linkingSub?.remove(); };
   }, []);
 
   if (!ready) {
@@ -227,11 +245,29 @@ function AppInner() {
         },
       };
 
+  const linking = {
+    prefixes: ['sloughgpt://', 'https://sloughgpt.app'],
+    config: {
+      screens: {
+        Home: '',
+        Chat: 'chat',
+        Models: 'models',
+        Tools: 'tools',
+        Settings: 'settings',
+      },
+    },
+    async getInitialURL() {
+      const url = await Linking.getInitialURL();
+      if (url != null) return url;
+      return '';
+    },
+  };
+
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
       <SidebarProvider>
-        <NavigationContainer theme={navTheme}>
+        <NavigationContainer theme={navTheme} linking={linking}>
           <ConnectionStatusBar />
           <ToastContainer />
           <MainContent />

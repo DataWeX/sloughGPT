@@ -1,4 +1,5 @@
-import React, {createContext, useContext, useState, useCallback} from 'react';
+import React, {createContext, useContext, useState, useCallback, useEffect} from 'react';
+import {setNavigationRef} from '../services/navigation';
 
 interface SidebarContextType {
   visible: boolean;
@@ -29,6 +30,10 @@ export function SidebarProvider({children}: {children: React.ReactNode}) {
     setActiveScreen(screen);
     setVisible(false);
   }, []);
+
+  useEffect(() => {
+    setNavigationRef(navigate);
+  }, [navigate]);
 
   return (
     <SidebarCtx.Provider value={{visible, open, close, toggle, activeScreen, navigate}}>
