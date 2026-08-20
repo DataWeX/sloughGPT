@@ -97,7 +97,15 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
   const [speaking, setSpeaking] = useState(false)
   const [savedToKnowledge, setSavedToKnowledge] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
-  const [localReactions, setLocalReactions] = useState<Record<string, string[]>>(() => getReactions(messageId))
+  const [localReactions, setLocalReactions] = useState<Record<string, string[]>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    getReactions(messageId).then(reactions => {
+      if (!cancelled) setLocalReactions(reactions)
+    })
+    return () => { cancelled = true }
+  }, [messageId])
   const addToast = useToastStore(s => s.addToast)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -169,8 +177,9 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
   }, [content, savedToKnowledge, addToast])
 
   const handleToggleReaction = useCallback((emoji: string) => {
-    toggleReaction(messageId, emoji)
-    setLocalReactions(getReactions(messageId))
+    return toggleReaction(messageId, emoji).then(() => {
+      return getReactions(messageId)
+    }).then(setLocalReactions)
   }, [messageId])
 
   return (
