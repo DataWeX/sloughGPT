@@ -35,6 +35,7 @@ import {ExportScreen} from './src/screens/ExportScreen';
 import {ImportScreen} from './src/screens/ImportScreen';
 import {NotificationSettingsScreen} from './src/screens/NotificationSettingsScreen';
 import {WhatsNewScreen} from './src/screens/WhatsNewScreen';
+import {LegalScreen} from './src/screens/LegalScreen';
 import {BenchmarkScreen} from './src/screens/BenchmarkScreen';
 import {AdaptersScreen} from './src/screens/AdaptersScreen';
 import {FeedbackScreen} from './src/screens/FeedbackScreen';
@@ -55,7 +56,7 @@ import {MemoryScreen} from './src/screens/MemoryScreen';
 import {useSettingsStore} from './src/stores/settings-store';
 import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
-import {LoadingScreen} from './src/components/LoadingScreen';
+import {SplashScreen} from './src/components/SplashAnimated';
 import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
 import {ToastContainer} from './src/components/ToastContainer';
 import {OnboardingScreen, isFirstLaunch} from './src/screens/OnboardingScreen';
@@ -90,6 +91,7 @@ function ToolsStack() {
       <Stack.Screen name="Import" component={ImportScreen} />
       <Stack.Screen name="Notifications" component={NotificationSettingsScreen} />
       <Stack.Screen name="WhatsNew" component={WhatsNewScreen} />
+      <Stack.Screen name="Legal" component={LegalScreen} />
       <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
       <Stack.Screen name="Adapters" component={AdaptersScreen} />
       <Stack.Screen name="Feedback" component={FeedbackScreen} />
@@ -132,6 +134,7 @@ function SettingsStack() {
       <Stack.Screen name="Import" component={ImportScreen} />
       <Stack.Screen name="Notifications" component={NotificationSettingsScreen} />
       <Stack.Screen name="WhatsNew" component={WhatsNewScreen} />
+      <Stack.Screen name="Legal" component={LegalScreen} />
       <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
       <Stack.Screen name="Adapters" component={AdaptersScreen} />
       <Stack.Screen name="Feedback" component={FeedbackScreen} />
@@ -216,7 +219,7 @@ function AppInner() {
     return (
       <SafeAreaProvider>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
-        <LoadingScreen />
+        <SplashScreen />
       </SafeAreaProvider>
     );
   }

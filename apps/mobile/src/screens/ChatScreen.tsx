@@ -277,6 +277,8 @@ export function ChatScreen() {
               contentContainerStyle={{paddingTop: 8, paddingBottom: 8}}
               onScroll={a.onScroll}
               scrollEventThrottle={16}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
               removeClippedSubviews
               maxToRenderPerBatch={10}
               windowSize={11}

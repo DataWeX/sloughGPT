@@ -19,6 +19,7 @@ export type SettingsStackParamList = {
   Import: undefined;
   Notifications: undefined;
   WhatsNew: undefined;
+  Legal: undefined;
   Benchmark: undefined;
   Adapters: undefined;
   Feedback: undefined;
@@ -54,6 +55,7 @@ export type ToolsStackParamList = {
   Import: undefined;
   Notifications: undefined;
   WhatsNew: undefined;
+  Legal: undefined;
   Benchmark: undefined;
   Adapters: undefined;
   Feedback: undefined;
