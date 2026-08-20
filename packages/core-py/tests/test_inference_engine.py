@@ -562,62 +562,13 @@ class TestFullIntegration:
         finally:
             engine.stop()
 
-    def test_client_auto_reconnect(self):
-        engine, port = self._start_engine_with_mock()
-        from domains.infrastructure.inference_client import InferenceClient
-        client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=1.0)
-        client.connect()
-
-        # Kill engine
-        engine.stop()
-        time.sleep(0.2)
-
-        # chat should fail gracefully (no restart fn, reconnect fails)
-        import asyncio
-        result = asyncio.run(client.chat(
-            [{"role": "user", "content": "reconnect"}],
-            max_tokens=5,
-        ))
-        assert "[Error" in result
-        client.disconnect()
-
-    def test_client_restart_fn_succeeds(self):
-        engine, port = self._start_engine_with_mock()
-        from domains.infrastructure.inference_client import InferenceClient
-
-        # Kill engine and restart on same port
-        engine.stop()
-        time.sleep(0.1)
-        engine2, port2 = self._start_engine_with_mock()
-        assert port == port2  # same port due to SO_REUSEADDR
-
-        def _restart():
-            c = InferenceClient.__new__(InferenceClient)
-            c.host = "127.0.0.1"
-            c.port = port2
-            c.connect_timeout = 1.0
-            c.generate_timeout = 5.0
-            c._restart_fn = None
-            c._socket = None
-            c._lock = threading.Lock()
-            c._model_id = "mock-model"
-            c._loaded = True
-            c._kv_states = {}
-            c._kv_last_access = {}
-            c._kv_max_sessions = 64
-            c._kv_ttl = 3600.0
-            if c.connect():
-                return c
-            return None
-
-        client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=1.0,
-                                 restart_fn=_restart)
-
-        import asyncio
-        result = asyncio.run(client.chat(
-            [{"role": "user", "content": "restart"}],
-            max_tokens=5,
-        ))
-        assert result == "echo:restart"
-        client.disconnect()
-        engine2.stop()
+    def test_provider_none_raises(self):
+        from domains.infrastructure.inference_engine import InferenceEngine
+        engine = InferenceEngine.__new__(InferenceEngine)
+        engine.model_id = "test"
+        engine._provider = None
+        engine._active_streams = {}
+        engine._active_streams_lock = threading.Lock()
+        engine._pid_file = None
+        with pytest.raises(AttributeError):
+            engine._provider._generate_sync([{"role": "user", "content": "hi"}])

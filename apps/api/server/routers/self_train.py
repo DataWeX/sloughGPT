@@ -1,6 +1,7 @@
 """
 Self-Train Router - Start/stop/status for self-training subprocess.
 """
+import asyncio
 import re
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -91,7 +92,7 @@ class SelfTrainRouter:
             return success_response(data={"status": "not_running"})
         try:
             proc.terminate()
-            proc.wait(timeout=5)
+            await asyncio.to_thread(proc.wait, 5)
             server_state._self_train_proc = None
             safe_audit_log("self_train.stop", resource=str(proc.pid), detail="stopped")
             return success_response(data={"status": "stopped"})
@@ -115,7 +116,8 @@ class SelfTrainRouter:
         history_path = self._repo_root / "data" / "self_train_history.txt"
         history = []
         if history_path.exists():
-            history = history_path.read_text().strip().split("\n")[-50:]
+            _text = await asyncio.to_thread(history_path.read_text)
+            history = _text.strip().split("\n")[-50:]
         if proc is None:
             return success_response(data={"status": "not_started", "history": history})
         ret = proc.poll()

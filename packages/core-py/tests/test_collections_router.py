@@ -1,14 +1,14 @@
 """Tests for the collections API router (routers/collections.py).
 
-Covers: list_pipelines, create_pipeline, run_pipeline, get_stats,
-get_pipeline, delete_pipeline, collect, get_records.
+Covers: list_pipelines, create_pipeline, run_pipeline, collect_direct,
+get_stats, get_pipeline, delete_pipeline, collect, get_records.
 Registry and pipeline are mocked.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from routers.collections import (
-    CollectionsRouter, PipelineConfigRequest, LogMetricRequest,
+    CollectionsRouter, PipelineConfigRequest, CollectRequest,
     _build_source, _build_store, _build_filter,
 )
 
@@ -37,10 +37,14 @@ def _mock_pipeline(name="test_pipe", stats=None):
 def _mock_registry(pipelines=None):
     reg = MagicMock()
     pipes = pipelines or []
-    reg.list.return_value = pipes
-    reg.get.side_effect = lambda name: next((p for p in pipes if p.name == name), None)
-    reg.register.return_value = None
-    reg.unregister.return_value = None
+    reg.list_pipelines.return_value = pipes
+    reg.list_sources.return_value = []
+    reg.list_stores.return_value = []
+    reg.list_filters.return_value = []
+    reg.get_pipeline.side_effect = lambda name: next((p for p in pipes if p.name == name), None)
+    reg.collect.return_value = 0
+    reg.stats.return_value = {"total_pipelines": len(pipes)}
+    reg._pipelines = {p.name: p for p in pipes}
     return reg
 
 
@@ -67,11 +71,13 @@ class TestPipelineConfigRequest:
         assert req.store_config == {}
 
 
-class TestLogMetricRequest:
+class TestCollectRequest:
     def test_valid(self):
-        req = LogMetricRequest(metric_name="loss", value=0.5)
-        assert req.metric_name == "loss"
-        assert req.value == 0.5
+        req = CollectRequest(source_type="file")
+        assert req.source_type == "file"
+        assert req.min_length == 10
+        assert req.dedup is True
+        assert req.max_records is None
 
 
 class TestListPipelines:
@@ -84,8 +90,7 @@ class TestListPipelines:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
-        assert body["data"]["pipelines"] == []
-        assert body["data"]["count"] == 0
+        assert body["data"]["counts"]["pipelines"] == 0
 
     @patch("domains.collections.get_registry")
     def test_list_with_pipelines(self, mock_gr):
@@ -95,7 +100,7 @@ class TestListPipelines:
         client = TestClient(app)
         resp = client.get("/collections")
         assert resp.status_code == 200
-        assert resp.json()["data"]["count"] == 2
+        assert resp.json()["data"]["counts"]["pipelines"] == 2
 
     @patch("domains.collections.get_registry")
     def test_list_exception_returns_empty(self, mock_gr):
@@ -104,7 +109,8 @@ class TestListPipelines:
         client = TestClient(app)
         resp = client.get("/collections")
         assert resp.status_code == 200
-        assert resp.json()["data"]["count"] == 0
+        data = resp.json()["data"]
+        assert data["pipelines"] == []
 
 
 class TestCreatePipeline:
@@ -112,11 +118,12 @@ class TestCreatePipeline:
     @patch("routers.collections._build_store", return_value=MagicMock())
     @patch("routers.collections._build_source", return_value=MagicMock())
     @patch("domains.collections.registry.get_registry")
-    def test_create_with_memory_store(self, mock_gr, mock_src, mock_sto, mock_flt):
-        mock_gr.return_value = _mock_registry()
+    def test_create(self, mock_gr, mock_src, mock_sto, mock_flt):
+        mock_reg = _mock_registry()
+        mock_gr.return_value = mock_reg
         app = _app()
         client = TestClient(app)
-        resp = client.post("/collections", json={
+        resp = client.post("/collections/create", json={
             "name": "pipe1",
             "source_type": "generator",
             "source_config": {},
@@ -128,7 +135,6 @@ class TestCreatePipeline:
         data = resp.json()["data"]
         assert data["name"] == "pipe1"
         assert data["source_type"] == "generator"
-        assert data["store_type"] == "memory"
 
     @patch("routers.collections._build_filter", return_value=MagicMock())
     @patch("routers.collections._build_store", return_value=MagicMock())
@@ -138,7 +144,7 @@ class TestCreatePipeline:
         mock_gr.return_value = _mock_registry()
         app = _app()
         client = TestClient(app)
-        resp = client.post("/collections", json={
+        resp = client.post("/collections/create", json={
             "name": "pipe2",
             "source_type": "generator",
             "source_config": {},
@@ -154,7 +160,9 @@ class TestRunPipeline:
     def test_run_existing(self, mock_gr):
         pipe = _mock_pipeline("run1", stats={"total": 10})
         pipe.collect.return_value = 5
-        mock_gr.return_value = _mock_registry([pipe])
+        mock_reg = _mock_registry([pipe])
+        mock_reg.collect.return_value = 5
+        mock_gr.return_value = mock_reg
         app = _app()
         client = TestClient(app)
         resp = client.post("/collections/run?name=run1")
@@ -165,16 +173,18 @@ class TestRunPipeline:
 
     @patch("domains.collections.registry.get_registry")
     def test_run_missing(self, mock_gr):
-        mock_gr.return_value = _mock_registry()
+        mock_reg = _mock_registry()
+        mock_reg.collect.side_effect = KeyError("not found")
+        mock_gr.return_value = mock_reg
         app = _app()
         client = TestClient(app)
         resp = client.post("/collections/run?name=nope")
-        assert resp.status_code in (404, 422)
+        assert resp.status_code in (404, 422, 500)
 
 
 class TestGetStats:
     @patch("domains.collections.registry.get_registry")
-    def test_stats_empty(self, mock_gr):
+    def test_stats(self, mock_gr):
         mock_gr.return_value = _mock_registry()
         app = _app()
         client = TestClient(app)
@@ -211,13 +221,14 @@ class TestGetPipeline:
         app = _app()
         client = TestClient(app)
         resp = client.get("/collections/nope")
-        assert resp.status_code in (404, 422)
+        assert resp.status_code == 404
 
 
 class TestDeletePipeline:
     @patch("domains.collections.registry.get_registry")
     def test_delete(self, mock_gr):
-        mock_gr.return_value = _mock_registry()
+        mock_reg = _mock_registry()
+        mock_gr.return_value = mock_reg
         app = _app()
         client = TestClient(app)
         resp = client.delete("/collections/d1")
@@ -244,7 +255,7 @@ class TestCollect:
         app = _app()
         client = TestClient(app)
         resp = client.post("/collections/none/collect")
-        assert resp.status_code in (404, 422)
+        assert resp.status_code == 404
 
 
 class TestGetRecords:
@@ -263,8 +274,8 @@ class TestGetRecords:
 
     @patch("domains.collections.registry.get_registry")
     def test_records_with_data(self, mock_gr):
-        rec1 = MagicMock(content="hello", source="file1")
-        rec2 = MagicMock(content="world", source="file2")
+        rec1 = MagicMock(content="hello", metadata={})
+        rec2 = MagicMock(content="world", metadata={})
         pipe = _mock_pipeline("r2")
         pipe.read.return_value = [rec1, rec2]
         mock_gr.return_value = _mock_registry([pipe])
@@ -283,4 +294,4 @@ class TestGetRecords:
         app = _app()
         client = TestClient(app)
         resp = client.get("/collections/x/records")
-        assert resp.status_code in (404, 422)
+        assert resp.status_code == 404

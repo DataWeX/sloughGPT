@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
-from schemas.common import success_response, classify_and_raise
+from schemas.common import success_response
 
 logger = logging.getLogger("slo.routers.companion")
 
@@ -201,7 +201,6 @@ class CompanionRouter:
             else:
                 error_msg = "No model loaded"
         except Exception as e:
-            classify_and_raise(e, source="companion_chat")
             error_msg = str(e)
             logger.warning("Companion chat failed: %s", e, extra={"tag": "MODEL", "context": {"error": str(e)}})
 
