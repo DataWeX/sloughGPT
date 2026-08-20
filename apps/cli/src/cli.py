@@ -1969,6 +1969,74 @@ def world_tick(ticks, babies, render, neural, verbose):
         log.key_value("Render time", f"{render_bridge.stats.get('total_time_ms', 0):.0f}ms")
 
 
+@world.command("analyze", help="Analyze render history over simulation ticks")
+@click.option("--ticks", default=20, type=int, help="Number of ticks to simulate")
+@click.option("--babies", default=4, type=int, help="Number of baby agents")
+@click.option("--threshold", default=0.1, type=float, help="Change detection threshold")
+def world_analyze(ticks, babies, threshold):
+    from domains.shell.simulation import SimScene, Simulation, WorldParams
+    from domains.shell.world_render import RenderBridge, RenderAnalyzer, RenderConfig
+
+    config = RenderConfig(width=64, height=48, samples=1)
+    bridge = RenderBridge(config)
+
+    params = WorldParams()
+    scene = SimScene(params)
+
+    for _ in range(babies):
+        from domains.shell.simulation import SimBaby
+        baby = SimBaby()
+        baby.entity.position[0] = 32 + np.random.randint(-10, 10)
+        baby.entity.position[2] = 32 + np.random.randint(-10, 10)
+        scene.add_baby(baby)
+
+    sim = Simulation(scene, max_ticks=ticks, render_bridge=bridge)
+    analyzer = RenderAnalyzer(bridge._history if hasattr(bridge, '_history') else None)
+
+    sim.run()
+
+    for i, entry in enumerate(bridge._history._entries if hasattr(bridge, '_history') else []):
+        analyzer.history.add(entry["image"], tick=entry["tick"])
+
+    summary = analyzer.summary()
+    log.header("Render Analysis")
+    log.key_value("Total renders", str(summary.get("count", 0)))
+    log.key_value("Significant changes", str(summary.get("significant_changes", 0)))
+    if summary.get("mean_range"):
+        log.key_value("Mean range", f"{summary['mean_range'][0]:.4f} - {summary['mean_range'][1]:.4f}")
+    if summary.get("mean_trend") is not None:
+        log.key_value("Mean trend", f"{summary['mean_trend']:+.4f}")
+
+    changes = analyzer.detect_significant_changes(threshold)
+    if changes:
+        log.header("Significant Changes")
+        for c in changes:
+            log.info(f"  Tick {c['tick_from']} -> {c['tick_to']}: "
+                     f"{c['change_ratio']:.1%} changed, MSE={c['mse']:.6f}")
+
+
+@world.command("diff", help="Compare two render images")
+@click.argument("image_a", type=click.Path(exists=True))
+@click.argument("image_b", type=click.Path(exists=True))
+def world_diff(image_a, image_b):
+    from domains.shell.world_render import RenderDiff
+    from PIL import Image as PILImage
+
+    a = np.array(PILImage.open(image_a)).astype(np.float32) / 255.0
+    b = np.array(PILImage.open(image_b)).astype(np.float32) / 255.0
+
+    diff = RenderDiff(a, b)
+    s = diff.summary()
+
+    log.header("Render Diff")
+    log.key_value("MSE", f"{s['mse']:.6f}")
+    log.key_value("MAE", f"{s['mae']:.6f}")
+    log.key_value("Max diff", f"{s['max_diff']:.4f}")
+    log.key_value("Changed pixels", f"{s['changed_pixels']}/{s['total_pixels']} ({s['change_ratio']:.1%})")
+    log.key_value("Mean A", f"{s['mean_a']:.4f}")
+    log.key_value("Mean B", f"{s['mean_b']:.4f}")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════

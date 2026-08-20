@@ -187,3 +187,250 @@ class TestSimulationWithRender:
         sim = Simulation(scene, max_ticks=1)
         results = sim.step()
         assert len(results) >= 0
+
+
+class TestRenderDiff:
+    def test_identical_images(self):
+        from domains.shell.world_render import RenderDiff
+
+        a = np.ones((8, 8, 3), dtype=np.float32) * 0.5
+        b = a.copy()
+        diff = RenderDiff(a, b)
+        assert diff.mse == 0.0
+        assert diff.mae == 0.0
+        assert diff.change_ratio == 0.0
+
+    def test_different_images(self):
+        from domains.shell.world_render import RenderDiff
+
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        diff = RenderDiff(a, b)
+        assert diff.mse > 0.0
+        assert diff.change_ratio == 1.0
+        assert diff.max_diff == 1.0
+
+    def test_summary(self):
+        from domains.shell.world_render import RenderDiff
+
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        diff = RenderDiff(a, b)
+        s = diff.summary()
+        assert "mse" in s
+        assert "mae" in s
+        assert "change_ratio" in s
+        assert s["total_pixels"] == 64
+
+    def test_heatmap(self):
+        from domains.shell.world_render import RenderDiff
+
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        diff = RenderDiff(a, b)
+        hm = diff.heatmap()
+        assert hm.shape == (8, 8)
+        assert hm.max() <= 1.0
+        assert hm.min() >= 0.0
+
+    def test_diff_image(self):
+        from domains.shell.world_render import RenderDiff
+
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        diff = RenderDiff(a, b)
+        di = diff.diff_image()
+        assert di.shape == (8, 8, 3)
+        assert di.max() <= 1.0
+
+    def test_different_shapes(self):
+        from domains.shell.world_render import RenderDiff
+
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.zeros((16, 16, 3), dtype=np.float32)
+        diff = RenderDiff(a, b)
+        assert diff.mse == 0.0
+
+
+class TestRenderHistory:
+    def test_add_and_get(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory(max_entries=10)
+        img = np.ones((8, 8, 3), dtype=np.float32) * 0.5
+        idx = history.add(img, tick=0)
+        assert idx == 0
+        assert len(history) == 1
+        assert history.get(0) is not None
+        assert history.get(1) is None
+
+    def test_max_entries(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory(max_entries=5)
+        for i in range(10):
+            img = np.ones((8, 8, 3), dtype=np.float32) * (i / 10)
+            history.add(img, tick=i)
+        assert len(history) == 5
+        assert history[0]["tick"] == 5
+
+    def test_diff(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory()
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        history.add(a, tick=0)
+        history.add(b, tick=1)
+        diff = history.diff(0, 1)
+        assert diff is not None
+        assert diff.mse > 0.0
+
+    def test_diff_latest(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory()
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        history.add(a, tick=0)
+        history.add(b, tick=1)
+        diff = history.diff_latest()
+        assert diff is not None
+        assert diff.mse > 0.0
+
+    def test_diff_latest_insufficient(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory()
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        history.add(a, tick=0)
+        diff = history.diff_latest()
+        assert diff is None
+
+    def test_timeline(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory()
+        for i in range(5):
+            img = np.ones((8, 8, 3), dtype=np.float32) * i
+            history.add(img, tick=i)
+        tl = history.timeline()
+        assert len(tl) == 5
+        assert tl[0]["tick"] == 0
+        assert tl[4]["tick"] == 4
+
+    def test_recent(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory()
+        for i in range(10):
+            img = np.ones((8, 8, 3), dtype=np.float32) * i
+            history.add(img, tick=i)
+        recent = history.recent(3)
+        assert len(recent) == 3
+        assert recent[0]["index"] == 7
+
+    def test_clear(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory()
+        for i in range(5):
+            img = np.ones((8, 8, 3), dtype=np.float32) * i
+            history.add(img, tick=i)
+        assert len(history) == 5
+        history.clear()
+        assert len(history) == 0
+
+    def test_getitem(self):
+        from domains.shell.world_render import RenderHistory
+
+        history = RenderHistory()
+        img = np.ones((8, 8, 3), dtype=np.float32) * 0.5
+        history.add(img, tick=0)
+        entry = history[0]
+        assert entry is not None
+        assert entry["tick"] == 0
+        assert history[-1] is None
+
+
+class TestRenderAnalyzer:
+    def test_analyze_series(self):
+        from domains.shell.world_render import RenderAnalyzer
+
+        analyzer = RenderAnalyzer()
+        for i in range(5):
+            img = np.ones((8, 8, 3), dtype=np.float32) * (i / 5)
+            analyzer.history.add(img, tick=i)
+        result = analyzer.analyze_series()
+        assert result["count"] == 5
+        assert "mean_range" in result
+        assert "mean_trend" in result
+
+    def test_analyze_empty(self):
+        from domains.shell.world_render import RenderAnalyzer
+
+        analyzer = RenderAnalyzer()
+        result = analyzer.analyze_series()
+        assert result["count"] == 0
+
+    def test_detect_significant_changes(self):
+        from domains.shell.world_render import RenderAnalyzer
+
+        analyzer = RenderAnalyzer()
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        analyzer.history.add(a, tick=0)
+        analyzer.history.add(b, tick=1)
+        changes = analyzer.detect_significant_changes(threshold=0.1)
+        assert len(changes) == 1
+        assert changes[0]["from"] == 0
+        assert changes[0]["to"] == 1
+
+    def test_compare_ticks(self):
+        from domains.shell.world_render import RenderAnalyzer
+
+        analyzer = RenderAnalyzer()
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        analyzer.history.add(a, tick=0)
+        analyzer.history.add(b, tick=1)
+        diff = analyzer.compare_ticks(0, 1)
+        assert diff is not None
+        assert diff.mse > 0.0
+
+    def test_compare_ticks_missing(self):
+        from domains.shell.world_render import RenderAnalyzer
+
+        analyzer = RenderAnalyzer()
+        diff = analyzer.compare_ticks(0, 1)
+        assert diff is None
+
+    def test_summary(self):
+        from domains.shell.world_render import RenderAnalyzer
+
+        analyzer = RenderAnalyzer()
+        for i in range(3):
+            img = np.ones((8, 8, 3), dtype=np.float32) * (i / 3)
+            analyzer.history.add(img, tick=i)
+        s = analyzer.summary()
+        assert "count" in s
+        assert "significant_changes" in s
+
+    def test_render_diff_summary(self):
+        from domains.shell.world_render import RenderAnalyzer
+
+        analyzer = RenderAnalyzer()
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        analyzer.history.add(a, tick=0)
+        analyzer.history.add(b, tick=1)
+        text = analyzer.render_diff_summary(0, 1)
+        assert "MSE" in text
+        assert "MAE" in text
+
+    def test_render_diff_summary_out_of_range(self):
+        from domains.shell.world_render import RenderAnalyzer
+
+        analyzer = RenderAnalyzer()
+        text = analyzer.render_diff_summary(0, 1)
+        assert "Cannot compare" in text
