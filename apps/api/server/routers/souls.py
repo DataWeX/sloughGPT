@@ -452,7 +452,7 @@ Be yourself — let your personality shape how you respond."""
         try:
             from domains.inference.slo_manager import get_slo_manager
             manager = get_slo_manager()
-            souls = manager.list_souls()
+            souls = await asyncio.to_thread(manager.list_souls)
             for s in souls:
                 if s.name == soul_name:
                     return success_response(data={
