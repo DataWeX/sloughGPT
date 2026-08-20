@@ -262,7 +262,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     }
     setImages(prev => [...prev, newImage])
     multimodalController.trainImage(dataUrl, newImage.name).then(res => {
-      logger.debug('Vision trained on uploaded image', res.caption)
+      logger.debug('Vision trained on uploaded image', { caption: res.caption })
       multimodalController.getCapabilities().then(caps => {
         multimodalController.getTrainingReport().then(r => {
           onVisionUpdate(caps, r.caption_history || [], r.vocab_size)

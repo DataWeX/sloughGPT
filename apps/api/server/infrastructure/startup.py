@@ -717,6 +717,7 @@ class StartupOrchestrator:
                 logger.warning("Lifecycle shutdown error: %s", e, extra={"tag": "START"})
 
         # Fallback: direct cleanup
+        await self._shutdown_inference_engine()
         await self._shutdown_training_runtime()
         await self._shutdown_task_queue()
         await self._shutdown_jobs()

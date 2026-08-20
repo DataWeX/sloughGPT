@@ -3300,7 +3300,12 @@ Examples:
                 self._print(out, end="")
         else:
             error = result.get("error", "unknown") if isinstance(result, dict) else "unexpected response"
-            self._print(f"  AI interpretation failed: {error}")
+            if "timeout" in str(error).lower() or "timed out" in str(error).lower():
+                self._print(f"  \u26a0\ufe0f AI server is busy (timeout). Try again in a moment.")
+            elif "connect" in str(error).lower() or "refused" in str(error).lower():
+                self._print(f"  \u274c AI server is not running. Start it with: api start")
+            else:
+                self._print(f"  \u274c AI interpretation failed: {error}")
             self._print("  Falling back to keyword matching...")
             self._interpret_natural(args)
 

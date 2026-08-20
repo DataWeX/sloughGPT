@@ -39,7 +39,7 @@ export function useChatLocalEngine(
       }
       logger.debug('Model fetched', { size_bytes: buf.byteLength })
       const arch = inferArch(buf)
-      logger.debug('Inferred architecture', arch)
+      logger.debug('Inferred architecture', { arch })
 
       if (arch.archType === 'transformer') {
         const engine = new SoulTransformerWebGPU()
