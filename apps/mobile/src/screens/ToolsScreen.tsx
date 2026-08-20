@@ -37,6 +37,10 @@ const TOOLS: ToolItem[] = [
   {icon: 'download', title: 'Export', desc: 'Export models and training data', target: 'Export'},
   {icon: 'settings', title: 'Tokenizer', desc: 'Vocab stats and tokenization', target: 'Tokenizer'},
   {icon: 'copy', title: 'Compare', desc: 'Side-by-side model comparison', target: 'Compare'},
+  {icon: 'triangle-alert', title: 'Errors', desc: 'Client error monitoring', target: 'Errors'},
+  {icon: 'lock', title: 'Security', desc: 'Audit logs and API keys', target: 'Security'},
+  {icon: 'image', title: 'Images', desc: 'AI image generation', target: 'Images'},
+  {icon: 'layers', title: 'Experiments', desc: 'ML experiment tracking', target: 'Experiments'},
 ];
 
 function formatUptime(seconds: number): string {
