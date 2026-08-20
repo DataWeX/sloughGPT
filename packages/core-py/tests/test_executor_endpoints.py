@@ -135,7 +135,6 @@ class TestExecutorEndpoints:
         assert resp.status_code == 400
         assert "error" in resp.json()
         evt.set()
-        time.sleep(0.1)
 
     def test_purge_old_jobs(self, client):
         from domains.training.executor import get_training_executor
@@ -212,7 +211,7 @@ class TestExecutorEndpoints:
         assert data["initialized"] is False
 
         resp = client.get("/system/executor/any_id")
-        assert resp.status_code == 200
+        assert resp.status_code == 503
 
         resp = client.post("/system/executor/purge?max_age_s=1")
         data = resp.json()["data"]
