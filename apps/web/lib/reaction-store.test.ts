@@ -10,7 +10,7 @@ vi.mock('@/lib/db', () => ({
   chatDB: chatDBMock,
 }))
 
-import { getReactions, addReaction, toggleReaction } from './reaction-store'
+import { getReactions, addReaction, toggleReaction, removeReaction } from './reaction-store'
 
 const KEY = 'sloughgpt-message-reactions'
 
@@ -79,5 +79,17 @@ describe('reaction-store', () => {
     await addReaction('msg-b', '🔥')
     expect(await getReactions('msg-a')).toEqual({ '👍': ['user'] })
     expect(await getReactions('msg-b')).toEqual({ '🔥': ['user'] })
+  })
+
+  it('removeReaction removes a user from an emoji and cleans empty entries', async () => {
+    chatDBMock.getKV.mockResolvedValueOnce({ value: { 'msg-1': { '👍': ['user', 'alice'] } } })
+    await removeReaction('msg-1', '👍', 'user')
+    expect(await getReactions('msg-1')).toEqual({ '👍': ['alice'] })
+  })
+
+  it('removeReaction deletes the message entry when the last reaction is removed', async () => {
+    chatDBMock.getKV.mockResolvedValueOnce({ value: { 'msg-1': { '👍': ['user'] } } })
+    await removeReaction('msg-1', '👍', 'user')
+    expect(await getReactions('msg-1')).toEqual({})
   })
 })

@@ -77,21 +77,32 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 }))
 
+let _initPromise: Promise<void> | null = null
+
 export async function initStore() {
-  try {
-    const [storedSettings, storedKnowledge] = await Promise.all([
-      chatDB.getKV<AppSettings>(SETTINGS_KEY),
-      chatDB.getKV<InjectedKnowledge[]>(KNOWLEDGE_KEY),
-    ])
-    if (storedSettings) {
-      useAppStore.setState({ settings: { ...DEFAULT_SETTINGS, ...storedSettings } })
+  if (_initPromise) return _initPromise
+  _initPromise = (async () => {
+    try {
+      const [storedSettings, storedKnowledge] = await Promise.all([
+        chatDB.getKV<AppSettings>(SETTINGS_KEY),
+        chatDB.getKV<InjectedKnowledge[]>(KNOWLEDGE_KEY),
+      ])
+      if (storedSettings) {
+        useAppStore.setState({ settings: { ...DEFAULT_SETTINGS, ...storedSettings } })
+      }
+      if (storedKnowledge) {
+        useAppStore.setState({ injectedKnowledge: storedKnowledge })
+      }
+    } catch {
+      // ignore init errors — store stays at defaults
     }
-    if (storedKnowledge) {
-      useAppStore.setState({ injectedKnowledge: storedKnowledge })
-    }
-  } catch {
-    // ignore init errors — store stays at defaults
-  }
+  })()
+  return _initPromise
+}
+
+/** Reset the init guard — for tests only. */
+export function _resetInitGuard() {
+  _initPromise = null
 }
 
 if (typeof window !== 'undefined') {
