@@ -12,7 +12,6 @@ import time
 from typing import List, Optional
 from pathlib import Path
 from threading import Lock
-import numpy as np
 
 from fastapi import APIRouter, UploadFile, File, Form
 from pydantic import BaseModel, Field
@@ -485,7 +484,7 @@ class MultimodalRouter:
         """synthesize_speech."""
         try:
             from domains.multimodal.tts import TTSEngine
-            import base64, io, wave
+            import base64, io, wave, numpy as np
             if self._tts is None:
                 self._tts = TTSEngine()
             tts = self._tts
