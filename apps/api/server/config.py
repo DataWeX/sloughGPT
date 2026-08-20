@@ -81,6 +81,9 @@ class ServerConfig:
     enable_process_guard: bool = True  # production default: guard _load_hf_model() in a subprocess
     lazy_guard_autoload: bool = True  # defer parent weight load when a ProcessGuard + .slnc are available
     enable_inference_engine: bool = False  # run model in separate subprocess (isolated memory)
+    inference_engine_host: str = "127.0.0.1"  # inference engine bind address
+    inference_engine_port: int = 0  # 0 = auto-assign
+    inference_engine_timeout: float = 300.0  # seconds to wait for engine startup
     process_guard_memory_limit_mb: float = 0.0  # 0 = auto-size from model file
     enable_web: bool = False
 
@@ -113,6 +116,9 @@ class ServerConfig:
             enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower() in ("1", "true", "yes"),
             lazy_guard_autoload=os.getenv("SLO_LAZY_GUARD_AUTOLOAD", "true").lower() in ("1", "true", "yes"),
             enable_inference_engine=os.getenv("SLO_INFERENCE_ENGINE", "false").lower() in ("1", "true", "yes"),
+            inference_engine_host=os.getenv("SLO_INFERENCE_ENGINE_HOST", "127.0.0.1").strip(),
+            inference_engine_port=int(os.getenv("SLO_INFERENCE_ENGINE_PORT", "0")),
+            inference_engine_timeout=float(os.getenv("SLO_INFERENCE_ENGINE_TIMEOUT", "300")),
             process_guard_memory_limit_mb=float(os.getenv("SLO_PROCESS_GUARD_MEMORY_LIMIT_MB", "0")),
             enable_workflow=os.getenv("SLO_AUTO_WORKFLOW", "true").lower() == "true",
             enable_health_monitor=os.getenv("SLO_HEALTH_MONITOR", "true").lower() == "true",

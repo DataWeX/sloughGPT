@@ -1062,9 +1062,6 @@ class InferenceRouter:
                     except Exception as e:
                         _mgr.finish(_op_id, str(e))
                         classify_and_raise(e, source="chat_stream_provider")
-                        logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e), "error_code": err.code}})
-                        yield sse_error("chat", err.code, err.user_message)
-                        return
                 else:
                     yield sse_error("chat", "STREAMING", "No inference provider loaded")
 
@@ -1200,8 +1197,6 @@ class InferenceRouter:
             except Exception as e:
                 _mgr.finish(_op_id, str(e))
                 classify_and_raise(e, source="chat_stream_outer")
-                yield sse_error("chat", err.code, err.user_message)
-                yield sse_token("chat", "", done=True)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -1628,7 +1623,6 @@ class InferenceRouter:
         r.add_api_route("/chat/sessions", self.create_session, methods=["POST"])
         r.add_api_route("/chat/sessions/{session_id}", self.get_session, methods=["GET"])
         r.add_api_route("/chat/sessions/{session_id}", self.delete_session, methods=["DELETE"])
-        r.add_api_route("/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/chat/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/providers", self.list_model_providers, methods=["GET"])
         r.add_api_route("/operations", self.list_operations, methods=["GET"])

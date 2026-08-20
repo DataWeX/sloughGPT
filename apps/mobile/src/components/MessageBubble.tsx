@@ -80,28 +80,23 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
     row: {
       paddingHorizontal: S.lg,
       marginBottom: 6,
-      alignItems: 'flex-start',
-      overflow: 'visible',
+      alignItems: 'stretch',
     },
-    rowUser: {
-      alignItems: 'flex-end',
+    innerRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
     },
-    deleteContainer: {
-      position: 'absolute',
-      right: S.lg,
-      top: 0,
-      bottom: 0,
-      justifyContent: 'center',
-      width: DELETE_WIDTH,
-      alignItems: 'center',
+    innerRowUser: {
+      flexDirection: 'row-reverse',
     },
     deleteBtn: {
+      position: 'absolute',
+      right: 36,
+      top: 0,
+      bottom: 0,
       width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.error,
-      alignItems: 'center',
       justifyContent: 'center',
+      alignItems: 'center',
     },
     selectCheckbox: {
       width: 32,
@@ -125,7 +120,8 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
       borderColor: primary,
     },
     swipeable: {
-      maxWidth: '80%',
+      flex: 1,
+      overflow: 'hidden',
     },
     bubble: {
       paddingHorizontal: S.md + 2,
@@ -479,75 +475,75 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
   };
 
   return (
-    <Animated.View style={[styles.row, isUser && styles.rowUser, {opacity, transform: [{translateY}]}]}>
-      {selectMode && (
-        <Pressable
-          style={styles.selectCheckbox}
-          onPress={onSelect}>
-          <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-            {selected && <Icon name="check" size={12} color="white" />}
-          </View>
-        </Pressable>
-      )}
-
-      <View style={styles.deleteContainer}>
+    <Animated.View style={[styles.row, {opacity, transform: [{translateY}]}]}>
+      <View style={[styles.innerRow, isUser && styles.innerRowUser]}>
         <Pressable style={styles.deleteBtn} onPress={handleDelete}>
           <Icon name="trash-2" size={16} color="white" />
         </Pressable>
-      </View>
 
-      <Animated.View
-        style={[styles.swipeable, {transform: [{translateX}]}]}
-        {...panResponder.panHandlers}>
-        <Pressable
-          style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight, pinned && styles.pinnedBubble]}
-          onPress={selectMode ? onSelect : handleDoubleTap}
-          onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}>
-          {pinned && (
-            <View style={styles.pinIcon}>
-              <Icon name="pin" size={12} color={primary} />
+        {selectMode && (
+          <Pressable
+            style={styles.selectCheckbox}
+            onPress={onSelect}>
+            <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+              {selected && <Icon name="check" size={12} color="white" />}
             </View>
-          )}
-          {message.images && message.images.length > 0 && (
-            <View style={styles.imageContainer}>
-              {message.images.map((uri, i) => (
-                <Image
-                  key={i}
-                  source={{uri}}
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                />
-              ))}
-            </View>
-          )}
-          {(message._voice || message.audio_path || message.audio) && (
-            <AudioPlayer
-              audioUrl={message.audio}
-              audioPath={message.audio_path}
-              durationMs={message.audio_duration_ms}
-            />
-          )}
-          {isUser ? (
-            <Markdown content={message.content} />
-          ) : (
-            <Markdown
-              content={collapsed && message.content.length > 500
-                ? message.content.slice(0, 500) + '...'
-                : message.content || 'Thinking...'}
-              streaming={streaming}
-            />
-          )}
-          {!isUser && !streaming && message.content && message.content.length > 500 && (
-            <View style={{marginTop: 4}}>
-              <Pressable onPress={() => setCollapsed(c => !c)} hitSlop={8}>
-                <Text style={[styles.timestamp, {color: primary}]}>
-                  {collapsed ? 'Show full response' : 'Show less'}
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        </Pressable>
-      </Animated.View>
+          </Pressable>
+        )}
+
+        <Animated.View
+          style={[styles.swipeable, {transform: [{translateX}]}]}
+          {...panResponder.panHandlers}>
+          <Pressable
+            style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight, pinned && styles.pinnedBubble]}
+            onPress={selectMode ? onSelect : handleDoubleTap}
+            onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}>
+            {pinned && (
+              <View style={styles.pinIcon}>
+                <Icon name="pin" size={12} color={primary} />
+              </View>
+            )}
+            {message.images && message.images.length > 0 && (
+              <View style={styles.imageContainer}>
+                {message.images.map((uri, i) => (
+                  <Image
+                    key={i}
+                    source={{uri}}
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                  />
+                ))}
+              </View>
+            )}
+            {(message._voice || message.audio_path || message.audio) && (
+              <AudioPlayer
+                audioUrl={message.audio}
+                audioPath={message.audio_path}
+                durationMs={message.audio_duration_ms}
+              />
+            )}
+            {isUser ? (
+              <Markdown content={message.content} />
+            ) : (
+              <Markdown
+                content={collapsed && message.content.length > 500
+                  ? message.content.slice(0, 500) + '...'
+                  : message.content || 'Thinking...'}
+                streaming={streaming}
+              />
+            )}
+            {!isUser && !streaming && message.content && message.content.length > 500 && (
+              <View style={{marginTop: 4}}>
+                <Pressable onPress={() => setCollapsed(c => !c)} hitSlop={8}>
+                  <Text style={[styles.timestamp, {color: primary}]}>
+                    {collapsed ? 'Show full response' : 'Show less'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </Pressable>
+        </Animated.View>
+      </View>
 
       <Pressable
         onPress={() => setShowFullDate(d => !d)}

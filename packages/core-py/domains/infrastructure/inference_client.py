@@ -39,11 +39,13 @@ class InferenceClient:
         port: int = 9100,
         connect_timeout: float = 10.0,
         generate_timeout: float = 120.0,
+        restart_fn=None,
     ):
         self.host = host
         self.port = port
         self.connect_timeout = connect_timeout
         self.generate_timeout = generate_timeout
+        self._restart_fn = restart_fn
 
         self._socket: Optional[socket.socket] = None
         self._lock = threading.Lock()
@@ -208,8 +210,13 @@ class InferenceClient:
             done.set()
 
     def _send_and_recv(self, msg: dict, timeout: float = 30.0) -> Optional[dict]:
-        """Send a message and wait for a response (thread-safe)."""
+        """Send a message and wait for a response (thread-safe).
+
+        If the connection is lost, attempts one reconnect before failing.
+        """
         with self._lock:
+            if self._socket is None:
+                self._try_reconnect()
             if self._socket is None:
                 return None
             try:
@@ -222,7 +229,61 @@ class InferenceClient:
             except Exception as e:
                 logger.warning("InferenceClient: send/recv error: %s", e)
                 self.disconnect()
+                # One reconnect attempt
+                if self._try_reconnect():
+                    try:
+                        self._send_message(msg)
+                        self._socket.settimeout(timeout)
+                        try:
+                            return self._recv_message()
+                        finally:
+                            self._socket.settimeout(None)
+                    except Exception:
+                        self.disconnect()
                 return None
+
+    def _try_reconnect(self) -> bool:
+        """Attempt to reconnect to the engine. Must hold _lock."""
+        self.disconnect()
+        try:
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._socket.settimeout(self.connect_timeout)
+            self._socket.connect((self.host, self.port))
+            self._socket.settimeout(None)
+            resp = self._send_and_recv_unlocked({"type": "health"})
+            if resp and resp.get("type") == "health_ok":
+                self._model_id = resp.get("model_id", "unknown")
+                self._loaded = resp.get("loaded", False)
+                logger.info("InferenceClient: reconnected (model=%s)", self._model_id)
+                return True
+        except Exception as e:
+            logger.warning("InferenceClient: reconnect failed: %s", e)
+            self._socket = None
+        # If direct reconnect failed and we have a restart callback, try restarting the engine
+        if self._restart_fn is not None:
+            logger.info("InferenceClient: attempting engine restart via callback")
+            try:
+                new_client = self._restart_fn()
+                if new_client is not None:
+                    self.host = new_client.host
+                    self.port = new_client.port
+                    self._socket = new_client._socket
+                    new_client._socket = None
+                    self._model_id = new_client._model_id
+                    self._loaded = new_client._loaded
+                    logger.info("InferenceClient: engine restarted and reconnected")
+                    return True
+            except Exception as e:
+                logger.warning("InferenceClient: restart callback failed: %s", e)
+        return False
+
+    def _send_and_recv_unlocked(self, msg: dict) -> Optional[dict]:
+        """Send/recv without lock (for use inside _try_reconnect which holds lock)."""
+        try:
+            self._send_message(msg)
+            return self._recv_message()
+        except Exception:
+            return None
 
     def _send_message(self, msg: dict) -> None:
         """Send a length-prefixed JSON message."""

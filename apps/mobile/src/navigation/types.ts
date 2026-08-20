@@ -16,6 +16,7 @@ export type SettingsStackParamList = {
   Datasets: undefined;
   DatasetDetail: {datasetId: string};
   Export: undefined;
+  Import: undefined;
   Benchmark: undefined;
   Adapters: undefined;
   Feedback: undefined;
@@ -48,6 +49,7 @@ export type ToolsStackParamList = {
   Datasets: undefined;
   DatasetDetail: {datasetId: string};
   Export: undefined;
+  Import: undefined;
   Benchmark: undefined;
   Adapters: undefined;
   Feedback: undefined;

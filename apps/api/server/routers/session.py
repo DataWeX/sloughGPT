@@ -161,7 +161,7 @@ class SessionRouter:
                 asyncio.to_thread(_fetch_workspace),
             )
 
-            return {
+            return success_response(data={
                 "session": {
                     "id": session_id,
                     "message_count": len(msgs),
@@ -176,7 +176,7 @@ class SessionRouter:
                     "thumbs_down": fb_stats.get("thumbs_down", 0),
                 },
                 "workspace": workspace,
-            }
+            })
 
         except Exception as e:
             classify_and_raise(e, source="session_inspector")

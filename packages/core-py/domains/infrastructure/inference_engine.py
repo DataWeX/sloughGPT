@@ -64,12 +64,18 @@ class InferenceEngine:
         host: str = "127.0.0.1",
         port: int = 9100,
         quantize: bool = True,
+        quant_bits: int = 8,
+        quant_mode: str = "symmetric",
+        quant_clip: float = 0.999,
     ):
         self.model_id = model_id
         self.slnc_path = slnc_path
         self.host = host
         self.port = port
         self.quantize = quantize
+        self.quant_bits = quant_bits
+        self.quant_mode = quant_mode
+        self.quant_clip = quant_clip
 
         self._provider = None
         self._server_socket: Optional[socket.socket] = None
@@ -148,7 +154,12 @@ class InferenceEngine:
         """Load the model via SloNetChatProvider."""
         from domains.inference.slonet_provider import SloNetChatProvider
 
-        load_kwargs: Dict[str, Any] = {"quantize": self.quantize}
+        load_kwargs: Dict[str, Any] = {
+            "quantize": self.quantize,
+            "quant_bits": self.quant_bits,
+            "quant_mode": self.quant_mode,
+            "quant_clip": self.quant_clip,
+        }
         if self.slnc_path:
             self._provider = SloNetChatProvider.from_slnc(
                 self.slnc_path, model_id=self.model_id, **load_kwargs,
@@ -344,12 +355,17 @@ class InferenceEngine:
 # ── CLI entry point ───────────────────────────────────────────────────
 
 def main():
+    import signal
+
     parser = argparse.ArgumentParser(description="Standalone inference engine")
     parser.add_argument("--model-id", default="Qwen/Qwen2.5-0.5B-Instruct")
     parser.add_argument("--slnc-path", default=None)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=9100)
     parser.add_argument("--quantize", action="store_true", default=True)
+    parser.add_argument("--quant-bits", type=int, default=8)
+    parser.add_argument("--quant-mode", default="symmetric")
+    parser.add_argument("--quant-clip", type=float, default=0.999)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
@@ -360,7 +376,18 @@ def main():
         host=args.host,
         port=args.port,
         quantize=args.quantize,
+        quant_bits=args.quant_bits,
+        quant_mode=args.quant_mode,
+        quant_clip=args.quant_clip,
     )
+
+    def _handle_signal(signum, frame):
+        logger.info("Inference engine: received signal %d, shutting down", signum)
+        engine.stop()
+
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+
     engine.start()
     engine.wait_ready()
     print(f"ENGINE_READY port={engine.addr[1]}", flush=True)

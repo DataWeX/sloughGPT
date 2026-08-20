@@ -678,6 +678,21 @@ class StartupOrchestrator:
         except Exception as e:
             logger.debug("Registry reset failed during shutdown: %s", e)
 
+    async def _shutdown_inference_engine(self):
+        """Terminate the inference engine subprocess if running."""
+        try:
+            import state as server_state
+            proc = getattr(server_state, "_inference_engine_proc", None)
+            if proc is not None and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=10)
+                except Exception:
+                    proc.kill()
+                logger.info("Inference engine subprocess terminated (pid=%d)", proc.pid, extra={"tag": "START"})
+        except Exception as e:
+            logger.debug("Inference engine shutdown failed: %s", e)
+
     async def _shutdown_process_guard(self):
         """Stop any active ProcessGuard so worker subprocesses exit cleanly."""
         try:
@@ -1136,9 +1151,13 @@ def _start_inference_engine(cfg) -> Optional[Any]:
         logger.warning("Inference engine: slnc resolution failed: %s", e, extra={"tag": "START"})
         return None
 
+    engine_host = getattr(cfg, "inference_engine_host", "127.0.0.1")
+    engine_port = getattr(cfg, "inference_engine_port", 0)
+    connect_timeout = getattr(cfg, "inference_engine_timeout", 300.0)
+
     import socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(("127.0.0.1", 0))
+    sock.bind((engine_host, engine_port))
     port = sock.getsockname()[1]
     sock.close()
 
@@ -1146,11 +1165,14 @@ def _start_inference_engine(cfg) -> Optional[Any]:
         sys.executable, "-m", "domains.infrastructure.inference_engine",
         "--model-id", model_type,
         "--slnc-path", str(slnc_path),
-        "--host", "127.0.0.1",
+        "--host", engine_host,
         "--port", str(port),
     ]
     if cfg.quantize_slonet:
         engine_cmd.append("--quantize")
+    engine_cmd.extend(["--quant-bits", str(cfg.quant_bits)])
+    engine_cmd.extend(["--quant-mode", cfg.quant_mode])
+    engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
     try:
         proc = subprocess.Popen(
@@ -1159,6 +1181,8 @@ def _start_inference_engine(cfg) -> Optional[Any]:
             stderr=subprocess.PIPE,
             cwd=os.getcwd(),
         )
+        import state as server_state
+        server_state._inference_engine_proc = proc
         logger.info(
             "Inference engine subprocess launched (pid=%d, port=%d)", proc.pid, port,
             extra={"tag": "START"},
@@ -1168,10 +1192,12 @@ def _start_inference_engine(cfg) -> Optional[Any]:
         return None
 
     from domains.infrastructure.inference_client import InferenceClient
-    client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=300.0)
+    restart_fn = _make_engine_restart_fn(cfg)
+    client = InferenceClient(host=engine_host, port=port, connect_timeout=connect_timeout, restart_fn=restart_fn)
 
     import time
-    for _ in range(300):
+    deadline = time.monotonic() + connect_timeout
+    while time.monotonic() < deadline:
         if proc.poll() is not None:
             stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
             logger.error(
@@ -1183,11 +1209,104 @@ def _start_inference_engine(cfg) -> Optional[Any]:
         try:
             if client.connect():
                 logger.info("Inference engine connected (model=%s)", client.model_id, extra={"tag": "START"})
+                _start_engine_watcher(proc, client)
                 return client
         except Exception:
             pass
         time.sleep(1.0)
 
-    logger.error("Inference engine: connection timeout after 300s", extra={"tag": "START"})
+    logger.error("Inference engine: connection timeout after %ds", int(connect_timeout), extra={"tag": "START"})
     proc.terminate()
     return None
+
+
+def _start_engine_watcher(proc, client):
+    """Background thread that monitors the inference engine process."""
+    def _watch():
+        while proc.poll() is None:
+            time.sleep(10)
+        rc = proc.returncode
+        if rc is not None and rc != 0:
+            logger.error(
+                "Inference engine process exited with code %d — inference will fail until restarted",
+                rc, extra={"tag": "START"},
+            )
+        else:
+            logger.info("Inference engine process exited cleanly (code=0)", extra={"tag": "START"})
+    t = threading.Thread(target=_watch, daemon=True, name="engine-watcher")
+    t.start()
+
+
+def _make_engine_restart_fn(cfg):
+    """Create a callback that restarts the inference engine subprocess."""
+    def _restart():
+        import subprocess
+        import sys
+
+        model_type = cfg.autoload_model
+        if not model_type:
+            return None
+
+        try:
+            from domains.infrastructure.safetensors_loader import _get_model_dir
+            slnc_path = _get_model_dir(model_type) / "model.slnc"
+            if not slnc_path.exists():
+                return None
+        except Exception:
+            return None
+
+        engine_host = getattr(cfg, "inference_engine_host", "127.0.0.1")
+        engine_port = getattr(cfg, "inference_engine_port", 0)
+
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind((engine_host, engine_port))
+        port = sock.getsockname()[1]
+        sock.close()
+
+        engine_cmd = [
+            sys.executable, "-m", "domains.infrastructure.inference_engine",
+            "--model-id", model_type,
+            "--slnc-path", str(slnc_path),
+            "--host", engine_host,
+            "--port", str(port),
+        ]
+        if cfg.quantize_slonet:
+            engine_cmd.append("--quantize")
+        engine_cmd.extend(["--quant-bits", str(cfg.quant_bits)])
+        engine_cmd.extend(["--quant-mode", cfg.quant_mode])
+        engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
+
+        try:
+            proc = subprocess.Popen(
+                engine_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=os.getcwd(),
+            )
+            import state as server_state
+            server_state._inference_engine_proc = proc
+            logger.info("Inference engine restarted (pid=%d, port=%d)", proc.pid, port, extra={"tag": "START"})
+        except Exception as e:
+            logger.error("Inference engine: restart failed: %s", e, extra={"tag": "START"})
+            return None
+
+        from domains.infrastructure.inference_client import InferenceClient
+        new_client = InferenceClient(host=engine_host, port=port, connect_timeout=cfg.inference_engine_timeout)
+
+        deadline = time.monotonic() + cfg.inference_engine_timeout
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                return None
+            try:
+                if new_client.connect():
+                    _start_engine_watcher(proc, new_client)
+                    return new_client
+            except Exception:
+                pass
+            time.sleep(1.0)
+
+        proc.terminate()
+        return None
+
+    return _restart

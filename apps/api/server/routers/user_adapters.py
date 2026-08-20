@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
-from infrastructure.auth import require_auth_if_enabled, audit_user
+from infrastructure.auth import require_auth_if_enabled
 
 
 class AggregateBestRequest(BaseModel):

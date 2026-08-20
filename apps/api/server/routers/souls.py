@@ -10,11 +10,11 @@ from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict, AsyncGenerator
 from pydantic import BaseModel
 import re
-import json, asyncio, numpy as np, logging
+import json, asyncio, logging
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
-from infrastructure.auth import require_auth_if_enabled, audit_user
+from infrastructure.auth import require_auth_if_enabled
 
 try:
     from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
@@ -287,6 +287,7 @@ Be yourself — let your personality shape how you respond."""
                     if await request.is_disconnected():
                         return
 
+                    import numpy as np
                     seq = np.array([generated[-128:]], dtype=np.int64)
 
                     logits_arr, _ = model.forward(seq, targets=None)

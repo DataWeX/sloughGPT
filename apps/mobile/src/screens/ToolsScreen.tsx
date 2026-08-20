@@ -35,6 +35,7 @@ const TOOLS: ToolItem[] = [
   {icon: 'message-circle', title: 'Agents', desc: 'Multi-agent orchestration', target: 'Agents'},
   {icon: 'image', title: 'Multimodal', desc: 'Vision, image analysis, DPO', target: 'Multimodal'},
   {icon: 'download', title: 'Export', desc: 'Export models and training data', target: 'Export'},
+  {icon: 'upload', title: 'Import', desc: 'Import settings, checkpoints, datasets', target: 'Import'},
   {icon: 'settings', title: 'Tokenizer', desc: 'Vocab stats and tokenization', target: 'Tokenizer'},
   {icon: 'copy', title: 'Compare', desc: 'Side-by-side model comparison', target: 'Compare'},
   {icon: 'triangle-alert', title: 'Errors', desc: 'Client error monitoring', target: 'Errors'},

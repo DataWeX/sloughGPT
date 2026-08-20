@@ -178,10 +178,17 @@ class CollectorTrainingBridge:
         return count
 
     def get_text(self) -> str:
-        return self._adapter.records_to_text(self._records)
+        parts = []
+        for record in self._records:
+            parts.append(record.content)
+        return self._config.separator.join(parts)
 
     def get_numpy(self) -> tuple[np.ndarray, int]:
-        return self._adapter.records_to_numpy(self._records)
+        text = self.get_text()
+        chars = sorted(set(text))
+        stoi = {c: i for i, c in enumerate(chars)}
+        data = np.array([stoi[c] for c in text], dtype=np.int64)
+        return data, len(chars)
 
     @property
     def adapter(self) -> TrainingDataAdapter:

@@ -16,6 +16,9 @@ class Record:
         if "timestamp" not in self.metadata:
             self.metadata["timestamp"] = time.time()
 
+    def to_dict(self) -> dict:
+        return {"content": self.content, "metadata": dict(self.metadata)}
+
 
 @runtime_checkable
 class Source(Protocol):
