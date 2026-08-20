@@ -24,6 +24,7 @@ from domains.feedback.response_tracker import get_response_tracker
 from domains.learner import get_learner
 from domains.learner.entity_extractor import extract_and_store
 from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
+from domains.infrastructure.request_coalescer import get_coalescer
 
 logger = logging.getLogger("slo.inference")
 
@@ -490,6 +491,20 @@ class InferenceRouter:
                 repetition_penalty=req.repetition_penalty,
                 user_message=req.prompt,
             )
+
+            import state as _gen_state
+            _coalescer = get_coalescer()
+            _coalesce_key = _coalescer.hash(provider_messages, gen_params, req.max_new_tokens, _gen_state.model_type)
+            existing = await _coalescer.start(_coalesce_key)
+            if existing is not None:
+                await existing.event.wait()
+                if existing.error is not None:
+                    raise existing.error
+                result = existing.result
+                tokens = _count_tokens(result, _gen_state)
+                actual_model = _gen_state.model_type or req.model
+                return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
+
             result = await provider.chat(
                 provider_messages,
                 max_tokens=req.max_new_tokens,
@@ -525,8 +540,13 @@ class InferenceRouter:
                 )
             except Exception as e:
                 logger.debug("Failed to capture conversation: %s", e)
+            await _coalescer.complete(_coalesce_key, result)
             return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
         except Exception as e:
+            try:
+                await _coalescer.complete_error(_coalesce_key, e)
+            except Exception:
+                pass
             classify_and_raise(e, source="generate")
 
     async def generate_stream(self, req: GenerateRequest, request: Request) -> StreamingResponse:
@@ -586,6 +606,23 @@ class InferenceRouter:
                 repetition_penalty=req.repetition_penalty,
                 user_message=req.prompt,
             )
+
+            _coalescer = get_coalescer()
+            _coalesce_key = _coalescer.hash(provider_messages, gen_params, req.max_new_tokens, _stream_state.model_type)
+            existing = await _coalescer.start(_coalesce_key)
+            if existing is not None:
+                await existing.event.wait()
+                if existing.error is not None:
+                    yield sse_error("generate", "ERROR", str(existing.error))
+                    return
+                cached = existing.result or ""
+                tokens = cached.split()
+                for i in range(0, len(tokens), 5):
+                    yield sse_token("generate", " ".join(tokens[i:i+5]))
+                _mgr.finish(_op_id)
+                yield sse_token("generate", "", done=True, meta={"tokens": len(tokens), "cached": True})
+                return
+
             try:
                 async for token in provider.chat_stream(
                     provider_messages,
@@ -624,6 +661,10 @@ class InferenceRouter:
                     yield sse_token("generate", "".join(_batch))
                     _batch = []
             except Exception as e:
+                try:
+                    await _coalescer.complete_error(_coalesce_key, e)
+                except Exception:
+                    pass
                 _mgr.finish(_op_id, str(e))
                 classify_and_raise(e, source="generate_stream")
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
@@ -646,6 +687,8 @@ class InferenceRouter:
                 )
             except Exception as e:
                 logger.debug("Failed to capture conversation: %s", e)
+            full_response = "".join(collected)
+            await _coalescer.complete(_coalesce_key, full_response)
             _mgr.finish(_op_id)
             yield sse_token("generate", "", done=True, meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)})
 
@@ -1013,6 +1056,24 @@ class InferenceRouter:
                         user_message=user_msg or "",
                         user_id=req.user_id or "default",
                     )
+
+                    import state as _cs_state
+                    _coalescer = get_coalescer()
+                    _coalesce_key = _coalescer.hash(provider_messages, gen_params, req.max_tokens, _cs_state.model_type)
+                    existing = await _coalescer.start(_coalesce_key)
+                    if existing is not None:
+                        await existing.event.wait()
+                        if existing.error is not None:
+                            yield sse_error("chat", "ERROR", str(existing.error))
+                            return
+                        cached = existing.result or ""
+                        tokens = cached.split()
+                        for i in range(0, len(tokens), 5):
+                            yield sse_token("chat", " ".join(tokens[i:i+5]))
+                        _mgr.finish(_op_id)
+                        yield sse_token("chat", "", done=True)
+                        return
+
                     try:
                         try:
                             async for token in provider.chat_stream(
@@ -1058,12 +1119,17 @@ class InferenceRouter:
                             logger.info("Client disconnected from chat stream", extra={"tag": "INF", "context": {"session_id": session_id}})
                             return
                     except Exception as e:
+                        try:
+                            await _coalescer.complete_error(_coalesce_key, e)
+                        except Exception:
+                            pass
                         _mgr.finish(_op_id, str(e))
                         classify_and_raise(e, source="chat_stream_provider")
                 else:
                     yield sse_error("chat", "STREAMING", "No inference provider loaded")
 
                 full_response = "".join(full_response_parts)
+                await _coalescer.complete(_coalesce_key, full_response)
 
                 if session_id not in self._session_deleted:
                     session_data["messages"].append({

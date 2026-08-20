@@ -5,6 +5,7 @@ import {useColors} from '../theme/colors';
 import {Icon} from './Icon';
 import {toast} from '../services/toast';
 import {copyToClipboard} from '../services/clipboard';
+import {HighlightedCode} from './CodeHighlight';
 
 interface MarkdownProps {
   content: string;
@@ -212,11 +213,15 @@ function CodeBlock({language, code, colors}: {language: string; code: string; co
         </Pressable>
       </XStack>
       {/* Code content */}
-      <Text fontFamily="mono" fontSize={12} lineHeight={18}
-        color={colors.text} paddingHorizontal={12} paddingVertical={10}
-        selectable>
-        {code}
-      </Text>
+      {language ? (
+        <HighlightedCode code={code} language={language} colors={colors} />
+      ) : (
+        <Text fontFamily="mono" fontSize={12} lineHeight={18}
+          color={colors.text} paddingHorizontal={12} paddingVertical={10}
+          selectable>
+          {code}
+        </Text>
+      )}
     </YStack>
   );
 }
