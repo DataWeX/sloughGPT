@@ -33,6 +33,7 @@ import {DatasetsScreen} from './src/screens/DatasetsScreen';
 import {DatasetDetailScreen} from './src/screens/DatasetDetailScreen';
 import {ExportScreen} from './src/screens/ExportScreen';
 import {ImportScreen} from './src/screens/ImportScreen';
+import {NotificationSettingsScreen} from './src/screens/NotificationSettingsScreen';
 import {BenchmarkScreen} from './src/screens/BenchmarkScreen';
 import {AdaptersScreen} from './src/screens/AdaptersScreen';
 import {FeedbackScreen} from './src/screens/FeedbackScreen';
@@ -86,6 +87,7 @@ function ToolsStack() {
       <Stack.Screen name="DatasetDetail" component={DatasetDetailScreen} />
       <Stack.Screen name="Export" component={ExportScreen} />
       <Stack.Screen name="Import" component={ImportScreen} />
+      <Stack.Screen name="Notifications" component={NotificationSettingsScreen} />
       <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
       <Stack.Screen name="Adapters" component={AdaptersScreen} />
       <Stack.Screen name="Feedback" component={FeedbackScreen} />
@@ -126,6 +128,7 @@ function SettingsStack() {
       <Stack.Screen name="DatasetDetail" component={DatasetDetailScreen} />
       <Stack.Screen name="Export" component={ExportScreen} />
       <Stack.Screen name="Import" component={ImportScreen} />
+      <Stack.Screen name="Notifications" component={NotificationSettingsScreen} />
       <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
       <Stack.Screen name="Adapters" component={AdaptersScreen} />
       <Stack.Screen name="Feedback" component={FeedbackScreen} />
