@@ -237,20 +237,167 @@ class TestInferenceClient:
         s1, s2 = socket.socketpair()
         client._socket = s1
         s2.sendall(b"ab")
+        s2.close()
         result = client._recv_exact(5)
         assert result is None
         s1.close()
-        s2.close()
 
     def test_recv_message(self):
         from domains.infrastructure.inference_client import InferenceClient
         client = InferenceClient()
-        s1, s2 = socket.socketpair()
-        client._socket = s1
         msg = {"type": "health_ok", "model_id": "test"}
         raw = encode_message(msg)
-        s2.sendall(raw)
+
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+
+        def _send():
+            conn, _ = server.accept()
+            conn.sendall(raw)
+            time.sleep(0.1)
+            conn.close()
+
+        t = threading.Thread(target=_send, daemon=True)
+        t.start()
+
+        client._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client._socket.connect(("127.0.0.1", port))
         result = client._recv_message()
+        client._socket.close()
+        server.close()
+        t.join(timeout=2)
+
         assert result["type"] == "health_ok"
-        s1.close()
-        s2.close()
+
+
+# ── Concurrent connections ────────────────────────────────────────────
+
+class TestEngineConcurrency:
+    def _make_engine(self):
+        from domains.infrastructure.inference_engine import InferenceEngine
+        engine = InferenceEngine.__new__(InferenceEngine)
+        engine.model_id = "test-model"
+        engine.slnc_path = None
+        engine.host = "127.0.0.1"
+        engine.port = 0
+        engine.quantize = False
+        engine.quant_bits = 8
+        engine.quant_mode = "symmetric"
+        engine.quant_clip = 0.999
+        engine._provider = None
+        engine._server_socket = None
+        engine._thread = None
+        engine._ready = threading.Event()
+        engine._stop = threading.Event()
+        engine._active_streams = {}
+        engine._active_streams_lock = threading.Lock()
+        return engine
+
+    def test_concurrent_health_requests(self):
+        engine = self._make_engine()
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("127.0.0.1", 0))
+        server.listen(8)
+        port = server.getsockname()[1]
+
+        def _handler():
+            while not engine._stop.is_set():
+                try:
+                    client, _ = server.accept()
+                except OSError:
+                    break
+                msg_raw = client.recv(1024)
+                if not msg_raw:
+                    client.close()
+                    continue
+                length = struct.unpack("!I", msg_raw[:4])[0]
+                msg = json.loads(msg_raw[4:4+length])
+                engine._handle_health(client, msg)
+                client.close()
+
+        t = threading.Thread(target=_handler, daemon=True)
+        t.start()
+
+        results = []
+
+        def _do_health(i):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(("127.0.0.1", port))
+            sock.sendall(encode_message({"type": "health"}))
+            header = sock.recv(4)
+            length = struct.unpack("!I", header)[0]
+            payload = sock.recv(length)
+            resp = json.loads(payload)
+            results.append((i, resp["type"]))
+            sock.close()
+
+        threads = [threading.Thread(target=_do_health, args=(i,)) for i in range(5)]
+        for t2 in threads:
+            t2.start()
+        for t2 in threads:
+            t2.join(timeout=5)
+
+        engine._stop.set()
+        server.close()
+        t.join(timeout=2)
+
+        assert len(results) == 5
+        assert all(r[1] == "health_ok" for r in results)
+
+    def test_active_streams_tracking(self):
+        engine = self._make_engine()
+        with engine._active_streams_lock:
+            engine._active_streams["s1"] = True
+            engine._active_streams["s2"] = True
+        assert len(engine._active_streams) == 2
+
+        engine._handle_stream_stop({"id": "s1"})
+        with engine._active_streams_lock:
+            assert engine._active_streams["s1"] is False
+            assert engine._active_streams["s2"] is True
+
+        engine._handle_stream_stop({"id": "s2"})
+        with engine._active_streams_lock:
+            assert engine._active_streams["s2"] is False
+
+
+# ── Client reconnection with restart callback ─────────────────────────
+
+class TestClientRestart:
+    def test_restart_callback_called_on_failure(self):
+        from domains.infrastructure.inference_client import InferenceClient
+
+        call_count = [0]
+
+        def fake_restart():
+            call_count[0] += 1
+            new_client = InferenceClient.__new__(InferenceClient)
+            new_client.host = "127.0.0.1"
+            new_client.port = 1
+            new_client.connect_timeout = 1.0
+            new_client.generate_timeout = 5.0
+            new_client._restart_fn = None
+            new_client._socket = None
+            new_client._lock = threading.Lock()
+            new_client._model_id = "restarted"
+            new_client._loaded = True
+            new_client._kv_states = {}
+            new_client._kv_last_access = {}
+            new_client._kv_max_sessions = 64
+            new_client._kv_ttl = 3600.0
+            return None  # restart also fails
+
+        client = InferenceClient(host="127.0.0.1", port=1, restart_fn=fake_restart)
+        client._try_reconnect()
+
+        assert call_count[0] == 1
+
+    def test_no_restart_callback(self):
+        from domains.infrastructure.inference_client import InferenceClient
+        client = InferenceClient(host="127.0.0.1", port=1)
+        result = client._try_reconnect()
+        assert result is False

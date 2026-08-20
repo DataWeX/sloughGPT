@@ -450,6 +450,7 @@ Be yourself — let your personality shape how you respond."""
     async def get_soul(self, soul_name: str) -> dict:
         """Get details for a specific soul by name."""
         try:
+            import asyncio
             from domains.inference.slo_manager import get_slo_manager
             manager = get_slo_manager()
             souls = await asyncio.to_thread(manager.list_souls)

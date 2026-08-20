@@ -86,6 +86,7 @@ class ModelsRouter:
         self.router.add_api_route(path="/conversion-status", endpoint=self.get_conversion_status, methods=["GET"])
         self.router.add_api_route(path="/process-guard", endpoint=self.get_process_guard, methods=["GET"])
         self.router.add_api_route(path="/process-guard", endpoint=self.set_process_guard, methods=["POST"])
+        self.router.add_api_route(path="/engine/status", endpoint=self.get_engine_status, methods=["GET"])
 
     @staticmethod
     def _audit_model_id(provider) -> str:
@@ -912,6 +913,33 @@ class ModelsRouter:
         """
         ctrl = get_models_controller()
         return success_response(data=ctrl.set_process_guard_enabled(req.enabled))
+
+    async def get_engine_status(self) -> dict:
+        """Get standalone inference engine status.
+
+        Returns whether the engine subprocess is enabled, its PID, whether
+        the client is connected, and the model id.
+        """
+        import state as server_state
+        proc = getattr(server_state, "_inference_engine_proc", None)
+        provider = getattr(server_state, "provider", None)
+        from domains.infrastructure.inference_client import InferenceClient
+        is_client = isinstance(provider, InferenceClient)
+        pid = proc.pid if proc is not None else None
+        alive = proc.poll() is None if proc is not None else False
+        health = {}
+        if is_client and alive:
+            try:
+                health = await asyncio.to_thread(provider.health)
+            except Exception:
+                health = {"type": "error"}
+        return success_response(data={
+            "enabled": is_client,
+            "pid": pid,
+            "alive": alive,
+            "model_id": getattr(provider, "model_id", None) if is_client else None,
+            "health": health,
+        })
 
 
 router = ModelsRouter().router

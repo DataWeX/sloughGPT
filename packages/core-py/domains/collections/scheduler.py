@@ -103,16 +103,18 @@ class JobScheduler:
         return count
 
     def stop_job(self, name: str) -> bool:
+        thread = None
         with self._lock:
             if name in self._stop_events:
                 self._stop_events[name].set()
-                thread = self._threads.get(name)
-                if thread:
-                    thread.join(timeout=5.0)
-                    del self._threads[name]
+                thread = self._threads.pop(name, None)
                 self._stats[name]["status"] = "stopped"
-                return True
-        return False
+                found = True
+            else:
+                found = False
+        if found and thread:
+            thread.join(timeout=2.0)
+        return found
 
     def stop_all(self) -> int:
         count = 0

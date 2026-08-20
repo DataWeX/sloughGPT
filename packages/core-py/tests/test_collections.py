@@ -585,7 +585,6 @@ class TestJobScheduler:
         scheduler.add_job(config, c1)
         assert "job1" in scheduler.list_jobs()
         assert scheduler.get_collector("job1") is c1
-        scheduler.stop_all()
 
     def test_start_and_stop(self, tmp_path):
         f1 = tmp_path / "a.txt"
@@ -598,7 +597,7 @@ class TestJobScheduler:
         assert scheduler.start_job("job1")
         import time
         time.sleep(0.5)
-        scheduler.stop_all()
+        scheduler.stop_job("job1")
         stats = scheduler.job_stats("job1")
         assert stats["runs"] >= 1
 
