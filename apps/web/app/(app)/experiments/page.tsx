@@ -211,7 +211,12 @@ export default function ExperimentsPage() {
           </CardHeader>
           <CardContent>
             {experiments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No experiments yet.</p>
+              <div className="text-center py-6 space-y-2">
+                <p className="text-sm text-muted-foreground">No experiments yet.</p>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCreateDialogOpen(true)}>
+                  New Experiment
+                </Button>
+              </div>
             ) : (
               <>
                 {selectedIds.size > 0 && (
