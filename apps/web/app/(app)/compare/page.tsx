@@ -239,7 +239,7 @@ export default function ComparePage() {
               <p className="text-xs text-muted-foreground/70 max-w-md mx-auto">
                 Run benchmarks on your models to see side-by-side comparisons. Click &ldquo;Benchmark all&rdquo; or use the benchmark button on each model card above.
               </p>
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={runAllBenchmarks} disabled={loading || models.length === 0}>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={runAll} disabled={loading || models.length === 0}>
                 Benchmark all
               </Button>
               <div className="flex items-center justify-center gap-4 text-[10px] text-muted-foreground/50 pt-2">

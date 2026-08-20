@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 const { mockGet, mockPost, mockAddToast } = vi.hoisted(() => ({
   mockGet: vi.fn(), mockPost: vi.fn(), mockAddToast: vi.fn(),
 }))
