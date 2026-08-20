@@ -116,8 +116,8 @@ describe('trainingJobsController.get', () => {
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/jobs/j1')
   })
 
-  it('returns null on error', async () => {
-    apiClient.apiGet.mockRejectedValue(new Error('not found'))
+  it('returns null on 404', async () => {
+    apiClient.apiGet.mockRejectedValue(new Error('404 not found'))
     const result = await trainingJobsController.get('missing')
     expect(result).toBeNull()
   })
@@ -400,10 +400,9 @@ describe('trainingJobsController.listFineTuned', () => {
     expect(result).toHaveLength(1)
   })
 
-  it('returns empty array on error', async () => {
+  it('propagates errors', async () => {
     apiClient.apiGet.mockRejectedValue(new Error('boom'))
-    const result = await trainingJobsController.listFineTuned()
-    expect(result).toEqual([])
+    await expect(trainingJobsController.listFineTuned()).rejects.toThrow('boom')
   })
 })
 
