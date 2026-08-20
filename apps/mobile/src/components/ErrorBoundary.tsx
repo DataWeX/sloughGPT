@@ -1,5 +1,6 @@
 import React from 'react';
 import {Pressable, View, Text as RNText, StyleSheet} from 'react-native';
+import {useColors} from '../theme/colors';
 
 interface ErrorFallbackProps {
   error: Error | null;
@@ -7,59 +8,63 @@ interface ErrorFallbackProps {
 }
 
 function ErrorFallback({error, onRetry}: ErrorFallbackProps) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   return (
-    <View style={styles.container}>
-      <RNText style={styles.icon}>!</RNText>
-      <RNText style={styles.title}>Something went wrong</RNText>
-      <RNText style={styles.message}>
-        {error?.message}
+    <View style={s.container}>
+      <RNText style={s.icon}>!</RNText>
+      <RNText style={s.title}>Something went wrong</RNText>
+      <RNText style={s.message}>
+        {error?.message || 'An unexpected error occurred'}
       </RNText>
-      <Pressable onPress={onRetry} style={styles.button}>
-        <RNText style={styles.buttonText}>Try Again</RNText>
+      <Pressable onPress={onRetry} style={s.button} testID="error-retry-button">
+        <RNText style={s.buttonText}>Try Again</RNText>
       </Pressable>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#110F18',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  icon: {
-    fontSize: 48,
-    marginBottom: 16,
-    color: '#E85D04',
-    fontWeight: '700',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#F0ECF5',
-    marginBottom: 8,
-  },
-  message: {
-    fontSize: 13,
-    color: '#968CAC',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 24,
-  },
-  button: {
-    backgroundColor: '#7C52C4',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  buttonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-});
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 32,
+    },
+    icon: {
+      fontSize: 48,
+      marginBottom: 16,
+      color: colors.error,
+      fontWeight: '700',
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    message: {
+      fontSize: 13,
+      color: colors.textMuted,
+      textAlign: 'center',
+      lineHeight: 18,
+      marginBottom: 24,
+    },
+    button: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    buttonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    },
+  });
+}
 
 interface Props {
   children: React.ReactNode;
@@ -80,10 +85,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return {hasError: true, error};
   }
 
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    if (__DEV__) console.error('[ErrorBoundary]', error, errorInfo);
+  }
+
   render() {
     if (this.state.hasError) {
       return (
-        <ErrorFallback
+        <ErrorBoundaryFallback
           error={this.state.error}
           onRetry={() => this.setState({hasError: false, error: null})}
         />
@@ -91,4 +100,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
     }
     return this.props.children;
   }
+}
+
+function ErrorBoundaryFallback(props: ErrorFallbackProps) {
+  return <ErrorFallback {...props} />;
 }

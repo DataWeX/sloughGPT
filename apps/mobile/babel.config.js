@@ -8,5 +8,9 @@ module.exports = {
         config: './tamagui.config.ts',
       },
     ],
+    // Strip console.log/debug in release builds
+    ...(process.env.NODE_ENV === 'production'
+      ? [['transform-remove-console', {exclude: ['error', 'warn']}]]
+      : []),
   ],
 };
