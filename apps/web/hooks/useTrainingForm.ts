@@ -153,7 +153,6 @@ export function useTrainingForm(
   const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
 
   const [customPresets, setCustomPresets] = useState<TrainingPreset[]>([])
-  const [presetsLoaded, setPresetsLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -161,9 +160,8 @@ export function useTrainingForm(
       if (!cancelled && presets) {
         setCustomPresets(presets)
       }
-      setPresetsLoaded(true)
     }).catch(() => {
-      setPresetsLoaded(true)
+      // ignore load errors — keep empty presets
     })
     return () => { cancelled = true }
   }, [])
