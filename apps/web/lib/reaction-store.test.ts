@@ -1,75 +1,83 @@
-import { describe, expect, it, beforeEach } from 'vitest'
-import {
-  getReactions,
-  addReaction,
-  toggleReaction,
-} from './reaction-store'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+
+const chatDBMock = {
+  getKV: vi.fn().mockResolvedValue(undefined),
+  setKV: vi.fn().mockResolvedValue(undefined),
+  deleteKV: vi.fn().mockResolvedValue(undefined),
+}
+
+vi.mock('@/lib/db', () => ({
+  chatDB: chatDBMock,
+}))
+
+import { getReactions, addReaction, toggleReaction } from './reaction-store'
 
 const KEY = 'sloughgpt-message-reactions'
 
 describe('reaction-store', () => {
   beforeEach(() => {
-    localStorage.clear()
+    chatDBMock.getKV.mockClear()
+    chatDBMock.setKV.mockClear()
+    chatDBMock.deleteKV.mockClear()
   })
 
-  it('returns an empty map for an unknown message', () => {
-    expect(getReactions('msg-1')).toEqual({})
+  it('returns an empty map for an unknown message', async () => {
+    chatDBMock.getKV.mockResolvedValueOnce(undefined)
+    expect(await getReactions('msg-1')).toEqual({})
   })
 
-  it('returns an empty map when localStorage holds invalid JSON', () => {
-    localStorage.setItem(KEY, '{broken')
-    expect(getReactions('msg-1')).toEqual({})
+  it('adds a reaction for a user and persists it', async () => {
+    chatDBMock.getKV.mockResolvedValueOnce(undefined)
+    await addReaction('msg-1', '👍')
+    expect(await getReactions('msg-1')).toEqual({ '👍': ['user'] })
+    expect(chatDBMock.setKV).toHaveBeenCalledWith(KEY, expect.objectContaining({
+      value: { 'msg-1': { '👍': ['user'] } }
+    }))
   })
 
-  it('adds a reaction for a user and persists it', () => {
-    addReaction('msg-1', '👍')
-    expect(getReactions('msg-1')).toEqual({ '👍': ['user'] })
-    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ 'msg-1': { '👍': ['user'] } })
+  it('does not duplicate the same user for one emoji', async () => {
+    chatDBMock.getKV.mockResolvedValueOnce(undefined)
+    await addReaction('msg-1', '👍')
+    await addReaction('msg-1', '👍')
+    await addReaction('msg-1', '👍', 'alice')
+    expect(await getReactions('msg-1')).toEqual({ '👍': ['user', 'alice'] })
   })
 
-  it('does not duplicate the same user for one emoji', () => {
-    addReaction('msg-1', '👍')
-    addReaction('msg-1', '👍')
-    addReaction('msg-1', '👍', 'alice')
-    expect(getReactions('msg-1')).toEqual({ '👍': ['user', 'alice'] })
+  it('removes a user from a reaction via toggle', async () => {
+    chatDBMock.getKV
+      .mockResolvedValueOnce({ value: { 'msg-1': { '👍': ['user', 'alice'] } } })
+    await toggleReaction('msg-1', '👍', 'user')
+    expect(await getReactions('msg-1')).toEqual({ '👍': ['alice'] })
   })
 
-  it('removes a user from a reaction via toggle', () => {
-    addReaction('msg-1', '👍')
-    addReaction('msg-1', '👍', 'alice')
-    toggleReaction('msg-1', '👍', 'user')
-    expect(getReactions('msg-1')).toEqual({ '👍': ['alice'] })
+  it('deletes the emoji key when the last user is removed via toggle', async () => {
+    chatDBMock.getKV
+      .mockResolvedValueOnce({ value: { 'msg-1': { '👍': ['user'] } } })
+    await toggleReaction('msg-1', '👍')
+    expect(await getReactions('msg-1')).toEqual({})
   })
 
-  it('deletes the emoji key when the last user is removed via toggle', () => {
-    addReaction('msg-1', '👍')
-    toggleReaction('msg-1', '👍')
-    expect(getReactions('msg-1')).toEqual({})
+  it('is a no-op when toggling a reaction that does not exist', async () => {
+    chatDBMock.getKV.mockResolvedValueOnce(undefined)
+    await toggleReaction('msg-1', '🔥')
+    expect(await getReactions('msg-1')).toEqual({ '🔥': ['user'] })
   })
 
-  it('deletes the message key when its last reaction is removed via toggle', () => {
-    addReaction('msg-1', '👍')
-    toggleReaction('msg-1', '👍')
-    expect(getReactions('msg-1')).toEqual({})
-    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({})
+  it('toggles a reaction on for the user and off again', async () => {
+    chatDBMock.getKV
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ value: { 'msg-1': { '🔥': ['user'] } } })
+    await toggleReaction('msg-1', '🔥')
+    expect(await getReactions('msg-1')).toEqual({ '🔥': ['user'] })
+    await toggleReaction('msg-1', '🔥')
+    expect(await getReactions('msg-1')).toEqual({})
   })
 
-  it('is a no-op when toggling a reaction that does not exist', () => {
-    toggleReaction('msg-1', '🔥')
-    expect(getReactions('msg-1')).toEqual({ '🔥': ['user'] })
-  })
-
-  it('toggles a reaction on for the user and off again', () => {
-    toggleReaction('msg-1', '🔥')
-    expect(getReactions('msg-1')).toEqual({ '🔥': ['user'] })
-    toggleReaction('msg-1', '🔥')
-    expect(getReactions('msg-1')).toEqual({})
-  })
-
-  it('keeps separate reactions per message', () => {
-    addReaction('msg-a', '👍')
-    addReaction('msg-b', '🔥')
-    expect(getReactions('msg-a')).toEqual({ '👍': ['user'] })
-    expect(getReactions('msg-b')).toEqual({ '🔥': ['user'] })
+  it('keeps separate reactions per message', async () => {
+    chatDBMock.getKV.mockResolvedValueOnce(undefined)
+    await addReaction('msg-a', '👍')
+    await addReaction('msg-b', '🔥')
+    expect(await getReactions('msg-a')).toEqual({ '👍': ['user'] })
+    expect(await getReactions('msg-b')).toEqual({ '🔥': ['user'] })
   })
 })

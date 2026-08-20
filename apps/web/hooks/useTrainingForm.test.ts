@@ -2,6 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTrainingForm } from './useTrainingForm'
 
+const chatDBMock = {
+  getKV: vi.fn().mockResolvedValue(undefined),
+  setKV: vi.fn().mockResolvedValue(undefined),
+  deleteKV: vi.fn().mockResolvedValue(undefined),
+}
+
+vi.mock('@/lib/db', () => ({
+  chatDB: chatDBMock,
+}))
+
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
@@ -49,7 +59,9 @@ const addToast = vi.fn()
 beforeEach(() => {
   vi.clearAllMocks()
   mockFetch.mockReset()
-  localStorage.clear()
+  chatDBMock.getKV.mockClear()
+  chatDBMock.setKV.mockClear()
+  chatDBMock.deleteKV.mockClear()
 })
 
 describe('useTrainingForm', () => {

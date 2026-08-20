@@ -152,14 +152,26 @@ export function useTrainingForm(
 
   const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
 
-  const [customPresets, setCustomPresets] = useState<TrainingPreset[]>(() => {
-    try { return JSON.parse(localStorage.getItem('sloughgpt-training-presets') || '[]') } catch { return [] }
-  })
+  const [customPresets, setCustomPresets] = useState<TrainingPreset[]>([])
+  const [presetsLoaded, setPresetsLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    chatDB.getKV<TrainingPreset[]>('training-presets').then(presets => {
+      if (!cancelled && presets) {
+        setCustomPresets(presets)
+      }
+      setPresetsLoaded(true)
+    }).catch(() => {
+      setPresetsLoaded(true)
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const saveCustomPreset = useCallback((preset: TrainingPreset) => {
     setCustomPresets(prev => {
       const next = [...prev.filter(p => p.name !== preset.name), preset]
-      localStorage.setItem('sloughgpt-training-presets', JSON.stringify(next))
+      chatDB.setKV('training-presets', next).catch(() => {})
       return next
     })
   }, [])
@@ -167,7 +179,7 @@ export function useTrainingForm(
   const deleteCustomPreset = useCallback((name: string) => {
     setCustomPresets(prev => {
       const next = prev.filter(p => p.name !== name)
-      localStorage.setItem('sloughgpt-training-presets', JSON.stringify(next))
+      chatDB.setKV('training-presets', next).catch(() => {})
       return next
     })
   }, [])
