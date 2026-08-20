@@ -309,7 +309,7 @@ export function ChatScreen() {
                 onPress={a.deleteSelected}
                 disabled={a.selectedIds.size === 0}>
                 <Text fontSize={13} fontWeight="600"
-                  color={a.selectedIds.size > 0 ? '#EF4444' : '$color10'}>Delete</Text>
+                  color={a.selectedIds.size > 0 ? colors.error : colors.textMuted}>Delete</Text>
               </YStack>
               <YStack paddingHorizontal={10} paddingVertical={5} borderRadius={8}
                 backgroundColor={colors.primaryAlpha(0.08)} onPress={a.toggleSelectMode}>

@@ -358,7 +358,7 @@ export function TrainingScreen() {
       pressStyle={{opacity: 0.7}}>
       <Text
         fontSize={11}
-        color={selected ? '#FFFFFF' : '$color10'}
+        color={selected ? colors.white : colors.textMuted}
         letterSpacing={0.2}>
         {label}
       </Text>
@@ -432,7 +432,7 @@ export function TrainingScreen() {
                     pressStyle={{opacity: 0.7}}>
                     <Text
                       fontSize={13}
-                      color={method === m ? '#FFFFFF' : '$color10'}
+                      color={method === m ? colors.white : colors.textMuted}
                       fontWeight="500">
                       {m === 'distill' ? 'Distill' : 'Fine-tune'}
                     </Text>
@@ -713,7 +713,7 @@ export function TrainingScreen() {
                     <Text
                       fontSize={13}
                       color={
-                        inputMode === mode ? '#FFFFFF' : '$color10'
+                        inputMode === mode ? colors.white : colors.textMuted
                       }
                       fontWeight="500">
                       {mode === 'text' ? 'Paste Text' : 'Dataset'}
