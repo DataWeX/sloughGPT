@@ -25,9 +25,7 @@ export default function AdaptersPage() {
   const [evalHistory, setEvalHistory] = useState<LoraEvalResult[]>([])
   const [runningEval, setRunningEval] = useState(false)
 
-  const fetchData = async () => {
-    setLoading(true)
-    setError(null)
+  const refreshData = async () => {
     try {
       const [listRes, qualityRes] = await Promise.all([
         userAdaptersController.list(),
@@ -35,14 +33,9 @@ export default function AdaptersPage() {
       ])
       setStats(listRes.stats)
       setAdapters(listRes.adapters ?? [])
-      try {
-        const evalResults = await loraEvalController.getHistory(10)
-        setEvalHistory(evalResults)
-      } catch { /* optional */ }
+      setQuality(qualityRes)
     } catch (e) {
-      setError(extractErrorMessage(e, 'Failed to load adapters'))
-    } finally {
-      setLoading(false)
+      addToast(extractErrorMessage(e, 'Failed to refresh adapters'), 'error')
     }
   }
 
@@ -93,7 +86,7 @@ export default function AdaptersPage() {
     try {
       const res = await userAdaptersController.prune()
       setAggregateResult(`Pruned ${res.deleted_count} adapters`)
-      await fetchData()
+      await refreshData()
     } catch (err) {
       setAggregateResult(err instanceof Error ? err.message : 'Prune failed')
     } finally {
@@ -105,7 +98,7 @@ export default function AdaptersPage() {
     if (!window.confirm(`Reset adapter for ${userId}? This cannot be undone.`)) return
     try {
       await userAdaptersController.reset(userId)
-      await fetchData()
+      await refreshData()
       addToast(`Adapter for ${userId} reset`, 'success')
     } catch {
       addToast('Failed to reset adapter', 'error')
@@ -136,7 +129,7 @@ export default function AdaptersPage() {
 
   if (error) {
     return (
-      <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" error={error} onRetry={() => void fetchData()}>
+      <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" error={error} onRetry={() => void refreshData()}>
         <></>
       </PageContainer>
     )
@@ -146,7 +139,7 @@ export default function AdaptersPage() {
     <PageContainer
       title="Adapters"
       subtitle="Per-user LoRA adapter management"
-      headerRight={<Button size="sm" variant="ghost" onClick={fetchData}><IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>}
+      headerRight={<Button size="sm" variant="ghost" onClick={refreshData}><IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>}
     >
       {aggregateResult && (
         <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
@@ -183,7 +176,7 @@ export default function AdaptersPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Actions</CardTitle>
-          <Button size="sm" variant="ghost" onClick={fetchData}>
+          <Button size="sm" variant="ghost" onClick={refreshData}>
             <IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </CardHeader>
