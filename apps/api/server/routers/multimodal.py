@@ -509,9 +509,8 @@ class MultimodalRouter:
             from domains.multimodal.diffusion import LatentDiffusionModel
             from domains.multimodal.vae import SloVAE
             from domains.multimodal.text_encoder import TextEncoder
-            import base64
+            import base64, io, numpy as np
             from PIL import Image
-            import io
             if self._vae is None:
                 self._vae = SloVAE(latent_dim=64)
                 self._diffusion = LatentDiffusionModel(latent_dim=64)

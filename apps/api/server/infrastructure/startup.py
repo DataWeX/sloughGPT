@@ -1177,7 +1177,7 @@ def _start_inference_engine(cfg) -> Optional[Any]:
     try:
         proc = subprocess.Popen(
             engine_cmd,
-            stdout=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             cwd=os.getcwd(),
         )
@@ -1280,7 +1280,7 @@ def _make_engine_restart_fn(cfg):
         try:
             proc = subprocess.Popen(
                 engine_cmd,
-                stdout=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 cwd=os.getcwd(),
             )
