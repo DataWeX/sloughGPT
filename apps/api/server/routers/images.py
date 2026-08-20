@@ -316,8 +316,6 @@ class ImagesRouter:
 
         except Exception as e:
             classify_and_raise(e, source="images_generate")
-            logger.error(f"Image generation failed: {e}", extra={"tag": "MODEL"})
-            raise_error(f"Failed to generate image: {e}", "E_INFRA_STARTUP", status_code=500)
 
     async def list_gallery(self) -> dict:
         """List all generated images in the gallery."""
