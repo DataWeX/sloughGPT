@@ -1172,14 +1172,15 @@ class SloNetChatProvider:
         # for it to finish instead of blocking on the lock.
         mat = getattr(self, "_materializing", None)
         if mat is not None and not mat.is_set():
-            for _ in range(600):  # 60s max wait
-                time.sleep(0.1)
-                model = self._model
-                if model is not None:
-                    return model
-            raise RuntimeError(
-                f"Model materialization timed out for '{self._model_id}'"
-            )
+            # Wait for background preload to finish (up to 300s).
+            # Uses Event.wait() instead of busy loop for efficiency.
+            if not mat.wait(timeout=300):
+                raise RuntimeError(
+                    f"Model materialization timed out for '{self._model_id}'"
+                )
+            model = self._model
+            if model is not None:
+                return model
         with lock:
             model = self._model
             if model is not None:
