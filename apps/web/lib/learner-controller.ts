@@ -10,12 +10,23 @@
 import { apiGet, apiPost } from './http-client'
 
 export interface LearnerStatus {
-  learner_active: boolean
-  knowledge_count: number
-  feeds_count: number
-  total_tokens: number
-  last_train?: string
-  last_search?: string
+  soul_name: string
+  total_tokens_ingested: number
+  train_steps_completed: number
+  current_loss: number
+  loss_history: number[]
+  buffer_size: number
+  buffer_capacity: number
+  pending_tokens: number
+  arch: string
+  n_embed: number
+  n_layer: number
+  n_head: number
+  vocab_size: number
+  knowledge: Record<string, unknown>
+  feeds_subscribed: number
+  filter_stats: Record<string, unknown>
+  filter_config: Record<string, unknown>
 }
 
 export interface SearchResult {

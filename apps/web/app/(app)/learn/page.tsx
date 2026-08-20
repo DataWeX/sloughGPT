@@ -138,17 +138,17 @@ export default function LearnPage() {
   return (
     <PageContainer
       title="Learner"
-      subtitle={status ? `${status.knowledge_count} facts · ${status.total_tokens} tokens` : 'Continual web learning'}
+      subtitle={status ? `${status.total_tokens_ingested} tokens · ${status.feeds_subscribed} feeds` : 'Continual web learning'}
       loading={loading}
       toolbar={toolbar}
     >
       {status && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Knowledge', value: status.knowledge_count },
-            { label: 'Tokens', value: status.total_tokens },
-            { label: 'Feeds', value: status.feeds_count },
-            { label: 'Status', value: status.learner_active ? 'Active' : 'Idle' },
+            { label: 'Tokens Ingested', value: status.total_tokens_ingested },
+            { label: 'Train Steps', value: status.train_steps_completed },
+            { label: 'Feeds', value: status.feeds_subscribed },
+            { label: 'Buffer', value: `${status.buffer_size}/${status.buffer_capacity}` },
           ].map(s => (
             <div key={s.label} className="rounded-md bg-muted/30 p-4 text-center">
               <div className="text-xs text-muted-foreground">{s.label}</div>

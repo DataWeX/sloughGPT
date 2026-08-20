@@ -26,21 +26,33 @@ export interface RegistryData {
 
 class RegistryController {
   async list(): Promise<RegisteredModel[]> {
-    const data = await apiGet<{ data?: { models?: RegisteredModel[] }; models?: RegisteredModel[] } | RegisteredModel[]>('/registry/models')
+    const data = await apiGet<{ models?: RegisteredModel[] } | RegisteredModel[]>('/registry/models')
     if (Array.isArray(data)) return data
-    return data?.data?.models ?? data?.models ?? []
+    return data?.models ?? []
   }
 
   async stats(): Promise<RegistryStats | null> {
-    const data = await apiGet<{ data?: RegistryStats } | RegistryStats>('/registry/stats')
+    const data = await apiGet<{
+      models_loaded?: number
+      models_registered?: number
+      healthy?: boolean
+      degraded?: boolean
+      has_errors?: boolean
+      default_model?: string | null
+    }>('/registry/stats')
     if (!data) return null
-    return (data as { data?: RegistryStats }).data ?? data as RegistryStats
+    return {
+      total_models: data.models_registered ?? 0,
+      loaded_models: data.models_loaded ?? 0,
+      failed_models: data.has_errors ? 1 : 0,
+      circuit_breaker_open: data.degraded ?? false,
+    }
   }
 
   async best(): Promise<Record<string, unknown> | null> {
-    const data = await apiGet<{ data?: Record<string, unknown> } | Record<string, unknown>>('/registry/best')
+    const data = await apiGet<{ default_model?: string | null; models_loaded?: number }>('/registry/best')
     if (!data) return null
-    return (data as { data?: Record<string, unknown> }).data ?? data as Record<string, unknown>
+    return data as Record<string, unknown>
   }
 }
 
