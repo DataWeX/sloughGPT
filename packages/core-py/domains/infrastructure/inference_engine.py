@@ -25,6 +25,7 @@ import asyncio
 import collections
 import json
 import logging
+import os
 import selectors
 import socket
 import struct
@@ -85,6 +86,7 @@ class InferenceEngine:
         self._stop = threading.Event()
         self._active_streams: Dict[str, bool] = {}
         self._active_streams_lock = threading.Lock()
+        self._pid_file: Optional[str] = None
 
     @property
     def addr(self) -> tuple:
@@ -131,15 +133,32 @@ class InferenceEngine:
         if self._thread is not None:
             self._thread.join(timeout=10)
 
+        # Remove PID file
+        if self._pid_file is not None:
+            try:
+                os.remove(self._pid_file)
+            except Exception:
+                pass
+
     # ── Internal ──────────────────────────────────────────────────────
 
     def _run(self) -> None:
         """Main loop: load model, bind socket, accept connections."""
+        import os
         try:
             self._load_model()
         except Exception as e:
             logger.error("Inference engine failed to load model: %s", e)
             return
+
+        # Write PID file for external monitoring
+        pid_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".inference_engine.pid")
+        try:
+            with open(pid_path, "w") as f:
+                f.write(str(os.getpid()))
+            self._pid_file = pid_path
+        except Exception:
+            pass
 
         try:
             self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

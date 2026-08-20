@@ -693,7 +693,6 @@ class AutoTrainRouter:
                 get_training_runtime().sync(job_id)
             _finish_cm("completed")
         except Exception as e:
-            classify_and_raise(e, source="auto_train_turbo")
             autotrain_logger.error("SloughGPTTrainer failed: %s", e, extra={"tag": "TRAIN"})
             with _turbo_lock:
                 _turbo_state["status"] = "error"
@@ -704,6 +703,7 @@ class AutoTrainRouter:
                 job["error"] = str(e)
                 get_training_runtime().sync(job_id)
             _finish_cm("failed", str(e))
+            classify_and_raise(e, source="auto_train_turbo")
 
     def _run_turbo_pgq(
         self, job_id: str, tree_id: str, point_library: Any,
@@ -1076,10 +1076,9 @@ class AutoTrainRouter:
                 "provider": "slonet",
             }, message="loaded")
         except Exception as e:
-            classify_and_raise(e, source="load_checkpoint")
             import traceback
             autotrain_logger.error("Failed to load checkpoint %s: %s", cp.name, e, extra={"tag": "TRAIN", "context": {"checkpoint": cp.name, "error": str(e), "traceback": traceback.format_exc()}})
-            raise_error(str(e), details={"name": cp.name})
+            classify_and_raise(e, source="load_checkpoint")
 
     async def download_checkpoint(self, name: str) -> dict:
         """download_checkpoint."""

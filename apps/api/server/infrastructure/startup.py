@@ -1181,8 +1181,21 @@ def _start_inference_engine(cfg) -> Optional[Any]:
             stderr=subprocess.PIPE,
             cwd=os.getcwd(),
         )
+        import collections
         import state as server_state
         server_state._inference_engine_proc = proc
+        server_state._inference_engine_stderr = collections.deque(maxlen=50)
+
+        def _capture_stderr():
+            try:
+                for line in iter(proc.stderr.readline, b""):
+                    server_state._inference_engine_stderr.append(
+                        line.decode(errors="replace").rstrip()
+                    )
+            except Exception:
+                pass
+
+        threading.Thread(target=_capture_stderr, daemon=True, name="engine-stderr").start()
         logger.info(
             "Inference engine subprocess launched (pid=%d, port=%d)", proc.pid, port,
             extra={"tag": "START"},

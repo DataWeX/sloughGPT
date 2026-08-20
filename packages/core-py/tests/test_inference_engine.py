@@ -294,6 +294,7 @@ class TestEngineConcurrency:
         engine._stop = threading.Event()
         engine._active_streams = {}
         engine._active_streams_lock = threading.Lock()
+        engine._pid_file = None
         return engine
 
     def test_concurrent_health_requests(self):
@@ -401,3 +402,212 @@ class TestClientRestart:
         client = InferenceClient(host="127.0.0.1", port=1)
         result = client._try_reconnect()
         assert result is False
+
+
+# ── Full integration: engine + client over TCP ─────────────────────────
+
+class MockProvider:
+    """Minimal provider that simulates generate and chat_stream."""
+
+    def __init__(self):
+        self._loaded = True
+        self._model_id = "mock-model"
+
+    @property
+    def _meta(self):
+        return {"quantized": False}
+
+    def _generate_sync(self, messages, max_tokens=512, temperature=0.8,
+                       top_k=None, top_p=None, repetition_penalty=1.0,
+                       session_id=None):
+        prompt = messages[-1]["content"] if messages else ""
+        return f"echo:{prompt[:50]}"
+
+    async def chat_stream(self, messages, max_tokens=512, temperature=0.7, **kwargs):
+        prompt = messages[-1]["content"] if messages else ""
+        for word in f"stream:{prompt[:20]}".split(":")[-1].split():
+            yield word + " "
+
+
+class TestFullIntegration:
+    """Spin up an engine with a mock provider, connect a client, run requests."""
+
+    def _start_engine_with_mock(self):
+        from domains.infrastructure.inference_engine import InferenceEngine
+        engine = InferenceEngine.__new__(InferenceEngine)
+        engine.model_id = "mock-model"
+        engine.slnc_path = None
+        engine.host = "127.0.0.1"
+        engine.port = 0
+        engine.quantize = False
+        engine.quant_bits = 8
+        engine.quant_mode = "symmetric"
+        engine.quant_clip = 0.999
+        engine._provider = MockProvider()
+        engine._server_socket = None
+        engine._thread = None
+        engine._ready = threading.Event()
+        engine._stop = threading.Event()
+        engine._active_streams = {}
+        engine._active_streams_lock = threading.Lock()
+        engine._pid_file = None
+
+        # Bind and start accept loop manually
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("127.0.0.1", 0))
+        server.listen(4)
+        port = server.getsockname()[1]
+        engine._server_socket = server
+
+        def _accept_loop():
+            engine._ready.set()
+            while not engine._stop.is_set():
+                try:
+                    client, addr = server.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+                t = threading.Thread(
+                    target=engine._handle_client, args=(client, addr), daemon=True
+                )
+                t.start()
+
+        engine._thread = threading.Thread(target=_accept_loop, daemon=True, name="mock-engine")
+        engine._thread.start()
+        return engine, port
+
+    def test_health_roundtrip(self):
+        engine, port = self._start_engine_with_mock()
+        try:
+            from domains.infrastructure.inference_client import InferenceClient
+            client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
+            assert client.connect() is True
+            assert client.model_id == "mock-model"
+            health = client.health()
+            assert health["type"] == "health_ok"
+            assert health["loaded"] is True
+            client.disconnect()
+        finally:
+            engine.stop()
+
+    def test_generate_roundtrip(self):
+        engine, port = self._start_engine_with_mock()
+        try:
+            from domains.infrastructure.inference_client import InferenceClient
+            client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
+            client.connect()
+            import asyncio
+            result = asyncio.run(client.chat(
+                [{"role": "user", "content": "hello world"}],
+                max_tokens=10,
+            ))
+            assert result == "echo:hello world"
+            client.disconnect()
+        finally:
+            engine.stop()
+
+    def test_stream_roundtrip(self):
+        engine, port = self._start_engine_with_mock()
+        try:
+            from domains.infrastructure.inference_client import InferenceClient
+            client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
+            client.connect()
+            import asyncio
+
+            async def _collect():
+                tokens = []
+                async for t in client.chat_stream(
+                    [{"role": "user", "content": "test"}],
+                    max_tokens=5,
+                ):
+                    tokens.append(t)
+                return tokens
+
+            tokens = asyncio.run(_collect())
+            assert len(tokens) > 0
+            assert "".join(tokens).strip() != ""
+            client.disconnect()
+        finally:
+            engine.stop()
+
+    def test_multiple_clients(self):
+        engine, port = self._start_engine_with_mock()
+        try:
+            from domains.infrastructure.inference_client import InferenceClient
+            import asyncio
+
+            results = []
+
+            def _do_request(i):
+                c = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
+                c.connect()
+                r = asyncio.run(c.chat(
+                    [{"role": "user", "content": f"msg{i}"}],
+                    max_tokens=5,
+                ))
+                results.append((i, r))
+                c.disconnect()
+
+            threads = [threading.Thread(target=_do_request, args=(i,)) for i in range(3)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=10)
+
+            assert len(results) == 3
+            for i, r in results:
+                assert r == f"echo:msg{i}"
+        finally:
+            engine.stop()
+
+    def test_client_auto_reconnect(self):
+        engine, port = self._start_engine_with_mock()
+        from domains.infrastructure.inference_client import InferenceClient
+
+        # Shared state for restart fn to find the new engine
+        new_port = [None]
+
+        def _restart():
+            if new_port[0] is None:
+                return None
+            c = InferenceClient.__new__(InferenceClient)
+            c.host = "127.0.0.1"
+            c.port = new_port[0]
+            c.connect_timeout = 2.0
+            c.generate_timeout = 5.0
+            c._restart_fn = None
+            c._socket = None
+            c._lock = threading.Lock()
+            c._model_id = "mock-model"
+            c._loaded = True
+            c._kv_states = {}
+            c._kv_last_access = {}
+            c._kv_max_sessions = 64
+            c._kv_ttl = 3600.0
+            if c.connect():
+                return c
+            return None
+
+        client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0,
+                                 restart_fn=_restart)
+        client.connect()
+
+        # Kill engine
+        engine.stop()
+        time.sleep(0.2)
+
+        # Restart on new port
+        engine2, port2 = self._start_engine_with_mock()
+        new_port[0] = port2
+        try:
+            import asyncio
+            result = asyncio.run(client.chat(
+                [{"role": "user", "content": "reconnect"}],
+                max_tokens=5,
+            ))
+            assert result == "echo:reconnect"
+        finally:
+            client.disconnect()
+            engine2.stop()

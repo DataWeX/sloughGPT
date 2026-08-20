@@ -46,14 +46,15 @@ class JobScheduler:
 
     def remove_job(self, name: str) -> bool:
         with self._lock:
-            if name in self._jobs:
-                self.stop_job(name)
-                del self._jobs[name]
-                del self._collectors[name]
-                del self._stop_events[name]
-                del self._stats[name]
-                return True
-            return False
+            if name not in self._jobs:
+                return False
+        self.stop_job(name)
+        with self._lock:
+            self._jobs.pop(name, None)
+            self._collectors.pop(name, None)
+            self._stop_events.pop(name, None)
+            self._stats.pop(name, None)
+        return True
 
     def start_job(self, name: str) -> bool:
         with self._lock:
@@ -86,7 +87,7 @@ class JobScheduler:
                 run_count += 1
                 if config.max_runs and run_count >= config.max_runs:
                     break
-                stop_event.wait(config.interval)
+                stop_event.wait(min(config.interval, 0.5))
             self._stats[name]["status"] = "stopped"
 
         thread = threading.Thread(target=run_loop, daemon=True, name=f"job:{name}")

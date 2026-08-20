@@ -626,8 +626,6 @@ class InferenceRouter:
             except Exception as e:
                 _mgr.finish(_op_id, str(e))
                 classify_and_raise(e, source="generate_stream")
-                yield sse_error("generate", "STREAMING", err.user_message)
-                return
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:
 

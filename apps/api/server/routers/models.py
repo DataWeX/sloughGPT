@@ -918,11 +918,12 @@ class ModelsRouter:
         """Get standalone inference engine status.
 
         Returns whether the engine subprocess is enabled, its PID, whether
-        the client is connected, and the model id.
+        the client is connected, the model id, and the last 50 lines of stderr.
         """
         import state as server_state
         proc = getattr(server_state, "_inference_engine_proc", None)
         provider = getattr(server_state, "provider", None)
+        stderr_tail = list(getattr(server_state, "_inference_engine_stderr", []))
         from domains.infrastructure.inference_client import InferenceClient
         is_client = isinstance(provider, InferenceClient)
         pid = proc.pid if proc is not None else None
@@ -939,6 +940,7 @@ class ModelsRouter:
             "alive": alive,
             "model_id": getattr(provider, "model_id", None) if is_client else None,
             "health": health,
+            "stderr_tail": stderr_tail[-20:],
         })
 
 
