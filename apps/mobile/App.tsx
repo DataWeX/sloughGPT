@@ -42,6 +42,12 @@ import {LearnScreen} from './src/screens/LearnScreen';
 import {AgentsScreen} from './src/screens/AgentsScreen';
 import {MultimodalScreen} from './src/screens/MultimodalScreen';
 import {ModelDetailScreen} from './src/screens/ModelDetailScreen';
+import {ErrorsScreen} from './src/screens/ErrorsScreen';
+import {SecurityScreen} from './src/screens/SecurityScreen';
+import {ImagesScreen} from './src/screens/ImagesScreen';
+import {ExperimentsScreen} from './src/screens/ExperimentsScreen';
+import {FilesScreen} from './src/screens/FilesScreen';
+import {RegistryScreen} from './src/screens/RegistryScreen';
 import {useSettingsStore} from './src/stores/settings-store';
 import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
@@ -85,6 +91,12 @@ function ToolsStack() {
       <Stack.Screen name="Agents" component={AgentsScreen} />
       <Stack.Screen name="Multimodal" component={MultimodalScreen} />
       <Stack.Screen name="ModelDetail" component={ModelDetailScreen} />
+      <Stack.Screen name="Errors" component={ErrorsScreen} />
+      <Stack.Screen name="Security" component={SecurityScreen} />
+      <Stack.Screen name="Images" component={ImagesScreen} />
+      <Stack.Screen name="Experiments" component={ExperimentsScreen} />
+      <Stack.Screen name="Files" component={FilesScreen} />
+      <Stack.Screen name="Registry" component={RegistryScreen} />
     </Stack.Navigator>
   );
 }
@@ -117,6 +129,12 @@ function SettingsStack() {
       <Stack.Screen name="Agents" component={AgentsScreen} />
       <Stack.Screen name="Multimodal" component={MultimodalScreen} />
       <Stack.Screen name="ModelDetail" component={ModelDetailScreen} />
+      <Stack.Screen name="Errors" component={ErrorsScreen} />
+      <Stack.Screen name="Security" component={SecurityScreen} />
+      <Stack.Screen name="Images" component={ImagesScreen} />
+      <Stack.Screen name="Experiments" component={ExperimentsScreen} />
+      <Stack.Screen name="Files" component={FilesScreen} />
+      <Stack.Screen name="Registry" component={RegistryScreen} />
     </Stack.Navigator>
   );
 }

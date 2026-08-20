@@ -26,6 +26,12 @@ export type SettingsStackParamList = {
   Agents: undefined;
   Multimodal: undefined;
   ModelDetail: {modelId: string};
+  Errors: undefined;
+  Security: undefined;
+  Images: undefined;
+  Experiments: undefined;
+  Files: undefined;
+  Registry: undefined;
 };
 
 export type ToolsStackParamList = {
@@ -51,6 +57,12 @@ export type ToolsStackParamList = {
   Agents: undefined;
   Multimodal: undefined;
   ModelDetail: {modelId: string};
+  Errors: undefined;
+  Security: undefined;
+  Images: undefined;
+  Experiments: undefined;
+  Files: undefined;
+  Registry: undefined;
 };
 
 export type SettingsScreenProps<T extends keyof SettingsStackParamList> =
