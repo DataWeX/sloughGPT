@@ -19,6 +19,9 @@ from .validators import (
 from .scheduler import (
     JobConfig, JobScheduler, CollectorMonitor, CollectorExporter,
 )
+from .builders import (
+    CollectorBuilder, DataSource, DataSink, DataTransformer,
+)
 from .pipeline import CollectionPipeline
 from .registry import CollectionRegistry, get_registry
 from .config import SourceConfig, StoreConfig, FilterConfig, PipelineConfig
@@ -71,6 +74,7 @@ __all__ = [
     "Schema", "DataValidator", "DataEnricher", "EnrichmentRule",
     "RateLimiter", "CallableSource", "CallableStore", "CollectorRunner",
     "JobConfig", "JobScheduler", "CollectorMonitor", "CollectorExporter",
+    "CollectorBuilder", "DataSource", "DataSink", "DataTransformer",
     "CollectionPipeline", "CollectionRegistry", "get_registry",
     "SourceConfig", "StoreConfig", "FilterConfig", "PipelineConfig",
     "collect_file", "collect_url", "collect_rss", "collect_api", "collect_records",
