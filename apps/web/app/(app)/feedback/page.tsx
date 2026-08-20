@@ -155,7 +155,12 @@ export default function FeedbackPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No feedback data yet.</p>
+                <div className="text-center py-4 text-sm text-muted-foreground space-y-2">
+                  <div>No feedback data yet.</div>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+                    Start Chatting
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
