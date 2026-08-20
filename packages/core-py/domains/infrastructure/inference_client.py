@@ -146,13 +146,12 @@ class InferenceClient:
         **kwargs,
     ) -> AsyncIterator[str]:
         """Streaming chat — yields token strings."""
-        prompt = self._build_prompt(messages)
         req_id = str(uuid.uuid4())
 
         msg = {
             "type": "stream_start",
             "id": req_id,
-            "prompt": prompt,
+            "messages": messages,
             "params": {
                 "max_new_tokens": max_tokens,
                 "temperature": temperature,
@@ -207,21 +206,6 @@ class InferenceClient:
                 yield token
         finally:
             done.set()
-
-    def _build_prompt(self, messages: List[Dict[str, str]]) -> str:
-        """Build a chat prompt from messages list."""
-        parts = []
-        for msg in messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            if role == "system":
-                parts.append(f"<|system|>\n{content}<|end|>")
-            elif role == "assistant":
-                parts.append(f"<|assistant|>\n{content}<|end|>")
-            else:
-                parts.append(f"<|user|>\n{content}<|end|>")
-        parts.append("<|assistant|>\n")
-        return "\n".join(parts)
 
     def _send_and_recv(self, msg: dict, timeout: float = 30.0) -> Optional[dict]:
         """Send a message and wait for a response (thread-safe)."""
