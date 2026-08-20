@@ -1199,24 +1199,6 @@ class SloNetChatProvider:
             if self._meta is not None:
                 self._meta["quantized"] = eager._quant_engine is not None
                 self._meta["lazy"] = True
-            # Stop the ProcessGuard to release its subprocess copy — parent
-            # now holds the weights and would OOM with both copies resident.
-            try:
-                server = getattr(self, "_server", None)
-                if server is not None:
-                    guard = getattr(server, "_process_guard", None)
-                    if guard is not None and getattr(guard, "alive", False):
-                        guard.stop()
-                        logger.info(
-                            "Stopped ProcessGuard after parent materialization "
-                            "(subprocess copy released)",
-                            extra={"tag": "INF"},
-                        )
-            except Exception as exc:
-                logger.debug(
-                    "Guard stop after materialization failed (non-fatal): %s",
-                    exc, extra={"tag": "INF"},
-                )
             logger.info(
                 "SloNetChatProvider: %s weights now resident in parent (lazy load)",
                 self._model_id, extra={"tag": "INF"},
@@ -1229,6 +1211,9 @@ class SloNetChatProvider:
         Used by parent preload to load weights without holding _lazy_lock
         for the entire duration. Sets _materializing flag so other threads
         wait instead of blocking on the lock.
+
+        Note: Guard lifecycle is managed by the caller (startup.py preload
+        thread), not by this method.
         """
         model = getattr(self, "_model", None)
         if model is not None:
@@ -1254,23 +1239,6 @@ class SloNetChatProvider:
             if self._meta is not None:
                 self._meta["quantized"] = eager._quant_engine is not None
                 self._meta["lazy"] = True
-            # Stop the ProcessGuard to release its subprocess copy
-            try:
-                server = getattr(self, "_server", None)
-                if server is not None:
-                    guard = getattr(server, "_process_guard", None)
-                    if guard is not None and getattr(guard, "alive", False):
-                        guard.stop()
-                        logger.info(
-                            "Stopped ProcessGuard after parent materialization "
-                            "(subprocess copy released)",
-                            extra={"tag": "INF"},
-                        )
-            except Exception as exc:
-                logger.debug(
-                    "Guard stop after materialization failed (non-fatal): %s",
-                    exc, extra={"tag": "INF"},
-                )
             logger.info(
                 "SloNetChatProvider: %s weights now resident (materialize)",
                 self._model_id, extra={"tag": "INF"},

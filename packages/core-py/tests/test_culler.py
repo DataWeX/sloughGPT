@@ -2,10 +2,10 @@ import json
 import os
 import tempfile
 
-from domains.culler import (
-    Record, FileSource, MemoryStore, CallbackStore, Culler,
+from domains.collections import (
+    Record, FileSource, MemoryStore, CallbackStore, Collector,
     LengthFilter, DedupFilter, KeywordFilter, RegexFilter,
-    LanguageFilter, FilterChain, CullerPipeline, CullerRegistry,
+    LanguageFilter, FilterChain, CollectionPipeline, CollectionRegistry,
 )
 
 
@@ -172,14 +172,14 @@ class TestFilters:
         assert chain.stats["rejected"] == 1
 
 
-class TestCuller:
+class TestCollector:
     def test_collect_file_to_memory(self, tmp_path):
         src_file = tmp_path / "input.jsonl"
         src_file.write_text('{"content": "a"}\n{"content": "b"}\n')
         source = FileSource(str(src_file))
         store = MemoryStore()
-        culler = Culler(source, store)
-        count = culler.collect()
+        collector = Collector(source, store)
+        count = collector.collect()
         assert count == 2
         assert store.count() == 2
 
@@ -188,8 +188,8 @@ class TestCuller:
         src_file.write_text("short\nthis is a longer line that passes the filter\n")
         source = FileSource(str(src_file))
         store = MemoryStore()
-        culler = Culler(source, store, [LengthFilter(min_length=20)])
-        count = culler.collect()
+        collector = Collector(source, store, [LengthFilter(min_length=20)])
+        count = collector.collect()
         assert count == 1
 
     def test_collect_with_dedup(self, tmp_path):
@@ -197,28 +197,27 @@ class TestCuller:
         src_file.write_text("hello\nhello\nworld\n")
         source = FileSource(str(src_file))
         store = MemoryStore()
-        culler = Culler(source, store, [DedupFilter()])
-        count = culler.collect()
+        collector = Collector(source, store, [DedupFilter()])
+        count = collector.collect()
         assert count == 2
 
 
-class TestCullerPipeline:
+class TestCollectionPipeline:
     def test_pipeline_collect(self, tmp_path):
         src_file = tmp_path / "input.jsonl"
         src_file.write_text('{"content": "alpha"}\n{"content": "beta"}\n')
-        out_file = tmp_path / "output.jsonl"
-        pipeline = CullerPipeline(
+        pipeline = CollectionPipeline(
             source=FileSource(str(src_file)),
             store=MemoryStore(),
         )
         count = pipeline.collect()
         assert count == 2
-        assert pipeline.stats["culler"]["collected"] == 2
+        assert pipeline.stats["collector"]["collected"] == 2
 
     def test_pipeline_read(self, tmp_path):
         src_file = tmp_path / "input.txt"
         src_file.write_text("line1\nline2\n")
-        pipeline = CullerPipeline(
+        pipeline = CollectionPipeline(
             source=FileSource(str(src_file)),
             store=MemoryStore(),
         )
@@ -226,16 +225,16 @@ class TestCullerPipeline:
         assert len(records) == 2
 
 
-class TestCullerRegistry:
+class TestCollectionRegistry:
     def test_register_and_get(self):
-        reg = CullerRegistry()
+        reg = CollectionRegistry()
         src = MemoryStore()
         reg.register_store("mem", src)
         assert reg.get_store("mem") is src
         assert reg.get_store("nope") is None
 
     def test_create_pipeline(self, tmp_path):
-        reg = CullerRegistry()
+        reg = CollectionRegistry()
         src_file = tmp_path / "in.txt"
         src_file.write_text("hello\n")
         reg.register_source("f", FileSource(str(src_file)))
@@ -246,7 +245,7 @@ class TestCullerRegistry:
         assert count == 1
 
     def test_list(self):
-        reg = CullerRegistry()
+        reg = CollectionRegistry()
         reg.register_source("s1", None)
         reg.register_store("st1", None)
         assert "s1" in reg.list_sources()
