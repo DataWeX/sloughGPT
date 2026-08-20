@@ -57,4 +57,4 @@ export type SettingsScreenProps<T extends keyof SettingsStackParamList> =
   StackScreenProps<SettingsStackParamList, T>;
 
 export type ToolsScreenProps<T extends keyof ToolsStackParamList> =
-  NativeStackScreenProps<ToolsStackParamList, T>;
+  StackScreenProps<ToolsStackParamList, T>;

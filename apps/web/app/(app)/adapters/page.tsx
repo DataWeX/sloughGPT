@@ -27,6 +27,7 @@ export default function AdaptersPage() {
 
   const refreshData = async () => {
     try {
+      setError(null)
       const [listRes, qualityRes] = await Promise.all([
         userAdaptersController.list(),
         userAdaptersController.getQuality(3),

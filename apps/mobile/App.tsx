@@ -1,6 +1,11 @@
 import React, {useEffect, useState} from 'react';
 import {LogBox, StatusBar, useColorScheme} from 'react-native';
 
+try {
+  const Screens = require('react-native-screens');
+  if (Screens.enableScreens) Screens.enableScreens(false);
+} catch (_) {}
+
 if (__DEV__) {
   LogBox.ignoreLogs([
     'Non-serializable values were found in the navigation state',

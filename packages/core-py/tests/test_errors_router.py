@@ -24,6 +24,8 @@ from routers.errors import ErrorsRouter  # noqa: E402
 def _app(er: ErrorsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(er.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 

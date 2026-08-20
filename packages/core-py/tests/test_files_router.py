@@ -28,6 +28,8 @@ from routers.files import FilesRouter  # noqa: E402
 def _app(fr: FilesRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(fr.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 

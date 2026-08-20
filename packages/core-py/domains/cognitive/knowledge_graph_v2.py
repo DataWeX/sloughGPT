@@ -333,7 +333,7 @@ class KnowledgeGraph:
             if obj_id in self.object_index:
                 for pred, subjects in self.object_index[obj_id].items():
                     for sub in subjects:
-                        results.append(self.facts[(sub, predicate, obj_id)])
+                        results.append(self.facts[(sub, pred, obj_id)])
 
         return results
 

@@ -78,7 +78,7 @@ function mockHistoryFetch() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('fetch', mockFetch)
-  mockList.mockResolvedValue(mockStats)
+  mockList.mockResolvedValue({ adapters: mockQuality.adapters, stats: mockStats })
   mockGetQuality.mockResolvedValue(mockQuality)
   mockRunEval.mockResolvedValue({ status: 'started' })
   mockGetHistory.mockResolvedValue([])
@@ -121,6 +121,7 @@ describe('AdaptersPage', () => {
   })
 
   it('shows empty state when no adapters exist', async () => {
+    mockList.mockResolvedValue({ adapters: [], stats: mockStats })
     mockGetQuality.mockResolvedValue({ count: 0, adapters: [] })
     render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getByText(/No adapters yet/)).toBeTruthy() })
@@ -229,12 +230,12 @@ describe('AdaptersPage', () => {
     await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Eval failed', 'error') })
   })
 
-  it('loads eval history on refresh', async () => {
+  it('loads eval history after running eval', async () => {
+    mockRunEval.mockResolvedValue({ status: 'done' })
     mockGetHistory.mockResolvedValue([{ adapter_path: 'best_aggregated.npz', verdict: 'better' }])
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Adapter Stats')).toBeTruthy() })
-    expect(screen.queryByText('best_aggregated.npz')).toBeNull()
-    await act(async () => { screen.getAllByTestId('icon-refresh')[0].click() })
+    await waitFor(() => { expect(screen.getByText('Run Eval')).toBeTruthy() })
+    await act(async () => { screen.getByText('Run Eval').click() })
     await waitFor(() => { expect(screen.getByText('best_aggregated.npz')).toBeTruthy() })
   })
 })

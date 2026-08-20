@@ -3,7 +3,7 @@ import {FlatList, Pressable, RefreshControl} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useRoute, useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import type {StackNavigationProp} from '@react-navigation/stack';
 import type {ToolsStackParamList} from '../navigation/types';
 import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
@@ -27,7 +27,7 @@ interface DatasetPreview {
 
 export function DatasetDetailScreen() {
   const route = useRoute();
-  const navigation = useNavigation<NativeStackNavigationProp<ToolsStackParamList>>();
+  const navigation = useNavigation<StackNavigationProp<ToolsStackParamList>>();
   const colors = useColors();
   const {datasetId} = route.params as {datasetId: string};
   const [dataset, setDataset] = useState<Dataset | null>(null);

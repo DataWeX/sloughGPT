@@ -2,7 +2,7 @@ import React, {useEffect, useState, useCallback} from 'react';
 import {FlatList, Pressable, RefreshControl, Alert, TextInput, Modal} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import type {StackNavigationProp} from '@react-navigation/stack';
 import type {ToolsStackParamList} from '../navigation/types';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
@@ -15,7 +15,7 @@ import type {Dataset} from '../types';
 
 export function DatasetsScreen() {
   const colors = useColors();
-  const navigation = useNavigation<NativeStackNavigationProp<ToolsStackParamList>>();
+  const navigation = useNavigation<StackNavigationProp<ToolsStackParamList>>();
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

@@ -37,6 +37,8 @@ def _mock_ctrl(**overrides) -> MagicMock:
 def _app(cr: ConfigRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(cr.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 
