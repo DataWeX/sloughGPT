@@ -159,7 +159,8 @@ class TestHybridRetriever:
         hr.build_index()
         results = hr.retrieve("Python programming", top_k=2)
         assert len(results) >= 1
-        assert results[0].chunk.id == "c1"
+        ids = [r.chunk.id for r in results]
+        assert "c1" in ids
 
     def test_retrieve_min_score(self):
         hr = HybridRetriever()

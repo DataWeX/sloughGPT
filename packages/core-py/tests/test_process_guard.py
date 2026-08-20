@@ -223,3 +223,159 @@ class TestCreateSloGuardFactory:
             assert guard._quantize is True
             assert guard._quant_bits == 4
             assert guard._quant_mode == "asymmetric"
+
+
+# ── Lifecycle tests (mocked worker) ────────────────────────────────────
+
+class TestProcessGuardStartStop:
+    def test_start_launches_worker(self):
+        guard = ProcessGuard(max_restarts=1, restart_delay=0.0)
+        mock_worker = MagicMock()
+        mock_worker.alive = True
+        guard._launch_worker = MagicMock()
+        guard._worker = mock_worker
+        guard.start()
+        assert guard._monitor_thread is not None
+        guard._stop_monitor.set()
+        guard._worker.stop()
+
+    def test_stop_clears_worker(self):
+        guard = ProcessGuard()
+        mock_worker = MagicMock()
+        mock_worker.alive = True
+        guard._launch_worker = MagicMock()
+        guard._worker = mock_worker
+        guard.start()
+        guard.stop()
+        assert guard._worker is None
+        assert guard._monitor_thread is None
+
+    def test_stop_without_worker(self):
+        guard = ProcessGuard()
+        guard.stop()
+        assert guard._worker is None
+
+
+class TestProcessGuardGenerate:
+    def test_generate_returns_result(self):
+        guard = ProcessGuard()
+        mock_worker = MagicMock()
+        mock_worker.alive = True
+        mock_worker.generate.return_value = {"text": "hello", "tokens": 1}
+        guard._worker = mock_worker
+        result = guard.generate("test prompt")
+        assert result["text"] == "hello"
+        assert guard._requests_served == 1
+
+    def test_generate_increments_requests(self):
+        guard = ProcessGuard()
+        mock_worker = MagicMock()
+        mock_worker.alive = True
+        mock_worker.generate.return_value = {}
+        guard._worker = mock_worker
+        guard.generate("a")
+        guard.generate("b")
+        assert guard._requests_served == 2
+
+    def test_generate_stream_returns_tokens(self):
+        guard = ProcessGuard()
+        mock_worker = MagicMock()
+        mock_worker.alive = True
+
+        def fake_stream(prompt, **kwargs):
+            yield "token1"
+            yield "token2"
+            return {"tokens_generated": 2}
+
+        mock_worker.generate_stream = fake_stream
+        guard._worker = mock_worker
+        tokens = list(guard.generate_stream("test"))
+        assert tokens == ["token1", "token2"]
+
+    def test_generate_recover_from_stall(self):
+        from domains.infrastructure.model_worker import WorkerStreamStalledError
+        guard = ProcessGuard(max_restarts=3, restart_delay=0.0)
+        mock_worker = MagicMock()
+        mock_worker.alive = True
+        mock_worker.generate.side_effect = WorkerStreamStalledError("stall")
+        guard._worker = mock_worker
+        guard._launch_worker = MagicMock()
+        with pytest.raises(WorkerStreamStalledError):
+            guard.generate("test")
+        assert guard._restart_count == 1
+
+
+class TestProcessGuardRestartWorker:
+    def test_restart_fires_crash_callbacks(self):
+        guard = ProcessGuard(max_restarts=3, restart_delay=0.0)
+        cb = MagicMock()
+        guard.on_crash(cb)
+        guard._launch_worker = MagicMock()
+        guard._restart_worker_locked("crash", fire_callbacks=True)
+        cb.assert_called_once_with(guard.worker_id)
+
+    def test_restart_fires_restart_callbacks(self):
+        guard = ProcessGuard(max_restarts=3, restart_delay=0.0)
+        cb = MagicMock()
+        guard.on_restart(cb)
+        guard._launch_worker = MagicMock()
+        guard._restart_worker_locked("restart", fire_callbacks=True)
+        cb.assert_called_once_with(guard.worker_id)
+
+    def test_restart_increments_count(self):
+        guard = ProcessGuard(max_restarts=3, restart_delay=0.0)
+        guard._launch_worker = MagicMock()
+        guard._restart_worker_locked("test")
+        assert guard._restart_count == 1
+
+    def test_restart_callback_exception_does_not_propagate(self):
+        guard = ProcessGuard(max_restarts=3, restart_delay=0.0)
+        guard.on_crash(lambda wid: 1 / 0)  # type: ignore
+        guard._launch_worker = MagicMock()
+        guard._restart_worker_locked("crash", fire_callbacks=True)
+        assert guard._restart_count == 1
+
+
+class TestProcessGuardLoadAdapter:
+    def test_load_adapter_not_alive(self):
+        guard = ProcessGuard()
+        with pytest.raises(RuntimeError, match="not alive"):
+            guard.load_adapter("/path/adapter")
+
+    def test_unload_adapter_not_alive(self):
+        guard = ProcessGuard()
+        with pytest.raises(RuntimeError, match="not alive"):
+            guard.unload_adapter()
+
+
+class TestProcessGuardMemoryMb:
+    def test_memory_mb_no_worker(self):
+        guard = ProcessGuard()
+        assert guard._memory_mb() is None
+
+    def test_memory_mb_with_worker(self):
+        guard = ProcessGuard()
+        mock_process = MagicMock()
+        mock_process.memory_info.return_value.rss = 1024 * 1024 * 500
+        mock_worker = MagicMock()
+        mock_worker._process.pid = 12345
+        guard._worker = mock_worker
+        with patch.dict("sys.modules", {"psutil": MagicMock(Process=MagicMock(return_value=mock_process))}):
+            result = guard._memory_mb()
+        assert result == 500.0
+
+    def test_memory_mb_psutil_not_installed(self):
+        guard = ProcessGuard()
+        mock_worker = MagicMock()
+        mock_worker._process.pid = 12345
+        guard._worker = mock_worker
+        with patch.dict("sys.modules", {"psutil": None}):
+            result = guard._memory_mb()
+        assert result is None
+
+    def test_memory_mb_no_process(self):
+        guard = ProcessGuard()
+        mock_worker = MagicMock()
+        mock_worker._process = None
+        guard._worker = mock_worker
+        assert guard._memory_mb() is None
