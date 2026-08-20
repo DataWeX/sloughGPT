@@ -244,9 +244,9 @@ export default function FeedbackPage() {
             <CardContent>
               {trainStats ? (
                 <KpiGrid>
-                  <StatCard label="Feedback Pairs" value={String(trainStats.feedback_pairs ?? 0)} />
+                  <StatCard label="Training Jobs" value={String(trainStats.feedback_pairs ?? 0)} />
                   <StatCard label="Last Training" value={trainStats.last_training ? new Date(trainStats.last_training).toLocaleDateString() : 'Never'} />
-                  <StatCard label="Quality Score" value={trainStats.quality_score != null ? `${(trainStats.quality_score * 100).toFixed(1)}%` : '—'} />
+                  <StatCard label="Final Loss" value={trainStats.quality_score != null ? trainStats.quality_score.toFixed(3) : '—'} />
                 </KpiGrid>
               ) : (
                 <div className="text-center py-4 text-sm text-muted-foreground">

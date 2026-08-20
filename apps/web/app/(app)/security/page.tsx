@@ -18,7 +18,8 @@ interface AuditLog {
 }
 
 interface AuditResponse {
-  data?: { logs?: AuditLog[] }
+  logs?: AuditLog[]
+  count?: number
 }
 
 function mergeLogs(a: AuditLog[], b: AuditLog[]): AuditLog[] {
@@ -55,9 +56,9 @@ export default function SecurityPage() {
         apiGet<AuditResponse>(auditUrl).catch(() => null),
         apiGet<{ data?: { count: number; configured: boolean } } | { count: number; configured: boolean }>('/security/keys').catch(() => null),
       ])
-      setLogs(logsRes?.data?.logs ?? [])
-      const keysData = keysRes && 'data' in keysRes && keysRes.data ? keysRes.data : keysRes
-      setKeyInfo(keysData as { count: number; configured: boolean } | null)
+      setLogs(logsRes?.logs ?? [])
+      const keysData = keysRes && 'count' in keysRes ? keysRes : null
+      setKeyInfo(keysData)
     } catch {
       addToast('Failed to load security data', 'error')
     } finally {
@@ -82,7 +83,7 @@ export default function SecurityPage() {
       if (!oldest) return
       const before = encodeURIComponent(oldest)
       const res = await apiGet<AuditResponse>(`/security/audit?history=true&limit=100&before=${before}${eventParam()}`)
-      const older = res?.data?.logs ?? []
+      const older = res?.logs ?? []
       setLogs(prev => mergeLogs(prev, older))
     } catch {
       addToast('Failed to load older audit logs', 'error')
