@@ -1,61 +1,85 @@
-"""Tests for domains.collections.config — SourceConfig, StoreConfig, FilterConfig, PipelineConfig."""
+"""Tests for domains.collections.config — pipeline configuration dataclasses.
 
-from domains.collections.config import SourceConfig, StoreConfig, FilterConfig, PipelineConfig
+Covers: SourceConfig, StoreConfig, FilterConfig, PipelineConfig defaults and custom values.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+_core_dir = str(Path(__file__).resolve().parents[2])
+if _core_dir not in sys.path:
+    sys.path.insert(0, _core_dir)
+
+from domains.collections.config import (
+    SourceConfig,
+    StoreConfig,
+    FilterConfig,
+    PipelineConfig,
+)
 
 
 class TestSourceConfig:
     def test_defaults(self):
-        sc = SourceConfig()
-        assert sc.type == "file"
-        assert sc.path == ""
-        assert sc.timeout == 30
-        assert sc.poll_interval == 60.0
+        c = SourceConfig()
+        assert c.type == "file"
+        assert c.path == ""
+        assert c.url == ""
+        assert c.timeout == 30
+        assert c.poll_interval == 60.0
+        assert c.headers == {}
 
     def test_custom(self):
-        sc = SourceConfig(type="url", url="http://x", timeout=60)
-        assert sc.type == "url"
-        assert sc.url == "http://x"
+        c = SourceConfig(type="url", url="https://example.com", timeout=60)
+        assert c.type == "url"
+        assert c.url == "https://example.com"
+        assert c.timeout == 60
 
 
 class TestStoreConfig:
     def test_defaults(self):
-        sc = StoreConfig()
-        assert sc.type == "file"
-        assert sc.max_size == 10000
+        c = StoreConfig()
+        assert c.type == "file"
+        assert c.path == ""
+        assert c.max_size == 10000
 
     def test_custom(self):
-        sc = StoreConfig(type="memory", max_size=100)
-        assert sc.type == "memory"
-        assert sc.max_size == 100
+        c = StoreConfig(type="sqlite", path="/tmp/db.sqlite", max_size=50000)
+        assert c.type == "sqlite"
+        assert c.max_size == 50000
 
 
 class TestFilterConfig:
     def test_defaults(self):
-        fc = FilterConfig()
-        assert fc.type == "length"
-        assert fc.min_length == 10
-        assert fc.keywords == []
+        c = FilterConfig()
+        assert c.type == "length"
+        assert c.min_length == 10
+        assert c.max_length == 100000
+        assert c.keywords == []
+        assert c.mode == "include"
 
     def test_custom(self):
-        fc = FilterConfig(type="keyword", keywords=["python"], mode="include")
-        assert fc.type == "keyword"
-        assert fc.keywords == ["python"]
+        c = FilterConfig(type="keyword", keywords=["python", "test"], mode="exclude")
+        assert c.keywords == ["python", "test"]
+        assert c.mode == "exclude"
 
 
 class TestPipelineConfig:
     def test_defaults(self):
-        pc = PipelineConfig()
-        assert pc.name == ""
-        assert pc.filters == []
-        assert pc.max_rounds is None
+        c = PipelineConfig()
+        assert c.name == ""
+        assert c.collect_interval == 0.0
+        assert c.max_rounds is None
 
     def test_nested(self):
-        pc = PipelineConfig(
-            name="test",
+        c = PipelineConfig(
+            name="test_pipeline",
             source=SourceConfig(type="url"),
             store=StoreConfig(type="memory"),
             filters=[FilterConfig(type="length")],
         )
-        assert pc.source.type == "url"
-        assert pc.store.type == "memory"
-        assert len(pc.filters) == 1
+        assert c.source.type == "url"
+        assert c.store.type == "memory"
+        assert len(c.filters) == 1
