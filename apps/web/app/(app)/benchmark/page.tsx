@@ -17,7 +17,7 @@ export default function BenchmarkPage() {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('metrics')
   const [metrics, setMetrics] = useState<BenchmarkResult | null>(null)
-  const [quality, setQuality] = useState<{ coherence_score: number; quality_score: number; repetition_rate: number } | null>(null)
+  const [quality, setQuality] = useState<{ coherence_score: number; quality_score: number; repetition_rate: number; total_responses: number; avg_length: number } | null>(null)
   const [responses, setResponses] = useState<LoggedBenchmarkResponse[]>([])
   const [stats, setStats] = useState<{ total: number; avg_tokens: number } | null>(null)
   const [loading, setLoading] = useState(true)

@@ -5,7 +5,7 @@ import type { BenchmarkResult } from '@/lib/benchmark-controller'
 
 interface BenchmarkInsightsCardProps {
   metrics: BenchmarkResult | null
-  quality: { coherence_score: number; quality_score: number; repetition_rate: number } | null
+  quality: { coherence_score: number; quality_score: number; repetition_rate: number; total_responses?: number; avg_length?: number } | null
   stats: { total: number; avg_tokens: number } | null
 }
 

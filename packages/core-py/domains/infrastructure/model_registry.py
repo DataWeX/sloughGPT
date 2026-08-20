@@ -43,8 +43,8 @@ class ModelRegistry:
             from .event_bus import get_event_bus
             bus = get_event_bus()
             bus.emit_sync(event, {"model_id": model_id, **extra}, source="model_registry")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("EventBus emit failed for %s/%s: %s", event, model_id, exc, extra={"tag": "INFRA"})
 
     # --- Registration ---
 

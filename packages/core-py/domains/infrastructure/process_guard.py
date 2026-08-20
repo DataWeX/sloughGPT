@@ -360,9 +360,15 @@ class ProcessGuard:
             time.sleep(self.health_check_interval)
             if self._stop_monitor.is_set():
                 break
-            if self._worker is None:
+            # Snapshot worker reference under the restart lock to avoid racing
+            # with _restart_worker_locked() which swaps self._worker via
+            # _launch_worker().
+            with self._restart_lock:
+                worker = self._worker
+                restarts_left = self._restart_count < self.max_restarts
+            if worker is None:
                 continue
-            if not self._worker.alive and self._restart_count < self.max_restarts:
+            if not worker.alive and restarts_left:
                 self._restart_worker("died", fire_callbacks=True)
 
 

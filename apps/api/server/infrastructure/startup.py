@@ -20,6 +20,8 @@ import importlib
 import logging
 import os
 import sys
+import threading
+import time
 from typing import Any, Optional
 
 from fastapi import FastAPI
@@ -338,9 +340,10 @@ class StartupOrchestrator:
             if _try_lazy_guard_autoload(cfg):
                 _sync_soul_traits()
                 logger.info(
-                    "Lazy-guard autoload ready: %s (parent weights deferred)",
+                    "Lazy-guard autoload ready: %s (parent weights deferred, background preload starting)",
                     cfg.autoload_model, extra={"tag": "START"},
                 )
+                _start_parent_preload(cfg.autoload_model)
                 return
 
             try:
@@ -715,6 +718,60 @@ def _sync_soul_traits():
             update_personality_traits(current.personality)
     except Exception as e:
         logger.debug("Failed to sync soul traits to personality processor: %s", e, extra={"tag": "START"})
+
+
+def _start_parent_preload(model_type: str):
+    """Background preload of parent weights after lazy-guard autoload.
+
+    When lazy-guard starts, the guard subprocess owns the weights while the
+    parent stays near-idle.  Streaming requests (/chat, /chat/stream) bypass
+    the guard and call ``_acquire_model()`` which materializes weights
+    synchronously — cold-start latency equal to the full SLNC→SloNet
+    conversion time (~10–70 s depending on model size and cache state).
+
+    This function spawns a daemon thread that first stops the guard (releasing
+    the subprocess copy to avoid double-memory OOM), then materializes the
+    parent weights.  During preload, requests that arrive will block on the
+    lazy lock until the parent is ready — the same as a cold start but
+    without the risk of two copies coexisting.
+    """
+    import state as server_state
+
+    def _preload():
+        try:
+            provider = getattr(server_state, "provider", None)
+            if provider is None:
+                logger.debug("Parent preload: no provider on server_state, skipping", extra={"tag": "START"})
+                return
+
+            # Stop the guard FIRST to release its subprocess copy.
+            # Keeping both guard + parent in memory causes OOM on machines
+            # with <=16GB RAM (guard ~4GB + parent ~4GB = ~8GB+ resident).
+            try:
+                server = getattr(provider, "_server", None)
+                if server is not None:
+                    guard = getattr(server, "_process_guard", None)
+                    if guard is not None and getattr(guard, "alive", False):
+                        guard.stop()
+                        logger.info(
+                            "Parent preload: stopped guard first (release subprocess copy)",
+                            extra={"tag": "START"},
+                        )
+            except Exception as exc:
+                logger.debug("Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"})
+
+            # Now materialize the parent — only one model copy in memory.
+            _st = time.monotonic()
+            model = provider.materialize_model()
+            elapsed = time.monotonic() - _st
+            logger.info(
+                "Parent preload complete: %s in %.1fs — in-process ready",
+                model_type, elapsed, extra={"tag": "START"},
+            )
+        except Exception as e:
+            logger.debug("Parent preload failed (will materialize on first request): %s", e, extra={"tag": "START"})
+
+    threading.Thread(target=_preload, daemon=True, name=f"parent-preload-{model_type.split('/')[-1]}").start()
 
 
 def _try_lazy_guard_autoload(cfg) -> bool:

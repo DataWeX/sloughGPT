@@ -67,8 +67,8 @@ export default function SystemHealthPage() {
   const [knowledgeStats, setKnowledgeStats] = useState<{ total_items: number; topic_count: number; avg_importance: number; searchable: boolean } | null>(null)
   const [adapterStatus, setAdapterStatus] = useState<{ adapter_exists: boolean; fact_count: number; total_facts_available: number } | null>(null)
   const [benchQuality, setBenchQuality] = useState<{
-    status: string; total_responses: number; coherence_score: number; quality_score: number;
-    repetition_rate: number; avg_length: number; empty_rate: number;
+    coherence_score: number; quality_score: number; repetition_rate: number;
+    total_responses: number; avg_length: number; empty_rate: number;
   } | null>(null)
   const [benchStats, setBenchStats] = useState<{ total: number; avg_tokens: number; models: string[] } | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
@@ -82,6 +82,7 @@ export default function SystemHealthPage() {
   const MAX_HISTORY = 30
   const [inferenceRate, setInferenceRate] = useState<number>(0)
   const prevInferenceRef = useRef<{ count: number; time: number } | null>(null)
+  const rateEmaRef = useRef<number>(0)
   const [cpuThreshold, setCpuThreshold] = useState(() => {
     return getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).cpu ?? 80
   })
@@ -126,7 +127,7 @@ export default function SystemHealthPage() {
       if (ks != null) setKnowledgeStats(ks)
       if (as_ != null) setAdapterStatus(as_)
       if (bq && 'coherence_score' in bq) {
-        setBenchQuality(bq as { status: string; total_responses: number; coherence_score: number; quality_score: number; repetition_rate: number; avg_length: number; empty_rate: number })
+        setBenchQuality(bq as { coherence_score: number; quality_score: number; repetition_rate: number; total_responses: number; avg_length: number; empty_rate: number })
       }
       if (bs != null) setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
       if (dsRes != null) setDpoStatus(dsRes as typeof dpoStatus)
@@ -204,8 +205,11 @@ export default function SystemHealthPage() {
     if (prev) {
       const elapsed = (now - prev.time) / 1000
       if (elapsed > 0) {
-        const rate = ((count - prev.count) / elapsed) * 60
-        setInferenceRate(Math.max(0, rate))
+        const rawRate = ((count - prev.count) / elapsed) * 60
+        // Exponential moving average (alpha=0.3) to smooth jitter
+        const alpha = 0.3
+        rateEmaRef.current = alpha * rawRate + (1 - alpha) * rateEmaRef.current
+        setInferenceRate(Math.max(0, rateEmaRef.current))
       }
     }
     prevInferenceRef.current = { count, time: now }
@@ -382,7 +386,7 @@ export default function SystemHealthPage() {
             <ModelEventsCard liveHealth={liveHealth} />
             <RateViolationsCard liveHealth={liveHealth} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <LatencyCard chartHistory={chartHistory} />
+              <LatencyCard liveHealth={liveHealth} />
               <ProcessCard detailed={detailed} />
             </div>
           </div>

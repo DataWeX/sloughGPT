@@ -4,7 +4,7 @@ Inference Router - Chat and text generation endpoints
 from fastapi import APIRouter, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, AsyncIterator
+from typing import Any, Optional, List, AsyncIterator
 from pathlib import Path
 import json
 import logging
@@ -12,6 +12,18 @@ import threading
 
 from schemas.common import success_response, raise_error, classify_and_raise
 from domains.infrastructure.errors import AppError
+from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+from domains.infrastructure.server_state import get_server_state
+from domains.infrastructure.conversation_log import capture
+from domains.models.provider import get_provider, KnowledgeProcessor, apply_processors
+from domains.agents.system import get_agent_system
+from domains.agents.tools import get_tool_registry
+from domains.memory.memory_service import get_memory_service
+from domains.cognitive.rag_service import get_rag_service
+from domains.feedback.response_tracker import get_response_tracker
+from domains.learner import get_learner
+from domains.learner.entity_extractor import extract_and_store
+from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
 
 logger = logging.getLogger("slo.inference")
 
@@ -46,7 +58,6 @@ _server_parent = str(Path(__file__).parent.parent)
 if _server_parent not in _sys.path:
     _sys.path.insert(0, _server_parent)
 
-
 def _model_ready() -> bool:
     """True when a model or a lazy guard-backed provider is available.
 
@@ -57,6 +68,23 @@ def _model_ready() -> bool:
     import state as server_state
     return server_state.model is not None or server_state.provider is not None
 
+
+def _check_memory_pressure() -> Optional[str]:
+    """Return an error message if system memory is critically low, else None.
+
+    Blocks new inference when >95% memory used to prevent OOM kills (SIGKILL -9).
+    Allows inference to proceed (with a warning log) when 85-95% used.
+    """
+    try:
+        import psutil
+        mem = psutil.virtual_memory()
+        if mem.percent > 95:
+            return f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
+        if mem.percent > 85:
+            logger.warning("Memory pressure: %.0f%% used — inference may be slow", mem.percent, extra={"tag": "INF"})
+    except Exception:
+        pass
+    return None
 
 class CreateSessionRequest(BaseModel):
     """Schema for creating a new chat session."""
@@ -71,17 +99,16 @@ class UpsertSessionRequest(BaseModel):
     starred: Optional[bool] = None
     pinned: Optional[bool] = None
 
-
 class Message(BaseModel):
     role: str
     content: str
-
 
 class ChatRequest(BaseModel):
     messages: List[Message]
     model: str = "qwen2.5-0.5b-instruct"
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=128, ge=1, le=2048)
+    max_new_tokens: Optional[int] = Field(default=None, ge=1, le=2048, description="Alias for max_tokens (frontend compat)")
     top_p: float = Field(default=0.85, ge=0.0, le=1.0)
     top_k: int = Field(default=40, ge=0, le=500)
     repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
@@ -94,12 +121,15 @@ class ChatRequest(BaseModel):
     use_rag: bool = Field(default=True, description="Use production RAG for document-grounded responses")
     agent_id: Optional[str] = Field(default=None, description="Agent ID for role-based system instructions")
 
+    def model_post_init(self, __context: Any) -> None:
+        """Resolve max_new_tokens alias into max_tokens."""
+        if self.max_new_tokens is not None and self.max_tokens == 128:
+            object.__setattr__(self, 'max_tokens', self.max_new_tokens)
 
 class ChatResponse(BaseModel):
     message: str
     session_id: str
     done: bool = True
-
 
 class ContextInspectorResponse(BaseModel):
     system_prompt: str
@@ -110,7 +140,6 @@ class ContextInspectorResponse(BaseModel):
     sensory_buffer_size: int
     last_frame: Optional[dict]
 
-
 class GenerateRequest(BaseModel):
     prompt: str
     max_new_tokens: int = Field(default=256, ge=1, le=2048)
@@ -120,12 +149,10 @@ class GenerateRequest(BaseModel):
     repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
     model: str = "qwen2.5-0.5b-instruct"
 
-
 class GenerateResponse(BaseModel):
     text: str
     model: str
     tokens_generated: int = 0
-
 
 # ── Pure module-level helpers (no instance state) ──
 
@@ -147,7 +174,6 @@ def _count_tokens(text: str, server_state) -> int:
         logger.debug("tokenizer encode fallback failed: %s", e)
     return len(text.split())
 
-
 def _extract_user_message(messages: List[Message]) -> Optional[str]:
     """Extract the last user message from conversation."""
     for msg in reversed(messages):
@@ -155,10 +181,8 @@ def _extract_user_message(messages: List[Message]) -> Optional[str]:
             return msg.content or None
     return None
 
-
 _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
-
 
 def _apply_meta_weights(
     temperature: float,
@@ -210,7 +234,6 @@ def _apply_meta_weights(
             "repetition_penalty": repetition_penalty,
         }
 
-
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
     """Search learned knowledge + optionally live web search. Returns {facts, source, topics}."""
     try:
@@ -219,7 +242,6 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
     except Exception as e:
         logger.warning("Knowledge enrichment failed: %s", e, extra={"tag": "INF", "context": {"error": str(e)}})
         return {"facts": [], "source": "none", "topics": []}
-
 
 def _search_sessions_sync(q: str, limit: int) -> list:
     """Synchronous full-text search across session files on disk."""
@@ -277,10 +299,8 @@ def _search_sessions_sync(q: str, limit: int) -> list:
 
     return results
 
-
 # ── FileRepository-backed session store ──
 from domains.infrastructure.repository import FileRepository, Serializer
-
 
 class _SessionDictSerializer(Serializer[dict]):
     """JSON serializer for session dict data."""
@@ -292,7 +312,6 @@ class _SessionDictSerializer(Serializer[dict]):
     def deserialize(self, data: dict) -> dict:
         """deserialize."""
         return data
-
 
 class InferenceRouter:
     """OOP-style router for inference, chat, sessions, and context endpoints."""
@@ -446,12 +465,16 @@ class InferenceRouter:
 
     async def generate(self, req: GenerateRequest) -> GenerateResponse:
         """generate."""
-        from domains.models.provider import get_provider
+
         from startup_progress import STARTUP_PHASE
         import state as _gen_state
 
         if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
             raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
+
+        mem_err = _check_memory_pressure()
+        if mem_err:
+            raise_error(mem_err, "E_RESOURCE", status_code=503)
 
         provider = get_provider("default")
         if provider is None:
@@ -486,12 +509,12 @@ class InferenceRouter:
             tokens = _count_tokens(result, _gen_state)
             actual_model = _gen_state.model_type or req.model
             try:
-                from domains.infrastructure.server_state import get_server_state
+
                 get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=actual_model)
             except Exception as e:
                 logger.debug("Failed to record inference metrics: %s", e)
             try:
-                from domains.infrastructure.conversation_log import capture
+
                 capture(
                     req.prompt,
                     result,
@@ -517,10 +540,19 @@ class InferenceRouter:
                 yield sse_error("generate", "IDLE", "Model still loading — please wait.")
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
+        mem_err = _check_memory_pressure()
+        if mem_err:
+            async def oom_stream() -> AsyncIterator[str]:
+                yield sse_error("generate", "IDLE", mem_err)
+            return StreamingResponse(oom_stream(), media_type="text/event-stream")
+
+        # Trigger GC before inference to free stale KV caches
+        import gc
+        gc.collect(0)
+
         async def generate() -> AsyncIterator[str]:
             """generate."""
-            from domains.models.provider import get_provider
-            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+
             provider = get_provider("default")
             if provider is None:
                 yield sse_error("generate", "IDLE", "No provider available")
@@ -598,14 +630,14 @@ class InferenceRouter:
                 return
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:
-                from domains.infrastructure.server_state import get_server_state
+
                 get_server_state().record_inference(
                     tokens=token_count, elapsed_ms=elapsed, model=_stream_state.model_type or req.model
                 )
             except Exception as e:
                 logger.debug("Failed to record inference metrics: %s", e)
             try:
-                from domains.infrastructure.conversation_log import capture
+
                 capture(
                     req.prompt,
                     "".join(collected),
@@ -708,7 +740,7 @@ class InferenceRouter:
     async def list_chat_tools(self) -> dict:
         """list_chat_tools."""
         try:
-            from domains.agents.tools import get_tool_registry
+
             return {"tools": get_tool_registry().list_tools()}
         except Exception as e:
             logger.warning("Failed to list tools: %s", e, extra={"tag": "INF"})
@@ -730,10 +762,22 @@ class InferenceRouter:
                 yield sse_error("chat", "IDLE", msg)
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
+        mem_err = _check_memory_pressure()
+        if mem_err:
+            get_server_state().record_memory_pressure_block()
+            async def oom_stream() -> AsyncIterator[str]:
+                yield sse_error("chat", "IDLE", mem_err)
+            return StreamingResponse(oom_stream(), media_type="text/event-stream")
+
+        # Trigger GC before inference to free stale KV caches and temporary objects
+        import gc
+        gc.collect(0)
+        get_server_state().record_gc_cycle()
+
         async def generate() -> AsyncIterator[str]:
             """generate."""
             logger.debug("chat_stream.generate() ENTERED")
-            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+
             cancel_event = threading.Event()
             user_msg = _extract_user_message(req.messages)
             if not user_msg:
@@ -756,7 +800,7 @@ class InferenceRouter:
             if req.knowledge:
                 try:
                     def _store_knowledge(k_list):
-                        from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
+
                         import time
                         mem = get_knowledge_memory()
                         stored = 0
@@ -798,7 +842,7 @@ class InferenceRouter:
             skip_context = False
             if ctx_core and req.use_context_core:
                 try:
-                    from domains.memory.memory_service import get_memory_service
+
                     if get_memory_service().stats().get("total_facts", 0) == 0 and not req.knowledge:
                         skip_context = True
                 except Exception as e:
@@ -836,7 +880,7 @@ class InferenceRouter:
             rag_info = {}
             if req.use_rag:
                 try:
-                    from domains.cognitive.rag_service import get_rag_service
+
                     rag_svc = get_rag_service()
                     if rag_svc.stats().get("total_chunks", 0) > 0:
                         rag_result = await asyncio.to_thread(rag_svc.query, user_msg, 5)
@@ -859,7 +903,7 @@ class InferenceRouter:
 
             if req.agent_id:
                 try:
-                    from domains.agents.system import get_agent_system
+
                     agent_sys = get_agent_system()
                     agent_instructions = agent_sys.get_instructions(req.agent_id)
                     if agent_instructions:
@@ -877,7 +921,7 @@ class InferenceRouter:
 
             tool_result_data = None
             try:
-                from domains.agents.tools import get_tool_registry
+
                 tool_reg = get_tool_registry()
                 tool_intent = tool_reg.detect_tool_intent(user_msg)
                 if tool_intent:
@@ -941,14 +985,14 @@ class InferenceRouter:
             all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
             if all_knowledge:
                 try:
-                    from domains.models.provider import KnowledgeProcessor, apply_processors
+
                     k_proc = KnowledgeProcessor(knowledge=all_knowledge)
                     provider_messages = await apply_processors(provider_messages, [k_proc])
                 except Exception as e:
                     logger.debug("Knowledge processor failed: %s", e)
 
             try:
-                from domains.models.provider import get_provider
+
                 provider = get_provider("default")
 
                 if provider is not None:
@@ -1040,7 +1084,7 @@ class InferenceRouter:
                 _memory_stored = False
                 _memory_fact = None
                 try:
-                    from domains.memory.memory_service import get_memory_service
+
                     _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", full_response)
                     _memory_stored = len(_memory_facts) > 0
                     if _memory_stored:
@@ -1063,7 +1107,7 @@ class InferenceRouter:
                 rag_verification = None
                 if req.use_rag and full_response.strip():
                     try:
-                        from domains.cognitive.rag_service import get_rag_service
+
                         rag_svc = get_rag_service()
                         if rag_svc.stats().get("total_chunks", 0) > 0:
                             rag_verification = await asyncio.to_thread(
@@ -1073,7 +1117,7 @@ class InferenceRouter:
                         logger.debug("RAG verification skipped: %s", e)
 
                 try:
-                    from domains.infrastructure.conversation_log import capture
+
                     capture(
                         user_msg or "",
                         full_response,
@@ -1087,7 +1131,7 @@ class InferenceRouter:
                     logger.debug("Failed to capture conversation: %s", e)
 
                 try:
-                    from domains.feedback.response_tracker import get_response_tracker
+
                     tracker = get_response_tracker()
                     _post_gen_tasks.append(asyncio.to_thread(
                         tracker.log,
@@ -1105,7 +1149,7 @@ class InferenceRouter:
                     logger.debug("ResponseTracker.log failed: %s", e)
 
                 try:
-                    from domains.infrastructure.server_state import get_server_state
+
                     _post_gen_tasks.append(asyncio.to_thread(
                         get_server_state().record_inference,
                         tokens=tokens, elapsed_ms=duration_ms, model=_check_state.model_type or req.model,
@@ -1117,7 +1161,7 @@ class InferenceRouter:
                     _post_gen_tasks.append(asyncio.to_thread(ctx_core.add_response, full_response, model=req.model))
 
                 try:
-                    from domains.learner import get_learner
+
                     _post_gen_tasks.append(asyncio.to_thread(
                         get_learner().ingest_conversation, [(user_msg, full_response)]
                     ))
@@ -1143,7 +1187,7 @@ class InferenceRouter:
                     )
 
                 try:
-                    from domains.learner.entity_extractor import extract_and_store
+
                     task = asyncio.create_task(extract_and_store(user_msg or "", full_response))
                     self._BG_TASKS.add(task)
                     task.add_done_callback(self._BG_TASKS.discard)
@@ -1206,8 +1250,12 @@ class InferenceRouter:
         if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
             raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
 
+        mem_err = _check_memory_pressure()
+        if mem_err:
+            raise_error(mem_err, "E_RESOURCE", status_code=503)
+
         try:
-            from domains.models.provider import get_provider
+
             _router = get_provider("default")
             _server = getattr(_router, '_server', None)
             if _server is not None:
@@ -1240,7 +1288,7 @@ class InferenceRouter:
 
         if req.agent_id:
             try:
-                from domains.agents.system import get_agent_system
+
                 agent_sys = get_agent_system()
                 agent_instructions = agent_sys.get_instructions(req.agent_id)
                 if agent_instructions:
@@ -1289,7 +1337,7 @@ class InferenceRouter:
             )
 
         try:
-            from domains.infrastructure.server_state import get_server_state
+
             tokens = _count_tokens(result.text, _chat_state)
             get_server_state().record_inference(
                 tokens=tokens, elapsed_ms=0, model=_chat_state.model_type or req.model
@@ -1298,7 +1346,7 @@ class InferenceRouter:
             logger.debug("Failed to record inference metrics: %s", e)
 
         try:
-            from domains.infrastructure.conversation_log import capture
+
             capture(
                 user_msg or "",
                 result.text,
@@ -1438,7 +1486,7 @@ class InferenceRouter:
         TTL eviction and risk stale-context reuse if the id is recycled.
         """
         try:
-            from domains.models.provider import get_provider
+
             provider = get_provider("slonet-native")
             if provider is None:
                 provider = get_provider("slonet")
@@ -1496,7 +1544,6 @@ class InferenceRouter:
         Returns:
             Dict with 'operations' list and 'counts' by status.
         """
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
 
         mgr = get_cancel_manager()
         op_type = OpType(type) if type else None
@@ -1515,7 +1562,6 @@ class InferenceRouter:
         Returns:
             Dict with cancel result.
         """
-        from domains.infrastructure.cancel_manager import get_cancel_manager
 
         mgr = get_cancel_manager()
         found = mgr.get(op_id)
@@ -1538,7 +1584,6 @@ class InferenceRouter:
         Returns:
             Dict with list of cancelled operation IDs.
         """
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
 
         mgr = get_cancel_manager()
         op_type = OpType(type) if type else None
@@ -1554,7 +1599,6 @@ class InferenceRouter:
         Returns:
             Dict with count of purged operations.
         """
-        from domains.infrastructure.cancel_manager import get_cancel_manager
 
         removed = get_cancel_manager().purge(max_age_s=max_age_s)
         return success_response(data={"purged": removed})
@@ -1591,7 +1635,6 @@ class InferenceRouter:
         r.add_api_route("/cancel/{op_id}", self.cancel_operation, methods=["POST"])
         r.add_api_route("/cancel-all", self.cancel_all_operations, methods=["POST"])
         r.add_api_route("/operations/purge", self.purge_operations, methods=["POST"])
-
 
 _instance = InferenceRouter()
 router = _instance.router

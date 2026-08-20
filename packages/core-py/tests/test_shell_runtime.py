@@ -93,6 +93,8 @@ class TestAPIServerProcessStart:
 
     def test_start_launch_error(self):
         with patch("domains.shell.runtime._shared_proc", None), \
+             patch("domains.shell.runtime._probe_api", return_value={"available": False}), \
+             patch("socket.create_connection", side_effect=ConnectionRefusedError), \
              patch("domains.shell.runtime.subprocess.Popen",
                    side_effect=OSError("boom")):
             r = APIServerProcess().start()
@@ -108,6 +110,7 @@ class TestAPIServerProcessStart:
              patch("domains.shell.runtime.time.time",
                    side_effect=[0.0, 0.0, 0.5, 1.0, 1.5, 2.0]), \
              patch("domains.shell.runtime.time.sleep", lambda s: None), \
+             patch("socket.create_connection", side_effect=ConnectionRefusedError), \
              patch("sys.stdout", MagicMock()):
             r = APIServerProcess("http://x").start(timeout=1.0)
         assert r["ok"] is False

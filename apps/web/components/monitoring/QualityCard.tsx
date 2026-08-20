@@ -4,7 +4,6 @@ import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 
 interface BenchQuality {
-  status: string
   total_responses: number
   coherence_score: number
   quality_score: number
@@ -33,7 +32,7 @@ function QualityDot({ score }: { score: number }) {
 }
 
 export function QualityCard({ quality, stats }: QualityCardProps) {
-  if (quality.status !== 'ok') return null
+  if (quality.total_responses === 0) return null
 
   return (
     <Card className="p-3">
