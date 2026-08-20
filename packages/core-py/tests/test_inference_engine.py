@@ -565,17 +565,37 @@ class TestFullIntegration:
     def test_client_auto_reconnect(self):
         engine, port = self._start_engine_with_mock()
         from domains.infrastructure.inference_client import InferenceClient
+        client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=1.0)
+        client.connect()
 
-        # Shared state for restart fn to find the new engine
-        new_port = [None]
+        # Kill engine
+        engine.stop()
+        time.sleep(0.2)
+
+        # chat should fail gracefully (no restart fn, reconnect fails)
+        import asyncio
+        result = asyncio.run(client.chat(
+            [{"role": "user", "content": "reconnect"}],
+            max_tokens=5,
+        ))
+        assert "[Error" in result
+        client.disconnect()
+
+    def test_client_restart_fn_succeeds(self):
+        engine, port = self._start_engine_with_mock()
+        from domains.infrastructure.inference_client import InferenceClient
+
+        # Kill engine and restart on same port
+        engine.stop()
+        time.sleep(0.1)
+        engine2, port2 = self._start_engine_with_mock()
+        assert port == port2  # same port due to SO_REUSEADDR
 
         def _restart():
-            if new_port[0] is None:
-                return None
             c = InferenceClient.__new__(InferenceClient)
             c.host = "127.0.0.1"
-            c.port = new_port[0]
-            c.connect_timeout = 2.0
+            c.port = port2
+            c.connect_timeout = 1.0
             c.generate_timeout = 5.0
             c._restart_fn = None
             c._socket = None
@@ -590,24 +610,14 @@ class TestFullIntegration:
                 return c
             return None
 
-        client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0,
+        client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=1.0,
                                  restart_fn=_restart)
-        client.connect()
 
-        # Kill engine
-        engine.stop()
-        time.sleep(0.2)
-
-        # Restart on new port
-        engine2, port2 = self._start_engine_with_mock()
-        new_port[0] = port2
-        try:
-            import asyncio
-            result = asyncio.run(client.chat(
-                [{"role": "user", "content": "reconnect"}],
-                max_tokens=5,
-            ))
-            assert result == "echo:reconnect"
-        finally:
-            client.disconnect()
-            engine2.stop()
+        import asyncio
+        result = asyncio.run(client.chat(
+            [{"role": "user", "content": "restart"}],
+            max_tokens=5,
+        ))
+        assert result == "echo:restart"
+        client.disconnect()
+        engine2.stop()

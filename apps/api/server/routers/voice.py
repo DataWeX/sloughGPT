@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from schemas.common import raise_error, success_response, classify_and_raise
+from schemas.common import raise_error, success_response
 
 logger = logging.getLogger("slo.routers.voice")
 
@@ -109,8 +109,7 @@ class VoiceRouter:
                     backend="hf-model",
                 )
         except Exception as e:
-            classify_and_raise(e, source="voice_tts")
-            logger.warning(f"TTS generation failed, falling back to browser: {e}", extra={"tag": "MODEL"})
+            logger.warning("TTS generation failed, falling back to browser: %s", e, extra={"tag": "MODEL"})
 
         return TTSResponse(
             audio="",

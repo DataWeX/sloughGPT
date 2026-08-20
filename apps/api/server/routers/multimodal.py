@@ -377,11 +377,10 @@ class MultimodalRouter:
                 "pairs_trained": result.get("pairs_trained", 0), "elapsed_seconds": round(elapsed, 1),
             })
         except Exception as e:
-            classify_and_raise(e, source="multimodal_dpo")
             with self._dpo_lock:
                 self._dpo_state["status"] = "error"
                 self._dpo_state["result"] = {"error": str(e)}
-            raise_error(err.user_message, status_code=err.http_status)
+            classify_and_raise(e, source="multimodal_dpo")
 
     # ── Analysis ──────────────────────────────────────────────────────
 

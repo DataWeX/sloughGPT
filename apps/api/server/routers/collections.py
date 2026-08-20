@@ -71,6 +71,8 @@ class CollectionsRouter:
                     "filters": len(filters),
                 },
             })
+        except AppError:
+            raise
         except Exception as e:
             return success_response(data={"pipelines": [], "error": str(e)})
 
@@ -103,6 +105,8 @@ class CollectionsRouter:
                 "store_type": req.store_type,
                 "filters": len(filters),
             })
+        except AppError:
+            raise
         except Exception as e:
             raise_error(f"Failed to create pipeline: {e}", code="E_CREATE_FAILED", status_code=500)
 
@@ -120,6 +124,8 @@ class CollectionsRouter:
                 "collected": count,
                 "stats": pipeline.stats,
             })
+        except AppError:
+            raise
         except Exception as e:
             raise_error(f"Failed to run pipeline: {e}", code="E_RUN_FAILED", status_code=500)
 
@@ -149,6 +155,8 @@ class CollectionsRouter:
                 "stats": collector.stats,
                 "records": records[:50],
             })
+        except AppError:
+            raise
         except Exception as e:
             raise_error(f"Failed to collect: {e}", code="E_COLLECT_FAILED", status_code=500)
 
@@ -159,6 +167,8 @@ class CollectionsRouter:
             registry = get_registry()
             stats = registry.stats()
             return success_response(data=stats)
+        except AppError:
+            raise
         except Exception as e:
             return success_response(data={"error": str(e)})
 
@@ -175,6 +185,8 @@ class CollectionsRouter:
                 "name": getattr(pipeline, 'name', pipeline_id),
                 "stats": pipeline.stats,
             })
+        except AppError:
+            raise
         except Exception as e:
             raise_error(f"Failed to get pipeline: {e}", code="E_GET_FAILED", status_code=500)
 
@@ -186,6 +198,8 @@ class CollectionsRouter:
             if pipeline_id in registry._pipelines:
                 del registry._pipelines[pipeline_id]
             return success_response(data={"deleted": pipeline_id})
+        except AppError:
+            raise
         except Exception as e:
             raise_error(f"Failed to delete pipeline: {e}", code="E_DELETE_FAILED", status_code=500)
 
@@ -203,6 +217,8 @@ class CollectionsRouter:
                 "collected": count,
                 "stats": pipeline.stats,
             })
+        except AppError:
+            raise
         except Exception as e:
             raise_error(f"Failed to collect: {e}", code="E_COLLECT_FAILED", status_code=500)
 
@@ -226,6 +242,8 @@ class CollectionsRouter:
                 "total": len(records),
                 "returned": len(limited),
             })
+        except AppError:
+            raise
         except Exception as e:
             raise_error(f"Failed to get records: {e}", code="E_RECORDS_FAILED", status_code=500)
 
