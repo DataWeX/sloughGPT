@@ -3,9 +3,9 @@ import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-libra
 import React from 'react'
 
 const {
-  mockRun, mockQuality, mockStats, mockHistory, mockApiPost, mockAddToast,
+  mockRun, mockMetrics, mockQuality, mockStats, mockHistory, mockApiPost, mockAddToast,
 } = vi.hoisted(() => ({
-  mockRun: vi.fn(), mockQuality: vi.fn(), mockStats: vi.fn(), mockHistory: vi.fn(),
+  mockRun: vi.fn(), mockMetrics: vi.fn(), mockQuality: vi.fn(), mockStats: vi.fn(), mockHistory: vi.fn(),
   mockApiPost: vi.fn(), mockAddToast: vi.fn(),
 }))
 
@@ -17,7 +17,7 @@ vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: ({ children, ...props }: any) => <div {...props}>{children}</div>, CardContent: passthrough, CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled, variant }: any) => (
       <button onClick={onClick} disabled={disabled} data-variant={variant}>{children}</button>
@@ -36,6 +36,7 @@ vi.mock('@sloughgpt/strui', () => {
 vi.mock('@/lib/benchmark-controller', () => ({
   benchmarkController: {
     run: (...a: unknown[]) => mockRun(...a),
+    metrics: (...a: unknown[]) => mockMetrics(...a),
     quality: (...a: unknown[]) => mockQuality(...a),
     stats: (...a: unknown[]) => mockStats(...a),
     history: (...a: unknown[]) => mockHistory(...a),
@@ -63,8 +64,13 @@ afterEach(cleanup)
 beforeEach(() => {
   vi.clearAllMocks()
   mockRun.mockResolvedValue({ throughput: 10, latency_p50: 200, latency_p95: 500 })
+  mockMetrics.mockResolvedValue({
+    model: 'gpt2', model_loaded: true, inference_count: 5, total_tokens: 210,
+    tokens_per_second: 42, memory_mb: 512, num_parameters: 124000000, latency_ms: 200,
+    throughput: 10, throughput_tokens_per_sec: 42, inference_time_ms: 200,
+  })
   mockQuality.mockResolvedValue({ coherence_score: 0.85, quality_score: 0.78, repetition_rate: 0.12 })
-  mockStats.mockResolvedValue({ total: 15, avg_tokens: 42 })
+  mockStats.mockResolvedValue({ total: 15, avg_tokens: 42, models: ['gpt2'] })
   mockHistory.mockResolvedValue([
     { timestamp: '2026-08-07T10:00:00Z', user_message: 'Hello', assistant_response: 'Hi there', model: 'gpt2', tokens_generated: 10, duration_ms: 200 },
   ])
@@ -79,17 +85,17 @@ describe('BenchmarkPage — initial load flow', () => {
     })
   })
 
-  it('fetches run, quality, and stats on mount', async () => {
+  it('fetches metrics, quality, and stats on mount', async () => {
     render(<BenchmarkPage />)
     await waitFor(() => {
-      expect(mockRun).toHaveBeenCalledTimes(1)
+      expect(mockMetrics).toHaveBeenCalledTimes(1)
       expect(mockQuality).toHaveBeenCalledTimes(1)
       expect(mockStats).toHaveBeenCalledTimes(1)
     })
   })
 
   it('shows loading state initially', async () => {
-    mockRun.mockReturnValue(new Promise(() => {})) // never resolves
+    mockMetrics.mockReturnValue(new Promise(() => {})) // never resolves
     render(<BenchmarkPage />)
     // Should render skeleton while loading
     expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
@@ -107,7 +113,7 @@ describe('BenchmarkPage — metrics tab flow', () => {
 
   it('refresh metrics button triggers re-run', async () => {
     render(<BenchmarkPage />)
-    await waitFor(() => { expect(mockRun).toHaveBeenCalledTimes(1) })
+    await waitFor(() => { expect(mockMetrics).toHaveBeenCalledTimes(1) })
 
     const refreshBtns = screen.getAllByRole('button').filter(b =>
       b.textContent?.includes('refresh') || b.textContent?.includes('Refresh')
@@ -115,7 +121,7 @@ describe('BenchmarkPage — metrics tab flow', () => {
     if (refreshBtns.length > 0) {
       await act(async () => { fireEvent.click(refreshBtns[0]) })
       await waitFor(() => {
-        expect(mockRun).toHaveBeenCalledTimes(2)
+        expect(mockRun).toHaveBeenCalledTimes(1)
       })
     }
   })
@@ -132,7 +138,7 @@ describe('BenchmarkPage — quality tab flow', () => {
     if (qualityTab) {
       fireEvent.click(qualityTab)
       await waitFor(() => {
-        expect(screen.getByText(/0\.85|coherence/i)).toBeTruthy()
+        expect(screen.getAllByText(/85\.0%|Coherence/i).length).toBeGreaterThanOrEqual(1)
       })
     }
   })

@@ -723,10 +723,23 @@ class ProviderRouter:
         temperature: float = 0.7,
         **kwargs,
     ) -> str:
-        chunks = []
-        async for chunk in self.chat_stream(messages, max_tokens, temperature, **kwargs):
-            chunks.append(chunk)
-        return "".join(chunks)
+        # Run processors
+        msgs = list(messages)
+        for processor in self._processors:
+            try:
+                msgs = await processor.process(msgs)
+            except Exception as e:
+                logger.warning(f"Processor {type(processor).__name__} failed: {e}", extra={"tag": "MODEL"})
+
+        if not self._text_name:
+            return "No text model configured. Please load a model first."
+        text_provider = get_provider(self._text_name)
+        if text_provider is None:
+            return f"Text model '{self._text_name}' is not available. Please load a model."
+
+        # Call text_provider.chat() directly (goes through guard when alive)
+        # instead of chat_stream() which always runs in-process.
+        return await text_provider.chat(msgs, max_tokens=max_tokens, temperature=temperature, **kwargs)
 
     def embed(self, text: str) -> List[float]:
         return []

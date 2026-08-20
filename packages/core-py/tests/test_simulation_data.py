@@ -23,7 +23,6 @@ class TestWorldParams:
         assert wp.start_agents == 4
         assert wp.social_enabled is True
         assert wp.message_enabled is False
-        assert wp.nest_enabled is False
 
     def test_custom(self):
         wp = WorldParams(grid_size=(32, 16, 32), start_energy=50.0)

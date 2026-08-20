@@ -21,9 +21,10 @@ import {ReasoningPanel} from '../components/ReasoningPanel';
 import {Icon} from '../components/Icon';
 
 const SUGGESTIONS = [
-  'Tell me something interesting',
-  'Help me brainstorm',
-  'Explain a concept',
+  {icon: 'zap' as const, text: 'Tell me something interesting', prompt: 'Tell me something interesting'},
+  {icon: 'target' as const, text: 'Help me brainstorm ideas', prompt: 'Help me brainstorm ideas for a project'},
+  {icon: 'book-open' as const, text: 'Explain a concept', prompt: 'Explain a concept to me in simple terms'},
+  {icon: 'terminal' as const, text: 'Write some code', prompt: 'Write some code for me'},
 ];
 
 export function ChatScreen() {
@@ -55,8 +56,7 @@ export function ChatScreen() {
           borderBottomColor="$borderColor"
           backgroundColor="$background"
           alignItems="center"
-          justifyContent="space-between"
-          opacity={0.98}>
+          justifyContent="space-between">
           <XStack alignItems="center" gap={12}>
             <YStack
               width={36} height={36} borderRadius={12}
@@ -88,17 +88,6 @@ export function ChatScreen() {
                     onPress={() => a.setShowSoulPicker(true)}
                     pressStyle={{opacity: 0.7, scale: 0.95}}>
                     <Text fontSize={11} fontWeight="600" color="$color9">{a.currentSoul.name}</Text>
-                  </YStack>
-                )}
-                {a.health?.model_name && (
-                  <YStack
-                    backgroundColor={colors.successAlpha(0.1)}
-                    paddingHorizontal={8}
-                    paddingVertical={3}
-                    borderRadius={999}
-                    borderWidth={0.5}
-                    borderColor={colors.successAlpha(0.18)}>
-                    <Text fontSize={10} fontWeight="600" color="#34B07D">{a.health.model_name}</Text>
                   </YStack>
                 )}
               </XStack>
@@ -216,21 +205,34 @@ export function ChatScreen() {
                 : 'Start a conversation'}
             </Text>
 
-            <XStack gap={10} flexWrap="wrap" justifyContent="center">
+            <YStack gap={12} width="100%" maxWidth={320}>
               {SUGGESTIONS.map(s => (
                 <YStack
-                  key={s}
-                  paddingHorizontal={18} paddingVertical={10}
-                  borderRadius={999}
+                  key={s.text}
+                  flexDirection="row"
+                  alignItems="center"
+                  gap={12}
+                  paddingHorizontal={16}
+                  paddingVertical={14}
+                  borderRadius={14}
                   backgroundColor={colors.primaryAlpha(0.06)}
                   borderWidth={0.5}
                   borderColor={colors.primaryAlpha(0.12)}
-                  onPress={() => a.handleSuggestion(s)}
-                  pressStyle={{opacity: 0.7, scale: 0.96}}>
-                  <Text fontSize={13} fontWeight="500" color="$color9">{s}</Text>
+                  onPress={() => a.handleSuggestion(s.prompt)}
+                  pressStyle={{opacity: 0.7, scale: 0.98, backgroundColor: colors.primaryAlpha(0.1)}}>
+                  <YStack
+                    width={32} height={32} borderRadius={10}
+                    backgroundColor={colors.primaryAlpha(0.1)}
+                    alignItems="center" justifyContent="center">
+                    <Icon name={s.icon} size={16} color={colors.primary} />
+                  </YStack>
+                  <Text fontSize={14} fontWeight="500" color="$color" flex={1}>{s.text}</Text>
+                  <YStack style={{transform: [{rotate: '-90deg'}]}}>
+                    <Icon name="chevron-down" size={14} color={colors.textMuted} />
+                  </YStack>
                 </YStack>
               ))}
-            </XStack>
+            </YStack>
 
             <Text fontSize={11} color="$color10" marginTop={32} textAlign="center" letterSpacing={0.3}>
               Swipe left on a message to delete it

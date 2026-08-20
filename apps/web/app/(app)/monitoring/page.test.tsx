@@ -1,16 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react'
+import { systemController } from '@/lib/system-controller'
+import { trainingController } from '@/lib/training-controller'
+import { knowledgeController } from '@/lib/knowledge-controller'
+import { benchmarkController } from '@/lib/benchmark-controller'
+import { multimodalController } from '@/lib/controllers'
 
 const { mockDetailedHealth, mockUseLiveStatus } = vi.hoisted(() => ({
   mockDetailedHealth: {
-    model_loaded: true, model_name: 'gpt2', cpu_percent: 45.2, memory_percent: 62.1,
-    uptime: 3600, total_requests: 100, error_count: 2, active_connections: 1,
-    model_status: 'ready', gpu_available: false, disk_usage_percent: 55,
-    inference_count: 50, soul: 'default', num_parameters: 124000000,
-    is_inferencing: false, model_loading: false,
-    memory: { total_mb: 16384, used_mb: 8192, available_mb: 8192 },
-    training_pool: { active: 0, max: 2, tracked: 0 },
-    kv_sessions: { enabled: true, cross_turn_enabled: true, active_sessions: 3, total_entries: 120, total_hit_bytes: 4096 },
+    status: 'healthy', uptime_seconds: 3600, timestamp: new Date().toISOString(),
+    request_count: 100, error_count: 2, avg_latency_ms: 45, p95_latency_ms: 120,
+    requests_per_minute: 5, path_latencies: [], recent_errors: [],
+    inference_count: 50, total_tokens: 10000, tokens_per_sec: 25, avg_tokens_per_request: 200,
+    health_score: { score: 85, status: 'healthy' }, status_message: 'OK',
+    model_metrics: [], model_events: [], health_history: [], memory_history: [], rate_violations: [],
+    system: { cpu_percent: 45.2, memory_percent: 62.1, memory_available_mb: 8192 },
+    model_loaded: true, model_loading: false, model_type: 'gpt2', soul: 'default',
+    inference: { is_inferencing: false, inference_count: 50 },
+    kv_sessions: { enabled: true, active_sessions: 3, cached_tokens: 120 },
+    training_pool: { active_jobs: 0, max_workers: 2, total_tracked: 0 },
   },
   mockUseLiveStatus: { health: null as Record<string, unknown> | null, connectionStatus: 'disconnected' as string },
 }))
@@ -18,10 +26,10 @@ const { mockDetailedHealth, mockUseLiveStatus } = vi.hoisted(() => ({
 vi.mock('@/lib/system-controller', () => ({
   systemController: {
     getDetailedHealth: vi.fn().mockResolvedValue(mockDetailedHealth),
-    getMetrics: vi.fn().mockResolvedValue({ cpu: 45, memory: 62, requests: 100, errors: 2 }),
-    getDisk: vi.fn().mockResolvedValue({ total_gb: 500, used_gb: 275, free_gb: 225 }),
-    getInfo: vi.fn().mockResolvedValue({ hostname: 'test', platform: 'linux', python: '3.9' }),
-    getExecutorStatus: vi.fn().mockResolvedValue({ initialized: true, active: 0, max: 2, tracked: 0, jobs: [] }),
+    getMetrics: vi.fn().mockResolvedValue({ cpu_percent: 45, memory_percent: 62, memory_used_gb: 8, memory_total_gb: 16 }),
+    getDisk: vi.fn().mockResolvedValue({ total_gb: 500, used_gb: 275, free_gb: 225, percent: 55 }),
+    getInfo: vi.fn().mockResolvedValue({ platform: 'linux', platform_release: '5.15', platform_version: '#1 SMP', architecture: 'x86_64', processor: 'Intel', cpu_count: 8 }),
+    getExecutorStatus: vi.fn().mockResolvedValue({ initialized: true, active_jobs: 0, max_workers: 2, total_tracked: 0, jobs: [] }),
     getInferencePoolStatus: vi.fn().mockResolvedValue(null),
     getProcessGuardStatus: vi.fn().mockResolvedValue(null),
   },
@@ -275,7 +283,27 @@ describe('MonitoringPage — error handling flow', () => {
 })
 
 describe('MonitoringPage — data loading flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockUseLiveStatus.connectionStatus = 'disconnected'; mockUseLiveStatus.health = null })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUseLiveStatus.connectionStatus = 'disconnected'
+    mockUseLiveStatus.health = null
+    const sc = vi.mocked(systemController)
+    sc.getDetailedHealth.mockResolvedValue(mockDetailedHealth)
+    sc.getMetrics.mockResolvedValue({ cpu_percent: 45, memory_percent: 62, memory_used_gb: 8, memory_total_gb: 16 })
+    sc.getInfo.mockResolvedValue({ platform: 'linux', platform_release: '5.15', platform_version: '#1 SMP', architecture: 'x86_64', processor: 'Intel', cpu_count: 8 })
+    sc.getDisk.mockResolvedValue({ total_gb: 500, used_gb: 275, free_gb: 225, percent: 55 })
+    sc.getExecutorStatus.mockResolvedValue({ initialized: true, active_jobs: 0, max_workers: 2, total_tracked: 0, jobs: [] })
+    sc.getProcessGuardStatus.mockResolvedValue({ enabled: false, active: false, pid: null, crash_count: 0, restart_count: 0, last_error: null, worker_state: null, pending_restart: false } as any)
+    sc.getInferencePoolStatus.mockResolvedValue({ initialized: false } as any)
+    vi.mocked(trainingController).list.mockResolvedValue([])
+    vi.mocked(trainingController).getAutoTrainStatus.mockResolvedValue({ running: false } as any)
+    vi.mocked(knowledgeController).stats.mockResolvedValue({ total_facts: 0 } as any)
+    vi.mocked(knowledgeController).getAdapterStatus.mockResolvedValue({ has_adapter: false } as any)
+    vi.mocked(benchmarkController).quality.mockResolvedValue({ count: 0, adapters: [] } as any)
+    vi.mocked(benchmarkController).stats.mockResolvedValue({ total_runs: 0 } as any)
+    vi.mocked(multimodalController).getDPOStatus.mockResolvedValue({ status: 'idle', accepted_count: 0, rejected_count: 0 } as any)
+    vi.mocked(multimodalController).getStatus.mockResolvedValue({ enabled: false } as any)
+  })
   afterEach(() => { cleanup() })
 
   it('calls systemController on mount', async () => {

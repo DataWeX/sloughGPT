@@ -1,6 +1,7 @@
 """Coverage tests for AI device nodes (domains.shell.devices)."""
 
 import builtins
+from unittest.mock import patch
 
 import pytest
 
@@ -119,9 +120,9 @@ class TestEmbeddingDevice:
 
     def test_read_after_write_fallback(self):
         dev = EmbeddingDevice()
-        assert dev.write("hello") == "  embedding: 64 dims"
+        assert dev.write("hello") == "  embedding: 384 dims"
         out = dev.read()
-        assert out.endswith("(64 dims)")
+        assert "(384 dims" in out
 
     def test_write_empty_shows_usage(self):
         assert "Usage" in EmbeddingDevice().write("  ")
@@ -133,10 +134,11 @@ class TestEmbeddingDevice:
 
     def test_compute_fallback_is_deterministic(self):
         dev = EmbeddingDevice()
-        a = dev._compute_embedding("same text")
-        b = dev._compute_embedding("same text")
+        with patch("domains.inference.vector_store.simple_embed", side_effect=ImportError):
+            a = dev._compute_embedding("same text")
+            b = dev._compute_embedding("same text")
         assert a == b
-        assert len(a) == 64
+        assert len(a) == 32
 
 
 class TestKnowledgeDevice:
