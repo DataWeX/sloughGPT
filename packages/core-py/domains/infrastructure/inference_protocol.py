@@ -15,12 +15,14 @@ Message types:
         generate     — {"type": "generate", "id": ..., "prompt": ..., "params": {...}}
         stream_start — {"type": "stream_start", "id": ..., "prompt": ..., "params": {...}}
         stream_stop  — {"type": "stream_stop", "id": ...}
+        reload       — {"type": "reload", "model_id": ..., "slnc_path": ...}
 
     Engine → Client:
         health_ok    — {"type": "health_ok", "model_id": ..., "loaded": bool}
         result       — {"type": "result", "id": ..., "text": ..., "meta": {...}}
         token        — {"type": "token", "id": ..., "token": ...}
         stream_done  — {"type": "stream_done", "id": ..., "meta": {...}}
+        reload_ok    — {"type": "reload_ok", "model_id": ..., "elapsed": ...}
         error        — {"type": "error", "id": ..., "message": ...}
 """
 

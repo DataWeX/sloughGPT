@@ -109,6 +109,17 @@ class InferenceClient:
         except Exception as e:
             return {"type": "error", "message": str(e)}
 
+    def reload(self, model_id: str, slnc_path: Optional[str] = None) -> dict:
+        """Hot-reload: swap the model in the engine without restarting."""
+        try:
+            return self._send_and_recv({
+                "type": "reload",
+                "model_id": model_id,
+                "slnc_path": slnc_path,
+            }, timeout=300.0) or {}
+        except Exception as e:
+            return {"type": "error", "message": str(e)}
+
     async def chat(
         self,
         messages: List[Dict[str, str]],

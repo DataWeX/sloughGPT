@@ -1869,6 +1869,107 @@ def collect_stats(path):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# World rendering
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Render and simulate the programmable world")
+def world():
+    pass
+
+
+@world.command("render", help="Render the current world state")
+@click.option("--width", default=160, type=int, help="Render width")
+@click.option("--height", default=120, type=int, help="Render height")
+@click.option("--samples", default=16, type=int, help="Render samples")
+@click.option("--output", "-o", default=None, help="Output file (PPM)")
+@click.option("--neural", is_flag=True, help="Run neural processing on render")
+def world_render(width, height, samples, output, neural):
+    from domains.shell.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
+    from domains.shell.simulation import WorldGrid
+    import numpy as np
+
+    cfg = RenderConfig(width=width, height=height, samples=samples)
+
+    if neural:
+        bridge = NeuralRenderBridge(cfg)
+    else:
+        bridge = RenderBridge(cfg)
+
+    world = WorldGrid()
+    for x in range(10, 54):
+        world.material[world.idx(x, 0, 32)] = 1
+    for x in range(20, 44):
+        world.material[world.idx(x, 0, 32)] = 2
+        world.energy[world.idx(x, 0, 32)] = 3.0
+    world.material[world.idx(32, 1, 32)] = 4
+    world.energy[world.idx(32, 1, 32)] = 5.0
+
+    log.header("Rendering world...")
+    bridge.build_scene(world)
+    image = bridge.render()
+    log.success(f"Rendered {image.shape[1]}x{image.shape[0]} image ({bridge.stats['total_time_ms']:.0f}ms)")
+
+    if output:
+        img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+        header = f"P6\n{img_uint8.shape[1]} {img_uint8.shape[0]}\n255\n"
+        with open(output, "wb") as f:
+            f.write(header.encode() + img_uint8.tobytes())
+        log.info(f"Saved: {output}")
+
+    if neural:
+        result = bridge.process_neural()
+        emb = result.get("embedding")
+        if emb is not None:
+            log.key_value("Embedding dim", str(len(emb)))
+            log.key_value("Embedding norm", f"{np.linalg.norm(emb):.4f}")
+        desc = bridge.get_descriptor()
+        log.key_value("Scene features", str(len(desc.get("tensor_stats", {}))))
+
+
+@world.command("tick", help="Run simulation ticks with optional rendering")
+@click.option("--ticks", default=5, type=int, help="Number of ticks")
+@click.option("--babies", default=4, type=int, help="Number of baby agents")
+@click.option("--render", is_flag=True, help="Enable rendering")
+@click.option("--neural", is_flag=True, help="Enable neural processing")
+@click.option("--verbose", is_flag=True, help="Verbose output")
+def world_tick(ticks, babies, render, neural, verbose):
+    from domains.shell.simulation import SimScene, Simulation, WorldParams
+    from domains.shell.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
+
+    params = WorldParams()
+    scene = SimScene(params)
+
+    for _ in range(babies):
+        from domains.shell.simulation import SimBaby, Entity, EntityType
+        baby = SimBaby()
+        baby.entity.position[0] = 32 + np.random.randint(-10, 10)
+        baby.entity.position[2] = 32 + np.random.randint(-10, 10)
+        scene.add_baby(baby)
+
+    render_bridge = None
+    if render or neural:
+        if neural:
+            render_bridge = NeuralRenderBridge()
+        else:
+            render_bridge = RenderBridge()
+
+    sim = Simulation(scene, max_ticks=ticks, verbose=verbose, render_bridge=render_bridge)
+    log.header(f"Running {ticks} ticks with {len(scene.babies)} babies...")
+    sim.run()
+    summary = sim.summary()
+
+    log.key_value("Ticks", str(summary.get("total_ticks", 0)))
+    log.key_value("Babies at end", str(summary.get("alive_at_end", False)))
+    log.key_value("Avg energy", f"{summary.get('avg_energy', 0):.1f}")
+    log.key_value("Cells written", str(summary.get("total_cells_written", 0)))
+
+    if render_bridge:
+        log.key_value("Renders", str(render_bridge.stats.get("renders", 0)))
+        log.key_value("Render time", f"{render_bridge.stats.get('total_time_ms', 0):.0f}ms")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════
 

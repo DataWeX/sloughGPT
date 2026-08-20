@@ -87,6 +87,7 @@ class ModelsRouter:
         self.router.add_api_route(path="/process-guard", endpoint=self.get_process_guard, methods=["GET"])
         self.router.add_api_route(path="/process-guard", endpoint=self.set_process_guard, methods=["POST"])
         self.router.add_api_route(path="/engine/status", endpoint=self.get_engine_status, methods=["GET"])
+        self.router.add_api_route(path="/engine/reload", endpoint=self.reload_engine, methods=["POST"])
 
     @staticmethod
     def _audit_model_id(provider) -> str:
@@ -918,7 +919,7 @@ class ModelsRouter:
         """Get standalone inference engine status.
 
         Returns whether the engine subprocess is enabled, its PID, whether
-        the client is connected, the model id, and the last 50 lines of stderr.
+        the client is connected, the model id, and the last 20 lines of stderr.
         """
         import state as server_state
         proc = getattr(server_state, "_inference_engine_proc", None)
@@ -929,9 +930,11 @@ class ModelsRouter:
         pid = proc.pid if proc is not None else None
         alive = proc.poll() is None if proc is not None else False
         health = {}
+        metrics = {}
         if is_client and alive:
             try:
                 health = await asyncio.to_thread(provider.health)
+                metrics = health.get("metrics", {})
             except Exception:
                 health = {"type": "error"}
         return success_response(data={
@@ -940,8 +943,28 @@ class ModelsRouter:
             "alive": alive,
             "model_id": getattr(provider, "model_id", None) if is_client else None,
             "health": health,
+            "metrics": metrics,
             "stderr_tail": stderr_tail[-20:],
         })
+
+    async def reload_engine(self, req: Dict[str, Any]) -> dict:
+        """Hot-reload the inference engine model.
+
+        Body: ``{"model_id": "Qwen/Qwen2.5-0.5B-Instruct", "slnc_path": "/path/to/model.slnc"}``
+
+        Swaps the model in the engine subprocess without restarting.
+        """
+        import state as server_state
+        from domains.infrastructure.inference_client import InferenceClient
+        provider = getattr(server_state, "provider", None)
+        if not isinstance(provider, InferenceClient):
+            return success_response(data={"error": "Inference engine not active"})
+        model_id = req.get("model_id", server_state.model_type)
+        slnc_path = req.get("slnc_path")
+        result = await asyncio.to_thread(provider.reload, model_id, slnc_path)
+        if result.get("type") == "reload_ok":
+            server_state.model_type = model_id
+        return success_response(data=result)
 
 
 router = ModelsRouter().router

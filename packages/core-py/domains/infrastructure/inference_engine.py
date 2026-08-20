@@ -88,6 +88,17 @@ class InferenceEngine:
         self._active_streams_lock = threading.Lock()
         self._pid_file: Optional[str] = None
 
+        # Metrics
+        self._metrics_lock = threading.Lock()
+        self._request_count: int = 0
+        self._error_count: int = 0
+        self._total_latency: float = 0.0
+        self._max_latency: float = 0.0
+        self._reload_count: int = 0
+
+        # Config
+        self._request_timeout: float = 120.0
+
     @property
     def addr(self) -> tuple:
         if self._server_socket is not None:
@@ -140,6 +151,38 @@ class InferenceEngine:
             except Exception:
                 pass
 
+    def _record_request(self, latency: float, error: bool = False) -> None:
+        """Record request metrics (thread-safe)."""
+        with self._metrics_lock:
+            self._request_count += 1
+            self._total_latency += latency
+            self._max_latency = max(self._max_latency, latency)
+            if error:
+                self._error_count += 1
+
+    def _record_reload(self) -> None:
+        """Record a reload event (thread-safe)."""
+        with self._metrics_lock:
+            self._reload_count += 1
+
+    def get_metrics(self) -> dict:
+        """Return current engine metrics."""
+        with self._metrics_lock:
+            count = self._request_count
+            return {
+                "request_count": count,
+                "error_count": self._error_count,
+                "avg_latency_ms": round((self._total_latency / count * 1000), 1) if count else 0,
+                "max_latency_ms": round(self._max_latency * 1000, 1),
+                "reload_count": self._reload_count,
+                "active_streams": len(self._active_streams),
+            }
+
+    @property
+    def active_stream_count(self) -> int:
+        with self._active_streams_lock:
+            return len(self._active_streams)
+
     # ── Internal ──────────────────────────────────────────────────────
 
     def _run(self) -> None:
@@ -189,7 +232,12 @@ class InferenceEngine:
             self._ready.clear()
 
     def _load_model(self) -> None:
-        """Load the model via SloNetChatProvider."""
+        """Load the model via SloNetChatProvider with progress logging."""
+        import time as _time
+
+        logger.info("Inference engine: loading model %s ...", self.model_id)
+        _st = _time.monotonic()
+
         from domains.inference.slonet_provider import SloNetChatProvider
 
         load_kwargs: Dict[str, Any] = {
@@ -199,6 +247,7 @@ class InferenceEngine:
             "quant_clip": self.quant_clip,
         }
         if self.slnc_path:
+            logger.info("Inference engine: loading from .slnc %s", self.slnc_path)
             self._provider = SloNetChatProvider.from_slnc(
                 self.slnc_path, model_id=self.model_id, **load_kwargs,
             )
@@ -208,10 +257,16 @@ class InferenceEngine:
             _slnc = _cache_dir / "model.slnc"
             if not _slnc.exists():
                 raise FileNotFoundError(f"No .slnc file for {self.model_id} at {_slnc}")
+            logger.info("Inference engine: loading from .slnc %s", _slnc)
             self._provider = SloNetChatProvider.from_slnc(
                 str(_slnc), model_id=self.model_id, **load_kwargs,
             )
-        logger.info("Inference engine: model loaded (%s)", self.model_id)
+
+        elapsed = _time.monotonic() - _st
+        logger.info(
+            "Inference engine: model loaded in %.1fs (quantize=%s, bits=%d)",
+            elapsed, self.quantize, self.quant_bits,
+        )
 
     def _handle_client(self, client: socket.socket, addr: tuple) -> None:
         """Handle a single client connection (blocking)."""
@@ -280,6 +335,8 @@ class InferenceEngine:
             self._handle_stream_start(client, msg)
         elif msg_type == "stream_stop":
             self._handle_stream_stop(msg)
+        elif msg_type == "reload":
+            self._handle_reload(client, msg)
         else:
             self._send_message(client, {
                 "type": "error",
@@ -291,18 +348,22 @@ class InferenceEngine:
         meta = {}
         if self._provider is not None:
             meta = getattr(self._provider, "_meta", {}) or {}
+        metrics = self.get_metrics()
         self._send_message(client, {
             "type": "health_ok",
             "model_id": self.model_id,
             "loaded": self._provider is not None and getattr(self._provider, "_loaded", False),
             "model_type": self.model_id,
             "quantized": meta.get("quantized", False),
+            "metrics": metrics,
         })
 
     def _handle_generate(self, client: socket.socket, msg: dict) -> None:
+        import time as _time
         req_id = msg.get("id", "")
         messages = msg.get("messages", [{"role": "user", "content": msg.get("prompt", "")}])
         params = msg.get("params", {})
+        _st = _time.monotonic()
         try:
             result = self._provider._generate_sync(
                 messages,
@@ -313,13 +374,17 @@ class InferenceEngine:
                 repetition_penalty=params.get("repetition_penalty", 1.0),
                 session_id=params.get("session_id"),
             )
+            elapsed = _time.monotonic() - _st
+            self._record_request(elapsed)
             self._send_message(client, {
                 "type": "result",
                 "id": req_id,
                 "text": result,
-                "meta": {"model": self.model_id},
+                "meta": {"model": self.model_id, "elapsed_ms": round(elapsed * 1000, 1)},
             })
         except Exception as e:
+            elapsed = _time.monotonic() - _st
+            self._record_request(elapsed, error=True)
             self._send_message(client, {
                 "type": "error",
                 "id": req_id,
@@ -327,9 +392,11 @@ class InferenceEngine:
             })
 
     def _handle_stream_start(self, client: socket.socket, msg: dict) -> None:
+        import time as _time
         req_id = msg.get("id", "")
         messages = msg.get("messages", [{"role": "user", "content": msg.get("prompt", "")}])
         params = msg.get("params", {})
+        _st = _time.monotonic()
         with self._active_streams_lock:
             self._active_streams[req_id] = True
 
@@ -337,9 +404,6 @@ class InferenceEngine:
             import asyncio
 
             async def _run_stream():
-                cancel_event = threading.Event()
-                cancel_event.set()  # will be cleared by the cancel check
-
                 async for token in self._provider.chat_stream(
                     messages,
                     max_tokens=params.get("max_new_tokens", 256),
@@ -352,6 +416,10 @@ class InferenceEngine:
                     with self._active_streams_lock:
                         if not self._active_streams.get(req_id, False):
                             break
+                    elapsed = _time.monotonic() - _st
+                    if elapsed > self._request_timeout:
+                        logger.warning("Inference engine: stream %s timed out after %.1fs", req_id, elapsed)
+                        break
                     try:
                         self._send_message(client, {
                             "type": "token",
@@ -363,12 +431,16 @@ class InferenceEngine:
 
             try:
                 asyncio.run(_run_stream())
+                elapsed = _time.monotonic() - _st
+                self._record_request(elapsed)
                 self._send_message(client, {
                     "type": "stream_done",
                     "id": req_id,
-                    "meta": {"model": self.model_id},
+                    "meta": {"model": self.model_id, "elapsed_ms": round(elapsed * 1000, 1)},
                 })
             except Exception as e:
+                elapsed = _time.monotonic() - _st
+                self._record_request(elapsed, error=True)
                 try:
                     self._send_message(client, {
                         "type": "error",
@@ -388,6 +460,73 @@ class InferenceEngine:
         req_id = msg.get("id", "")
         with self._active_streams_lock:
             self._active_streams[req_id] = False
+
+    def _handle_reload(self, client: socket.socket, msg: dict) -> None:
+        """Hot-reload: swap the model at runtime without restarting the process.
+
+        Rejects if active streams are running (data race risk).
+        """
+        import time as _time
+
+        # Safety: reject if streams are active
+        active = self.active_stream_count
+        if active > 0:
+            self._send_message(client, {
+                "type": "error",
+                "id": msg.get("id", ""),
+                "message": f"Reload rejected: {active} active stream(s) in progress",
+            })
+            return
+
+        new_model_id = msg.get("model_id", self.model_id)
+        new_slnc_path = msg.get("slnc_path", self.slnc_path)
+
+        logger.info("Inference engine: reloading model %s -> %s", self.model_id, new_model_id)
+        _st = _time.monotonic()
+
+        try:
+            from domains.inference.slonet_provider import SloNetChatProvider
+
+            load_kwargs: Dict[str, Any] = {
+                "quantize": self.quantize,
+                "quant_bits": self.quant_bits,
+                "quant_mode": self.quant_mode,
+                "quant_clip": self.quant_clip,
+            }
+            if new_slnc_path:
+                new_provider = SloNetChatProvider.from_slnc(
+                    new_slnc_path, model_id=new_model_id, **load_kwargs,
+                )
+            else:
+                from domains.infrastructure.safetensors_loader import _get_model_dir
+                _slnc = _get_model_dir(new_model_id) / "model.slnc"
+                if not _slnc.exists():
+                    raise FileNotFoundError(f"No .slnc file for {new_model_id} at {_slnc}")
+                new_provider = SloNetChatProvider.from_slnc(
+                    str(_slnc), model_id=new_model_id, **load_kwargs,
+                )
+
+            old_provider = self._provider
+            self._provider = new_provider
+            self.model_id = new_model_id
+            self.slnc_path = new_slnc_path
+            self._record_reload()
+
+            elapsed = _time.monotonic() - _st
+            logger.info("Inference engine: model reloaded in %.1fs (%s)", elapsed, new_model_id)
+            self._send_message(client, {
+                "type": "reload_ok",
+                "model_id": new_model_id,
+                "elapsed": round(elapsed, 2),
+            })
+        except Exception as e:
+            elapsed = _time.monotonic() - _st
+            logger.error("Inference engine: reload failed in %.1fs: %s", elapsed, e)
+            self._send_message(client, {
+                "type": "error",
+                "id": msg.get("id", ""),
+                "message": str(e),
+            })
 
 
 # ── CLI entry point ───────────────────────────────────────────────────
