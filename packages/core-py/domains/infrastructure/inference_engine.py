@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import collections
 import json
 import logging
 import selectors
@@ -102,8 +103,26 @@ class InferenceEngine:
         return self._ready.wait(timeout)
 
     def stop(self) -> None:
-        """Shut down the engine."""
+        """Shut down the engine gracefully.
+
+        Signals all active streams to stop, waits up to 5s for them to drain,
+        then closes the server socket and joins the accept thread.
+        """
         self._stop.set()
+
+        # Signal all active streams to stop
+        with self._active_streams_lock:
+            for req_id in list(self._active_streams):
+                self._active_streams[req_id] = False
+
+        # Wait for active streams to drain (max 5s)
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with self._active_streams_lock:
+                if not self._active_streams:
+                    break
+            time.sleep(0.1)
+
         if self._server_socket is not None:
             try:
                 self._server_socket.close()
