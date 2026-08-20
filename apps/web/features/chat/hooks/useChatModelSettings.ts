@@ -61,6 +61,11 @@ export function useChatModelSettings(
     }
   }, [])
 
+  useEffect(() => {
+    setTemperature(storeSettings.defaultTemp)
+    setMaxTokens(storeSettings.defaultMaxTokens)
+  }, [storeSettings.defaultTemp, storeSettings.defaultMaxTokens])
+
   const startDownloadFlow = useCallback(async (m: string, sizeGb?: number) => {
     startDownloadFlowRef.current = startDownloadFlow
     setLoadingModel(m)

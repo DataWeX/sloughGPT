@@ -1,80 +1,79 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// Persist rehydration reads localStorage synchronously at store creation, so the
-// legacy payload must be seeded BEFORE the store module is loaded. A static
-// import is hoisted above module-level statements, so a dynamic import is used.
-const localStorageMock = (() => {
-  let store = new Map<string, string>()
-  return {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => store.set(key, value),
-    removeItem: (key: string) => store.delete(key),
-    clear: () => store.clear(),
-    get length() { return store.size },
-    key: (i: number) => [...store.keys()][i] ?? null,
-  }
-})()
+const chatDBMock = {
+  getKV: vi.fn().mockResolvedValue(undefined),
+  setKV: vi.fn().mockResolvedValue(undefined),
+  deleteKV: vi.fn().mockResolvedValue(undefined),
+}
 
-const LEGACY_PAYLOAD = JSON.stringify({
-  state: {
-    settings: {
-      apiUrl: 'http://old-host:9999',
-      hfToken: 'hf_legacy',
-      theme: 'dark',
-    },
-    injectedKnowledge: [{ id: 'know_1', content: 'old fact', timestamp: 1 }],
-  },
-  version: 0,
-})
+vi.mock('@/lib/db', () => ({
+  chatDB: chatDBMock,
+}))
 
-localStorageMock.setItem('man-store', LEGACY_PAYLOAD)
-vi.stubGlobal('localStorage', localStorageMock)
+const { useAppStore, initStore, DEFAULT_SETTINGS } = await import('./store')
 
-const { useAppStore } = await import('./store')
+describe('MogDB-backed settings initialization', () => {
+  beforeEach(() => {
+    useAppStore.setState({ settings: DEFAULT_SETTINGS, injectedKnowledge: [] })
+    chatDBMock.getKV.mockClear()
+    chatDBMock.setKV.mockClear()
+    chatDBMock.deleteKV.mockClear()
+  })
 
-describe('persisted settings migration', () => {
-  it('fills fields missing from a legacy persisted store with defaults', () => {
+  it('starts with defaults when MogDB has no stored settings', async () => {
+    chatDBMock.getKV.mockResolvedValueOnce(undefined)
+    await initStore()
     const { settings } = useAppStore.getState()
     expect(settings.defaultTemp).toBe(0.7)
     expect(settings.defaultMaxTokens).toBe(300)
-    expect(settings.defaultTopP).toBe(0.85)
-    expect(settings.defaultTopK).toBe(40)
-    expect(settings.collapsibleMessageLength).toBe(500)
     expect(settings.streaming).toBe(true)
   })
 
-  it('keeps persisted values that still exist', () => {
+  it('overrides defaults with MogDB-stored values', async () => {
+    chatDBMock.getKV
+      .mockResolvedValueOnce({ defaultTemp: 0.5, hfToken: 'hf_test', theme: 'dark' })
+      .mockResolvedValueOnce(undefined)
+
+    await initStore()
     const { settings } = useAppStore.getState()
-    expect(settings.apiUrl).toBe('http://old-host:9999')
-    expect(settings.hfToken).toBe('hf_legacy')
+    expect(settings.defaultTemp).toBe(0.5)
+    expect(settings.hfToken).toBe('hf_test')
     expect(settings.theme).toBe('dark')
+    expect(settings.defaultMaxTokens).toBe(300)
   })
 
-  it('preserves non-settings state', () => {
+  it('preserves non-settings state when loading settings', async () => {
+    useAppStore.setState({ injectedKnowledge: [{ id: 'know_1', content: 'local fact', timestamp: 1 }] })
+    chatDBMock.getKV
+      .mockResolvedValueOnce({ defaultTemp: 0.5 })
+      .mockResolvedValueOnce(undefined)
+
+    await initStore()
     const { injectedKnowledge } = useAppStore.getState()
     expect(injectedKnowledge).toHaveLength(1)
-    expect(injectedKnowledge[0].content).toBe('old fact')
+    expect(injectedKnowledge[0].content).toBe('local fact')
   })
 
-  it('has correct default streaming value', () => {
-    const { settings } = useAppStore.getState()
-    expect(typeof settings.streaming).toBe('boolean')
+  it('loads injected knowledge from MogDB', async () => {
+    const storedKnowledge = [
+      { id: 'know_1', content: 'fact from db', timestamp: 1000 },
+      { id: 'know_2', content: 'another fact', timestamp: 2000 },
+    ]
+    chatDBMock.getKV
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(storedKnowledge)
+
+    await initStore()
+    const { injectedKnowledge } = useAppStore.getState()
+    expect(injectedKnowledge).toHaveLength(2)
+    expect(injectedKnowledge[0].content).toBe('fact from db')
+    expect(injectedKnowledge[1].content).toBe('another fact')
   })
 
-  it('has correct default top-p value', () => {
+  it('handles MogDB errors gracefully', async () => {
+    chatDBMock.getKV.mockRejectedValueOnce(new Error('MogDB down'))
+    await initStore()
     const { settings } = useAppStore.getState()
-    expect(settings.defaultTopP).toBeGreaterThan(0)
-    expect(settings.defaultTopP).toBeLessThanOrEqual(1)
-  })
-
-  it('has correct default top-k value', () => {
-    const { settings } = useAppStore.getState()
-    expect(settings.defaultTopK).toBeGreaterThanOrEqual(1)
-    expect(settings.defaultTopK).toBeLessThanOrEqual(100)
-  })
-
-  it('has correct default collapsible message length', () => {
-    const { settings } = useAppStore.getState()
-    expect(settings.collapsibleMessageLength).toBe(500)
+    expect(settings.defaultTemp).toBe(0.7)
   })
 })
