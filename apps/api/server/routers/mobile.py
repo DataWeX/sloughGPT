@@ -946,8 +946,6 @@ class MobileRouter:
             raise
         except Exception as e:
             classify_and_raise(e, source="mobile_train")
-            logger.error("Mobile training failed: %s", e, extra={"tag": "REQ"})
-            raise_error(f"Training failed: {e}", "E_INFRA_STARTUP", status_code=500)
 
     async def get_training_stats(self) -> dict:
         """
@@ -1342,9 +1340,6 @@ class MobileRouter:
             )
         except Exception as e:
             classify_and_raise(e, source="mobile_train_from_sessions")
-            logger.error("Failed to start training subprocess: %s", e, extra={"tag": "REQ"})
-            yield sse_error("training", "TRAIN", f"Failed to start training: {e}")
-            return
 
         # Stream stdout lines as SSE events
         deadline = _time.time() + 600  # 10-minute hard timeout

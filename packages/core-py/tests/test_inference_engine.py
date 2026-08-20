@@ -75,6 +75,14 @@ class TestEngineDispatch:
         engine._stop = threading.Event()
         engine._active_streams = {}
         engine._active_streams_lock = threading.Lock()
+        engine._pid_file = None
+        engine._metrics_lock = threading.Lock()
+        engine._request_count = 0
+        engine._error_count = 0
+        engine._total_latency = 0.0
+        engine._max_latency = 0.0
+        engine._reload_count = 0
+        engine._request_timeout = 120.0
         return engine
 
     def _send_recv(self, sock, msg):
@@ -295,6 +303,13 @@ class TestEngineConcurrency:
         engine._active_streams = {}
         engine._active_streams_lock = threading.Lock()
         engine._pid_file = None
+        engine._metrics_lock = threading.Lock()
+        engine._request_count = 0
+        engine._error_count = 0
+        engine._total_latency = 0.0
+        engine._max_latency = 0.0
+        engine._reload_count = 0
+        engine._request_timeout = 120.0
         return engine
 
     def test_concurrent_health_requests(self):
@@ -451,6 +466,13 @@ class TestFullIntegration:
         engine._active_streams = {}
         engine._active_streams_lock = threading.Lock()
         engine._pid_file = None
+        engine._metrics_lock = threading.Lock()
+        engine._request_count = 0
+        engine._error_count = 0
+        engine._total_latency = 0.0
+        engine._max_latency = 0.0
+        engine._reload_count = 0
+        engine._request_timeout = 120.0
 
         # Bind and start accept loop manually
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -349,3 +349,198 @@ class NeuralRenderBridge(RenderBridge):
     @property
     def last_classification(self) -> dict | None:
         return self._last_classification
+
+
+class RenderDiff:
+    def __init__(self, image_a: np.ndarray, image_b: np.ndarray):
+        self.image_a = image_a
+        self.image_b = image_b
+        self._compute()
+
+    def _compute(self):
+        a = self.image_a.astype(np.float32)
+        b = self.image_b.astype(np.float32)
+        if a.shape != b.shape:
+            min_h = min(a.shape[0], b.shape[0])
+            min_w = min(a.shape[1], b.shape[1])
+            a = a[:min_h, :min_w]
+            b = b[:min_h, :min_w]
+
+        self.diff = np.abs(a - b)
+        self.mse = float(np.mean(self.diff ** 2))
+        self.mae = float(np.mean(self.diff))
+        self.max_diff = float(np.max(self.diff))
+
+        self.diff_magnitude = np.sqrt(np.sum(self.diff ** 2, axis=-1))
+        self.changed_pixels = int(np.sum(self.diff_magnitude > 0.01))
+        self.total_pixels = a.shape[0] * a.shape[1]
+        self.change_ratio = self.changed_pixels / max(self.total_pixels, 1)
+
+        self.mean_a = float(np.mean(a))
+        self.mean_b = float(np.mean(b))
+        self.std_a = float(np.std(a))
+        self.std_b = float(np.std(b))
+
+    def summary(self) -> dict:
+        return {
+            "mse": self.mse,
+            "mae": self.mae,
+            "max_diff": self.max_diff,
+            "changed_pixels": self.changed_pixels,
+            "total_pixels": self.total_pixels,
+            "change_ratio": self.change_ratio,
+            "mean_a": self.mean_a,
+            "mean_b": self.mean_b,
+            "std_a": self.std_a,
+            "std_b": self.std_b,
+        }
+
+    def heatmap(self) -> np.ndarray:
+        norm = self.diff_magnitude / max(self.max_diff, 1e-8)
+        return np.clip(norm, 0, 1).astype(np.float32)
+
+    def diff_image(self) -> np.ndarray:
+        return np.clip(self.diff * 5.0, 0, 1).astype(np.float32)
+
+
+class RenderHistory:
+    def __init__(self, max_entries: int = 100):
+        self.max_entries = max_entries
+        self._entries: list[dict] = []
+
+    def add(self, image: np.ndarray, tick: int = -1, metadata: dict | None = None) -> int:
+        entry = {
+            "image": image.copy(),
+            "tick": tick,
+            "metadata": metadata or {},
+            "mean": float(np.mean(image)),
+            "std": float(np.std(image)),
+        }
+        self._entries.append(entry)
+        if len(self._entries) > self.max_entries:
+            self._entries = self._entries[-self.max_entries:]
+        return len(self._entries) - 1
+
+    def get(self, index: int) -> np.ndarray | None:
+        if 0 <= index < len(self._entries):
+            return self._entries[index]["image"]
+        return None
+
+    def diff(self, index_a: int, index_b: int) -> RenderDiff | None:
+        img_a = self.get(index_a)
+        img_b = self.get(index_b)
+        if img_a is None or img_b is None:
+            return None
+        return RenderDiff(img_a, img_b)
+
+    def diff_latest(self) -> RenderDiff | None:
+        if len(self._entries) < 2:
+            return None
+        return RenderDiff(
+            self._entries[-2]["image"],
+            self._entries[-1]["image"],
+        )
+
+    def timeline(self) -> list[dict]:
+        return [
+            {"index": i, "tick": e["tick"], "mean": e["mean"], "std": e["std"]}
+            for i, e in enumerate(self._entries)
+        ]
+
+    def recent(self, n: int = 5) -> list[dict]:
+        entries = self._entries[-n:]
+        return [
+            {"index": len(self._entries) - len(entries) + i,
+             "tick": e["tick"], "mean": e["mean"]}
+            for i, e in enumerate(entries)
+        ]
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def __getitem__(self, index: int) -> dict | None:
+        if 0 <= index < len(self._entries):
+            return dict(self._entries[index])
+        return None
+
+    def clear(self):
+        self._entries.clear()
+
+
+class RenderAnalyzer:
+    def __init__(self, history: RenderHistory | None = None):
+        self._history = history or RenderHistory()
+
+    @property
+    def history(self) -> RenderHistory:
+        return self._history
+
+    def analyze_series(self) -> dict:
+        entries = self._history._entries
+        if not entries:
+            return {"count": 0}
+
+        means = [e["mean"] for e in entries]
+        stds = [e["std"] for e in entries]
+
+        return {
+            "count": len(entries),
+            "mean_range": [min(means), max(means)],
+            "mean_trend": means[-1] - means[0] if len(means) > 1 else 0.0,
+            "std_range": [min(stds), max(stds)],
+            "avg_mean": float(np.mean(means)),
+            "avg_std": float(np.mean(stds)),
+        }
+
+    def detect_significant_changes(self, threshold: float = 0.1) -> list[dict]:
+        entries = self._history._entries
+        changes = []
+        for i in range(1, len(entries)):
+            diff = RenderDiff(entries[i - 1]["image"], entries[i]["image"])
+            if diff.change_ratio > threshold:
+                changes.append({
+                    "from": i - 1,
+                    "to": i,
+                    "tick_from": entries[i - 1]["tick"],
+                    "tick_to": entries[i]["tick"],
+                    "change_ratio": diff.change_ratio,
+                    "mse": diff.mse,
+                })
+        return changes
+
+    def compare_ticks(self, tick_a: int, tick_b: int) -> RenderDiff | None:
+        entries = self._history._entries
+        img_a = None
+        img_b = None
+        for e in entries:
+            if e["tick"] == tick_a:
+                img_a = e["image"]
+            if e["tick"] == tick_b:
+                img_b = e["image"]
+        if img_a is None or img_b is None:
+            return None
+        return RenderDiff(img_a, img_b)
+
+    def summary(self) -> dict:
+        analysis = self.analyze_series()
+        changes = self.detect_significant_changes()
+        return {
+            **analysis,
+            "significant_changes": len(changes),
+            "largest_change": max(changes, key=lambda c: c["mse"]) if changes else None,
+        }
+
+    def render_diff_summary(self, index_a: int, index_b: int) -> str:
+        diff = self._history.diff(index_a, index_b)
+        if diff is None:
+            return "Cannot compare: indices out of range"
+        s = diff.summary()
+        lines = [
+            f"Render Diff [{index_a}] -> [{index_b}]",
+            f"  MSE:      {s['mse']:.6f}",
+            f"  MAE:      {s['mae']:.6f}",
+            f"  Max diff: {s['max_diff']:.4f}",
+            f"  Changed:  {s['changed_pixels']}/{s['total_pixels']} pixels ({s['change_ratio']:.1%})",
+            f"  Mean A:   {s['mean_a']:.4f}  Mean B: {s['mean_b']:.4f}",
+        ]
+        return "\n".join(lines)

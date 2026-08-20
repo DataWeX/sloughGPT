@@ -285,7 +285,7 @@ class TestInferTransitive:
 class TestVerifyStatement:
     def test_verify_true_and_false(self):
         g = KnowledgeGraph()
-        g.add_fact("Paris", "rdf:type", "City")
+        g.add_fact("Paris", "is_a", "City")
         result_true = g.verify_statement("Paris is a City")
         assert result_true["verified"] is True
         # Now verify a different statement that is NOT in the graph
@@ -294,8 +294,8 @@ class TestVerifyStatement:
 
     def test_verify_contradiction(self):
         g = KnowledgeGraph()
-        g.add_fact("Paris", "rdf:type", "City")
-        g.add_fact("Paris", "rdf:type", "Country")
+        g.add_fact("Paris", "is_a", "City")
+        g.add_fact("Paris", "is_a", "Country")
         # Both triples exist so "Paris is a Country" is verified
         result = g.verify_statement("Paris is a Country")
         assert result["verified"] is True
