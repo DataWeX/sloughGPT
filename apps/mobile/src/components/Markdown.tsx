@@ -9,6 +9,7 @@ import {copyToClipboard} from '../services/clipboard';
 interface MarkdownProps {
   content: string;
   streaming?: boolean;
+  highlight?: string;
 }
 
 type Block =
@@ -119,8 +120,23 @@ function parseBlocks(text: string): Block[] {
   return blocks;
 }
 
-function InlineText({text, fontSize = 14, colors}: {text: string; fontSize?: number; colors: ReturnType<typeof useColors>}) {
+function InlineText({text, fontSize = 14, colors, highlight}: {text: string; fontSize?: number; colors: ReturnType<typeof useColors>; highlight?: string}) {
   const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|~~[^~]+~~)/g).filter(Boolean);
+
+  const renderHighlighted = (str: string, key: number) => {
+    if (!highlight) return <Text key={key}>{str}</Text>;
+    const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const segments = str.split(regex);
+    return (
+      <Text key={key}>
+        {segments.map((seg, si) =>
+          regex.test(seg)
+            ? <Text key={si} backgroundColor="#FCD34D80" borderRadius={2}>{seg}</Text>
+            : <Text key={si}>{seg}</Text>
+        )}
+      </Text>
+    );
+  };
 
   return (
     <Text fontSize={fontSize} lineHeight={fontSize * 1.5} color={colors.text}>
@@ -158,7 +174,7 @@ function InlineText({text, fontSize = 14, colors}: {text: string; fontSize?: num
             );
           }
         }
-        return <Text key={i}>{part}</Text>;
+        return renderHighlighted(part, i);
       })}
     </Text>
   );
@@ -205,7 +221,7 @@ function CodeBlock({language, code, colors}: {language: string; code: string; co
   );
 }
 
-export function Markdown({content, streaming = false}: MarkdownProps) {
+export function Markdown({content, streaming = false, highlight}: MarkdownProps) {
   const [rendered, setRendered] = useState(content);
   const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const colors = useColors();
@@ -264,7 +280,7 @@ export function Markdown({content, streaming = false}: MarkdownProps) {
             return (
               <XStack key={i} gap={8} marginVertical={4} paddingLeft={12}
                 borderLeftWidth={2} borderLeftColor={colors.primary} opacity={0.85}>
-                <InlineText text={block.text} colors={colors} />
+                <InlineText text={block.text} colors={colors} highlight={highlight} />
               </XStack>
             );
           case 'ul':
@@ -273,7 +289,7 @@ export function Markdown({content, streaming = false}: MarkdownProps) {
                 {block.items.map((item, j) => (
                   <XStack key={j} gap={6} paddingLeft={4}>
                     <Text fontSize={14} color={colors.primary} marginTop={1}>•</Text>
-                    <InlineText text={item} colors={colors} />
+                    <InlineText text={item} colors={colors} highlight={highlight} />
                   </XStack>
                 ))}
               </YStack>
@@ -286,7 +302,7 @@ export function Markdown({content, streaming = false}: MarkdownProps) {
                     <Text fontSize={14} color={colors.textSecondary} fontWeight="600" minWidth={18}>
                       {j + 1}.
                     </Text>
-                    <InlineText text={item} colors={colors} />
+                    <InlineText text={item} colors={colors} highlight={highlight} />
                   </XStack>
                 ))}
               </YStack>
@@ -299,7 +315,7 @@ export function Markdown({content, streaming = false}: MarkdownProps) {
           case 'paragraph':
             return (
               <YStack key={i} marginVertical={2}>
-                <InlineText text={block.text} colors={colors} />
+                <InlineText text={block.text} colors={colors} highlight={highlight} />
               </YStack>
             );
           default:

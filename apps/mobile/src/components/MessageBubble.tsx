@@ -54,6 +54,7 @@ interface Props {
   message: Message;
   sessionId?: string;
   highlight?: boolean;
+  searchQuery?: string;
   streaming?: boolean;
   onRegenerate?: () => void;
   onFeedback?: (positive: boolean) => void;
@@ -68,7 +69,7 @@ interface Props {
   onLongPressSelect?: () => void;
 }
 
-export function MessageBubble({message, sessionId, highlight, streaming, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
+export function MessageBubble({message, sessionId, highlight, searchQuery, streaming, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
   const colors = useColors();
   const bg = colors.background;
   const border = colors.border;
@@ -523,13 +524,14 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
               />
             )}
             {isUser ? (
-              <Markdown content={message.content} />
+              <Markdown content={message.content} highlight={searchQuery} />
             ) : (
               <Markdown
                 content={collapsed && message.content.length > 500
                   ? message.content.slice(0, 500) + '...'
                   : message.content || 'Thinking...'}
                 streaming={streaming}
+                highlight={searchQuery}
               />
             )}
             {!isUser && !streaming && message.content && message.content.length > 500 && (

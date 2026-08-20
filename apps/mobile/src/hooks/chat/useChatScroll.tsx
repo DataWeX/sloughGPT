@@ -41,6 +41,7 @@ export function useChatScroll(
           message={item}
           sessionId={activeSessionId || undefined}
           highlight={searchQuery ? item.content.toLowerCase().includes(searchQuery.toLowerCase()) : false}
+          searchQuery={searchQuery || undefined}
           onRegenerate={
             item.role === 'assistant' ? () => regenerate(item.id) : undefined
           }

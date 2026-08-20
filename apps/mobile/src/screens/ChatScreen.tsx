@@ -163,6 +163,33 @@ export function ChatScreen() {
               placeholderTextColor={colors.textMuted}
               autoFocus
             />
+            {a.matchCount > 0 && (
+              <Text fontSize={11} color={colors.textMuted} minWidth={40} textAlign="center">
+                {a.currentMatchIdx + 1}/{a.matchCount}
+              </Text>
+            )}
+            {a.matchCount > 0 && (
+              <>
+                <YStack
+                  width={28} height={28} borderRadius={9}
+                  alignItems="center" justifyContent="center"
+                  backgroundColor={colors.primaryAlpha(0.06)}
+                  onPress={a.searchPrev}
+                  pressStyle={{opacity: 0.6}}
+                  accessible accessibilityRole="button" accessibilityLabel="Previous match">
+                  <Icon name="chevron-up" size={14} color={colors.textMuted} />
+                </YStack>
+                <YStack
+                  width={28} height={28} borderRadius={9}
+                  alignItems="center" justifyContent="center"
+                  backgroundColor={colors.primaryAlpha(0.06)}
+                  onPress={a.searchNext}
+                  pressStyle={{opacity: 0.6}}
+                  accessible accessibilityRole="button" accessibilityLabel="Next match">
+                  <Icon name="chevron-down" size={14} color={colors.textMuted} />
+                </YStack>
+              </>
+            )}
             <YStack
               width={28} height={28} borderRadius={9}
               alignItems="center" justifyContent="center"

@@ -49,7 +49,12 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
   const hybrid = useHybridStore();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+
+  const matchCount = searchQuery
+    ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase())).length
+    : 0;
   const [editingMessage, setEditingMessage] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [forwardTo, setForwardTo] = useState<Message | null>(null);
@@ -65,6 +70,21 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     select.toggleSelectMessage, setEditingMessage,
     setReplyTo, setForwardTo, select.setSelectMode, select.setSelectedIds,
   );
+
+  const searchNext = useCallback(() => {
+    if (matchCount === 0) return;
+    setCurrentMatchIdx(i => (i + 1) % matchCount);
+  }, [matchCount]);
+
+  const searchPrev = useCallback(() => {
+    if (matchCount === 0) return;
+    setCurrentMatchIdx(i => (i - 1 + matchCount) % matchCount);
+  }, [matchCount]);
+
+  // Reset match index when query changes
+  useEffect(() => {
+    setCurrentMatchIdx(0);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (modals.showInfo && activeSessionId) {
@@ -213,6 +233,10 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     setShowInfo: modals.setShowInfo,
     searchQuery,
     setSearchQuery,
+    matchCount,
+    currentMatchIdx,
+    searchNext,
+    searchPrev,
     refreshing,
     setRefreshing,
     isRecording: voice.isRecording,
