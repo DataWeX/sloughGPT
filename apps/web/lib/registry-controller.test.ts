@@ -12,9 +12,9 @@ beforeEach(() => { vi.clearAllMocks() })
 
 describe('registryController', () => {
   it('list unwraps nested data.models', async () => {
-    apiGet.mockResolvedValue({ data: { models: [{ model_id: 'gpt2', status: 'loaded' }] } })
+    apiGet.mockResolvedValue({ models: [{ model_id: 'gpt2', status: 'ready' }] })
     const result = await registryController.list()
-    expect(result).toEqual([{ model_id: 'gpt2', status: 'loaded' }])
+    expect(result).toEqual([{ model_id: 'gpt2', status: 'ready' }])
   })
 
   it('list handles flat array', async () => {
@@ -23,22 +23,22 @@ describe('registryController', () => {
     expect(result).toEqual([{ model_id: 'qwen', status: 'registered' }])
   })
 
-  it('stats unwraps data envelope', async () => {
-    apiGet.mockResolvedValue({ data: { total_models: 3, loaded_models: 1, failed_models: 0, circuit_breaker_open: false } })
+  it('stats maps backend fields to frontend shape', async () => {
+    apiGet.mockResolvedValue({ models_registered: 3, models_loaded: 1, healthy: true, degraded: false, has_errors: false, default_model: 'gpt2' })
     const result = await registryController.stats()
     expect(result).toEqual({ total_models: 3, loaded_models: 1, failed_models: 0, circuit_breaker_open: false })
   })
 
-  it('stats handles flat response', async () => {
-    apiGet.mockResolvedValue({ total_models: 1, loaded_models: 0, failed_models: 1, circuit_breaker_open: true })
+  it('stats maps errors and degraded', async () => {
+    apiGet.mockResolvedValue({ models_registered: 1, models_loaded: 0, healthy: false, degraded: true, has_errors: true })
     const result = await registryController.stats()
     expect(result).toEqual({ total_models: 1, loaded_models: 0, failed_models: 1, circuit_breaker_open: true })
   })
 
-  it('best unwraps data envelope', async () => {
-    apiGet.mockResolvedValue({ data: { model_id: 'gpt2', score: 0.95 } })
+  it('best returns the data as-is', async () => {
+    apiGet.mockResolvedValue({ default_model: 'gpt2', models_loaded: 1 })
     const result = await registryController.best()
-    expect(result).toEqual({ model_id: 'gpt2', score: 0.95 })
+    expect(result).toEqual({ default_model: 'gpt2', models_loaded: 1 })
   })
 
   it('best returns null on empty', async () => {
@@ -54,7 +54,7 @@ describe('registryController', () => {
   })
 
   it('stats calls correct endpoint', async () => {
-    apiGet.mockResolvedValue({ total_models: 0, loaded_models: 0, failed_models: 0, circuit_breaker_open: false })
+    apiGet.mockResolvedValue({ models_registered: 0, models_loaded: 0, healthy: true, degraded: false, has_errors: false })
     await registryController.stats()
     expect(apiGet).toHaveBeenCalledWith('/registry/stats')
   })

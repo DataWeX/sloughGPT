@@ -51,23 +51,38 @@ describe('benchmarkController.history', () => {
 describe('benchmarkController.quality', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /benchmark/quality', async () => {
-    apiClient.apiGet.mockResolvedValue({ coherence_score: 0.9, quality_score: 0.85, repetition_rate: 0.05 })
+  it('maps backend response to quality metrics', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      responses_analyzed: 20,
+      metrics: { avg_length: 150, length_std: 50, repetition_rate: 0.05, unique_bigram_ratio: 0.9 },
+    })
 
     const result = await benchmarkController.quality()
+    expect(result.total_responses).toBe(20)
+    expect(result.repetition_rate).toBe(0.05)
     expect(result.coherence_score).toBe(0.9)
+    expect(result.avg_length).toBe(150)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/quality')
+  })
+
+  it('handles empty response', async () => {
+    apiClient.apiGet.mockResolvedValue(null)
+    const result = await benchmarkController.quality()
+    expect(result.total_responses).toBe(0)
+    expect(result.coherence_score).toBe(0)
   })
 })
 
 describe('benchmarkController.stats', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /benchmark/stats', async () => {
-    apiClient.apiGet.mockResolvedValue({ total: 10, avg_tokens: 128 })
+  it('maps backend response to stats', async () => {
+    apiClient.apiGet.mockResolvedValue({ total_responses: 10, avg_length: 640, models: ['gpt2'] })
 
     const result = await benchmarkController.stats()
     expect(result.total).toBe(10)
+    expect(result.avg_tokens).toBe(128)
+    expect(result.models).toEqual(['gpt2'])
     expect(apiClient.apiGet).toHaveBeenCalledWith('/benchmark/stats')
   })
 })
