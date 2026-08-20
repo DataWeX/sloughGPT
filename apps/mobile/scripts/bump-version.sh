@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bump version across package.json, build.gradle, and commit
+# Bump version across package.json, build.gradle, constants.ts, and commit
 # Usage: ./scripts/bump-version.sh [major|minor|patch]
 
 set -euo pipefail
@@ -28,5 +28,8 @@ sed -i "s/\"version\": \"$CURRENT\"/\"version\": \"$NEW\"/" package.json
 sed -i "s/versionCode [0-9]*/versionCode $((MAJOR * 10000 + MINOR * 100 + PATCH))/" android/app/build.gradle
 sed -i "s/versionName \"$CURRENT\"/versionName \"$NEW\"/" android/app/build.gradle
 
-echo "Updated: package.json, build.gradle"
+# Update constants.ts
+sed -i "s/export const APP_VERSION = '$CURRENT'/export const APP_VERSION = '$NEW'/" src/constants.ts
+
+echo "Updated: package.json, build.gradle, constants.ts"
 echo "Version: $NEW (code: $((MAJOR * 10000 + MINOR * 100 + PATCH)))"

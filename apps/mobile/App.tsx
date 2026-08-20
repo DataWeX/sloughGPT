@@ -1,5 +1,5 @@
-import React, {useEffect, useState} from 'react';
-import {LogBox, StatusBar, useColorScheme} from 'react-native';
+import React, {useEffect, useState, useRef} from 'react';
+import {LogBox, StatusBar, useColorScheme, BackHandler} from 'react-native';
 
 try {
   const Screens = require('react-native-screens');
@@ -188,6 +188,9 @@ function AppInner() {
   const isDark = useColorScheme() === 'dark';
   const [ready, setReady] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const sidebarState = useSidebar();
+  const useSidebarRef = useRef(sidebarState);
+  useSidebarRef.current = sidebarState;
 
   useEffect(() => {
     setReady(true);
@@ -213,6 +216,20 @@ function AppInner() {
       if (path) navigateTo(path);
     });
     return () => { unsub(); unsubResponse(); linkingSub?.remove(); };
+  }, []);
+
+  // Android back button: navigate to Chat on main screens, exit on Chat
+  useEffect(() => {
+    const onBackPress = () => {
+      const {activeScreen, navigate} = useSidebarRef.current;
+      if (activeScreen !== 'Chat') {
+        navigate('Chat');
+        return true; // handled
+      }
+      return false; // let default behavior (exit app)
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
   }, []);
 
   if (!ready) {

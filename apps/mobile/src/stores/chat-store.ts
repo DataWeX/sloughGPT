@@ -59,7 +59,9 @@ async function saveSessionContext(
     await api.post(`/session/${sessionId}/context`, {
       messages: messages.map(m => ({role: m.role, content: m.content})),
     });
-  } catch {}
+  } catch (e) {
+    if (__DEV__) console.warn('[chat-store] sendContext failed:', e);
+  }
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -292,7 +294,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           await finalizeSuccess(result.text);
           return;
         }
-      } catch {}
+      } catch (e) {
+        if (__DEV__) console.warn('[chat-store] local inference failed, falling back:', e);
+      }
       // Fall through to remote if local fails
     }
 
