@@ -43,6 +43,7 @@ const TOOLS: ToolItem[] = [
   {icon: 'layers', title: 'Experiments', desc: 'ML experiment tracking', target: 'Experiments'},
   {icon: 'book', title: 'Files', desc: 'File management and upload', target: 'Files'},
   {icon: 'package', title: 'Registry', desc: 'Model registry and health', target: 'Registry'},
+  {icon: 'brain', title: 'Memory', desc: 'Auto-memory store and search', target: 'Memory'},
 ];
 
 function formatUptime(seconds: number): string {

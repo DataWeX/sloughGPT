@@ -48,6 +48,7 @@ import {ImagesScreen} from './src/screens/ImagesScreen';
 import {ExperimentsScreen} from './src/screens/ExperimentsScreen';
 import {FilesScreen} from './src/screens/FilesScreen';
 import {RegistryScreen} from './src/screens/RegistryScreen';
+import {MemoryScreen} from './src/screens/MemoryScreen';
 import {useSettingsStore} from './src/stores/settings-store';
 import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
@@ -97,6 +98,7 @@ function ToolsStack() {
       <Stack.Screen name="Experiments" component={ExperimentsScreen} />
       <Stack.Screen name="Files" component={FilesScreen} />
       <Stack.Screen name="Registry" component={RegistryScreen} />
+      <Stack.Screen name="Memory" component={MemoryScreen} />
     </Stack.Navigator>
   );
 }
@@ -135,6 +137,7 @@ function SettingsStack() {
       <Stack.Screen name="Experiments" component={ExperimentsScreen} />
       <Stack.Screen name="Files" component={FilesScreen} />
       <Stack.Screen name="Registry" component={RegistryScreen} />
+      <Stack.Screen name="Memory" component={MemoryScreen} />
     </Stack.Navigator>
   );
 }

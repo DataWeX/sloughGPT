@@ -32,6 +32,7 @@ export type SettingsStackParamList = {
   Experiments: undefined;
   Files: undefined;
   Registry: undefined;
+  Memory: undefined;
 };
 
 export type ToolsStackParamList = {
@@ -63,6 +64,7 @@ export type ToolsStackParamList = {
   Experiments: undefined;
   Files: undefined;
   Registry: undefined;
+  Memory: undefined;
 };
 
 export type SettingsScreenProps<T extends keyof SettingsStackParamList> =
