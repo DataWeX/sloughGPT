@@ -5,6 +5,7 @@ import {useSettingsStore} from './settings-store';
 import {useHybridStore} from './hybrid-inference-store';
 import {useProvidersStore} from './providers-store';
 import {streamProviderChat, ProviderError} from '../services/providers-client';
+import {onMessageSent} from '../services/app-review';
 import {
   cacheMessages,
   getCachedMessages,
@@ -245,6 +246,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ]);
       await get().refreshSessions();
       set({streaming: false});
+      onMessageSent().catch(() => {});
     };
 
     const handleError = async (err: any) => {
