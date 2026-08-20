@@ -11,6 +11,7 @@ import type { Conversation } from '@/lib/session-controller'
 import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 import { downloadJson, downloadMarkdown } from '@/lib/download-utils'
 import { MS_PER_DAY } from '@/lib/format-bytes'
+import { chatDB } from '@/lib/db'
 
 interface ConversationSidebarProps {
   conversations: Conversation[]
@@ -68,12 +69,17 @@ function SidebarContent({
 
   const [search, setSearch] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
-  const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>(() => {
-    if (typeof window === 'undefined') return 'updated'
-    const saved = localStorage.getItem(SORT_KEY)
-    if (saved === 'name' || saved === 'messages') return saved
-    return 'updated'
-  })
+  const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>('updated')
+
+  useEffect(() => {
+    let cancelled = false
+    chatDB.getKV<string>(SORT_KEY).then(saved => {
+      if (!cancelled && (saved === 'name' || saved === 'messages')) {
+        setSortMode(saved)
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
   const unreadCount = useMemo(() => conversations.filter(c => c.unread).length, [conversations])
   const [archivedExpanded, setArchivedExpanded] = useState(false)
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([])
@@ -81,7 +87,7 @@ function SidebarContent({
   const [sortOpen, setSortOpen] = useState(false)
 
   useEffect(() => {
-    localStorage.setItem(SORT_KEY, sortMode)
+    chatDB.setKV(SORT_KEY, sortMode).catch(() => {})
   }, [sortMode])
 
   const sorted = useMemo(() => {

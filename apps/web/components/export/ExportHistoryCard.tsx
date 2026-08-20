@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { chatDB } from '@/lib/db'
 
 const STORAGE_KEY = 'sloughgpt-export-history'
 
@@ -12,29 +13,28 @@ interface ExportRecord {
   label: string
 }
 
-function loadHistory(): ExportRecord[] {
+async function loadHistory(): Promise<ExportRecord[]> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    return JSON.parse(raw) as ExportRecord[]
+    const entry = await chatDB.getKV<ExportRecord[]>(STORAGE_KEY)
+    return entry ?? []
   } catch {
     return []
   }
 }
 
-function saveHistory(history: ExportRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 20)))
+async function saveHistory(history: ExportRecord[]) {
+  try { await chatDB.setKV(STORAGE_KEY, history.slice(0, 20)) } catch { /* quota exceeded */ }
 }
 
-export function recordExport(format: string, fileCount: number) {
-  const history = loadHistory()
+export async function recordExport(format: string, fileCount: number) {
+  const history = await loadHistory()
   history.unshift({
     format,
     timestamp: Date.now(),
     fileCount,
     label: format.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
   })
-  saveHistory(history.slice(0, 20))
+  await saveHistory(history.slice(0, 20))
 }
 
 function timeAgo(ts: number): string {
@@ -57,7 +57,7 @@ export function ExportHistoryCard() {
   const [history, setHistory] = useState<ExportRecord[]>([])
 
   useEffect(() => {
-    setHistory(loadHistory())
+    loadHistory().then(setHistory)
   }, [])
 
   if (history.length === 0) return null

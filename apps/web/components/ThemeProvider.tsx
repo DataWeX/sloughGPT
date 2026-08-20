@@ -1,8 +1,8 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode } from 'react'
-
 import { syncHtmlTheme } from '@/lib/sync-html-theme'
+import { chatDB } from '@/lib/db'
 import {
   isStoredThemeId,
   isStoredPaletteId,
@@ -32,32 +32,35 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false)
 
   useLayoutEffect(() => {
-    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
-    const savedMode = localStorage.getItem(MODE_STORAGE_KEY)
-    const savedPalette = localStorage.getItem(PALETTE_STORAGE_KEY)
-    const t = isStoredThemeId(savedTheme) ? savedTheme : 'purple'
-    const p = isStoredPaletteId(savedPalette) ? savedPalette : 'noir-violet'
-    let m: ThemeMode
-    if (savedMode === 'light' || savedMode === 'dark') {
-      m = savedMode
-    } else if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: light)').matches) {
-      m = 'light'
-    } else {
-      m = 'dark'
-    }
-    setTheme(t)
-    setMode(m)
-    setPalette(p)
-    syncHtmlTheme(m, t, p)
-    setMounted(true)
+    Promise.all([
+      chatDB.getKV<string>(THEME_STORAGE_KEY),
+      chatDB.getKV<string>(MODE_STORAGE_KEY),
+      chatDB.getKV<string>(PALETTE_STORAGE_KEY),
+    ]).then(([savedTheme, savedMode, savedPalette]) => {
+      const t = isStoredThemeId(savedTheme) ? savedTheme : 'purple'
+      const p = isStoredPaletteId(savedPalette) ? savedPalette : 'noir-violet'
+      let m: ThemeMode
+      if (savedMode === 'light' || savedMode === 'dark') {
+        m = savedMode
+      } else if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: light)').matches) {
+        m = 'light'
+      } else {
+        m = 'dark'
+      }
+      setTheme(t)
+      setMode(m)
+      setPalette(p)
+      syncHtmlTheme(m, t, p)
+      setMounted(true)
+    })
   }, [])
 
   useEffect(() => {
     if (!mounted) return
     syncHtmlTheme(mode, theme, palette)
-    localStorage.setItem(THEME_STORAGE_KEY, theme)
-    localStorage.setItem(MODE_STORAGE_KEY, mode)
-    localStorage.setItem(PALETTE_STORAGE_KEY, palette)
+    chatDB.setKV(THEME_STORAGE_KEY, theme).catch(() => {})
+    chatDB.setKV(MODE_STORAGE_KEY, mode).catch(() => {})
+    chatDB.setKV(PALETTE_STORAGE_KEY, palette).catch(() => {})
   }, [theme, mode, palette, mounted])
 
   return (

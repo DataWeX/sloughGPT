@@ -16,7 +16,7 @@ import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from 'next/dynamic'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { downloadJson } from '@/lib/download-utils'
-import { todayDateString, getJsonItem } from '@/lib/format-bytes'
+import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
 import { StatusCard } from '@/components/monitoring/StatusCard'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
 import { TrafficCard } from '@/components/monitoring/TrafficCard'
@@ -82,19 +82,26 @@ export default function SystemHealthPage() {
   const MAX_HISTORY = 30
   const [inferenceRate, setInferenceRate] = useState<number>(0)
   const prevInferenceRef = useRef<{ count: number; time: number } | null>(null)
-  const [cpuThreshold, setCpuThreshold] = useState(() => {
-    return getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).cpu ?? 80
-  })
-  const [memThreshold, setMemThreshold] = useState(() => {
-    return getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).mem ?? 80
-  })
+  const [cpuThreshold, setCpuThreshold] = useState(80)
+  const [memThreshold, setMemThreshold] = useState(80)
   const [alerts, setAlerts] = useState<Array<{ time: string; type: string; value: number }>>([])
   const alertsRef = useRef<Array<{ time: string; type: string; value: number }>>([])
   const prevCpuOverRef = useRef(false)
   const prevMemOverRef = useRef(false)
 
   useEffect(() => {
-    try { localStorage.setItem('sloughgpt-monitoring-thresholds', JSON.stringify({ cpu: cpuThreshold, mem: memThreshold })) } catch { /* ignore */ }
+    let cancelled = false
+    getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).then(t => {
+      if (!cancelled) {
+        if (t.cpu != null) setCpuThreshold(t.cpu)
+        if (t.mem != null) setMemThreshold(t.mem)
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    setJsonItem('sloughgpt-monitoring-thresholds', { cpu: cpuThreshold, mem: memThreshold }).catch(() => {})
   }, [cpuThreshold, memThreshold])
 
   const fetchAll = useCallback(async (showRefreshing = false): Promise<boolean> => {

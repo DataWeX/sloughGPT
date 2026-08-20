@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react'
+import { chatDB } from '@/lib/db'
 
 type Locale = 'en' | 'es' | 'fr' | 'de' | 'zh'
 
@@ -231,20 +232,23 @@ const LocaleContext = createContext<LocaleContextType | undefined>(undefined)
 const LOCALE_KEY = 'man_locale'
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(LOCALE_KEY) as Locale
-      if (saved && translations[saved]) return saved
-    }
-    return 'en'
-  })
+  const [locale, setLocaleState] = useState<Locale>('en')
+
+  useEffect(() => {
+    let cancelled = false
+    chatDB.getKV<string>(LOCALE_KEY).then(saved => {
+      if (!cancelled && saved && translations[saved]) {
+        setLocaleState(saved)
+        document.documentElement.lang = saved
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const setLocale = useCallback((newLocale: Locale) => {
     setLocaleState(newLocale)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCALE_KEY, newLocale)
-      document.documentElement.lang = newLocale
-    }
+    chatDB.setKV(LOCALE_KEY, newLocale).catch(() => {})
+    document.documentElement.lang = newLocale
   }, [])
 
   useEffect(() => {

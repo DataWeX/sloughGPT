@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
 import { authController, type UserInfo } from '@/lib/auth-controller'
+import { chatDB } from '@/lib/db'
 
 type Mode = 'login' | 'register'
 
@@ -21,16 +22,20 @@ export default function AuthPage() {
   const [token, setToken] = useState<string | null>(null)
 
   useEffect(() => {
-    const saved = localStorage.getItem('auth_token')
-    if (saved) {
-      setToken(saved)
-      authController.getMe(saved)
-        .then(d => setCurrentUser(d))
-        .catch(() => { localStorage.removeItem('auth_token'); setToken(null) })
-        .finally(() => setChecking(false))
-    } else {
-      setChecking(false)
-    }
+    let cancelled = false
+    chatDB.getKV<string>('auth_token').then(saved => {
+      if (cancelled) return
+      if (saved) {
+        setToken(saved)
+        authController.getMe(saved)
+          .then(d => setCurrentUser(d))
+          .catch(() => { chatDB.deleteKV('auth_token').catch(() => {}); setToken(null) })
+          .finally(() => setChecking(false))
+      } else {
+        setChecking(false)
+      }
+    })
+    return () => { cancelled = true }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +48,7 @@ export default function AuthPage() {
         : await authController.register(username, email, password)
       setToken(data.token)
       setCurrentUser(data.user)
-      localStorage.setItem('auth_token', data.token)
+      chatDB.setKV('auth_token', data.token).catch(() => {})
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed')
     } finally {
@@ -54,7 +59,7 @@ export default function AuthPage() {
   const handleLogout = () => {
     setToken(null)
     setCurrentUser(null)
-    localStorage.removeItem('auth_token')
+    chatDB.deleteKV('auth_token').catch(() => {})
   }
 
   if (checking) {

@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge } fro
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { chatDB } from '@/lib/db'
 
 const DEFAULT_MAX_STEPS = 5000
 const MAX_STEPS_LIMIT = 1_000_000
@@ -47,9 +48,10 @@ function clampSteps(n: number): number {
     : DEFAULT_MAX_STEPS
 }
 
-function loadRole(): string {
+async function loadRole(): Promise<string> {
   try {
-    const saved = localStorage.getItem('vm-role')
+    const entry = await chatDB.getKV<string>('vm-role')
+    const saved = entry ?? 'user'
     if (saved === 'admin' || saved === 'kernel' || saved === 'user') return saved
   } catch {
     /* storage unavailable — default to user */
@@ -57,9 +59,10 @@ function loadRole(): string {
   return 'user'
 }
 
-function loadMaxSteps(): number {
+async function loadMaxSteps(): Promise<number> {
   try {
-    const saved = Number(localStorage.getItem('vm-max-steps'))
+    const entry = await chatDB.getKV<number>('vm-max-steps')
+    const saved = Number(entry ?? NaN)
     if (Number.isFinite(saved)) return clampSteps(saved)
   } catch {
     /* storage unavailable — default steps */
@@ -67,22 +70,12 @@ function loadMaxSteps(): number {
   return DEFAULT_MAX_STEPS
 }
 
-function loadTrainConfig(): TrainConfig {
+async function loadTrainConfig(): Promise<TrainConfig> {
   try {
-    const raw = localStorage.getItem('vm-train-config')
-    if (!raw) return DEFAULT_TRAIN_CONFIG
-    const parsed = JSON.parse(raw) as Partial<TrainConfig>
-    return clampTrainConfig({
-      dataset: parsed.dataset ?? DEFAULT_TRAIN_CONFIG.dataset,
-      epochs: parsed.epochs ?? DEFAULT_TRAIN_CONFIG.epochs,
-      lr: parsed.lr ?? DEFAULT_TRAIN_CONFIG.lr,
-      batch_size: parsed.batch_size ?? DEFAULT_TRAIN_CONFIG.batch_size,
-      n_layer: parsed.n_layer ?? DEFAULT_TRAIN_CONFIG.n_layer,
-      n_head: parsed.n_head ?? DEFAULT_TRAIN_CONFIG.n_head,
-      embed_dim: parsed.embed_dim ?? DEFAULT_TRAIN_CONFIG.embed_dim,
-    })
+    const entry = await chatDB.getKV<TrainConfig>('vm-train-config')
+    if (entry) return clampTrainConfig(entry)
   } catch {
-    /* malformed or unavailable — default config */
+    /* storage unavailable — default config */
   }
   return DEFAULT_TRAIN_CONFIG
 }
@@ -637,46 +630,43 @@ export default function VMPage() {
         setSource(decoded)
         sourceLoaded = true
       }
-    } catch { /* malformed hash — fall through to localStorage */ }
+    } catch { /* malformed hash — fall through to chatDB */ }
     if (!sourceLoaded) {
-      const saved = localStorage.getItem('vm-source')
+      const saved = await chatDB.getKV<string>('vm-source')
       if (saved) setSource(saved)
     }
-    setRole(loadRole())
-    setMaxSteps(loadMaxSteps())
-    setTrainConfig(loadTrainConfig())
+    const [role, maxSteps, trainConfigData] = await Promise.all([
+      loadRole(),
+      loadMaxSteps(),
+      loadTrainConfig(),
+    ])
+    setRole(role)
+    setMaxSteps(maxSteps)
+    setTrainConfig(trainConfigData)
     setHydrated(true)
   }, [])
 
-  // Save source to localStorage on change
+  // Save source to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    try {
-      localStorage.setItem('vm-source', source)
-    } catch { /* quota exceeded — source not persisted */ }
+    chatDB.setKV('vm-source', source).catch(() => {})
   }, [source, hydrated])
 
-  // Save role and steps to localStorage on change
+  // Save role and steps to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    try {
-      localStorage.setItem('vm-role', role)
-    } catch { /* storage unavailable */ }
+    chatDB.setKV('vm-role', role).catch(() => {})
   }, [role, hydrated])
 
   useEffect(() => {
     if (!hydrated) return
-    try {
-      localStorage.setItem('vm-max-steps', String(maxSteps))
-    } catch { /* storage unavailable */ }
+    chatDB.setKV('vm-max-steps', maxSteps).catch(() => {})
   }, [maxSteps, hydrated])
 
-  // Save the training launch config to localStorage on change
+  // Save the training launch config to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    try {
-      localStorage.setItem('vm-train-config', JSON.stringify(clampTrainConfig(trainConfig)))
-    } catch { /* storage unavailable */ }
+    chatDB.setKV('vm-train-config', clampTrainConfig(trainConfig)).catch(() => {})
   }, [trainConfig, hydrated])
 
   const handleRun = useCallback(async (step?: boolean, srcOverride?: string): Promise<VMRunResult | null> => {
