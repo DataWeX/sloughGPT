@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconDownload } from '@/components/icons/NavIcons'
@@ -26,6 +27,7 @@ interface Checkpoint {
 }
 
 export default function ExportPage() {
+  const router = useRouter()
   const [formats, setFormats] = useState<ExportFormat[]>([])
   const [selectedFormat, setSelectedFormat] = useState('sou')
   const [exporting, setExporting] = useState(false)
@@ -245,9 +247,12 @@ export default function ExportPage() {
         </CardHeader>
         <CardContent>
           {checkpoints.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No checkpoints found. Train a model to create checkpoints.
-            </p>
+            <div className="text-center py-6 space-y-2">
+              <p className="text-sm text-muted-foreground">No checkpoints found. Train a model to create checkpoints.</p>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/training')}>
+                Go to Training
+              </Button>
+            </div>
           ) : (
             <div className="space-y-2">
               {checkpoints.map(cp => (

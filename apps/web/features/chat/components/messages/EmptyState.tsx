@@ -120,7 +120,16 @@ export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSu
             </Button>
           </Link>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex items-center gap-2 pt-1">
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onSuggestionClick?.('Show me my datasets')}>
+            Datasets
+          </Button>
+          <Button size="sm" className="h-8 text-xs" onClick={() => onSuggestionClick?.('Train a model on my data')}>
+            Train model
+          </Button>
+        </div>
+      )}
 
       <div
         className="flex flex-wrap items-center justify-center gap-3 text-[11px] text-muted-foreground/40 bg-muted/30 px-4 py-2 rounded-full border border-border/30"

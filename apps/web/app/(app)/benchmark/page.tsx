@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -12,6 +13,7 @@ import { useToastStore } from '@/lib/toast-store'
 type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity'
 
 export default function BenchmarkPage() {
+  const router = useRouter()
   const [tab, setTab] = useState<Tab>('metrics')
   const [metrics, setMetrics] = useState<BenchmarkResult | null>(null)
   const [quality, setQuality] = useState<{ coherence_score: number; quality_score: number; repetition_rate: number } | null>(null)
@@ -147,7 +149,14 @@ export default function BenchmarkPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No metrics available. Is a model loaded?</p>
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                No metrics available. Is a model loaded?
+                <div className="mt-2">
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/models')}>
+                    Open Models
+                  </Button>
+                </div>
+              </div>
             )}
             {stats && (
               <div className="mt-3 text-xs text-muted-foreground">
@@ -179,7 +188,12 @@ export default function BenchmarkPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No quality data yet. Chat with the model to generate responses.</p>
+              <div className="text-center py-6 text-sm text-muted-foreground space-y-2">
+                <div>No quality data yet. Chat with the model to generate responses.</div>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+                  Open Chat
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -200,7 +214,12 @@ export default function BenchmarkPage() {
           </CardHeader>
           <CardContent>
             {responses.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No responses logged yet.</p>
+              <div className="text-center py-6 text-sm text-muted-foreground space-y-2">
+                <div>No responses logged yet.</div>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+                  Open Chat
+                </Button>
+              </div>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {responses.map((r, i) => (

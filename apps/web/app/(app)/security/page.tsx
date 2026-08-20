@@ -162,7 +162,10 @@ export default function SecurityPage() {
             placeholder="Filter by event type..."
           />
           {filteredLogs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No audit logs found.</p>
+            <div className="text-center py-6 text-sm text-muted-foreground space-y-1">
+              <div>No audit logs found.</div>
+              <div className="text-xs text-muted-foreground/70">Activities are logged automatically as you use the app.</div>
+            </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {filteredLogs.map((log, i) => (

@@ -1,6 +1,8 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { Card, CardContent } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
 import type { TrainingJob } from '@/lib/training-controller'
 
 interface TrainingHistoryProps {
@@ -19,12 +21,18 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function TrainingHistory({ jobs }: TrainingHistoryProps) {
+  const router = useRouter()
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Training History</span>
       <CardContent className="p-0">
         {jobs.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">No training jobs yet</p>
+          <div className="text-xs text-muted-foreground text-center py-4 space-y-2">
+            <div>No training jobs yet</div>
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => router.push('/training')}>
+              Go to Training
+            </Button>
+          </div>
         ) : (
           <div className="space-y-1">
             {jobs.slice(0, 6).map((job) => (

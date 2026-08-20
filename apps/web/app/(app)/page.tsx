@@ -47,11 +47,15 @@ export default function HomePage() {
   const { t } = useLocale()
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
   const addToast = useToastStore(s => s.addToast)
-  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, healthSummary, feedbackStats, ...data } = useHomePageData(health)
+  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, recentDatasets, healthSummary, feedbackStats, ...data } = useHomePageData(health)
 
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   const [startup, setStartup] = useState<{phase: string; step: number; total: number; message: string} | null>(null)
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('onboarding_dismissed') === '1'
+  })
 
   const [convStats, setConvStats] = useState<{ totalConversations: number; totalMessages: number; totalWords: number; activeDays: number; mostActiveHour: number | null } | null>(null)
 
@@ -103,6 +107,15 @@ export default function HomePage() {
     }).catch(() => { /* dataset stats non-critical */ })
     return () => { cancelled = true }
   }, [apiStatus])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (onboardingDismissed) {
+      localStorage.setItem('onboarding_dismissed', '1')
+    } else {
+      localStorage.removeItem('onboarding_dismissed')
+    }
+  }, [onboardingDismissed])
 
   useEffect(() => {
     if (apiStatus !== 'offline') return
@@ -338,6 +351,20 @@ export default function HomePage() {
         </div>
       )}
 
+      {apiStatus === 'online' && !modelStatus.loaded && (
+        <Card className="border-dashed border-border/60 bg-muted/20">
+          <CardContent className="py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">No model loaded</p>
+              <p className="text-xs text-muted-foreground">Load a model in Personalities to start chatting</p>
+            </div>
+            <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => router.push('/models')}>
+              Open Models
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {apiStatus === 'online' && modelStatus.loaded && (
         <Card>
           <CardContent className="py-3">
@@ -378,26 +405,48 @@ export default function HomePage() {
         </Card>
       )}
 
-      {!apiStatus || apiStatus === 'loading' || apiStatus === 'offline' ? null : (() => {
-        const dismissed = typeof window !== 'undefined' && localStorage.getItem('onboarding_dismissed')
-        if (dismissed) return null
-        return (
-          <Card className="border-dashed border-primary/20 bg-primary/[0.02]">
-            <CardContent className="py-3 flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">New here?</span>{' '}
-                Start chatting, then train the model on your conversations. The more you chat, the better it gets.
-              </p>
-              <button
-                className="text-xs text-muted-foreground hover:text-foreground shrink-0 transition-colors"
-                onClick={(e) => { localStorage.setItem('onboarding_dismissed', '1'); e.currentTarget.closest('.space-y-4 > div')?.remove() }}
-              >
-                Got it
-              </button>
-            </CardContent>
-          </Card>
-        )
-      })()}
+      {apiStatus === 'online' && recentDatasets.length > 0 && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-medium">Recent datasets</p>
+              <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+            </div>
+            <div className="space-y-1.5">
+              {recentDatasets.map(ds => (
+                <button
+                  key={ds.id}
+                  onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
+                  className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
+                  <span className="text-xs truncate flex-1">{ds.name}</span>
+                  {ds.samples != null && <span className="text-xs text-muted-foreground shrink-0">{ds.samples.toLocaleString()} samples</span>}
+                  <span className="text-[10px] text-primary shrink-0">Train →</span>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!onboardingDismissed && (
+        <Card className="border-dashed border-primary/20 bg-primary/[0.02]">
+          <CardContent className="py-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">New here?</span>{' '}
+              Start chatting, then train the model on your conversations. The more you chat, the better it gets.
+            </p>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+              onClick={() => setOnboardingDismissed(true)}
+            >
+              Got it
+            </button>
+          </CardContent>
+        </Card>
+      )}
 
       {recentSessions.length > 0 && (
         <button
@@ -536,6 +585,22 @@ export default function HomePage() {
         </div>
       )}
 
+      {apiStatus === 'online' && datasetStats && datasetStats.totalDatasets > 0 && modelStatus.loaded && (
+        <Card className="border-accent/25 bg-accent/[0.03]">
+          <CardContent className="py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Ready to train</p>
+              <p className="text-xs text-muted-foreground">
+                {datasetStats.totalDatasets} dataset{datasetStats.totalDatasets === 1 ? '' : 's'} available · {formatBytes(datasetStats.totalSize)}
+              </p>
+            </div>
+            <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => router.push('/training')}>
+              Start training
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
         <Link
           href="/chat"
@@ -580,7 +645,12 @@ export default function HomePage() {
               <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm font-semibold">Datasets</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs sm:text-sm font-semibold">Datasets</p>
+                {datasetStats && datasetStats.totalDatasets > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
+                )}
+              </div>
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Manage training data</p>
             </div>
           </div>
@@ -597,7 +667,12 @@ export default function HomePage() {
               <IconBolt className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm font-semibold">Teach me</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs sm:text-sm font-semibold">Teach me</p>
+                {datasetStats && datasetStats.totalDatasets > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
+                )}
+              </div>
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Train from your writing</p>
             </div>
           </div>

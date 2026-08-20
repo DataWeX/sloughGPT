@@ -108,7 +108,7 @@ export function TrainingPipeline({
 
   const goToTrain = () => setStep('train')
 
-  const stepProps = { form, datasets, onNext: advance, onBack: goBack }
+  const stepProps = { form, datasets, onNext: advance, onBack: goBack, addToast }
 
   if (isTraining) {
     return (

@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { cn, IconChevronDown, IconCheck, IconRefresh } from '@sloughgpt/strui'
 import {
   DropdownMenu,
@@ -46,6 +47,7 @@ export function ModelDropdown({
   panelTitle = 'Backend Model',
 }: ModelDropdownProps) {
   const ctx = useChatToolbarContext()
+  const router = useRouter()
   const {
     availableModels,
     current: currentModel,
@@ -71,7 +73,12 @@ export function ModelDropdown({
         )}
         <div className="max-h-28 overflow-y-auto p-1.5 space-y-0.5">
           {availableModels.length === 0 ? (
-            <div className="px-2 py-3 text-[10px] text-muted-foreground text-center">No models available</div>
+            <div className="px-2 py-3 text-[10px] text-muted-foreground text-center space-y-2">
+              <div>No models available</div>
+              <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => router.push('/models')}>
+                Browse models
+              </Button>
+            </div>
           ) : availableModels.map(m => {
             const info = modelInfoMap[m]
             const sl = sizeLabel(info)

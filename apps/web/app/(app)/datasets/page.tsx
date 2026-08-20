@@ -334,10 +334,10 @@ export default function DatasetsPage() {
           <div className="grid gap-2 max-h-[60vh] overflow-y-auto overscroll-contain">
             {filtered.map(ds => (
               <div key={ds.id}>
-                <Card
-                  className={`cursor-pointer hover:bg-accent/40 transition-colors ${expandedId === ds.id ? 'border-primary/40 bg-primary/[0.08]' : ''}`}
-                  onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
-                >
+              <Card
+                className={`group transition-colors ${expandedId === ds.id ? 'border-primary/40 bg-primary/[0.08]' : 'hover:bg-accent/40'}`}
+                onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
+              >
                   <CardContent className="flex items-center justify-between py-3 px-4">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{ds.name}</p>

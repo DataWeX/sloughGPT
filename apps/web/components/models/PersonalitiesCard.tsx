@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { cn, Badge, Chip } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -21,11 +22,17 @@ export default function PersonalitiesCard({
   souls, soulsLoading, checkpoints, checkpointsLoading,
   currentSoul, activeCheckpoint, switchingSoul, onSwitch,
 }: PersonalitiesCardProps) {
+  const router = useRouter()
   if (souls.length === 0 && !soulsLoading) return (
     <Card>
       <CardHeader><CardTitle className="text-base">Personalities</CardTitle></CardHeader>
       <CardContent>
-        <p className="text-xs text-muted-foreground text-center py-4">No personalities available yet.</p>
+        <div className="text-center py-4 space-y-2">
+          <div className="text-xs text-muted-foreground">No personalities available yet.</div>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => router.push('/souls')}>
+            Manage Souls
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

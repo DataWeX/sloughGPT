@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -21,6 +22,7 @@ interface Style {
 }
 
 export default function ImagesPage() {
+  const router = useRouter()
   const [gallery, setGallery] = useState<GalleryImage[]>([])
   const [styles, setStyles] = useState<Style[]>([])
   const [loading, setLoading] = useState(true)
@@ -132,7 +134,12 @@ export default function ImagesPage() {
         </CardHeader>
         <CardContent>
           {gallery.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No images generated yet.</p>
+            <div className="text-center py-8 text-sm text-muted-foreground space-y-2">
+              <div>No images generated yet.</div>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+                Open Chat
+              </Button>
+            </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {gallery.map(img => (

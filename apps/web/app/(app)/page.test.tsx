@@ -102,6 +102,7 @@ function makeHomeData(overrides: Record<string, unknown> = {}) {
     runningTraining: null,
     knowledgeCount: 0,
     recentJobs: [],
+    recentDatasets: [],
     testRunning: false,
     testResponse: null,
     setTestRunning: vi.fn(),
@@ -110,7 +111,7 @@ function makeHomeData(overrides: Record<string, unknown> = {}) {
     inferenceCount: 5,
     healthSummary: 'hf/gpt2',
     feedbackStats: null,
-    errors: { models: false, soul: false, sessions: false, training: false, knowledge: false, feedback: false },
+    errors: { models: false, soul: false, sessions: false, training: false, knowledge: false, feedback: false, datasets: false },
     ...overrides,
   }
 }

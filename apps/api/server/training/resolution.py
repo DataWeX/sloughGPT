@@ -11,6 +11,12 @@ from typing import Any, Optional, Tuple, Dict
 from .schemas import TrainDatasetRef
 
 
+def _repo_root() -> "Path":
+    from pathlib import Path
+    from domains.shared.utils import find_repo_root
+    return find_repo_root(Path(__file__).resolve())
+
+
 def resolve_training_inputs(
     dataset: Optional[str],
     manifest_uri: Optional[str],
@@ -50,7 +56,7 @@ def resolve_training_inputs(
         return str(data_path), out_stem, manifest_meta, "manifest"
 
     stem = str(dataset).strip()
-    p = Path("datasets") / stem / "input.txt"
+    p = _repo_root() / "datasets" / stem / "input.txt"
     if not p.is_file():
         raise ManifestError(f"Missing training file: {p}")
     return str(p.resolve()), stem, None, "legacy"

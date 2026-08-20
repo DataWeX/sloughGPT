@@ -142,6 +142,11 @@ export default function TokenizerPage() {
       {!loading && !loadError && !stats && (
         <div className="text-center py-8 text-sm text-muted-foreground">
           No tokenizer data available. Train a tokenizer or check server status.
+          <div className="mt-2">
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/training')}>
+              Go to Training
+            </Button>
+          </div>
         </div>
       )}
 

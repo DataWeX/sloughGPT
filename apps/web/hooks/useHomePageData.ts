@@ -20,6 +20,7 @@ export interface HomePageData {
   runningTraining: { name: string; status_message: string } | null
   knowledgeCount: number
   recentJobs: Array<{ id: string; name: string; status: string; created_at?: string }>
+  recentDatasets: Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>
   testRunning: boolean
   testResponse: string | null
   setTestRunning: (v: boolean) => void
@@ -36,6 +37,7 @@ export interface HomePageData {
     training: boolean
     knowledge: boolean
     feedback: boolean
+    datasets: boolean
   }
 }
 
@@ -48,6 +50,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const [runningTraining, setRunningTraining] = useState<{ name: string; status_message: string } | null>(null)
   const [knowledgeCount, setKnowledgeCount] = useState<number>(0)
   const [recentJobs, setRecentJobs] = useState<Array<{ id: string; name: string; status: string; created_at?: string }>>([])
+  const [recentDatasets, setRecentDatasets] = useState<Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>>([])
   const [testRunning, setTestRunning] = useState(false)
   const [testResponse, setTestResponse] = useState<string | null>(null)
   const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | null>(null)
@@ -58,6 +61,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     training: false,
     knowledge: false,
     feedback: false,
+    datasets: false,
   })
 
   const ready = useApiReady()
@@ -116,6 +120,21 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     feedbackController.getFeedbackStats().then(s => {
       if (!cancelled.current) setFeedbackStats(s)
     }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
+    datasetController.list().then(list => {
+      if (!cancelled.current) {
+        const sorted = [...list]
+          .sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime())
+          .slice(0, 5)
+          .map(ds => ({
+            id: ds.id,
+            name: ds.name,
+            updated_at: ds.updated_at || ds.created_at,
+            size: ds.size,
+            samples: ds.samples,
+          }))
+        setRecentDatasets(sorted)
+      }
+    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, datasets: true })) })
     return () => { cancelled.current = true }
   }, [ready])
 
@@ -123,7 +142,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     modelCount, checkpointCount,
     modelStatus, currentSoul,
     recentSessions, runningTraining,
-    knowledgeCount, recentJobs,
+    knowledgeCount, recentJobs, recentDatasets,
     testRunning, testResponse,
     setTestRunning, setTestResponse,
     setKnowledgeCount, inferenceCount,

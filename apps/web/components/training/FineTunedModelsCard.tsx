@@ -135,9 +135,12 @@ export function FineTunedModelsCard({
             <Button size="sm" variant="ghost" onClick={() => void fetchModels()}>Retry</Button>
           </div>
         ) : models.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            No fine-tuned models yet. HF fine-tuned outputs under models/hf-finetuned appear here.
-          </p>
+          <div className="text-center py-4 space-y-2">
+            <p className="text-xs text-muted-foreground">No fine-tuned models yet. HF fine-tuned outputs under models/hf-finetuned appear here.</p>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => router.push('/training')}>
+              Go to Training
+            </Button>
+          </div>
         ) : (
           <>
             {selectedIds.size > 0 && (
