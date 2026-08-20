@@ -105,3 +105,56 @@ class CallbackStore:
 
     def count(self) -> int:
         return self._count
+
+
+class ChainedStore:
+    def __init__(self, stores: list[Store], name: str = ""):
+        self.name = name or "chained"
+        self._stores = stores
+
+    def write(self, record: Record) -> None:
+        for store in self._stores:
+            store.write(record)
+
+    def read_all(self) -> Iterator[Record]:
+        seen = set()
+        for store in self._stores:
+            for record in store.read_all():
+                key = (record.content, id(store))
+                if key not in seen:
+                    seen.add(key)
+                    yield record
+
+    def count(self) -> int:
+        return sum(s.count() for s in self._stores)
+
+
+class StatsStore:
+    def __init__(self, inner: Store, name: str = ""):
+        self.name = name or f"stats:{inner.name}"
+        self._inner = inner
+        self.total_written = 0
+        self.total_bytes = 0
+        self.by_source: dict[str, int] = {}
+
+    def write(self, record: Record) -> None:
+        self._inner.write(record)
+        self.total_written += 1
+        self.total_bytes += len(record.content)
+        source = record.metadata.get("source", "unknown")
+        self.by_source[source] = self.by_source.get(source, 0) + 1
+
+    def read_all(self) -> Iterator[Record]:
+        return self._inner.read_all()
+
+    def count(self) -> int:
+        return self._inner.count()
+
+    def stats(self) -> dict:
+        return {
+            "total_written": self.total_written,
+            "total_bytes": self.total_bytes,
+            "avg_bytes": self.total_bytes / max(self.total_written, 1),
+            "by_source": dict(self.by_source),
+            "inner_count": self._inner.count(),
+        }

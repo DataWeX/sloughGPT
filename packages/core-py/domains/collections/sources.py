@@ -191,7 +191,7 @@ class ApiSource:
         import urllib.request
         import urllib.error
         try:
-            req = urllib.request.Request(self.url, headers={"User-Agent": "sloughgpt-culler/1.0", **self.headers})
+            req = urllib.request.Request(self.url, headers={"User-Agent": "sloughgpt-collections/1.0", **self.headers})
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 body = resp.read().decode("utf-8", errors="replace")
             data = json.loads(body)
@@ -206,3 +206,85 @@ class ApiSource:
                 self._last_id = str(items[0].get("id", 0))
         except (urllib.error.URLError, OSError, json.JSONDecodeError):
             return
+
+
+class SseSource:
+    def __init__(self, url: str, name: str = "", timeout: int = 30):
+        self.url = url
+        self.name = name or f"sse:{url[:60]}"
+        self.timeout = timeout
+
+    def read(self) -> Iterator[Record]:
+        import urllib.request
+        import urllib.error
+        try:
+            req = urllib.request.Request(self.url, headers={
+                "User-Agent": "sloughgpt-collections/1.0",
+                "Accept": "text/event-stream",
+            })
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                event_type = ""
+                event_data = []
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if line.startswith("event:"):
+                        event_type = line[6:].strip()
+                    elif line.startswith("data:"):
+                        event_data.append(line[5:].strip())
+                    elif line == "":
+                        if event_data:
+                            content = "\n".join(event_data)
+                            yield Record(content=content, metadata={"source": self.name, "event": event_type, "url": self.url})
+                            event_type = ""
+                            event_data = []
+        except (urllib.error.URLError, OSError):
+            return
+
+
+class WatchSource:
+    def __init__(self, path: str, name: str = "", poll_interval: float = 1.0, patterns: list[str] | None = None):
+        self.path = Path(path)
+        self.name = name or f"watch:{self.path.name}"
+        self.poll_interval = poll_interval
+        self.patterns = patterns or ["*"]
+        self._seen_mtimes: dict[str, float] = {}
+
+    def read(self) -> Iterator[Record]:
+        import fnmatch
+        for pattern in self.patterns:
+            for file_path in self.path.glob(pattern):
+                if not file_path.is_file():
+                    continue
+                mtime = file_path.stat().st_mtime
+                key = str(file_path)
+                last_mtime = self._seen_mtimes.get(key, 0.0)
+                if mtime > last_mtime:
+                    self._seen_mtimes[key] = mtime
+                    try:
+                        content = file_path.read_text(encoding="utf-8", errors="replace")
+                        if content.strip():
+                            yield Record(
+                                content=content.strip(),
+                                metadata={"source": self.name, "path": str(file_path), "mtime": mtime},
+                            )
+                    except OSError:
+                        continue
+
+    def reset(self):
+        self._seen_mtimes.clear()
+
+
+class GeneratorSource:
+    def __init__(self, generator_fn, name: str = "generator"):
+        self._generator_fn = generator_fn
+        self.name = name
+
+    def read(self) -> Iterator[Record]:
+        for item in self._generator_fn():
+            if isinstance(item, Record):
+                yield item
+            elif isinstance(item, str):
+                yield Record(content=item, metadata={"source": self.name})
+            elif isinstance(item, dict):
+                content = item.pop("content", "") if isinstance(item, dict) else str(item)
+                yield Record(content=content, metadata={"source": self.name, **(item if isinstance(item, dict) else {})})

@@ -258,8 +258,8 @@ describe('FeedbackPage — training tab flow', () => {
     if (trainTab) {
       fireEvent.click(trainTab)
       await waitFor(() => {
-        expect(screen.getByTestId('stat-Feedback Pairs')).toBeTruthy()
-        expect(screen.getByTestId('stat-Quality Score')).toBeTruthy()
+        expect(screen.getByTestId('stat-Training Jobs')).toBeTruthy()
+        expect(screen.getByTestId('stat-Final Loss')).toBeTruthy()
       })
     }
   })

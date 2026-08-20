@@ -6,6 +6,9 @@ from domains.collections import (
     Record, FileSource, MemoryStore, CallbackStore, Collector,
     LengthFilter, DedupFilter, KeywordFilter, RegexFilter,
     LanguageFilter, FilterChain, CollectionPipeline, CollectionRegistry,
+    ChainedStore, StatsStore, GeneratorSource, WatchSource,
+    ParallelCollector, BatchCollector, SamplerFilter, TransformFilter,
+    TruncateFilter, PrefixFilter, MetadataFilter,
 )
 
 
@@ -250,3 +253,183 @@ class TestCollectionRegistry:
         reg.register_store("st1", None)
         assert "s1" in reg.list_sources()
         assert "st1" in reg.list_stores()
+
+
+class TestChainedStore:
+    def test_write_to_all(self):
+        s1 = MemoryStore()
+        s2 = MemoryStore()
+        chained = ChainedStore([s1, s2])
+        chained.write(Record(content="hello"))
+        assert s1.count() == 1
+        assert s2.count() == 1
+
+    def test_read_all_merges(self):
+        s1 = MemoryStore()
+        s2 = MemoryStore()
+        s1.write(Record(content="a"))
+        s2.write(Record(content="b"))
+        chained = ChainedStore([s1, s2])
+        records = list(chained.read_all())
+        assert len(records) == 2
+
+    def test_count_sums(self):
+        s1 = MemoryStore()
+        s2 = MemoryStore()
+        s1.write(Record(content="a"))
+        s2.write(Record(content="b"))
+        s2.write(Record(content="c"))
+        chained = ChainedStore([s1, s2])
+        assert chained.count() == 3
+
+
+class TestStatsStore:
+    def test_stats_tracking(self):
+        inner = MemoryStore()
+        stats = StatsStore(inner)
+        stats.write(Record(content="hello", metadata={"source": "test"}))
+        stats.write(Record(content="world", metadata={"source": "test"}))
+        s = stats.stats()
+        assert s["total_written"] == 2
+        assert s["total_bytes"] == 10
+        assert s["by_source"]["test"] == 2
+
+    def test_delegates_to_inner(self):
+        inner = MemoryStore()
+        stats = StatsStore(inner)
+        stats.write(Record(content="x"))
+        assert inner.count() == 1
+        assert stats.count() == 1
+
+
+class TestGeneratorSource:
+    def test_generator_fn(self):
+        def gen():
+            yield "hello"
+            yield "world"
+        src = GeneratorSource(gen)
+        records = list(src.read())
+        assert len(records) == 2
+        assert records[0].content == "hello"
+
+    def test_generator_with_records(self):
+        def gen():
+            yield Record(content="a", metadata={"x": 1})
+        src = GeneratorSource(gen)
+        records = list(src.read())
+        assert len(records) == 1
+        assert records[0].metadata["x"] == 1
+
+
+class TestWatchSource:
+    def test_watches_new_files(self, tmp_path):
+        src = WatchSource(str(tmp_path), patterns=["*.txt"])
+        records = list(src.read())
+        assert len(records) == 0
+
+        (tmp_path / "test.txt").write_text("hello")
+        records = list(src.read())
+        assert len(records) == 1
+        assert records[0].content == "hello"
+
+    def test_watches_modified_files(self, tmp_path):
+        (tmp_path / "test.txt").write_text("v1")
+        src = WatchSource(str(tmp_path), patterns=["*.txt"])
+        list(src.read())
+
+        (tmp_path / "test.txt").write_text("v2")
+        records = list(src.read())
+        assert len(records) == 1
+        assert records[0].content == "v2"
+
+    def test_reset(self, tmp_path):
+        (tmp_path / "test.txt").write_text("hello")
+        src = WatchSource(str(tmp_path), patterns=["*.txt"])
+        list(src.read())
+        src.reset()
+        records = list(src.read())
+        assert len(records) == 1
+
+
+class TestParallelCollector:
+    def test_collects_from_all(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_text("alpha\nbeta\n")
+        f2.write_text("gamma\n")
+        store = MemoryStore()
+        c1 = Collector(FileSource(str(f1)), store)
+        c2 = Collector(FileSource(str(f2)), store)
+        pc = ParallelCollector([c1, c2])
+        count = pc.collect_threaded()
+        assert count == 3
+        assert store.count() == 3
+
+    def test_stats_populated(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("hello\n")
+        store = MemoryStore()
+        c1 = Collector(FileSource(str(f1)), store)
+        pc = ParallelCollector([c1])
+        pc.collect_threaded()
+        assert "file:a.txt" in pc.stats["sources"]
+
+
+class TestBatchCollector:
+    def test_collects_all(self, tmp_path):
+        src_file = tmp_path / "data.txt"
+        lines = "\n".join(f"line{i}" for i in range(25))
+        src_file.write_text(lines + "\n")
+        store = MemoryStore()
+        bc = BatchCollector(FileSource(str(src_file)), store, batch_size=10)
+        count = bc.collect()
+        assert count == 25
+        assert store.count() == 25
+        assert bc.stats["batches"] == 3
+
+
+class TestSamplerFilter:
+    def test_samples_subset(self):
+        f = SamplerFilter(rate=0.5)
+        results = [f.accept(Record(content="x")) for _ in range(100)]
+        sampled = sum(results)
+        assert 20 < sampled < 80
+
+
+class TestTransformFilter:
+    def test_transform(self):
+        tf = TransformFilter(transform_fn=lambda r: Record(
+            content=r.content.upper(), metadata=r.metadata
+        ))
+        r = Record(content="hello")
+        assert tf.accept(r) is True
+        result = tf.transform(r)
+        assert result.content == "HELLO"
+
+
+class TestTruncateFilter:
+    def test_truncates(self):
+        f = TruncateFilter(max_length=5)
+        r = Record(content="hello world")
+        f.accept(r)
+        assert r.content == "hello"
+
+
+class TestPrefixFilter:
+    def test_prefixes(self):
+        f = PrefixFilter(prefix="[PREF] ")
+        r = Record(content="hello")
+        f.accept(r)
+        assert r.content == "[PREF] hello"
+
+
+class TestMetadataFilter:
+    def test_include_mode(self):
+        f = MetadataFilter(key="source", values=["rss", "api"])
+        assert f.accept(Record(content="x", metadata={"source": "rss"}))
+        assert not f.accept(Record(content="x", metadata={"source": "file"}))
+
+    def test_exclude_mode(self):
+        f = MetadataFilter(key="source", values=["spam"], mode="exclude")
+        assert f.accept(Record(content="x", metadata={"source": "news"}))
+        assert not f.accept(Record(content="x", metadata={"source": "spam"}))

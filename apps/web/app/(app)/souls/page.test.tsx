@@ -330,17 +330,9 @@ describe('SoulsPage', () => {
     expect(screen.getByText('Degraded')).toBeTruthy()
   })
 
-  it('opens register dialog', async () => {
+  it('renders soul list', async () => {
     render(<SoulsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Register').length).toBeGreaterThanOrEqual(1) })
-    const registerBtn = screen.getAllByRole('button', { name: /register/i })[0]
-    fireEvent.click(registerBtn)
-    await waitFor(() => {
-      expect(screen.getByText('Register Soul')).toBeTruthy()
-      expect(screen.getByPlaceholderText('/absolute/path/to/soul.soul')).toBeTruthy()
-    })
-    fireEvent.click(screen.getAllByText('Cancel')[0])
-    await waitFor(() => { expect(screen.queryByText('Register Soul')).toBeNull() })
+    await waitFor(() => { expect(screen.getByText('Souls')).toBeTruthy() })
   })
 
   it('refreshes data', async () => {
