@@ -30,13 +30,6 @@ export default defineConfig({
       'app/**/*.test.{ts,tsx}',
       'features/**/*.test.{ts,tsx}',
     ],
-    // ModelDetailPage.test.tsx excluded: vitest fork pool never exits because the
-    // page's setInterval (uptime timer) keeps the Node event loop alive even after
-    // cleanup() unmounts the component. Run separately:
-    //   npx vitest run "app/(app)/model/[id]/ModelDetailPage.test.tsx"
-    exclude: [
-      'app/(app)/model/[id]/ModelDetailPage.test.tsx',
-    ],
     passWithNoTests: true,
     setupFiles: ['./vitest-setup.ts'],
     pool: 'forks',

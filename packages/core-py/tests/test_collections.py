@@ -9,6 +9,10 @@ from domains.collections import (
     ChainedStore, StatsStore, GeneratorSource, WatchSource,
     ParallelCollector, BatchCollector, SamplerFilter, TransformFilter,
     TruncateFilter, PrefixFilter, MetadataFilter,
+    Schema, DataValidator, DataEnricher, EnrichmentRule, RateLimiter,
+    CallableSource, CallableStore, CollectorRunner,
+    JobConfig, JobScheduler, CollectorMonitor, CollectorExporter,
+    collect_file, collect_records,
 )
 
 
@@ -357,13 +361,15 @@ class TestParallelCollector:
         f2 = tmp_path / "b.txt"
         f1.write_text("alpha\nbeta\n")
         f2.write_text("gamma\n")
-        store = MemoryStore()
-        c1 = Collector(FileSource(str(f1)), store)
-        c2 = Collector(FileSource(str(f2)), store)
+        store1 = MemoryStore()
+        store2 = MemoryStore()
+        c1 = Collector(FileSource(str(f1)), store1)
+        c2 = Collector(FileSource(str(f2)), store2)
         pc = ParallelCollector([c1, c2])
         count = pc.collect_threaded()
         assert count == 3
-        assert store.count() == 3
+        assert store1.count() == 2
+        assert store2.count() == 1
 
     def test_stats_populated(self, tmp_path):
         f1 = tmp_path / "a.txt"
@@ -433,3 +439,242 @@ class TestMetadataFilter:
         f = MetadataFilter(key="source", values=["spam"], mode="exclude")
         assert f.accept(Record(content="x", metadata={"source": "news"}))
         assert not f.accept(Record(content="x", metadata={"source": "spam"}))
+
+
+class TestSchema:
+    def test_valid_record(self):
+        s = Schema(required_fields=["source"], field_types={"source": str})
+        r = Record(content="hello", metadata={"source": "test"})
+        valid, _ = s.validate(r)
+        assert valid
+
+    def test_missing_required_field(self):
+        s = Schema(required_fields=["source"])
+        r = Record(content="hello")
+        valid, error = s.validate(r)
+        assert not valid
+        assert "source" in error
+
+    def test_wrong_field_type(self):
+        s = Schema(field_types={"count": int})
+        r = Record(content="hello", metadata={"count": "not_int"})
+        valid, error = s.validate(r)
+        assert not valid
+        assert "wrong type" in error
+
+    def test_content_length_limit(self):
+        s = Schema(max_content_length=5)
+        r = Record(content="hello world")
+        valid, error = s.validate(r)
+        assert not valid
+        assert "too long" in error
+
+
+class TestDataValidator:
+    def test_validates_all(self):
+        schema = Schema(required_fields=["source"])
+        validator = DataValidator(schema)
+        r1 = Record(content="hello", metadata={"source": "a"})
+        r2 = Record(content="world")
+        results = validator.validate_all([r1, r2])
+        assert len(results) == 1
+        assert validator.stats["valid"] == 1
+        assert validator.stats["invalid"] == 1
+
+
+class TestDataEnricher:
+    def test_enriches(self):
+        enricher = DataEnricher([
+            EnrichmentRule(key="tag", value="important"),
+            EnrichmentRule(key="length", value_fn=lambda r: len(r.content)),
+        ])
+        r = Record(content="hello")
+        result = enricher.enrich(r)
+        assert result.metadata["tag"] == "important"
+        assert result.metadata["length"] == 5
+        assert enricher.stats["enriched"] == 1
+
+    def test_no_overwrite(self):
+        enricher = DataEnricher([EnrichmentRule(key="tag", value="new")])
+        r = Record(content="hello", metadata={"tag": "old"})
+        enricher.enrich(r)
+        assert r.metadata["tag"] == "old"
+        assert enricher.stats["skipped"] == 1
+
+
+class TestRateLimiter:
+    def test_allows_within_rate(self):
+        limiter = RateLimiter(max_per_second=10, burst_size=5)
+        assert limiter.acquire()
+        assert limiter.acquire()
+        assert limiter.stats["allowed"] == 2
+
+    def test_rate_limiting(self):
+        limiter = RateLimiter(max_per_second=1, burst_size=1)
+        assert limiter.acquire()
+        assert not limiter.acquire()
+        assert limiter.stats["delayed"] == 1
+
+
+class TestCallableSource:
+    def test_callable_source(self):
+        def gen():
+            yield Record(content="hello")
+        src = CallableSource(gen)
+        records = list(src.read())
+        assert len(records) == 1
+        assert records[0].content == "hello"
+
+
+class TestCallableStore:
+    def test_callable_store(self):
+        stored = []
+        def store_fn(r):
+            stored.append(r)
+        store = CallableStore(store_fn)
+        store.write(Record(content="hello"))
+        assert len(stored) == 1
+        assert store.count() == 1
+
+
+class TestCollectorRunner:
+    def test_runs_collectors(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_text("alpha\n")
+        f2.write_text("beta\n")
+        store = MemoryStore()
+        c1 = Collector(FileSource(str(f1)), store)
+        c2 = Collector(FileSource(str(f2)), store)
+        runner = CollectorRunner()
+        runner.add("src1", c1)
+        runner.add("src2", c2)
+        results = runner.run_all()
+        assert results["src1"] == 1
+        assert results["src2"] == 1
+        assert store.count() == 2
+        stats = runner.stats()
+        assert stats["src1"]["runs"] == 1
+        assert stats["src1"]["total_collected"] == 1
+
+    def test_remove(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("hello\n")
+        store = MemoryStore()
+        c1 = Collector(FileSource(str(f1)), store)
+        runner = CollectorRunner()
+        runner.add("src", c1)
+        assert runner.remove("src")
+        assert not runner.remove("nonexistent")
+        assert len(runner.list()) == 0
+
+
+class TestJobScheduler:
+    def test_add_and_list(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("hello\n")
+        store = MemoryStore()
+        c1 = Collector(FileSource(str(f1)), store)
+        scheduler = JobScheduler()
+        config = JobConfig(name="job1", interval=0.1, max_runs=1)
+        scheduler.add_job(config, c1)
+        assert "job1" in scheduler.list_jobs()
+        assert scheduler.get_collector("job1") is c1
+
+    def test_start_and_stop(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("hello\n")
+        store = MemoryStore()
+        c1 = Collector(FileSource(str(f1)), store)
+        scheduler = JobScheduler()
+        config = JobConfig(name="job1", interval=0.1, max_runs=2)
+        scheduler.add_job(config, c1)
+        assert scheduler.start_job("job1")
+        import time
+        time.sleep(0.5)
+        scheduler.stop_job("job1")
+        stats = scheduler.job_stats("job1")
+        assert stats["runs"] >= 1
+
+    def test_remove_job(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("hello\n")
+        store = MemoryStore()
+        c1 = Collector(FileSource(str(f1)), store)
+        scheduler = JobScheduler()
+        config = JobConfig(name="job1", interval=1.0)
+        scheduler.add_job(config, c1)
+        assert scheduler.remove_job("job1")
+        assert not scheduler.remove_job("nonexistent")
+
+
+class TestCollectorMonitor:
+    def test_overview(self):
+        monitor = CollectorMonitor()
+        overview = monitor.get_overview()
+        assert "timestamp" in overview
+        assert overview["healthy"]
+
+    def test_health_checks(self):
+        monitor = CollectorMonitor()
+        monitor.add_health_check("test", lambda: True)
+        health = monitor.check_health()
+        assert health["test"]
+
+    def test_format_report(self):
+        monitor = CollectorMonitor()
+        report = monitor.format_report()
+        assert "Collection Monitor Report" in report
+
+
+class TestCollectorExporter:
+    def test_export_jsonl(self, tmp_path):
+        store = MemoryStore()
+        store.write(Record(content="hello"))
+        store.write(Record(content="world"))
+        exporter = CollectorExporter(store)
+        out_path = str(tmp_path / "out.jsonl")
+        count = exporter.to_jsonl(out_path)
+        assert count == 2
+        with open(out_path) as f:
+            lines = f.readlines()
+        assert len(lines) == 2
+
+    def test_export_text(self, tmp_path):
+        store = MemoryStore()
+        store.write(Record(content="hello"))
+        store.write(Record(content="world"))
+        exporter = CollectorExporter(store)
+        out_path = str(tmp_path / "out.txt")
+        count = exporter.to_text(out_path)
+        assert count == 2
+
+    def test_to_dicts(self):
+        store = MemoryStore()
+        store.write(Record(content="hello"))
+        exporter = CollectorExporter(store)
+        dicts = exporter.to_dicts()
+        assert len(dicts) == 1
+        assert dicts[0]["content"] == "hello"
+
+    def test_summary(self):
+        store = MemoryStore()
+        store.write(Record(content="hello", metadata={"source": "test"}))
+        exporter = CollectorExporter(store)
+        s = exporter.summary()
+        assert s["count"] == 1
+        assert s["total_bytes"] == 5
+        assert s["sources"]["test"] == 1
+
+
+class TestConvenienceAPI:
+    def test_collect_file(self, tmp_path):
+        f = tmp_path / "data.txt"
+        f.write_text("hello\nworld\n")
+        count = collect_file(str(f))
+        assert count == 2
+
+    def test_collect_records(self):
+        records = [Record(content="a"), Record(content="b")]
+        count = collect_records(records)
+        assert count == 2

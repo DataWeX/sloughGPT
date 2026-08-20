@@ -248,8 +248,15 @@ class TaskQueue:
             return
         stream_name = task.metadata.get("sse_stream", "auto-train")
         try:
-            error_event = {"event": "error", "stream": stream_name, "data": {"type": status.value, "message": task.error or f"Task {status.value}"}}
-            sse_queue.put_nowait(error_event)
+            import json
+            phase = status.value.upper()
+            payload = json.dumps({
+                "status": "error",
+                "stream": stream_name,
+                "phase": phase,
+                "data": {"error": task.error or f"Task {phase}"},
+            })
+            sse_queue.put_nowait(f"data: {payload}")
         except Exception:
             pass
 
@@ -490,3 +497,22 @@ class InProcessTaskQueue(TaskQueue):
                     self._emit("failed", task)
                     self._push_sse_terminal(task, TaskStatus.FAILED)
                     return
+
+
+# ── Singleton ──
+
+_default_queue: InProcessTaskQueue | None = None
+
+
+def get_task_queue(num_workers: int = 2) -> InProcessTaskQueue:
+    """Get or create the global InProcessTaskQueue singleton."""
+    global _default_queue
+    if _default_queue is None:
+        _default_queue = InProcessTaskQueue(num_workers=num_workers)
+    return _default_queue
+
+
+def set_task_queue(queue: InProcessTaskQueue):
+    """Replace the global InProcessTaskQueue singleton."""
+    global _default_queue
+    _default_queue = queue

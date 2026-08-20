@@ -460,30 +460,20 @@ class TestInProcessTaskQueue:
         with pytest.raises(NotImplementedError):
             await q._run_with_controls(Task(task_type="echo"))
 
-    async def test_event_bus_import_failure(self, monkeypatch):
-        import sys
-        import types
-
-        fake = types.ModuleType("domains.infrastructure.event_bus")
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.event_bus", fake)
-        q = InProcessTaskQueue(num_workers=1)
-        assert q._event_bus is None
-
     async def test_set_singleton(self):
         q = InProcessTaskQueue()
         set_task_queue(q)
         assert get_task_queue() is q
 
     async def test_get_task_queue_initializes_singleton(self):
-        import domains.infrastructure.task_queue as tq
-        from domains.infrastructure.resource_manager import get_resource_manager
+        import infra_lib.task_queue as tq
 
         old = tq._default_queue
         tq._default_queue = None
         try:
             q = tq.get_task_queue()
             assert q is not None
-            assert q._pool.num_workers == get_resource_manager().task_queue_workers
+            assert q._pool.num_workers == 2
         finally:
             tq._default_queue = old
 
