@@ -44,3 +44,17 @@ export const DEFAULT_ERROR_MESSAGE = 'Something went wrong'
 
 /** Default max tokens for PDF analysis. */
 export const PDF_ANALYSIS_MAX_TOKENS = 512
+
+/** Default max tokens for generation. */
+export const DEFAULT_MAX_TOKENS = 100
+
+/** Safely read a JSON value from localStorage, returning fallback on any error. */
+export function getJsonItem<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null) return fallback
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
