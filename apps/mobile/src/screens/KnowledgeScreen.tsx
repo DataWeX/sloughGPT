@@ -14,6 +14,7 @@ import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
 import {triggerHaptic} from '../services/haptics';
+import {toast} from '../services/toast';
 import {pickDocument} from '../services/file-upload';
 import type {KnowledgeItem} from '../types';
 
@@ -23,6 +24,7 @@ export function KnowledgeScreen() {
   const [topics, setTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [editItem, setEditItem] = useState<KnowledgeItem | null>(null);
@@ -51,6 +53,8 @@ export function KnowledgeScreen() {
       setItems(data);
     } catch {
       setItems([]);
+    } finally {
+      setLoading(false);
     }
   }, [search, selectedTopic]);
 
@@ -58,7 +62,9 @@ export function KnowledgeScreen() {
     try {
       const result = await api.get<{topics: string[]}>('/knowledge/topics');
       setTopics(result.topics || []);
-    } catch {}
+    } catch {
+      // Topics load is non-critical — silently ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -94,7 +100,9 @@ export function KnowledgeScreen() {
       setFormTopic('');
       await fetchItems();
       await fetchTopics();
-    } catch {}
+    } catch {
+      toast.error('Failed to add knowledge');
+    }
   };
 
   const handleEdit = async () => {
@@ -108,7 +116,9 @@ export function KnowledgeScreen() {
       setFormContent('');
       setFormTopic('');
       await fetchItems();
-    } catch {}
+    } catch {
+      toast.error('Failed to update knowledge');
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -116,7 +126,9 @@ export function KnowledgeScreen() {
       triggerHaptic('light');
       await api.delete(`/knowledge/${id}`);
       await fetchItems();
-    } catch {}
+    } catch {
+      toast.error('Failed to delete item');
+    }
   };
 
   const handleBatchDelete = async () => {
@@ -128,7 +140,9 @@ export function KnowledgeScreen() {
       setSelectedIds(new Set());
       setSelectMode(false);
       await fetchItems();
-    } catch {}
+    } catch {
+      toast.error('Failed to delete selected items');
+    }
   };
 
   const toggleSelect = (id: string) => {

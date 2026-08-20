@@ -29,6 +29,11 @@ export function useChatModals() {
     setShowInfo(false);
   }, []);
 
+  /** Dismiss only keyboard-triggered modals — safe to call on keyboard hide. */
+  const dismissKeyboardModals = useCallback(() => {
+    setShowSearch(false);
+  }, []);
+
   return {
     showDrawer, setShowDrawer,
     showSoulPicker, setShowSoulPicker,
@@ -39,5 +44,6 @@ export function useChatModals() {
     showSearchSessions, setShowSearchSessions,
     showInfo, setShowInfo,
     dismissAllModals,
+    dismissKeyboardModals,
   };
 }

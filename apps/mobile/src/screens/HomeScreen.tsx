@@ -1,8 +1,6 @@
 import React, {useEffect, useState, useCallback} from 'react';
 import {Pressable, RefreshControl, ScrollView} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
 import {useModelStore} from '../stores/model-store';
@@ -11,7 +9,7 @@ import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
-import type {ToolsStackParamList} from '../navigation/types';
+import {useSidebar} from '../contexts/SidebarContext';
 import type {Session} from '../types';
 
 interface SystemHealth {
@@ -62,7 +60,7 @@ function QuickAction({icon, label, onPress, color}: {icon: string; label: string
 
 export function HomeScreen() {
   const colors = useColors();
-  const navigation = useNavigation<NativeStackNavigationProp<ToolsStackParamList>>();
+  const {open: openSidebar, navigate} = useSidebar();
   const {health, models, currentSoul, refresh: refreshModels} = useModelStore();
   const {sessions, refreshSessions, loadSession} = useChatStore();
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
@@ -94,7 +92,6 @@ export function HomeScreen() {
 
   const recentSessions = sessions.slice(0, 5);
   const isModelLoaded = health?.model_loaded ?? systemHealth?.model_loaded ?? false;
-  const modelOk = isModelLoaded;
   const apiOk = systemHealth != null;
 
   return (
@@ -106,11 +103,21 @@ export function HomeScreen() {
 
         {/* Header */}
         <XStack justifyContent="space-between" alignItems="center">
-          <YStack gap={2}>
-            <Text fontSize={24} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Home</Text>
-            <Text fontSize={12} color={colors.textMuted}>SloughGPT Mobile</Text>
-          </YStack>
-          <Pressable onPress={() => navigation.getParent()?.navigate('Tools', {screen: 'Health'})}>
+          <XStack alignItems="center" gap={12}>
+            <YStack
+              width={36} height={36} borderRadius={12}
+              alignItems="center" justifyContent="center"
+              onPress={openSidebar}
+              pressStyle={{opacity: 0.6, scale: 0.95}}
+              accessible accessibilityRole="button" accessibilityLabel="Open menu">
+              <Icon name="menu" size={20} color={colors.textSecondary} />
+            </YStack>
+            <YStack gap={1}>
+              <Text fontSize={20} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Home</Text>
+              <Text fontSize={11} color={colors.textMuted}>SloughGPT Mobile</Text>
+            </YStack>
+          </XStack>
+          <Pressable onPress={() => navigate('Settings/Health')}>
             <YStack
               paddingHorizontal={8}
               paddingVertical={4}
@@ -161,25 +168,25 @@ export function HomeScreen() {
               icon="message-circle"
               label="Chat"
               color={colors.primary}
-              onPress={() => navigation.getParent()?.navigate('Chat')}
+              onPress={() => navigate('Chat')}
             />
             <QuickAction
               icon="brain"
               label="Models"
               color={colors.primary}
-              onPress={() => navigation.getParent()?.navigate('Models')}
+              onPress={() => navigate('Models')}
             />
             <QuickAction
               icon="dumbbell"
               label="Train"
               color={colors.primary}
-              onPress={() => navigation.getParent()?.navigate('Tools', {screen: 'Training'})}
+              onPress={() => navigate('Tools/Training')}
             />
             <QuickAction
               icon="database"
               label="Datasets"
               color={colors.primary}
-              onPress={() => navigation.getParent()?.navigate('Tools', {screen: 'Datasets'})}
+              onPress={() => navigate('Tools/Datasets')}
             />
           </XStack>
         </YStack>
@@ -215,7 +222,7 @@ export function HomeScreen() {
         <YStack padding={14} borderRadius={12} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={10}>
           <XStack justifyContent="space-between" alignItems="center">
             <Text fontSize={14} fontWeight="600" color={colors.text}>Recent Chats</Text>
-            <Pressable onPress={() => navigation.getParent()?.navigate('Chat')}>
+            <Pressable onPress={() => navigate('Chat')}>
               <Text fontSize={12} color={colors.primary}>View all</Text>
             </Pressable>
           </XStack>
@@ -231,7 +238,7 @@ export function HomeScreen() {
                 key={session.id}
                 onPress={() => {
                   loadSession(session.id);
-                  navigation.getParent()?.navigate('Chat');
+                  navigate('Chat');
                 }}>
                 {({pressed}) => (
                   <XStack

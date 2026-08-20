@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
@@ -78,9 +78,9 @@ export default function VoicePage() {
     return (
       <PageContainer title="Voice" subtitle="Text-to-speech settings" loadingCards={3}>
         <KpiGrid>
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         <Card><CardContent><div className="h-40 animate-pulse bg-muted/50 rounded" /></CardContent></Card>

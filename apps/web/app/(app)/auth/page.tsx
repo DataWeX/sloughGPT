@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
@@ -61,9 +61,9 @@ export default function AuthPage() {
     return (
       <PageContainer title="Auth" subtitle="Authentication" loadingCards={3}>
         <KpiGrid>
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         <Card><CardContent><div className="h-24 animate-pulse bg-muted/50 rounded" /></CardContent></Card>

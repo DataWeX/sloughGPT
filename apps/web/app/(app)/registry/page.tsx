@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
@@ -49,10 +49,10 @@ export default function RegistryPage() {
         loadingContent={
           <div className="space-y-4">
             <KpiGrid>
-              <StatCard label="Loading" value="..." />
-              <StatCard label="Loading" value="..." />
-              <StatCard label="Loading" value="..." />
-              <StatCard label="Loading" value="..." />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
             </KpiGrid>
             <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
             <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>

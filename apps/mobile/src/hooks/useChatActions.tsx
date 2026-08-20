@@ -74,6 +74,19 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     }
   }, [modals.showInfo, activeSessionId]);
 
+  // Auto-retry pending messages when connection recovers
+  const wasOffline = useRef(false);
+  useEffect(() => {
+    if (online && wasOffline.current) {
+      const state = useChatStore.getState();
+      if (state.offlineQueue > 0) {
+        toast.info('Connection restored — retrying queued messages');
+        retryPendingSends();
+      }
+    }
+    wasOffline.current = !online;
+  }, [online, retryPendingSends]);
+
   useEffect(() => {
     if (modals.showDrawer) {
       (async () => {
@@ -268,5 +281,6 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     onScroll: scroll.onScroll,
     isConnected: online,
     dismissAllModals: modals.dismissAllModals,
+    dismissKeyboardModals: modals.dismissKeyboardModals,
   };
 }

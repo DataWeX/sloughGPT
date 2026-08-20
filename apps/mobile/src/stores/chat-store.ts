@@ -44,6 +44,7 @@ interface ChatState {
 }
 
 let _abortController: AbortController | null = null;
+let _everConnected = false;
 
 function genId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -82,17 +83,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const data = await api.get<{messages: Message[]}>(
         `/session/${id}/messages`,
       );
+      _everConnected = true;
       const msgs = data.messages || [];
       set({activeSessionId: id, messages: msgs});
       await cacheActiveSessionId(id);
       await cacheMessages(id, msgs);
     } catch {
-      // offline — load from cache
       const cached = await getCachedMessages(id);
       if (cached.length > 0) {
         set({activeSessionId: id, messages: cached});
       }
-      set({error: 'Offline — showing cached messages'});
+      if (_everConnected) {
+        set({error: 'Offline — showing cached messages'});
+      }
     }
   },
 

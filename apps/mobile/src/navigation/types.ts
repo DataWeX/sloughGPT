@@ -1,4 +1,4 @@
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import type {StackScreenProps} from '@react-navigation/stack';
 
 export type SettingsStackParamList = {
   SettingsMain: undefined;
@@ -54,7 +54,7 @@ export type ToolsStackParamList = {
 };
 
 export type SettingsScreenProps<T extends keyof SettingsStackParamList> =
-  NativeStackScreenProps<SettingsStackParamList, T>;
+  StackScreenProps<SettingsStackParamList, T>;
 
 export type ToolsScreenProps<T extends keyof ToolsStackParamList> =
   NativeStackScreenProps<ToolsStackParamList, T>;

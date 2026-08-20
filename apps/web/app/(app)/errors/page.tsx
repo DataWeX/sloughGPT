@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { ErrorInsightsCard } from '@/components/errors/ErrorInsightsCard'
@@ -101,10 +101,10 @@ export default function ErrorsPage() {
         loading
       >
         <KpiGrid>
-          <StatCard label="Total" value="..." />
-          <StatCard label="Groups" value="..." />
-          <StatCard label="Last Hour" value="..." />
-          <StatCard label="Top Error" value="..." />
+          <StatCard label="Total" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Groups" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Last Hour" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Top Error" value={<Skeleton className="h-5 w-24" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
       </PageContainer>

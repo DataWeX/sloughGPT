@@ -283,50 +283,29 @@ export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, d
             <Icon name="arrow-up" size={20} color="white" />
           </Pressable>
         ) : (
-          <XStack alignItems="center" gap={4}>
-            {onVoiceMessageToggle && !isRecording && (
-              <Pressable
-                onPress={onVoiceMessageToggle}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 9999,
-                  backgroundColor: bg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 0.5,
-                  borderColor: border,
-                }}
-                accessibilityLabel="Toggle voice message"
-                accessibilityRole="button"
-                accessible={true}>
-                <Icon name="mic" size={12} color={textSecondary} />
-              </Pressable>
-            )}
-            <Pressable
-              onPress={onVoice}
-              style={[
-                {
-                  width: 40,
-                  height: 40,
-                  borderRadius: 9999,
-                  backgroundColor: bg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 0.5,
-                  borderColor: border,
-                },
-                isRecording && {
-                  backgroundColor: colors.errorLight,
-                  borderColor: colors.error,
-                },
-              ]}
-              accessibilityLabel={isRecording ? 'Stop recording' : 'Start voice input'}
-              accessibilityRole="button"
-              accessible={true}>
-              <Icon name={isRecording ? 'stop-circle' : voiceMessageMode ? 'music' : 'mic'} size={18} color={textSecondary} />
-            </Pressable>
-          </XStack>
+          <Pressable
+            onPress={onVoice}
+            style={[
+              {
+                width: 40,
+                height: 40,
+                borderRadius: 9999,
+                backgroundColor: bg,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 0.5,
+                borderColor: border,
+              },
+              isRecording && {
+                backgroundColor: colors.errorLight,
+                borderColor: colors.error,
+              },
+            ]}
+            accessibilityLabel={isRecording ? 'Stop recording' : 'Start voice input'}
+            accessibilityRole="button"
+            accessible={true}>
+            <Icon name={isRecording ? 'stop-circle' : 'mic'} size={18} color={textSecondary} />
+          </Pressable>
         )}
       </XStack>
 

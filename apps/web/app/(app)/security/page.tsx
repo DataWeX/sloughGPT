@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
@@ -102,10 +102,10 @@ export default function SecurityPage() {
     return (
       <PageContainer title="Security" subtitle="Audit logs & API keys" loadingCards={4}>
         <KpiGrid>
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>

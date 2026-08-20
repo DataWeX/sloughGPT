@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid,
+  Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton,
   SearchInput, Slider, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   Tabs, TabsList, TabsTrigger, TabsContent, AlertDialog, AlertDialogAction,
   AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -352,10 +352,10 @@ export default function SoulsPage() {
         <AppRouteHeader left={<AppRouteHeaderLead title="Souls" subtitle="Personality management" />} />
         <div className="space-y-4">
           <KpiGrid>
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
-            <StatCard label="Loading" value="..." />
+            <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+            <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+            <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+            <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
           </KpiGrid>
           <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         </div>

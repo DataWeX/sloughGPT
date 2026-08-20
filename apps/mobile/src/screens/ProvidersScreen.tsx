@@ -36,7 +36,6 @@ export function ProvidersScreen() {
   const setApiKey = useProvidersStore(s => s.setApiKey);
   const setBaseUrl = useProvidersStore(s => s.setBaseUrl);
   const setDefaultModel = useProvidersStore(s => s.setDefaultModel);
-  const toggleProvider = useProvidersStore(s => s.toggleProvider);
   const hybrid = useHybridStore();
 
   const [expandedId, setExpandedId] = useState<ProviderId | null>(null);

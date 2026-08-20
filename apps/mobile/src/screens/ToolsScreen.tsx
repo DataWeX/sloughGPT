@@ -8,6 +8,7 @@ import {StatusBadge} from '../components/StatusBadge';
 import {useHapticPress} from '../hooks/useHapticPress';
 import {useNavigation} from '@react-navigation/native';
 import {api} from '../services/api-client';
+import {useSidebar} from '../contexts/SidebarContext';
 import type {HealthStatus} from '../types';
 
 interface ToolItem {
@@ -49,6 +50,7 @@ function formatUptime(seconds: number): string {
 export function ToolsScreen() {
   const colors = useColors();
   const navigation = useNavigation<any>();
+  const {open: openSidebar} = useSidebar();
   const accent = colors.primary;
   const muted = colors.textMuted;
   const bgCard = colors.background;
@@ -84,14 +86,23 @@ export function ToolsScreen() {
         backgroundColor={colors.background}
         contentContainerStyle={{padding: 16, gap: 12}}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <Text
-          fontSize={24}
-          fontWeight="700"
-          letterSpacing={-0.3}
-          color="$color"
-          paddingBottom={4}>
-          Tools
-        </Text>
+        <XStack alignItems="center" gap={12} paddingBottom={4}>
+          <YStack
+            width={36} height={36} borderRadius={12}
+            alignItems="center" justifyContent="center"
+            onPress={openSidebar}
+            pressStyle={{opacity: 0.6, scale: 0.95}}
+            accessible accessibilityRole="button" accessibilityLabel="Open menu">
+            <Icon name="menu" size={20} color={colors.textSecondary} />
+          </YStack>
+          <Text
+            fontSize={24}
+            fontWeight="700"
+            letterSpacing={-0.3}
+            color="$color">
+            Tools
+          </Text>
+        </XStack>
 
         {/* Server Status */}
         <YStack

@@ -12,6 +12,8 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import {YStack, XStack, Text, Input, Button} from 'tamagui';
 import {useColors} from '../theme/colors';
+import {useSidebar} from '../contexts/SidebarContext';
+import {Icon} from '../components/Icon';
 import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
 import {StatusBadge} from '../components/StatusBadge';
@@ -50,6 +52,7 @@ export function SettingsScreen() {
   const settings = useSettingsStore();
   const {health, refresh} = useModelStore();
   const navigation = useNavigation<any>();
+  const {open: openSidebar} = useSidebar();
   const [serverUrl, setServerUrl] = useState('');
   const serverUrlEditedRef = useRef(false);
   const [healthData, setHealthData] = useState<HealthStatus | null>(null);
@@ -106,9 +109,19 @@ export function SettingsScreen() {
     <SafeAreaView style={{flex: 1, backgroundColor: 'var(--background)'}} edges={['top']}>
       <KeyboardAvoidingView style={{flex: 1}} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={{padding: 16, gap: 12}}>
-          <Text fontSize={22} fontWeight="700" letterSpacing={-0.3} color="$color" marginBottom={4}>
-            Settings
-          </Text>
+          <XStack alignItems="center" gap={12} marginBottom={4}>
+            <YStack
+              width={36} height={36} borderRadius={12}
+              alignItems="center" justifyContent="center"
+              onPress={openSidebar}
+              pressStyle={{opacity: 0.6, scale: 0.95}}
+              accessible accessibilityRole="button" accessibilityLabel="Open menu">
+              <Icon name="menu" size={20} color={colors.textSecondary} />
+            </YStack>
+            <Text fontSize={22} fontWeight="700" letterSpacing={-0.3} color="$color">
+              Settings
+            </Text>
+          </XStack>
 
           {/* Server */}
           <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>

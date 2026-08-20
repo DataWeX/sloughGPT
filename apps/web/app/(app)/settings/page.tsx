@@ -506,19 +506,19 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="CPU"
-                value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : '...'}</span>}
+                value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : <Skeleton className="h-5 w-10 inline-block" />}</span>}
                 icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
               />
               <StatCard
                 label="Memory"
-                value={<span className="font-mono">{metrics ? `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB` : '...'}</span>}
+                value={<span className="font-mono">{metrics ? `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB` : <Skeleton className="h-5 w-20 inline-block" />}</span>}
                 icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="Disk"
-                value={<span className="font-mono">{disk ? `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB` : '...'}</span>}
+                value={<span className="font-mono">{disk ? `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB` : <Skeleton className="h-5 w-20 inline-block" />}</span>}
                 icon={<span className={`inline-block w-2 h-2 rounded-full ${(disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
               />
               <StatCard

@@ -100,6 +100,7 @@ export function TrainingScreen() {
   const [testResult, setTestResult] = useState('');
   const [testLoading, setTestLoading] = useState(false);
   const [testModalVisible, setTestModalVisible] = useState(false);
+  const [soulNames, setSoulNames] = useState<string[]>([]);
   const prevPhaseRef = useRef(phase);
   const hapticPress = useHapticPress();
 
@@ -130,6 +131,15 @@ export function TrainingScreen() {
     return () => {
       cleanupTraining();
     };
+  }, []);
+
+  useEffect(() => {
+    api.get<{souls: {name: string}[]}>('/souls')
+      .then(data => {
+        const names = (data?.souls || []).map((s: any) => s.name || '').filter(Boolean);
+        if (names.length > 0) setSoulNames(names);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -896,7 +906,7 @@ export function TrainingScreen() {
                   Soul
                 </Text>
                 <XStack gap={4} flexWrap="wrap">
-                  {['assistant', 'creative', 'coder', 'teacher', 'analyst'].map(
+                  {(soulNames.length > 0 ? soulNames : ['assistant', 'creative', 'coder', 'teacher', 'analyst']).map(
                     v => (
                       <Pill
                         key={v}

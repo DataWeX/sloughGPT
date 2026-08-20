@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { companionController, type CompanionTraits, type CompanionPreset } from '@/lib/companion-controller'
@@ -107,10 +107,10 @@ export default function CompanionPage() {
     return (
       <PageContainer title="Companion" subtitle="AI personality management" loadingCards={3}>
         <KpiGrid>
-          <StatCard label="Active Preset" value="..." />
-          <StatCard label="Warmth" value="..." />
-          <StatCard label="Curiosity" value="..." />
-          <StatCard label="Creativity" value="..." />
+          <StatCard label="Active Preset" value={<Skeleton className="h-5 w-16" />} />
+          <StatCard label="Warmth" value={<Skeleton className="h-5 w-8" />} />
+          <StatCard label="Curiosity" value={<Skeleton className="h-5 w-8" />} />
+          <StatCard label="Creativity" value={<Skeleton className="h-5 w-8" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
       </PageContainer>
@@ -131,8 +131,8 @@ export default function CompanionPage() {
     <PageContainer title="Companion" subtitle="AI personality management">
       <KpiGrid>
         <StatCard label="Active Preset" value={presets.length > 0 ? presets[0].name : 'Custom'} />
-        <StatCard label="Warmth" value={traits ? String(traits.warmth ?? 0) : '...'} />
-        <StatCard label="Curiosity" value={traits ? String(traits.curiosity ?? 0) : '...'} />
+        <StatCard label="Warmth" value={traits ? String(traits.warmth ?? 0) : <Skeleton className="h-5 w-8" />} />
+        <StatCard label="Curiosity" value={traits ? String(traits.curiosity ?? 0) : <Skeleton className="h-5 w-8" />} />
         <StatCard label="Avg Trait" value={String(avgTrait)} />
       </KpiGrid>
 

@@ -14,6 +14,7 @@ import {useColors} from '../theme/colors';
 import {useChatActions} from '../hooks/useChatActions';
 import {ChatDrawer} from '../components/ChatDrawer';
 import {ChatBottomSheets} from '../components/ChatBottomSheets';
+import {useSidebar} from '../contexts/SidebarContext';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
 import {ReasoningPanel} from '../components/ReasoningPanel';
@@ -29,14 +30,16 @@ export function ChatScreen() {
   const colors = useColors();
   const flatListRef = useRef<FlatList>(null);
   const a = useChatActions(flatListRef);
+  const {open: openSidebar} = useSidebar();
 
   useEffect(() => {
     const {Keyboard: KB} = require('react-native');
     const sub = KB.addListener('keyboardDidHide', () => {
-      a.dismissAllModals();
+      // Only dismiss keyboard-triggered modals (search), not explicit ones (drawer, soul picker)
+      a.dismissKeyboardModals();
     });
     return () => sub.remove();
-  }, [a.dismissAllModals]);
+  }, [a.dismissKeyboardModals]);
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: 'var(--background)'}} edges={['top']}>
@@ -58,7 +61,7 @@ export function ChatScreen() {
             <YStack
               width={36} height={36} borderRadius={12}
               alignItems="center" justifyContent="center"
-              onPress={() => a.setShowDrawer(true)}
+              onPress={openSidebar}
               pressStyle={{opacity: 0.6, scale: 0.95}}
               accessible accessibilityRole="button" accessibilityLabel="Open menu">
               <Icon name="menu" size={18} color={colors.textSecondary} />

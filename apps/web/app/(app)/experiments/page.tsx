@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { experimentsController } from '@/lib/experiments-controller'
@@ -143,10 +143,10 @@ export default function ExperimentsPage() {
         loading
       >
         <KpiGrid>
-          <StatCard label="Total" value="..." />
-          <StatCard label="Selected" value="..." />
-          <StatCard label="Auto-refresh" value="..." />
-          <StatCard label="Last Created" value="..." />
+          <StatCard label="Total" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Selected" value={<Skeleton className="h-5 w-8" />} />
+          <StatCard label="Auto-refresh" value={<Skeleton className="h-5 w-8" />} />
+          <StatCard label="Last Created" value={<Skeleton className="h-5 w-24" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
       </PageContainer>
