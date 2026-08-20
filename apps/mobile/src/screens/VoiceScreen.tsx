@@ -2,7 +2,7 @@ import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {FlatList, Pressable, RefreshControl, TextInput as RNTextInput} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
-import {Audio} from 'expo-av';
+import {Audio, Sound} from 'expo-av';
 import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
@@ -33,7 +33,7 @@ export function VoiceScreen() {
   const [inputText, setInputText] = useState('');
   const [generating, setGenerating] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRef = useRef<Sound | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -82,8 +82,8 @@ export function VoiceScreen() {
       soundRef.current = sound;
       setPlaying(true);
 
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
+      sound.setOnPlaybackStatusUpdate((playbackStatus) => {
+        if (playbackStatus.isLoaded && playbackStatus.didJustFinish) {
           setPlaying(false);
           sound.unloadAsync().catch(() => {});
           soundRef.current = null;
@@ -172,7 +172,7 @@ export function VoiceScreen() {
                 />
                 <Pressable onPress={handleGenerate} disabled={!inputText.trim() || generating || playing}>
                   <XStack padding={10} borderRadius={8} backgroundColor={inputText.trim() && !generating && !playing ? colors.primary : colors.border} alignItems="center" justifyContent="center" gap={6}>
-                    <Icon name={generating ? 'refresh-cw' : playing ? 'volume-2' : 'music'} size={16} color="white" />
+                    <Icon name={generating ? 'refresh-cw' : playing ? 'music' : 'music'} size={16} color="white" />
                     <Text fontSize={13} fontWeight="600" color="white">{generating ? 'Generating...' : playing ? 'Playing...' : 'Generate & Play'}</Text>
                   </XStack>
                 </Pressable>

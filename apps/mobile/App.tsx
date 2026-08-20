@@ -41,6 +41,7 @@ import {LoadingScreen} from './src/components/LoadingScreen';
 import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
 import {ToastContainer} from './src/components/ToastContainer';
 import {OnboardingScreen, isFirstLaunch} from './src/screens/OnboardingScreen';
+import {HomeScreen} from './src/screens/HomeScreen';
 import {ToolsScreen} from './src/screens/ToolsScreen';
 import {ALL_TABS} from './src/navigation/tabs';
 import {registerForPushNotifications, onNotification} from './src/services/push-notifications';
@@ -49,6 +50,7 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 const TAB_ICONS: Record<string, import('./src/components/Icon').IconName> = {
+  Home: 'home',
   Chat: 'message-circle',
   Models: 'brain',
   Tools: 'dumbbell',
