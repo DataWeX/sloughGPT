@@ -679,3 +679,152 @@ class TestConvenienceAPI:
         records = [Record(content="a"), Record(content="b")]
         count = collect_records(records)
         assert count == 2
+
+
+class TestCollectorBuilder:
+    def test_build_from_file(self, tmp_path):
+        f = tmp_path / "data.txt"
+        f.write_text("hello\nworld\n")
+        builder = CollectorBuilder()
+        collector = builder.file_source(str(f)).memory_store().build()
+        assert isinstance(collector, Collector)
+        count = collector.collect()
+        assert count == 2
+
+    def test_build_with_filters(self, tmp_path):
+        f = tmp_path / "data.txt"
+        f.write_text("short\nthis is a longer line that passes\n")
+        builder = CollectorBuilder()
+        collector = builder.file_source(str(f)).memory_store().length_filter(min_length=20).build()
+        count = collector.collect()
+        assert count == 1
+
+    def test_build_batch(self, tmp_path):
+        f = tmp_path / "data.txt"
+        f.write_text("hello\n" * 25)
+        builder = CollectorBuilder()
+        collector = builder.file_source(str(f)).memory_store().batch(batch_size=10).build()
+        assert isinstance(collector, BatchCollector)
+        count = collector.collect()
+        assert count == 25
+
+    def test_build_parallel(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_text("alpha\n")
+        f2.write_text("beta\n")
+        b1 = CollectorBuilder().file_source(str(f1)).memory_store()
+        b2 = CollectorBuilder().file_source(str(f2)).memory_store()
+        pc = b1.build_parallel([b1, b2])
+        assert isinstance(pc, ParallelCollector)
+
+    def test_fluent_chaining(self, tmp_path):
+        f = tmp_path / "data.txt"
+        f.write_text("hello\n")
+        collector = (CollectorBuilder()
+            .file_source(str(f))
+            .memory_store()
+            .dedup_filter()
+            .length_filter(min_length=1)
+            .build())
+        count = collector.collect()
+        assert count == 1
+
+
+class TestDataSource:
+    def test_add_and_read(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_text("alpha\n")
+        f2.write_text("beta\n")
+        ds = DataSource()
+        ds.add_file(str(f1)).add_file(str(f2))
+        records = list(ds.read_all())
+        assert len(records) == 2
+        assert ds.count() == 2
+
+    def test_read_single_source(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("alpha\n")
+        ds = DataSource().add_file(str(f1))
+        records = list(ds.read(0))
+        assert len(records) == 1
+
+    def test_list_sources(self, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("")
+        ds = DataSource().add_file(str(f1))
+        names = ds.list_sources()
+        assert len(names) == 1
+
+
+class TestDataSink:
+    def test_write_to_all(self):
+        s1 = MemoryStore()
+        s2 = MemoryStore()
+        ds = DataSink().add(s1).add(s2)
+        ds.write(Record(content="hello"))
+        assert s1.count() == 1
+        assert s2.count() == 1
+
+    def test_write_all(self):
+        s1 = MemoryStore()
+        ds = DataSink().add(s1)
+        records = [Record(content="a"), Record(content="b")]
+        count = ds.write_all(records)
+        assert count == 2
+        assert s1.count() == 2
+
+    def test_list_stores(self):
+        s1 = MemoryStore()
+        s2 = MemoryStore()
+        ds = DataSink().add(s1).add(s2)
+        names = ds.list_stores()
+        assert len(names) == 2
+
+    def test_count(self):
+        s1 = MemoryStore()
+        s2 = MemoryStore()
+        ds = DataSink().add(s1).add(s2)
+        ds.write(Record(content="a"))
+        ds.write(Record(content="b"))
+        assert ds.count() == 2
+
+
+class TestDataTransformer:
+    def test_transform(self):
+        dt = DataTransformer()
+        dt.add_content_transform(lambda s: s.upper())
+        r = Record(content="hello")
+        result = dt.transform(r)
+        assert result.content == "HELLO"
+
+    def test_add_field(self):
+        dt = DataTransformer()
+        dt.add_field("tag", "test")
+        r = Record(content="hello")
+        result = dt.transform(r)
+        assert result.metadata["tag"] == "test"
+
+    def test_add_field_fn(self):
+        dt = DataTransformer()
+        dt.add_field_fn("length", lambda r: len(r.content))
+        r = Record(content="hello")
+        result = dt.transform(r)
+        assert result.metadata["length"] == 5
+
+    def test_transform_all(self):
+        dt = DataTransformer()
+        dt.add_content_transform(lambda s: s.upper())
+        records = [Record(content="a"), Record(content="b")]
+        results = dt.transform_all(records)
+        assert results[0].content == "A"
+        assert results[1].content == "B"
+
+    def test_stats(self):
+        dt = DataTransformer()
+        dt.add_content_transform(lambda s: s.upper())
+        dt.transform(Record(content="hello"))
+        dt.transform(Record(content="world"))
+        assert dt.stats["transformed"] == 2
+        assert dt.stats["errors"] == 0
