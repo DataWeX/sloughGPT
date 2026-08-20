@@ -1409,11 +1409,14 @@ class MobileRouter:
 
             if proc.returncode != 0:
                 stderr_tail = (await asyncio.to_thread(proc.stderr.read))[-500:] if proc.stderr else ""
+                logger.error("Training subprocess failed (rc=%d): %s", proc.returncode, stderr_tail, extra={"tag": "REQ"})
+                yield sse_error("training", "TRAIN", f"Training failed (exit code {proc.returncode})")
+                return
 
             # Parse final result if not already captured from stdout
             if result is None:
                 # Try reading any remaining stderr for errors
-                stderr_tail = proc.stderr.read()[-500:] if proc.stderr else ""
+                stderr_tail = (await asyncio.to_thread(proc.stderr.read))[-500:] if proc.stderr else ""
                 yield sse_error("training", "TRAIN",
                                 f"Training produced no result output. stderr: {stderr_tail[:200]}")
                 return

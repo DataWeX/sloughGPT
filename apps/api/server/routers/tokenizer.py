@@ -150,9 +150,12 @@ class TokenizerRouter:
             lines = req.texts
         else:
             import asyncio
+            from urllib.request import urlopen
             url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
-            text = await asyncio.to_thread(urllib.request.urlopen, url)
-            text = text.read().decode("utf-8")
+            def _fetch():
+                with urlopen(url) as resp:
+                    return resp.read().decode("utf-8")
+            text = await asyncio.to_thread(_fetch)
             lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
         mgr = get_tokenizer_manager()
         mgr.train(lines, vocab_size=req.vocab_size, min_frequency=3)
