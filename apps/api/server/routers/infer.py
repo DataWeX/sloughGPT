@@ -102,7 +102,7 @@ class InferInfoResponse(BaseModel):
     has_tokenizer: bool = False
     has_streaming: bool = True
     has_embedding: bool = False
-    extra: dict = {}
+    extra: dict = Field(default_factory=dict)
 
 
 class InferRouter:
