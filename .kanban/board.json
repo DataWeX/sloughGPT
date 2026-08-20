@@ -24,6 +24,200 @@
   ],
   "cards": [
     {
+      "id": "20260820_173109_test-mobile-screens-on-real-device",
+      "title": "Test mobile screens on real device",
+      "description": "",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "testing"
+      ],
+      "created_at": "2026-08-20T17:31:09.786350+00:00",
+      "updated_at": "2026-08-20T17:31:09.786350+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_make-web-ui-responsive-320px-768px",
+      "title": "Make web UI responsive (320px-768px)",
+      "description": "",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "responsive",
+        "web",
+        "css"
+      ],
+      "created_at": "2026-08-20T17:31:09.760911+00:00",
+      "updated_at": "2026-08-20T17:31:09.760911+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-settingsscreen-to-config-api",
+      "title": "Wire SettingsScreen to /config API",
+      "description": "",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "settings",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.733309+00:00",
+      "updated_at": "2026-08-20T17:31:09.733309+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-feedbackscreen-to-feedback-api",
+      "title": "Wire FeedbackScreen to /feedback API",
+      "description": "",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "feedback",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.702968+00:00",
+      "updated_at": "2026-08-20T17:31:09.702968+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-soulsscreen-to-souls-api",
+      "title": "Wire SoulsScreen to /souls API",
+      "description": "",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "souls",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.676815+00:00",
+      "updated_at": "2026-08-20T17:31:09.676815+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-knowledgescreen-to-knowledge-api",
+      "title": "Wire KnowledgeScreen to /knowledge API",
+      "description": "",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "knowledge",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.651311+00:00",
+      "updated_at": "2026-08-20T17:31:09.651311+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-datasetsscreen-to-datasets-api",
+      "title": "Wire DatasetsScreen to /datasets API",
+      "description": "",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "datasets",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.622559+00:00",
+      "updated_at": "2026-08-20T17:31:09.622559+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-trainingscreen-to-training-api",
+      "title": "Wire TrainingScreen to /training API",
+      "description": "",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "training",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.562450+00:00",
+      "updated_at": "2026-08-20T17:31:09.562450+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-modelsscreen-to-models-api",
+      "title": "Wire ModelsScreen to /models API",
+      "description": "",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "models",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.502250+00:00",
+      "updated_at": "2026-08-20T17:31:09.502250+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-chatscreen-to-chat-api",
+      "title": "Wire ChatScreen to /chat API",
+      "description": "",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "chat",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.467107+00:00",
+      "updated_at": "2026-08-20T17:31:09.467107+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_mobile-responsive-ui-porting",
+      "title": "Mobile Responsive UI Porting",
+      "description": "Port the web UI to mobile by wiring existing 40+ screens to the real backend API and making the web UI responsive.",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "responsive",
+        "ui",
+        "porting"
+      ],
+      "created_at": "2026-08-20T17:31:09.407006+00:00",
+      "updated_at": "2026-08-20T17:31:09.434254+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": [
+        {
+          "id": "20260820_173109_note-20260820-173109-mobile-responsive-ui-porting",
+          "text": "## Current State\n- Web: 32 pages, all migrated to @sloughgpt/strui components, 3048 tests pass\n- Mobile: 40+ screen files exist in apps/mobile/src/screens/ but are scaffolded, not wired to real API\n- ROADMAP says Mobile: Not started \u2014 screens exist but are not connected\n- API: 84 SDK methods, all live\n\n## Phase 1: Wire Mobile Screens to Real API\nEach screen needs to call the corresponding backend endpoint:\n- ChatScreen -> /chat, /inference/generate (High)\n- ModelsScreen -> /models, /registry/models (High)\n- TrainingScreen -> /training/start, /training/jobs (High)\n- DatasetsScreen -> /datasets (High)\n- KnowledgeScreen -> /knowledge (High)\n- SoulsScreen -> /souls (Medium)\n- FeedbackScreen -> /feedback/* (Medium)\n- SettingsScreen -> /config/* (Medium)\n- VoiceScreen -> /voice (Low)\n- ImagesScreen -> /images (Low)\n\n## Phase 2: Make Web UI Responsive\n- Verify @sloughgpt/strui components work on mobile viewports\n- Add responsive breakpoints where needed\n- Test chat, models, training pages on small screens\n\n## Phase 3: Feature Gaps (per UX_FLOWS.md)\nFeatures not yet built on either platform:\n- Writing Assistant\n- Rewrite and Polish\n- Translate\n- Help Me Decide\n- Explain Things Simply\n- Make Me Well (Wellness)\n\n## Acceptance Criteria\n- All mobile screens make real API calls (no mock data)\n- Web UI renders correctly on 320px-768px viewports\n- No horizontal scroll on mobile\n- Touch targets >= 44px\n- Loading states for all API calls\n- Error handling for failed requests",
+          "author": "opencode",
+          "created_at": "2026-08-20T17:31:09.434254+00:00"
+        }
+      ]
+    },
+    {
       "id": "20260819_190830_android-apk-launch-fix",
       "title": "Android APK launch fix",
       "description": "Fixed 4 cascading Android APK launch crashes: (1) abiFilters x86_64-only had no ARM code - fixed to arm64-v8a+armeabi-v7a+x86_64; (2) isNewArchEnabled override removed (unsupported since RN 0.82); (3) ReactInstanceManager.createReactContext removed (bridge mode dropped in RN 0.86); (4) librninstance.so missing - stub created in jniLibs. Removed explicit DefaultNewArchitectureEntryPoint.load() from MainApplication. Enabled fabricEnabled=true. Bundled JS via react-native bundle. App runs: onboarding \u2192 chat screen with suggestion chips, input bar, bottom tabs. 90/90 test suites, 843/843 tests pass.",
