@@ -632,6 +632,17 @@ class FormalLogicEngine:
         elif wff.operator == LogicalOperator.OR and wff.left and wff.right:
             literals.update(self._extract_literals(wff.left))
             literals.update(self._extract_literals(wff.right))
+        elif wff.operator == LogicalOperator.IMPLIES and wff.left and wff.right:
+            # A → B ≡ ¬A ∨ B
+            if wff.left.predicate:
+                negated = Predicate(
+                    name=wff.left.predicate.name,
+                    terms=wff.left.predicate.terms,
+                    negated=True,
+                )
+                literals.add(negated)
+            if wff.right.predicate:
+                literals.add(wff.right.predicate)
 
         return literals
 

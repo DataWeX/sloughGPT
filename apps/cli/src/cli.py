@@ -2037,6 +2037,54 @@ def world_diff(image_a, image_b):
     log.key_value("Mean B", f"{s['mean_b']:.4f}")
 
 
+@world.command("ingest", help="Feed data into the world grid")
+@click.argument("source_type", type=click.Choice(["file", "url", "rss", "records"]))
+@click.argument("source_value")
+@click.option("--radius", default=15, type=int, help="Placement radius around center")
+@click.option("--decay", default=0.95, type=float, help="Energy decay rate per tick")
+@click.option("--verbose", is_flag=True, help="Verbose output")
+def world_ingest(source_type, source_value, radius, decay, verbose):
+    from domains.collections.perception import WorldPerception, PerceptionConfig
+    from domains.collections.sources import FileSource, UrlSource, RssSource, GeneratorSource, Record
+    from domains.shell.simulation import WorldGrid
+
+    config = PerceptionConfig(radius=radius, decay_rate=decay)
+    perception = WorldPerception(config)
+    world = WorldGrid()
+
+    if source_type == "file":
+        records = []
+        with open(source_value, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(Record(content=line))
+        events = perception.ingest_records(records)
+    elif source_type == "url":
+        from domains.collections.sources import UrlSource
+        source = UrlSource(source_value)
+        events = perception.ingest_source(source)
+    elif source_type == "rss":
+        from domains.collections.sources import RssSource
+        source = RssSource(source_value)
+        events = perception.ingest_source(source)
+    else:
+        records = [Record(content=source_value)]
+        events = perception.ingest_records(records)
+
+    perception.apply_to_grid(world, events)
+
+    log.header("World Ingestion")
+    log.key_value("Records ingested", str(len(events)))
+    log.key_value("Grid cells filled", str(np.sum(world.material != 0)))
+    log.key_value("Avg energy", f"{np.mean(world.energy[world.material != 0]):.2f}" if np.any(world.material != 0) else "0.00")
+
+    if verbose:
+        summary = perception.summary()
+        for cls, count in summary.get("material_counts", {}).items():
+            log.key_value(f"  {cls}", str(count))
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════
