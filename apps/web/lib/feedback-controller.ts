@@ -32,21 +32,15 @@ export const feedbackController = {
 
   async getFeedbackStats(): Promise<FeedbackStats & { quality_trend: { thumbs_up_ratio: number } }> {
     const data = await apiGet<{
-      db_stats: {
-        total_feedback?: number
-        thumbs_up?: number
-        thumbs_down?: number
-        total_regenerations?: number
-        active_sessions?: number
-      }
-      quality_trend?: { thumbs_up_ratio?: number }
-      current_weights?: { temperature?: number; repetition_penalty?: number }
-      history_length?: number
-    }>('/meta-weights/stats')
-    const db = data.db_stats ?? {}
-    const thumbsUp = db.thumbs_up ?? 0
-    const thumbsDown = db.thumbs_down ?? 0
-    const total = db.total_feedback ?? 0
+      thumbs_up?: number
+      thumbs_down?: number
+      total?: number
+      up_ratio?: number
+    }>('/feedback/stats/summary')
+    const thumbsUp = data.thumbs_up ?? 0
+    const thumbsDown = data.thumbs_down ?? 0
+    const total = data.total ?? 0
+    const ratio = data.up_ratio ?? (total > 0 ? thumbsUp / total : 0)
     return {
       db_stats: {
         conversations: 0,
@@ -54,14 +48,14 @@ export const feedbackController = {
         feedback_total: total,
         thumbs_up: thumbsUp,
         thumbs_down: thumbsDown,
-        ratio: total > 0 ? thumbsUp / total : 0,
+        ratio,
       },
       current_weights: {
-        temperature: data.current_weights?.temperature ?? 0.7,
-        repetition_penalty: data.current_weights?.repetition_penalty ?? 1.1,
+        temperature: 0.7,
+        repetition_penalty: 1.1,
       },
-      history_length: data.history_length ?? 0,
-      quality_trend: { thumbs_up_ratio: data.quality_trend?.thumbs_up_ratio ?? 0 },
+      history_length: 0,
+      quality_trend: { thumbs_up_ratio: ratio },
     }
   },
 
