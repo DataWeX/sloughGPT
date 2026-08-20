@@ -48,6 +48,7 @@ from .webhooks import (
 from .job_store import get_job_store
 from domains.training.executor import get_training_executor
 from domains.shared import find_repo_root
+from domains.mobile.notifications import get_notification_service
 
 logger = logging.getLogger("slo")
 
@@ -713,6 +714,19 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 )
             except Exception as e:
                 logger.debug("Training completion webhook failed: %s", e, extra={"tag": "TRAIN"})
+
+            # Push notification to mobile devices
+            try:
+                loss = training_jobs[jid].get("loss")
+                loss_str = f"Final loss: {loss:.4f}" if loss is not None else "Training"
+                get_notification_service().send_notification_sync(
+                    title="Training Complete",
+                    body=f"{loss_str}. Checkpoint saved.",
+                    data={"screen": "Training", "job_id": jid},
+                    topics=["training"],
+                )
+            except Exception as e:
+                logger.debug("Training completion push failed: %s", e, extra={"tag": "TRAIN"})
         except Exception as e:
             logger.exception("Training job %s failed", jid, extra={"tag": "TRAIN"})
             _finish_job(jid, "failed", str(e))
@@ -734,6 +748,17 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                             "error": str(e),
                         },
                     )
+                )
+            except Exception:
+                pass
+
+            # Push notification to mobile devices
+            try:
+                get_notification_service().send_notification_sync(
+                    title="Training Failed",
+                    body=f"Job {training_jobs[jid].get('name', jid)} failed: {str(e)[:100]}",
+                    data={"screen": "Training", "job_id": jid},
+                    topics=["training"],
                 )
             except Exception:
                 pass

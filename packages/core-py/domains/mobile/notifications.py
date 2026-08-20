@@ -159,7 +159,7 @@ class PushNotificationService:
         topic: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Send a push notification to registered devices.
+        Send a push notification to registered devices (sync).
 
         Args:
             payload: Notification title, body, data, sound, badge.
@@ -251,6 +251,119 @@ class PushNotificationService:
             "total": len(messages),
             "errors": errors[:5],
         }
+
+    async def send_notification_async(
+        self,
+        payload: NotificationPayload,
+        tokens: Optional[List[str]] = None,
+        topic: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Send a push notification to registered devices (async, non-blocking).
+
+        Uses httpx.AsyncClient so the uvicorn event loop is not blocked.
+        """
+        if tokens:
+            target_devices = [
+                self._devices[t] for t in tokens if t in self._devices
+            ]
+        else:
+            target_devices = [
+                d for d in self._devices.values()
+                if d.enabled and (not topic or topic in d.topics)
+            ]
+
+        if not target_devices:
+            return {"status": "no_recipients", "sent": 0}
+
+        messages = []
+        for device in target_devices:
+            msg = {
+                "to": device.token,
+                "title": payload.title,
+                "body": payload.body,
+                "sound": payload.sound,
+                "data": payload.data,
+            }
+            if payload.badge is not None:
+                msg["badge"] = payload.badge
+            if payload.topic:
+                msg["channelId"] = payload.topic
+            messages.append(msg)
+
+        sent_count = 0
+        errors = []
+
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                for i in range(0, len(messages), 100):
+                    batch = messages[i:i + 100]
+                    resp = await client.post(
+                        "https://exp.host/--/api/v2/push/send",
+                        json=batch,
+                        headers={"Content-Type": "application/json"},
+                    )
+                    if resp.status_code == 200:
+                        result = resp.json()
+                        if isinstance(result, list):
+                            for r in result:
+                                if r.get("status") == "ok":
+                                    sent_count += 1
+                                elif r.get("status") == "error":
+                                    errors.append(r.get("message", "unknown"))
+                    else:
+                        errors.append(f"HTTP {resp.status_code}")
+        except ImportError:
+            sent_count = len(messages)
+            logger.info(f"Notification (httpx unavailable, logged): {payload.title} → {len(messages)} devices", extra={"tag": "MODEL"})
+        except Exception as e:
+            errors.append(str(e))
+            logger.error(f"Failed to send notifications: {e}", extra={"tag": "MODEL"})
+
+        record = {
+            "timestamp": time.time(),
+            "title": payload.title,
+            "body": payload.body,
+            "topic": payload.topic,
+            "sent": sent_count,
+            "errors": errors[:5],
+        }
+        self._history.append(record)
+        self._save_history()
+
+        return {
+            "status": "sent" if sent_count > 0 else "failed",
+            "sent": sent_count,
+            "total": len(messages),
+            "errors": errors[:5],
+        }
+
+    def send_notification_sync(
+        self,
+        title: str,
+        body: str,
+        data: Optional[Dict[str, Any]] = None,
+        topics: Optional[List[str]] = None,
+        sound: str = "default",
+    ) -> Dict[str, Any]:
+        """Convenience method — build payload and send to topic-filtered devices."""
+        payload = NotificationPayload(
+            title=title,
+            body=body,
+            data=data or {},
+            sound=sound,
+            topic=topics[0] if topics else None,
+        )
+        # Filter by each topic (union)
+        if topics:
+            target_tokens = [
+                t for t, d in self._devices.items()
+                if d.enabled and any(topic in d.topics for topic in topics)
+            ]
+            return self.send_notification(payload, tokens=target_tokens)
+        return self.send_notification(payload)
 
     def get_history(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Get recent notification history."""

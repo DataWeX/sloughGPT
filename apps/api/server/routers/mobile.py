@@ -765,7 +765,7 @@ class MobileRouter:
             badge=body.badge,
             topic=body.topic,
         )
-        result = svc.send_notification(
+        result = await svc.send_notification_async(
             payload=payload,
             tokens=body.tokens,
             topic=body.topic,
@@ -818,7 +818,7 @@ class MobileRouter:
 
         payload = NotificationPayload(
             title="Training Complete",
-            body=f"Model training finished. Final loss: {loss:.4f}" if loss else f"Training {status}",
+            body=f"Model training finished. Final loss: {loss:.4f}" if loss is not None else f"Training {status}",
             data={"type": "training_complete", "status": status},
             topic="training",
         )
