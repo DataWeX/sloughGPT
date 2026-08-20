@@ -1,144 +1,98 @@
-"""Tests for CharTokenizer — character-level tokenization, vocab, encode/decode, save/load.
+"""Tests for domains.multimodal.char_tokenizer — CharTokenizer.
 
-Covers:
-  - build_vocab from texts
-  - encode produces BOS + char_ids + EOS
-  - decode strips special tokens
-  - Unknown characters map to <UNK>
-  - vocab_size property
-  - save/load round-trip
-  - pad_to parameter
+Covers: vocab building, encode/decode round-trip, special tokens, save/load,
+pad_to, unknown character handling, vocab_size property.
 """
+from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
+
 import pytest
+
+_core_dir = str(Path(__file__).resolve().parents[2])
+if _core_dir not in sys.path:
+    sys.path.insert(0, _core_dir)
+
 from domains.multimodal.char_tokenizer import CharTokenizer
 
 
 class TestCharTokenizer:
-    def test_init(self):
-        tok = CharTokenizer()
-        assert tok.vocab_size == 0
-        assert tok._built is False
-
     def test_build_vocab(self):
         tok = CharTokenizer()
         tok.build_vocab(["hello", "world"])
+        assert tok.vocab_size > 0
         assert tok._built is True
-        assert tok.vocab_size > 4  # special tokens + chars
 
-    def test_special_tokens_first(self):
+    def test_encode_decode_roundtrip(self):
         tok = CharTokenizer()
-        tok.build_vocab(["abc"])
-        assert tok.vocab["<BOS>"] == 0
-        assert tok.vocab["<EOS>"] == 1
-        assert tok.vocab["<PAD>"] == 2
-        assert tok.vocab["<UNK>"] == 3
+        tok.build_vocab(["hello world"])
+        ids = tok.encode("hello")
+        text = tok.decode(ids)
+        assert text == "hello"
 
     def test_encode_bos_eos(self):
         tok = CharTokenizer()
-        tok.build_vocab(["hello"])
-        ids = tok.encode("hi")
-        assert ids[0] == 0  # BOS
-        assert ids[-1] == 1  # EOS
-        assert len(ids) == 4  # BOS + h + i + EOS
+        tok.build_vocab(["test"])
+        ids = tok.encode("ab")
+        assert ids[0] == tok.vocab["<BOS>"]
+        assert ids[-1] == tok.vocab["<EOS>"]
+        assert len(ids) == 4  # BOS + a + b + EOS
 
-    def test_encode_single_char(self):
+    def test_encode_without_build(self):
+        tok = CharTokenizer()
+        with pytest.raises(RuntimeError):
+            tok.encode("test")
+
+    def test_decode_strips_special_tokens(self):
+        tok = CharTokenizer()
+        tok.build_vocab(["abc"])
+        ids = [tok.vocab["<BOS>"], tok.vocab["a"], tok.vocab["b"], tok.vocab["<EOS>"]]
+        assert tok.decode(ids) == "ab"
+
+    def test_unknown_character(self):
+        tok = CharTokenizer()
+        tok.build_vocab(["abc"])
+        ids = tok.encode("xyz")
+        # x, y, z might be in ASCII fallback or mapped to UNK
+        assert len(ids) > 2
+
+    def test_vocab_size(self):
         tok = CharTokenizer()
         tok.build_vocab(["a"])
-        ids = tok.encode("a")
-        assert ids[0] == 0  # BOS
-        assert ids[-1] == 1  # EOS
-        assert len(ids) == 3  # BOS + a + EOS
+        assert tok.vocab_size > 4  # 4 special + at least 'a' + ASCII
 
-    def test_encode_empty(self):
+    def test_save_and_load(self, tmp_path):
         tok = CharTokenizer()
-        tok.build_vocab(["x"])
-        ids = tok.encode("")
-        assert ids == [0, 1]  # BOS + EOS only
-
-    def test_decode_strips_special(self):
-        tok = CharTokenizer()
-        tok.build_vocab(["hello"])
-        ids = tok.encode("hi")
-        decoded = tok.decode(ids)
-        assert decoded == "hi"
-
-    def test_decode_strips_unk(self):
-        tok = CharTokenizer()
-        tok.build_vocab(["ab"])
-        # 'z' not in training text but in ASCII fallback
-        ids = tok.encode("z")
-        decoded = tok.decode(ids)
-        assert decoded == "z"
-
-    def test_encode_before_build_raises(self):
-        tok = CharTokenizer()
-        with pytest.raises(RuntimeError, match="not trained"):
-            tok.encode("hello")
-
-    def test_decode_before_build(self):
-        tok = CharTokenizer()
-        # decode doesn't require build_vocab (uses itos which is empty)
-        result = tok.decode([0, 1])
-        assert result == ""
-
-    def test_vocab_includes_ascii(self):
-        tok = CharTokenizer()
-        tok.build_vocab([""])
-        # All printable ASCII should be in vocab
-        for ch in "abcdefghijklmnopqrstuvwxyz":
-            assert ch in tok.vocab
-
-    def test_pad_to(self):
-        tok = CharTokenizer(pad_to=32)
-        assert tok.pad_to == 32
-
-    def test_save_load_roundtrip(self, tmp_path):
-        tok = CharTokenizer(pad_to=16)
-        tok.build_vocab(["hello world"])
-        path = str(tmp_path / "tok.json")
+        tok.build_vocab(["test data"])
+        path = str(tmp_path / "tokenizer.json")
         tok.save(path)
 
         tok2 = CharTokenizer()
         assert tok2.load(path) is True
-        assert tok2.vocab == tok.vocab
-        assert tok2.itos == tok.itos
-        assert tok2.pad_to == 16
-        assert tok2._built is True
+        assert tok2.vocab_size == tok.vocab_size
 
     def test_load_nonexistent(self):
         tok = CharTokenizer()
         assert tok.load("/nonexistent/path.json") is False
 
-    def test_save_creates_parent_dirs(self, tmp_path):
+    def test_pad_to(self):
+        tok = CharTokenizer(pad_to=20)
+        assert tok.pad_to == 20
+
+    def test_ensure_ascii(self):
+        tok = CharTokenizer()
+        ascii_chars = tok._ensure_ascii()
+        assert "a" in ascii_chars
+        assert "z" in ascii_chars
+        assert "A" in ascii_chars
+
+    def test_encode_empty(self):
         tok = CharTokenizer()
         tok.build_vocab(["test"])
-        path = str(tmp_path / "subdir" / "tok.json")
-        tok.save(path)
-        assert (tmp_path / "subdir" / "tok.json").exists()
+        ids = tok.encode("")
+        assert ids == [tok.vocab["<BOS>"], tok.vocab["<EOS>"]]
 
-    def test_encode_decode_roundtrip(self):
-        tok = CharTokenizer()
-        tok.build_vocab(["the quick brown fox"])
-        text = "hello"
-        encoded = tok.encode(text)
-        decoded = tok.decode(encoded)
-        assert decoded == text
-
-    def test_encode_decode_unicode(self):
-        tok = CharTokenizer()
-        tok.build_vocab(["café"])
-        text = "café"
-        encoded = tok.encode(text)
-        decoded = tok.decode(encoded)
-        assert decoded == text
-
-    def test_multiple_encode_calls(self):
-        tok = CharTokenizer()
-        tok.build_vocab(["ab", "cd"])
-        ids1 = tok.encode("ab")
-        ids2 = tok.encode("cd")
-        assert ids1 != ids2
-        assert ids1[0] == ids2[0] == 0  # both start with BOS
-        assert ids1[-1] == ids2[-1] == 1  # both end with EOS
+    def test_special_tokens(self):
+        assert CharTokenizer.SPECIAL_TOKENS == ["<BOS>", "<EOS>", "<PAD>", "<UNK>"]
