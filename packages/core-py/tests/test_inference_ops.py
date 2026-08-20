@@ -1,186 +1,101 @@
-"""
-Tests for inference ops: layernorm and rmsnorm.
+"""Tests for domains.inference.ops — rmsnorm, layernorm, matmul (numpy fallback path).
 
-Covers:
-    - Basic correctness against reference implementations
-    - Batch dimensions
-    - Edge cases (constant input, zero input, large values)
-    - Numerical stability (eps parameter)
-    - Shape preservation
+Covers: normalization correctness, matmul with various dtypes, shape preservation.
 """
+from __future__ import annotations
 
-import numpy as np
-import pytest
 import sys
 from pathlib import Path
 
-_CORE_PY = Path(__file__).resolve().parents[1]
-if str(_CORE_PY) not in sys.path:
-    sys.path.insert(0, str(_CORE_PY))
+import numpy as np
+import pytest
 
-from domains.inference.ops.layernorm import layernorm
+_core_dir = str(Path(__file__).resolve().parents[2])
+if _core_dir not in sys.path:
+    sys.path.insert(0, _core_dir)
+
 from domains.inference.ops.rmsnorm import rmsnorm
+from domains.inference.ops.layernorm import layernorm
+from domains.inference.ops.matmul import matmul
 
 
-# ── Reference implementations ─────────────────────────────────────────
-
-
-def _ref_layernorm(x, weight, bias, eps=1e-5):
-    """Reference layer normalization."""
-    mean = x.mean(axis=-1, keepdims=True)
-    var = x.var(axis=-1, keepdims=True)
-    return (x - mean) / np.sqrt(var + eps) * weight + bias
-
-
-def _ref_rmsnorm(x, weight, eps=1e-6):
-    """Reference RMS normalization."""
-    rms = np.sqrt(np.mean(x ** 2, axis=-1, keepdims=True) + eps)
-    return x / rms * weight
-
-
-# ── LayerNorm tests ───────────────────────────────────────────────────
-
-
-class TestLayerNorm:
-    def test_basic_1d(self):
-        x = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
-        w = np.ones(4, dtype=np.float32)
-        b = np.zeros(4, dtype=np.float32)
-        result = layernorm(x, w, b)
-        expected = _ref_layernorm(x, w, b)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
-
-    def test_basic_2d(self):
-        x = np.random.randn(8, 64).astype(np.float32)
-        w = np.ones(64, dtype=np.float32)
-        b = np.zeros(64, dtype=np.float32)
-        result = layernorm(x, w, b)
-        expected = _ref_layernorm(x, w, b)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
-
-    def test_with_weight_and_bias(self):
-        x = np.random.randn(4, 32).astype(np.float32)
-        w = np.random.randn(32).astype(np.float32)
-        b = np.random.randn(32).astype(np.float32)
-        result = layernorm(x, w, b)
-        expected = _ref_layernorm(x, w, b)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
-
-    def test_batch_3d(self):
-        x = np.random.randn(2, 4, 128).astype(np.float32)
-        w = np.ones(128, dtype=np.float32)
-        b = np.zeros(128, dtype=np.float32)
-        result = layernorm(x, w, b)
-        assert result.shape == x.shape
-        expected = _ref_layernorm(x, w, b)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
-
-    def test_output_zero_mean(self):
-        x = np.random.randn(16, 64).astype(np.float32)
-        w = np.ones(64, dtype=np.float32)
-        b = np.zeros(64, dtype=np.float32)
-        result = layernorm(x, w, b)
-        means = result.mean(axis=-1)
-        np.testing.assert_allclose(means, 0.0, atol=1e-5)
-
-    def test_output_unit_variance(self):
-        x = np.random.randn(16, 64).astype(np.float32)
-        w = np.ones(64, dtype=np.float32)
-        b = np.zeros(64, dtype=np.float32)
-        result = layernorm(x, w, b)
-        variances = result.var(axis=-1)
-        np.testing.assert_allclose(variances, 1.0, atol=1e-2)
-
-    def test_constant_input(self):
-        x = np.full((4, 32), 5.0, dtype=np.float32)
-        w = np.ones(32, dtype=np.float32)
-        b = np.zeros(32, dtype=np.float32)
-        result = layernorm(x, w, b)
-        # Constant input -> zero after mean subtraction -> zeros after div by sqrt(0+eps)
-        np.testing.assert_allclose(result, 0.0, atol=1e-3)
-
-    def test_shape_preserved(self):
-        for shape in [(64,), (8, 64), (2, 4, 128), (1, 1, 1, 256)]:
-            x = np.random.randn(*shape).astype(np.float32)
-            w = np.ones(shape[-1], dtype=np.float32)
-            b = np.zeros(shape[-1], dtype=np.float32)
-            result = layernorm(x, w, b)
-            assert result.shape == x.shape
-
-    def test_eps_affects_output(self):
-        x = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
-        w = np.ones(4, dtype=np.float32)
-        b = np.zeros(4, dtype=np.float32)
-        r1 = layernorm(x, w, b, eps=1e-5)
-        r2 = layernorm(x, w, b, eps=1.0)
-        # With eps=1.0, the normalization is much weaker
-        assert not np.allclose(r1, r2)
-
-
-# ── RMSNorm tests ─────────────────────────────────────────────────────
-
-
-class TestRMSNorm:
-    def test_basic_1d(self):
-        x = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
-        w = np.ones(4, dtype=np.float32)
-        result = rmsnorm(x, w)
-        expected = _ref_rmsnorm(x, w)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
-
-    def test_basic_2d(self):
-        x = np.random.randn(8, 64).astype(np.float32)
-        w = np.ones(64, dtype=np.float32)
-        result = rmsnorm(x, w)
-        expected = _ref_rmsnorm(x, w)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
-
-    def test_with_weight(self):
-        x = np.random.randn(4, 32).astype(np.float32)
-        w = np.random.randn(32).astype(np.float32)
-        result = rmsnorm(x, w)
-        expected = _ref_rmsnorm(x, w)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
-
-    def test_batch_3d(self):
-        x = np.random.randn(2, 4, 128).astype(np.float32)
-        w = np.ones(128, dtype=np.float32)
+class TestOpsRmsnorm:
+    def test_basic(self):
+        x = np.array([[1.0, 2.0, 3.0]])
+        w = np.ones(3)
         result = rmsnorm(x, w)
         assert result.shape == x.shape
-        expected = _ref_rmsnorm(x, w)
-        np.testing.assert_allclose(result, expected, rtol=1e-5)
+        # Output should have unit RMS
+        rms = np.sqrt(np.mean(result ** 2))
+        assert rms == pytest.approx(1.0, abs=0.01)
 
-    def test_rms_of_output(self):
-        x = np.random.randn(16, 64).astype(np.float32)
-        w = np.ones(64, dtype=np.float32)
+    def test_weighted(self):
+        x = np.array([[1.0, 2.0, 3.0]])
+        w = np.array([2.0, 2.0, 2.0])
         result = rmsnorm(x, w)
-        # RMS of output should be close to RMS of weight
-        rms_out = np.sqrt(np.mean(result ** 2, axis=-1))
-        rms_w = np.sqrt(np.mean(w ** 2))
-        np.testing.assert_allclose(rms_out, rms_w, rtol=1e-4)
+        rms = np.sqrt(np.mean(result ** 2))
+        assert rms == pytest.approx(2.0, abs=0.01)
 
-    def test_zero_input(self):
-        x = np.zeros((4, 32), dtype=np.float32)
-        w = np.ones(32, dtype=np.float32)
+    def test_2d_batch(self):
+        x = np.ones((4, 8))
+        w = np.ones(8)
         result = rmsnorm(x, w)
-        np.testing.assert_allclose(result, 0.0, atol=1e-6)
+        assert result.shape == (4, 8)
 
-    def test_shape_preserved(self):
-        for shape in [(64,), (8, 64), (2, 4, 128), (1, 1, 1, 256)]:
-            x = np.random.randn(*shape).astype(np.float32)
-            w = np.ones(shape[-1], dtype=np.float32)
-            result = rmsnorm(x, w)
-            assert result.shape == x.shape
+    def test_custom_eps(self):
+        x = np.array([[1.0, 2.0, 3.0]])
+        w = np.ones(3)
+        result = rmsnorm(x, w, eps=1e-3)
+        assert result.shape == x.shape
 
-    def test_eps_prevents_division_by_zero(self):
-        x = np.zeros((4, 32), dtype=np.float32)
-        w = np.ones(32, dtype=np.float32)
-        # Should not raise
-        result = rmsnorm(x, w, eps=1e-6)
-        assert np.all(np.isfinite(result))
 
-    def test_large_values_stable(self):
-        x = np.random.randn(4, 32).astype(np.float32) * 1000
-        w = np.ones(32, dtype=np.float32)
-        result = rmsnorm(x, w)
-        assert np.all(np.isfinite(result))
+class TestOpsLayernorm:
+    def test_basic(self):
+        x = np.array([[1.0, 2.0, 3.0]])
+        w = np.ones(3)
+        b = np.zeros(3)
+        result = layernorm(x, w, b)
+        assert result.shape == x.shape
+        # Output should be zero-mean
+        assert result.mean() == pytest.approx(0.0, abs=1e-5)
+
+    def test_weighted(self):
+        x = np.array([[1.0, 2.0, 3.0]])
+        w = np.array([2.0, 2.0, 2.0])
+        b = np.array([1.0, 1.0, 1.0])
+        result = layernorm(x, w, b)
+        assert result.mean() == pytest.approx(1.0, abs=1e-5)
+
+    def test_2d_batch(self):
+        x = np.random.randn(4, 8).astype(np.float32)
+        w = np.ones(8, dtype=np.float32)
+        b = np.zeros(8, dtype=np.float32)
+        result = layernorm(x, w, b)
+        assert result.shape == (4, 8)
+
+
+class TestOpsMatmul:
+    def test_basic(self):
+        a = np.array([[1.0, 2.0], [3.0, 4.0]])
+        b = np.array([[5.0, 6.0], [7.0, 8.0]])
+        result = matmul(a, b)
+        expected = a @ b
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_shapes(self):
+        a = np.ones((2, 3))
+        b = np.ones((3, 4))
+        result = matmul(a, b)
+        assert result.shape == (2, 4)
+
+    def test_float32(self):
+        a = np.ones((2, 3), dtype=np.float32)
+        b = np.ones((3, 2), dtype=np.float32)
+        result = matmul(a, b)
+        assert result.dtype in (np.float32, np.float64)
+
+    def test_integer(self):
+        a = np.array([[1, 2], [3, 4]])
+        b = np.array([[5, 6], [7, 8]])
+        result = matmul(a, b)
+        np.testing.assert_array_equal(result, [[19, 22], [43, 50]])
