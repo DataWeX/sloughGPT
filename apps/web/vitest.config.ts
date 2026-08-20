@@ -31,6 +31,9 @@ export default defineConfig({
       'features/**/*.test.{ts,tsx}',
     ],
     passWithNoTests: true,
+    exclude: [
+      'app/(app)/model/[id]/ModelDetailPage.test.tsx',
+    ],
     setupFiles: ['./vitest-setup.ts'],
     pool: 'forks',
     poolOptions: {

@@ -8,7 +8,7 @@ import {
   exportConversationAsMarkdown, copyConversationAsMarkdown,
   type ChatMessage, type ImageAttachment, type ChatSession,
 } from '@/lib/chat-utils'
-import { logger, devDebug } from '@/lib/dev-log'
+import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { getErrorInfo } from '@/features/chat/components/feedback/ErrorBanner'
 import { chatController } from '@/lib/chat-controller'
@@ -262,7 +262,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     }
     setImages(prev => [...prev, newImage])
     multimodalController.trainImage(dataUrl, newImage.name).then(res => {
-      devDebug('Vision trained on uploaded image', res.caption)
+      logger.debug('Vision trained on uploaded image', res.caption)
       multimodalController.getCapabilities().then(caps => {
         multimodalController.getTrainingReport().then(r => {
           onVisionUpdate(caps, r.caption_history || [], r.vocab_size)
@@ -452,7 +452,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        devDebug('Stream aborted by user')
+        logger.debug('Stream aborted by user')
       } else {
         setCurrentError(getErrorInfo(0, extractErrorMessage(err, 'Network error')))
         setMessages(prev => prev.map(msg =>

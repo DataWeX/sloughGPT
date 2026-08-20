@@ -18,8 +18,7 @@ export const loraEvalController = {
   },
 
   async getHistory(limit = 10): Promise<LoraEvalResult[]> {
-    const data = await apiGet<{ data?: LoraEvalHistory } | LoraEvalHistory>(`/lora-eval/history?limit=${limit}`)
-    const d = (data as Record<string, unknown>).data != null ? (data as { data: LoraEvalHistory }).data : (data as LoraEvalHistory)
+    const d = await apiGet<LoraEvalHistory>(`/lora-eval/history?limit=${limit}`)
     return d?.results ?? []
   },
 }

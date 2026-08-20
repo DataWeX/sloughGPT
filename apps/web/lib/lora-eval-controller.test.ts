@@ -25,7 +25,7 @@ describe('loraEvalController', () => {
   describe('getHistory', () => {
     it('returns results from nested data', async () => {
       mockGet.mockResolvedValue({
-        data: { results: [{ adapter_path: 'a.npz', verdict: 'good' }] },
+        results: [{ adapter_path: 'a.npz', verdict: 'good' }],
       })
       const results = await loraEvalController.getHistory(5)
       expect(results).toHaveLength(1)

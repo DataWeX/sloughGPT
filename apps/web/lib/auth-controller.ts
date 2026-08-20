@@ -12,7 +12,9 @@ export interface AuthResponse {
 }
 
 export interface VerifyResponse {
-  data: { valid: boolean }
+  valid: boolean
+  subject?: string
+  expires?: number
 }
 
 export const authController = {

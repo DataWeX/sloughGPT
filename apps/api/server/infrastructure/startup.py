@@ -332,6 +332,35 @@ class StartupOrchestrator:
             """Load model then register with registry/providers."""
             import state as server_state
 
+            # Standalone inference engine path: launch subprocess, connect via IPC.
+            engine_client = _start_inference_engine(cfg)
+            if engine_client is not None:
+                server_state.model_type = cfg.autoload_model
+                server_state.provider = engine_client
+                try:
+                    from domains.infrastructure.server_state import get_server_state
+                    core = get_server_state()
+                    core.model.set(engine_client)
+                    core.model_type.set(cfg.autoload_model)
+                except Exception as e:
+                    logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
+                try:
+                    from domains.models.provider import setup_providers
+                    setup_providers(
+                        slonet_provider=engine_client,
+                        quantize=cfg.quantize_slonet,
+                        quant_bits=cfg.quant_bits,
+                        quant_mode=cfg.quant_mode,
+                    )
+                except Exception as e:
+                    logger.error("Inference engine: registration failed (%s)", e, exc_info=True, extra={"tag": "START"})
+                _sync_soul_traits()
+                logger.info(
+                    "Inference engine ready: %s (subprocess mode)",
+                    cfg.autoload_model, extra={"tag": "START"},
+                )
+                return
+
             # Lazy-guard fast path (default): with a ProcessGuard + .slnc
             # available, defer the parent weight load entirely. The guard's
             # worker process owns the weights and serves inference; the parent
@@ -1071,3 +1100,93 @@ def _autoload_model(cfg: ServerConfig):
         logger.info("Autoload ok (after download): %s (%s)", model_id, result.model_type, extra={"tag": "START"})
     else:
         logger.warning("Autoload failed after download: %s", result.error, extra={"tag": "START"})
+
+
+# ── Standalone inference engine ───────────────────────────────────────
+
+def _start_inference_engine(cfg) -> Optional[Any]:
+    """Launch a standalone InferenceEngine subprocess and return a connected InferenceClient.
+
+    When ``SLO_INFERENCE_ENGINE`` is enabled, the model runs in a separate process.
+    The API server connects to it via InferenceClient over TCP, isolating model
+    memory/CPU from the API server.
+
+    Returns:
+        InferenceClient connected to the engine, or None if disabled/failed.
+    """
+    import subprocess
+    import sys
+
+    if not getattr(cfg, "enable_inference_engine", False):
+        return None
+
+    model_type = cfg.autoload_model
+    if not model_type:
+        logger.info("Inference engine skipped: no autoload_model", extra={"tag": "START"})
+        return None
+
+    try:
+        from domains.infrastructure.safetensors_loader import _get_model_dir
+        slnc_path = _get_model_dir(model_type) / "model.slnc"
+        if not slnc_path.exists():
+            logger.info("Inference engine skipped: no .slnc at %s", slnc_path, extra={"tag": "START"})
+            return None
+    except Exception as e:
+        logger.warning("Inference engine: slnc resolution failed: %s", e, extra={"tag": "START"})
+        return None
+
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+
+    engine_cmd = [
+        sys.executable, "-m", "domains.infrastructure.inference_engine",
+        "--model-id", model_type,
+        "--slnc-path", str(slnc_path),
+        "--host", "127.0.0.1",
+        "--port", str(port),
+    ]
+    if cfg.quantize_slonet:
+        engine_cmd.append("--quantize")
+
+    try:
+        proc = subprocess.Popen(
+            engine_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=os.getcwd(),
+        )
+        logger.info(
+            "Inference engine subprocess launched (pid=%d, port=%d)", proc.pid, port,
+            extra={"tag": "START"},
+        )
+    except Exception as e:
+        logger.error("Inference engine: failed to launch subprocess: %s", e, extra={"tag": "START"})
+        return None
+
+    from domains.infrastructure.inference_client import InferenceClient
+    client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=300.0)
+
+    import time
+    for _ in range(300):
+        if proc.poll() is not None:
+            stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
+            logger.error(
+                "Inference engine process died (code=%s): %s",
+                proc.returncode, stderr[-500:] if stderr else "",
+                extra={"tag": "START"},
+            )
+            return None
+        try:
+            if client.connect():
+                logger.info("Inference engine connected (model=%s)", client.model_id, extra={"tag": "START"})
+                return client
+        except Exception:
+            pass
+        time.sleep(1.0)
+
+    logger.error("Inference engine: connection timeout after 300s", extra={"tag": "START"})
+    proc.terminate()
+    return None

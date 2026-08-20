@@ -3364,7 +3364,13 @@ Examples:
     def _cmd_tutorial(self, args: str = "") -> None:
         """Interactive walkthrough of shell features."""
         w = self._print
-        _proceed = lambda: self.io.read(f"{_C_DIM}Press Enter to continue, or q to quit...{_C_RESET} ")
+
+        def _proceed():
+            while True:
+                resp = self.io.read(f"{_C_DIM}[Enter] continue  [q] quit{_C_RESET} ")
+                if resp.strip() == "" or resp.strip().lower() in ("q", "quit", "exit"):
+                    return resp
+                w(f"  {_C_DIM}(press Enter to continue, or q to quit){_C_RESET}")
 
         steps = [
             ("\u2728 Welcome to the tutorial!", [
@@ -3434,18 +3440,20 @@ Examples:
             ]),
         ]
 
-        for title, lines in steps:
+        total = len(steps)
+        for i, (title, lines) in enumerate(steps):
             w(f"\n  {_C_BOLD}{_C_CYAN}{title}{_C_RESET}")
             for line in lines:
                 w(f"  {line}")
-            try:
-                resp = _proceed()
-                if resp.strip().lower() == "q":
+            if i < total - 1:
+                try:
+                    resp = _proceed()
+                    if resp.strip().lower() in ("q", "quit", "exit"):
+                        w(f"  {_C_DIM}Tutorial stopped.{_C_RESET}")
+                        return
+                except (EOFError, KeyboardInterrupt):
                     w(f"  {_C_DIM}Tutorial stopped.{_C_RESET}")
                     return
-            except (EOFError, KeyboardInterrupt):
-                w(f"  {_C_DIM}Tutorial stopped.{_C_RESET}")
-                return
 
     def _cmd_lsdev(self, args: str = "") -> None:
         """List AI device nodes (/dev/*)."""

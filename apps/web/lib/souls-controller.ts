@@ -143,7 +143,7 @@ export const soulsController = {
     const res = await apiDelete<{ deleted: boolean } | { status: string; data: { deleted: boolean } }>(
       `/souls/weights/snapshot/${encodeURIComponent(name)}`
     )
-    return ('deleted' in res ? (res as { deleted: boolean }).deleted : false) ?? ('data' in res ? (res as { data: { deleted: boolean } }).data?.deleted : false) ?? false
+    return 'deleted' in res ? (res as { deleted: boolean }).deleted : false
   },
 
   async saveTraitWeights(weights: Record<string, Record<string, number>>): Promise<{ status: string }> {

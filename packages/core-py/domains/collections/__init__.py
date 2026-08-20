@@ -22,6 +22,14 @@ from .scheduler import (
 from .builders import (
     CollectorBuilder, DataSource, DataSink, DataTransformer,
 )
+from .world_bridge import (
+    WorldFeedConfig, RecordToWorldMapper, WorldGridBridge,
+    WorldGridSource, WorldStoreAdapter, CollectionWorldPipeline,
+)
+from .training_bridge import (
+    TrainingDataConfig, TrainingDataAdapter, RecordToTrainingSource,
+    TrainingDatasetBuilder, CollectorTrainingBridge,
+)
 from .pipeline import CollectionPipeline
 from .registry import CollectionRegistry, get_registry
 from .config import SourceConfig, StoreConfig, FilterConfig, PipelineConfig
@@ -75,6 +83,10 @@ __all__ = [
     "RateLimiter", "CallableSource", "CallableStore", "CollectorRunner",
     "JobConfig", "JobScheduler", "CollectorMonitor", "CollectorExporter",
     "CollectorBuilder", "DataSource", "DataSink", "DataTransformer",
+    "WorldFeedConfig", "RecordToWorldMapper", "WorldGridBridge",
+    "WorldGridSource", "WorldStoreAdapter", "CollectionWorldPipeline",
+    "TrainingDataConfig", "TrainingDataAdapter", "RecordToTrainingSource",
+    "TrainingDatasetBuilder", "CollectorTrainingBridge",
     "CollectionPipeline", "CollectionRegistry", "get_registry",
     "SourceConfig", "StoreConfig", "FilterConfig", "PipelineConfig",
     "collect_file", "collect_url", "collect_rss", "collect_api", "collect_records",

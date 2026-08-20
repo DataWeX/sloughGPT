@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { apiGet, apiPost } from '@/lib/http-client'
+import { apiPost } from '@/lib/http-client'
+import { imagesController } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -33,11 +34,11 @@ export function ImageSection() {
   const fetchData = async () => {
     try {
       const [galleryRes, stylesRes] = await Promise.all([
-        apiGet<{ data?: { images?: GalleryImage[] } }>('/images/gallery').catch(() => null),
-        apiGet<{ data?: { styles?: Array<[string, string]> } }>('/images/styles').catch(() => null),
+        imagesController.gallery().catch(() => null),
+        imagesController.styles().catch(() => null),
       ])
-      setGallery(galleryRes?.data?.images ?? [])
-      setStyles((stylesRes?.data?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+      setGallery(galleryRes?.images ?? [])
+      setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
     } catch {
       addToast('Failed to load image data', 'error')
     } finally {

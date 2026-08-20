@@ -2,19 +2,6 @@ import { describe, it, expect, vi, afterEach, beforeEach, beforeAll, afterAll } 
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-let _origSetInterval: typeof globalThis.setInterval
-beforeAll(() => {
-  _origSetInterval = globalThis.setInterval
-  globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
-    return _origSetInterval(...args)
-  }) as typeof setInterval
-})
-afterAll(() => {
-  globalThis.setInterval = _origSetInterval
-  const ids = vi.getTimerCount?.() ? [] : []
-  for (let i = 1; i < 99999; i++) { clearInterval(i); clearTimeout(i) }
-  cleanup()
-})
 afterEach(() => { cleanup() })
 
 vi.mock('recharts', () => ({

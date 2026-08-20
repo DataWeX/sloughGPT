@@ -13,6 +13,10 @@ from domains.collections import (
     CallableSource, CallableStore, CollectorRunner,
     JobConfig, JobScheduler, CollectorMonitor, CollectorExporter,
     CollectorBuilder, DataSource, DataSink, DataTransformer,
+    WorldFeedConfig, RecordToWorldMapper, WorldGridBridge,
+    WorldGridSource, WorldStoreAdapter, CollectionWorldPipeline,
+    TrainingDataConfig, TrainingDataAdapter, TrainingDatasetBuilder,
+    CollectorTrainingBridge,
     collect_file, collect_records,
 )
 
@@ -828,3 +832,233 @@ class TestDataTransformer:
         dt.transform(Record(content="world"))
         assert dt.stats["transformed"] == 2
         assert dt.stats["errors"] == 0
+
+
+class TestRecordToWorldMapper:
+    def test_record_to_cell_signal(self):
+        mapper = RecordToWorldMapper()
+        r = Record(content="test data", metadata={"energy": 0.5})
+        cell = mapper.record_to_cell_signal(r)
+        assert "energy" in cell
+        assert "temperature" in cell
+        assert "signal" in cell
+        assert cell["energy"] == 0.5
+
+    def test_record_to_position(self):
+        mapper = RecordToWorldMapper()
+        r = Record(content="test", metadata={"position": [10, 5, 20]})
+        pos = mapper.record_to_position(r, 0)
+        assert pos == (10, 5, 20)
+
+    def test_record_to_position_hash(self):
+        mapper = RecordToWorldMapper()
+        r = Record(content="test data for hashing")
+        pos = mapper.record_to_position(r, 0)
+        assert 0 <= pos[0] < 64
+        assert 0 <= pos[1] < 32
+        assert 0 <= pos[2] < 64
+
+    def test_records_to_world_ops(self):
+        mapper = RecordToWorldMapper()
+        records = [Record(content="a"), Record(content="b")]
+        ops = mapper.records_to_world_ops(records)
+        assert len(ops) == 2
+        assert ops[0]["type"] == "place_cell"
+        assert "x" in ops[0]
+
+
+class TestWorldFeedConfig:
+    def test_defaults(self):
+        config = WorldFeedConfig()
+        assert config.grid_size == (64, 32, 64)
+        assert config.energy_scale == 1.0
+        assert config.feed_radius == 5
+
+    def test_custom(self):
+        config = WorldFeedConfig(grid_size=(32, 16, 32), energy_scale=2.0)
+        assert config.grid_size == (32, 16, 32)
+        assert config.energy_scale == 2.0
+
+
+class TestWorldGridBridge:
+    def test_inject_records(self):
+        bridge = WorldGridBridge()
+        records = [Record(content="hello"), Record(content="world")]
+        count = bridge.inject_records(records)
+        assert count == 2
+        assert bridge.stats["injected"] == 2
+
+    def test_inject_with_position(self):
+        bridge = WorldGridBridge()
+        records = [Record(content="test", metadata={"position": [10, 5, 20]})]
+        count = bridge.inject_records(records)
+        assert count == 1
+
+    def test_read_grid_as_records(self):
+        bridge = WorldGridBridge()
+        records = bridge.read_grid_as_records(center=(32, 16, 32), radius=2)
+        assert isinstance(records, list)
+
+    def test_grid_to_source(self):
+        bridge = WorldGridBridge()
+        source = bridge.grid_to_source(center=(32, 16, 32), radius=2)
+        assert source.name == "world_grid"
+        records = list(source.read())
+        assert isinstance(records, list)
+
+    def test_world_store_adapter(self):
+        bridge = WorldGridBridge()
+        adapter = WorldStoreAdapter(bridge)
+        adapter.write(Record(content="hello"))
+        assert adapter.count() == 1
+        assert bridge.stats["injected"] == 1
+
+
+class TestCollectionWorldPipeline:
+    def test_run(self):
+        pipeline = CollectionWorldPipeline(
+            source=GeneratorSource(lambda: iter([
+                Record(content="a"), Record(content="b")
+            ])),
+        )
+        count = pipeline.run()
+        assert count == 2
+        assert pipeline.stats["total_collected"] == 2
+        assert pipeline.stats["total_injected"] == 2
+
+    def test_run_with_filter(self):
+        pipeline = CollectionWorldPipeline(
+            source=GeneratorSource(lambda: iter([
+                Record(content="short"),
+                Record(content="this is a much longer record"),
+            ])),
+            filters=[LengthFilter(min_length=10)],
+        )
+        count = pipeline.run()
+        assert count == 1
+        assert pipeline.stats["filtered"] == 1
+
+
+class TestTrainingDataAdapter:
+    def test_records_to_text(self):
+        adapter = TrainingDataAdapter()
+        records = [Record(content="hello"), Record(content="world")]
+        text = adapter.records_to_text(records)
+        assert text == "hello\nworld"
+        assert adapter.stats["accepted"] == 2
+
+    def test_deduplication(self):
+        adapter = TrainingDataAdapter(TrainingDataConfig(deduplicate=True))
+        records = [Record(content="hello"), Record(content="hello"), Record(content="world")]
+        text = adapter.records_to_text(records)
+        assert text == "hello\nworld"
+        assert adapter.stats["deduplicated"] == 1
+
+    def test_min_length_filter(self):
+        adapter = TrainingDataAdapter(TrainingDataConfig(min_length=5))
+        records = [Record(content="hi"), Record(content="hello world")]
+        text = adapter.records_to_text(records)
+        assert text == "hello world"
+        assert adapter.stats["too_short"] == 1
+
+    def test_records_to_numpy(self):
+        adapter = TrainingDataAdapter()
+        records = [Record(content="hello"), Record(content="world")]
+        data, vocab_size = adapter.records_to_numpy(records)
+        assert len(data) > 0
+        assert vocab_size > 0
+
+    def test_records_to_text_file(self, tmp_path):
+        adapter = TrainingDataAdapter()
+        records = [Record(content="hello"), Record(content="world")]
+        path = str(tmp_path / "train.txt")
+        count = adapter.records_to_text_file(records, path)
+        assert count > 0
+        assert (tmp_path / "train.txt").exists()
+
+    def test_reset(self):
+        adapter = TrainingDataAdapter()
+        adapter.records_to_text([Record(content="hello")])
+        assert adapter.stats["accepted"] == 1
+        adapter.reset()
+        assert adapter.stats["accepted"] == 0
+
+
+class TestTrainingDatasetBuilder:
+    def test_add_records(self):
+        builder = TrainingDatasetBuilder()
+        builder.add_records([Record(content="hello"), Record(content="world")])
+        assert builder.record_count == 2
+
+    def test_build_text(self):
+        builder = TrainingDatasetBuilder()
+        builder.add_records([Record(content="hello"), Record(content="world")])
+        text = builder.build_text()
+        assert text == "hello\nworld"
+
+    def test_build_numpy(self):
+        builder = TrainingDatasetBuilder()
+        builder.add_records([Record(content="hello"), Record(content="world")])
+        data, vocab_size = builder.build_numpy()
+        assert len(data) > 0
+        assert vocab_size > 0
+
+    def test_build_dataset(self):
+        builder = TrainingDatasetBuilder()
+        builder.add_records([Record(content="hello"), Record(content="world")])
+        data, stoi, itos = builder.build_dataset()
+        assert len(data) > 0
+        assert len(stoi) > 0
+        assert len(itos) > 0
+
+    def test_save_text(self, tmp_path):
+        builder = TrainingDatasetBuilder()
+        builder.add_records([Record(content="hello"), Record(content="world")])
+        path = str(tmp_path / "train.txt")
+        count = builder.save_text(path)
+        assert count > 0
+        assert (tmp_path / "train.txt").exists()
+
+    def test_add_from_text(self):
+        builder = TrainingDatasetBuilder()
+        builder.add_from_text("hello\nworld\nfoo")
+        assert builder.record_count == 3
+
+    def test_add_from_file(self, tmp_path):
+        f = tmp_path / "data.txt"
+        f.write_text("hello\nworld\n")
+        builder = TrainingDatasetBuilder()
+        builder.add_from_file(str(f))
+        assert builder.record_count == 2
+
+
+class TestCollectorTrainingBridge:
+    def test_collect_and_prepare(self, tmp_path):
+        f = tmp_path / "data.txt"
+        f.write_text("hello world\nfoo bar\n")
+        collector = Collector(FileSource(str(f)), MemoryStore())
+        bridge = CollectorTrainingBridge(collector)
+        data, vocab_size = bridge.collect_and_prepare()
+        assert len(data) > 0
+        assert vocab_size > 0
+        assert bridge.stats["collected"] == 2
+
+    def test_collect_and_save_text(self, tmp_path):
+        f = tmp_path / "input.txt"
+        f.write_text("hello\nworld\n")
+        out = tmp_path / "output.txt"
+        collector = Collector(FileSource(str(f)), MemoryStore())
+        bridge = CollectorTrainingBridge(collector)
+        count = bridge.collect_and_save_text(str(out))
+        assert count > 0
+        assert out.exists()
+
+    def test_get_text(self, tmp_path):
+        f = tmp_path / "data.txt"
+        f.write_text("hello\nworld\n")
+        collector = Collector(FileSource(str(f)), MemoryStore())
+        bridge = CollectorTrainingBridge(collector)
+        bridge.collect_and_prepare()
+        text = bridge.get_text()
+        assert "hello" in text
+        assert "world" in text

@@ -54,7 +54,7 @@ export default function SecurityPage() {
       const auditUrl = `${useHistory ? '/security/audit?history=true&limit=100' : '/security/audit?limit=100'}${eventParam()}`
       const [logsRes, keysRes] = await Promise.all([
         apiGet<AuditResponse>(auditUrl).catch(() => null),
-        apiGet<{ data?: { count: number; configured: boolean } } | { count: number; configured: boolean }>('/security/keys').catch(() => null),
+        apiGet<{ count: number; configured: boolean }>('/security/keys').catch(() => null),
       ])
       setLogs(logsRes?.logs ?? [])
       const keysData = keysRes && 'count' in keysRes ? keysRes : null

@@ -14,7 +14,7 @@ beforeEach(() => { vi.clearAllMocks() })
 
 describe('voiceController', () => {
   it('getStatus unwraps {data} envelope', async () => {
-    apiGet.mockResolvedValue({ data: { server_tts: true, model: 'bark', error: null } })
+    apiGet.mockResolvedValue({ server_tts: true, model: 'bark', error: null })
     const result = await voiceController.getStatus()
     expect(result).toEqual({ server_tts: true, model: 'bark', error: null })
   })
