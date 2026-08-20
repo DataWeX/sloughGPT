@@ -179,8 +179,7 @@ class MobileRouter:
                     return resp.json()
                 return None
             except Exception as e:
-                classify_and_raise(e, source="mobile_internal_get")
-                logger.warning(f"Internal GET {path} failed: {e}", extra={"tag": "REQ"})
+                logger.warning("Internal GET %s failed: %s", path, e, extra={"tag": "REQ"})
                 return None
 
     async def _internal_post(self, request: Request, path: str, body: dict = None):
@@ -193,8 +192,7 @@ class MobileRouter:
                     return resp.json()
                 return None
             except Exception as e:
-                classify_and_raise(e, source="mobile_internal_post")
-                logger.warning(f"Internal POST {path} failed: {e}", extra={"tag": "REQ"})
+                logger.warning("Internal POST %s failed: %s", path, e, extra={"tag": "REQ"})
                 return None
 
     async def _internal_patch(self, request: Request, path: str, body: dict = None):
@@ -207,8 +205,7 @@ class MobileRouter:
                     return resp.json()
                 return None
             except Exception as e:
-                classify_and_raise(e, source="mobile_internal_patch")
-                logger.warning(f"Internal PATCH {path} failed: {e}", extra={"tag": "REQ"})
+                logger.warning("Internal PATCH %s failed: %s", path, e, extra={"tag": "REQ"})
                 return None
 
     async def _internal_delete(self, request: Request, path: str):
@@ -221,8 +218,7 @@ class MobileRouter:
                     return resp.json()
                 return None
             except Exception as e:
-                classify_and_raise(e, source="mobile_internal_delete")
-                logger.warning(f"Internal DELETE {path} failed: {e}", extra={"tag": "REQ"})
+                logger.warning("Internal DELETE %s failed: %s", path, e, extra={"tag": "REQ"})
                 return None
 
     async def get_dashboard(self, request: Request) -> dict:
@@ -654,7 +650,6 @@ class MobileRouter:
                         error="No response from server",
                     ))
             except Exception as e:
-                classify_and_raise(e, source="mobile_sync_offline")
                 results.append(SyncResult(
                     id=msg.id,
                     status="error",

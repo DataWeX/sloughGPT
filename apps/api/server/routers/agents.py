@@ -12,7 +12,7 @@ from typing import Optional, List, AsyncGenerator
 
 from domains.api.sse_envelope import sse_event, sse_complete, sse_error
 
-from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+from schemas.common import raise_error, success_response, safe_audit_log
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -301,7 +301,6 @@ class AgentsRouter:
                                 message=f"Completed: {task.description}",
                             )
                         except Exception as e:
-                            classify_and_raise(e, source="agents_orchestrate_run_task")
                             error = str(e)
                             task.error = error
                             task.status = "failed"
@@ -360,7 +359,6 @@ class AgentsRouter:
                 )
 
             except Exception as e:
-                classify_and_raise(e, source="agents_orchestrate")
                 logger.exception("Orchestration error", extra={"tag": "MODEL"})
                 if run_id:
                     store.fail(run_id, str(e))
