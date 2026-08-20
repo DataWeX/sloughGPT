@@ -70,8 +70,8 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
 
   fetchAdapterStats: async () => {
     try {
-      const adapterStats = await userAdaptersController.list()
-      set({ adapterStats })
+      const res = await userAdaptersController.list()
+      set({ adapterStats: res.stats })
     } catch (err) {
       if (useApiMonitor.getState().status === 'reloading') return
       const msg = extractErrorMessage(err)

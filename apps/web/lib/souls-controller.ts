@@ -2,7 +2,7 @@
  * Souls Controller — axios-based API for personality management.
  */
 
-import { apiGet, apiPost, apiDelete } from './http-client'
+import { apiGet, apiPost, apiDelete, authFetch } from './http-client'
 
 export interface Soul {
   name: string
@@ -175,7 +175,7 @@ export const soulsController = {
   },
 
   async downloadCheckpoint(name: string): Promise<Blob> {
-    const response = await fetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
+    const response = await authFetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
     if (!response.ok) throw new Error('Download failed')
     return response.blob()
   },

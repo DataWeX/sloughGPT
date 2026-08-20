@@ -29,13 +29,12 @@ export default function AdaptersPage() {
     setLoading(true)
     setError(null)
     try {
-      const [statsRes, qualityRes] = await Promise.all([
+      const [listRes, qualityRes] = await Promise.all([
         userAdaptersController.list(),
         userAdaptersController.getQuality(3),
       ])
-      setStats(statsRes)
-      setQuality(qualityRes)
-      setAdapters(qualityRes.adapters ?? [])
+      setStats(listRes.stats)
+      setAdapters(listRes.adapters ?? [])
       try {
         const evalResults = await loraEvalController.getHistory(10)
         setEvalHistory(evalResults)
@@ -53,14 +52,14 @@ export default function AdaptersPage() {
       setLoading(true)
       setError(null)
       try {
-        const [statsRes, qualityRes] = await Promise.all([
+        const [listRes, qualityRes] = await Promise.all([
           userAdaptersController.list(),
           userAdaptersController.getQuality(3),
         ])
         if (ignore) return
-        setStats(statsRes)
+        setStats(listRes.stats)
         setQuality(qualityRes)
-        setAdapters(qualityRes.adapters ?? [])
+        setAdapters(listRes.adapters ?? [])
       } catch (e) {
         if (!ignore) setError(extractErrorMessage(e, 'Failed to load adapters'))
       } finally {
