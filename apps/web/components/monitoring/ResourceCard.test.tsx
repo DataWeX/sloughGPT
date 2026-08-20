@@ -26,9 +26,10 @@ function renderCard(props: Partial<Parameters<typeof ResourceCard>[0]> = {}) {
 describe('ResourceCard', () => {
   afterEach(cleanup)
 
-  it('shows placeholder values when no data', () => {
+  it('shows skeleton placeholders when no data', () => {
     renderCard()
-    expect(screen.getAllByText('...').length).toBe(4)
+    const skeletons = document.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThanOrEqual(4)
   })
 
   it('renders cpu and memory from liveHealth', () => {

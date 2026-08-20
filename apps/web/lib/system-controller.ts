@@ -56,6 +56,7 @@ export interface DetailedHealth {
   request_count: number
   error_count: number
   avg_latency_ms: number
+  p95_latency_ms: number
   requests_per_minute: number
   path_latencies: Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
   recent_errors: Array<{ path: string; method: string; status: number; message: string; error_type: string; ts: number }>

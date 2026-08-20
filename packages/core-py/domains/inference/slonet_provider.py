@@ -799,6 +799,8 @@ class SloNetChatProvider:
             "trim_allocator_after_load": trim_allocator_after_load,
         }
         instance._lazy_lock = threading.Lock()
+        instance._materializing = threading.Event()
+        instance._materializing.set()  # Start "not loading" — cleared during materialize_model()
         instance._loaded = False
         instance._meta = {
             "model_id": model_id,
@@ -1166,6 +1168,18 @@ class SloNetChatProvider:
         lock = getattr(self, "_lazy_lock", None)
         if lock is None:
             return None
+        # If another thread (e.g. parent preload) is already loading, wait
+        # for it to finish instead of blocking on the lock.
+        mat = getattr(self, "_materializing", None)
+        if mat is not None and not mat.is_set():
+            for _ in range(600):  # 60s max wait
+                time.sleep(0.1)
+                model = self._model
+                if model is not None:
+                    return model
+            raise RuntimeError(
+                f"Model materialization timed out for '{self._model_id}'"
+            )
         with lock:
             model = self._model
             if model is not None:
@@ -1208,6 +1222,62 @@ class SloNetChatProvider:
                 self._model_id, extra={"tag": "INF"},
             )
             return self._model
+
+    def materialize_model(self):
+        """Load the model directly, bypassing _get_model() lock.
+
+        Used by parent preload to load weights without holding _lazy_lock
+        for the entire duration. Sets _materializing flag so other threads
+        wait instead of blocking on the lock.
+        """
+        model = getattr(self, "_model", None)
+        if model is not None:
+            return model
+        mat = getattr(self, "_materializing", None)
+        if mat is None:
+            return self._get_model()
+        # Signal that materialization is in progress
+        mat.clear()
+        try:
+            eager = self.from_slnc(
+                self._slnc_path, model_id=self._model_id, **self._load_kwargs
+            )
+            self._model = eager._model
+            self._parser = eager._parser
+            self._quant_engine = eager._quant_engine
+            self._kv_states = eager._kv_states
+            self._kv_last_access = eager._kv_last_access
+            self._kv_ttl = eager._kv_ttl
+            self._kv_max_sessions = eager._kv_max_sessions
+            self._kv_lock = eager._kv_lock
+            self._loaded = True
+            if self._meta is not None:
+                self._meta["quantized"] = eager._quant_engine is not None
+                self._meta["lazy"] = True
+            # Stop the ProcessGuard to release its subprocess copy
+            try:
+                server = getattr(self, "_server", None)
+                if server is not None:
+                    guard = getattr(server, "_process_guard", None)
+                    if guard is not None and getattr(guard, "alive", False):
+                        guard.stop()
+                        logger.info(
+                            "Stopped ProcessGuard after parent materialization "
+                            "(subprocess copy released)",
+                            extra={"tag": "INF"},
+                        )
+            except Exception as exc:
+                logger.debug(
+                    "Guard stop after materialization failed (non-fatal): %s",
+                    exc, extra={"tag": "INF"},
+                )
+            logger.info(
+                "SloNetChatProvider: %s weights now resident (materialize)",
+                self._model_id, extra={"tag": "INF"},
+            )
+            return self._model
+        finally:
+            mat.set()  # Signal completion — wake all waiters
 
     def release_model(self) -> bool:
         """Drop the resident model and return its memory to the OS.

@@ -1,7 +1,7 @@
 'use client'
 
 import { Card, CardContent } from '@sloughgpt/strui'
-import { StatCard, KpiGrid } from '@sloughgpt/strui'
+import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { logger } from '@/lib/dev-log'
 import { apiPost } from '@/lib/http-client'
@@ -37,7 +37,7 @@ export function FeedbackCard({ dpoStatus, visualStatus, dpoRunning, onDpoRunning
         <KpiGrid columns={2}>
           <StatCard
             label="Feedback"
-            value={dpoStatus ? <span className="font-mono">{dpoStatus.status}</span> : '...'}
+            value={dpoStatus ? <span className="font-mono">{dpoStatus.status}</span> : <Skeleton className="h-5 w-16" />}
             icon={<span className={`inline-block w-2 h-2 rounded-full ${
               !dpoStatus ? 'bg-warning' :
               dpoStatus.status === 'running' ? 'bg-warning' :
@@ -47,13 +47,13 @@ export function FeedbackCard({ dpoStatus, visualStatus, dpoRunning, onDpoRunning
           />
           <StatCard
             label="Vision"
-            value={visualStatus ? <span className="font-mono">{visualStatus.visual_loaded ? 'Yes' : 'No'}</span> : '...'}
+            value={visualStatus ? <span className="font-mono">{visualStatus.visual_loaded ? 'Yes' : 'No'}</span> : <Skeleton className="h-5 w-12" />}
             icon={<span className={`inline-block w-2 h-2 rounded-full ${
               !visualStatus ? 'bg-warning' : visualStatus.visual_loaded ? 'bg-success' : 'bg-muted-foreground/50'
             }`} />}
           />
-          <StatCard label="Accepted" value={dpoStatus ? dpoStatus.accepted_count.toString() : '...'} numeric />
-          <StatCard label="Rejected" value={dpoStatus ? dpoStatus.rejected_count.toString() : '...'} numeric />
+          <StatCard label="Accepted" value={dpoStatus ? dpoStatus.accepted_count.toString() : <Skeleton className="h-5 w-8" />} numeric />
+          <StatCard label="Rejected" value={dpoStatus ? dpoStatus.rejected_count.toString() : <Skeleton className="h-5 w-8" />} numeric />
         </KpiGrid>
         <div className="mt-2">
           <Button

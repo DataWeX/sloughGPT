@@ -38,6 +38,7 @@ export interface LiveHealthSnapshot {
   error_count: number
   tokens_per_sec: number
   avg_latency_ms: number
+  p95_latency_ms: number
   requests_per_minute: number
   total_tokens: number
   avg_tokens_per_request: number
@@ -108,6 +109,7 @@ export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
     error_count: Number(d.error_count) || 0,
     tokens_per_sec: Number(d.tokens_per_sec) || 0,
     avg_latency_ms: Number(d.avg_latency_ms) || 0,
+    p95_latency_ms: Number(d.p95_latency_ms) || 0,
     requests_per_minute: Number(d.requests_per_minute) || 0,
     total_tokens: Number(d.total_tokens) || 0,
     avg_tokens_per_request: Number(d.avg_tokens_per_request) || 0,
@@ -226,6 +228,7 @@ export function initLiveStatus(): () => void {
       error_count: Number(d.error_count) || 0,
       tokens_per_sec: Number(d.tokens_per_sec) || 0,
       avg_latency_ms: Number(d.avg_latency_ms) || 0,
+      p95_latency_ms: Number(d.p95_latency_ms) || 0,
       requests_per_minute: Number(d.requests_per_minute) || 0,
       total_tokens: Number(d.total_tokens) || 0,
       avg_tokens_per_request: Number(d.avg_tokens_per_request) || 0,

@@ -1,7 +1,7 @@
 'use client'
 
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Chip } from '@sloughgpt/strui'
+import { Chip, Skeleton } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelDisplayName } from '@/lib/inference-display'
 import type { HealthStatus } from '@/lib/model-controller'
@@ -61,9 +61,9 @@ export default function ModelStatusCard({
       )}
 
       <KpiGrid columns={3}>
-        <StatCard label="Models" value={modelsLoading ? '—' : modelsCount.toString()} icon={<span className="text-xs font-mono">M</span>} />
-        <StatCard label="Personalities" value={soulsLoading ? '—' : soulsCount.toString()} icon={<span className="text-xs">🎭</span>} />
-        <StatCard label="Checkpoints" value={checkpointsLoading ? '—' : checkpointsCount.toString()} icon={<span className="text-xs">📦</span>} />
+        <StatCard label="Models" value={modelsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : modelsCount.toString()} icon={<span className="text-xs font-mono">M</span>} />
+        <StatCard label="Personalities" value={soulsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : soulsCount.toString()} icon={<span className="text-xs">🎭</span>} />
+        <StatCard label="Checkpoints" value={checkpointsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : checkpointsCount.toString()} icon={<span className="text-xs">📦</span>} />
       </KpiGrid>
     </>
   )

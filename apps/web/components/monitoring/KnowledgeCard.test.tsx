@@ -18,10 +18,11 @@ function renderCard(props: Partial<Parameters<typeof KnowledgeCard>[0]> = {}) {
 describe('KnowledgeCard', () => {
   afterEach(cleanup)
 
-  it('shows placeholders when nothing is loaded', () => {
+  it('shows skeleton placeholders when nothing is loaded', () => {
     renderCard()
     expect(screen.getByText('Knowledge')).toBeDefined()
-    expect(screen.getAllByText('...').length).toBe(4)
+    const skeletons = document.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThanOrEqual(4)
   })
 
   it('shows zero values once loaded without stats', () => {

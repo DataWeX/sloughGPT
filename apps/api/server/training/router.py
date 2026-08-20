@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
 from infrastructure.auth import require_auth_if_enabled, audit_user, get_audit_logger
@@ -444,6 +444,41 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
         "status": "deleted",
         "job_id": job_id,
         "deleted_files": deleted_files,
+    }
+
+
+@router.post("/training/jobs/purge")
+async def purge_training_jobs(
+    status: Optional[str] = Query(None, description="Only purge jobs in this terminal status"),
+    auth_user: dict = Depends(require_auth_if_enabled),
+):
+    """Remove all terminal training jobs from the in-memory tracker.
+
+    By default purges jobs with status completed, failed, cancelled, or
+    interrupted.  Pass ``?status=completed`` to purge only completed jobs.
+    Only terminal statuses are accepted — running/queued jobs cannot be purged.
+    """
+    terminal = {"completed", "failed", "cancelled", "interrupted"}
+    if status:
+        if status not in terminal:
+            raise_error(
+                f"Cannot purge non-terminal status '{status}'",
+                "E_INVALID_STATUS",
+                status_code=400,
+            )
+        terminal = {status}
+
+    before = len(training_jobs)
+    to_remove = [jid for jid, j in training_jobs.items() if j.get("status") in terminal]
+    for jid in to_remove:
+        del training_jobs[jid]
+    purged = before - len(training_jobs)
+
+    return {
+        "status": "purged",
+        "purged": purged,
+        "remaining": len(training_jobs),
+        "statuses_purged": sorted(terminal),
     }
 
 

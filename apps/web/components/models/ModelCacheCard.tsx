@@ -1,7 +1,7 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelDisplayName } from '@/lib/inference-display'
@@ -47,7 +47,17 @@ export default function ModelCacheCard({ cacheUsage, health, onRefresh }: ModelC
             </div>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">Loading cache stats...</p>
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-5 w-12" />
+                </div>
+              ))}
+            </div>
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </div>
         )}
       </CardContent>
     </Card>

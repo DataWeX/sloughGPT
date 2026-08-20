@@ -232,6 +232,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# GZip omitted — Starlette GZipMiddleware buffers responses, which kills SSE streaming.
+# /chat/stream and /inference/generate/stream send chunked text/event-stream that must
+# not be buffered. Non-streaming responses (health, models, etc.) are <5KB — compression
+# overhead exceeds bandwidth savings at that size. Add back only if large payload
+# endpoints (/datasets/export, /training/export-text) need it, using per-route config.
+
 # Register structured middleware from the infrastructure package.
 from infrastructure.middleware import register_all_middleware  # noqa: E402
 register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)

@@ -1,7 +1,7 @@
 'use client'
 
 import { Card, CardContent } from '@sloughgpt/strui'
-import { StatCard, KpiGrid } from '@sloughgpt/strui'
+import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import type { KvSessionsInfo } from '@/lib/system-controller'
 
 interface KvCacheCardProps {
@@ -31,7 +31,7 @@ export function KvCacheCard({ kvSessions }: KvCacheCardProps) {
           <StatCard label="TTL" value={(kvSessions.ttl_seconds ?? 0) / 60 + "m"} numeric />
           <StatCard
             label="Oldest"
-            value={kvSessions.oldest_session_age != null ? `${kvSessions.oldest_session_age.toFixed(0)}s` : '...'} numeric
+            value={kvSessions.oldest_session_age != null ? `${kvSessions.oldest_session_age.toFixed(0)}s` : <Skeleton className="h-5 w-10" />} numeric
           />
         </KpiGrid>
         {kvSessions.max_sessions != null && (

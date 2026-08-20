@@ -96,9 +96,9 @@ class ServerState:
         self._error_count: int = 0
         self._lock = RLock()
 
-        # Request history ring buffer (last 50 requests)
+        # Request history ring buffer (last 500 requests)
         self._request_history: list[dict] = []
-        self._request_history_max: int = 50
+        self._request_history_max: int = 500
 
         # Error history ring buffer (last 20 errors)
         self._error_history: list[dict] = []
@@ -113,7 +113,11 @@ class ServerState:
         self._total_tokens: int = 0
         self._total_inference_ms: float = 0.0
         self._tokens_per_request: list[int] = []
-        self._tokens_per_request_max: int = 50
+        self._tokens_per_request_max: int = 100
+
+        # Sliding window for recent tokens/s (last 30 inferences)
+        self._recent_inferences: list[dict] = []  # [{tokens, elapsed_ms, ts}, ...]
+        self._recent_inferences_max: int = 30
 
         # Per-model inference tracking: {model: {tokens, time_ms, count}}
         self._model_metrics: dict[str, dict] = {}
@@ -136,6 +140,10 @@ class ServerState:
         self._rate_limits: dict[str, dict] = {}
         self._rate_limit_violations: list[dict] = []
         self._rate_limit_violations_max: int = 20
+
+        # Memory pressure tracking
+        self._memory_pressure_blocks: int = 0  # times inference was blocked by >95% memory
+        self._gc_cycles: int = 0  # GC triggers before inference
 
     @property
     def uptime_seconds(self) -> float:
@@ -176,6 +184,16 @@ class ServerState:
             if not recent:
                 return 0.0
             return round(sum(r["elapsed_ms"] for r in recent) / len(recent), 1)
+
+    def get_p95_latency(self) -> float:
+        """P95 latency of recent requests in ms (last 100 requests)."""
+        with self._lock:
+            recent = self._request_history[-100:]
+            if not recent:
+                return 0.0
+            sorted_lat = sorted(r["elapsed_ms"] for r in recent)
+            idx = int(len(sorted_lat) * 0.95)
+            return round(sorted_lat[min(idx, len(sorted_lat) - 1)], 1)
 
     def record_error_detail(
         self, path: str, method: str, status: int, message: str, error_type: str = "",
@@ -240,6 +258,14 @@ class ServerState:
             self._tokens_per_request.append(tokens)
             if len(self._tokens_per_request) > self._tokens_per_request_max:
                 self._tokens_per_request = self._tokens_per_request[-self._tokens_per_request_max:]
+            # Sliding window for recent tokens/s
+            self._recent_inferences.append({
+                "tokens": tokens,
+                "elapsed_ms": elapsed_ms,
+                "ts": time.time(),
+            })
+            if len(self._recent_inferences) > self._recent_inferences_max:
+                self._recent_inferences = self._recent_inferences[-self._recent_inferences_max:]
             if model:
                 if model not in self._model_metrics:
                     self._model_metrics[model] = {"tokens": 0, "time_ms": 0.0, "count": 0}
@@ -248,11 +274,23 @@ class ServerState:
                 self._model_metrics[model]["count"] += 1
 
     def get_tokens_per_second(self) -> float:
-        """Average tokens/sec across all recorded inferences."""
+        """Recent tokens/sec — sliding window of last 10 inferences.
+
+        Falls back to lifetime average when fewer than 3 inferences recorded
+        (sliding window needs at least 2 data points for a meaningful rate).
+        """
         with self._lock:
-            if self._total_inference_ms <= 0:
+            recent = self._recent_inferences[-10:]
+            if len(recent) < 3:
+                # Not enough data — use lifetime average
+                if self._total_inference_ms <= 0:
+                    return 0.0
+                return round(self._total_tokens / (self._total_inference_ms / 1000), 1)
+            total_tokens = sum(r["tokens"] for r in recent)
+            total_ms = sum(r["elapsed_ms"] for r in recent)
+            if total_ms <= 0:
                 return 0.0
-            return round(self._total_tokens / (self._total_inference_ms / 1000), 1)
+            return round(total_tokens / (total_ms / 1000), 1)
 
     def get_avg_tokens_per_request(self) -> float:
         """Average tokens generated per inference request (last N)."""
@@ -287,10 +325,10 @@ class ServerState:
             result.sort(key=lambda x: x["count"], reverse=True)
             return result
 
-    def get_health_score(self) -> dict:
+    def get_health_score(self, cpu_percent: float = 0.0, memory_percent: float = 0.0) -> dict:
         """Composite health score via the diagnostic flow pipeline.
 
-        Each concern (errors, latency, throughput, model, uptime) is checked
+        Each concern (errors, latency, throughput, model, uptime, resources) is checked
         independently. The flow produces a score, status, and a human-readable
         summary sentence — no raw numbers in user-facing messages.
         """
@@ -315,6 +353,8 @@ class ServerState:
             uptime_seconds=uptime,
             model_loaded=model_loaded,
             model_type=model_type,
+            cpu_percent=cpu_percent,
+            memory_percent=memory_percent,
         )
 
         return {
@@ -386,15 +426,6 @@ class ServerState:
 
     def record_memory_snapshot(self) -> None:
         """Snapshot current memory usage (RSS + virtual) for trend tracking."""
-        import os
-        try:
-            proc = os.getpid()
-            # macOS: use /proc-like approach via resource module
-            import resource
-            usage = resource.getrusage(resource.RUSAGE_SELF)
-            rss_mb = usage.ru_maxrss / 1024 / 1024  # bytes on macOS, convert to MB
-        except Exception:
-            rss_mb = 0.0
         try:
             import psutil
             mem = psutil.virtual_memory()
@@ -404,6 +435,7 @@ class ServerState:
             virtual_mb = proc_mem.vms / (1024 * 1024)
             system_percent = mem.percent
         except Exception:
+            rss_mb = 0.0
             virtual_mb = 0.0
             system_percent = 0.0
         with self._lock:
@@ -448,6 +480,24 @@ class ServerState:
         """Return recent rate limit violations (newest first)."""
         with self._lock:
             return list(reversed(self._rate_limit_violations[-limit:]))
+
+    def record_memory_pressure_block(self) -> None:
+        """Record that inference was blocked due to memory pressure."""
+        with self._lock:
+            self._memory_pressure_blocks += 1
+
+    def record_gc_cycle(self) -> None:
+        """Record that a GC cycle was triggered before inference."""
+        with self._lock:
+            self._gc_cycles += 1
+
+    def get_memory_pressure_stats(self) -> dict:
+        """Return memory pressure stats for monitoring."""
+        with self._lock:
+            return {
+                "pressure_blocks": self._memory_pressure_blocks,
+                "gc_cycles": self._gc_cycles,
+            }
 
     @property
     def request_count(self) -> int:

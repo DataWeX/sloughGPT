@@ -17,7 +17,8 @@ class ConfigRouter:
 
     def _register_routes(self):
         self.router.add_api_route("/generation", self.get_generation_config, methods=["GET"])
-        self.router.add_api_route("/generation", self.update_generation_config, methods=["PUT", "PATCH"])
+        self.router.add_api_route("/generation", self.update_generation_config, methods=["PUT"], operation_id="update_generation_config_put")
+        self.router.add_api_route("/generation", self.update_generation_config, methods=["PATCH"], operation_id="update_generation_config_patch")
 
     async def get_generation_config(self) -> dict:
         """Return the current generation configuration (temperature, top_p, etc).

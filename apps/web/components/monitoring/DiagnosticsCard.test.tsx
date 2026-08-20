@@ -17,6 +17,7 @@ const healthy: LiveHealthSnapshot = {
   error_count: 0,
   tokens_per_sec: 2.5,
   avg_latency_ms: 40,
+  p95_latency_ms: 60,
   requests_per_minute: 1.5,
   total_tokens: 500,
   avg_tokens_per_request: 120,

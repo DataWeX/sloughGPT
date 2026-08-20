@@ -330,6 +330,12 @@ class HealthController:
     def __init__(self):
         self._cache: Dict[str, Any] = {}
         self._cache_time: float = 0.0
+        # Warm up psutil cpu_percent — first call always returns 0.0
+        try:
+            psutil.cpu_percent(interval=None)
+            psutil.Process().cpu_percent(interval=None)
+        except Exception:
+            pass
 
     def get_basic_health(self) -> Dict[str, Any]:
         """Get basic health status with flow-based summary."""
@@ -435,6 +441,7 @@ class HealthController:
             error_count = ss.error_count
             current_soul = ss.current_soul.get()
             avg_latency = ss.get_avg_latency()
+            p95_latency = ss.get_p95_latency()
             requests_per_min = ss.get_requests_per_minute()
             path_latencies = ss.get_path_latencies(5)
             recent_errors = ss.get_error_history(5)
@@ -442,7 +449,7 @@ class HealthController:
             total_tokens = ss.total_tokens
             tokens_per_sec = ss.get_tokens_per_second()
             avg_tokens_per_req = ss.get_avg_tokens_per_request()
-            health_score = ss.get_health_score()
+            health_score = ss.get_health_score(cpu_percent=cpu, memory_percent=mem.percent)
             model_metrics = ss.get_model_metrics()
             model_events = ss.get_model_events(10)
             ss.record_trend_snapshots()
@@ -454,6 +461,7 @@ class HealthController:
             error_count = 0
             current_soul = None
             avg_latency = 0.0
+            p95_latency = 0.0
             requests_per_min = 0.0
             path_latencies = []
             recent_errors = []
@@ -477,6 +485,7 @@ class HealthController:
             "request_count": request_count,
             "error_count": error_count,
             "avg_latency_ms": avg_latency,
+            "p95_latency_ms": p95_latency,
             "requests_per_minute": requests_per_min,
             "path_latencies": path_latencies,
             "recent_errors": recent_errors,
