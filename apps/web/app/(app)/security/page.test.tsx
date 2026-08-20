@@ -17,7 +17,7 @@ import SecurityPage from './page'
 describe('SecurityPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockApiGet.mockResolvedValue({ data: { logs: [] } })
+    mockApiGet.mockResolvedValue({ logs: [] })
   })
 
   afterEach(() => {
@@ -49,11 +49,11 @@ describe('SecurityPage', () => {
     const rec = { event_type: 'auth_success', timestamp: '2024-01-01T00:00:02+00:00', user: 'u' }
     const older = { event_type: 'auth_older', timestamp: '2024-01-01T00:00:01+00:00', user: 'u' }
     mockApiGet
-      .mockResolvedValueOnce({ data: { logs: [rec] } })        // initial audit fetch
-      .mockResolvedValueOnce({ data: { count: 1, configured: true } }) // keys
-      .mockResolvedValueOnce({ data: { logs: [rec] } })        // persisted fetch
-      .mockResolvedValueOnce({ data: { count: 1, configured: true } }) // keys
-      .mockResolvedValue({ data: { logs: [older] } })          // load older
+      .mockResolvedValueOnce({ logs: [rec] })
+      .mockResolvedValueOnce({ count: 1, configured: true })
+      .mockResolvedValueOnce({ logs: [rec] })
+      .mockResolvedValueOnce({ count: 1, configured: true })
+      .mockResolvedValue({ logs: [older] })
     render(<SecurityPage />)
     await screen.findAllByText('auth_success')
     await user.click(screen.getByRole('button', { name: /session/i }))
@@ -68,9 +68,9 @@ describe('SecurityPage', () => {
   it('passes event_type to backend when filter is set', async () => {
     const user = userEvent.setup()
     mockApiGet
-      .mockResolvedValueOnce({ data: { logs: [] } })               // initial audit fetch
-      .mockResolvedValueOnce({ data: { count: 0, configured: false } }) // keys
-      .mockResolvedValue({ data: { logs: [] } })                   // refresh
+      .mockResolvedValueOnce({ logs: [] })
+      .mockResolvedValueOnce({ count: 0, configured: false })
+      .mockResolvedValue({ logs: [] })
     render(<SecurityPage />)
     const input = await screen.findByPlaceholderText(/filter by event/i)
     await user.type(input, 'training')
@@ -83,11 +83,11 @@ describe('SecurityPage', () => {
     const rec = { event_type: 'training.start', timestamp: '2024-01-01T00:00:02+00:00', user: 'u' }
     const older = { event_type: 'training.start', timestamp: '2024-01-01T00:00:01+00:00', user: 'u' }
     mockApiGet
-      .mockResolvedValueOnce({ data: { logs: [rec] } })        // initial audit fetch
-      .mockResolvedValueOnce({ data: { count: 1, configured: true } }) // keys
-      .mockResolvedValueOnce({ data: { logs: [rec] } })        // persisted fetch
-      .mockResolvedValueOnce({ data: { count: 1, configured: true } }) // keys
-      .mockResolvedValue({ data: { logs: [older] } })          // load older
+      .mockResolvedValueOnce({ logs: [rec] })
+      .mockResolvedValueOnce({ count: 1, configured: true })
+      .mockResolvedValueOnce({ logs: [rec] })
+      .mockResolvedValueOnce({ count: 1, configured: true })
+      .mockResolvedValue({ logs: [older] })
     render(<SecurityPage />)
     const input = await screen.findByPlaceholderText(/filter by event/i)
     await user.type(input, 'training.start')
@@ -100,7 +100,7 @@ describe('SecurityPage', () => {
   })
 
   it('shows empty state when no logs', async () => {
-    mockApiGet.mockResolvedValue({ data: { logs: [] } })
+    mockApiGet.mockResolvedValue({ logs: [] })
     render(<SecurityPage />)
     await screen.findByPlaceholderText(/filter by event/i)
     expect(screen.getAllByText(/no|empty|nothing/i).length).toBeGreaterThanOrEqual(1)
@@ -118,7 +118,7 @@ describe('SecurityPage', () => {
       { event_type: 'auth_success', timestamp: '2024-01-01T00:00:01+00:00', user: 'admin' },
       { event_type: 'model_load', timestamp: '2024-01-01T00:00:02+00:00', user: 'system' },
     ]
-    mockApiGet.mockResolvedValue({ data: { logs } })
+    mockApiGet.mockResolvedValue({ logs })
     render(<SecurityPage />)
     await screen.findAllByText('auth_success')
     expect(screen.getAllByText('model_load').length).toBeGreaterThanOrEqual(1)
@@ -128,7 +128,7 @@ describe('SecurityPage', () => {
     const logs = [
       { event_type: 'auth_success', timestamp: '2024-01-01T00:00:01+00:00', user: 'admin' },
     ]
-    mockApiGet.mockResolvedValue({ data: { logs } })
+    mockApiGet.mockResolvedValue({ logs })
     render(<SecurityPage />)
     await screen.findAllByText('auth_success')
     expect(screen.getByText('Security')).toBeTruthy()
@@ -158,8 +158,8 @@ describe('SecurityPage', () => {
 
   it('displays API keys status', async () => {
     mockApiGet
-      .mockResolvedValueOnce({ data: { logs: [] } })
-      .mockResolvedValueOnce({ data: { count: 2, configured: true } })
+      .mockResolvedValueOnce({ logs: [] })
+      .mockResolvedValueOnce({ count: 2, configured: true })
     render(<SecurityPage />)
     await screen.findByPlaceholderText(/filter by event/i)
     expect(screen.getByText('Security')).toBeTruthy()
