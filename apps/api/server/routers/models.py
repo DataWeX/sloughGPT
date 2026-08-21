@@ -611,8 +611,11 @@ class ModelsRouter:
         logger.info("Downloading Qwen GGUF from HuggingFace Hub (this may take a while)...", extra={"tag": "MODEL"})
         try:
             url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
+            _t0 = time.monotonic()
             download_file(url=url, dest=cached_path)
-            logger.info("GGUF downloaded and cached: %s", cached_path, extra={"tag": "MODEL"})
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
+            safe_audit_log("model.download_gguf", resource=repo_id, detail=f"elapsed={_elapsed_ms:.0f}ms size={cached_path.stat().st_size}")
+            logger.info("GGUF downloaded and cached: %s (%.0fms)", cached_path, _elapsed_ms, extra={"tag": "MODEL"})
             return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
         except Exception as e:
             logger.warning("Download GGUF failed: %s", e)

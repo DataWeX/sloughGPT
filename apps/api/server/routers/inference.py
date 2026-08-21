@@ -1124,6 +1124,7 @@ class InferenceRouter:
                         except Exception:
                             pass
                         _mgr.finish(_op_id, str(e))
+                        logger.warning("Chat stream provider failed: %s", e, extra={"tag": "INF"})
                         classify_and_raise(e, source="chat_stream_provider")
                 else:
                     yield sse_error("chat", "STREAMING", "No inference provider loaded")
@@ -1260,6 +1261,7 @@ class InferenceRouter:
 
             except Exception as e:
                 _mgr.finish(_op_id, str(e))
+                logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
                 classify_and_raise(e, source="chat_stream_outer")
 
         return StreamingResponse(generate(), media_type="text/event-stream")
@@ -1519,6 +1521,7 @@ class InferenceRouter:
             safe_audit_log("inference.session_create", resource=session_id)
             return success_response(data={"session_id": session_id}, message="created")
         except Exception as exc:
+            logger.warning("Create session failed: %s", exc, extra={"tag": "INF"})
             classify_and_raise(exc, source="create_session")
 
     async def get_session(self, session_id: str) -> dict:

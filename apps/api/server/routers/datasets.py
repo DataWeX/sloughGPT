@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, List
 import asyncio
 import json
+import time
 
 from schemas.datasets import (
     DatasetInfo, DatasetCreate, DatasetUpdate, DatasetDataRequest,
@@ -123,14 +124,16 @@ class DatasetsRouter:
                 if not any(import_path == b or str(import_path).startswith(str(b) + "/") for b in _allowed):
                     raise_error(f"Directory not in allowed paths: {request.path}", "E_AUTH_FORBIDDEN")
                 importer = self._get_data_importer()
+                _t0 = time.monotonic()
                 result = await asyncio.to_thread(
                     importer.import_from_local,
                     path=request.path,
                     name=request.name,
                     extensions=request.extensions or None,
                 )
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
                 if result.success:
-                    safe_audit_log("dataset.import", resource=request.name, detail="local", files=result.files_imported, chars=result.total_chars)
+                    safe_audit_log("dataset.import", resource=request.name, detail=f"local elapsed={_elapsed_ms:.0f}ms", files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=request.name,
@@ -152,6 +155,7 @@ class DatasetsRouter:
             try:
                 from domains.training.data_import import RepoImporter
                 importer = RepoImporter()
+                _t0 = time.monotonic()
                 result = await asyncio.to_thread(
                     importer.import_from_github,
                     url=request.url,
@@ -160,8 +164,9 @@ class DatasetsRouter:
                     extensions=request.extensions or None,
                     max_files=request.max_files,
                 )
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
                 if result.success:
-                    safe_audit_log("dataset.import", resource=result.name or request.name, detail="github", files=result.files_imported, chars=result.total_chars)
+                    safe_audit_log("dataset.import", resource=result.name or request.name, detail=f"github elapsed={_elapsed_ms:.0f}ms", files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=result.name or request.name,
@@ -184,14 +189,16 @@ class DatasetsRouter:
             try:
                 from domains.training.data_import import HuggingFaceImporter
                 importer = HuggingFaceImporter()
+                _t0 = time.monotonic()
                 result = await asyncio.to_thread(
-                    importer.download_dataset,
+                    importer.downloadDataset,
                     dataset_id=request.dataset_id,
                     name=name,
                     output_dir=str(self._DATASETS_DIR),
                 )
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
                 if result.success:
-                    safe_audit_log("dataset.import", resource=name, detail="huggingface", dataset_id=request.dataset_id, files=result.files_imported, chars=result.total_chars)
+                    safe_audit_log("dataset.import", resource=name, detail=f"huggingface elapsed={_elapsed_ms:.0f}ms", dataset_id=request.dataset_id, files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=name,
@@ -230,14 +237,16 @@ class DatasetsRouter:
             try:
                 from domains.training.data_import import URLImporter
                 importer = URLImporter()
+                _t0 = time.monotonic()
                 result = await asyncio.to_thread(
                     importer.import_from_url,
                     url=request.url,
                     dataset_name=request.name,
                     output_dir=str(self._DATASETS_DIR),
                 )
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
                 if result.success:
-                    safe_audit_log("dataset.import", resource=request.name, detail="url", url=request.url, chars=result.total_chars)
+                    safe_audit_log("dataset.import", resource=request.name, detail=f"url elapsed={_elapsed_ms:.0f}ms", url=request.url, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=request.name,
@@ -274,12 +283,14 @@ class DatasetsRouter:
             output_dir = self._DATASETS_DIR / name
             output_dir.mkdir(parents=True, exist_ok=True)
 
+            _t0 = time.monotonic()
             proc = await asyncio.create_subprocess_exec(
                 "kaggle", "datasets", "download", "-d", request.dataset, "-p", str(output_dir), "--unzip",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
             if proc.returncode != 0:
                 raise_error(f"Kaggle import failed: {stderr.decode()}", "E_BAD_REQUEST")
 
@@ -296,7 +307,7 @@ class DatasetsRouter:
 
             file_count, total_size = await asyncio.to_thread(_organize)
 
-            safe_audit_log("dataset.import", resource=name, detail="kaggle", dataset=request.dataset, files=file_count)
+            safe_audit_log("dataset.import", resource=name, detail=f"kaggle elapsed={_elapsed_ms:.0f}ms", dataset=request.dataset, files=file_count)
             return ImportResponse(
                 success=True,
                 dataset_id=name,
@@ -467,13 +478,15 @@ class DatasetsRouter:
         try:
             from domains.training.data_import import ISBNImporter
             importer = ISBNImporter(output_dir=str(self._DATASETS_DIR))
+            _t0 = time.monotonic()
             result = await asyncio.to_thread(
                 importer.import_from_isbn,
                 isbn=request.isbn,
                 name=request.name or f"book_{request.isbn}",
             )
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
             if result.success:
-                safe_audit_log("dataset.import", resource=result.name or request.name or f"book_{request.isbn}", detail="isbn", isbn=request.isbn, files=result.files_imported)
+                safe_audit_log("dataset.import", resource=result.name or request.name or f"book_{request.isbn}", detail=f"isbn elapsed={_elapsed_ms:.0f}ms", isbn=request.isbn, files=result.files_imported)
                 return ImportResponse(
                     success=True,
                     dataset_id=result.name or request.name or f"book_{request.isbn}",

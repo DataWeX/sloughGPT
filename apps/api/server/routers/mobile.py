@@ -940,6 +940,7 @@ class MobileRouter:
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Mobile train failed: %s", e, extra={"tag": "REQ"})
             classify_and_raise(e, source="mobile_train")
 
     async def get_training_stats(self) -> dict:
@@ -1334,6 +1335,7 @@ class MobileRouter:
                 bufsize=1,
             )
         except Exception as e:
+            logger.warning("Mobile train subprocess spawn failed: %s", e, extra={"tag": "REQ"})
             classify_and_raise(e, source="mobile_train_from_sessions")
 
         # Stream stdout lines as SSE events

@@ -39,6 +39,7 @@ class WorkflowRouter:
         except ImportError:
             raise_error("Workflow module not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Workflow init failed: %s", exc)
             classify_and_raise(exc, source="workflow")
 
     async def get_workflow_status(self) -> Dict[str, Any]:
