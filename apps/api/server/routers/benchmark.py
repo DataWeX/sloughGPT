@@ -224,6 +224,7 @@ class BenchmarkRouter:
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Perplexity benchmark failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
     async def get_quality_metrics(
@@ -243,6 +244,7 @@ class BenchmarkRouter:
             bench = get_benchmark_domain()
             return success_response(data=bench.evaluate_latest(limit=limit))
         except Exception as e:
+            logger.warning("Quality metrics failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
     async def get_logged_responses(
@@ -272,6 +274,7 @@ class BenchmarkRouter:
                 "count": len(responses),
             })
         except Exception as e:
+            logger.warning("Logged responses failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
     async def get_tracker_stats(self) -> Dict[str, Any]:
@@ -282,6 +285,7 @@ class BenchmarkRouter:
             bench = get_benchmark_domain()
             return success_response(data=bench.get_stats())
         except Exception as e:
+            logger.warning("Tracker stats failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
     async def clear_history(self) -> dict:
@@ -293,6 +297,7 @@ class BenchmarkRouter:
             bench.clear_history()
             return success_response(data={"status": "ok", "cleared": True})
         except Exception as e:
+            logger.warning("Clear history failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
 

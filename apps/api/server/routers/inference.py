@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 
-from schemas.common import success_response, raise_error, classify_and_raise
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
 from domains.infrastructure.server_state import get_server_state
@@ -1516,6 +1516,7 @@ class InferenceRouter:
             session_data["session_id"] = session_id
             self._save_session(session_id, session_data)
             await self._flush_session_to_disk(session_id)
+            safe_audit_log("inference.session_create", resource=session_id)
             return success_response(data={"session_id": session_id}, message="created")
         except Exception as exc:
             classify_and_raise(exc, source="create_session")
@@ -1534,6 +1535,7 @@ class InferenceRouter:
             self._session_dirty.discard(session_id)
             self._session_deleted.add(session_id)
             self._clear_session_kv(session_id)
+            safe_audit_log("inference.session_delete", resource=session_id)
             return success_response(data={"session_id": session_id}, message="deleted")
         raise_error("Session not found", "E_NOT_FOUND", status_code=404)
 
@@ -1627,6 +1629,7 @@ class InferenceRouter:
         if not found:
             raise_error("Operation not found", "E_NOT_FOUND", status_code=404)
         if mgr.cancel(op_id):
+            safe_audit_log("inference.operation_cancel", resource=op_id)
             return success_response(data=found.to_dict(), message="cancelled")
         raise_error(
             f"Cannot cancel operation in '{found.status.value}' state",
@@ -1647,6 +1650,7 @@ class InferenceRouter:
         mgr = get_cancel_manager()
         op_type = OpType(type) if type else None
         cancelled = mgr.cancel_all(op_type=op_type)
+        safe_audit_log("inference.operation_cancel_all", detail=f"count={len(cancelled)} type={type or 'all'}")
         return success_response(data={"cancelled": cancelled, "count": len(cancelled)})
 
     async def purge_operations(self, max_age_s: float = 3600.0) -> dict:

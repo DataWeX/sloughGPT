@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query, Request
 
 from pydantic import BaseModel, Field
 from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
-from schemas.common import raise_error, success_response
+from schemas.common import raise_error, success_response, safe_audit_log
 from controllers.feedback import get_feedback_controller
 
 logger = logging.getLogger("slo.api.feedback")
@@ -107,6 +107,7 @@ class FeedbackRouter:
             name=req.name,
             session_id=req.session_id,
         )
+        safe_audit_log("feedback.conversation_create", resource=getattr(conv, "id", "unknown"), detail=f"name={req.name}")
         return conv
 
     async def list_conversations(
@@ -159,6 +160,7 @@ class FeedbackRouter:
         conv = ctrl.update_conversation(conv_id, req.model_dump(exclude_unset=True))
         if not conv:
             raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
+        safe_audit_log("feedback.conversation_update", resource=conv_id)
         return conv
 
     async def delete_conversation(self, conv_id: str) -> dict:
@@ -175,6 +177,7 @@ class FeedbackRouter:
         """
         ctrl = get_feedback_controller()
         ctrl.delete_conversation(conv_id)
+        safe_audit_log("feedback.conversation_delete", resource=conv_id)
         return {"status": "deleted", "id": conv_id}
 
     async def get_feedback(self, message_id: str) -> dict:
