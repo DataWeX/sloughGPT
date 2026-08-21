@@ -224,6 +224,8 @@ def _apply_meta_weights(
         }
         _META_WEIGHT_CACHE[cache_key] = (now, result)
         if len(_META_WEIGHT_CACHE) > 1000:
+            logger.info("Meta-weight cache overflow, clearing %d entries", len(_META_WEIGHT_CACHE))
+            safe_audit_log("inference.meta_weight_cache_clear", resource="meta_weight_cache", detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}")
             _META_WEIGHT_CACHE.clear()
         return result
     except Exception as e:

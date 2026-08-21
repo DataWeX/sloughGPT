@@ -428,6 +428,7 @@ class KBRouter:
         except AppError:
             raise
         except Exception as e:
+            logger.warning("KB ingest failed: %s", e)
             classify_and_raise(e, source="kb_ingest")
 
     def batch_delete_knowledge(self, req: BatchDeleteRequest) -> dict:

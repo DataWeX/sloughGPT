@@ -74,6 +74,7 @@ class SelfTrainRouter:
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Self-training start failed: %s", e)
             classify_and_raise(e, source="self_train_start")
 
     async def stop_self_train(self) -> dict:

@@ -36,11 +36,13 @@ class LoraEvalRouter:
             - saves results to eval history
         """
         try:
+            import time as _time
             from domains.feedback.lora_eval import get_lora_evaluator
 
             evaluator = get_lora_evaluator()
             adapter_file = adapter_path
 
+            _t0 = _time.monotonic()
             baseline = evaluator.run(adapter_path=None, soul_name=soul, save=True)
 
             try:
@@ -48,17 +50,22 @@ class LoraEvalRouter:
                 if Path(adapter_file).exists():
                     with_adapter = evaluator.run(adapter_path=adapter_file, soul_name=soul, save=True)
                     delta = evaluator.compare(baseline, with_adapter)
+                    _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                    safe_audit_log("lora_eval.run_eval", resource=soul or "default", detail=f"elapsed={_elapsed_ms:.0f}ms")
                     return success_response(data={
                         "status": "compared",
                         "baseline": baseline.to_dict(),
                         "with_adapter": with_adapter.to_dict(),
                         "delta": delta,
                         "report": evaluator.compare_with_report(baseline, with_adapter),
+                        "elapsed_ms": round(_elapsed_ms, 1),
                     })
             except Exception as e:
                 import logging
                 logging.getLogger("slo.lora_eval").warning("Adapter comparison failed: %s", e)
 
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("lora_eval.run_eval", resource=soul or "default", detail=f"baseline_only elapsed={_elapsed_ms:.0f}ms")
             return success_response(data={
                 "status": "baseline_only",
                 "baseline": baseline.to_dict(),
