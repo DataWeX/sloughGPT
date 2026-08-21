@@ -27,7 +27,7 @@
       "id": "20260821_012030_make-me-well-wellness-feature",
       "title": "Make Me Well (Wellness) feature",
       "description": "Per UX_FLOWS.md: Calming welcome screen, options (Sleep story, Meditation guide, Journal prompt, Breathing exercise, Positive affirmation), timer settings, voice output.",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "feature",
@@ -45,7 +45,7 @@
       "id": "20260821_012030_explain-things-simply-feature",
       "title": "Explain Things Simply feature",
       "description": "Per UX_FLOWS.md: Input \"What do you want explained?\", difficulty selector (Simple/Normal/Detailed), response with plain language, examples, analogies. Drill deeper on follow-up.",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "feature",
@@ -63,7 +63,7 @@
       "id": "20260821_012030_help-me-decide-feature",
       "title": "Help Me Decide feature",
       "description": "Per UX_FLOWS.md: Input \"What are you deciding between?\", Option A and B fields with notes, pro/con table, recommendation, explanation. Save decision to notepad.",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "feature",
@@ -81,7 +81,7 @@
       "id": "20260821_012030_web-home-quick-actions",
       "title": "Web home quick actions",
       "description": "Per UX_FLOWS.md: \"Hi [name], what can I help with?\" greeting, search bar, quick action buttons (Write something, Read a file, Create an image, Brainstorm ideas, Talk instead). Current home page is basic.",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "feature",
@@ -98,7 +98,7 @@
       "id": "20260821_012030_translate-feature",
       "title": "Translate feature",
       "description": "Per UX_FLOWS.md: Two columns side by side, auto-detect source language, big dropdown for target language, instant translation, speaker icon for pronunciation, copy translation, swap languages.",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "feature",
@@ -116,7 +116,7 @@
       "id": "20260821_012030_rewrite-polish-feature",
       "title": "Rewrite & Polish feature",
       "description": "Per UX_FLOWS.md: Paste text box, buttons (Fix spelling/grammar, Make it shorter, Make it friendlier, Make it professional, Make it sound like me), side-by-side view original vs rewritten, \"Use this version\" action.",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "feature",
@@ -134,7 +134,7 @@
       "id": "20260821_012030_writing-assistant-feature",
       "title": "Writing Assistant feature",
       "description": "Per UX_FLOWS.md: Tone buttons (Friendly/Professional/Funny/Short/Detailed), Type buttons (Email/Social Post/Story/Poem/Letter/Note), \"Make it better\" button. Backend needs prompt templates for each tone+type combination.",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "feature",
@@ -152,7 +152,7 @@
       "id": "20260821_012030_mobile-test-coverage",
       "title": "Mobile test coverage",
       "description": "Only 4 test files in apps/mobile/src/__tests__/ for 38 wired screens. Need store tests (chat, model, training), screen component tests, API client integration tests.",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "mobile",
@@ -168,7 +168,7 @@
       "id": "20260821_012030_fix-6-failing-web-test-files-57-tests",
       "title": "Fix 6 failing web test files (57 tests)",
       "description": "6 test files failing: ModelsCard (15), PersonalitiesCard (14), ModelDropdown (19), TrainingHistory (7), LearnSection (1), QualityCard (1). All stale mocks or component API mismatches. 332/338 files pass, 3981/4038 tests pass.",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "web",
@@ -201,7 +201,7 @@
       "id": "20260820_173109_make-web-ui-responsive-320px-768px",
       "title": "Make web UI responsive (320px-768px)",
       "description": "",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "responsive",

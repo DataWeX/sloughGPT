@@ -152,7 +152,7 @@ class CLILogger(Logger):
         """Format and write the record to the output stream (thread-safe).
 
         Format:
-            {icon} {message}
+            {icon} {message} — {exception}  (if exception)
               {logger} {context...}
         """
         if not _TERMINAL_ENABLED:
@@ -161,8 +161,11 @@ class CLILogger(Logger):
         color, icon, _ = _LEVEL_STYLE.get(record.level, (_A.WHITE, "·", "debug"))
         c = self._colors
 
-        # Primary line: icon + message
-        primary = f"  {_c(icon, color, c)} {record.message}"
+        # Primary line: icon + message + exception
+        msg = record.message
+        if record.exception:
+            msg += _c(f" — {record.exception}", _A.RED, c)
+        primary = f"  {_c(icon, color, c)} {msg}"
 
         # Secondary line: logger + context
         meta_parts = []

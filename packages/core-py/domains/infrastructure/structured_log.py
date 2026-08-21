@@ -13,6 +13,19 @@ Usage::
         #    "request_id": "abc-123", "model_id": "gpt2",
         #    "msg": "Generating", "tokens": 50, "latency_ms": 123.4}
 
+Timing helpers::
+
+    from domains.infrastructure.structured_log import log_timer, timed
+
+    # Context manager
+    with log_timer(log, "model load"):
+        load_model()
+
+    # Decorator
+    @timed(log)
+    def load_model():
+        ...
+
 FastAPI middleware::
 
     from domains.infrastructure.structured_log import request_log_middleware
@@ -23,12 +36,14 @@ FastAPI middleware::
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import threading
 import time
 import uuid
-from typing import Any, Optional
+from contextlib import contextmanager
+from typing import Any, Callable, Optional
 
 
 # ── Thread-local request context ──────────────────────────────────────
@@ -157,7 +172,95 @@ class StructuredLogger:
         self._log(logging.CRITICAL, msg, *args, **extra)
 
 
-# ── Setup helper ─────────────────────────────────────────────────────
+# ── Timing helpers ────────────────────────────────────────────────────
+
+@contextmanager
+def log_timer(
+    logger: StructuredLogger,
+    label: str,
+    level: int = logging.INFO,
+    **extra: Any,
+):
+    """Context manager that logs elapsed time on exit.
+
+    Usage::
+
+        with log_timer(log, "model load"):
+            load_model()
+        # → "model load completed in 3.2s"
+    """
+    start = time.monotonic()
+    try:
+        yield
+    except Exception:
+        elapsed_ms = (time.monotonic() - start) * 1000
+        logger._log(
+            logging.ERROR,
+            f"{label} failed after {elapsed_ms:.1f}ms",
+            elapsed_ms=round(elapsed_ms, 1),
+            **extra,
+        )
+        raise
+    else:
+        elapsed_ms = (time.monotonic() - start) * 1000
+        if elapsed_ms >= 1000:
+            elapsed_str = f"{elapsed_ms / 1000:.1f}s"
+        else:
+            elapsed_str = f"{elapsed_ms:.0f}ms"
+        logger._log(
+            level,
+            f"{label} completed in {elapsed_str}",
+            elapsed_ms=round(elapsed_ms, 1),
+            **extra,
+        )
+
+
+def timed(
+    logger: StructuredLogger,
+    level: int = logging.INFO,
+    **extra: Any,
+) -> Callable:
+    """Decorator that logs function execution time.
+
+    Usage::
+
+        @timed(log)
+        def load_model():
+            ...
+
+        @timed(log, level=logging.WARNING)
+        def slow_operation():
+            ...
+    """
+    def decorator(fn: Callable) -> Callable:
+        @functools.wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            start = time.monotonic()
+            try:
+                return fn(*args, **kwargs)
+            except Exception:
+                elapsed_ms = (time.monotonic() - start) * 1000
+                logger._log(
+                    logging.ERROR,
+                    f"{fn.__name__} failed after {elapsed_ms:.1f}ms",
+                    elapsed_ms=round(elapsed_ms, 1),
+                    **extra,
+                )
+                raise
+            else:
+                elapsed_ms = (time.monotonic() - start) * 1000
+                if elapsed_ms >= 1000:
+                    elapsed_str = f"{elapsed_ms / 1000:.1f}s"
+                else:
+                    elapsed_str = f"{elapsed_ms:.0f}ms"
+                logger._log(
+                    level,
+                    f"{fn.__name__} completed in {elapsed_str}",
+                    elapsed_ms=round(elapsed_ms, 1),
+                    **extra,
+                )
+        return wrapper
+    return decorator
 
 def setup_structured_logging(
     root_level: int = logging.INFO,

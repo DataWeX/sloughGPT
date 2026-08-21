@@ -164,10 +164,10 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
     def encode(text):
         return np.array([stoi.get(c, 0) for c in text], dtype=np.int64)
 
-    # Model config: 128 embed, 256 hidden, 2 layers
-    n_embed = 128
-    n_hidden = 256
-    n_layers = 2
+    # Model config: 64 embed, 128 hidden, 1 layer (smaller for fast training)
+    n_embed = 64
+    n_hidden = 128
+    n_layers = 1
 
     print(f"Training benchmark model: vocab={vocab_size}, embed={n_embed}, hidden={n_hidden}, layers={n_layers}")
     print(f"Training data: {len(SHAKESPEARE_TEXT)} chars, {epochs} epochs")
@@ -190,7 +190,7 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
         order = np.random.permutation(max(1, len(data) - chunk))
         ep_loss = 0.0
         steps = 0
-        for pos in order[:50]:  # 50 steps per epoch
+        for pos in order[:20]:  # 20 steps per epoch (faster)
             x = tensor(data[pos:pos + chunk].reshape(1, -1), requires_grad=True)
             y = tensor(data[pos + 1:pos + chunk + 1].reshape(1, -1))
             h = lstm.init_hidden()

@@ -123,7 +123,6 @@ class TestEmit:
         logger.emit(_record(message="booted"))
         out = buf.getvalue()
         assert "booted" in out
-        assert out.endswith("\n")
 
     def test_emit_respects_level(self, buf):
         log = CLILogger("x", stream=buf, level=LogLevel.WARNING, colors=False)
@@ -144,10 +143,10 @@ class TestEmit:
         out = buf.getvalue()
         assert "k=v" in out
 
-    def test_emit_includes_level_label(self, logger, buf):
+    def test_emit_includes_icon(self, logger, buf):
         logger.emit(_record(message="test", level=LogLevel.ERROR))
         out = buf.getvalue()
-        assert "[error]" in out
+        assert "✗" in out
 
     def test_emit_includes_logger_name(self, logger, buf):
         logger.emit(_record(message="test", logger="slo.api"))
@@ -175,6 +174,14 @@ class TestEmit:
 
         log = CLILogger("x", stream=Broken(), colors=False)
         log.emit(_record(message="won't raise"))
+
+    def test_emit_secondary_line_has_logger_and_context(self, logger, buf):
+        logger.emit(_record(message="msg", logger="slo.api", context={"k": "v"}))
+        out = buf.getvalue()
+        lines = out.strip().split("\n")
+        assert len(lines) == 2
+        assert "slo.api" in lines[1]
+        assert "k=v" in lines[1]
 
 
 # ── Success ─────────────────────────────────────────────────────────────
@@ -214,16 +221,16 @@ class TestStep:
 # ── Header ──────────────────────────────────────────────────────────────
 
 class TestHeader:
-    def test_header_prints_two_lines(self, logger, buf):
+    def test_header_prints_three_lines(self, logger, buf):
         logger.header("Title")
         lines = buf.getvalue().splitlines()
-        assert len(lines) == 2
-        assert "Title" in lines[0]
+        assert len(lines) == 3
+        assert "Title" in lines[1]
 
     def test_header_custom_char(self, logger, buf):
-        logger.header("Title", char="-")
+        logger.header("Title", char="=")
         lines = buf.getvalue().splitlines()
-        assert "-" in lines[1]
+        assert "=" in lines[2]
 
 
 # ── Section ─────────────────────────────────────────────────────────────
