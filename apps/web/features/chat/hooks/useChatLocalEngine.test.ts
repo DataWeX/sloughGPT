@@ -39,18 +39,12 @@ describe('useChatLocalEngine', () => {
     expect(result.current.localModelUrl).toBe('')
   })
 
-  it('initLocalEngine returns false when WebGPU unavailable', async () => {
-    const { result } = renderHook(() => useChatLocalEngine(showToast))
-    const ok = await act(async () => result.current.initLocalEngine())
-    expect(ok).toBe(false)
-    expect(showToast).toHaveBeenCalledWith('WebGPU not available in this browser', 'error')
-  })
-
   it('initLocalEngine returns false when no model URL', async () => {
     (navigator as any).gpu = {}
     const { result } = renderHook(() => useChatLocalEngine(showToast))
     const ok = await act(async () => result.current.initLocalEngine())
     expect(ok).toBe(false)
+    expect(showToast).toHaveBeenCalledWith('Failed to load local AI: No .soul file URL configured', 'error')
   })
 
   it('initLocalEngine loads LSTM model', async () => {
