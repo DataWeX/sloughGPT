@@ -234,21 +234,21 @@ function AppInner() {
 
   if (!ready) {
     return (
-      <TamaguiProvider>
-        <SafeAreaProvider>
-          <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
-          <SplashScreen />
-        </SafeAreaProvider>
-      </TamaguiProvider>
+      <SafeAreaProvider>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
+        <SplashScreen />
+      </SafeAreaProvider>
     );
   }
 
   if (needsOnboarding) {
     return (
-      <SafeAreaProvider>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
-        <OnboardingScreen onComplete={() => setNeedsOnboarding(false)} />
-      </SafeAreaProvider>
+      <TamaguiProvider>
+        <SafeAreaProvider>
+          <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
+          <OnboardingScreen onComplete={() => setNeedsOnboarding(false)} />
+        </SafeAreaProvider>
+      </TamaguiProvider>
     );
   }
 
