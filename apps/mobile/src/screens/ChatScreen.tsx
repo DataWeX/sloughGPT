@@ -20,7 +20,6 @@ import {ChatInput} from '../components/ChatInput';
 import {ChatModeBar, type ChatMode} from '../components/ChatModeBar';
 import {ReasoningPanel} from '../components/ReasoningPanel';
 import {Icon} from '../components/Icon';
-import {useRoute} from '@react-navigation/native';
 
 const SUGGESTIONS = [
   {icon: 'zap' as const, text: 'Tell me something interesting', prompt: 'Tell me something interesting'},
@@ -89,9 +88,7 @@ export function ChatScreen() {
   const {open: openSidebar} = useSidebar();
 
   // Mode state
-  const route = useRoute();
-  const routeMode = (route.params as any)?.mode as ChatMode | undefined;
-  const [chatMode, setChatMode] = useState<ChatMode>(routeMode || 'chat');
+  const [chatMode, setChatMode] = useState<ChatMode>('chat');
   const [writeTone, setWriteTone] = useState('Friendly');
   const [writeType, setWriteType] = useState('Email');
   const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar');

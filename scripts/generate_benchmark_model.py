@@ -20,6 +20,7 @@ import numpy as np
 from domains.training.slonet import (
     SloNet, SloEmbedding, SloLSTM, SloAdam,
     cross_entropy, tensor, no_grad, _sample_from_logits,
+    save_checkpoint_npz,
 )
 from domains.inference.slo_format import SloProfile, save_soul
 
@@ -75,7 +76,7 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
     def encode(text):
         return np.array([stoi.get(c, 0) for c in text], dtype=np.int64)
 
-    # Model config: 64 embed, 128 hidden, 1 layer (smaller for fast training)
+    # Model config
     n_embed = 64
     n_hidden = 128
     n_layers = 1
@@ -86,12 +87,12 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
     net = SloNet(
         layers=[
             SloEmbedding(vocab_size, n_embed),
-            SloLSTM(n_embed, n_hidden, n_hidden, num_layers=n_layers, dropout=0.0),
+            SloLSTM(vocab_size, n_embed, n_hidden, num_layers=n_layers, dropout=0.0),
         ],
         soul_name="bench-shakespeare",
     )
     lstm = net.layers[1]
-    opt = SloAdam(lr=0.005)
+    opt = SloAdam(lr=0.001)
     data = encode(SHAKESPEARE_TEXT)
     chunk = 128
     losses = []
@@ -101,7 +102,7 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
         order = np.random.permutation(max(1, len(data) - chunk))
         ep_loss = 0.0
         steps = 0
-        for pos in order[:20]:  # 20 steps per epoch (faster)
+        for pos in order[:20]:
             x = tensor(data[pos:pos + chunk].reshape(1, -1), requires_grad=True)
             y = tensor(data[pos + 1:pos + chunk + 1].reshape(1, -1))
             h = lstm.init_hidden()
@@ -118,28 +119,23 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
             elapsed = time.time() - t0
             print(f"  epoch {ep:3d}: loss={avg_loss:.4f} ({elapsed:.1f}s)")
 
-    # Save checkpoint
+    # Save checkpoint as .soul
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     profile = SloProfile(
         name="bench-shakespeare",
-        soul_traits={"warmth": 0.5, "creativity": 0.5, "curiosity": 0.5, "confidence": 0.5},
-        system_prompt="You are a helpful assistant.",
+        system_prompt="You are a helpful assistant trained on Shakespeare.",
         lineage="benchmark",
-        metadata={
-            "charset": "".join(chars),
-            "model_config": {
-                "n_embed": n_embed,
-                "n_hidden": n_hidden,
-                "n_layer": n_layers,
-                "vocab_size": vocab_size,
-            },
-            "training": {
-                "epochs": epochs,
-                "final_loss": float(losses[-1]) if losses else None,
-                "data": "shakespeare",
-            },
-        },
     )
+    profile.metadata["charset"] = "".join(chars)
+    profile.metadata["vocab_size"] = vocab_size
+    profile.metadata["n_embed"] = n_embed
+    profile.metadata["n_hidden"] = n_hidden
+    profile.metadata["n_layer"] = n_layers
+    profile.metadata["training"] = {
+        "epochs": epochs,
+        "final_loss": float(losses[-1]) if losses else None,
+        "data": "shakespeare",
+    }
     save_soul(net, output_path, soul_profile=profile)
     print(f"\nSaved benchmark model to {output_path}")
     print(f"Final loss: {losses[-1]:.4f}")

@@ -1,6 +1,7 @@
 import React from 'react';
 import {Modal, FlatList, TextInput as RNTextInput, Platform} from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
+import {TamaguiProvider} from '../theme/TamaguiProvider';
 import {useColors} from '../theme/colors';
 import {useChatStore} from '../stores/chat-store';
 import {useSettingsStore} from '../stores/settings-store';
@@ -104,6 +105,7 @@ export function ChatBottomSheets({
   const colors = useColors();
 
   return (
+    <TamaguiProvider>
     <>
       {/* Conversation Info — bottom sheet */}
       <Modal visible={showInfo} animationType="slide" transparent onRequestClose={() => setShowInfo(false)}>
@@ -700,6 +702,7 @@ export function ChatBottomSheets({
         </YStack>
       </Modal>
     </>
+    </TamaguiProvider>
   );
 }
 

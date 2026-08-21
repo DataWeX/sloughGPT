@@ -111,8 +111,12 @@ class _AutoTrainCancelled(Exception):
 REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent
 CHECKPOINTS_DIR = REPO_ROOT / "models" / "auto-training"
 LORA_DIR = REPO_ROOT / "data" / "user_adapters"
-CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
-LORA_DIR.mkdir(parents=True, exist_ok=True)
+
+try:
+    CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
+    LORA_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 
 try:
     from domains.infrastructure.pugqeep import PGQ

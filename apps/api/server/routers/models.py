@@ -640,8 +640,14 @@ class ModelsRouter:
         Returns:
             Quantization report with per-tensor error metrics and aggregate summary.
         """
-        from domains.infrastructure.quantization import Quantine
-        from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+        try:
+            from domains.infrastructure.quantization import Quantine
+        except ImportError:
+            raise_error("Quantization not available — domains.infrastructure.quantization missing", "E_BAD_REQUEST")
+        try:
+            from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+        except ImportError:
+            HAS_AVX2 = False
         import numpy as np
 
         bits = req.bits

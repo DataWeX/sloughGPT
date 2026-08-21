@@ -42,6 +42,15 @@ EVAL_PROMPTS = {
     "Hello, how are you?": "Hello! I am doing well, thank you for asking.",
 }
 
+SHAKESPEARE_PROMPTS = {
+    "To be or not ": "To be or not to be, that is the question:",
+    "The quality of ": "The quality of mercy is not strained;",
+    "Friends, Romans, ": "Friends, Romans, countrymen, lend me your ears;",
+    "If music be ": "If music be the food of love, play on;",
+    "All the world ": "All the world's a stage,",
+    "Shall I compare ": "Shall I compare thee to a summer's day?",
+}
+
 QUICK_PROMPTS = {
     "What is 2+2?": "4 is the answer to 2+2.",
     "The capital of France is": "The capital of France is Paris.",
@@ -121,60 +130,205 @@ def compute_diversity(text: str) -> float:
 # ── Native SloNet training (no torch required) ───────────────────────────
 
 BENCH_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "bench_shakespeare.soul"
+TRAINED_MODELS_DIR = Path(__file__).resolve().parent.parent / "models" / "auto-training"
+
+TRAIN_TEXT = (
+    "the quick brown fox jumps over the lazy dog. "
+    "pack my box with five dozen liquor jugs. "
+    "how vexingly quick daft zebras jump. "
+    "the five boxing wizards jump quickly. "
+    "sphinx of black quartz judge my vow. "
+    "two driven jocks help fax my big quiz. "
+    "five quacking zephyrs jolt my wax bed. "
+    "the jay pig fox zebra and my wolves quack. "
+    "blowzy red vixens fight for a quick jump. "
+    "cozy lummox gives smart squid who asks for job pen. "
+) * 10
+
+
+def train_native_model(epochs: int = 30):
+    """Train a small SloNet model on-the-fly for benchmarking."""
+    from domains.training.slonet import (
+        SloNet, SloEmbedding, SloLSTM, SloAdam,
+        cross_entropy, tensor, _sample_from_logits,
+    )
+
+    chars = sorted(set(TRAIN_TEXT))
+    stoi = {c: i + 1 for i, c in enumerate(chars)}
+    itos = {i + 1: c for i, c in enumerate(chars)}
+    vocab_size = len(chars) + 1
+    charset = "".join(chars)
+
+    def encode(text):
+        return np.array([stoi.get(c, 0) for c in text], dtype=np.int64)
+
+    def decode(ids):
+        return "".join(itos.get(int(i), "?") for i in ids if i > 0)
+
+    net = SloNet(
+        layers=[SloEmbedding(vocab_size, 32), SloLSTM(vocab_size, 32, 64, num_layers=1, dropout=0.0)],
+        soul_name="bench_native",
+    )
+    lstm = net.layers[1]
+    opt = SloAdam(lr=0.01)
+    data = encode(TRAIN_TEXT)
+    chunk = 32
+
+    print(f"Training native model ({epochs} epochs, vocab={vocab_size})...")
+    for ep in range(epochs):
+        order = np.random.permutation(max(1, len(data) - chunk))
+        ep_loss = 0.0
+        steps = 0
+        for pos in order[:30]:
+            x = tensor(data[pos:pos + chunk].reshape(1, -1), requires_grad=True)
+            y = tensor(data[pos + 1:pos + chunk + 1].reshape(1, -1))
+            h = lstm.init_hidden()
+            logits, _ = lstm.forward(x, h)
+            loss = cross_entropy(logits, y.reshape(-1))
+            ep_loss += float(loss.data)
+            steps += 1
+            loss.backward()
+            opt.step(lstm.parameters())
+            lstm.zero_grad()
+        if ep % 10 == 0:
+            print(f"  epoch {ep}: loss={ep_loss / max(steps, 1):.4f}")
+
+    return net, lstm, encode, decode, charset
+
+
+def _find_best_trained_model():
+    """Find the best available trained model in auto-training dir."""
+    if not TRAINED_MODELS_DIR.exists():
+        return None
+    candidates = sorted(TRAINED_MODELS_DIR.glob("*.soul"), key=lambda p: p.stat().st_size, reverse=True)
+    for path in candidates:
+        if path.stat().st_size > 1_000_000:  # >1MB = real model
+            return path
+    return None
 
 
 def load_native_model():
-    """Load pre-trained benchmark model. Falls back to training if not found."""
-    if BENCH_MODEL_PATH.exists():
-        print(f"Loading pre-trained benchmark model from {BENCH_MODEL_PATH}")
+    """Load pre-trained model for benchmarking.
+    Returns (net, lstm_or_None, encode_fn, decode_fn, charset_str).
+    Priority: trained transformer > bench LSTM > train on-the-fly."""
+    # 1. Try finding a trained transformer in auto-training
+    trained_path = _find_best_trained_model()
+    if trained_path:
+        print(f"Loading trained model from {trained_path}")
+        from domains.training.slonet import import_from_sou
+        net = import_from_sou(str(trained_path))
+        if hasattr(net, 'generate'):
+            meta_raw = _read_soul_metadata(trained_path)
+            md = meta_raw.get("metadata", {}) if meta_raw else {}
+            stoi = md.get("stoi", {})
+            itos = md.get("itos", {})
+            charset = md.get("chars", "")
+            if isinstance(charset, list):
+                charset = "".join(charset)
+            if itos:
+                if isinstance(itos, list):
+                    itos_map = {i: c for i, c in enumerate(itos)}
+                else:
+                    itos_map = {int(k): v for k, v in itos.items()}
+                stoi_map = {v: k for k, v in itos_map.items()}
+                encode = lambda text: np.array([stoi_map.get(c, 0) for c in text], dtype=np.int64).reshape(1, -1)
+                decode_tokens = lambda ids: "".join(itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map)
+                return net, None, encode, decode_tokens, charset
+            else:
+                vocab_size = md.get("vocab_size", 256)
+                encode = lambda text: np.array([ord(c) % vocab_size for c in text], dtype=np.int64).reshape(1, -1)
+                decode_tokens = lambda ids: "".join(chr(int(i)) if 32 <= int(i) < 127 else "?" for i in ids.flatten())
+                return net, None, encode, decode_tokens, ""
+
+    # 2. Try the bench LSTM .soul
+    soul_path = BENCH_MODEL_PATH
+    if soul_path.exists():
+        print(f"Loading benchmark LSTM from {soul_path}")
         from domains.training.slonet import SloNet, SloLSTM, import_from_sou
-        net = import_from_sou(str(BENCH_MODEL_PATH))
+        net = import_from_sou(str(soul_path))
         lstm = net.layers[1] if len(net.layers) > 1 else net.layers[0]
-        chars = sorted(set(" " + "".join(c for c in TRAIN_TEXT if c.isalnum() or c in ".,!?;:'-")))
+        meta = getattr(net, 'metadata', {})
+        inner_meta = meta.get('metadata', {})
+        charset = inner_meta.get('charset', '') if isinstance(inner_meta, dict) else ''
+        if charset:
+            chars = sorted(set(charset))
+        else:
+            chars = sorted(set(" " + "".join(c for c in TRAIN_TEXT if c.isalnum() or c in ".,!?;:'-")))
         stoi = {c: i + 1 for i, c in enumerate(chars)}
         itos = {i + 1: c for i, c in enumerate(chars)}
         def encode(text):
             return np.array([stoi.get(c, 0) for c in text], dtype=np.int64)
         def decode(ids):
             return "".join(itos.get(int(i), "?") for i in ids if i > 0)
-        return net, lstm, encode, decode
+        return net, lstm, encode, decode, charset
 
-    print(f"Pre-trained model not found at {BENCH_MODEL_PATH}")
+    print("No pre-trained model found.")
     print("Train one with: python scripts/generate_benchmark_model.py")
     print("Falling back to small on-the-fly model...")
-    return train_native_model(epochs=50)
+    return *train_native_model(epochs=50), ""
+
+
+def _read_soul_metadata(path):
+    """Read the JSON metadata from a .soul file."""
+    import struct, json
+    with open(path, "rb") as f:
+        raw = f.read()
+    if raw[:4] not in (b"SOU\x00", b"SOUL"):
+        return None
+    json_len = struct.unpack("<I", raw[8:12])[0]
+    meta_bytes = raw[12:12 + json_len].rstrip(b"\x00")
+    return json.loads(meta_bytes.decode())
+
+
+def _detect_charset(net):
+    """Detect charset from a loaded model's metadata."""
+    meta_raw = getattr(net, "_raw_metadata", None)
+    if meta_raw is None:
+        # Try reading from metadata attribute
+        meta = getattr(net, "metadata", {})
+        inner = meta.get("metadata", {})
+        if isinstance(inner, dict):
+            return inner.get("charset", "")
+    return ""
 
 
 def run_native_inference(net, lstm, encode, decode, prompt: str, max_new_tokens: int = 50):
-    """Run inference on a native SloNet model."""
-    ids = encode(prompt)
+    """Run inference on a native model (LSTM or Transformer)."""
+    input_ids = encode(prompt)
 
-    from domains.training.slonet import tensor, no_grad
     t0 = time.perf_counter()
 
-    h = lstm.init_hidden()
-    prompt_len = len(ids)
-    gen_ids = list(ids)
-
-    with no_grad():
-        for _ in range(max_new_tokens):
-            seq = np.array([gen_ids[-128:]], dtype=np.int64)  # Use up to 128 context
-            x = tensor(seq, requires_grad=False)
-            logits, h = lstm.forward(x, h)
-            logits_arr = logits.data
-            # Handle 3D output (batch, seq, vocab)
-            if logits_arr.ndim == 3:
-                logits_arr = logits_arr[0, -1, :]
-            elif logits_arr.ndim == 2:
-                logits_arr = logits_arr[-1, :]
-            next_id = int(np.argmax(logits_arr))
-            if next_id == 0:
-                break
-            gen_ids.append(next_id)
-
-    elapsed = time.perf_counter() - t0
-    text = decode(gen_ids[prompt_len:])
-    return text.strip(), elapsed, len(gen_ids) - prompt_len
+    if lstm is not None:
+        # LSTM path
+        gen_ids = list(input_ids.flatten())
+        from domains.training.slonet import tensor, no_grad
+        h = lstm.init_hidden()
+        prompt_len = len(gen_ids)
+        with no_grad():
+            for _ in range(max_new_tokens):
+                seq = np.array([gen_ids[-128:]], dtype=np.int64)
+                x = tensor(seq, requires_grad=False)
+                logits, h = lstm.forward(x, h)
+                logits_arr = logits.data
+                if logits_arr.ndim == 3:
+                    logits_arr = logits_arr[0, -1, :]
+                elif logits_arr.ndim == 2:
+                    logits_arr = logits_arr[-1, :]
+                next_id = int(np.argmax(logits_arr))
+                if next_id == 0:
+                    break
+                gen_ids.append(next_id)
+        elapsed = time.perf_counter() - t0
+        text = decode(gen_ids[prompt_len:])
+        return text.strip(), elapsed, len(gen_ids) - prompt_len
+    else:
+        # Transformer path
+        if input_ids.ndim == 1:
+            input_ids = input_ids.reshape(1, -1)
+        result = net.generate(input_ids, max_new_tokens=max_new_tokens, temperature=0.8)
+        elapsed = time.perf_counter() - t0
+        text = decode(result.data)
+        return text.strip(), elapsed, result.data.shape[1] - input_ids.shape[1]
 
 
 def run_sou_inference(model, prompt: str, max_new_tokens: int = 50):
@@ -306,7 +460,12 @@ def main():
     # Native mode: load pre-trained or train small model
     if args.mode in ("native", "both"):
         try:
-            net, lstm, encode, decode = load_native_model()
+            net, lstm, encode, decode, charset = load_native_model()
+            # Auto-detect: if charset has no digits, use Shakespeare prompts
+            if charset and not any(c.isdigit() for c in charset):
+                prompts_dict = SHAKESPEARE_PROMPTS
+                prompts = list(prompts_dict.keys())
+                print(f"  Using Shakespeare prompts (charset has {len(charset)} chars, no digits)")
             responses, latencies, token_counts = [], [], []
             print(f"\nBenchmarking native SloNet...")
             for prompt in prompts:

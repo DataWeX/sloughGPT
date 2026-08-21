@@ -6,6 +6,7 @@ import {
   TextInput,
 } from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
+import {TamaguiProvider} from '../theme/TamaguiProvider';
 import {useColors} from '../theme/colors';
 import {
   getQuickPromptsByCategory,
@@ -69,6 +70,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TamaguiProvider>
       <YStack flex={1} backgroundColor={colors.overlay(0.5)} justifyContent="flex-end">
         <YStack
           backgroundColor={colors.background}
@@ -220,6 +222,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
           )}
         </YStack>
       </YStack>
+      </TamaguiProvider>
     </Modal>
   );
 }

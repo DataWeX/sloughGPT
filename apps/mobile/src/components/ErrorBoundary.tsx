@@ -1,6 +1,5 @@
 import React from 'react';
 import {Pressable, View, Text as RNText, StyleSheet} from 'react-native';
-import {useColors} from '../theme/colors';
 
 interface ErrorFallbackProps {
   error: Error | null;
@@ -8,8 +7,7 @@ interface ErrorFallbackProps {
 }
 
 function ErrorFallback({error, onRetry}: ErrorFallbackProps) {
-  const colors = useColors();
-  const s = makeStyles(colors);
+  const s = makeStyles();
   return (
     <View style={s.container}>
       <RNText style={s.icon}>!</RNText>
@@ -24,11 +22,11 @@ function ErrorFallback({error, onRetry}: ErrorFallbackProps) {
   );
 }
 
-function makeStyles(colors: ReturnType<typeof useColors>) {
+function makeStyles() {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: '#110F18',
       alignItems: 'center',
       justifyContent: 'center',
       padding: 32,
@@ -36,24 +34,24 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     icon: {
       fontSize: 48,
       marginBottom: 16,
-      color: colors.error,
+      color: '#EF4444',
       fontWeight: '700',
     },
     title: {
       fontSize: 20,
       fontWeight: '600',
-      color: colors.text,
+      color: '#F0ECF5',
       marginBottom: 8,
     },
     message: {
       fontSize: 13,
-      color: colors.textMuted,
+      color: '#9B95A8',
       textAlign: 'center',
       lineHeight: 18,
       marginBottom: 24,
     },
     button: {
-      backgroundColor: colors.primary,
+      backgroundColor: '#7C52C4',
       paddingHorizontal: 20,
       paddingVertical: 12,
       borderRadius: 12,

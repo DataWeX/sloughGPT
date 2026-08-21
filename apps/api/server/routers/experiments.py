@@ -39,28 +39,16 @@ class ExperimentsRouter:
         self.router.add_api_route("/{experiment_id}/log_param", self.log_param, methods=["POST"])
 
     async def create_experiment(self, req: ExperimentCreate) -> dict:
-        """Create a new ML experiment with a timestamped directory.
-
-        Generates a unique experiment ID from the name and current timestamp,
-        creates the experiment directory under data/experiments/, and returns
-        the experiment metadata.
-
-        Args:
-            req: ExperimentCreate with name (required) and optional config dict.
-
-        Returns:
-            Success envelope with id, name, and created flag.
-
-        Side effects:
-            - Creates a directory under data/experiments/ for the experiment.
-            - Writes an audit log entry for the creation.
-        """
-        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-        exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        exp_dir = self.EXPERIMENTS_DIR / exp_id
-        exp_dir.mkdir(exist_ok=True)
-        safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
-        return success_response(data={"id": exp_id, "name": req.name, "created": True})
+        """Create a new ML experiment with a timestamped directory."""
+        try:
+            self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+            exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            exp_dir = self.EXPERIMENTS_DIR / exp_id
+            exp_dir.mkdir(exist_ok=True)
+            safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
+            return success_response(data={"id": exp_id, "name": req.name, "created": True})
+        except Exception as e:
+            raise_error(f"Failed to create experiment: {e}", "E_SERVER_ERROR", status_code=500)
 
     async def list_experiments(self) -> dict:
         """List all ML experiments stored on disk.
@@ -107,9 +95,12 @@ class ExperimentsRouter:
         path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
         if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
             raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-        shutil.rmtree(path)
-        safe_audit_log("experiment.delete", resource=experiment_id)
-        return success_response(data={"id": experiment_id, "deleted": True})
+        try:
+            shutil.rmtree(path)
+            safe_audit_log("experiment.delete", resource=experiment_id)
+            return success_response(data={"id": experiment_id, "deleted": True})
+        except Exception as e:
+            raise_error(f"Failed to delete experiment: {e}", "E_SERVER_ERROR", status_code=500)
 
     async def get_experiment_runs(self, experiment_id: str) -> dict:
         """Get runs for an experiment"""
@@ -132,69 +123,81 @@ class ExperimentsRouter:
         metrics = []
         params = []
         status = None
-        if metrics_file.exists():
-            with open(metrics_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            metrics.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            pass
-        if params_file.exists():
-            with open(params_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            params.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            pass
-        if status_file.exists():
-            with open(status_file) as f:
-                try:
-                    status = json.load(f)
-                except json.JSONDecodeError:
-                    pass
-        return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
+        try:
+            if metrics_file.exists():
+                with open(metrics_file) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                metrics.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                pass
+            if params_file.exists():
+                with open(params_file) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                params.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                pass
+            if status_file.exists():
+                with open(status_file) as f:
+                    try:
+                        status = json.load(f)
+                    except json.JSONDecodeError:
+                        pass
+            return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
+        except Exception as e:
+            raise_error(f"Failed to read experiment data: {e}", "E_SERVER_ERROR", status_code=500)
 
     async def complete_experiment(self, experiment_id: str) -> dict:
         """Mark experiment as complete and persist status to disk."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-        status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
-        status_data = {
-            "experiment_id": e_id,
-            "status": "completed",
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        }
-        with open(status_file, "w") as f:
-            json.dump(status_data, f)
-        return success_response(data={"id": e_id, "status": "completed"})
+        try:
+            self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+            status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
+            status_data = {
+                "experiment_id": e_id,
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            with open(status_file, "w") as f:
+                json.dump(status_data, f)
+            return success_response(data={"id": e_id, "status": "completed"})
+        except Exception as e:
+            raise_error(f"Failed to complete experiment: {e}", "E_SERVER_ERROR", status_code=500)
 
     async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0) -> dict:
         """Log a metric for an experiment."""
         e_id = experiment_id
-        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
-        with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
-            f.write(json.dumps(entry) + "\n")
-        return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
+        try:
+            self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+            entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
+            with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
+                f.write(json.dumps(entry) + "\n")
+            return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
+        except Exception as e:
+            raise_error(f"Failed to log metric: {e}", "E_SERVER_ERROR", status_code=500)
 
     async def log_param(self, experiment_id: str, param_name: str, value: Any) -> dict:
         """Log a parameter for an experiment."""
         e_id = experiment_id
-        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
-        with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
-            f.write(json.dumps(entry) + "\n")
-        return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})
+        try:
+            self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+            entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
+            with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
+                f.write(json.dumps(entry) + "\n")
+            return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})
+        except Exception as e:
+            raise_error(f"Failed to log param: {e}", "E_SERVER_ERROR", status_code=500)
 
 
 router = ExperimentsRouter().router
