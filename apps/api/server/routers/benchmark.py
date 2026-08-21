@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response, raise_error, classify_and_raise
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 
 
@@ -295,6 +295,7 @@ class BenchmarkRouter:
 
             bench = get_benchmark_domain()
             bench.clear_history()
+            safe_audit_log("benchmark.clear_history")
             return success_response(data={"status": "ok", "cleared": True})
         except Exception as e:
             logger.warning("Clear history failed: %s", e)

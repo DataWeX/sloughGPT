@@ -8,7 +8,7 @@ from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import raise_error, success_response, classify_and_raise
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 
 class VectorStoreConfig(BaseModel):
@@ -69,6 +69,7 @@ class VectorRouter:
                 set_vector_store_ref(self._vector_store)
             except Exception as e:
                 logger.warning("Failed to set vector store ref on inference router: %s", e)
+            safe_audit_log("vector.init", resource=self._vector_store_type, detail=f"provider={self._vector_store_type} dimension={config.dimension}")
             return success_response(data={"status": "connected", "provider": self._vector_store_type})
         except ImportError:
             self._vector_store_type = "in_memory"
@@ -78,6 +79,7 @@ class VectorRouter:
                 set_vector_store_ref(self._vector_store)
             except Exception as e:
                 logger.warning("Failed to set vector store ref on inference router: %s", e)
+            safe_audit_log("vector.init", resource="in_memory", detail=f"provider=in_memory dimension={config.dimension}")
             return success_response(data={"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"})
         except Exception as e:
             logger.warning("Vector store init failed: %s", e)
@@ -107,6 +109,7 @@ class VectorRouter:
             )
             entries.append(entry)
         count = await store.upsert(entries)
+        safe_audit_log("vector.upsert", resource="vector_store", detail=f"count={count}")
         return success_response(data={"status": "upserted", "count": count})
 
     async def search_vectors(self, request: SearchRequest) -> dict:

@@ -401,8 +401,11 @@ class ModelsRouter:
                     "exported_at": str(time.time()),
                 },
             )
+            _t0 = time.monotonic()
             results = do_export(config, server_state.model, server_state.tokenizer)
-            return success_response(data={"format": request.format, "files": results}, message="exported")
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
+            safe_audit_log("model.export", resource=request.output_path or "unknown", detail=f"format={request.format} elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={"format": request.format, "files": results, "elapsed_ms": round(_elapsed_ms, 1)}, message="exported")
         except Exception as e:
             logger.warning("Export model failed: %s", e)
             classify_and_raise(e, source="export_model")

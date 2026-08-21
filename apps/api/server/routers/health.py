@@ -188,6 +188,7 @@ class HealthRouter:
             stats = mon.get_stats()
             return success_response(data={"status": "ok", **stats})
         except Exception as e:
+            logger.warning("Health monitor failed: %s", e)
             classify_and_raise(e, source="health_model_health")
 
     async def health_summary(self) -> dict:
@@ -304,6 +305,7 @@ class HealthRouter:
                     )
                     yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
                 except Exception as e:
+                    logger.warning("Health stream snapshot failed: %s", e)
                     classify_and_raise(e, source="health_stream")
                 await asyncio.sleep(self.HEALTH_STREAM_INTERVAL)
 

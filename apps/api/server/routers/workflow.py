@@ -57,6 +57,7 @@ class WorkflowRouter:
         workflow = self._get_workflow()
         workflow.config = config
         workflow.start()
+        safe_audit_log("workflow.start", detail=f"aggregate={request.aggregate_interval_minutes}m prune={request.prune_interval_minutes}m export={request.export_interval_hours}h")
         logger.info("Workflow started (aggregate=%dm, prune=%dm, export=%dh)", request.aggregate_interval_minutes, request.prune_interval_minutes, request.export_interval_hours)
         return success_response(data={"status": "started", "config": request.model_dump()})
 
@@ -64,6 +65,7 @@ class WorkflowRouter:
         """Stop the automated feedback workflow."""
         workflow = self._get_workflow()
         workflow.stop()
+        safe_audit_log("workflow.stop")
         logger.info("Workflow stopped")
         return success_response(data={"status": "stopped"})
 
