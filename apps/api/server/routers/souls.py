@@ -214,6 +214,7 @@ class SoulsRouter:
 
             return {"status": "no_target_model"}
         except Exception as e:
+            logger.warning("Load checkpoint into model failed: %s", e)
             classify_and_raise(e, source="load_checkpoint_into_model")
 
     def _build_soul_system_prompt(self, soul_info) -> str:
@@ -328,6 +329,7 @@ Be yourself — let your personality shape how you respond."""
             return StreamingResponse(stream(), media_type="text/event-stream")
 
         except Exception as e:
+            logger.warning("Soul chat failed: %s", e)
             classify_and_raise(e, source="soul_chat")
 
     async def switch_soul(
@@ -401,6 +403,7 @@ Be yourself — let your personality shape how you respond."""
 
             return success_response(data=result)
         except Exception as e:
+            logger.warning("Switch soul failed: %s", e)
             classify_and_raise(e, source="switch_soul")
 
     async def list_souls(self) -> dict:
@@ -480,6 +483,7 @@ Be yourself — let your personality shape how you respond."""
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Get soul failed: %s", e)
             classify_and_raise(e, source="get_soul")
 
     async def get_trait_weights(self) -> dict:
@@ -504,6 +508,7 @@ Be yourself — let your personality shape how you respond."""
             weights = manager.get_trait_weights()
             return success_response(data=weights)
         except Exception as e:
+            logger.warning("Soul operation failed: %s", e)
             classify_and_raise(e, source="soul_handler")
 
     async def save_trait_weights(self, body: SaveWeightsRequest) -> dict:
@@ -531,6 +536,7 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("soul.weights.save", resource="traits", detail=f"traits_saved={len(flat)}", groups=[g for g in ("personality", "cognition", "emotion") if getattr(body, g, None)])
             return success_response(message="saved")
         except Exception as e:
+            logger.warning("Soul operation failed: %s", e)
             classify_and_raise(e, source="soul_handler")
 
     async def get_trait_modes(self) -> dict:
@@ -563,6 +569,7 @@ Be yourself — let your personality shape how you respond."""
                 "task": TaskManager(config).get_mode(),
             })
         except Exception as e:
+            logger.warning("Soul operation failed: %s", e)
             classify_and_raise(e, source="soul_handler")
 
     async def get_current_soul(self) -> dict:
@@ -587,6 +594,7 @@ Be yourself — let your personality shape how you respond."""
                 })
             return success_response(data={"name": None})
         except Exception as e:
+            logger.warning("Soul operation failed: %s", e)
             classify_and_raise(e, source="soul_handler")
 
     async def list_weight_snapshots(self) -> dict:
@@ -626,6 +634,7 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.save", resource=name)
             return success_response(data={"path": path}, message="saved")
         except Exception as e:
+            logger.warning("Soul operation failed: %s", e)
             classify_and_raise(e, source="soul_handler")
 
     async def load_weight_snapshot(self, name: str) -> dict:
@@ -648,6 +657,7 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.load", resource=name, detail=f"traits_loaded={count}")
             return success_response(data={"traits_loaded": count}, message="loaded")
         except Exception as e:
+            logger.warning("Soul operation failed: %s", e)
             classify_and_raise(e, source="soul_handler")
 
     async def delete_weight_snapshot(self, name: str) -> dict:
@@ -670,6 +680,7 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.delete", resource=name, detail=f"deleted={ok}")
             return success_response(data={"deleted": ok})
         except Exception as e:
+            logger.warning("Soul operation failed: %s", e)
             classify_and_raise(e, source="soul_handler")
 
     async def get_soul_stats(self) -> dict:
@@ -686,6 +697,7 @@ Be yourself — let your personality shape how you respond."""
             from domains.inference.slo_manager import get_slo_manager
             return success_response(data=get_slo_manager().get_stats())
         except Exception as e:
+            logger.warning("Soul operation failed: %s", e)
             classify_and_raise(e, source="soul_handler")
 
 

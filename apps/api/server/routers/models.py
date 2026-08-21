@@ -6,7 +6,6 @@ import asyncio
 import os
 import logging
 import re
-import time
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
