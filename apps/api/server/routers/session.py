@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, AsyncIterator
 
-from schemas.common import success_response, classify_and_raise
+from schemas.common import success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +76,7 @@ class SessionRouter:
         if ctx.messages:
             from domains.infrastructure.session_core import SessionCore
             result = SessionCore.store_context(session_id, ctx.messages)
+            safe_audit_log("session.context_store", resource=session_id, detail=f"messages={len(ctx.messages)}")
             return success_response(data=result)
         return success_response(data={"session_id": session_id, "message_count": 0}, message="stored")
 
@@ -191,6 +192,7 @@ class SessionRouter:
         """
         async def generate() -> AsyncIterator[str]:
             """generate."""
+            _regen_start = time.time()
             try:
                 from domains.infrastructure.session_core import SessionCore
                 msgs = SessionCore.get_messages(session_id)
@@ -237,6 +239,8 @@ class SessionRouter:
                             yield self._sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
                             return
                     yield self._sse_token("chat", "", done=True)
+                    _regen_elapsed_ms = round((time.time() - _regen_start) * 1000)
+                    logger.info("Regenerate completed: %d chars in %dms", len(full_response), _regen_elapsed_ms, extra={"tag": "REQ"})
                 except GeneratorExit:
                     return
                 except Exception as e:

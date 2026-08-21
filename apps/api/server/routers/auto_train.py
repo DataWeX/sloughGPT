@@ -655,8 +655,10 @@ class AutoTrainRouter:
                 "Starting SloughGPTTrainer with method=%s data=%s",
                 req.method, data_path, extra={"tag": "TRAIN"},
             )
+            _train_t0 = time.monotonic()
             result = trainer.train(on_progress=on_progress, cancel_event=_turbo_cancel_event)
-            autotrain_logger.info("SloughGPTTrainer result: %s", result, extra={"tag": "TRAIN"})
+            _train_elapsed_ms = (time.monotonic() - _train_t0) * 1000
+            autotrain_logger.info("SloughGPTTrainer result: %s (elapsed=%dms)", result, _train_elapsed_ms, extra={"tag": "TRAIN"})
 
             if _turbo_cancel_event.is_set():
                 with _turbo_lock:
@@ -682,7 +684,7 @@ class AutoTrainRouter:
                 _finish_cm("failed", result.get("message") or "Training failed")
                 return
 
-            safe_audit_log("training.start", resource=data_path or req.dataset_id or "turbo", detail="turbo", method=req.method or "", epochs=req.epochs)
+            safe_audit_log("training.complete", resource=data_path or req.dataset_id or "turbo", detail=f"turbo elapsed={_train_elapsed_ms:.0f}ms", method=req.method or "", epochs=req.epochs)
             with _turbo_lock:
                 _turbo_state["status"] = "complete"
                 _turbo_state["result"] = _finite_payload(result)

@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Path, Query
 
-from schemas.common import success_response, raise_error
+from schemas.common import success_response, raise_error, safe_audit_log
 from mogdb import MogDB
 
 COLLECTIONS = frozenset({
@@ -199,6 +199,7 @@ class DocStoreRouter:
         if err:
             return err
         deleted = _collection(collection).delete_one({"_id": doc_id})
+        safe_audit_log("docstore.delete", resource=f"{collection}/{doc_id}")
         return success_response(data={"deleted": bool(deleted)})
 
     def clear_collection(self, collection: str = Path(...)) -> dict:
@@ -211,6 +212,7 @@ class DocStoreRouter:
         if err:
             return err
         _collection(collection).drop()
+        safe_audit_log("docstore.clear", resource=collection)
         return success_response(data={"cleared": True})
 
     def bulk_put(
@@ -247,6 +249,7 @@ class DocStoreRouter:
                 coll.delete_one({"_id": doc_id})
             coll.insert_one(doc)
             count += 1
+        safe_audit_log("docstore.bulk_put", resource=collection, detail=f"imported={count}")
         return success_response(data={"imported": count})
 
 

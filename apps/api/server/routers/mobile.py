@@ -1420,6 +1420,7 @@ class MobileRouter:
                 return
 
             elapsed_ms = round((_time.time() - t0) * 1000)
+            safe_audit_log("mobile.train_sessions", resource=checkpoint_name, detail=f"elapsed_ms={elapsed_ms}", pairs=len(pairs), loss=result.get("loss", 0.0))
 
             yield sse_complete(
                 stream="training", phase="COMPLETE",

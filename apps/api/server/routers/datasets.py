@@ -144,6 +144,7 @@ class DatasetsRouter:
             except HTTPException:
                 raise
             except Exception as e:
+                logger.warning("Dataset import (local) failed: %s", e)
                 classify_and_raise(e, source="dataset_import_local")
 
     async def import_from_github(self, request: GitHubImportRequest) -> dict:
@@ -177,6 +178,7 @@ class DatasetsRouter:
             except HTTPException:
                 raise
             except Exception as e:
+                logger.warning("Dataset import (github) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
     async def import_from_huggingface(self, request: HuggingFaceImportRequest) -> dict:
@@ -209,6 +211,7 @@ class DatasetsRouter:
             except HTTPException:
                 raise
             except Exception as e:
+                logger.warning("Dataset import (huggingface) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
     async def import_from_url(self, request: URLImportRequest) -> dict:
@@ -257,6 +260,7 @@ class DatasetsRouter:
             except HTTPException:
                 raise
             except Exception as e:
+                logger.warning("Dataset import (url) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
     async def import_from_kaggle(self, request: KaggleImportRequest) -> dict:
@@ -319,6 +323,7 @@ class DatasetsRouter:
         except FileNotFoundError:
             raise_error("Kaggle CLI not found. Install with: pip install kaggle", "E_BAD_REQUEST")
         except Exception as e:
+            logger.warning("Dataset import (kaggle) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
     async def import_from_csv(self, request: CSVImportRequest) -> dict:
@@ -367,6 +372,7 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
+            logger.warning("Dataset import (csv) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
     async def batch_import(self, request: BatchImportRequest) -> dict:
@@ -501,6 +507,7 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except Exception as e:
+            logger.warning("Dataset import (isbn) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
     async def search_datasets(self, q: str = Query(..., min_length=1, max_length=500, description="Search query")) -> dict:
