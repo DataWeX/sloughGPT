@@ -430,7 +430,7 @@ class InferenceRouter:
                 try:
                     await self.flush_dirty_sessions()
                 except Exception as e:
-                    logger.debug("Background session flush failed: %s", e)
+                    logger.warning("Background session flush failed: %s", e)
         try:
             self._background_flush_task = asyncio.create_task(_flush_loop())
         except RuntimeError:
@@ -527,7 +527,7 @@ class InferenceRouter:
 
                 get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=actual_model)
             except Exception as e:
-                logger.debug("Failed to record inference metrics: %s", e)
+                logger.warning("Failed to record inference metrics: %s", e)
             try:
 
                 capture(
@@ -539,7 +539,7 @@ class InferenceRouter:
                     temperature=req.temperature,
                 )
             except Exception as e:
-                logger.debug("Failed to capture conversation: %s", e)
+                logger.warning("Failed to capture conversation: %s", e)
             await _coalescer.complete(_coalesce_key, result)
             return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
         except Exception as e:
@@ -674,7 +674,7 @@ class InferenceRouter:
                     tokens=token_count, elapsed_ms=elapsed, model=_stream_state.model_type or req.model
                 )
             except Exception as e:
-                logger.debug("Failed to record inference metrics: %s", e)
+                logger.warning("Failed to record inference metrics: %s", e)
             try:
 
                 capture(
@@ -686,7 +686,7 @@ class InferenceRouter:
                     temperature=req.temperature,
                 )
             except Exception as e:
-                logger.debug("Failed to capture conversation: %s", e)
+                logger.warning("Failed to capture conversation: %s", e)
             full_response = "".join(collected)
             await _coalescer.complete(_coalesce_key, full_response)
             _mgr.finish(_op_id)
@@ -1189,7 +1189,7 @@ class InferenceRouter:
                         meta={"session_id": session_id},
                     )
                 except Exception as e:
-                    logger.debug("Failed to capture conversation: %s", e)
+                    logger.warning("Failed to capture conversation: %s", e)
 
                 try:
 
@@ -1207,7 +1207,7 @@ class InferenceRouter:
                         has_images=bool(req.images),
                     ))
                 except Exception as e:
-                    logger.debug("ResponseTracker.log failed: %s", e)
+                    logger.warning("ResponseTracker.log failed: %s", e)
 
                 try:
 
@@ -1216,7 +1216,7 @@ class InferenceRouter:
                         tokens=tokens, elapsed_ms=duration_ms, model=_check_state.model_type or req.model,
                     ))
                 except Exception as e:
-                    logger.debug("Failed to record inference metrics: %s", e)
+                    logger.warning("Failed to record inference metrics: %s", e)
 
                 if ctx_core and req.use_context_core:
                     _post_gen_tasks.append(asyncio.to_thread(ctx_core.add_response, full_response, model=req.model))
@@ -1227,7 +1227,7 @@ class InferenceRouter:
                         get_learner().ingest_conversation, [(user_msg, full_response)]
                     ))
                 except Exception as e:
-                    logger.debug("Continual learner ingest failed: %s", e)
+                    logger.warning("Continual learner ingest failed: %s", e)
 
                 if _post_gen_tasks:
                     await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
@@ -1253,7 +1253,7 @@ class InferenceRouter:
                     self._BG_TASKS.add(task)
                     task.add_done_callback(self._BG_TASKS.discard)
                 except Exception as e:
-                    logger.debug("Entity extraction failed: %s", e)
+                    logger.warning("Entity extraction failed: %s", e)
 
                 logger.info("Chat stream: generated %d chars", len(full_response), extra={"tag": "INF", "context": {"char_count": len(full_response), "session_id": session_id}})
                 _mgr.finish(_op_id)
@@ -1402,7 +1402,7 @@ class InferenceRouter:
                 tokens=tokens, elapsed_ms=0, model=_chat_state.model_type or req.model
             )
         except Exception as e:
-            logger.debug("Failed to record inference metrics: %s", e)
+            logger.warning("Failed to record inference metrics: %s", e)
 
         try:
 
@@ -1415,7 +1415,7 @@ class InferenceRouter:
                 meta={"session_id": req.session_id or "default"},
             )
         except Exception as e:
-            logger.debug("Failed to capture conversation: %s", e)
+            logger.warning("Failed to capture conversation: %s", e)
 
         return ChatResponse(
             message=result.text,

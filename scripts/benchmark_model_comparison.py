@@ -461,11 +461,11 @@ def main():
     if args.mode in ("native", "both"):
         try:
             net, lstm, encode, decode, charset = load_native_model()
-            # Auto-detect: if charset has no digits, use Shakespeare prompts
-            if charset and not any(c.isdigit() for c in charset):
+            # Auto-detect: if charset is small (<80 chars), use Shakespeare prompts
+            if charset and len(charset) < 80:
                 prompts_dict = SHAKESPEARE_PROMPTS
                 prompts = list(prompts_dict.keys())
-                print(f"  Using Shakespeare prompts (charset has {len(charset)} chars, no digits)")
+                print(f"  Using Shakespeare prompts (charset has {len(charset)} chars)")
             responses, latencies, token_counts = [], [], []
             print(f"\nBenchmarking native SloNet...")
             for prompt in prompts:

@@ -215,20 +215,24 @@ class APIServerProcess:
                             source="api.server",
                             message=stripped,
                         ))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("stderr capture thread failed: %s", e)
         threading.Thread(target=_log_stderr, daemon=True).start()
 
         # Poll health until ready
         deadline = time.time() + timeout
         model_id = None
+        _probe_attempts = 0
         while time.time() < deadline:
             probe = _probe_api(self._api_url)
             if probe.get("available"):
                 model_id = probe.get("model_id")
+                logger.debug("API server ready after %d probe(s)", _probe_attempts)
                 break
+            _probe_attempts += 1
             time.sleep(0.5)
         else:
+            logger.warning("API server not ready after %d probes (%.0fs)", _probe_attempts, timeout)
             return {"ok": False, "error": f"Timed out waiting for API ({timeout:.0f}s)"}
 
         return {"ok": True, "message": f"ready ({model_id})" if model_id else "ready"}
@@ -258,10 +262,10 @@ class APIServerProcess:
                 else:
                     proc.kill()
                 proc.wait(timeout=5)
-            except Exception:
-                pass
-        except Exception:
-            pass
+            except Exception as e:
+                logger.warning("Failed to SIGKILL API server (pid=%d): %s", proc.pid, e)
+        except Exception as e:
+            logger.warning("Failed to stop API server (pid=%d): %s", proc.pid, e)
 
         return {"ok": True, "message": "stopped"}
 
