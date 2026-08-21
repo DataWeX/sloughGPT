@@ -37,7 +37,7 @@ python-multipart>=0.0.32
 
 # CLI/UI
 click>=8.1.0
-prompt-toolkit>=3.0.0
+prompt-toolkit>=3.0.53
 
 # Storage/IO
 safetensors>=0.4.0
