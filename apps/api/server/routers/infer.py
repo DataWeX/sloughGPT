@@ -187,6 +187,7 @@ class InferRouter:
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Inference failed: %s", e)
             classify_and_raise(e, source="infer")
 
     async def infer_stream(self, req: InferRequest, request: Request) -> AsyncGenerator[str, None]:

@@ -89,6 +89,7 @@ class SessionRouter:
             msgs = SessionCore.get_messages(session_id)
             return success_response(data={"session_id": session_id, "messages": msgs})
         except Exception as e:
+            logger.warning("Get session messages failed: %s", e)
             classify_and_raise(e, source="session_get_messages")
 
     async def get_session_inspector(self, session_id: str) -> dict:
@@ -179,6 +180,7 @@ class SessionRouter:
             })
 
         except Exception as e:
+            logger.warning("Session inspector failed: %s", e)
             classify_and_raise(e, source="session_inspector")
 
     async def regenerate_session(self, session_id: str, request: Request) -> StreamingResponse:

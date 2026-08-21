@@ -80,6 +80,7 @@ class VectorRouter:
                 logger.warning("Failed to set vector store ref on inference router: %s", e)
             return success_response(data={"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"})
         except Exception as e:
+            logger.warning("Vector store init failed: %s", e)
             classify_and_raise(e, source="vector")
 
     async def get_stats(self) -> dict:

@@ -65,6 +65,7 @@ class LoraEvalRouter:
                 "note": "No adapter found — run aggregate first",
             })
         except Exception as e:
+            logging.getLogger("slo.lora_eval").warning("LoRA eval run failed: %s", e)
             classify_and_raise(e, source="lora_eval_run")
 
     async def get_eval_history(
@@ -143,6 +144,7 @@ class LoraEvalRouter:
                 "total_feedback": result["total_feedback"],
             })
         except Exception as e:
+            logging.getLogger("slo.lora_eval").warning("LoRA eval aggregate failed: %s", e)
             classify_and_raise(e, source="lora_eval_aggregate")
 
 

@@ -65,6 +65,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("List adapters failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.list")
 
     async def get_adapter(self, user_id: str) -> dict:
@@ -90,6 +91,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Get adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.get")
 
     async def update_adapter(self, user_id: str, req: AdapterUpdateRequest) -> dict:
@@ -119,6 +121,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Update adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.update")
 
     async def reset_adapter(self, user_id: str) -> dict:
@@ -150,6 +153,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Reset adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.reset")
 
     async def merge_adapters(self) -> dict:
@@ -178,6 +182,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Merge adapters failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.merge")
 
     async def aggregate_best(self, req: AggregateBestRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -210,6 +215,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Aggregate best failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.aggregate")
 
     async def get_quality(self, min_feedback_count: int = 3, max_age_days: Optional[int] = None) -> dict:
@@ -243,6 +249,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA module not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Quality report failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.quality")
 
     async def delete_user_adapter(self, user_id: str, req: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -257,6 +264,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Delete adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.delete")
 
     async def prune_low_quality_adapters(self, request: PruneAdaptersRequest, req: Request) -> dict:
@@ -278,6 +286,7 @@ class UserAdaptersRouter:
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:
+            logger.warning("Prune adapters failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.prune")
 
 

@@ -404,6 +404,7 @@ class ModelsRouter:
             results = do_export(config, server_state.model, server_state.tokenizer)
             return success_response(data={"format": request.format, "files": results}, message="exported")
         except Exception as e:
+            logger.warning("Export model failed: %s", e)
             classify_and_raise(e, source="export_model")
 
     async def get_export_formats(self) -> dict:
@@ -539,6 +540,7 @@ class ModelsRouter:
                 "size_on_disk": size_str,
             }
         except Exception as e:
+            logger.warning("Verify download failed (model=%s): %s", model_id, e)
             classify_and_raise(e, source="verify_download")
 
     async def retry_download(self, model_id: str) -> Dict[str, Any]:
@@ -610,6 +612,7 @@ class ModelsRouter:
             logger.info("GGUF downloaded and cached: %s", cached_path, extra={"tag": "MODEL"})
             return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
         except Exception as e:
+            logger.warning("Download GGUF failed: %s", e)
             classify_and_raise(e, source="download_gguf")
 
     async def visual_model_load(self, model_dir: str = "", model_id: str = "") -> dict:

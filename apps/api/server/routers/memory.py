@@ -225,6 +225,7 @@ class MemoryRouter:
             svc.set_enabled(req.enabled)
         if req.archive_retention_days is not None:
             svc.set_archive_retention(req.archive_retention_days)
+        safe_audit_log("memory.config", resource="memory", detail=f"enabled={req.enabled} retention={req.archive_retention_days}")
         return svc.config_snapshot()
 
     def get_config(self) -> dict:

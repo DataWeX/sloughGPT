@@ -315,6 +315,7 @@ class ImagesRouter:
             )
 
         except Exception as e:
+            logger.warning("Image generation failed: %s", e)
             classify_and_raise(e, source="images_generate")
 
     async def list_gallery(self) -> dict:
