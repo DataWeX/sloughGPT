@@ -262,6 +262,49 @@ def timed(
         return wrapper
     return decorator
 
+
+def tagged(
+    logger: StructuredLogger,
+    **tags: Any,
+) -> StructuredLogger:
+    """Return a proxy that injects ``tags`` into every log call.
+
+    Usage::
+
+        log = tagged(StructuredLogger("slo.training"), phase="train")
+        log.info("Starting", epochs=10)
+        # → {"msg": "Starting", "phase": "train", "epochs": 10}
+    """
+    class _TaggedProxy:
+        __slots__ = ("_inner", "_tags")
+
+        def __init__(self, inner: StructuredLogger, tags: dict):
+            object.__setattr__(self, "_inner", inner)
+            object.__setattr__(self, "_tags", tags)
+
+        def _merge(self, extra: dict) -> dict:
+            merged = dict(self._tags)
+            merged.update(extra)
+            return merged
+
+        def debug(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.DEBUG, msg, *args, **self._merge(extra))
+
+        def info(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.INFO, msg, *args, **self._merge(extra))
+
+        def warning(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.WARNING, msg, *args, **self._merge(extra))
+
+        def error(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.ERROR, msg, *args, **self._merge(extra))
+
+        def critical(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.CRITICAL, msg, *args, **self._merge(extra))
+
+    return _TaggedProxy(logger, tags)
+
+
 def setup_structured_logging(
     root_level: int = logging.INFO,
     fmt: Optional[logging.Formatter] = None,
