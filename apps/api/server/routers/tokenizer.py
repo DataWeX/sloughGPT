@@ -146,6 +146,8 @@ class TokenizerRouter:
         """
         Train the BPE tokenizer on provided text corpus or download default Shakespeare data.
         """
+        import time as _time
+        _t0 = _time.monotonic()
         if req.texts:
             lines = req.texts
         else:
@@ -159,8 +161,9 @@ class TokenizerRouter:
             lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
         mgr = get_tokenizer_manager()
         mgr.train(lines, vocab_size=req.vocab_size, min_frequency=3)
-        safe_audit_log("tokenizer.train", resource="bpe", vocab_size=req.vocab_size, corpus_size=len(lines))
-        return success_response(data={"status": "trained", "corpus_size": len(lines), "stats": mgr.stats()})
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("tokenizer.train", resource="bpe", detail=f"elapsed={_elapsed_ms:.0f}ms", vocab_size=req.vocab_size, corpus_size=len(lines))
+        return success_response(data={"status": "trained", "corpus_size": len(lines), "stats": mgr.stats(), "elapsed_ms": round(_elapsed_ms, 1)})
 
     async def get_tokenization_sample(self) -> dict:
         """get_tokenization_sample."""

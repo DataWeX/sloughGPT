@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
-from schemas.common import success_response
+from schemas.common import success_response, safe_audit_log
 
 logger = logging.getLogger("slo.routers.companion")
 
@@ -128,6 +128,7 @@ class CompanionRouter:
         """Reset companion to default personality."""
         from domains.companion import create_companion
         self._companion = create_companion()
+        safe_audit_log("companion.reset")
         return success_response(data={"status": "ok", "traits": self._companion.to_dict()["traits"]})
 
     async def use_preset(self, req: PresetRequest) -> dict:

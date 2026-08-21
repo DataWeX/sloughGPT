@@ -601,6 +601,7 @@ class MobileRouter:
             - Calls DELETE /knowledge/{id} internally.
         """
         result = await self._internal_delete(request, f"/knowledge/{item_id}")
+        safe_audit_log("mobile.knowledge_delete", resource=item_id)
         return {"status": "deleted", "id": item_id}
 
     async def sync_offline(self, request: Request, body: SyncRequest) -> dict:
@@ -1168,6 +1169,7 @@ class MobileRouter:
         if not deleted:
 
             raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
+        safe_audit_log("mobile.pair_delete", resource=pair_id)
         return {"status": "deleted", "pair_id": pair_id}
 
     async def delete_synced_pairs(self) -> dict:
@@ -1184,6 +1186,7 @@ class MobileRouter:
 
         store = get_training_store()
         count = store.delete_synced()
+        safe_audit_log("mobile.pairs_delete_synced", detail=f"count={count}")
         return {"status": "deleted", "count": count}
 
     async def delete_pairs_bulk(self, ids: list[str] = Query(..., description="Pair IDs to delete")) -> dict:
@@ -1206,6 +1209,7 @@ class MobileRouter:
         for pair_id in ids:
             if store.delete_pair(pair_id):
                 count += 1
+        safe_audit_log("mobile.pairs_delete_bulk", detail=f"count={count} requested={len(ids)}")
         return {"status": "deleted", "count": count}
 
     async def compact_training_store(self) -> dict:

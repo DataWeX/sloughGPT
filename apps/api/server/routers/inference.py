@@ -1302,8 +1302,10 @@ class InferenceRouter:
             raise_error("ContextCore not available", "E_INFRA_STARTUP")
         if all:
             ctx_core.reset_all()
+            safe_audit_log("inference.reset_context", resource="context", detail="scope=all")
         else:
             ctx_core.reset_session()
+            safe_audit_log("inference.reset_context", resource="context", detail="scope=session")
         return {"reset": "session" if not all else "all"}
 
     async def chat(self, req: ChatRequest) -> ChatResponse:

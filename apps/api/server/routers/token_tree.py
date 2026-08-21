@@ -13,6 +13,7 @@ This router just exposes manager methods as HTTP endpoints:
 - ``DELETE /token-tree/saved/{name}`` — delete a saved tree.
 - ``POST /token-tree/train``  — train on a corpus (or the built-in default).
 - ``POST /token-tree/similar`` — nearest-neighbor tokens via generated embeddings.
+
 - ``POST /token-tree/embedding`` — inspect a token's generated embedding vector.
 - ``POST /token-tree/encode`` — tree-walk encode text to ids.
 - ``POST /token-tree/path`` — trace the encoder's greedy trie walk step by step.
@@ -26,7 +27,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from domains.training.token_tree_manager import get_token_tree_manager
-from schemas.common import raise_error, success_response
+from schemas.common import raise_error, success_response, safe_audit_log
 
 
 class TrainTreeRequest(BaseModel):
@@ -205,6 +206,7 @@ class TokenTreeRouter:
             raise_error(str(e), "E_VAL_REQUEST", status_code=422)
         if not deleted:
             raise_error(f"No saved token tree named {name!r}", "E_NOT_FOUND", status_code=404)
+        safe_audit_log("token_tree.delete", resource=name)
         return success_response(data={"name": name, "deleted": True})
 
     def train_tree(self, req: TrainTreeRequest) -> dict:
