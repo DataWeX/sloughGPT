@@ -12,14 +12,14 @@ const store = new Map<string, string>()
 
 const { chatDBMock } = vi.hoisted(() => {
   const chatDBMock = {
-    getKV: vi.fn(async <T>(key: string): Promise<T | undefined> => {
+    getKV: vi.fn(async (key: string) => {
       const entry = store.get(key)
-      return entry as T | undefined
+      return entry
     }),
-    setKV: vi.fn(async (key: string, value: unknown): Promise<void> => {
+    setKV: vi.fn(async (key: string, value: unknown) => {
       store.set(key, String(value))
     }),
-    deleteKV: vi.fn(async (key: string): Promise<void> => {
+    deleteKV: vi.fn(async (key: string) => {
       store.delete(key)
     }),
   }
