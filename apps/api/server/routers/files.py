@@ -11,7 +11,7 @@ import re
 from fastapi import APIRouter, UploadFile, File, Form, Query
 from pydantic import BaseModel
 
-from schemas.common import raise_error, success_response, classify_and_raise
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.files")
 
@@ -198,6 +198,7 @@ class FilesRouter:
         }
         self._save_metadata(meta)
 
+        safe_audit_log("file.upload", resource=fid, detail=f"filename={file.filename}, size={len(contents)}")
         return UploadResponse(
             id=fid,
             filename=file.filename,
@@ -288,6 +289,7 @@ class FilesRouter:
         if file_path.exists():
             file_path.unlink()
         self._save_metadata(meta)
+        safe_audit_log("file.delete", resource=file_id, detail=f"filename={m['filename']}")
         return success_response(data={"status": "deleted", "file_id": file_id})
 
     async def ingest_file(self, file_id: str) -> dict:
@@ -332,6 +334,7 @@ class FilesRouter:
         except ImportError:
             raise_error("Knowledge base not available", "E_INFRA_STARTUP", status_code=501)
         except Exception as exc:
+            logger.warning("File ingest failed (file=%s): %s", file_id, exc)
             classify_and_raise(exc, source="files.ingest")
 
     # ── Helpers ──

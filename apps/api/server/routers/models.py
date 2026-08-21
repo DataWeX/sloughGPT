@@ -6,6 +6,7 @@ import asyncio
 import os
 import logging
 import re
+import time
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
@@ -241,7 +242,9 @@ class ModelsRouter:
     ) -> dict:
         """Load a model"""
         ctrl = get_models_controller()
+        _t0 = time.monotonic()
         result = ctrl.load_model(req.model_id, req.device.value, req.quantize)
+        _elapsed_ms = (time.monotonic() - _t0) * 1000
         try:
             from domains.infrastructure.server_state import get_server_state
             ss = get_server_state()
@@ -251,8 +254,9 @@ class ModelsRouter:
             else:
                 ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
         except Exception as e:
-            logger.debug("Failed to record model load event: %s", e)
-        safe_audit_log("model.load", resource=req.model_id, detail=result.get("status", "unknown"), device=req.device.value, quantize=req.quantize)
+            logger.warning("Failed to record model load event: %s", e)
+        logger.info("Model loaded: %s (%.0fms)", req.model_id, _elapsed_ms)
+        safe_audit_log("model.load", resource=req.model_id, detail=f"{result.get('status', 'unknown')} ({_elapsed_ms:.0f}ms)", device=req.device.value, quantize=req.quantize)
         return wrap_controller_result(result)
 
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from domains.memory.memory_service import get_memory_service
-from schemas.common import raise_error
+from schemas.common import raise_error, safe_audit_log
 
 logger = logging.getLogger("slo.api.memory")
 
@@ -176,6 +176,7 @@ class MemoryRouter:
         except Exception as e:
             logger.error("Memory store failed (topic=%s): %s", topic, e, exc_info=True)
             raise
+        safe_audit_log("memory.store", resource=topic, detail=f"stored={stored}")
         return {"stored": stored, "content": content, "topic": topic, "source": source}
 
     def remember(self, req: RememberRequest) -> dict:
@@ -256,6 +257,7 @@ class MemoryRouter:
         if not item_id or not item_id.strip():
             raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
         removed = self._service().delete([item_id.strip()])
+        safe_audit_log("memory.delete", resource=item_id, detail=f"deleted={removed}")
         return {"deleted": removed}
 
     def update_item(self, item_id: str, req: UpdateRequest) -> dict:
@@ -278,6 +280,7 @@ class MemoryRouter:
         if not req.content or not req.content.strip():
             raise_error("content is required", "E_BAD_REQUEST", status_code=400)
         updated = self._service().update(item_id.strip(), req.content, topic=req.topic, importance=req.importance)
+        safe_audit_log("memory.update", resource=item_id, detail=f"updated={updated}")
         return {"updated": 1 if updated else 0, "duplicate": not updated}
 
     def clear(self) -> dict:
@@ -291,6 +294,7 @@ class MemoryRouter:
             - wipes the underlying knowledge store.
         """
         removed = self._service().clear()
+        safe_audit_log("memory.clear", resource="all", detail=f"cleared={removed}")
         return {"cleared": removed}
     def consolidate(self, threshold: Optional[float] = None) -> dict:
         """
@@ -323,6 +327,7 @@ class MemoryRouter:
         except Exception as e:
             logger.error("Memory consolidation delete failed (threshold=%s): %s", threshold, e, exc_info=True)
             raise
+        safe_audit_log("memory.consolidate", resource="all", detail=f"removed={removed}, kept={len(plan['keep_ids'])}")
         return {"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold}
 
     def archive(self, limit: Optional[int] = None) -> dict:
@@ -379,6 +384,7 @@ class MemoryRouter:
         except Exception as e:
             logger.error("Archive prune failed (retain_days=%s): %s", retain_days, e, exc_info=True)
             raise
+        safe_audit_log("memory.archive_prune", resource="archive", detail=f"pruned={removed}")
         return {"pruned": removed}
 
 
