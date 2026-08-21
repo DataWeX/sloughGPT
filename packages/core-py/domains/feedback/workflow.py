@@ -245,7 +245,10 @@ class FeedbackWorkflowManager:
             if not all_ppls:
                 return None
             return float(np.mean(all_ppls))
-        except Exception:
+        except Exception as e:
+            logger.warning("workflow: _benchmark_ppl failed", extra={
+                "error": str(e),
+            })
             return None
 
     def _snapshot_weights(self, net):
@@ -673,20 +676,27 @@ class FeedbackWorkflowManager:
 
     def _do_prune(self):
         """Perform pruning task."""
+        import time as _time
+        t0 = _time.monotonic()
         try:
             deleted = self.lora_store.prune_low_quality(
                 min_feedback_count=1,
                 max_age_days=7,
             )
+            elapsed_ms = (_time.monotonic() - t0) * 1000
             if deleted:
                 self._stats["prunes_performed"] += 1
-                logger.info("Pruned %d adapters", len(deleted), extra={"tag": "INFRA"})
+                logger.info("Pruned %d adapters", len(deleted), extra={
+                    "tag": "INFRA", "elapsed_ms": round(elapsed_ms, 1),
+                })
         except Exception as e:
             logger.warning("Prune error: %s", e, extra={"tag": "INFRA"})
 
 
     def _do_export(self):
         """Perform training data export task."""
+        import time as _time
+        t0 = _time.monotonic()
         try:
             from pathlib import Path
 
@@ -697,8 +707,11 @@ class FeedbackWorkflowManager:
             filepath = export_path / f"feedback_export_{timestamp}.jsonl"
 
             self.db.export_feedback_jsonl(str(filepath))
+            elapsed_ms = (_time.monotonic() - t0) * 1000
             self._stats["exports_performed"] += 1
-            logger.info("Exported training data to %s", filepath, extra={"tag": "INFRA"})
+            logger.info("Exported training data to %s", filepath, extra={
+                "tag": "INFRA", "elapsed_ms": round(elapsed_ms, 1),
+            })
         except Exception as e:
             logger.warning("Export error: %s", e, extra={"tag": "INFRA"})
 

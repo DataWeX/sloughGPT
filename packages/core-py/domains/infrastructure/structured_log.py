@@ -138,12 +138,31 @@ class StructuredLogger:
         log.info("Loaded %s in %.1fms", "gpt2", 3200, extra={"tag": "MODEL"})
     """
 
-    def __init__(self, name: str, level: int = logging.INFO):
+    def __init__(self, name: str, level: int = logging.INFO, **tags: Any):
         self._logger = logging.getLogger(name)
         self._logger.setLevel(level)
+        self._tags = dict(tags)
+
+    def __repr__(self) -> str:
+        tags = f", tags={self._tags}" if self._tags else ""
+        return f"StructuredLogger({self._logger.name!r}, level={logging.getLevelName(self._logger.level)}{tags})"
 
     def __getattr__(self, attr: str):
         return getattr(self._logger, attr)
+
+    def child(self, suffix: str, **tags: Any) -> "StructuredLogger":
+        """Create a child logger with a dotted name suffix and extra tags.
+
+        Tags merge with parent tags (child overrides parent)::
+
+            parent = StructuredLogger("slo.training")
+            child = parent.child("optimizer", phase="train")
+            child.info("lr updated")
+            # → {"logger": "slo.training.optimizer", "phase": "train", ...}
+        """
+        child_name = f"{self._logger.name}.{suffix}"
+        merged_tags = {**self._tags, **tags}
+        return StructuredLogger(child_name, level=self._logger.level, **merged_tags)
 
     def _log(self, level: int, msg: str, *args: Any, **extra: Any) -> None:
         extra_dict = extra.pop("extra", {})
@@ -151,6 +170,10 @@ class StructuredLogger:
             extra_dict.update(extra)
         else:
             extra_dict = dict(extra)
+        if self._tags:
+            merged = dict(self._tags)
+            merged.update(extra_dict)
+            extra_dict = merged
         if args:
             self._logger.log(level, msg, *args, extra=extra_dict)
         else:
@@ -237,7 +260,7 @@ def timed(
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             start = time.monotonic()
             try:
-                return fn(*args, **kwargs)
+                result = fn(*args, **kwargs)
             except Exception:
                 elapsed_ms = (time.monotonic() - start) * 1000
                 logger._log(
@@ -259,6 +282,7 @@ def timed(
                     elapsed_ms=round(elapsed_ms, 1),
                     **extra,
                 )
+                return result
         return wrapper
     return decorator
 

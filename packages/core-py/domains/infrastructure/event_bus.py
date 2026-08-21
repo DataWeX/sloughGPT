@@ -174,6 +174,10 @@ class EventBus:
             try:
                 result = sub.handler(event, data or {})
                 if asyncio.iscoroutine(result):
+                    logger.warning("event_bus: async handler %s ignored by emit_sync (coroutine not awaited)",
+                        getattr(sub.handler, "__name__", "?"),
+                        extra={"tag": "INFRA", "event": event},
+                    )
                     continue
             except Exception:
                 logger.exception(

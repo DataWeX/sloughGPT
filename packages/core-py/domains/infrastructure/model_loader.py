@@ -72,6 +72,9 @@ class ModelLoader:
         Returns:
             LoadResult with provider, model, tokenizer, and metrics
         """
+        import time as _time
+        load_start = _time.monotonic()
+
         from domains.infrastructure.conversion_tracker import get_tracker, ConversionStage
         tracker = get_tracker()
 
@@ -91,6 +94,11 @@ class ModelLoader:
             tracker.update(model_id, stage=ConversionStage.LOADING, progress=0.95, message="Loading into memory...")
             if verify and result.success:
                 self._verify_model(result)
+            elapsed_ms = (_time.monotonic() - load_start) * 1000
+            logger.info("model_loader: load complete", extra={
+                "model_id": model_id, "elapsed_ms": round(elapsed_ms, 1),
+                "success": result.success, "source": "slnc",
+            })
             tracker.finish(model_id)
             return result
 
@@ -99,8 +107,18 @@ class ModelLoader:
         if soul_result is not None:
             if verify and soul_result.success:
                 self._verify_model(soul_result)
+            elapsed_ms = (_time.monotonic() - load_start) * 1000
+            logger.info("model_loader: load complete", extra={
+                "model_id": model_id, "elapsed_ms": round(elapsed_ms, 1),
+                "success": soul_result.success, "source": "soul",
+            })
             tracker.finish(model_id)
             return soul_result
+
+        elapsed_ms = (_time.monotonic() - load_start) * 1000
+        logger.warning("model_loader: load failed", extra={
+            "model_id": model_id, "elapsed_ms": round(elapsed_ms, 1),
+        })
 
         if not has_slnc:
             tracker.fail(model_id, "No .slnc or .soul file found")

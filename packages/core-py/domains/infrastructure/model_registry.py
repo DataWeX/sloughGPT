@@ -44,7 +44,7 @@ class ModelRegistry:
             bus = get_event_bus()
             bus.emit_sync(event, {"model_id": model_id, **extra}, source="model_registry")
         except Exception as exc:
-            logger.debug("EventBus emit failed for %s/%s: %s", event, model_id, exc, extra={"tag": "INFRA"})
+            logger.warning("EventBus emit failed for %s/%s: %s", event, model_id, exc, extra={"tag": "INFRA"})
 
     # --- Registration ---
 
@@ -158,8 +158,13 @@ class ModelRegistry:
         with self._lock:
             mid = model_id or self._default_id
             if mid is None:
+                logger.debug("model_registry: no model_id and no default set")
                 return None
-            return self._servers.get(mid)
+            server = self._servers.get(mid)
+            if server is None:
+                logger.debug("model_registry: model '%s' not found (available: %s)",
+                    mid, list(self._servers.keys()))
+            return server
 
     def list_models(self) -> list[dict]:
         """List all registered models with their status and metrics."""

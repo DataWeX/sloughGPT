@@ -186,7 +186,14 @@ class AutoTrainer:
                     extra={"tag": "TRAIN"},)
                 return False
 
-            result = json.loads(proc.stdout.strip().split("\n")[-1])
+            try:
+                result = json.loads(proc.stdout.strip().split("\n")[-1])
+            except (json.JSONDecodeError, IndexError) as e:
+                logger.error("AutoTrainer: invalid JSON from subprocess", extra={
+                    "tag": "TRAIN", "error": str(e),
+                    "stdout_tail": proc.stdout[-500:] if proc.stdout else "",
+                })
+                return False
             elapsed = time.time() - t0
 
             if result.get("success"):

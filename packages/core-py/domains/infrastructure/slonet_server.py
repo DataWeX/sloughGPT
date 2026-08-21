@@ -126,12 +126,17 @@ class SloNetServer:
             if self._lazy_model_factory is not None:
                 with self._lazy_lock:
                     if self._model is None:
+                        t0 = time.monotonic()
                         model = self._lazy_model_factory()
+                        elapsed_ms = (time.monotonic() - t0) * 1000
                         if model is None:
                             raise RuntimeError(
                                 f"Lazy model factory returned None for '{self._model_id}'"
                             )
                         self._model = model
+                        logger.info("slonet_server: lazy model materialized", extra={
+                            "model_id": self._model_id, "elapsed_ms": round(elapsed_ms, 1),
+                        })
                     return self._model
             raise RuntimeError(
                 f"SloNetServer '{self._model_id}' has no model and no lazy factory"
@@ -255,7 +260,10 @@ class SloNetServer:
             return None
         try:
             return self._process_guard.health()
-        except Exception:
+        except Exception as e:
+            logger.warning("slonet_server: guard health check failed", extra={
+                "model_id": self._model_id, "error": str(e),
+            })
             return {"alive": False}
 
     def _generate_sync(
@@ -558,8 +566,10 @@ class SloNetServer:
                 n_head = int(pmeta.get("n_head", 0))
                 vocab = int(pmeta.get("vocab_size", 0))
                 max_seq = int(pmeta.get("max_seq_len", 0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("slonet_server: provider metadata parse failed", extra={
+                    "model_id": self._model_id, "error": str(e),
+                })
 
         cb_state = (
             self._circuit_breaker.state.value

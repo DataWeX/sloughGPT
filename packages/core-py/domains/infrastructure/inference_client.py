@@ -249,7 +249,10 @@ class InferenceClient:
                             return self._recv_message()
                         finally:
                             self._socket.settimeout(None)
-                    except Exception:
+                    except Exception as e2:
+                        logger.error("InferenceClient: reconnect+send failed", extra={
+                            "host": self.host, "port": self.port, "error": str(e2),
+                        })
                         self.disconnect()
                 return None
 

@@ -252,8 +252,10 @@ class DownloadManager:
             for cb in self._callbacks.get(model_id, []):
                 try:
                     cb(self._downloads[model_id].to_dict())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("download_manager: callback failed", extra={
+                        "model_id": model_id, "error": str(e),
+                    })
 
     def on_progress(self, model_id: str, callback: Callable):
         with self._lock:

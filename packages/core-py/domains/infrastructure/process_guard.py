@@ -142,6 +142,9 @@ class ProcessGuard:
 
     def start(self) -> None:
         """Start the worker and begin health monitoring."""
+        logger.info("process_guard: starting", extra={
+            "worker_id": self.worker_id, "model_id": self._model_id,
+        })
         self._launch_worker()
         self._stop_monitor.clear()
         self._monitor_thread = threading.Thread(
@@ -151,6 +154,9 @@ class ProcessGuard:
 
     def stop(self) -> None:
         """Stop the worker and health monitoring."""
+        logger.info("process_guard: stopping", extra={
+            "worker_id": self.worker_id, "model_id": self._model_id,
+        })
         self._stop_monitor.set()
         if self._worker is not None:
             self._worker.stop()
@@ -316,6 +322,10 @@ class ProcessGuard:
                 extra_sys_paths=self.extra_sys_paths,
             )
         self._worker.start()
+        logger.info("process_guard: worker launched", extra={
+            "worker_id": self.worker_id, "model_id": self._model_id,
+            "slnc_path": str(self._slnc_path) if self._slnc_path else None,
+        })
 
     def _restart_worker(self, reason: str, fire_callbacks: bool = False) -> None:
         """Stop, relaunch, and count a worker restart under a lock.
@@ -370,6 +380,11 @@ class ProcessGuard:
                 continue
             if not worker.alive and restarts_left:
                 self._restart_worker("died", fire_callbacks=True)
+            elif not worker.alive and not restarts_left:
+                logger.error("process_guard: worker dead, restart budget exhausted", extra={
+                    "worker_id": self.worker_id, "model_id": self._model_id,
+                    "restarts": self._restart_count, "max_restarts": self.max_restarts,
+                })
 
 
 def create_model_guard(

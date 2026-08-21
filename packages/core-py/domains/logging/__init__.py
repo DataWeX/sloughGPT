@@ -45,7 +45,6 @@ from .config import (
     set_log_context,
     clear_log_context,
 )
-from .cli_logger import CLILogger
 
 __all__ = [
     "LogLevel",

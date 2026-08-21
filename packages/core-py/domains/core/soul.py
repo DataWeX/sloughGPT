@@ -439,8 +439,10 @@ class SloEngine:
                 parts.append(knowledge_text)
                 parts.append("[/KNOWN_FACTS]")
                 parts.append("")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("soul: knowledge memory retrieval failed", extra={
+                "error": str(e),
+            })
 
         parts.append(f"User: {prompt}")
         parts.append("Assistant:")

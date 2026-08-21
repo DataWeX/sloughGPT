@@ -184,7 +184,24 @@ class RAGService:
         Returns:
             Dict with 'context' (concatenated text), 'results' (ranked list), 'num_results'.
         """
-        return self.rag.query(question, top_k=top_k, return_context=True)
+        import time as _time
+        t0 = _time.monotonic()
+        try:
+            result = self.rag.query(question, top_k=top_k, return_context=True)
+            elapsed_ms = (_time.monotonic() - t0) * 1000
+            logger.info("rag_service: query complete", extra={
+                "question_len": len(question), "top_k": top_k,
+                "num_results": result.get("num_results", 0),
+                "elapsed_ms": round(elapsed_ms, 1),
+            })
+            return result
+        except Exception as e:
+            elapsed_ms = (_time.monotonic() - t0) * 1000
+            logger.error("rag_service: query failed", extra={
+                "question_len": len(question), "top_k": top_k,
+                "error": str(e), "elapsed_ms": round(elapsed_ms, 1),
+            })
+            raise
 
     def verify_and_ground(
         self,
@@ -200,7 +217,24 @@ class RAGService:
         Returns:
             Dict with 'verification', 'citations', 'confidence', 'is_verified'.
         """
-        return self.rag.verify_and_ground(generated_text, question)
+        import time as _time
+        t0 = _time.monotonic()
+        try:
+            result = self.rag.verify_and_ground(generated_text, question)
+            elapsed_ms = (_time.monotonic() - t0) * 1000
+            logger.info("rag_service: verify_and_ground complete", extra={
+                "is_verified": result.get("is_verified", False),
+                "confidence": result.get("confidence", 0),
+                "num_citations": len(result.get("citations", [])),
+                "elapsed_ms": round(elapsed_ms, 1),
+            })
+            return result
+        except Exception as e:
+            elapsed_ms = (_time.monotonic() - t0) * 1000
+            logger.error("rag_service: verify_and_ground failed", extra={
+                "error": str(e), "elapsed_ms": round(elapsed_ms, 1),
+            })
+            raise
 
     def list_documents(self) -> List[Dict[str, Any]]:
         """List all ingested documents (metadata only, no content)."""

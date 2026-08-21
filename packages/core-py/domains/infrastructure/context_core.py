@@ -279,8 +279,10 @@ Be concise, accurate, and helpful."""
                 import asyncio
                 ingester = AutoIngester(provider=provider)
                 asyncio.run(ingester.ingest())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("context_core: auto-ingestion failed", extra={
+                    "provider": provider, "error": str(e),
+                })
         threading.Thread(target=_do, daemon=True).start()
 
     async def get_rag_context(self, query: str) -> str:
@@ -301,8 +303,10 @@ Be concise, accurate, and helpful."""
                 facts = await asyncio.to_thread(_query_aug)
                 if facts:
                     return "\n".join(f"[Knowledge] {f}" for f in facts)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("context_core: knowledge augmenter query failed", extra={
+                    "error": str(e),
+                })
             # Auto-ingest if empty, then fallback to semantic memory
             if not hasattr(self, '_auto_ingest_triggered'):
                 self._auto_ingest_triggered = True

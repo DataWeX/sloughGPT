@@ -292,8 +292,11 @@ class TaskQueue:
             else:
                 message = task.error or f"Task failed: {task.task_type}"
                 sse_queue.put_nowait(sse_error(stream_name, "FAILED", message))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("task_queue: SSE terminal event delivery failed", extra={
+                "task_id": task.id, "task_type": task.task_type,
+                "status": status.value, "error": str(e),
+            })
 
     # ── Enqueue ──
 

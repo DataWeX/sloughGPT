@@ -991,8 +991,10 @@ class LocalBackend(GenerateBackend):
                                getattr(self._model_ref, "past_key_values", None)
                     if captured is not None:
                         SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), captured)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("model_server: KV cache capture failed", extra={
+                        "session_id": session_id, "error": str(e),
+                    })
 
         return {"text": text, "tokens_generated": tokens_generated}
 
@@ -1435,7 +1437,10 @@ class ModelServer:
                 p = next(self._model_ref.parameters(), None)
                 if p is not None:
                     self._device = str(p.device)
-        except Exception:
+        except Exception as e:
+            logger.warning("model_server: device detection failed", extra={
+                "model_id": self.model_id, "error": str(e),
+            })
             self._device = "unknown"
         # Sync device to local backend
         if self._local_backend is not None:
@@ -1496,8 +1501,11 @@ class ModelServer:
                 "new_state": new.value,
                 "failure_count": self._circuit_breaker._failure_count,
             }, source="model_server")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("model_server: circuit breaker state change event failed", extra={
+                "model_id": self.model_id, "old_state": old.value,
+                "new_state": new.value, "error": str(e),
+            })
 
     # --- Lifecycle hooks ---
 
@@ -1552,8 +1560,10 @@ class ModelServer:
         workers = [asyncio.create_task(q.worker()) for _ in range(n_workers)]
         try:
             await asyncio.gather(*workers)
-        except Exception:
-            pass  # workers run forever
+        except Exception as e:
+            logger.error("model_server: queue worker pool crashed", extra={
+                "model_id": self.model_id, "n_workers": n_workers, "error": str(e),
+            })
 
     async def _get_read_semaphore(self) -> Optional[asyncio.Semaphore]:
         """Get a read semaphore for the current event loop.

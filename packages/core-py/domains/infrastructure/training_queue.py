@@ -72,7 +72,10 @@ async def training_handler(task) -> dict:
     payload = task.payload
     enqueue = task.metadata.get("enqueue")
     if enqueue is None:
-        logger.error("training_handler: no enqueue callback in task metadata")
+        logger.error("training_handler: no enqueue callback in task metadata", extra={
+            "task_id": task.id, "task_type": task.task_type,
+            "metadata_keys": list(task.metadata.keys()),
+        })
         return {"status": "failed", "error": "No enqueue callback"}
 
     # Bridge task queue asyncio events → threading events for the trainer.
@@ -235,7 +238,10 @@ async def training_sessions_handler(task) -> dict:
     payload = task.payload
     enqueue = task.metadata.get("enqueue")
     if enqueue is None:
-        logger.error("training_sessions_handler: no enqueue callback in task metadata")
+        logger.error("training_sessions_handler: no enqueue callback in task metadata", extra={
+            "task_id": task.id, "task_type": task.task_type,
+            "metadata_keys": list(task.metadata.keys()),
+        })
         return {"status": "failed", "error": "No enqueue callback"}
 
     cancel_event = threading.Event()

@@ -316,8 +316,10 @@ def _build_training_state_metadata(
                 if isinstance(hyper, dict):
                     hyper["lr"] = initial_lr
             state["optimizer"] = _make_json_safe(opt_state)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("train_pipeline: optimizer state serialization failed", extra={
+                "error": str(e),
+            })
     if scheduler is not None:
         try:
             sched_state = scheduler.state_dict()
@@ -326,8 +328,10 @@ def _build_training_state_metadata(
             if initial_lr is not None and isinstance(sched_state, dict):
                 sched_state["initial_lr"] = initial_lr
             state["scheduler"] = _make_json_safe(sched_state)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("train_pipeline: scheduler state serialization failed", extra={
+                "error": str(e),
+            })
     return state
 
 
@@ -825,6 +829,9 @@ class SloughGPTTrainer:
         Uses 10 batches — sufficient for loss estimation while keeping the
         per-eval cost low.
         """
+        import time as _time
+        eval_start = _time.monotonic()
+
         model = self.training_model
         model.eval()
 
@@ -838,6 +845,13 @@ class SloughGPTTrainer:
             steps += 1
 
         avg_loss = total_loss / max(steps, 1)
+        elapsed_ms = (_time.monotonic() - eval_start) * 1000
+        logger.info("train_pipeline: evaluate complete", extra={
+            "eval_loss": round(avg_loss, 4),
+            "eval_ppl": round(float(np.exp(avg_loss)), 2),
+            "batches": num_batches,
+            "elapsed_ms": round(elapsed_ms, 1),
+        })
         return {"eval_loss": avg_loss, "eval_ppl": float(np.exp(avg_loss))}
 
     def _restore_from_checkpoint_bundle(self, checkpoint: Dict[str, Any]) -> None:
