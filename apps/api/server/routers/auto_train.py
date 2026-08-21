@@ -707,6 +707,7 @@ class AutoTrainRouter:
                 job["error"] = str(e)
                 get_training_runtime().sync(job_id)
             _finish_cm("failed", str(e))
+            autotrain_logger.warning("Turbo training failed: %s", e, extra={"tag": "TRAIN"})
             classify_and_raise(e, source="auto_train_turbo")
 
     def _run_turbo_pgq(
@@ -1168,6 +1169,7 @@ class AutoTrainRouter:
         try:
             net = import_from_sou(str(fp))
         except Exception as e:
+            autotrain_logger.warning("Export checkpoint mobile failed: %s", e, extra={"tag": "TRAIN"})
             classify_and_raise(e, source="export_checkpoint_mobile")
 
         sd = net.state_dict()
