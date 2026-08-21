@@ -631,19 +631,24 @@ export default function VMPage() {
         sourceLoaded = true
       }
     } catch { /* malformed hash — fall through to chatDB */ }
-    if (!sourceLoaded) {
-      const saved = await chatDB.getKV<string>('vm-source')
-      if (saved) setSource(saved)
+
+    const loadState = async () => {
+      if (!sourceLoaded) {
+        const saved = await chatDB.getKV<string>('vm-source')
+        if (saved) setSource(saved)
+      }
+      const [role, maxSteps, trainConfigData] = await Promise.all([
+        loadRole(),
+        loadMaxSteps(),
+        loadTrainConfig(),
+      ])
+      setRole(role)
+      setMaxSteps(maxSteps)
+      setTrainConfig(trainConfigData)
+      setHydrated(true)
     }
-    const [role, maxSteps, trainConfigData] = await Promise.all([
-      loadRole(),
-      loadMaxSteps(),
-      loadTrainConfig(),
-    ])
-    setRole(role)
-    setMaxSteps(maxSteps)
-    setTrainConfig(trainConfigData)
-    setHydrated(true)
+
+    loadState()
   }, [])
 
   // Save source to chatDB on change
