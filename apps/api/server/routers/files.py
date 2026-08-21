@@ -309,10 +309,12 @@ class FilesRouter:
             return IngestResponse(id=file_id, filename=m.get("original_name", m["filename"]), chars=0, facts_stored=0)
 
         try:
+            import time as _time
             from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
 
             mem = get_knowledge_memory()
             stored = 0
+            _t0 = _time.monotonic()
             chunks = self._chunk_text(text, max_chars=500)
             for chunk in chunks:
                 if len(chunk) > 20:
@@ -325,6 +327,8 @@ class FilesRouter:
                     )
                     if mem.add_fact(fact):
                         stored += 1
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("file.ingest", resource=file_id, detail=f"elapsed={_elapsed_ms:.0f}ms chars={len(text)} facts={stored}")
             return IngestResponse(
                 id=file_id,
                 filename=m.get("original_name", m["filename"]),

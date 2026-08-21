@@ -563,6 +563,7 @@ class ModelsRouter:
 
         if is_download_complete(model_id):
             cleanup_incomplete(model_id)
+            safe_audit_log("model.retry_download", resource=model_id, detail="cleanup+restart")
 
         mgr = get_download_manager()
         if mgr.is_downloading(model_id):

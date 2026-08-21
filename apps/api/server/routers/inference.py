@@ -549,6 +549,7 @@ class InferenceRouter:
                 await _coalescer.complete_error(_coalesce_key, e)
             except Exception:
                 pass
+            logger.warning("Generate failed: %s", e, extra={"tag": "INF"})
             classify_and_raise(e, source="generate")
 
     async def generate_stream(self, req: GenerateRequest, request: Request) -> StreamingResponse:
@@ -668,6 +669,7 @@ class InferenceRouter:
                 except Exception:
                     pass
                 _mgr.finish(_op_id, str(e))
+                logger.warning("Generate stream failed: %s", e, extra={"tag": "INF"})
                 classify_and_raise(e, source="generate_stream")
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:

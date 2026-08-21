@@ -324,6 +324,7 @@ Be yourself — let your personality shape how you respond."""
 
                     await asyncio.sleep(0)
 
+                safe_audit_log("soul.chat", resource=req.checkpoint_name, detail=f"chars={len(decode(generated))}")
                 yield sse_complete("souls-chat", data={"response": decode(generated)})
 
             return StreamingResponse(stream(), media_type="text/event-stream")

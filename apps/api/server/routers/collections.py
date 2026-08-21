@@ -117,18 +117,22 @@ class CollectionsRouter:
 
     async def run_pipeline(self, name: str = Query(..., description="Pipeline name")) -> dict:
         """Run a collection pipeline once."""
+        import time as _time
         try:
+            _t0 = _time.monotonic()
             from domains.collections.registry import get_registry
             registry = get_registry()
             count = registry.collect(name)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
             pipeline = registry.get_pipeline(name)
             if not pipeline:
                 raise_error(f"Pipeline '{name}' not found", code="E_NOT_FOUND", status_code=404)
-            safe_audit_log("collection.run", resource=name, detail=f"collected={count}")
+            safe_audit_log("collection.run", resource=name, detail=f"collected={count} elapsed={_elapsed_ms:.0f}ms")
             return success_response(data={
                 "pipeline": name,
                 "collected": count,
                 "stats": pipeline.stats,
+                "elapsed_ms": round(_elapsed_ms, 1),
             })
         except AppError:
             raise
@@ -138,7 +142,9 @@ class CollectionsRouter:
 
     async def collect_direct(self, req: CollectRequest) -> dict:
         """Collect data directly without pre-creating a pipeline."""
+        import time as _time
         try:
+            _t0 = _time.monotonic()
             from domains.collections import (
                 Collector, MemoryStore, LengthFilter, DedupFilter,
             )
@@ -152,16 +158,18 @@ class CollectionsRouter:
 
             collector = Collector(source, store, filters=filters)
             count = collector.collect()
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
 
             records = []
             for record in store.read_all():
                 records.append({"content": record.content[:200], "metadata": record.metadata})
 
-            safe_audit_log("collection.direct", resource=req.source_type, detail=f"collected={count}")
+            safe_audit_log("collection.direct", resource=req.source_type, detail=f"collected={count} elapsed={_elapsed_ms:.0f}ms")
             return success_response(data={
                 "collected": count,
                 "stats": collector.stats,
                 "records": records[:50],
+                "elapsed_ms": round(_elapsed_ms, 1),
             })
         except AppError:
             raise
