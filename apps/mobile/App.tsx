@@ -234,10 +234,12 @@ function AppInner() {
 
   if (!ready) {
     return (
-      <SafeAreaProvider>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
-        <SplashScreen />
-      </SafeAreaProvider>
+      <TamaguiProvider>
+        <SafeAreaProvider>
+          <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
+          <SplashScreen />
+        </SafeAreaProvider>
+      </TamaguiProvider>
     );
   }
 
@@ -309,10 +311,10 @@ function AppInner() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <TamaguiProvider>
+    <TamaguiProvider>
+      <ErrorBoundary>
         <AppInner />
-      </TamaguiProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </TamaguiProvider>
   );
 }
