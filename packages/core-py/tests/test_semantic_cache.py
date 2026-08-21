@@ -292,3 +292,51 @@ class TestSemanticCacheScoringBands:
 
     def test_evict_lru_empty_returns_false(self):
         assert make_cache()._evict_lru() is False
+
+
+class TestSemanticCacheStatsDetail:
+    def test_get_stats_hit_rate_with_hits(self):
+        """hit_rate should be non-zero after a hit."""
+        cache = make_cache()
+        cache.put("the capital of France is Paris", "Paris")
+        cache.get("the capital of France is Paris")  # hit
+        stats = cache.get_stats()
+        assert stats["hits"] == 1
+        assert stats["hit_rate"] != "0.0%"
+
+    def test_get_stats_hit_rate_zero_total(self):
+        """hit_rate should be 0.0% when no requests have been made."""
+        cache = make_cache()
+        stats = cache.get_stats()
+        assert stats["hit_rate"] == "0.0%"
+
+    def test_reset_stats_then_recount(self):
+        """After reset, hits/misses should be 0 but new requests should count."""
+        cache = make_cache()
+        cache.put("the capital of France is Paris", "Paris")
+        cache.get("the capital of France is Paris")
+        cache.reset_stats()
+        cache.get("unrelated topic entirely")  # miss
+        stats = cache.get_stats()
+        assert stats["hits"] == 0
+        assert stats["misses"] == 1
+
+    def test_concurrent_put_get(self):
+        """Multiple concurrent puts and gets should not crash."""
+        import asyncio
+
+        cache = make_cache()
+        cache._hyperdim = FakeHyperdim(similarity=0.0)
+
+        async def scenario():
+            async def putter(i):
+                cache.put(f"question number {i} about topic", f"answer {i}")
+
+            async def getter(i):
+                cache.get(f"question number {i} about topic")
+
+            await asyncio.gather(*[putter(i) for i in range(5)])
+            await asyncio.gather(*[getter(i) for i in range(5)])
+
+        asyncio.run(scenario())
+        assert len(cache.entries) == 5

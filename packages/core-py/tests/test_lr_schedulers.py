@@ -176,3 +176,39 @@ class TestBestPractices:
 
     def test_mentions_onecycle(self):
         assert "ONECYCLE" in BEST_PRACTICES
+
+
+class TestSchedulerConfigInheritance:
+    def test_cosine_config_inherits_scheduler_config(self):
+        cfg = CosineAnnealingConfig()
+        assert hasattr(cfg, "initial_lr")  # inherited from SchedulerConfig
+
+    def test_onecycle_config_inherits(self):
+        cfg = OneCycleConfig()
+        assert cfg.name == "onecycle"
+        assert hasattr(cfg, "initial_lr")
+
+    def test_cyclic_config_inherits(self):
+        cfg = CyclicConfig()
+        assert cfg.name == "cyclic"
+        assert cfg.base_lr == 1e-5
+
+    def test_warmup_config_inherits(self):
+        cfg = WarmupConfig()
+        assert cfg.name == "warmup"
+        assert hasattr(cfg, "initial_lr")
+
+
+class TestCreateSchedulerEdgeCases:
+    def test_unknown_type_raises_value_error(self):
+        """Unknown scheduler type should raise ValueError."""
+        with pytest.raises(ValueError, match="Unknown scheduler type"):
+            create_scheduler(MockOptimizer(), "unknown_type_xyz")
+
+    def test_onecycle_type(self):
+        """onecycle type should create a valid scheduler."""
+        sched = create_scheduler(MockOptimizer(lr=1e-3), "onecycle", total_steps=100)
+        assert sched is not None
+        lr = sched.get_lr()
+        assert isinstance(lr, list)
+        assert len(lr) > 0

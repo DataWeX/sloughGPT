@@ -237,3 +237,37 @@ class TestCoalescerHash:
         h1 = RequestCoalescer().hash(messages, {"temperature": 0.0}, 512, "model")
         h2 = RequestCoalescer().hash(messages, {"temperature": 1.0}, 512, "model")
         assert h1 != h2
+
+
+class TestCoalescerEdgeCases:
+    @pytest.mark.asyncio
+    async def test_complete_nonexistent_key_no_error(self):
+        """Completing a key that was never started should not raise."""
+        c = RequestCoalescer(ttl_seconds=60)
+        await c.complete("ghost", "result")  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_complete_error_nonexistent_key_no_error(self):
+        """Error-completing a key that was never started should not raise."""
+        c = RequestCoalescer(ttl_seconds=60)
+        await c.complete_error("ghost", ValueError("x"))  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_remove_nonexistent_key_no_error(self):
+        """Removing a key that was never started should not raise."""
+        c = RequestCoalescer(ttl_seconds=60)
+        await c.remove("ghost")  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_concurrent_start_same_key_only_one_none(self):
+        """Multiple concurrent starts on the same key — only one gets None."""
+        c = RequestCoalescer(ttl_seconds=60)
+        results = []
+
+        async def starter():
+            r = await c.start("race_key")
+            results.append(r)
+
+        await asyncio.gather(starter(), starter(), starter())
+        none_count = sum(1 for r in results if r is None)
+        assert none_count == 1  # exactly one was the "first" requester

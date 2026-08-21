@@ -33,6 +33,8 @@ from domains.infrastructure.event_bus import (
     get_event_bus,
     set_event_bus,
     _is_noisy,
+    install_log_subscriber,
+    _LOG_SUBSCRIBER_INSTALLED,
 )
 
 
@@ -365,3 +367,53 @@ class TestHandlerValidation:
         bus = EventBus()
         with pytest.raises(TypeError, match="callable"):
             bus.once("x", 42)
+
+
+# ── install_log_subscriber ─────────────────────────────────────────────
+
+
+class TestInstallLogSubscriber:
+    def test_idempotent(self):
+        """Calling install_log_subscriber twice doesn't add duplicate handlers."""
+        import domains.infrastructure.event_bus as mod
+        original = mod._LOG_SUBSCRIBER_INSTALLED
+        mod._LOG_SUBSCRIBER_INSTALLED = False
+        try:
+            bus = EventBus()
+            install_log_subscriber(bus)
+            count_after_first = bus.subscriber_count
+            install_log_subscriber(bus)  # second call — should be no-op
+            assert bus.subscriber_count == count_after_first
+        finally:
+            mod._LOG_SUBSCRIBER_INSTALLED = original
+
+    def test_noisy_events_filtered(self):
+        """Noisy events (heartbeat, metric, cache) should not reach the log handler."""
+        import logging
+        import domains.infrastructure.event_bus as mod
+        original = mod._LOG_SUBSCRIBER_INSTALLED
+        mod._LOG_SUBSCRIBER_INSTALLED = False
+        try:
+            bus = EventBus()
+            install_log_subscriber(bus)
+            # Emit a noisy event — should not raise
+            count = bus.emit_sync("heartbeat", {"ts": 1.0})
+            assert count >= 1  # handler was invoked (but filtered inside)
+        finally:
+            mod._LOG_SUBSCRIBER_INSTALLED = original
+
+    def test_replay_with_async_handler_warns(self):
+        """replay() with an async handler should emit a warning."""
+        bus = EventBus()
+        bus.emit_sync("x", {"v": 1})
+
+        async def async_handler(name, data):
+            pass
+
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            bus.replay(handler=async_handler)
+            async_warnings = [x for x in w if issubclass(x.category, RuntimeWarning)]
+            assert len(async_warnings) == 1
+            assert "async" in str(async_warnings[0].message).lower()

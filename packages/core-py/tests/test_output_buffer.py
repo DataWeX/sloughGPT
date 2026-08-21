@@ -478,3 +478,38 @@ class TestSingletons:
         sys.stdout.write("hello world\n")
         assert buf.count == 1
         assert buf.lines[0].text == "hello world"
+
+
+class TestSubscriberReadTimeoutZero:
+    def test_read_timeout_zero_returns_pending(self):
+        """read(timeout=0) should return immediately with any pending lines."""
+        buf = OutputBuffer()
+        sub = buf.subscribe("s1")
+        buf.append_text("a")
+        got = sub.read(timeout=0)
+        assert [l.text for l in got] == ["a"]
+
+    def test_read_timeout_zero_no_pending(self):
+        """read(timeout=0) with no pending lines returns empty immediately."""
+        buf = OutputBuffer()
+        sub = buf.subscribe("s1")
+        got = sub.read(timeout=0)
+        assert got == []
+
+
+class TestBufferLogHandlerLevelFilter:
+    def test_handler_respects_level_through_logger(self):
+        """BufferLogHandler should only emit records at or above its level when used via Logger."""
+        buf = OutputBuffer()
+        handler = BufferLogHandler(buf, level=logging.WARNING)
+        logger = logging.getLogger("slo.test.level_filter")
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
+        try:
+            logger.info("info msg")
+            logger.warning("warn msg")
+            # Only WARNING should be captured (INFO is below handler threshold)
+            assert buf.count == 1
+            assert buf.lines[0].text == "warn msg"
+        finally:
+            logger.removeHandler(handler)
