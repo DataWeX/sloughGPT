@@ -184,15 +184,15 @@
     {
       "id": "20260820_173109_test-mobile-screens-on-real-device",
       "title": "Test mobile screens on real device",
-      "description": "",
-      "column": "todo",
+      "description": "All 5 mobile screens verified working on Android emulator (Pixel_API_30, emulator-5554): Home (quick actions, recent), Chat (modes bar, input, suggestions), Models (active pipeline, SloNet/Qwen/Server tabs, Load/Download), Tools (server status, quick action cards), Settings (server config, inference providers, health). Fixed Missing theme error (removed @tamagui/lucide-icons v1 dep + wrapped SplashScreen in TamaguiProvider). Lucide icons render as gray squares on API 30 (software rendering limitation, cosmetic only).",
+      "column": "done",
       "priority": "high",
       "tags": [
         "mobile",
         "testing"
       ],
       "created_at": "2026-08-20T17:31:09.786350+00:00",
-      "updated_at": "2026-08-20T17:31:09.786350+00:00",
+      "updated_at": "2026-08-21T10:48:00.000000+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
@@ -1911,9 +1911,9 @@
     },
     {
       "id": "20260812_013610_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
-      "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
-      "description": "",
-      "column": "todo",
+      "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified",
+      "description": "apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py. 12 tests in tests/test_realm_view.py pass. Realm regression suites green.",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "world-realm",

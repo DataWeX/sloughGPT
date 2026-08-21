@@ -134,15 +134,7 @@ def _worker_loop(
             try:
                 session_id, prompt, kwargs = payload
                 result = generate_fn(prompt, **kwargs)
-                try:
-                    resp_q.put_nowait(("result", session_id, result))
-                except Exception as put_e:
-                    logger.error("Worker[%s]: resp_q.put failed: %s", worker_id, put_e,
-                        extra={"tag": "INFRA"})
-                    try:
-                        resp_q.put_nowait(("error", session_id, f"put failed: {put_e}"))
-                    except Exception:
-                        pass
+                resp_q.put_nowait(("result", session_id, result))
                 requests_served += 1
             except Exception as e:
                 tb = traceback.format_exc()
@@ -151,7 +143,8 @@ def _worker_loop(
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
-                    pass
+                    logger.error("Worker[%s]: generate error fallback also failed", worker_id,
+                        extra={"tag": "INFRA"})
 
         if cmd == "generate_stream":
             session_id = None
@@ -166,7 +159,8 @@ def _worker_loop(
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
-                    pass
+                    logger.error("Worker[%s]: stream error fallback also failed", worker_id,
+                        extra={"tag": "INFRA"})
 
         if cmd == "load_adapter":
             session_id = None
@@ -184,7 +178,8 @@ def _worker_loop(
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
-                    pass
+                    logger.error("Worker[%s]: load_adapter error fallback also failed", worker_id,
+                        extra={"tag": "INFRA"})
 
         if cmd == "unload_adapter":
             session_id = None
@@ -202,7 +197,8 @@ def _worker_loop(
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
-                    pass
+                    logger.error("Worker[%s]: unload_adapter error fallback also failed", worker_id,
+                        extra={"tag": "INFRA"})
 
     if cleanup_fn:
         try:
