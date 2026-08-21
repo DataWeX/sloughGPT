@@ -179,9 +179,8 @@ class InferRouter:
             try:
                 from domains.infrastructure.server_state import get_server_state
                 get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed_ms, model=req.model)
-            except Exception:
-                pass
-            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            except Exception as e:
+                logger.warning("Failed to record inference metrics: %s", e)
             model = self._get_model()
             model_name = req.model or (getattr(model, 'model_id', None) or type(model).__name__ if model else 'unknown')
             return InferResponse(text=result, model=model_name, tokens_generated=tokens, elapsed_ms=round(elapsed_ms, 1))
@@ -236,9 +235,8 @@ class InferRouter:
             try:
                 from domains.infrastructure.server_state import get_server_state
                 get_server_state().record_inference(tokens=token_count, elapsed_ms=elapsed_ms, model=req.model)
-            except Exception:
-                pass
-            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            except Exception as e:
+                logger.warning("Failed to record inference metrics: %s", e)
             import json
             yield "data: " + json.dumps({
                 "stream": "infer", "phase": "STREAMING", "status": "complete",

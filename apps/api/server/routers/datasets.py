@@ -374,8 +374,8 @@ class DatasetsRouter:
                 cancel_fn=lambda: _cancel_event.set(),
             )
             _cm.start(cm_op)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("CancelManager registration failed for batch import (may be unkillable): %s", e)
 
         try:
             for i, source in enumerate(request.sources[:20]):

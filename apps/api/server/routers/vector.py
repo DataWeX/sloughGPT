@@ -67,9 +67,8 @@ class VectorRouter:
             try:
                 from routers.inference import set_vector_store_ref
                 set_vector_store_ref(self._vector_store)
-            except Exception:
-                pass
-            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            except Exception as e:
+                logger.warning("Failed to set vector store ref on inference router: %s", e)
             return success_response(data={"status": "connected", "provider": self._vector_store_type})
         except ImportError:
             self._vector_store_type = "in_memory"
@@ -77,9 +76,8 @@ class VectorRouter:
             try:
                 from routers.inference import set_vector_store_ref
                 set_vector_store_ref(self._vector_store)
-            except Exception:
-                pass
-            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            except Exception as e:
+                logger.warning("Failed to set vector store ref on inference router: %s", e)
             return success_response(data={"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"})
         except Exception as e:
             classify_and_raise(e, source="vector")

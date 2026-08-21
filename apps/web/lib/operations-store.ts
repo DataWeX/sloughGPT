@@ -60,7 +60,10 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
       await apiPost(`/cancel/${opId}`)
       await get().fetch()
       return true
-    } catch {
+    } catch (e) {
+      if (typeof console !== 'undefined') {
+        console.warn('[operations] Cancel failed for op', opId, e)
+      }
       return false
     }
   },
@@ -71,7 +74,10 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
       const res = await apiPost<{ cancelled: string[]; count: number }>(`/cancel-all${qs}`)
       await get().fetch()
       return res.count
-    } catch {
+    } catch (e) {
+      if (typeof console !== 'undefined') {
+        console.warn('[operations] CancelAll failed:', e)
+      }
       return 0
     }
   },

@@ -263,16 +263,15 @@ class ModelsRouter:
             try:
                 from domains.infrastructure.model_registry import get_model_registry
                 model_id = get_model_registry().default_id
-            except Exception:
-                pass
-            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            except Exception as e:
+                logger.warning("Failed to get default model_id for unload: %s", e)
         result = ctrl.unload_model()
         try:
             from domains.infrastructure.server_state import get_server_state
             ss = get_server_state()
             ss.record_model_event("unload", model_id or "unknown")
         except Exception as e:
-            logger.debug("Failed to record model unload event: %s", e)
+            logger.warning("Failed to record model unload event: %s", e)
         safe_audit_log("model.unload", resource=model_id or "unknown", detail=result.get("status", "unknown"))
         return wrap_controller_result(result)
 
@@ -446,8 +445,8 @@ class ModelsRouter:
                 cancel_fn=lambda: mgr.cancel(model_id),
             )
             cm.start(cm_op)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("CancelManager registration failed for download %s: %s", model_id, e, extra={"tag": "MODEL"})
 
         try:
             result = await mgr.download(model_id, total_bytes_hint)

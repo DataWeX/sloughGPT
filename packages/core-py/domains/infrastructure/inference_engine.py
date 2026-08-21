@@ -139,8 +139,8 @@ class InferenceEngine:
         if self._server_socket is not None:
             try:
                 self._server_socket.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to close server socket: %s", e)
         if self._thread is not None:
             self._thread.join(timeout=10)
 
@@ -148,8 +148,8 @@ class InferenceEngine:
         if self._pid_file is not None:
             try:
                 os.remove(self._pid_file)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to remove PID file %s: %s", self._pid_file, e)
 
     def _record_request(self, latency: float, error: bool = False) -> None:
         """Record request metrics (thread-safe)."""

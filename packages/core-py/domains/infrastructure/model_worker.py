@@ -203,8 +203,9 @@ def _worker_loop(
     if cleanup_fn:
         try:
             cleanup_fn()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Worker[%s]: cleanup_fn failed: %s", worker_id, e,
+                extra={"tag": "INFRA"})
     gc.collect()
     hb_q.put_nowait(("dead", os.getpid()))
     logger.info("Worker[%s]: stopped", worker_id,
@@ -806,8 +807,9 @@ class ModelWorkerProcess:
             return
         try:
             self._req_q.put_nowait(("stop", None))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Worker[%s]: failed to send stop signal: %s", self.worker_id, e,
+                extra={"tag": "INFRA"})
         self._process.join(timeout=timeout)
         if self._process.is_alive():
             logger.warning("Worker[%s]: killing unresponsive process", self.worker_id,
