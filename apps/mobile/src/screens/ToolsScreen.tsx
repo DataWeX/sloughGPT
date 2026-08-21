@@ -16,9 +16,16 @@ interface ToolItem {
   title: string;
   desc: string;
   target: string;
+  mode?: string;
 }
 
 const TOOLS: ToolItem[] = [
+  {icon: 'edit', title: 'Writing Assistant', desc: 'Write emails, posts, stories, and more', target: 'Chat', mode: 'write'},
+  {icon: 'refresh-cw', title: 'Rewrite & Polish', desc: 'Fix grammar, make shorter, sound professional', target: 'Chat', mode: 'rewrite'},
+  {icon: 'message-square', title: 'Translate', desc: 'Translate between languages instantly', target: 'Chat', mode: 'translate'},
+  {icon: 'target', title: 'Help Me Decide', desc: 'Pro/con analysis and recommendations', target: 'Chat', mode: 'decide'},
+  {icon: 'book-open', title: 'Explain Things', desc: 'Simple explanations at any level', target: 'Chat', mode: 'explain'},
+  {icon: 'heart-pulse', title: 'Wellness', desc: 'Sleep stories, meditation, breathing', target: 'Chat', mode: 'wellness'},
   {icon: 'dumbbell', title: 'Training', desc: 'Fine-tune models with live loss tracking', target: 'Training'},
   {icon: 'book-open', title: 'Knowledge', desc: "Manage what the AI knows about you", target: 'Knowledge'},
   {icon: 'bookmark', title: 'Bookmarks', desc: 'Saved messages for quick access', target: 'Bookmarks'},
@@ -171,8 +178,14 @@ export function ToolsScreen() {
 
         {TOOLS.map(item => (
           <Pressable
-            key={item.target}
-            onPress={() => hapticPress('light', () => navigation.navigate(item.target))}>
+            key={item.target + (item.mode || '')}
+            onPress={() => hapticPress('light', () => {
+              if (item.mode) {
+                navigation.navigate(item.target as any, {mode: item.mode} as any);
+              } else {
+                navigation.navigate(item.target as any);
+              }
+            })}>
             {({pressed}) => (
               <XStack
                 backgroundColor={bgCard}

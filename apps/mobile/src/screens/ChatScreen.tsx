@@ -1,4 +1,4 @@
-import React, {useCallback, useRef, useEffect} from 'react';
+import React, {useCallback, useRef, useEffect, useState} from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -17,8 +17,10 @@ import {ChatBottomSheets} from '../components/ChatBottomSheets';
 import {useSidebar} from '../contexts/SidebarContext';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
+import {ChatModeBar, type ChatMode} from '../components/ChatModeBar';
 import {ReasoningPanel} from '../components/ReasoningPanel';
 import {Icon} from '../components/Icon';
+import {useRoute} from '@react-navigation/native';
 
 const SUGGESTIONS = [
   {icon: 'zap' as const, text: 'Tell me something interesting', prompt: 'Tell me something interesting'},
@@ -27,11 +29,92 @@ const SUGGESTIONS = [
   {icon: 'terminal' as const, text: 'Write some code', prompt: 'Write some code for me'},
 ];
 
+function buildModePrompt(
+  mode: ChatMode,
+  input: string,
+  opts: {
+    tone: string;
+    type: string;
+    rewriteStyle: string;
+    decideStructure: string;
+    difficulty: string;
+    langPair: string;
+    brainstormTopic: string;
+    wellnessType: string;
+  },
+): string {
+  switch (mode) {
+    case 'chat':
+      return input;
+    case 'write':
+      return `Write a ${opts.tone.toLowerCase()} ${opts.type.toLowerCase()} about: ${input}`;
+    case 'rewrite': {
+      const prompts: Record<string, string> = {
+        'Fix Grammar': 'Fix all grammar and spelling errors in this text while keeping the meaning',
+        'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
+        'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
+        'Make Professional': 'Rewrite this text in a professional, formal tone',
+        'Sound Like Me': 'Rewrite this text to sound more natural and conversational, like a real person wrote it',
+      };
+      return `${prompts[opts.rewriteStyle] || 'Rewrite this text'}:\n\n${input}`;
+    }
+    case 'decide':
+      return `Help me decide using ${opts.decideStructure.toLowerCase()}: ${input}`;
+    case 'explain':
+      return `Explain this at a ${opts.difficulty.toLowerCase()} level (as if explaining to a ${opts.difficulty.toLowerCase()} learner): ${input}`;
+    case 'translate': {
+      const [src, tgt] = opts.langPair.split('→');
+      return `Translate this from ${src} to ${tgt}: ${input}`;
+    }
+    case 'brainstorm':
+      return `Let's brainstorm ${opts.brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`;
+    case 'wellness': {
+      const prompts: Record<string, string> = {
+        'Sleep Story': 'Tell me a calming sleep story',
+        'Meditation': 'Guide me through a short meditation',
+        'Breathing': 'Guide me through a breathing exercise',
+        'Affirmation': 'Share a positive affirmation',
+      };
+      return `Respond in a gentle, soothing tone. ${prompts[opts.wellnessType] || 'Help me feel calm'}: ${input}`;
+    }
+    default:
+      return input;
+  }
+}
+
 export function ChatScreen() {
   const colors = useColors();
   const flatListRef = useRef<FlatList>(null);
   const a = useChatActions(flatListRef);
   const {open: openSidebar} = useSidebar();
+
+  // Mode state
+  const route = useRoute();
+  const routeMode = (route.params as any)?.mode as ChatMode | undefined;
+  const [chatMode, setChatMode] = useState<ChatMode>(routeMode || 'chat');
+  const [writeTone, setWriteTone] = useState('Friendly');
+  const [writeType, setWriteType] = useState('Email');
+  const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar');
+  const [decideStructure, setDecideStructure] = useState('Pros & Cons');
+  const [explainDifficulty, setExplainDifficulty] = useState('Simple');
+  const [translateLangPair, setTranslateLangPair] = useState('EN→ES');
+  const [brainstormTopic, setBrainstormTopic] = useState('Name Ideas');
+  const [wellnessType, setWellnessType] = useState('Sleep Story');
+
+  // Wrap handleSend to apply mode transformation
+  const handleModeSend = useCallback((text: string) => {
+    const transformed = buildModePrompt(chatMode, text, {
+      tone: writeTone,
+      type: writeType,
+      rewriteStyle,
+      decideStructure,
+      difficulty: explainDifficulty,
+      langPair: translateLangPair,
+      brainstormTopic,
+      wellnessType,
+    });
+    a.handleSend(transformed);
+  }, [chatMode, writeTone, writeType, rewriteStyle, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, a.handleSend]);
 
   useEffect(() => {
     const {Keyboard: KB} = require('react-native');
@@ -143,6 +226,27 @@ export function ChatScreen() {
             )}
           </XStack>
         )}
+
+        <ChatModeBar
+          mode={chatMode}
+          onModeChange={setChatMode}
+          tone={writeTone}
+          onToneChange={setWriteTone}
+          type={writeType}
+          onTypeChange={setWriteType}
+          rewriteStyle={rewriteStyle}
+          onRewriteStyleChange={setRewriteStyle}
+          decideStructure={decideStructure}
+          onDecideStructureChange={setDecideStructure}
+          difficulty={explainDifficulty}
+          onDifficultyChange={setExplainDifficulty}
+          langPair={translateLangPair}
+          onLangPairChange={setTranslateLangPair}
+          brainstormTopic={brainstormTopic}
+          onBrainstormTopicChange={setBrainstormTopic}
+          wellnessType={wellnessType}
+          onWellnessTypeChange={setWellnessType}
+        />
 
         {a.showSearch && (
           <XStack
@@ -382,7 +486,7 @@ export function ChatScreen() {
         )}
 
         <ChatInput
-          onSend={a.handleSend}
+          onSend={handleModeSend}
           onSendWithImages={a.handleSendWithImages}
           onImage={a.handleImage}
           onVoice={a.handleVoice}

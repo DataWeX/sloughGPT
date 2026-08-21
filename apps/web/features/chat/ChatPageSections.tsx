@@ -86,6 +86,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
     chatMode, setChatMode,
     writeTone, setWriteTone,
     writeType, setWriteType,
+    rewriteStyle, setRewriteStyle,
     decideStructure, setDecideStructure,
     explainDifficulty, setExplainDifficulty,
     translateLangPair, setTranslateLangPair,
@@ -114,6 +115,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
         mode={chatMode}
         tone={writeTone}
         type={writeType}
+        rewriteStyle={rewriteStyle}
         decideStructure={decideStructure}
         difficulty={explainDifficulty}
         langPair={translateLangPair}
@@ -123,6 +125,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
         onModeChange={setChatMode}
         onToneChange={setWriteTone}
         onTypeChange={setWriteType}
+        onRewriteStyleChange={setRewriteStyle}
         onDecideStructureChange={setDecideStructure}
         onDifficultyChange={setExplainDifficulty}
         onLangPairChange={setTranslateLangPair}

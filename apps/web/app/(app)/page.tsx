@@ -156,6 +156,27 @@ export default function HomePage() {
         <LossCurve className="w-full h-full" />
       </div>
 
+      {apiStatus === 'online' && modelStatus.loaded && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {[
+            { icon: '✍️', label: 'Write something', href: '/chat?mode=write' },
+            { icon: '📄', label: 'Read a file', href: '/chat?mode=read' },
+            { icon: '🎨', label: 'Create an image', href: '/chat?mode=create' },
+            { icon: '💡', label: 'Brainstorm ideas', href: '/chat?mode=brainstorm' },
+            { icon: '🎙️', label: 'Talk instead', href: '/chat?mode=talk' },
+          ].map(action => (
+            <Link
+              key={action.label}
+              href={action.href}
+              className="flex flex-col items-center gap-1.5 rounded-lg border border-border/40 bg-muted/20 p-3 text-center hover:bg-muted/40 hover:border-border/60 transition-all"
+            >
+              <span className="text-lg">{action.icon}</span>
+              <span className="text-[11px] font-medium text-muted-foreground">{action.label}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+
       {apiStatus === 'offline' ? (
         startup ? (
           <Card className="border-warning/35 bg-warning/5">

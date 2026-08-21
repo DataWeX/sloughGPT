@@ -101,6 +101,7 @@ export function useChatPageController(
     chatMode, setChatMode,
     writeTone, setWriteTone,
     writeType, setWriteType,
+    rewriteStyle, setRewriteStyle,
     decideStructure, setDecideStructure,
     explainDifficulty, setExplainDifficulty,
     translateLangPair, setTranslateLangPair,
@@ -337,6 +338,16 @@ export function useChatPageController(
     if (chatMode === 'write') {
       chat.sendMessage(`Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`)
       chat.setInput('')
+    } else if (chatMode === 'rewrite') {
+      const rewritePrompts: Record<string, string> = {
+        'Fix Grammar': 'Fix all grammar and spelling errors in this text while keeping the meaning',
+        'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
+        'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
+        'Make Professional': 'Rewrite this text in a professional, formal tone',
+        'Sound Like Me': 'Rewrite this text to sound more natural and conversational, like a real person wrote it',
+      }
+      chat.sendMessage(`${rewritePrompts[rewriteStyle] || 'Rewrite this text'}:\n\n${input}`)
+      chat.setInput('')
     } else if (chatMode === 'decide') {
       chat.sendMessage(`Help me decide using ${decideStructure.toLowerCase()}: ${input}`)
       chat.setInput('')
@@ -364,7 +375,7 @@ export function useChatPageController(
     } else {
       chat.sendMessage()
     }
-  }, [chatMode, writeTone, writeType, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, readFileData, chat, handleCreateImage])
+  }, [chatMode, writeTone, writeType, rewriteStyle, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, readFileData, chat, handleCreateImage])
 
   const handleToggleBookmark = useCallback((messageId: string) => {
     const msg = chat.messages.find(m => m.id === messageId)
@@ -480,6 +491,7 @@ export function useChatPageController(
     chatMode, setChatMode,
     writeTone, setWriteTone,
     writeType, setWriteType,
+    rewriteStyle, setRewriteStyle,
     decideStructure, setDecideStructure,
     explainDifficulty, setExplainDifficulty,
     translateLangPair, setTranslateLangPair,

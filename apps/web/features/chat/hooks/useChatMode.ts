@@ -11,6 +11,7 @@ import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 const MODE_CONFIGS: Record<ChatMode, { placeholder: string }> = {
   chat: { placeholder: 'Type a message...' },
   write: { placeholder: 'What do you want to write about?' },
+  rewrite: { placeholder: 'Paste text to rewrite...' },
   decide: { placeholder: 'What do you need help deciding?' },
   explain: { placeholder: 'What do you want explained?' },
   translate: { placeholder: 'Text to translate...' },
@@ -35,6 +36,7 @@ export function useChatMode({ chat }: UseChatModeOptions) {
   const [chatMode, setChatMode] = useState<ChatMode>('chat')
   const [writeTone, setWriteTone] = useState('Friendly')
   const [writeType, setWriteType] = useState('Email')
+  const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar')
   const [decideStructure, setDecideStructure] = useState('Pros & Cons')
   const [explainDifficulty, setExplainDifficulty] = useState('Simple')
   const [translateLangPair, setTranslateLangPair] = useState('EN→ES')
@@ -85,6 +87,16 @@ export function useChatMode({ chat }: UseChatModeOptions) {
         return null // no transform
       case 'write':
         return `Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`
+      case 'rewrite': {
+        const rewritePrompts: Record<string, string> = {
+          'Fix Grammar': 'Fix all grammar and spelling errors in this text while keeping the meaning',
+          'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
+          'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
+          'Make Professional': 'Rewrite this text in a professional, formal tone',
+          'Sound Like Me': 'Rewrite this text to sound more natural and conversational, like a real person wrote it',
+        }
+        return `${rewritePrompts[rewriteStyle] || 'Rewrite this text'}:\n\n${input}`
+      }
       case 'decide':
         return `Help me decide using ${decideStructure.toLowerCase()}: ${input}`
       case 'explain':
@@ -109,7 +121,7 @@ export function useChatMode({ chat }: UseChatModeOptions) {
       default:
         return null
     }
-  }, [chatMode, writeTone, writeType, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType])
+  }, [chatMode, writeTone, writeType, rewriteStyle, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType])
 
   const handleSend = useCallback(async (readFileData?: { text: string; filename: string } | null) => {
     const input = chat.input.trim()
@@ -154,6 +166,8 @@ export function useChatMode({ chat }: UseChatModeOptions) {
     setWriteTone,
     writeType,
     setWriteType,
+    rewriteStyle,
+    setRewriteStyle,
     decideStructure,
     setDecideStructure,
     explainDifficulty,
