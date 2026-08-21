@@ -302,7 +302,11 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
         if (!payload || payload === '[DONE]') continue
         try {
           yield JSON.parse(payload) as SSEEvent
-        } catch { /* skip malformed */ }
+        } catch (e) {
+          if (typeof console !== 'undefined') {
+            console.warn('[SSE] Malformed JSON payload skipped:', payload.slice(0, 80), e)
+          }
+        }
       }
     }
     // Drain remaining buffer

@@ -548,8 +548,8 @@ class AutoTrainRouter:
             )
             _mgr.start(_cm_op_id)
             _turbo_state["_cm_op_id"] = _cm_op_id
-        except Exception:
-            pass
+        except Exception as e:
+            autotrain_logger.warning("CancelManager registration failed (turbo training may be unkillable): %s", e, extra={"tag": "TRAIN"})
 
         output_dir = Path(self.REPO_ROOT / "models" / "turbo-trained")
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -827,8 +827,8 @@ class AutoTrainRouter:
                 cancel_fn=lambda: _auto_train_cancel_event.set(),
             )
             _mgr.start(_stream_cm_op_id)
-        except Exception:
-            pass
+        except Exception as e:
+            autotrain_logger.warning("CancelManager registration failed (training may be unkillable): %s", e, extra={"tag": "TRAIN"})
 
         task_id = await tq.enqueue(task)
         autotrain_logger.info("Training task enqueued via task queue: %s", task_id, extra={"tag": "TRAIN"})
