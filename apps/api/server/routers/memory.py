@@ -4,6 +4,7 @@ Thin HTTP wrapper over ``domains.memory.memory_service`` (endpoints are
 adapters; all logic lives in core). Exposed so frontends and integrations can
 manage the memory store the chat loop writes to automatically.
 """
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Query
@@ -11,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from domains.memory.memory_service import get_memory_service
 from schemas.common import raise_error
+
+logger = logging.getLogger("slo.api.memory")
 
 
 class StoreRequest(BaseModel):
@@ -168,7 +171,11 @@ class MemoryRouter:
             raise_error("content is required", "E_BAD_REQUEST", status_code=400)
         topic = req.topic or "manual"
         source = req.source or "api"
-        stored = self._service().store(content, topic, source)
+        try:
+            stored = self._service().store(content, topic, source)
+        except Exception as e:
+            logger.error("Memory store failed (topic=%s): %s", topic, e, exc_info=True)
+            raise
         return {"stored": stored, "content": content, "topic": topic, "source": source}
 
     def remember(self, req: RememberRequest) -> dict:
@@ -188,7 +195,11 @@ class MemoryRouter:
         assistant_response = req.assistant_response.strip()
         if not user_message or not assistant_response:
             raise_error("user_message and assistant_response are required", "E_BAD_REQUEST", status_code=400)
-        stored = self._service().remember(user_message, assistant_response)
+        try:
+            stored = self._service().remember(user_message, assistant_response)
+        except Exception as e:
+            logger.error("Memory remember failed: %s", e, exc_info=True)
+            raise
         reason = "stored" if stored else "skipped (disabled, too short, or nothing new)"
         return {"stored": stored, "reason": reason}
 
