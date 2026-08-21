@@ -12,11 +12,11 @@ describe('SoulNetWebGPU', () => {
     vi.unstubAllGlobals()
   })
 
-  it('throws WebGPU unavailable when no adapter exists', async () => {
+  it('falls back to CPU-only mode when no adapter exists', async () => {
     vi.stubGlobal('navigator', {})
     const engine = new SoulNetWebGPU()
-    await expect(engine.init()).rejects.toThrow('WebGPU unavailable')
-    expect(engine.ready).toBe(false)
+    await engine.init()
+    expect(engine.cpuOnly).toBe(true)
   })
 
   it('init is idempotent', async () => {
@@ -41,7 +41,7 @@ describe('SoulNetWebGPU', () => {
   it('load fetches a URL when given a string', async () => {
     makeWebGPU()
     const sou = lstmSou()
-    const fetchMock = vi.fn(async () => ({ arrayBuffer: async () => sou }))
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou }))
     vi.stubGlobal('fetch', fetchMock)
     const engine = new SoulNetWebGPU()
     await engine.init()
