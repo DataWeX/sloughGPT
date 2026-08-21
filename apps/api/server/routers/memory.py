@@ -318,7 +318,11 @@ class MemoryRouter:
         threshold = float(threshold)
         facts = svc.list_all(limit=5000)
         plan = plan_consolidation(facts, threshold=threshold)
-        removed = svc.delete(plan["remove_ids"]) if plan["remove_ids"] else 0
+        try:
+            removed = svc.delete(plan["remove_ids"]) if plan["remove_ids"] else 0
+        except Exception as e:
+            logger.error("Memory consolidation delete failed (threshold=%s): %s", threshold, e, exc_info=True)
+            raise
         return {"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold}
 
     def archive(self, limit: Optional[int] = None) -> dict:
@@ -370,7 +374,11 @@ class MemoryRouter:
             - rewrites ``facts.jsonl`` keeping only records inside the window.
         """
         from domains.memory.task_memory import prune_archive
-        removed = prune_archive(retain_days=retain_days)
+        try:
+            removed = prune_archive(retain_days=retain_days)
+        except Exception as e:
+            logger.error("Archive prune failed (retain_days=%s): %s", retain_days, e, exc_info=True)
+            raise
         return {"pruned": removed}
 
 
