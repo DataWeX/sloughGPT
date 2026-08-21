@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from pydantic import model_validator
-from schemas.common import raise_error
+from schemas.common import raise_error, safe_audit_log
 
 logger = logging.getLogger("slo.api.vm")
 router = APIRouter(prefix="/vm", tags=["vm"])
@@ -185,6 +185,7 @@ async def run_assembly(req: VMRunRequest) -> dict:
         vs._syscall._sys_train_get_result = _captured_train_get_result
         vs.cpu._trace_enabled = req.debug
         vs.cpu._trace.clear()
+        safe_audit_log("vm.run", resource="vm", detail=f"max_steps={req.max_steps} debug={req.debug} role={req.role}")
         try:
             try:
                 vs.cpu.run(max_steps=req.max_steps)

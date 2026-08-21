@@ -923,6 +923,7 @@ class MobileRouter:
             store.mark_synced(pair_ids)
 
             elapsed = int(time.time() * 1000) - t0
+            safe_audit_log("mobile.train", resource=checkpoint_name, detail=f"elapsed_ms={elapsed}", pairs=len(body.pairs), loss=result.get("loss", 0.0))
 
             return MobileTrainResult(
                 success=True,

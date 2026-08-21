@@ -374,6 +374,7 @@ class DatasetsRouter:
         results = []
         errors = []
         cm_op = None
+        _batch_t0 = time.monotonic()
         try:
             from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
             import threading
@@ -432,8 +433,9 @@ class DatasetsRouter:
                 except Exception:
                     pass
 
-        safe_audit_log("dataset.import", resource=f"batch({len(request.sources)})", detail="batch", imported=len(results), errors=len(errors))
-        return success_response(data={"imported": len(results), "errors": errors})
+        _batch_elapsed_ms = (time.monotonic() - _batch_t0) * 1000
+        safe_audit_log("dataset.import", resource=f"batch({len(request.sources)})", detail=f"batch elapsed={_batch_elapsed_ms:.0f}ms", imported=len(results), errors=len(errors))
+        return success_response(data={"imported": len(results), "errors": errors, "elapsed_ms": round(_batch_elapsed_ms, 1)})
 
     async def search_books(self, q: str = Query(..., description="Search by title or ISBN"), limit: int = Query(10, ge=1, le=50)) -> dict:
         """Search books by title or ISBN via Open Library."""

@@ -911,9 +911,13 @@ class KBRouter:
     def rag_clear(self) -> dict:
         """Clear the entire RAG index and persisted documents."""
         from domains.cognitive.rag_service import get_rag_service
+        import time
         rag_svc = get_rag_service()
+        _t0 = time.monotonic()
         count = rag_svc.clear()
-        return success_response(data={"cleared": count})
+        _elapsed_ms = (time.monotonic() - _t0) * 1000
+        safe_audit_log("knowledge.rag_clear", resource="rag", detail=f"cleared={count} elapsed={_elapsed_ms:.0f}ms")
+        return success_response(data={"cleared": count, "elapsed_ms": round(_elapsed_ms, 1)})
 
     def rag_stats(self) -> dict:
         """Retrieve statistics for the production RAG index.

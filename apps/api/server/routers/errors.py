@@ -19,6 +19,8 @@ from typing import List, Optional
 from datetime import datetime, timezone
 import re
 
+from schemas.common import success_response, safe_audit_log
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -363,6 +365,7 @@ class ErrorsRouter:
         self._clear_disk()
         self._error_count_since_clear = 0
         self._dedup_map.clear()
+        safe_audit_log("errors.clear", resource="all")
         return success_response(data={"status": "ok", "cleared": True})
 
     async def unread_count(self) -> dict:
