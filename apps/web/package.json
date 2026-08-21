@@ -42,6 +42,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
     "@sloughgpt/strui": "file:../../packages/strui",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "next": "^16.3.2",
     "next-auth": "^4.24.13",
