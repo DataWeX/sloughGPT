@@ -472,6 +472,15 @@ export function unload(): void {
   _loaded = null;
 }
 
+/** Load a pre-computed flat weight array with config (used by sou-loader). */
+export function loadFlatWeights(
+  config: MobileExportConfig,
+  weights: Float32Array,
+): void {
+  const [cos, sin] = precomputeFreqs(config.n_embed / config.n_head, config.block_size, 10000);
+  _loaded = { config, weights, cos, sin };
+}
+
 /** Generate text using the loaded SloNet model. */
 export async function generate(
   prompt: string,

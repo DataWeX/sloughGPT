@@ -37,7 +37,6 @@ python-multipart>=0.0.32
 
 # CLI/UI
 click>=8.1.0
-rich>=13.0.0
 prompt-toolkit>=3.0.0
 
 # Storage/IO
