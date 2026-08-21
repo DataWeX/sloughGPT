@@ -270,9 +270,8 @@ class KBRouter:
                     content=req.content,
                     metadata={"source": req.source or "knowledge", "topic": topic or "general", "item_id": item_id},
                 )
-            except Exception:
-                pass
-            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            except Exception as e:
+                logger.warning("RAG auto-ingest failed for knowledge add (topic=%s): %s", topic, e, exc_info=True)
 
         safe_audit_log(
             "knowledge.add",
@@ -409,9 +408,8 @@ class KBRouter:
                                 content=item.get("content", ""),
                                 metadata={"source": req.url, "topic": item.get("topic", "web")},
                             )
-                except Exception:
-                    pass
-                logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                except Exception as e:
+                    logger.warning("RAG auto-ingest failed for URL ingest (url=%s): %s", req.url, e, exc_info=True)
 
             safe_audit_log(
                 "knowledge.add",
@@ -568,9 +566,8 @@ class KBRouter:
                     content=chunk,
                     metadata={"source": f"file:{file.filename or 'unknown'}", "topic": topic},
                 )
-        except Exception:
-            pass
-        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+        except Exception as e:
+            logger.warning("RAG auto-ingest failed for file ingest (file=%s): %s", file.filename, e, exc_info=True)
 
         return success_response(data={
             "status": "imported",

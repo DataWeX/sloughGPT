@@ -425,8 +425,12 @@ def print_comparison(results: List[ModelMetrics]):
     print("=" * 90)
     print("RESPONSE COMPARISON")
     print("=" * 90)
-    prompts = list(EVAL_PROMPTS.keys())
-    for prompt in prompts[:3]:
+    all_prompts = []
+    for r in results:
+        for p in r.prompts:
+            if p not in all_prompts:
+                all_prompts.append(p)
+    for prompt in all_prompts[:6]:
         print(f"\nPrompt: {prompt!r}")
         print("-" * 60)
         for r in results:

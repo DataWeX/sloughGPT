@@ -1,12 +1,15 @@
 """
 Feedback Router - MVC View layer
 """
+import logging
 from fastapi import APIRouter, Query, Request
 
 from pydantic import BaseModel, Field
 from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
 from schemas.common import raise_error, success_response
 from controllers.feedback import get_feedback_controller
+
+logger = logging.getLogger("slo.api.feedback")
 
 
 class WorkflowFeedbackRequest(BaseModel):
@@ -35,33 +38,41 @@ class FeedbackRouter:
 
     async def record_feedback_workflow(self, req: WorkflowFeedbackRequest) -> dict:
         """Record user feedback (workflow variant used by frontend feedback store)."""
-        from controllers.feedback import get_feedback_controller
-        ctrl = get_feedback_controller()
-        feedback = ctrl.record_feedback(
-            message_id=req.conversation_id,
-            rating=req.rating,
-            session_id=req.conversation_id,
-            message_content=req.assistant_response,
-            user_message=req.user_message,
-            assistant_response=req.assistant_response,
-        )
-        return success_response(data={
-            "feedback_id": feedback.get("feedback_id", ""),
-            "workflow_active": True,
-        }, message="recorded")
+        try:
+            from controllers.feedback import get_feedback_controller
+            ctrl = get_feedback_controller()
+            feedback = ctrl.record_feedback(
+                message_id=req.conversation_id,
+                rating=req.rating,
+                session_id=req.conversation_id,
+                message_content=req.assistant_response,
+                user_message=req.user_message,
+                assistant_response=req.assistant_response,
+            )
+            return success_response(data={
+                "feedback_id": feedback.get("feedback_id", ""),
+                "workflow_active": True,
+            }, message="recorded")
+        except Exception as e:
+            logger.error("Failed to record workflow feedback (conversation=%s): %s", req.conversation_id, e)
+            raise
 
     async def record_feedback(self, req: FeedbackRequest) -> dict:
         """Record user feedback and pipe into learning systems."""
-        ctrl = get_feedback_controller()
-        feedback = ctrl.record_feedback(
-            message_id=req.message_id,
-            rating=req.rating,
-            session_id=req.session_id,
-            message_content=req.message_content,
-            user_message=getattr(req, 'user_message', None),
-            assistant_response=getattr(req, 'assistant_response', None),
-        )
-        return FeedbackResponse(**feedback)
+        try:
+            ctrl = get_feedback_controller()
+            feedback = ctrl.record_feedback(
+                message_id=req.message_id,
+                rating=req.rating,
+                session_id=req.session_id,
+                message_content=req.message_content,
+                user_message=getattr(req, 'user_message', None),
+                assistant_response=getattr(req, 'assistant_response', None),
+            )
+            return FeedbackResponse(**feedback)
+        except Exception as e:
+            logger.error("Failed to record feedback (message=%s): %s", req.message_id, e)
+            raise
 
     async def get_feedback_stats(self) -> dict:
         """Retrieve aggregate feedback statistics across all conversations.
