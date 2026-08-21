@@ -1,12 +1,16 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTrainingForm } from './useTrainingForm'
 
-const chatDBMock = {
-  getKV: vi.fn().mockResolvedValue(undefined),
-  setKV: vi.fn().mockResolvedValue(undefined),
-  deleteKV: vi.fn().mockResolvedValue(undefined),
-}
+const { chatDBMock } = vi.hoisted(() => {
+  const chatDBMock = {
+    getKV: vi.fn().mockResolvedValue(undefined),
+    setKV: vi.fn().mockResolvedValue(undefined),
+    deleteKV: vi.fn().mockResolvedValue(undefined),
+  }
+  return { chatDBMock }
+})
 
 vi.mock('@/lib/db', () => ({
   chatDB: chatDBMock,

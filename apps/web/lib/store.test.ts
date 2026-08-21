@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const chatDBMock = {
-  getKV: vi.fn().mockResolvedValue(undefined),
-  setKV: vi.fn().mockResolvedValue(undefined),
-  deleteKV: vi.fn().mockResolvedValue(undefined),
-}
+const { chatDBMock } = vi.hoisted(() => {
+  const chatDBMock = {
+    getKV: vi.fn().mockResolvedValue(undefined),
+    setKV: vi.fn().mockResolvedValue(undefined),
+    deleteKV: vi.fn().mockResolvedValue(undefined),
+  }
+  return { chatDBMock }
+})
 
 vi.mock('@/lib/db', () => ({
   chatDB: chatDBMock,

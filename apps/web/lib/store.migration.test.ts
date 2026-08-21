@@ -1,19 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const chatDBMock = {
-  getKV: vi.fn().mockResolvedValue(undefined),
-  setKV: vi.fn().mockResolvedValue(undefined),
-  deleteKV: vi.fn().mockResolvedValue(undefined),
-}
+const { chatDBMock } = vi.hoisted(() => {
+  const chatDBMock = {
+    getKV: vi.fn().mockResolvedValue(undefined),
+    setKV: vi.fn().mockResolvedValue(undefined),
+    deleteKV: vi.fn().mockResolvedValue(undefined),
+  }
+  return { chatDBMock }
+})
 
 vi.mock('@/lib/db', () => ({
   chatDB: chatDBMock,
 }))
 
-const { useAppStore, initStore, DEFAULT_SETTINGS } = await import('./store')
+const { useAppStore, initStore, DEFAULT_SETTINGS, _resetInitGuard } = await import('./store')
 
 describe('MogDB-backed settings initialization', () => {
   beforeEach(() => {
+    _resetInitGuard()
     useAppStore.setState({ settings: DEFAULT_SETTINGS, injectedKnowledge: [] })
     chatDBMock.getKV.mockClear()
     chatDBMock.setKV.mockClear()
