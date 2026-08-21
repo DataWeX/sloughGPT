@@ -924,7 +924,9 @@ class ModelsRouter:
         currently loaded model if a .slnc file exists.
         """
         ctrl = get_models_controller()
-        return success_response(data=ctrl.set_process_guard_enabled(req.enabled))
+        result = ctrl.set_process_guard_enabled(req.enabled)
+        safe_audit_log("model.process_guard", resource="process_guard", detail=f"enabled={req.enabled}")
+        return success_response(data=result)
 
     async def get_engine_status(self) -> dict:
         """Get standalone inference engine status.
@@ -975,6 +977,7 @@ class ModelsRouter:
         result = await asyncio.to_thread(provider.reload, model_id, slnc_path)
         if result.get("type") == "reload_ok":
             server_state.model_type = model_id
+        safe_audit_log("model.reload_engine", resource=model_id or "unknown", detail=f"result={result.get('type', 'unknown')}")
         return success_response(data=result)
 
 

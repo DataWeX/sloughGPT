@@ -7,12 +7,15 @@ Provides endpoints to:
 - View collection stats and records
 - Manage sources, stores, and filters
 """
+import logging
 from fastapi import APIRouter, Query
 from typing import Optional, List
 from pydantic import BaseModel, Field
 
-from schemas.common import success_response, raise_error
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
+
+logger = logging.getLogger("slo.api.collections")
 
 
 class PipelineConfigRequest(BaseModel):
@@ -98,6 +101,7 @@ class CollectionsRouter:
             registry = get_registry()
             registry._pipelines[req.name] = pipeline
 
+            safe_audit_log("collection.create", resource=req.name, detail=f"source={req.source_type} store={req.store_type}")
             return success_response(data={
                 "id": req.name,
                 "name": req.name,
@@ -108,6 +112,7 @@ class CollectionsRouter:
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Create pipeline failed: %s", e)
             raise_error(f"Failed to create pipeline: {e}", code="E_CREATE_FAILED", status_code=500)
 
     async def run_pipeline(self, name: str = Query(..., description="Pipeline name")) -> dict:
@@ -119,6 +124,7 @@ class CollectionsRouter:
             pipeline = registry.get_pipeline(name)
             if not pipeline:
                 raise_error(f"Pipeline '{name}' not found", code="E_NOT_FOUND", status_code=404)
+            safe_audit_log("collection.run", resource=name, detail=f"collected={count}")
             return success_response(data={
                 "pipeline": name,
                 "collected": count,
@@ -127,6 +133,7 @@ class CollectionsRouter:
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Run pipeline failed: %s", e)
             raise_error(f"Failed to run pipeline: {e}", code="E_RUN_FAILED", status_code=500)
 
     async def collect_direct(self, req: CollectRequest) -> dict:
@@ -150,6 +157,7 @@ class CollectionsRouter:
             for record in store.read_all():
                 records.append({"content": record.content[:200], "metadata": record.metadata})
 
+            safe_audit_log("collection.direct", resource=req.source_type, detail=f"collected={count}")
             return success_response(data={
                 "collected": count,
                 "stats": collector.stats,
@@ -158,6 +166,7 @@ class CollectionsRouter:
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Direct collect failed: %s", e)
             raise_error(f"Failed to collect: {e}", code="E_COLLECT_FAILED", status_code=500)
 
     async def get_stats(self) -> dict:
@@ -197,10 +206,12 @@ class CollectionsRouter:
             registry = get_registry()
             if pipeline_id in registry._pipelines:
                 del registry._pipelines[pipeline_id]
+            safe_audit_log("collection.delete", resource=pipeline_id)
             return success_response(data={"deleted": pipeline_id})
         except AppError:
             raise
         except Exception as e:
+            logger.warning("Delete pipeline failed: %s", e)
             raise_error(f"Failed to delete pipeline: {e}", code="E_DELETE_FAILED", status_code=500)
 
     async def collect(self, pipeline_id: str) -> dict:

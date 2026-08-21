@@ -213,6 +213,7 @@ class MultimodalRouter:
                 "supervised": label is not None and label.strip() != "",
             })
         except Exception as e:
+            logger.warning("Multimodal caption failed: %s", e)
             classify_and_raise(e, source="multimodal_caption")
 
     async def train_batch(
@@ -340,6 +341,7 @@ class MultimodalRouter:
         except HTTPException:
             raise
         except Exception as e:
+            logger.warning("Multimodal video generate failed: %s", e)
             classify_and_raise(e, source="multimodal_video_generate")
 
     # ── DPO ────────────────────────────────────────────────────────────
@@ -380,6 +382,7 @@ class MultimodalRouter:
             with self._dpo_lock:
                 self._dpo_state["status"] = "error"
                 self._dpo_state["result"] = {"error": str(e)}
+            logger.warning("Multimodal DPO failed: %s", e)
             classify_and_raise(e, source="multimodal_dpo")
 
     # ── Analysis ──────────────────────────────────────────────────────
@@ -407,6 +410,7 @@ class MultimodalRouter:
                 "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
             })
         except Exception as e:
+            logger.warning("Multimodal analyze image failed: %s", e)
             classify_and_raise(e, source="multimodal_analyze_image")
 
     async def analyze_pdf(
@@ -434,6 +438,7 @@ class MultimodalRouter:
                 "method": "vlm" if processor._get_vlm() is not None else "text_extract",
             })
         except Exception as e:
+            logger.warning("Multimodal analyze PDF failed: %s", e)
             classify_and_raise(e, source="multimodal_analyze_pdf")
         finally:
             os.unlink(tmp_path)
@@ -461,6 +466,7 @@ class MultimodalRouter:
             finally:
                 os.unlink(tmp_path)
         except Exception as e:
+            logger.warning("Multimodal process video failed: %s", e)
             classify_and_raise(e, source="multimodal_process_video")
 
     # ── Speech ────────────────────────────────────────────────────────
@@ -477,6 +483,7 @@ class MultimodalRouter:
             return success_response(data={"text": result.text, "confidence": result.confidence,
                     "language": result.language or language, "duration": result.duration})
         except Exception as e:
+            logger.warning("Multimodal transcribe failed: %s", e)
             classify_and_raise(e, source="multimodal_transcribe")
 
     async def synthesize_speech(self, text: str = Form(...)) -> dict:
@@ -497,6 +504,7 @@ class MultimodalRouter:
             return success_response(data={"audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                     "text": text, "duration_sec": len(waveform) / tts.sample_rate})
         except Exception as e:
+            logger.warning("Multimodal TTS failed: %s", e)
             classify_and_raise(e, source="multimodal_tts")
 
     # ── Generation ────────────────────────────────────────────────────
@@ -525,6 +533,7 @@ class MultimodalRouter:
             return success_response(data={"image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                     "prompt": prompt, "steps": steps})
         except Exception as e:
+            logger.warning("Multimodal generate image failed: %s", e)
             classify_and_raise(e, source="multimodal_generate_image")
 
     # ── Dataset ───────────────────────────────────────────────────────
@@ -599,6 +608,7 @@ class MultimodalRouter:
         except HTTPException:
             raise
         except Exception as e:
+            logger.warning("Multimodal load checkpoint failed: %s", e)
             classify_and_raise(e, source="multimodal_load_checkpoint")
 
     async def delete_checkpoint(self, name: str) -> dict:
@@ -620,6 +630,7 @@ class MultimodalRouter:
         except HTTPException:
             raise
         except Exception as e:
+            logger.warning("Multimodal delete checkpoint failed: %s", e)
             classify_and_raise(e, source="multimodal_delete_checkpoint")
 
     # ── Reset ─────────────────────────────────────────────────────────
