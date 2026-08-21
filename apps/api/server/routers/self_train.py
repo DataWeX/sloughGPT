@@ -2,6 +2,7 @@
 Self-Train Router - Start/stop/status for self-training subprocess.
 """
 import asyncio
+import logging
 import re
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -13,6 +14,8 @@ from typing import Optional
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
+
+logger = logging.getLogger("slo.api.self_train")
 
 
 class SelfTrainRequest(BaseModel):
@@ -65,6 +68,7 @@ class SelfTrainRouter:
                 cmd.append("--forever")
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             server_state._self_train_proc = proc
+            logger.info("Self-training started (pid=%d, model=%s)", proc.pid, req.model if req and req.model else "default")
             safe_audit_log("self_train.start", resource=req.model if req and req.model else "default", detail=f"pid={proc.pid}", temperature=req.temperature if req and req.temperature is not None else None, forever=bool(req and req.forever))
             return success_response(data={"status": "started", "pid": proc.pid})
         except AppError:
@@ -94,11 +98,13 @@ class SelfTrainRouter:
             proc.terminate()
             await asyncio.to_thread(proc.wait, 5)
             server_state._self_train_proc = None
+            logger.info("Self-training stopped gracefully (pid=%d)", proc.pid)
             safe_audit_log("self_train.stop", resource=str(proc.pid), detail="stopped")
             return success_response(data={"status": "stopped"})
         except Exception as e:
             proc.kill()
             server_state._self_train_proc = None
+            logger.warning("Self-training killed after terminate timeout (pid=%d): %s", proc.pid, e)
             safe_audit_log("self_train.stop", resource=str(proc.pid), detail="killed")
             raise_error(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
 

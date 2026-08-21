@@ -3,11 +3,14 @@ Workflow Router - Background task management
 
 Delegates to the canonical FeedbackWorkflowManager from the feedback domain.
 """
+import logging
 from typing import Dict, Any
 from pydantic import BaseModel
 from fastapi import APIRouter
 
 from schemas.common import raise_error, success_response, classify_and_raise
+
+logger = logging.getLogger("slo.api.workflow")
 
 
 class WorkflowStartRequest(BaseModel):
@@ -54,22 +57,27 @@ class WorkflowRouter:
         workflow = self._get_workflow()
         workflow.config = config
         workflow.start()
+        logger.info("Workflow started (aggregate=%dm, prune=%dm, export=%dh)", request.aggregate_interval_minutes, request.prune_interval_minutes, request.export_interval_hours)
         return success_response(data={"status": "started", "config": request.model_dump()})
 
     async def stop_workflow(self) -> Dict[str, Any]:
         """Stop the automated feedback workflow."""
         workflow = self._get_workflow()
         workflow.stop()
+        logger.info("Workflow stopped")
         return success_response(data={"status": "stopped"})
 
     async def trigger_workflow(self, action: str) -> Dict[str, Any]:
         """Manually trigger a workflow action (aggregate, prune, export)."""
         workflow = self._get_workflow()
         if action == "aggregate":
+            logger.info("Workflow action triggered: aggregate")
             return workflow.trigger_aggregate()
         elif action == "prune":
+            logger.info("Workflow action triggered: prune")
             return workflow.trigger_prune()
         elif action == "export":
+            logger.info("Workflow action triggered: export")
             return workflow.trigger_export()
         else:
             raise_error(f"Unknown action: {action}", "E_BAD_REQUEST", status_code=400)

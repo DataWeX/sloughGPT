@@ -4,6 +4,7 @@ System Router - Host metrics, system information, lifecycle status, and output s
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 import asyncio
+import logging
 import psutil
 import platform
 import time
@@ -11,6 +12,8 @@ import time
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
 from typing import AsyncGenerator
+
+logger = logging.getLogger("slo.api.system")
 
 
 class SystemRouter:

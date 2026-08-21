@@ -1,12 +1,15 @@
 """
 User Adapters Router - Per-user LoRA adapter management
 """
+import logging
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from typing import Optional
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
+
+logger = logging.getLogger("slo.api.user_adapters")
 
 
 class AggregateBestRequest(BaseModel):
@@ -110,6 +113,7 @@ class UserAdaptersRouter:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.update_adapter(user_id, rating=req.rating)
+            logger.info("Adapter updated (user=%s, rating=%s)", user_id, req.rating)
             safe_audit_log("adapter.update", resource=user_id, detail=f"rating={req.rating}")
             return success_response(data={"status": "updated", "user_id": user_id})
         except ImportError:
@@ -140,6 +144,7 @@ class UserAdaptersRouter:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.reset_user_adapter(user_id)
+            logger.info("Adapter reset (user=%s)", user_id)
             safe_audit_log("adapter.reset", resource=user_id)
             return success_response(data={"status": "reset", "user_id": user_id})
         except ImportError:
@@ -167,6 +172,7 @@ class UserAdaptersRouter:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.merge_all()
+            logger.info("All adapters merged")
             safe_audit_log("adapter.merge", resource="all")
             return success_response(data={"status": "merged"})
         except ImportError:
@@ -245,6 +251,7 @@ class UserAdaptersRouter:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             store.delete_adapter(user_id)
+            logger.info("Adapter deleted (user=%s)", user_id)
             safe_audit_log("adapter.delete", resource=user_id)
             return success_response(data={"status": "deleted", "user_id": user_id})
         except ImportError:
@@ -261,6 +268,7 @@ class UserAdaptersRouter:
                 min_feedback_count=request.min_feedback_count,
                 max_age_days=request.max_age_days,
             )
+            logger.info("Pruned %d low-quality adapters (min_feedback=%d, max_age=%dd)", len(deleted), request.min_feedback_count, request.max_age_days)
             safe_audit_log("adapter.prune", resource="all", detail=f"deleted={len(deleted)}", deleted_users=deleted)
             return success_response(data={
                 "status": "pruned",
