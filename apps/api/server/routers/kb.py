@@ -456,22 +456,26 @@ class KBRouter:
 
     def train_knowledge_adapter_route(self) -> dict:
         """Train a LoRA adapter on all knowledge facts to bake them into model weights."""
+        import time as _time
         from domains.infrastructure.knowledge_weight_integrator import train_knowledge_adapter, get_adapter_status
         memory = self._get_memory()
         facts = memory.list_all(top_k=5000)
 
+        _t0 = _time.monotonic()
         result = train_knowledge_adapter(
             knowledge_facts=facts,
             num_epochs=2,
         )
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
 
         status = get_adapter_status()
         safe_audit_log(
             "knowledge.train",
             resource="adapter",
+            detail=f"elapsed={_elapsed_ms:.0f}ms",
             facts=len(facts), status=result.get("status", ""),
         )
-        return success_response(data={**result, "adapter_status": status})
+        return success_response(data={**result, "adapter_status": status, "elapsed_ms": round(_elapsed_ms, 1)})
 
     def knowledge_adapter_status(self) -> dict:
         """Return status of the knowledge weight adapter."""

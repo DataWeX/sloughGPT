@@ -255,6 +255,8 @@ class MultimodalRouter:
         return success_response(data={"status": "started", "job_id": job_id, "total_images": len(image_paths)})
 
     async def _run_batch_training(self, mgr, image_sources: list):
+        import time as _time
+        _batch_t0 = _time.monotonic()
         loop = asyncio.get_event_loop()
         for src in image_sources:
             if not self._background_job["running"]:
@@ -281,6 +283,8 @@ class MultimodalRouter:
                 await asyncio.sleep(0)
         self._background_job["running"] = False
         self._background_job["finished_at"] = datetime.datetime.now().isoformat()
+        _batch_elapsed_ms = (_time.monotonic() - _batch_t0) * 1000
+        safe_audit_log("multimodal.train.complete", resource=self._background_job.get("job_id", "unknown"), detail=f"elapsed={_batch_elapsed_ms:.0f}ms completed={self._background_job['completed']} errors={self._background_job['errors']}")
 
     async def train_video(self, req: VideoTrainRequest) -> dict:
         """train_video."""

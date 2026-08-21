@@ -344,6 +344,8 @@ Be yourself — let your personality shape how you respond."""
         weights into the main chat model (baby model → inference engine).
         """
         try:
+            import time as _time
+            _switch_t0 = _time.monotonic()
             from domains.inference.slo_manager import get_slo_manager
 
             manager = get_slo_manager()
@@ -399,7 +401,8 @@ Be yourself — let your personality shape how you respond."""
             except Exception:
                 logger.debug("Failed to record model event", exc_info=True)
 
-            safe_audit_log("soul.switch", resource=req.name, detail="checkpoint_loaded" if req.checkpoint_name else "", checkpoint_name=req.checkpoint_name or "")
+            _switch_elapsed_ms = (_time.monotonic() - _switch_t0) * 1000
+            safe_audit_log("soul.switch", resource=req.name, detail=f"elapsed={_switch_elapsed_ms:.0f}ms checkpoint_loaded" if req.checkpoint_name else f"elapsed={_switch_elapsed_ms:.0f}ms", checkpoint_name=req.checkpoint_name or "")
 
             return success_response(data=result)
         except Exception as e:
@@ -508,8 +511,8 @@ Be yourself — let your personality shape how you respond."""
             weights = manager.get_trait_weights()
             return success_response(data=weights)
         except Exception as e:
-            logger.warning("Soul operation failed: %s", e)
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Get trait weights failed: %s", e)
+            classify_and_raise(e, source="get_trait_weights")
 
     async def save_trait_weights(self, body: SaveWeightsRequest) -> dict:
         """
@@ -536,8 +539,8 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("soul.weights.save", resource="traits", detail=f"traits_saved={len(flat)}", groups=[g for g in ("personality", "cognition", "emotion") if getattr(body, g, None)])
             return success_response(message="saved")
         except Exception as e:
-            logger.warning("Soul operation failed: %s", e)
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Save trait weights failed: %s", e)
+            classify_and_raise(e, source="save_trait_weights")
 
     async def get_trait_modes(self) -> dict:
         """
@@ -569,8 +572,8 @@ Be yourself — let your personality shape how you respond."""
                 "task": TaskManager(config).get_mode(),
             })
         except Exception as e:
-            logger.warning("Soul operation failed: %s", e)
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Get trait modes failed: %s", e)
+            classify_and_raise(e, source="get_trait_modes")
 
     async def get_current_soul(self) -> dict:
         """
@@ -594,8 +597,8 @@ Be yourself — let your personality shape how you respond."""
                 })
             return success_response(data={"name": None})
         except Exception as e:
-            logger.warning("Soul operation failed: %s", e)
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Get current soul failed: %s", e)
+            classify_and_raise(e, source="get_current_soul")
 
     async def list_weight_snapshots(self) -> dict:
         """
@@ -634,8 +637,8 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.save", resource=name)
             return success_response(data={"path": path}, message="saved")
         except Exception as e:
-            logger.warning("Soul operation failed: %s", e)
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Save weight snapshot failed: %s", e)
+            classify_and_raise(e, source="save_weight_snapshot")
 
     async def load_weight_snapshot(self, name: str) -> dict:
         """
@@ -657,8 +660,8 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.load", resource=name, detail=f"traits_loaded={count}")
             return success_response(data={"traits_loaded": count}, message="loaded")
         except Exception as e:
-            logger.warning("Soul operation failed: %s", e)
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Load weight snapshot failed: %s", e)
+            classify_and_raise(e, source="load_weight_snapshot")
 
     async def delete_weight_snapshot(self, name: str) -> dict:
         """
@@ -680,8 +683,8 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.delete", resource=name, detail=f"deleted={ok}")
             return success_response(data={"deleted": ok})
         except Exception as e:
-            logger.warning("Soul operation failed: %s", e)
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Delete weight snapshot failed: %s", e)
+            classify_and_raise(e, source="delete_weight_snapshot")
 
     async def get_soul_stats(self) -> dict:
         """
@@ -697,8 +700,8 @@ Be yourself — let your personality shape how you respond."""
             from domains.inference.slo_manager import get_slo_manager
             return success_response(data=get_slo_manager().get_stats())
         except Exception as e:
-            logger.warning("Soul operation failed: %s", e)
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Get soul stats failed: %s", e)
+            classify_and_raise(e, source="get_soul_stats")
 
 
 router = SoulsRouter().router

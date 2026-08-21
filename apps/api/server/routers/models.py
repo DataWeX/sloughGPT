@@ -438,12 +438,14 @@ class ModelsRouter:
 
     async def _run_download(self, model_id: str, total_bytes_hint: int):
         """Background task that runs the actual download."""
+        import time as _time
         from domains.infrastructure.download_manager import get_download_manager
         from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
         from controllers.models import get_models_controller
 
         mgr = get_download_manager()
         cm_op: Optional[str] = None
+        _download_t0 = _time.monotonic()
         try:
             cm = get_cancel_manager()
             cm_op = cm.register(
@@ -457,8 +459,10 @@ class ModelsRouter:
 
         try:
             result = await mgr.download(model_id, total_bytes_hint)
+            _download_elapsed_ms = (_time.monotonic() - _download_t0) * 1000
 
             if result.get("status") == "complete":
+                safe_audit_log("model.download.complete", resource=model_id, detail=f"elapsed={_download_elapsed_ms:.0f}ms size={result.get('size', 0)}")
                 ctrl = get_models_controller()
                 try:
                     ctrl.load_model(model_id)
@@ -476,12 +480,15 @@ class ModelsRouter:
                     except Exception:
                         pass
             else:
+                safe_audit_log("model.download.failed", resource=model_id, detail=f"elapsed={_download_elapsed_ms:.0f}ms error={result.get('error', 'unknown')}")
                 if cm_op:
                     try:
                         get_cancel_manager().finish(cm_op, error=result.get("error", "download failed"))
                     except Exception:
                         pass
         except Exception as e:
+            _download_elapsed_ms = (_time.monotonic() - _download_t0) * 1000
+            safe_audit_log("model.download.failed", resource=model_id, detail=f"elapsed={_download_elapsed_ms:.0f}ms error={e}")
             if cm_op:
                 try:
                     get_cancel_manager().finish(cm_op, error=str(e))
