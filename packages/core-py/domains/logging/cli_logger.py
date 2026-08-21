@@ -149,38 +149,33 @@ class CLILogger(Logger):
     # ── Core emit ───────────────────────────────────────────────────────
 
     def emit(self, record: LogRecord) -> None:
-        """Format and write the record to the output stream (thread-safe)."""
+        """Format and write the record to the output stream (thread-safe).
+
+        Format:
+            {icon} {message}
+              {logger} {context...}
+        """
         if not _TERMINAL_ENABLED:
             return
 
         color, icon, _ = _LEVEL_STYLE.get(record.level, (_A.WHITE, "·", "debug"))
         c = self._colors
 
-        parts = []
+        # Primary line: icon + message
+        primary = f"  {_c(icon, color, c)} {record.message}"
 
-        # Icon
-        parts.append(_c(f"  {icon} ", color, c))
-
-        # Level tag
-        parts.append(_c(f"[{record.level.value}] ", color, c))
-
-        # Logger name
-        parts.append(_c(f"{record.logger} ", _A.DIM, c))
-
-        # Context
+        # Secondary line: logger + context
+        meta_parts = []
+        if record.logger:
+            meta_parts.append(_c(record.logger, _A.DIM, c))
         if record.context:
             ctx_str = " ".join(f"{k}={v}" for k, v in record.context.items())
-            parts.append(_c(f"{ctx_str} ", _A.DIM, c))
-
-        # Message
-        parts.append(record.message)
-
-        # Exception
-        if record.exception:
-            parts.append(_c(f" — {record.exception}", _A.RED, c))
+            meta_parts.append(_c(ctx_str, _A.DIM, c))
 
         with self._lock:
-            _write(self._stream, "".join(parts) + "\n")
+            _write(self._stream, primary + "\n")
+            if meta_parts:
+                _write(self._stream, "    " + " ".join(meta_parts) + "\n")
 
     # ── CLI-specific helpers ────────────────────────────────────────────
 
@@ -189,34 +184,35 @@ class CLILogger(Logger):
         if not _TERMINAL_ENABLED:
             return
         c = self._colors
-        parts = [_c("  ✓ ", _A.GREEN, c), msg]
-        if ctx:
-            ctx_str = " ".join(f"{k}={v}" for k, v in ctx.items())
-            parts.append(_c(f" {ctx_str}", _A.DIM, c))
+        primary = f"  {_c('✓', _A.GREEN, c)} {msg}"
+        meta = " ".join(f"{k}={v}" for k, v in ctx.items()) if ctx else ""
         with self._lock:
-            _write(self._stream, "".join(parts) + "\n")
+            _write(self._stream, primary + "\n")
+            if meta:
+                _write(self._stream, f"    {_c(meta, _A.DIM, c)}\n")
 
     def step(self, msg: str, **ctx: Any) -> None:
         """Log a step/action (cyan arrow)."""
         if not _TERMINAL_ENABLED:
             return
         c = self._colors
-        parts = [_c("  → ", _A.CYAN, c), msg]
-        if ctx:
-            ctx_str = " ".join(f"{k}={v}" for k, v in ctx.items())
-            parts.append(_c(f" {ctx_str}", _A.DIM, c))
+        primary = f"  {_c('→', _A.CYAN, c)} {msg}"
+        meta = " ".join(f"{k}={v}" for k, v in ctx.items()) if ctx else ""
         with self._lock:
-            _write(self._stream, "".join(parts) + "\n")
+            _write(self._stream, primary + "\n")
+            if meta:
+                _write(self._stream, f"    {_c(meta, _A.DIM, c)}\n")
 
-    def header(self, title: str, char: str = "=") -> None:
+    def header(self, title: str, char: str = "─") -> None:
         """Print a bold header with a separator line."""
         if not _TERMINAL_ENABLED:
             return
         c = self._colors
         width = _term_width()
         with self._lock:
-            _write(self._stream, _c(title, _A.BOLD, c) + "\n")
-            _write(self._stream, _c(char * width, _A.DIM, c) + "\n")
+            _write(self._stream, "\n")
+            _write(self._stream, _c(f"  {title}", _A.BOLD, c) + "\n")
+            _write(self._stream, _c(f"  {char * (width - 4)}", _A.DIM, c) + "\n")
 
     def section(self, title: str) -> None:
         """Print a section divider."""
@@ -226,8 +222,8 @@ class CLILogger(Logger):
         width = _term_width()
         with self._lock:
             _write(self._stream, "\n")
-            _write(self._stream, _c(title, _A.BOLD, c) + "\n")
-            _write(self._stream, _c("-" * width, _A.DIM, c) + "\n")
+            _write(self._stream, _c(f"  {title}", _A.BOLD, c) + "\n")
+            _write(self._stream, _c(f"  {'·' * (width - 4)}", _A.DIM, c) + "\n")
 
     def table(
         self,

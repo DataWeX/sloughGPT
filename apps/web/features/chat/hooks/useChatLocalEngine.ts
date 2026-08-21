@@ -18,11 +18,6 @@ export function useChatLocalEngine(
 
   const initLocalEngine = useCallback(async (): Promise<boolean> => {
     if (engineRef.current || engineLoadingRef.current) return true
-    if (!navigator.gpu) {
-      showToast('WebGPU not available in this browser', 'error')
-      logger.debug('WebGPU unavailable', { navigator_gpu: false })
-      return false
-    }
     engineLoadingRef.current = true
     setLocalEngineLoading(true)
     try {
@@ -58,15 +53,17 @@ export function useChatLocalEngine(
           eps: 1e-5,
         })
         engineRef.current = engine
-        setLocalArchInfo(`${embedDim}×${numLayers}×8 Transformer`)
-        showToast(`On-device AI ready (${embedDim}×${numLayers}L)`)
+        const mode = engine.cpuOnly ? 'CPU' : 'WebGPU'
+        setLocalArchInfo(`${embedDim}×${numLayers}×8 Transformer (${mode})`)
+        showToast(`On-device AI ready (${embedDim}×${numLayers}L, ${mode})`)
       } else {
         const engine = new SoulNetWebGPU()
         await engine.init()
         await engine.load(buf, { ...arch })
         engineRef.current = engine
-        setLocalArchInfo(`${arch.embedDim}×${arch.hiddenDim} LSTM`)
-        showToast(`Local AI ready (${arch.embedDim}x${arch.hiddenDim})`)
+        const mode = engine.cpuOnly ? 'CPU' : 'WebGPU'
+        setLocalArchInfo(`${arch.embedDim}×${arch.hiddenDim} LSTM (${mode})`)
+        showToast(`Local AI ready (${arch.embedDim}x${arch.hiddenDim}, ${mode})`)
       }
       return true
     } catch (err) {
