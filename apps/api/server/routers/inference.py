@@ -372,7 +372,7 @@ class InferenceRouter:
                 from domains.inference.vector_store import simple_embed
                 self._context_core.set_vector_store(self._vector_store_ref, simple_embed)
             except Exception as e:
-                logger.debug("Vector store connection failed: %s", e)
+                logger.warning("Vector store connection failed: %s", e)
         return self._context_core
 
     def set_vector_store_ref(self, store) -> dict:
