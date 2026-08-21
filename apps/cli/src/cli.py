@@ -1,5 +1,5 @@
 """
-SloughGPT CLI — Click-powered entry point with Rich output.
+SloughGPT CLI — Click-powered entry point with ANSI output.
 
 Commands organized into logical groups. All delegate to existing
 cmd_* functions in commands/ modules.
@@ -25,13 +25,13 @@ from domains.logging.config import setup_logging  # noqa: E402
 from domains.logging import CLILogger, BridgeHandler, set_global, get_global  # noqa: E402
 
 # Setup stdlib logging (file + correlation IDs), but skip console handler
-# because CLI uses CLILogger (Rich-powered) via BridgeHandler instead.
+# because CLI uses CLILogger (ANSI-powered) via BridgeHandler instead.
 setup_logging(enable_console=False, enable_output_buffer=False)
 
 _cli_logger = CLILogger("slo")
 set_global(_cli_logger)
 
-# Bridge stdlib logging → CLILogger (Rich-powered terminal output)
+# Bridge stdlib logging → CLILogger (ANSI-powered terminal output)
 _bridge = BridgeHandler(_cli_logger)
 logging.root.addHandler(_bridge)
 
@@ -126,12 +126,7 @@ def cli(ctx, host: str, port: int, config: str):
 
 def _show_welcome_banner():
     """Show a polished welcome banner with version and quick start."""
-    from rich.console import Console
-    from rich.text import Text
-    from rich.panel import Panel
-    from rich.columns import Columns
-
-    console = Console(highlight=False)
+    import sys
 
     # Get version
     try:
@@ -139,41 +134,73 @@ def _show_welcome_banner():
     except Exception:
         version = "dev"
 
-    # Build banner
-    banner = Text()
-    banner.append("  SloughGPT", style="bold cyan")
-    banner.append(f"  {version}", style="dim")
+    # ANSI helpers
+    def _c(text, code):
+        if sys.stdout.isatty():
+            return f"{code}{text}\033[0m"
+        return text
 
-    console.print()
-    console.print(banner)
-    console.print("  " + "─" * 50)
-    console.print()
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED = "\033[31m"
+
+    _write = sys.stdout.write
+    _flush = sys.stdout.flush
+
+    def _line(text=""):
+        _write(text + "\n")
+        _flush()
+
+    _line()
+    _line(f"  {_c('SloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
+    _line("  " + "─" * 50)
+    _line()
 
     # Quick start commands
-    console.print("  [bold]Quick Start:[/]")
-    console.print("    [cyan]sloughgpt start[/]        Getting started guide")
-    console.print("    [cyan]sloughgpt chat[/]         Start chatting with AI")
-    console.print("    [cyan]sloughgpt model list[/]   List available models")
-    console.print("    [cyan]sloughgpt shell[/]        Interactive shell")
-    console.print()
+    _line(f"  {_c('Quick Start:', _BOLD)}")
+    _line(f"    {_c('sloughgpt start', _CYAN)}        Getting started guide")
+    _line(f"    {_c('sloughgpt chat', _CYAN)}         Start chatting with AI")
+    _line(f"    {_c('sloughgpt model list', _CYAN)}   List available models")
+    _line(f"    {_c('sloughgpt shell', _CYAN)}        Interactive shell")
+    _line()
 
     # Server status
-    _show_server_status(console)
+    _show_server_status()
 
-    console.print()
-    console.print("  [dim]Run 'sloughgpt --help' to see all commands[/]")
-    console.print()
+    _line()
+    _line(f"  {_c('Run \'sloughgpt --help\' to see all commands', _DIM)}")
+    _line()
 
 
-def _show_server_status(console):
+def _show_server_status():
     """Check and display server status."""
+    import sys
     import requests
-    import time
 
-    console.print("  [bold]Server Status:[/]")
+    def _c(text, code):
+        if sys.stdout.isatty():
+            return f"{code}{text}\033[0m"
+        return text
+
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED = "\033[31m"
+
+    _write = sys.stdout.write
+    _flush = sys.stdout.flush
+
+    def _line(text=""):
+        _write(text + "\n")
+        _flush()
+
+    _line(f"  {_c('Server Status:', _BOLD)}")
 
     try:
-        # Try to connect to the server
         response = requests.get("http://localhost:8000/health", timeout=2)
         if response.status_code == 200:
             raw = response.json()
@@ -181,15 +208,15 @@ def _show_server_status(console):
 
             if data.get("model_loaded"):
                 model = data.get("model_type", "unknown")
-                console.print(f"    [green]✓[/] Server running (model: {model})")
+                _line(f"    {_c('✓', _GREEN)} Server running (model: {model})")
             else:
-                console.print("    [yellow]![/] Server running (no model loaded)")
+                _line(f"    {_c('!', _YELLOW)} Server running (no model loaded)")
         else:
-            console.print("    [red]✗[/] Server unreachable")
+            _line(f"    {_c('✗', _RED)} Server unreachable")
     except requests.exceptions.ConnectionError:
-        console.print("    [dim]·[/] Server not running")
-    except Exception as e:
-        console.print(f"    [dim]·[/] Server status unknown")
+        _line(f"    {_c('·', _DIM)} Server not running")
+    except Exception:
+        _line(f"    {_c('·', _DIM)} Server status unknown")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1563,51 +1590,80 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
              layers: int, d_model: int, vocab_size: int, profile: bool,
              asm_source: str | None, do_self_test: bool):
     """Boot the kernel, load a model, run inference, and print metrics."""
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
     import time
+    import sys
     import numpy as np
 
-    console = Console()
-    console.print("\n[bold cyan]Kernel Simulation[/bold cyan]\n")
+    # ANSI helpers
+    _tty = sys.stdout.isatty()
+    def _c(text, code):
+        return f"{code}{text}\033[0m" if _tty else text
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _MAGENTA = "\033[35m"
+    _BLUE = "\033[34m"
+
+    def _p(text=""):
+        sys.stdout.write(text + "\n")
+        sys.stdout.flush()
+
+    def _table(headers, rows, col_styles=None):
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i in range(min(len(row), len(widths))):
+                widths[i] = max(widths[i], len(str(row[i])))
+        hdr = "  ".join(_c(h.ljust(widths[i]), _BOLD, _tty) for i, h in enumerate(headers))
+        sep = "  ".join("-" * w for w in widths)
+        _p(hdr)
+        _p(sep)
+        for row in rows:
+            cells = []
+            for i in range(len(headers)):
+                val = str(row[i]) if i < len(row) else ""
+                cells.append(val.ljust(widths[i]))
+            _p("  ".join(cells))
+
+    _p(f"\n{_c('Kernel Simulation', _BOLD + _CYAN)}\n")
 
     # ── Self-test mode ──
     if do_self_test:
         from domains.shell.vm import self_test
-        console.print("[bold]Running VM self-test...[/bold]\n")
+        _p(f"{_c('Running VM self-test...', _BOLD)}\n")
         results = self_test()
         for line in results:
-            console.print(line)
-        console.print()
+            _p(line)
+        _p()
         return
 
     # ── Run assembly mode ──
     if asm_source:
         from domains.shell.vm import VMRunner
-        console.print(f"[bold]Running VM assembly...[/bold]\n")
+        _p(f"{_c('Running VM assembly...', _BOLD)}\n")
         runner = VMRunner()
         t0 = time.perf_counter()
         output = runner.assemble_and_run(asm_source, trace=profile)
         elapsed = time.perf_counter() - t0
         for line in output:
-            console.print(f"  {line}")
-        console.print(f"\n  [dim]Completed in {elapsed*1000:.2f}ms, {runner.cpu._step_count} steps[/dim]")
+            _p(f"  {line}")
+        _p(f"\n  {_c(f'Completed in {elapsed*1000:.2f}ms, {runner.cpu._step_count} steps', _DIM)}")
         if profile:
             trace = runner.cpu.get_trace()
             if trace:
-                prof_table = Table(title="Execution Trace", show_header=True, header_style="bold blue")
-                prof_table.add_column("Step", justify="right")
-                prof_table.add_column("PC", justify="right")
-                prof_table.add_column("Instruction")
-                prof_table.add_column("Registers")
-                for entry in trace[:50]:
-                    regs = ", ".join(f"{k}={v}" for k, v in entry.registers.items())
-                    prof_table.add_row(str(entry.cycle), str(entry.pc), entry.instruction, regs)
+                _p()
+                _table(
+                    ["Step", "PC", "Instruction", "Registers"],
+                    [
+                        [str(e.cycle), str(e.pc), e.instruction,
+                         ", ".join(f"{k}={v}" for k, v in e.registers.items())]
+                        for e in trace[:50]
+                    ],
+                )
                 if len(trace) > 50:
-                    prof_table.add_row("...", "", f"({len(trace)-50} more)", "")
-                console.print(prof_table)
-        console.print()
+                    _p(f"  ... ({len(trace)-50} more)")
+        _p()
         return
 
     # ── Boot ──
@@ -1616,12 +1672,12 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
     k = Kernel()
     boot_msg = k.boot()
     t_boot = time.perf_counter() - t0
-    console.print(f"  [green]✓[/green] Booted in {t_boot*1000:.1f}ms — {boot_msg}")
+    _p(f"  {_c('✓', _GREEN)} Booted in {t_boot*1000:.1f}ms — {boot_msg}")
 
     try:
         # ── Register devices ──
         k.register_devices()
-        console.print(f"  [green]✓[/green] {k.devices.stats()['total_devices']} devices registered")
+        _p(f"  {_c('✓', _GREEN)} {k.devices.stats()['total_devices']} devices registered")
 
         # ── Load model ──
         t1 = time.perf_counter()
@@ -1651,8 +1707,8 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
             npu.open()
             result = npu.load_model(model, f"huggingface:{model}")
             if not result.success:
-                console.print(f"  [yellow]⚠ Could not load '{model}': {result.error}[/yellow]")
-                console.print("  [dim]Falling back to mock model. Install transformers for real models.[/dim]")
+                _p(f"  {_c(f'⚠ Could not load \'{model}\': {result.error}', _YELLOW)}")
+                _p(f"  {_c('Falling back to mock model. Install transformers for real models.', _DIM)}")
                 class FallbackModel:
                     def __init__(self):
                         self.call_count = 0
@@ -1675,13 +1731,13 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
                 provider = npu._models[model].provider
                 k.engine.load_model(model, provider)
         t_load = time.perf_counter() - t1
-        console.print(f"  [green]✓[/green] Model '{model}' loaded in {t_load*1000:.1f}ms")
+        _p(f"  {_c('✓', _GREEN)} Model '{model}' loaded in {t_load*1000:.1f}ms")
 
         # ── Tokenize ──
         t2 = time.perf_counter()
         tokens = k.tokenize(prompt)
         t_tok = time.perf_counter() - t2
-        console.print(f"  [green]✓[/green] Tokenized '{prompt[:40]}...' → {len(tokens)} tokens in {t_tok*1000:.2f}ms")
+        _p(f"  {_c('✓', _GREEN)} Tokenized '{prompt[:40]}...' → {len(tokens)} tokens in {t_tok*1000:.2f}ms")
 
         # ── Create inference process ──
         from domains.shell.kernel_neural import NeuralProcessType
@@ -1722,42 +1778,41 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
         ks = k.stats()
 
         # ── Print results ──
-        console.print()
-
-        # Summary table
-        table = Table(title="Simulation Results", show_header=True, header_style="bold magenta")
-        table.add_column("Metric", style="cyan")
-        table.add_column("Value", justify="right", style="green")
-        table.add_row("Boot time", f"{t_boot*1000:.1f}ms")
-        table.add_row("Model load", f"{t_load*1000:.1f}ms")
-        table.add_row("Tokenize", f"{t_tok*1000:.2f}ms")
-        table.add_row("Tokens in prompt", str(len(tokens)))
-        table.add_row("Iterations", str(iterations))
-        table.add_row("Avg latency", f"{avg_latency*1000:.1f}ms")
-        table.add_row("Total tokens generated", str(total_tokens))
-        table.add_row("Throughput", f"{throughput:.1f} tok/s")
-        table.add_row("Processes", str(ks["process_count"]))
-        table.add_row("KV cache layers", str(ns["kv_caches"]))
-        table.add_row("KV cache memory", f"{ns['gradient_accumulator']['step_count']} steps")
-        table.add_row("Uptime", f"{k.uptime:.2f}s")
-        console.print(table)
+        _p()
+        _table(
+            ["Metric", "Value"],
+            [
+                ["Boot time", f"{t_boot*1000:.1f}ms"],
+                ["Model load", f"{t_load*1000:.1f}ms"],
+                ["Tokenize", f"{t_tok*1000:.2f}ms"],
+                ["Tokens in prompt", str(len(tokens))],
+                ["Iterations", str(iterations)],
+                ["Avg latency", f"{avg_latency*1000:.1f}ms"],
+                ["Total tokens generated", str(total_tokens)],
+                ["Throughput", f"{throughput:.1f} tok/s"],
+                ["Processes", str(ks["process_count"])],
+                ["KV cache layers", str(ns["kv_caches"])],
+                ["KV cache memory", f"{ns['gradient_accumulator']['step_count']} steps"],
+                ["Uptime", f"{k.uptime:.2f}s"],
+            ],
+        )
 
         if profile:
-            prof_table = Table(title="Per-Iteration Profile", show_header=True, header_style="bold blue")
-            prof_table.add_column("Iter", justify="right")
-            prof_table.add_column("Latency", justify="right")
-            prof_table.add_column("Tokens", justify="right")
-            prof_table.add_column("tok/s", justify="right")
-            for i, (lat, tok) in enumerate(zip(latencies, tokens_generated)):
-                tps = tok / lat if lat > 0 else 0
-                prof_table.add_row(str(i + 1), f"{lat*1000:.1f}ms", str(tok), f"{tps:.1f}")
-            console.print(prof_table)
+            _p()
+            _table(
+                ["Iter", "Latency", "Tokens", "tok/s"],
+                [
+                    [str(i + 1), f"{lat*1000:.1f}ms", str(tok),
+                     f"{tok / lat:.1f}" if lat > 0 else "0.0"]
+                    for i, (lat, tok) in enumerate(zip(latencies, tokens_generated))
+                ],
+            )
 
-        console.print(f"\n[bold green]Simulation complete.[/bold green]\n")
+        _p(f"\n{_c('Simulation complete.', _BOLD + _GREEN)}\n")
 
     finally:
         k.shutdown()
-        console.print("  [dim]Kernel shut down.[/dim]")
+        _p(f"  {_c('Kernel shut down.', _DIM)}")
 
 
 # ═══════════════════════════════════════════════════════════════════════

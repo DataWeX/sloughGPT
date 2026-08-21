@@ -155,7 +155,7 @@ class Logger(ABC):
     """Abstract base for all interface-specific loggers.
 
     Subclass and implement ``emit()`` to route records to your output
-    (terminal colors, Rich console, browser console, structured JSON, etc.).
+    (terminal colors, ANSI console, browser console, structured JSON, etc.).
 
     The convenience methods (``debug``, ``info``, ``warning``, ``error``,
     ``critical``) build a ``LogRecord`` and call ``emit()``.  Override them
@@ -223,7 +223,17 @@ class Logger(ABC):
         error_code: Optional[str] = None,
         tag: Optional[str] = None,
     ) -> LogRecord:
-        merged = {**self._context, **(context or {})}
+        # Merge: logger defaults → thread-local context → call-site context
+        from .config import get_request_id, get_log_context
+
+        merged = {}
+        merged.update(get_log_context())
+        rid = get_request_id()
+        if rid:
+            merged["request_id"] = rid
+        merged.update(self._context)
+        merged.update(context or {})
+
         return LogRecord(
             level=level,
             message=message,
@@ -389,3 +399,47 @@ class ChildLogger(Logger):
 
     def emit(self, record: LogRecord) -> None:
         self._parent.emit(record)
+
+
+class CompositeLogger(Logger):
+    """A logger that emits to multiple downstream loggers.
+
+    Useful for writing to both console and file, or for debugging by
+    outputting to multiple destinations simultaneously.
+
+    Usage::
+
+        console = CLILogger("slo.console")
+        file_log = ConsoleLogger("slo.file", stream=open("app.log", "w"))
+        multi = CompositeLogger("slo", children=[console, file_log])
+        multi.info("this goes to both outputs")
+    """
+
+    def __init__(
+        self,
+        name: str = "slo",
+        children: Optional[List[Logger]] = None,
+        level: LogLevel = LogLevel.DEBUG,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(name=name, level=level, context=context)
+        self._children: List[Logger] = list(children) if children else []
+
+    def add(self, logger: Logger) -> "CompositeLogger":
+        """Add a child logger. Returns self for chaining."""
+        self._children.append(logger)
+        return self
+
+    def remove(self, logger: Logger) -> None:
+        """Remove a child logger."""
+        self._children.remove(logger)
+
+    @property
+    def children(self) -> List[Logger]:
+        """List of child loggers."""
+        return list(self._children)
+
+    def emit(self, record: LogRecord) -> None:
+        """Emit the record to all children."""
+        for child in self._children:
+            child.emit(record)

@@ -1,8 +1,8 @@
 """
-CLILogger — Rich-powered output for ``sloughgpt`` CLI commands.
+CLILogger — native ANSI output for ``sloughgpt`` CLI commands.
 
-Inherits Logger and routes records through ``rich.console.Console`` for
-formatted terminal output with tables, panels, and syntax highlighting.
+Inherits Logger and routes records through raw ANSI escape codes for
+formatted terminal output. No Rich dependency — pure TTY.
 
 Usage::
 
@@ -15,83 +15,122 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import json as _json
+import os
+import sys
+import time
+from contextlib import contextmanager
+from typing import Any, Dict, Generator, List, Optional, TextIO
 
 from .base import Logger, LogLevel, LogRecord
 
 
-# ── Rich imports (lazy — only loaded when CLILogger is instantiated) ────
+# ── TTY gate ────────────────────────────────────────────────────────────
 
-_console = None
-_Table = None
-_Panel = None
-_Syntax = None
-_box = None
-
-# While the shell TUI is active the terminal belongs to curses, so the rich
-# console must not write to it.  Handlers (e.g. the LogBuffer console pane)
-# keep receiving records regardless.
 _TERMINAL_ENABLED = True
 
 
 def set_cli_terminal(enabled: bool) -> None:
-    """Enable or disable rich terminal output (used by the shell TUI)."""
+    """Enable or disable terminal output (used by the shell TUI)."""
     global _TERMINAL_ENABLED
     _TERMINAL_ENABLED = enabled
 
 
-def _cli_print(renderable) -> None:
-    """Print via the rich console unless terminal output is disabled."""
-    if _TERMINAL_ENABLED:
-        _console.print(renderable)
+# ── ANSI codes ──────────────────────────────────────────────────────────
 
 
-def _ensure_rich():
-    global _console, _Table, _Panel, _Syntax, _box
-    if _console is not None:
-        return
-    from rich.console import Console
-    from rich.table import Table as RichTable
-    from rich.panel import Panel as RichPanel
-    from rich.syntax import Syntax as RichSyntax
-    from rich import box as rich_box
+def _color_enabled(stream: Optional[TextIO] = None) -> bool:
+    """Auto-detect color support. Respects NO_COLOR / FORCE_COLOR / TTY."""
+    no_color = os.environ.get("NO_COLOR", "").strip() == "1"
+    force_color = os.environ.get("FORCE_COLOR", "").strip() == "1"
+    slo_color = os.environ.get("SLO_LOG_COLOR", "").strip().lower()
 
-    _console = Console(highlight=False)
-    _Table = RichTable
-    _Panel = RichPanel
-    _Syntax = RichSyntax
-    _box = rich_box
+    if no_color:
+        return False
+    if slo_color in ("1", "true", "yes", "on"):
+        return True
+    if slo_color in ("0", "false", "no", "off"):
+        return False
+    if force_color:
+        return True
+    try:
+        return bool((stream or sys.stderr).isatty())
+    except (AttributeError, ValueError):
+        return False
 
 
-# ── Level → Rich style mapping ────────────────────────────────────────
+class _A:
+    """ANSI escape codes."""
+    RESET    = "\033[0m"
+    BOLD     = "\033[1m"
+    DIM      = "\033[2m"
+    ITALIC   = "\033[3m"
+    UNDER    = "\033[4m"
+    RED      = "\033[31m"
+    GREEN    = "\033[32m"
+    YELLOW   = "\033[33m"
+    BLUE     = "\033[34m"
+    MAGENTA  = "\033[35m"
+    CYAN     = "\033[36m"
+    WHITE    = "\033[37m"
+    GREY     = "\033[90m"
+    BG_RED   = "\033[41m"
+    BG_GREEN = "\033[42m"
+
+
+# ── Level → style mapping ──────────────────────────────────────────────
 
 _LEVEL_STYLE = {
-    LogLevel.DEBUG:    ("dim cyan",    "debug"),
-    LogLevel.INFO:     ("green",       "info"),
-    LogLevel.WARNING:  ("bold yellow", "warning"),
-    LogLevel.ERROR:    ("bold red",    "error"),
-    LogLevel.CRITICAL: ("bold white on red", "critical"),
+    LogLevel.DEBUG:    (_A.DIM + _A.CYAN,            "·",  "debug"),
+    LogLevel.INFO:     (_A.GREEN,                     "ℹ",  "info"),
+    LogLevel.WARNING:  (_A.BOLD + _A.YELLOW,          "!",  "warning"),
+    LogLevel.ERROR:    (_A.BOLD + _A.RED,             "✗",  "error"),
+    LogLevel.CRITICAL: (_A.BG_RED + _A.BOLD + _A.WHITE, "✗", "critical"),
 }
 
-# Semantic prefix icons (inherited from CLI Printer convention)
-_ICON = {
-    LogLevel.DEBUG:    ("dim", "·"),
-    LogLevel.INFO:     ("blue", "ℹ"),
-    LogLevel.WARNING:  ("yellow", "!"),
-    LogLevel.ERROR:    ("red", "✗"),
-    LogLevel.CRITICAL: ("bold red", "✗"),
-}
 
+# ── Terminal width ──────────────────────────────────────────────────────
+
+def _term_width() -> int:
+    """Get terminal width, fallback to 80."""
+    try:
+        return os.get_terminal_size().columns
+    except (AttributeError, ValueError, OSError):
+        return 80
+
+
+# ── Helpers ─────────────────────────────────────────────────────────────
+
+def _c(text: str, color: str, enabled: bool) -> str:
+    """Wrap text in ANSI color if enabled."""
+    if enabled:
+        return f"{color}{text}{_A.RESET}"
+    return text
+
+
+def _write(stream: TextIO, text: str) -> None:
+    """Write to stream, swallow errors."""
+    try:
+        stream.write(text)
+        stream.flush()
+    except (OSError, ValueError):
+        pass
+
+
+# ── CLILogger ───────────────────────────────────────────────────────────
 
 class CLILogger(Logger):
-    """Rich-based CLI logger — inherits from Logger, outputs via Rich Console.
+    """Native ANSI CLI logger — inherits from Logger, outputs via escape codes.
 
     Supports all base Logger methods plus CLI-specific helpers:
-    ``success()``, ``step()``, ``header()``, ``section()``, ``table()``.
+    ``success()``, ``step()``, ``header()``, ``section()``, ``table()``,
+    ``json()``, ``status()``, ``key_value()``, ``command()``.
 
     Parameters:
         name:    Logger name (e.g. ``"slo.cli"``).
         level:   Minimum severity to emit.
+        stream:  Output stream (default ``sys.stdout``).
+        colors:  Enable ANSI color output (default: auto-detect TTY).
         context: Default context attached to every record.
     """
 
@@ -99,87 +138,96 @@ class CLILogger(Logger):
         self,
         name: str = "slo.cli",
         level: LogLevel = LogLevel.INFO,
+        stream: Optional[TextIO] = None,
+        colors: Optional[bool] = None,
         context: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(name=name, level=level, context=context)
-        _ensure_rich()
+        self._stream = stream or sys.stdout
+        self._colors = _color_enabled(self._stream) if colors is None else colors
 
     # ── Core emit ───────────────────────────────────────────────────────
 
     def emit(self, record: LogRecord) -> None:
-        """Format and print the record via Rich Console (thread-safe)."""
-        style, _ = _LEVEL_STYLE.get(record.level, ("white", record.level.value))
-        icon_style, icon = _ICON.get(record.level, ("white", "·"))
+        """Format and write the record to the output stream (thread-safe)."""
+        if not _TERMINAL_ENABLED:
+            return
 
-        # Build Rich Text parts
-        from rich.text import Text
+        color, icon, _ = _LEVEL_STYLE.get(record.level, (_A.WHITE, "·", "debug"))
+        c = self._colors
 
-        parts = Text()
+        parts = []
 
         # Icon
-        parts.append(f"  {icon} ", style=icon_style)
+        parts.append(_c(f"  {icon} ", color, c))
 
         # Level tag
-        parts.append(f"[{record.level.value}] ", style=style)
+        parts.append(_c(f"[{record.level.value}] ", color, c))
 
         # Logger name
-        parts.append(f"{record.logger} ", style="dim")
+        parts.append(_c(f"{record.logger} ", _A.DIM, c))
 
         # Context
         if record.context:
             ctx_str = " ".join(f"{k}={v}" for k, v in record.context.items())
-            parts.append(f"{ctx_str} ", style="dim")
+            parts.append(_c(f"{ctx_str} ", _A.DIM, c))
 
         # Message
         parts.append(record.message)
 
         # Exception
         if record.exception:
-            parts.append(f" — {record.exception}", style="red")
+            parts.append(_c(f" — {record.exception}", _A.RED, c))
 
         with self._lock:
-            _cli_print(parts)
+            _write(self._stream, "".join(parts) + "\n")
 
-    # ── CLI-specific helpers (not on base Logger) ───────────────────────
+    # ── CLI-specific helpers ────────────────────────────────────────────
 
     def success(self, msg: str, **ctx: Any) -> None:
         """Log a success (green checkmark)."""
-        from rich.text import Text
-        parts = Text()
-        parts.append("  ✓ ", style="green")
-        parts.append(msg)
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
+        parts = [_c("  ✓ ", _A.GREEN, c), msg]
         if ctx:
             ctx_str = " ".join(f"{k}={v}" for k, v in ctx.items())
-            parts.append(f" {ctx_str}", style="dim")
+            parts.append(_c(f" {ctx_str}", _A.DIM, c))
         with self._lock:
-            _cli_print(parts)
+            _write(self._stream, "".join(parts) + "\n")
 
     def step(self, msg: str, **ctx: Any) -> None:
         """Log a step/action (cyan arrow)."""
-        from rich.text import Text
-        parts = Text()
-        parts.append("  → ", style="cyan")
-        parts.append(msg)
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
+        parts = [_c("  → ", _A.CYAN, c), msg]
         if ctx:
             ctx_str = " ".join(f"{k}={v}" for k, v in ctx.items())
-            parts.append(f" {ctx_str}", style="dim")
+            parts.append(_c(f" {ctx_str}", _A.DIM, c))
         with self._lock:
-            _cli_print(parts)
+            _write(self._stream, "".join(parts) + "\n")
 
     def header(self, title: str, char: str = "=") -> None:
         """Print a bold header with a separator line."""
-        width = _console.width
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
+        width = _term_width()
         with self._lock:
-            _cli_print(f"[bold]{title}[/]")
-            _cli_print(f"[dim]{char * width}[/]")
+            _write(self._stream, _c(title, _A.BOLD, c) + "\n")
+            _write(self._stream, _c(char * width, _A.DIM, c) + "\n")
 
     def section(self, title: str) -> None:
         """Print a section divider."""
-        width = _console.width
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
+        width = _term_width()
         with self._lock:
-            _cli_print("")
-            _cli_print(f"[bold]{title}[/]")
-            _cli_print(f"[dim]{'-' * width}[/]")
+            _write(self._stream, "\n")
+            _write(self._stream, _c(title, _A.BOLD, c) + "\n")
+            _write(self._stream, _c("-" * width, _A.DIM, c) + "\n")
 
     def table(
         self,
@@ -187,64 +235,128 @@ class CLILogger(Logger):
         rows: List[List[str]],
         align: Optional[List[str]] = None,
     ) -> None:
-        """Print a Rich table."""
+        """Print an ASCII table with column alignment."""
         if not rows:
             return
-        t = _Table(box=_box.SIMPLE, show_header=True, header_style="bold")
-        for i, h in enumerate(headers):
-            justification = {"l": "left", "r": "right", "c": "center"}.get(
-                align[i] if align and i < len(align) else "l", "left"
-            )
-            t.add_column(h, justify=justification)
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
+
+        # Compute column widths
+        col_count = len(headers)
+        widths = [len(h) for h in headers]
         for row in rows:
-            t.add_row(*row)
+            for i in range(min(len(row), col_count)):
+                widths[i] = max(widths[i], len(str(row[i])))
+
+        # Parse alignment
+        def _align_col(i: int) -> str:
+            if align and i < len(align):
+                return align[i]
+            return "l"
+
+        def _fmt_cell(text: str, width: int, a: str) -> str:
+            t = str(text)
+            if a == "r":
+                return t.rjust(width)
+            elif a == "c":
+                return t.center(width)
+            return t.ljust(width)
+
         with self._lock:
-            _cli_print(t)
+            # Header
+            header_parts = []
+            for i, h in enumerate(headers):
+                cell = _fmt_cell(h, widths[i], _align_col(i))
+                header_parts.append(_c(cell, _A.BOLD, c))
+            _write(self._stream, "  ".join(header_parts) + "\n")
+
+            # Separator
+            sep_parts = [_c("-" * w, _A.DIM, c) for w in widths]
+            _write(self._stream, "  ".join(sep_parts) + "\n")
+
+            # Rows
+            for row in rows:
+                cells = []
+                for i in range(col_count):
+                    val = str(row[i]) if i < len(row) else ""
+                    cells.append(_fmt_cell(val, widths[i], _align_col(i)))
+                _write(self._stream, "  ".join(cells) + "\n")
 
     def json(self, data: Any, indent: int = 2) -> None:
-        """Pretty-print JSON with syntax highlighting."""
-        import json as _json
-        text = _json.dumps(data, indent=indent, default=str)
-        syntax = _Syntax(text, "json", theme="monokai", line_numbers=False)
+        """Pretty-print JSON."""
+        if not _TERMINAL_ENABLED:
+            return
+        text = _json.dumps(data, indent=indent, default=str, ensure_ascii=False)
         with self._lock:
-            _cli_print(syntax)
+            _write(self._stream, text + "\n")
 
     def status(self, label: str, value: str, status: str = "ok") -> None:
         """Print a key-value status line with a colored indicator."""
-        colors = {"ok": "green", "warn": "yellow", "error": "red", "info": "blue"}
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
+        colors = {"ok": _A.GREEN, "warn": _A.YELLOW, "error": _A.RED, "info": _A.BLUE}
         icons = {"ok": "✓", "warn": "!", "error": "✗", "info": "ℹ"}
-        color = colors.get(status, "white")
+        color = colors.get(status, _A.WHITE)
         icon = icons.get(status, "•")
         with self._lock:
-            _cli_print(f"  [[{color}]{icon}[/]] {label}: {value}")
+            _write(self._stream, f"  {_c(icon, color, c)} {label}: {value}\n")
 
     def divider(self, char: str = "-") -> None:
         """Print a separator line."""
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
         with self._lock:
-            _cli_print(f"[dim]{char * _console.width}[/]")
+            _write(self._stream, _c(char * _term_width(), _A.DIM, c) + "\n")
 
-    def key_value(self, key: str, value: str, indent: int = 2):
+    def key_value(self, key: str, value: str, indent: int = 2) -> None:
         """Print a dim key: value pair."""
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
         padding = " " * indent
-        if key:
-            with self._lock:
-                _cli_print(f"{padding}[dim]{key}:[/] {value}")
-        else:
-            with self._lock:
-                _cli_print(f"{padding}{value}")
+        with self._lock:
+            if key:
+                _write(self._stream, f"{padding}{_c(key + ':', _A.DIM, c)} {value}\n")
+            else:
+                _write(self._stream, f"{padding}{value}\n")
 
-    def blank(self, count: int = 1):
+    def blank(self, count: int = 1) -> None:
         """Print blank lines."""
+        if not _TERMINAL_ENABLED:
+            return
         with self._lock:
             for _ in range(count):
-                _cli_print("")
+                _write(self._stream, "\n")
 
-    def command(self, cmd: str, description: str = ""):
+    def command(self, cmd: str, description: str = "") -> None:
         """Print a command with optional description."""
-        from rich.text import Text
-        parts = Text()
-        parts.append(f"  {cmd:<30}", style="cyan")
-        if description:
-            parts.append(f" {description}", style="dim")
+        if not _TERMINAL_ENABLED:
+            return
+        c = self._colors
         with self._lock:
-            _cli_print(parts)
+            line = _c(f"  {cmd:<30}", _A.CYAN, c)
+            if description:
+                line += _c(f" {description}", _A.DIM, c)
+            _write(self._stream, line + "\n")
+
+    # ── Timing ──────────────────────────────────────────────────────────
+
+    @contextmanager
+    def timer(self, label: str = "elapsed") -> Generator[None, None, None]:
+        """Context manager that logs elapsed time on exit.
+
+        Usage::
+
+            with log.timer("model load"):
+                load_model()
+            # prints: ℹ [info] slo.cli model load (42ms)
+        """
+        start = time.monotonic()
+        try:
+            yield
+        finally:
+            elapsed_ms = (time.monotonic() - start) * 1000
+            self.info(label, elapsed_ms=f"{elapsed_ms:.0f}ms")

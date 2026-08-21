@@ -251,31 +251,21 @@ def _cmd_models_download(args):
     """Download a HuggingFace model with size confirmation and live progress.
 
     Enforces the bandwidth policy: queries HuggingFace Hub for model size,
-    shows a Rich panel with the estimate, and requires user confirmation
-    for downloads over 50 MB. Use ``--yes`` or ``SLO_AUTO_DOWNLOAD=1``
-    to skip the prompt.
+    shows the estimate, and requires user confirmation for downloads over
+    50 MB. Use ``--yes`` or ``SLO_AUTO_DOWNLOAD=1`` to skip the prompt.
 
-    Shows a live ``rich.progress`` bar with percentage, speed, ETA, and
-    current filename. Ctrl+C cancels gracefully.
+    Shows a live progress bar with percentage, speed, ETA, and current
+    filename. Ctrl+C cancels gracefully.
 
     If no model_id is provided, shows an interactive fuzzy-searchable list
     of popular text-generation models from HuggingFace Hub.
 
     Side effects:
         - May download model files to HF cache directory
-        - Prints to stdout via Rich panels and progress bars
+        - Prints to stdout via ANSI progress bars
     """
     from core.permissions import PermissionsManager
-    from rich.console import Console
-    from rich.progress import (
-        Progress,
-        SpinnerColumn,
-        BarColumn,
-        TextColumn,
-        TimeRemainingColumn,
-        TransferSpeedColumn,
-        MofNCompleteColumn,
-    )
+    from utils.progress import ProgressBar
 
     # ── Interactive model selection if no model_id ──────────
     if not getattr(args, "model_id", None):
@@ -287,8 +277,6 @@ def _cmd_models_download(args):
     log.header("Download Model")
     log.key_value("Model ID", args.model_id)
     log.blank()
-
-    console = Console(highlight=False)
 
     try:
         from domains.infrastructure.download_manager import get_download_manager
@@ -307,47 +295,26 @@ def _cmd_models_download(args):
             return
 
         # ── Live progress bar ──────────────────────────────
-        cancel_requested = False
-        progress_task_id = None
+        bar = ProgressBar(total=100, desc="Downloading", width=30, show_eta=True)
         current_file = ""
-
-        progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(bar_width=30),
-            MofNCompleteColumn(),
-            TransferSpeedColumn(),
-            TimeRemainingColumn(),
-            console=console,
-        )
 
         def _render_progress(progress_dict):
             nonlocal current_file
             pct = progress_dict.get("percentage", 0)
-            downloaded = progress_dict.get("bytes_downloaded", 0)
-            total = progress_dict.get("total_bytes", 0)
             fname = progress_dict.get("current_file", "")
             if fname:
                 current_file = fname.split("/")[-1][:40]
-
-            if progress_task_id is not None and total > 0:
-                progress.update(
-                    progress_task_id,
-                    completed=downloaded,
-                    total=total,
-                    description=current_file or "Downloading",
-                )
+            bar.desc = current_file or "Downloading"
+            bar.set_progress(int(pct))
 
         async def _do_download():
-            nonlocal progress_task_id
             mgr.on_progress(args.model_id, _render_progress)
-
-            with progress:
-                progress_task_id = progress.add_task(
-                    "Downloading", total=None, completed=0
-                )
+            bar.start()
+            try:
                 result = await mgr.download(args.model_id)
                 return result
+            finally:
+                bar.finish()
 
         result = asyncio.run(_do_download())
 
@@ -378,10 +345,7 @@ def _cmd_models_status(args):
     their sizes, and indicates whether each has been converted to .slnc
     format. Useful for managing disk space and verifying downloads.
     """
-    from rich.console import Console
-    from rich.table import Table
-
-    console = Console(highlight=False)
+    import sys
 
     hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
     if not hf_cache.exists():
@@ -424,11 +388,11 @@ def _cmd_models_status(args):
 
         # Determine format status
         if has_slnc:
-            status = "[green].slnc[/]"
+            status = ".slnc"
         elif has_safetensors:
-            status = "[yellow]safetensors[/]"
+            status = "safetensors"
         else:
-            status = "[dim]other[/]"
+            status = "other"
 
         models.append({
             "id": model_id,
@@ -449,23 +413,14 @@ def _cmd_models_status(args):
 
     log.header(f"Cached Models ({len(models)} models, {format_size(total_cache)} total)")
 
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Model", style="cyan")
-    table.add_column("Size", justify="right")
-    table.add_column("Files", justify="right")
-    table.add_column("Format")
+    log.table(
+        ["Model", "Size", "Files", "Format"],
+        [[m["id"], format_size(m["size"]), str(m["files"]), m["status"]] for m in models],
+        align=["l", "r", "r", "l"],
+    )
 
-    for m in models:
-        table.add_row(
-            m["id"],
-            format_size(m["size"]),
-            str(m["files"]),
-            m["status"],
-        )
-
-    console.print(table)
-    console.print()
-    console.print(f"  [dim]Cache: {hf_cache}[/]")
+    log.blank()
+    log.key_value("Cache", str(hf_cache))
 
 
 def _cmd_models_compare(args):

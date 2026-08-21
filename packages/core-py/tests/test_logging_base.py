@@ -178,6 +178,43 @@ class TestLogger:
         log.info("msg")
         assert log.records[0].context == {}
 
+    def test_context_propagation_request_id(self):
+        from domains.logging.config import set_request_id, clear_log_context
+        clear_log_context()
+        set_request_id("req-123")
+        try:
+            log = CollectorLogger("slo.test")
+            log.info("msg")
+            assert log.records[0].context["request_id"] == "req-123"
+        finally:
+            from domains.logging.config import _request_id
+            _request_id.set(None)
+
+    def test_context_propagation_log_context(self):
+        from domains.logging.config import set_log_context, clear_log_context
+        clear_log_context()
+        set_log_context(session_id="s-456", user_id="u-789")
+        try:
+            log = CollectorLogger("slo.test")
+            log.info("msg")
+            assert log.records[0].context["session_id"] == "s-456"
+            assert log.records[0].context["user_id"] == "u-789"
+        finally:
+            from domains.logging.config import _log_context
+            _log_context.set({})
+
+    def test_context_priority_call_site_over_thread_local(self):
+        from domains.logging.config import set_log_context, clear_log_context
+        clear_log_context()
+        set_log_context(x="from_thread")
+        try:
+            log = CollectorLogger("slo.test")
+            log.info("msg", x="from_call")
+            assert log.records[0].context["x"] == "from_call"
+        finally:
+            from domains.logging.config import _log_context
+            _log_context.set({})
+
     def test_debug(self):
         log = CollectorLogger("slo.test", level=LogLevel.DEBUG)
         log.debug("d")
@@ -295,3 +332,53 @@ class TestChildLogger:
         child = parent.child("inference")
         child.info("msg")
         assert parent.records[0].logger == "slo.api.inference"
+
+
+# ── CompositeLogger ─────────────────────────────────────────────────────
+
+from domains.logging.base import CompositeLogger
+
+
+class TestCompositeLogger:
+    def test_emits_to_all_children(self):
+        a = CollectorLogger("a")
+        b = CollectorLogger("b")
+        multi = CompositeLogger("multi", children=[a, b])
+        multi.info("test")
+        assert len(a.records) == 1
+        assert len(b.records) == 1
+        assert a.records[0].message == "test"
+        assert b.records[0].message == "test"
+
+    def test_add_child(self):
+        a = CollectorLogger("a")
+        multi = CompositeLogger("multi")
+        multi.add(a)
+        assert a in multi._children
+
+    def test_remove_child(self):
+        a = CollectorLogger("a")
+        multi = CompositeLogger("multi", children=[a])
+        multi.remove(a)
+        assert a not in multi._children
+
+    def test_children_property_returns_copy(self):
+        a = CollectorLogger("a")
+        multi = CompositeLogger("multi", children=[a])
+        kids = multi.children
+        kids.append(CollectorLogger("extra"))
+        assert len(multi.children) == 1
+
+    def test_empty_composite_does_nothing(self):
+        multi = CompositeLogger("multi")
+        multi.info("no children")
+
+    def test_level_filtering(self):
+        a = CollectorLogger("a", level=LogLevel.WARNING)
+        b = CollectorLogger("b", level=LogLevel.WARNING)
+        multi = CompositeLogger("multi", children=[a, b], level=LogLevel.WARNING)
+        multi.info("filtered")
+        multi.warning("kept")
+        assert len(a.records) == 1
+        assert len(b.records) == 1
+        assert a.records[0].message == "kept"

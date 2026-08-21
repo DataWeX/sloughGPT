@@ -1,7 +1,6 @@
-"""Tests for domains.logging.base — LogLevel, ErrorCode, LogTag, LogRecord; domains.logging.rich_logger — Level."""
+"""Tests for domains.logging.base — LogLevel, ErrorCode, LogTag, LogRecord."""
 
 from domains.logging.base import LogLevel, ErrorCode, LogTag, LogRecord
-from domains.logging.rich_logger import Level
 
 
 class TestLogLevel:
@@ -63,13 +62,3 @@ class TestLogRecord:
             assert False, "Should have raised FrozenInstanceError"
         except Exception:
             pass
-
-
-class TestRichLevel:
-    def test_all_members(self):
-        assert len(Level) == 4
-    def test_values(self):
-        assert Level.DEBUG.value == 0
-        assert Level.INFO.value == 1
-        assert Level.WARN.value == 2
-        assert Level.ERROR.value == 3

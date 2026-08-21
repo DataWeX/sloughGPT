@@ -7,8 +7,9 @@ Classes:
     Logger           — abstract base class (ABC)
     ChildLogger      — delegates emit() to parent
     TaggedLogger     — attaches type tags to every record
+    CompositeLogger  — emits to multiple downstream loggers
     ConsoleLogger    — colored terminal output (API server)
-    CLILogger        — Rich-powered output (CLI commands)
+    CLILogger        — native ANSI output (CLI commands)
     ShellLogger      — ANSI output (interactive REPL)
     WebLogger        — structured JSON (browser / SSR)
     BridgeHandler    — routes Python logging.getLogger() through our Logger
@@ -30,7 +31,7 @@ Factory:
 
 from typing import Optional
 
-from .base import Logger, LogLevel, LogRecord, ChildLogger, TaggedLogger, ErrorCode, LogTag
+from .base import Logger, LogLevel, LogRecord, ChildLogger, TaggedLogger, CompositeLogger, ErrorCode, LogTag
 from .console_logger import ConsoleLogger
 from .cli_logger import CLILogger
 from .shell_logger import ShellLogger
@@ -51,6 +52,7 @@ __all__ = [
     "Logger",
     "ChildLogger",
     "TaggedLogger",
+    "CompositeLogger",
     "ErrorCode",
     "LogTag",
     "ConsoleLogger",
