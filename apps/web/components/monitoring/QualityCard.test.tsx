@@ -16,8 +16,8 @@ const quality = {
 describe('QualityCard', () => {
   afterEach(cleanup)
 
-  it('renders nothing when quality status is not ok', () => {
-    const { container } = render(<QualityCard quality={{ ...quality, status: 'error' } as any} stats={null} />)
+  it('renders nothing when total responses is 0', () => {
+    const { container } = render(<QualityCard quality={{ ...quality, total_responses: 0 } as any} stats={null} />)
     expect(container.innerHTML).toBe('')
   })
 

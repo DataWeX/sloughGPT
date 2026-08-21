@@ -68,17 +68,28 @@ describe('LearnSection', () => {
 
   it('renders header and stat tiles from status', async () => {
     mocks.mockStatus.mockResolvedValue({
-      learner_active: true,
-      knowledge_count: 42,
-      feeds_count: 3,
-      total_tokens: 1000,
+      soul_name: 'test',
+      total_tokens_ingested: 1000,
+      train_steps_completed: 5,
+      current_loss: 0.5,
+      loss_history: [],
+      buffer_size: 10,
+      buffer_capacity: 100,
+      pending_tokens: 0,
+      arch: 'lstm',
+      n_embed: 128,
+      n_layer: 2,
+      n_head: 4,
+      vocab_size: 256,
+      knowledge: {},
+      feeds_subscribed: 3,
+      filter_stats: {},
+      filter_config: {},
     })
     render(<LearnSection />)
     expect(await screen.findByText('Continual Learning')).toBeDefined()
-    expect(await screen.findByText(42)).toBeDefined()
-    expect(screen.getByText(1000)).toBeDefined()
+    expect(await screen.findByText(1000)).toBeDefined()
     expect(screen.getByText(3)).toBeDefined()
-    expect(screen.getByText('Active')).toBeDefined()
   })
 
   it('runs a search and shows the result summary', async () => {

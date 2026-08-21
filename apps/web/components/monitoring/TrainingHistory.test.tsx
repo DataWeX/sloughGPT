@@ -1,6 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
+
+const mockPush = vi.fn()
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+
 import { TrainingHistory } from './TrainingHistory'
 
 const jobs = [

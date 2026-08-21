@@ -15,6 +15,12 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useRoute: () => ({params: {}}),
+  useNavigation: () => ({navigate: jest.fn(), goBack: jest.fn()}),
+}));
+
 jest.mock('../../stores/chat-store', () => ({
   useChatStore: () => ({
     sessions: [],
