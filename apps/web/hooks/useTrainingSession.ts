@@ -190,7 +190,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       writeTraining({ totalEpochs: params.epochs, jobId })
       operationsStore.getState().fetch().catch(() => {})
       startStandardPoll(jobId, { addToast, onComplete })
-    }).catch(() => addToast('Something went wrong starting training', 'error'))
+    }).catch((e: unknown) => addToast(extractErrorMessage(e, 'Something went wrong starting training'), 'error'))
   }, [startStandardPoll])
 
   const startVisualTraining = useCallback((
@@ -218,7 +218,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           onComplete?.()
         },
       })
-    }).catch(() => addToast('Something went wrong starting image model training', 'error'))
+    }).catch((e: unknown) => addToast(extractErrorMessage(e, 'Something went wrong starting image model training'), 'error'))
   }, [startStandardPoll])
 
   const startTurboTrain = useCallback((

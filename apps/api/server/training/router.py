@@ -5,6 +5,7 @@ Trainer ``*.soul`` checkpoint charset maps: ``docs/policies/CONTRIBUTING.md`` (*
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import shutil
@@ -70,8 +71,8 @@ def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
             OpStatus.CANCELLED, OpStatus.COMPLETED, OpStatus.FAILED,
         ):
             mgr.finish(job_id, error=error or "")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("CancelManager.finish failed for job %s: %s", job_id, exc)
 
 
 def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
@@ -229,8 +230,8 @@ async def train(request: TrainRequest):
         )
         _mgr.start(op_id)
         training_jobs[job_id]["_cancel_manager_op_id"] = op_id
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager.register failed for train job %s: %s", job_id, exc)
 
     executor.submit(train_model, job_id)
 
@@ -325,13 +326,13 @@ async def stop_training_job(job_id: str):
     try:
         from domains.infrastructure.cancel_manager import get_cancel_manager
         get_cancel_manager().cancel(job_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager.cancel failed for job %s: %s", job_id, exc)
     try:
         from infrastructure.auth import get_audit_logger
         get_audit_logger().log("training.stop", resource=job_id, detail=f"from={prev_status}")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Audit logger.log failed for training.stop %s: %s", job_id, exc)
     return {"status": "stopping", "job_id": job_id}
 
 
@@ -415,7 +416,7 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
         checkpoint_path = Path(job["checkpoint"])
         if checkpoint_path.exists():
             try:
-                checkpoint_path.unlink()
+                await asyncio.to_thread(checkpoint_path.unlink)
                 deleted_files.append(str(checkpoint_path))
             except OSError:
                 pass
@@ -424,7 +425,7 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
         checkpoint_dir = Path(job["checkpoint_dir"])
         if checkpoint_dir.exists() and checkpoint_dir.is_dir():
             try:
-                shutil.rmtree(checkpoint_dir)
+                await asyncio.to_thread(shutil.rmtree, str(checkpoint_dir))
                 deleted_files.append(str(checkpoint_dir))
             except OSError:
                 pass
@@ -515,19 +516,28 @@ async def export_feedback_pairs(request: Request):
     min_quality = body.get("min_quality", 0)
     target_count = body.get("target_count", 100)
     ctrl = get_feedback_controller()
-    pairs = []
-    feedback_file = ctrl.feedback_dir / "feedback.jsonl"
-    if feedback_file.exists():
-        with open(feedback_file) as f:
-            for line in f:
-                fb = json.loads(line)
-                if fb.get("user_message") and fb.get("assistant_response"):
-                    pairs.append(fb)
-                    if len(pairs) >= target_count:
-                        break
+
+    def _read_feedback():
+        pairs = []
+        feedback_file = ctrl.feedback_dir / "feedback.jsonl"
+        if feedback_file.exists():
+            with open(feedback_file) as f:
+                for line in f:
+                    fb = json.loads(line)
+                    if fb.get("user_message") and fb.get("assistant_response"):
+                        pairs.append(fb)
+                        if len(pairs) >= target_count:
+                            break
+        return pairs
+
+    pairs = await asyncio.to_thread(_read_feedback)
     output_file = ctrl.feedback_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
-    with open(output_file, "w") as f:
-        json.dump({"pairs": pairs, "total": len(pairs)}, f, indent=2)
+
+    def _write_export():
+        with open(output_file, "w") as f:
+            json.dump({"pairs": pairs, "total": len(pairs)}, f, indent=2)
+
+    await asyncio.to_thread(_write_export)
     return {"pairs_count": len(pairs), "filepath": str(output_file), "status": "exported"}
 
 
@@ -655,6 +665,9 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 rec["steps_per_sec"] = info.get("steps_per_sec", rec.get("steps_per_sec"))
                 rec["eta_s"] = info.get("eta_s", rec.get("eta_s"))
                 rec["elapsed_s"] = info.get("elapsed_s", rec.get("elapsed_s"))
+                aq = info.get("avg_quality")
+                if aq is not None:
+                    rec["avg_quality"] = float(aq)
                 tl = info.get("train_loss")
                 if tl is not None:
                     rec["train_loss"] = float(tl)
@@ -936,7 +949,7 @@ async def start_distillation(request: DistillStartRequest):
         input_file = next((c for c in candidates if c.exists()), None)
     if not input_file or not Path(input_file).exists():
         raise_error("No training data file (input.txt/corpus.jsonl) in dataset", "E_BAD_REQUEST", status_code=400)
-    data_str = Path(input_file).read_text(encoding="utf-8")
+    data_str = await asyncio.to_thread(lambda: Path(input_file).read_text(encoding="utf-8"))
     if not data_str.strip():
         raise_error("Training data is empty", "E_BAD_REQUEST", status_code=400)
     out_stem = request.name or f"distill_{job_id}"
@@ -969,8 +982,8 @@ async def start_distillation(request: DistillStartRequest):
             op_id=job_id,
         )
         get_cancel_manager().start(job_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager.register failed for distill job %s: %s", job_id, exc)
 
     def _run_distill(job_id_: str = job_id):
         """Background thread that runs distillation."""
@@ -1567,8 +1580,8 @@ async def train_from_feedback():
             )
             _mgr.start(op_id)
             training_jobs[jid]["_cancel_manager_op_id"] = op_id
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("CancelManager.register failed for feedback job %s: %s", jid, exc)
 
         # Update global training controller
         get_training_controller().start(jid, f"Feedback Training {timestamp}")
@@ -2068,64 +2081,58 @@ async def list_builds():
     _lora_dir = _repo_root / "data" / "user_adapters"
     _hf_finetuned_dir = _repo_root / "models" / "hf-finetuned"
 
-    builds = []
-
-    # 1. Auto-train checkpoints (.soul / .npz)
-    seen = set()
-    for ext in ("*.soul", "*.npz"):
-        for f in sorted(_checkpoints_dir.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
-            if f.name in seen:
+    def _scan_builds():
+        builds = []
+        seen = set()
+        for ext in ("*.soul", "*.npz"):
+            for f in sorted(_checkpoints_dir.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
+                if f.name in seen:
+                    continue
+                seen.add(f.name)
+                info = _load_soul(f.name)
+                if info:
+                    info["build_type"] = "auto-train"
+                    builds.append(info)
+        for npz in sorted(_lora_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if npz.name in seen:
                 continue
-            seen.add(f.name)
-            info = _load_soul(f.name)
+            seen.add(npz.name)
+            info = _load_lora_soul(npz.name)
             if info:
-                info["build_type"] = "auto-train"
+                info["build_type"] = "lora"
                 builds.append(info)
-
-    # 2. LoRA .soul files
-    for npz in sorted(_lora_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
-        if npz.name in seen:
-            continue
-        seen.add(npz.name)
-        info = _load_lora_soul(npz.name)
-        if info:
-            info["build_type"] = "lora"
-            builds.append(info)
-
-    # 3. Completed HF fine-tune jobs
-    for jid, job in training_jobs.items():
-        if job.get("status") == "completed":
-            model_path = job.get("result", {}).get("model_path", "") if isinstance(job.get("result"), dict) else ""
-            builds.append({
-                "name": job.get("name") or jid,
-                "build_type": "hf-finetune",
-                "job_id": jid,
-                "model": job.get("model", ""),
-                "dataset": job.get("dataset", ""),
-                "loss": job.get("loss"),
-                "epochs": job.get("epochs"),
-                "model_path": model_path,
-                "created_at": job.get("started_at", ""),
-                "finished_at": job.get("completed_at", ""),
-            })
-
-    # 4. HF fine-tuned model directories on disk (for builds not tracked in memory)
-    if _hf_finetuned_dir.is_dir():
-        for d in sorted(_hf_finetuned_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            if d.is_dir() and d.name not in seen:
-                seen.add(d.name)
-                config_path = d / "config.json"
-                size_mb = sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) / (1024 * 1024)
+        for jid, job in training_jobs.items():
+            if job.get("status") == "completed":
+                model_path = job.get("result", {}).get("model_path", "") if isinstance(job.get("result"), dict) else ""
                 builds.append({
-                    "name": d.name,
-                    "build_type": "hf-finetuned-dir",
-                    "model_path": str(d),
-                    "size_mb": round(size_mb, 1),
-                    "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
-                    "model": d.name.split("_")[0].replace("--", "/"),
-                    "dataset": d.name.split("_")[1] if "_" in d.name else "",
+                    "name": job.get("name") or jid,
+                    "build_type": "hf-finetune",
+                    "job_id": jid,
+                    "model": job.get("model", ""),
+                    "dataset": job.get("dataset", ""),
+                    "loss": job.get("loss"),
+                    "epochs": job.get("epochs"),
+                    "model_path": model_path,
+                    "created_at": job.get("started_at", ""),
+                    "finished_at": job.get("completed_at", ""),
                 })
+        if _hf_finetuned_dir.is_dir():
+            for d in sorted(_hf_finetuned_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+                if d.is_dir() and d.name not in seen:
+                    seen.add(d.name)
+                    size_mb = sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) / (1024 * 1024)
+                    builds.append({
+                        "name": d.name,
+                        "build_type": "hf-finetuned-dir",
+                        "model_path": str(d),
+                        "size_mb": round(size_mb, 1),
+                        "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
+                        "model": d.name.split("_")[0].replace("--", "/"),
+                        "dataset": d.name.split("_")[1] if "_" in d.name else "",
+                    })
+        return builds
 
+    builds = await asyncio.to_thread(_scan_builds)
     return {"builds": builds}
 
 
@@ -2195,27 +2202,31 @@ def _resolve_finetuned(name: str) -> Path:
 async def list_finetuned_models():
     """List HF fine-tuned model directories under ``models/hf-finetuned/``."""
     base = _finetuned_dir()
-    models = []
-    if base.is_dir():
-        for d in sorted(base.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            if not d.is_dir():
-                continue
-            size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
-            meta = _read_finetuned_metadata(d)
-            display_name = d.name.split("_")[0].replace("--", "/")
-            models.append({
-                "name": d.name,
-                "model_path": str(d),
-                "size_mb": round(size_bytes / (1024 * 1024), 1),
-                "size_bytes": size_bytes,
-                "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
-                "model": meta.get("model") or display_name,
-                "dataset": meta.get("dataset") or (d.name.split("_")[1] if "_" in d.name else ""),
-                # Legacy keys consumed by the shell `finetuned` command table.
-                "model_name": d.name,
-                "final_loss": meta.get("final_loss"),
-                "epochs": meta.get("epochs") or 0,
-            })
+
+    def _scan_models():
+        models = []
+        if base.is_dir():
+            for d in sorted(base.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+                if not d.is_dir():
+                    continue
+                size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+                meta = _read_finetuned_metadata(d)
+                display_name = d.name.split("_")[0].replace("--", "/")
+                models.append({
+                    "name": d.name,
+                    "model_path": str(d),
+                    "size_mb": round(size_bytes / (1024 * 1024), 1),
+                    "size_bytes": size_bytes,
+                    "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
+                    "model": meta.get("model") or display_name,
+                    "dataset": meta.get("dataset") or (d.name.split("_")[1] if "_" in d.name else ""),
+                    "model_name": d.name,
+                    "final_loss": meta.get("final_loss"),
+                    "epochs": meta.get("epochs") or 0,
+                })
+        return models
+
+    models = await asyncio.to_thread(_scan_models)
     return {"models": models}
 
 
@@ -2239,7 +2250,7 @@ async def load_finetuned_model(name: str):
 async def delete_finetuned_model(name: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """Delete a fine-tuned model directory."""
     target = _resolve_finetuned(name)
-    shutil.rmtree(str(target))
+    await asyncio.to_thread(shutil.rmtree, str(target))
     return {"status": "deleted", "name": name}
 
 
@@ -2393,8 +2404,8 @@ async def recover_job(job_id: str):
         )
         _mgr.start(op_id)
         recovery_job["_cancel_manager_op_id"] = op_id
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager.register failed for recovery job %s: %s", jid, exc)
 
     def run_recovery(job_id_: str = jid):
         try:
@@ -2419,6 +2430,9 @@ async def recover_job(job_id: str):
                 rec["steps_per_sec"] = info.get("steps_per_sec", rec.get("steps_per_sec"))
                 rec["eta_s"] = info.get("eta_s", rec.get("eta_s"))
                 rec["elapsed_s"] = info.get("elapsed_s", rec.get("elapsed_s"))
+                aq = info.get("avg_quality")
+                if aq is not None:
+                    rec["avg_quality"] = float(aq)
                 tl = info.get("train_loss")
                 if tl is not None:
                     rec["train_loss"] = float(tl)

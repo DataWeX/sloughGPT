@@ -5,6 +5,7 @@ import { trainingJobsController } from '@/lib/controllers'
 import { readTraining, writeTraining, type TrainingToastFn } from '@/lib/app-shell'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { logger } from '@/lib/dev-log'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 const _log = logger.child('training-stream')
 
@@ -37,6 +38,7 @@ export function useTrainingStream() {
         elapsedSeconds: null, message: '', lossHistory: [], evalResult: null,
         startTime: Date.now(), error: null,
         checkpoint: null, finalLoss: null, modelPath: null, jobId: null,
+        avgQuality: null, dataQuality: null,
       })
 
       const es = new EventSource(`${PUBLIC_API_URL}/auto-train/stream`)
@@ -60,6 +62,7 @@ export function useTrainingStream() {
           if (env.meta?.total_epochs != null) patch.totalEpochs = env.meta.total_epochs
           if (env.message) patch.message = env.message
           if (env.data?.eval_report) patch.evalResult = env.data.eval_report
+          if (env.data?.avg_quality != null) patch.avgQuality = env.data.avg_quality
 
           // lossHistory accumulation — must read current state then write once
           // to avoid stale reads when both loss and eval_loss arrive together.
@@ -82,10 +85,13 @@ export function useTrainingStream() {
 
           if (env.status === 'complete') {
             closeStream()
+            const current = readTraining()
             writeTraining({
               phase: 'complete',
               checkpoint: env.data?.checkpoint ?? null,
               finalLoss: env.data?.final_loss ?? null,
+              avgQuality: env.data?.avg_quality ?? current.avgQuality,
+              dataQuality: env.data?.data_quality ?? current.dataQuality,
             })
             addToast('Training complete', 'success')
             onCheckpointUpdate?.()
@@ -106,7 +112,7 @@ export function useTrainingStream() {
           addToast('Connection lost during training', 'error')
         } else { esRetries++ }
       }
-    }).catch(() => addToast('Failed to start training', 'error'))
+    }).catch((e: unknown) => addToast(extractErrorMessage(e, 'Failed to start training'), 'error'))
   }, [closeStream])
 
   useEffect(() => () => closeStream(), [closeStream])

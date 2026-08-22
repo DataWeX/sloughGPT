@@ -114,7 +114,7 @@ class ErrorsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="errors_persist")
-            pass
+            logger.error("Failed to persist error to disk: %s", e)
 
     def _load_from_disk(self) -> list[dict]:
         try:
@@ -129,7 +129,7 @@ class ErrorsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="errors_load_from_disk")
-            pass
+            logger.error("Failed to load errors from disk: %s", e)
         return []
 
     def _clear_disk(self):
@@ -140,7 +140,7 @@ class ErrorsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="errors_clear_disk")
-            pass
+            logger.error("Failed to clear error log disk: %s", e)
 
     def _fingerprint(self, message: str) -> str:
         normalized = re.sub(r'\d+', 'N', message.lower())
@@ -344,7 +344,7 @@ class ErrorsRouter:
             from domains.infrastructure.errors import classify_exception, emit_error_event
             err = classify_exception(e)
             emit_error_event(err, source="errors_trends")
-            pass
+            logger.error("Failed to compute error trends: %s", e)
 
         result = [{"hour": k, "count": v} for k, v in sorted(buckets.items())]
         return success_response(data={"trends": result, "hours": hours})
