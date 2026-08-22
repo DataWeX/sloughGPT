@@ -147,8 +147,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [closeStream, clearAllPolls])
 
   const stopTraining = useCallback(() => {
-    trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
-    operationsStore.getState().cancelAll('training').catch((e) => console.warn('[training] cancelAll failed:', e?.message || e))
+    trainingJobsController.stopAutoTrain().catch((e) => _log.warning('Failed to stop training', e))
+    operationsStore.getState().cancelAll('training').catch((e) => _log.warning('cancelAll failed', e))
     resetTraining()
   }, [resetTraining])
 

@@ -8,6 +8,7 @@ import { sessionController } from '@/lib/session-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { NAV_SECTIONS } from '@/lib/navigation'
+import { useToastStore } from '@/lib/toast-store'
 
 interface CommandAction {
   id: string
@@ -29,6 +30,7 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null)
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
+  const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
     sessionController.list().then(sessions => {
@@ -62,7 +64,11 @@ export function CommandPalette() {
       id: `model-${m.id}`, label: `Switch to ${m.name}`, description: m.loaded ? 'Currently loaded' : 'Load and switch',
       icon: m.loaded ? '✓' : '🧠', category: 'model' as const,
       run: async () => {
-        if (!m.loaded) { try { await modelController.load(m.id) } catch { /* ignore */ } }
+        if (!m.loaded) {
+          try { await modelController.load(m.id) } catch {
+            addToast(`Failed to load model ${m.name}`, 'error')
+          }
+        }
         router.push('/chat')
       },
     }))

@@ -638,8 +638,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             op_id=job_id,
         )
         get_cancel_manager().start(job_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager.register failed for char-level train job %s: %s", job_id, exc)
 
     def run_training(job_id_: str = jid) -> None:
         from domains.training.train_pipeline import SloughGPTTrainer
@@ -679,6 +679,18 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                     rec["loss"] = fe
                     rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": fe, "type": "eval"})
                 get_training_runtime().sync(jid)
+                # Emit live progress to EventBus for SSE streams
+                get_training_executor().report_progress(jid, {
+                    "progress": rec.get("progress"),
+                    "epoch": rec.get("current_epoch"),
+                    "global_step": rec.get("global_step"),
+                    "total_steps": rec.get("total_steps"),
+                    "train_loss": rec.get("train_loss"),
+                    "eval_loss": rec.get("eval_loss"),
+                    "loss": rec.get("loss"),
+                    "eta_s": rec.get("eta_s"),
+                    "elapsed_s": rec.get("elapsed_s"),
+                })
 
             trainer = SloughGPTTrainer(
                 data_path=data_path_for_thread,
@@ -795,6 +807,81 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     }
 
 
+@router.get("/training/stream")
+async def training_stream(request: Request):
+    """SSE stream of live training progress.
+
+    Emits events when training jobs submit, start, progress, complete,
+    or fail. Uses the EventBus subscriptions from TrainingExecutor.
+    """
+    from domains.infrastructure.event_bus import get_event_bus
+    from domains.api.sse_envelope import sse_event
+
+    bus = get_event_bus()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def on_training_event(event_name: str, data: dict) -> None:
+        try:
+            queue.put_nowait(data)
+        except Exception:
+            pass
+
+    bus.on("training", on_training_event)
+
+    async def generate():
+        try:
+            # Send current active jobs immediately
+            active_jobs = {
+                jid: j for jid, j in training_jobs.items()
+                if j.get("status") in ("running", "queued", "starting")
+            }
+            if active_jobs:
+                yield sse_event(
+                    "training", "INIT", "working",
+                    data={
+                        "jobs": {
+                            jid: {k: v for k, v in j.items() if not k.startswith("_")}
+                            for jid, j in active_jobs.items()
+                        },
+                    },
+                    message=f"{len(active_jobs)} active job(s)",
+                )
+            # Stream live events
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event_data = await asyncio.wait_for(queue.get(), timeout=30)
+                    event_type = event_data.get("event", "update")
+                    job_id = event_data.get("job_id", "")
+                    # Enrich with job data if available
+                    job_rec = training_jobs.get(job_id, {})
+                    yield sse_event(
+                        "training", event_type.upper(), "working",
+                        data={
+                            "job_id": job_id,
+                            "event": event_type,
+                            **{k: v for k, v in job_rec.items() if not k.startswith("_")},
+                            **{k: v for k, v in event_data.items() if k != "event"},
+                        },
+                        message=f"{event_type}: {job_id}",
+                    )
+                except asyncio.TimeoutError:
+                    yield sse_event("training", "HEARTBEAT", "working", message="ping")
+        finally:
+            bus.off("training", on_training_event)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 # ── Visual Training ────────────────────────────────────────────────
 
 
@@ -867,8 +954,8 @@ async def start_visual_training(request: VisualTrainRequest):
         )
         _mgr.start(op_id)
         job["_cancel_manager_op_id"] = op_id
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager.register failed for VLM training job %s: %s", job_id, exc)
 
     def run_visual_training(job_id_: str = job_id) -> None:
         try:
@@ -1301,8 +1388,8 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
     try:
         from training.runtime import get_training_runtime
         get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, request.model_dump())
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Training runtime.register failed for LoRA job %s: %s", job_id, exc)
 
     try:
         from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
@@ -1314,8 +1401,8 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
             op_id=job_id,
         )
         get_cancel_manager().start(job_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager.register failed for LoRA training job %s: %s", job_id, exc)
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
