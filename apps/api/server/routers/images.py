@@ -9,8 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
-from schemas.common import raise_error, success_response, classify_and_raise
-from domains.infrastructure.logging import safe_audit_log
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.images")
 

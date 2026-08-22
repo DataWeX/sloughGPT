@@ -111,6 +111,7 @@ class Console:
         self._io = io
         self._has_readline = has_readline
         self._blocks: list[Block] = []
+        self._tui_repl = None
         if has_readline:
             try:
                 import readline  # noqa: F401
@@ -333,22 +334,26 @@ class Console:
 
     def confirm(self, message: str, default: bool = False) -> bool:
         """Prompt yes/no and return True/False."""
+        self._emit("confirm", {"message": message, "default": default})
+        if self._tui_repl is not None and hasattr(self._tui_repl, "prompt_confirm"):
+            return self._tui_repl.prompt_confirm(message, default)
         hint = "Y/n" if default else "y/N"
         self._io.write(f"  {message} [{hint}] ", end="")
         raw = self._io.read("").strip().lower()
         result = default if not raw else raw in ("y", "yes", "ye", "true", "1")
-        self._emit("confirm", {"message": message, "default": default, "result": result})
         return result
 
     # ── Ask — prompt for free-form input ──────────────────────────────
 
     def ask(self, message: str, default: str = "") -> str:
         """Prompt for free-form input with an optional default."""
+        self._emit("ask", {"message": message, "default": default})
+        if self._tui_repl is not None and hasattr(self._tui_repl, "prompt_ask"):
+            return self._tui_repl.prompt_ask(message, default)
         suffix = f" [{default}]" if default else ""
         self._io.write(f"  {message}{suffix} ", end="")
         raw = self._io.read("").strip()
         result = raw if raw else default
-        self._emit("ask", {"message": message, "default": default, "result": result})
         return result
 
     # ── JSON output ──────────────────────────────────────────────────

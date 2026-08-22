@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from domains.shell.io import MemoryIO
 from domains.shell.repl import ShellREPL
 from domains.shell.runtime import DaitRuntime
-from domains.infrastructure.logging import safe_audit_log
+from schemas.common import safe_audit_log
 
 logger = logging.getLogger("slo.api.shell")
 

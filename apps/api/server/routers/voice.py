@@ -10,8 +10,7 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from schemas.common import raise_error, success_response
-from domains.infrastructure.logging import safe_audit_log
+from schemas.common import raise_error, success_response, safe_audit_log
 
 logger = logging.getLogger("slo.routers.voice")
 
