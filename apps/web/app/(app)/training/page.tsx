@@ -7,6 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { Button } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
+import { writeTraining } from '@/lib/app-shell'
 import { datasetController } from '@/lib/controllers'
 import { trainingJobsController } from '@/lib/training-controller'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
@@ -108,6 +109,26 @@ export default function TrainingPage() {
 
   const runningJob = form.allJobs.find(j => j.status === 'running')
   const completedCount = form.allJobs.filter(j => j.status === 'completed').length
+
+  // If checkpoints polling finds a running job but session isn't tracking it, sync the state
+  useEffect(() => {
+    if (runningJob && !session.trainingRunning) {
+      writeTraining({
+        phase: 'TRAINING',
+        method: (runningJob.method as 'slnet' | 'hf' | 'turbo' | null) || 'slnet',
+        loss: runningJob.loss ?? runningJob.train_loss ?? null,
+        progress: runningJob.progress ?? 0,
+        epoch: runningJob.current_epoch ?? 0,
+        totalEpochs: runningJob.epochs ?? 0,
+        globalStep: runningJob.global_step ?? 0,
+        totalSteps: runningJob.total_steps ?? 0,
+        stepsPerSec: runningJob.steps_per_sec ?? null,
+        eta: runningJob.eta_s ?? null,
+        elapsedSeconds: runningJob.elapsed_s ?? null,
+        jobId: runningJob.id,
+      })
+    }
+  }, [runningJob, session.trainingRunning])
 
   // Browser notification on training completion
   const prevJobStatusesRef = useRef<Map<string, string>>(new Map())

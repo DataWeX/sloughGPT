@@ -15,6 +15,7 @@ interface HealthResult {
   message: string
   bestLoss: number | null
   recentTrend: number | null
+  avgQuality: number | null
 }
 
 function analyze(checkpoints: Checkpoint[]): HealthResult {
@@ -22,8 +23,13 @@ function analyze(checkpoints: Checkpoint[]): HealthResult {
     .filter(c => c.loss != null && c.loss > 0)
     .map(c => ({ name: c.name, loss: c.loss! }))
 
+  const withQuality = checkpoints.filter(c => c.avg_quality != null && c.avg_quality > 0)
+  const avgQuality = withQuality.length > 0
+    ? withQuality.reduce((s, c) => s + c.avg_quality!, 0) / withQuality.length
+    : null
+
   if (withLoss.length < 2) {
-    return { status: 'no-data', message: 'Need at least 2 checkpoints with loss to analyze', bestLoss: withLoss[0]?.loss ?? null, recentTrend: null }
+    return { status: 'no-data', message: 'Need at least 2 checkpoints with loss to analyze', bestLoss: withLoss[0]?.loss ?? null, recentTrend: null, avgQuality }
   }
 
   const bestLoss = Math.min(...withLoss.map(c => c.loss))
@@ -43,6 +49,7 @@ function analyze(checkpoints: Checkpoint[]): HealthResult {
       message: `Loss trending down (${trend.toFixed(4)} over last ${recentCount} runs)`,
       bestLoss,
       recentTrend: trend,
+      avgQuality,
     }
   }
 
@@ -52,6 +59,7 @@ function analyze(checkpoints: Checkpoint[]): HealthResult {
       message: `Loss trending up (+${trend.toFixed(4)} over last ${recentCount} runs) — consider lower learning rate`,
       bestLoss,
       recentTrend: trend,
+      avgQuality,
     }
   }
 
@@ -60,6 +68,7 @@ function analyze(checkpoints: Checkpoint[]): HealthResult {
     message: `Loss flat (Δ${trend.toFixed(4)} over last ${recentCount} runs) — try more data or different architecture`,
     bestLoss,
     recentTrend: trend,
+    avgQuality,
   }
 }
 
@@ -93,11 +102,14 @@ export function TrainingHealthCard({ checkpoints }: TrainingHealthCardProps) {
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground">{result.message}</p>
-        {result.bestLoss != null && (
-          <p className="text-[11px] text-muted-foreground/60 mt-1">
-            Best loss: {result.bestLoss.toFixed(4)}
-          </p>
-        )}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground/60 mt-1">
+          {result.bestLoss != null && (
+            <span>Best loss: {result.bestLoss.toFixed(4)}</span>
+          )}
+          {result.avgQuality != null && (
+            <span>Data quality: {result.avgQuality.toFixed(1)}/5</span>
+          )}
+        </div>
       </CardContent>
     </Card>
   )

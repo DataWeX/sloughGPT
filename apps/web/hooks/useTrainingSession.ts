@@ -98,7 +98,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             progress: turboStatus.progress ?? 0, globalStep: turboStatus.global_step ?? 0,
             totalSteps: turboStatus.total_steps ?? 0, stepsPerSec: turboStatus.steps_per_sec ?? null,
             eta: turboStatus.eta_s ?? null, elapsedSeconds: turboStatus.elapsed_s ?? null,
-            jobId: turboStatus.job_id ?? null,
+            jobId: turboStatus.job_id ?? null, avgQuality: turboStatus.avg_quality ?? null,
           })
           startTurboPoll()
           return
@@ -122,9 +122,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             phase: 'complete', method: 'turbo', progress: 100,
             checkpoint: (turboStatus.result?.checkpoint as string) ?? null,
             finalLoss: (turboStatus.result?.final_loss as number) ?? null,
+            avgQuality: (turboStatus.result?.avg_quality as number) ?? turboStatus.avg_quality ?? null,
+            dataQuality: (turboStatus.result?.data_quality as TrainingShellState['dataQuality']) ?? null,
           })
         }
-      } catch (e) { console.warn('[training] server reconciliation failed:', e?.message || e) }
+      } catch (e: unknown) { console.warn('[training] server reconciliation failed:', (e instanceof Error ? e.message : e) || e) }
     }
     reconcile()
     return () => { cancelled = true }
@@ -151,11 +153,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [resetTraining])
 
   const pauseTraining = useCallback(async () => {
-    try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch (e) { console.warn('[training] pause failed:', e?.message || e) }
+    try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch (e: unknown) { console.warn('[training] pause failed:', (e instanceof Error ? e.message : e) || e) }
   }, [])
 
   const resumeTraining = useCallback(async () => {
-    try { await trainingJobsController.resumeTraining(); writeTraining({ message: '' }) } catch (e) { console.warn('[training] resume failed:', e?.message || e) }
+    try { await trainingJobsController.resumeTraining(); writeTraining({ message: '' }) } catch (e: unknown) { console.warn('[training] resume failed:', (e instanceof Error ? e.message : e) || e) }
   }, [])
 
   const startFineTune = useCallback((
