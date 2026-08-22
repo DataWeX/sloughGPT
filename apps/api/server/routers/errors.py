@@ -10,6 +10,7 @@ Error logging router — accepts frontend JS errors for server-side monitoring.
 - GET /errors/unread: unread count
 """
 
+import asyncio
 import json
 import logging
 import hashlib
@@ -24,8 +25,6 @@ from schemas.common import success_response, safe_audit_log
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-
-from schemas.common import success_response
 
 logger = logging.getLogger("slo.errors")
 
@@ -116,6 +115,17 @@ class ErrorsRouter:
             emit_error_event(err, source="errors_persist")
             pass
 
+    def _persist_batch(self, records: list[dict]):
+        try:
+            self._ensure_dir()
+            with open(_ERROR_LOG_FILE, "a") as f:
+                for record in records:
+                    f.write(json.dumps(record, default=str) + "\n")
+        except Exception as e:
+            from domains.infrastructure.errors import classify_exception, emit_error_event
+            err = classify_exception(e)
+            emit_error_event(err, source="errors_persist_batch")
+
     def _load_from_disk(self) -> list[dict]:
         try:
             if _ERROR_LOG_FILE.exists():
@@ -176,6 +186,7 @@ class ErrorsRouter:
 
         logged = 0
         batch_fps: set = set()
+        records_to_persist: list = []
         for entry in batch.errors:
             message = entry.message or ""
             fp = self._fingerprint(message)
@@ -216,7 +227,7 @@ class ErrorsRouter:
             }
             self._error_buffer.append(error_record)
             self._error_count_since_clear += 1
-            self._persist_to_disk(error_record)
+            records_to_persist.append(error_record)
 
             is_extension = any(x in (entry.url or "") for x in ("chrome-extension://", "moz-extension://", "extension://"))
             is_vague = entry.message in ("error", "Script error.", "Non-Error promise rejection")
@@ -234,12 +245,14 @@ class ErrorsRouter:
         while len(self._error_buffer) > MAX_ERRORS:
             self._error_buffer.pop(0)
 
+        if records_to_persist:
+            await asyncio.to_thread(self._persist_batch, records_to_persist)
+
         return success_response(data={"status": "ok", "logged": logged})
 
     async def ingest_frontend_logs(self, batch: FrontendLogBatch) -> dict:
         """ingest_frontend_logs."""
         from domains.infrastructure.output_buffer import get_server_buffer
-        from domains.logging import LogLevel as _LL
 
         buf = get_server_buffer()
         level_map = {
@@ -326,8 +339,12 @@ class ErrorsRouter:
                 pass
 
         try:
-            if _ERROR_LOG_FILE.exists():
-                for line in _ERROR_LOG_FILE.read_text().splitlines():
+            def _read_trends():
+                if _ERROR_LOG_FILE.exists():
+                    return _ERROR_LOG_FILE.read_text().splitlines()
+                return []
+            lines = await asyncio.to_thread(_read_trends)
+            for line in lines:
                     line = line.strip()
                     if not line:
                         continue
@@ -362,7 +379,7 @@ class ErrorsRouter:
     async def clear_errors(self) -> dict:
         """clear_errors."""
         self._error_buffer.clear()
-        self._clear_disk()
+        await asyncio.to_thread(self._clear_disk)
         self._error_count_since_clear = 0
         self._dedup_map.clear()
         safe_audit_log("errors.clear", resource="all")
@@ -381,8 +398,10 @@ class ErrorsRouter:
         cli_log_path = os.path.join(home, ".opencode-error-log.json")
         try:
             if os.path.exists(cli_log_path):
-                with open(cli_log_path) as f:
-                    data = json.load(f)
+                def _read_cli_log():
+                    with open(cli_log_path) as f:
+                        return json.load(f)
+                data = await asyncio.to_thread(_read_cli_log)
                 for rec in data:
                     entries.append({
                         "timestamp": rec.get("timestamp", ""),
@@ -401,8 +420,10 @@ class ErrorsRouter:
         ui_log_path = os.path.join(home, ".opencode-ui-error-log.json")
         try:
             if os.path.exists(ui_log_path):
-                with open(ui_log_path) as f:
-                    data = json.load(f)
+                def _read_ui_log():
+                    with open(ui_log_path) as f:
+                        return json.load(f)
+                data = await asyncio.to_thread(_read_ui_log)
                 for rec in data:
                     entries.append({
                         "timestamp": rec.get("timestamp", ""),

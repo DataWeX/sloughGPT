@@ -6,6 +6,7 @@ import asyncio
 import os
 import logging
 import re
+import time
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from pathlib import Path
 
-from schemas.models import ModelInfo, LoadModelRequest, LoadModelResponse, ModelStatus
+from schemas.models import ModelInfo, LoadModelRequest, ModelStatus
 from schemas.common import success_response, raise_error, classify_and_raise, wrap_controller_result, safe_audit_log
 from controllers.models import get_models_controller
 from infrastructure.auth import require_auth_if_enabled
@@ -103,7 +104,6 @@ class ModelsRouter:
     def _describe_model(self, model_id: str, parameters: int, loaded: bool) -> str:
         """Generate a plain-language description of a model."""
         parts = []
-        name = model_id.split("/")[-1] if "/" in model_id else model_id
 
         # Size description
         if parameters:
@@ -534,21 +534,24 @@ class ModelsRouter:
         )
 
         try:
-            cache_dir = get_cache_dir(model_id)
-            refs_main = cache_dir / "refs" / "main"
-            if not refs_main.exists():
-                return {"status": "not_cached", "model_id": model_id}
-            ok = verify_model(model_id)
-            missing = list_missing_files(model_id)
-            size_str = format_size_gb(compute_model_size_gb(model_id)) or "—"
-            return {
-                "status": "verified" if ok else "corrupt",
-                "model_id": model_id,
-                "verified": ok,
-                "missing_files_count": len(missing),
-                "missing_files": missing,
-                "size_on_disk": size_str,
-            }
+            def _verify():
+                cache_dir = get_cache_dir(model_id)
+                refs_main = cache_dir / "refs" / "main"
+                if not refs_main.exists():
+                    return {"status": "not_cached", "model_id": model_id}
+                ok = verify_model(model_id)
+                missing = list_missing_files(model_id)
+                size_str = format_size_gb(compute_model_size_gb(model_id)) or "—"
+                return {
+                    "status": "verified" if ok else "corrupt",
+                    "model_id": model_id,
+                    "verified": ok,
+                    "missing_files_count": len(missing),
+                    "missing_files": missing,
+                    "size_on_disk": size_str,
+                }
+            result = await asyncio.to_thread(_verify)
+            return success_response(data=result)
         except Exception as e:
             logger.warning("Verify download failed (model=%s): %s", model_id, e)
             classify_and_raise(e, source="verify_download")
@@ -575,21 +578,28 @@ class ModelsRouter:
     async def cache_usage(self) -> Dict[str, Any]:
         """Total disk usage of the HuggingFace model cache (fast — walks blobs/ only)."""
         cache = _hf_cache_dir
-        if not cache.exists():
+
+        def _compute():
+            if not cache.exists():
+                return 0, 0
+            total = 0
+            count = 0
+            for entry in cache.iterdir():
+                if entry.name.startswith("models--") and entry.is_dir():
+                    blobs = entry / "blobs"
+                    if blobs.is_dir():
+                        for f in blobs.iterdir():
+                            if f.is_file():
+                                try:
+                                    total += f.stat().st_size
+                                except OSError:
+                                    pass
+                    count += 1
+            return total, count
+
+        total, count = await asyncio.to_thread(_compute)
+        if total == 0 and count == 0:
             return success_response(data={"total_bytes": 0, "total_gb": 0, "model_count": 0, "cache_dir": str(cache)})
-        total = 0
-        count = 0
-        for entry in cache.iterdir():
-            if entry.name.startswith("models--") and entry.is_dir():
-                blobs = entry / "blobs"
-                if blobs.is_dir():
-                    for f in blobs.iterdir():
-                        if f.is_file():
-                            try:
-                                total += f.stat().st_size
-                            except OSError:
-                                pass
-                count += 1
         return success_response(data={
             "total_bytes": total,
             "total_gb": round(total / (1024**3), 2),
@@ -609,10 +619,13 @@ class ModelsRouter:
         filename = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
 
         cache_dir = Path.home() / ".cache" / "sloughgpt" / "gguf"
-        cache_dir.mkdir(parents=True, exist_ok=True)
         cached_path = cache_dir / filename
 
-        if cached_path.exists():
+        def _check_cache():
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            return cached_path.exists()
+
+        if await asyncio.to_thread(_check_cache):
             logger.info("Serving cached GGUF: %s", cached_path, extra={"tag": "MODEL"})
             return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
 
@@ -620,9 +633,14 @@ class ModelsRouter:
         try:
             url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
             _t0 = time.monotonic()
-            download_file(url=url, dest=cached_path)
+
+            def _download():
+                download_file(url=url, dest=cached_path)
+
+            await asyncio.to_thread(_download)
             _elapsed_ms = (time.monotonic() - _t0) * 1000
-            safe_audit_log("model.download_gguf", resource=repo_id, detail=f"elapsed={_elapsed_ms:.0f}ms size={cached_path.stat().st_size}")
+            file_size = await asyncio.to_thread(lambda: cached_path.stat().st_size)
+            safe_audit_log("model.download_gguf", resource=repo_id, detail=f"elapsed={_elapsed_ms:.0f}ms size={file_size}")
             logger.info("GGUF downloaded and cached: %s (%.0fms)", cached_path, _elapsed_ms, extra={"tag": "MODEL"})
             return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
         except Exception as e:

@@ -1,6 +1,7 @@
 """
 Meta Weights Router - Feedback-driven weight adaptation.
 """
+import asyncio
 import logging
 import time as _time
 from fastapi import APIRouter, Request
@@ -44,8 +45,9 @@ class MetaWeightsRouter:
         manager = _get_manager()
         if manager is None:
             raise_error("Meta-weight system not available", "E_BAD_REQUEST", status_code=503)
-        weights = manager.get_adjustment(
-            user_message=request.user_message, k=request.k or 5, user_id=request.user_id or "default"
+        weights = await asyncio.to_thread(
+            manager.get_adjustment,
+            user_message=request.user_message, k=request.k or 5, user_id=request.user_id or "default",
         )
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         logger.info("Meta-weights computed in %.1fms (samples=%d)", _elapsed_ms, len(manager._weight_history))
@@ -73,7 +75,8 @@ class MetaWeightsRouter:
         manager = _get_manager()
         if manager is None:
             raise_error("Meta-weight system not available", "E_BAD_REQUEST", status_code=503)
-        return success_response(data=manager.get_stats())
+        stats = await asyncio.to_thread(manager.get_stats)
+        return success_response(data=stats)
 
     async def ping(self) -> dict:
         """

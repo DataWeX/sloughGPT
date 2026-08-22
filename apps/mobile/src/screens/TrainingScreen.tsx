@@ -15,7 +15,6 @@ import {useColors} from '../theme/colors';
 import {
   useTrainingStore,
   cleanupTraining,
-  type TrainPhase,
 } from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';

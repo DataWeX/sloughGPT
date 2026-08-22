@@ -315,6 +315,14 @@ class TestSingleton:
         assert get_event_bus() is new_bus
         set_event_bus(original)  # restore
 
+    def test_reset_creates_new_instance(self):
+        from domains.infrastructure.event_bus import reset_event_bus
+        original = get_event_bus()
+        reset_event_bus()
+        new = get_event_bus()
+        assert new is not original
+        assert isinstance(new, EventBus)
+
 
 # ── _is_noisy ─────────────────────────────────────────────────────────
 

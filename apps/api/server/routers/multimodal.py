@@ -13,7 +13,7 @@ from typing import List, Optional
 from pathlib import Path
 from threading import Lock
 
-from fastapi import APIRouter, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from domains.multimodal import get_multimodal_manager
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
@@ -231,11 +231,19 @@ class MultimodalRouter:
         if dataset_path:
             import glob
             dataset_path = os.path.expanduser(dataset_path)
-            if not os.path.isdir(dataset_path):
+
+            def _scan_dataset():
+                if not os.path.isdir(dataset_path):
+                    return None
+                paths = []
+                for ext in ("*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"):
+                    paths.extend(glob.glob(os.path.join(dataset_path, ext)))
+                    paths.extend(glob.glob(os.path.join(dataset_path, "**", ext), recursive=True))
+                return paths
+
+            image_paths = await asyncio.to_thread(_scan_dataset)
+            if image_paths is None:
                 raise_error(f"Directory not found: {dataset_path}", "E_BAD_REQUEST")
-            for ext in ("*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"):
-                image_paths.extend(glob.glob(os.path.join(dataset_path, ext)))
-                image_paths.extend(glob.glob(os.path.join(dataset_path, "**", ext), recursive=True))
             if not image_paths:
                 raise_error(f"No images found in {dataset_path}", "E_BAD_REQUEST")
         if files:
@@ -454,7 +462,7 @@ class MultimodalRouter:
             logger.warning("Multimodal analyze PDF failed: %s", e)
             classify_and_raise(e, source="multimodal_analyze_pdf")
         finally:
-            os.unlink(tmp_path)
+            await asyncio.to_thread(os.unlink, tmp_path)
 
     async def process_video(self, file: UploadFile = File(...), num_frames: int = Form(16)) -> dict:
         """process_video."""
@@ -477,7 +485,7 @@ class MultimodalRouter:
                 return success_response(data={"caption": caption.text, "num_frames": len(frames),
                         "video_embedding_shape": list(video_embedding.data.shape)})
             finally:
-                os.unlink(tmp_path)
+                await asyncio.to_thread(os.unlink, tmp_path)
         except Exception as e:
             logger.warning("Multimodal process video failed: %s", e)
             classify_and_raise(e, source="multimodal_process_video")
@@ -567,15 +575,21 @@ class MultimodalRouter:
         allowed_bases = {_REPO_ROOT / "datasets", _REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
         if not any(image_dir == base or str(image_dir).startswith(str(base) + "/") for base in allowed_bases):
                     raise_error(f"Directory not in allowed paths: {req.image_dir}", "E_AUTH_FORBIDDEN")
-        if not image_dir.exists():
-            raise_error(f"Directory not found: {req.image_dir}", "E_BAD_REQUEST")
+
         extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-        image_files = sorted([f for f in image_dir.iterdir() if f.suffix.lower() in extensions])
-        if not image_files:
-            raise_error(f"No images in {req.image_dir}", "E_BAD_REQUEST")
         datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
-        datasets_dir.mkdir(parents=True, exist_ok=True)
         output_path = datasets_dir / f"{req.name}.jsonl"
+
+        def _validate_and_list():
+            if not image_dir.exists():
+                raise_error(f"Directory not found: {req.image_dir}", "E_BAD_REQUEST")
+            files = sorted([f for f in image_dir.iterdir() if f.suffix.lower() in extensions])
+            if not files:
+                raise_error(f"No images in {req.image_dir}", "E_BAD_REQUEST")
+            datasets_dir.mkdir(parents=True, exist_ok=True)
+            return files
+
+        image_files = await asyncio.to_thread(_validate_and_list)
         auto_captioned = False
         if req.auto_caption:
             try:
@@ -612,10 +626,14 @@ class MultimodalRouter:
         """list_checkpoints."""
         try:
             from domains.training.video_trainer import list_video_checkpoints
-            ckpts = list_video_checkpoints()
-            if not ckpts:
-                ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
-            return ckpts
+
+            def _list():
+                ckpts = list_video_checkpoints()
+                if not ckpts:
+                    ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
+                return ckpts
+
+            return await asyncio.to_thread(_list)
         except Exception as exc:
             logger.warning("list_checkpoints failed: %s", exc)
             return []
@@ -624,14 +642,18 @@ class MultimodalRouter:
         """load_checkpoint."""
         try:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
-            ckpts = list_video_checkpoints()
-            if not ckpts:
-                ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
-            match = [c for c in ckpts if c["name"] == name]
+
+            def _find_checkpoint():
+                ckpts = list_video_checkpoints()
+                if not ckpts:
+                    ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
+                return [c for c in ckpts if c["name"] == name]
+
+            match = await asyncio.to_thread(_find_checkpoint)
             if not match:
                 raise_error(f"Checkpoint '{name}' not found", "E_NOT_FOUND")
             trainer = VideoCaptionTrainer()
-            trainer.load_checkpoint(match[0]["path"])
+            await asyncio.to_thread(trainer.load_checkpoint, match[0]["path"])
             safe_audit_log("multimodal.checkpoint.load", resource=name)
             return success_response(data={"status": "loaded", "checkpoint": name})
         except HTTPException:
@@ -644,16 +666,23 @@ class MultimodalRouter:
         """delete_checkpoint."""
         try:
             from domains.training.video_trainer import list_video_checkpoints
-            ckpts = list_video_checkpoints()
-            if not ckpts:
-                ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
-            match = [c for c in ckpts if c["name"] == name]
-            if not match:
+
+            def _find_and_delete():
+                ckpts = list_video_checkpoints()
+                if not ckpts:
+                    ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
+                match = [c for c in ckpts if c["name"] == name]
+                if not match:
+                    return False
+                path = Path(match[0]["path"])
+                for p in [path, path.with_suffix(".npz"), path.parent / f"{path.stem}_meta.json"]:
+                    if p.exists():
+                        os.remove(p)
+                return True
+
+            found = await asyncio.to_thread(_find_and_delete)
+            if not found:
                 raise_error(f"Checkpoint '{name}' not found", "E_NOT_FOUND")
-            path = Path(match[0]["path"])
-            for p in [path, path.with_suffix(".npz"), path.parent / f"{path.stem}_meta.json"]:
-                if p.exists():
-                    os.remove(p)
             safe_audit_log("multimodal.checkpoint.delete", resource=name)
             return success_response(data={"status": "deleted", "checkpoint": name})
         except HTTPException:

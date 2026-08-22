@@ -282,8 +282,8 @@ class InferenceEngine:
         finally:
             try:
                 client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("client close failed: %s", exc)
             logger.debug("Inference engine: client disconnected %s", addr)
 
     def _recv_message(self, client: socket.socket) -> Optional[dict]:

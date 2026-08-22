@@ -213,8 +213,8 @@ class SLNCLoader:
         try:
             self._mm.close()
             os.close(self._fd)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("slnc_loader close failed: %s", exc)
 
     def __repr__(self) -> str:
         return (

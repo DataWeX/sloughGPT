@@ -8,11 +8,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
-from routers.mobile import router
+from apps.api.server.routers.mobile import MobileRouter
 
 app = FastAPI()
 register_all_handlers(app)
-app.include_router(router)
+_m = MobileRouter()
+app.include_router(_m.router)
 client = TestClient(app, raise_server_exceptions=False)
 
 

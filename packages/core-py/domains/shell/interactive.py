@@ -1,0 +1,3723 @@
+"""
+InteractivePrompt — arrow-key navigation and type-to-filter for line-mode.
+
+Provides gh-auth-login-style interactive selection in the default
+(readline-based) shell.  Falls back to a numbered menu when the terminal
+does not support raw input (e.g. piped stdin, tests with MemoryIO).
+
+Usage:
+    from domains.shell.interactive import InteractivePrompt
+    prompt = InteractivePrompt(io)
+    choice = prompt.select("Pick an account", ["GitHub.com", "GitHub Enterprise"])
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import termios
+import time
+import tty
+
+
+# ── Raw key reading ──────────────────────────────────────────────────────────
+
+_KEY_UP = "up"
+_KEY_DOWN = "down"
+_KEY_LEFT = "left"
+_KEY_RIGHT = "right"
+_KEY_ENTER = "enter"
+_KEY_ESC = "esc"
+_KEY_BACKSPACE = "backspace"
+_KEY_DELETE = "delete"
+_KEY_HOME = "home"
+_KEY_END = "end"
+_KEY_CTRL_C = "ctrl_c"
+_KEY_CTRL_A = "ctrl_a"
+_KEY_CTRL_E = "ctrl_e"
+_KEY_PAGE_UP = "page_up"
+_KEY_PAGE_DOWN = "page_down"
+_KEY_CHAR = "char"
+
+
+def _terminal_width() -> int:
+    """Get terminal width in columns."""
+    try:
+        return os.get_terminal_size().columns
+    except (AttributeError, ValueError, OSError):
+        return 80
+
+
+def _terminal_height() -> int:
+    """Get terminal height in rows."""
+    try:
+        return os.get_terminal_size().lines
+    except (AttributeError, ValueError, OSError):
+        return 24
+
+
+class _RawKey:
+    """A decoded key press from the terminal."""
+
+    def __init__(self, kind: str, char: str = "") -> None:
+        self.kind = kind
+        self.char = char
+
+    def __repr__(self) -> str:
+        if self.char:
+            return f"RawKey({self.kind!r}, {self.char!r})"
+        return f"RawKey({self.kind!r})"
+
+
+def _read_raw_key(fd: int) -> _RawKey:
+    """Read a single key press from a raw-mode file descriptor.
+
+    Decodes escape sequences for arrow keys, and returns plain characters
+    for printable input.  Blocks until a key is pressed.
+
+    Args:
+        fd: file descriptor for the terminal (e.g. sys.stdin.fileno())
+
+    Returns:
+        _RawKey with kind and optional char.
+    """
+    ch = os.read(fd, 1)
+    if not ch:
+        return _RawKey(_KEY_ESC)
+
+    byte = ch[0]
+
+    # Ctrl+C
+    if byte == 3:
+        return _RawKey(_KEY_CTRL_C)
+
+    # Ctrl+A — Home
+    if byte == 1:
+        return _RawKey(_KEY_HOME)
+
+    # Ctrl+E — End
+    if byte == 5:
+        return _RawKey(_KEY_END)
+
+    # Enter
+    if byte in (10, 13):
+        return _RawKey(_KEY_ENTER)
+
+    # Escape — read rest of sequence
+    if byte == 27:
+        seq = os.read(fd, 1)
+        if not seq:
+            return _RawKey(_KEY_ESC)
+        if seq[0] == ord("["):
+            code = os.read(fd, 1)
+            if not code:
+                return _RawKey(_KEY_ESC)
+            c = code[0]
+            if c == 65:  # A — Up
+                return _RawKey(_KEY_UP)
+            if c == 66:  # B — Down
+                return _RawKey(_KEY_DOWN)
+            if c == 67:  # C — Right
+                return _RawKey(_KEY_RIGHT)
+            if c == 68:  # D — Left
+                return _RawKey(_KEY_LEFT)
+            if c == 72 or c == 55:  # H or 7 — Home
+                return _RawKey(_KEY_HOME)
+            if c == 70 or c == 56:  # F or 8 — End
+                return _RawKey(_KEY_END)
+            if c == 51:  # 3 — could be Delete
+                trailer = os.read(fd, 1)
+                if trailer and trailer[0] == 126:
+                    return _RawKey(_KEY_DELETE)
+                return _RawKey(_KEY_ESC)
+            if c == 49:  # 1 — could be Home (some terminals)
+                trailer = os.read(fd, 1)
+                if trailer and trailer[0] == 126:
+                    return _RawKey(_KEY_HOME)
+                return _RawKey(_KEY_ESC)
+            if c == 53:  # 5 — Page Up
+                trailer = os.read(fd, 1)
+                if trailer and trailer[0] == 126:
+                    return _RawKey(_KEY_PAGE_UP)
+                return _RawKey(_KEY_ESC)
+            if c == 54:  # 6 — Page Down
+                trailer = os.read(fd, 1)
+                if trailer and trailer[0] == 126:
+                    return _RawKey(_KEY_PAGE_DOWN)
+                return _RawKey(_KEY_ESC)
+            if c == 52:  # 4 — could be End (some terminals)
+                trailer = os.read(fd, 1)
+                if trailer and trailer[0] == 126:
+                    return _RawKey(_KEY_END)
+                return _RawKey(_KEY_ESC)
+            return _RawKey(_KEY_ESC)
+        if seq[0] == ord("O"):
+            code = os.read(fd, 1)
+            if not code:
+                return _RawKey(_KEY_ESC)
+            if code[0] == 72:  # OH — Home
+                return _RawKey(_KEY_HOME)
+            if code[0] == 70:  # OF — End
+                return _RawKey(_KEY_END)
+            if code[0] == 77:  # M — mouse event, ignore
+                os.read(fd, 1)
+                os.read(fd, 1)
+                return _RawKey(_KEY_ESC)
+            return _RawKey(_KEY_ESC)
+        return _RawKey(_KEY_ESC)
+
+    # Backspace / Delete
+    if byte in (127, 8):
+        return _RawKey(_KEY_BACKSPACE)
+
+    # Printable ASCII
+    if 32 <= byte < 127:
+        return _RawKey(_KEY_CHAR, chr(byte))
+
+    # Non-ASCII (utf-8 multi-byte) — read remaining bytes
+    if byte >= 128:
+        remaining = []
+        if byte < 224:
+            count = 1
+        elif byte < 240:
+            count = 2
+        elif byte < 248:
+            count = 3
+        else:
+            count = 4
+        for _ in range(count):
+            more = os.read(fd, 1)
+            if more:
+                remaining.append(more[0])
+        try:
+            char = bytes([byte] + remaining).decode("utf-8", errors="replace")
+        except Exception:
+            char = ""
+        return _RawKey(_KEY_CHAR, char)
+
+    return _RawKey(_KEY_ESC)
+
+
+# ── Terminal helpers ──────────────────────────────────────────────────────────
+
+class _RawTerminal:
+    """Context manager that puts the terminal in raw mode and restores it."""
+
+    def __init__(self, fd: int) -> None:
+        self._fd = fd
+        self._old_attrs: list | None = None
+
+    def __enter__(self) -> "_RawTerminal":
+        try:
+            self._old_attrs = termios.tcgetattr(self._fd)
+            tty.setraw(self._fd)
+        except termios.error:
+            self._old_attrs = None
+        return self
+
+    def __exit__(self, *exc) -> None:
+        if self._old_attrs is not None:
+            try:
+                termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_attrs)
+            except termios.error:
+                pass
+
+
+# ── ANSI helpers ──────────────────────────────────────────────────────────────
+
+_ERASE_LINE = "\033[2K"
+_CURSOR_UP = "\033[1A"
+_HIDE_CURSOR = "\033[?25l"
+_SHOW_CURSOR = "\033[?25h"
+_REVERSE = "\033[7m"
+_RESET_REVERSE = "\033[27m"
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_GREEN = "\033[32m"
+_RED = "\033[31m"
+_CYAN = "\033[36m"
+_RESET = "\033[0m"
+
+
+# ── InteractivePrompt ─────────────────────────────────────────────────────────
+
+class InteractivePrompt:
+    """Interactive arrow-key prompts for line-mode shell.
+
+    Wraps a ShellIO instance and provides select/confirm/ask methods that
+    use raw terminal input when available, falling back to numbered menus
+    for non-TTY environments (tests, piped input).
+    """
+
+    def __init__(self, io: object) -> None:
+        self._io = io
+        self._is_tty = self._detect_tty()
+
+    def _detect_tty(self) -> bool:
+        """Check if we can use raw terminal input."""
+        if hasattr(self._io, "_is_tty"):
+            return self._io._is_tty
+        try:
+            fd = sys.stdin.fileno()
+            return os.isatty(fd)
+        except (AttributeError, ValueError, OSError):
+            return False
+
+    def _get_fd(self) -> int:
+        """Get the file descriptor for raw input."""
+        if hasattr(self._io, "_tty") and self._io._tty is not None:
+            return self._io._tty.fileno()
+        return sys.stdin.fileno()
+
+    # ── Select (arrow-key menu) ───────────────────────────────────────────
+
+    def select(self, title: str, options: list[str]) -> str:
+        """Show an interactive arrow-key selection menu.
+
+        Args:
+            title: prompt text displayed above the options
+            options: list of strings to choose from
+
+        Returns:
+            the selected option string, or the first option on cancel/error
+        """
+        if not options:
+            return ""
+        if len(options) == 1:
+            return options[0]
+        if not self._is_tty:
+            return self._select_fallback(title, options)
+        return self._select_raw(title, options)
+
+    def _select_raw(self, title: str, options: list[str]) -> str:
+        """Interactive select using raw terminal input."""
+        fd = self._get_fd()
+        query = ""
+        cursor = 0
+        scroll = 0
+        max_visible = min(len(options), 20)
+        width = _terminal_width()
+
+        def _get_filtered() -> list[str]:
+            if query:
+                return [o for o in options if query.lower() in o.lower()]
+            return list(options)
+
+        def _render() -> list[str]:
+            filtered = _get_filtered()
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            if query:
+                lines.append(f"{_ERASE_LINE}\r  Filter: {_DIM}{query}{_RESET}{_HIDE_CURSOR}")
+            else:
+                lines.append("")
+
+            if not filtered:
+                lines.append(f"{_ERASE_LINE}\r  {_DIM}No matching options{_RESET}")
+            else:
+                for i in range(min(max_visible, len(filtered))):
+                    idx = scroll + i
+                    if idx >= len(filtered):
+                        break
+                    text = _truncate(filtered[idx], width - 5)
+                    if idx == cursor:
+                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {text}{_RESET_REVERSE}{_RESET}")
+                    else:
+                        lines.append(f"{_ERASE_LINE}\r   {text}")
+
+            if len(filtered) > max_visible:
+                lines.append(f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}")
+
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    filtered = _get_filtered()
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+
+                    key = _read_raw_key(fd)
+
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count)
+                        return options[0]
+
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count)
+                        if 0 <= cursor < len(filtered):
+                            return filtered[cursor]
+                        return options[0]
+
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                        if cursor < scroll:
+                            scroll = cursor
+
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(filtered) - 1, cursor + 1)
+                        if cursor >= scroll + max_visible:
+                            scroll = cursor - max_visible + 1
+
+                    elif key.kind == _KEY_BACKSPACE:
+                        if query:
+                            query = query[:-1]
+                            cursor = 0
+                            scroll = 0
+
+                    elif key.kind == _KEY_CHAR:
+                        query += key.char
+                        cursor = 0
+                        scroll = 0
+
+        except (termios.error, OSError):
+            return self._select_fallback(title, options)
+
+    def _select_fallback(self, title: str, options: list[str]) -> str:
+        """Numbered-menu fallback for non-TTY environments."""
+        self._io.write(f"  {title}")
+        for i, opt in enumerate(options, 1):
+            self._io.write(f"    {i}. {opt}")
+        while True:
+            self._io.write("  Enter number: ", end="")
+            try:
+                raw = self._io.read("").strip()
+            except (EOFError, KeyboardInterrupt):
+                return options[0] if options else ""
+            if raw.isdigit():
+                idx = int(raw) - 1
+                if 0 <= idx < len(options):
+                    return options[idx]
+
+    # ── Multi-select (checkbox menu) ─────────────────────────────────────
+
+    def select_multi(self, title: str, options: list[str]) -> list[str]:
+        """Show an interactive multi-select menu with checkboxes.
+
+        Use Space to toggle items, arrows to move, Enter to confirm.
+
+        Args:
+            title: prompt text displayed above the options
+            options: list of strings to choose from
+
+        Returns:
+            list of selected option strings
+        """
+        if not options:
+            return []
+        if not self._is_tty:
+            return self._select_multi_fallback(title, options)
+        return self._select_multi_raw(title, options)
+
+    def _select_multi_raw(self, title: str, options: list[str]) -> list[str]:
+        """Interactive multi-select using raw terminal input."""
+        fd = self._get_fd()
+        query = ""
+        cursor = 0
+        scroll = 0
+        checked: set[int] = set()
+        max_visible = min(len(options), 20)
+        width = _terminal_width()
+
+        def _get_filtered() -> list[tuple[int, str]]:
+            if query:
+                return [(i, o) for i, o in enumerate(options) if query.lower() in o.lower()]
+            return [(i, o) for i, o in enumerate(options)]
+
+        def _render() -> list[str]:
+            filtered = _get_filtered()
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_truncate(title, width - 4)}")
+            if query:
+                lines.append(f"{_ERASE_LINE}\r  Filter: {query}{_HIDE_CURSOR}")
+            else:
+                lines.append("")
+
+            for i in range(max_visible):
+                idx = scroll + i
+                if idx >= len(filtered):
+                    break
+                orig_idx, text = filtered[idx]
+                check = f"{_GREEN}\u25c9{_RESET}" if orig_idx in checked else "\u25cb"
+                prefix = f"{_REVERSE} > {_RESET_REVERSE}" if idx == cursor else "   "
+                display = _truncate(text, width - len(prefix) - 5)
+                lines.append(f"{_ERASE_LINE}\r{prefix} {check} {display}")
+
+            if len(filtered) > max_visible:
+                lines.append(f"{_ERASE_LINE}\r   ({len(filtered)} items, {cursor + 1}/{len(filtered)})")
+
+            n_checked = len(checked)
+            lines.append(f"{_ERASE_LINE}\r  Space: toggle  Enter: confirm ({n_checked} selected)  Esc: cancel{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    filtered = _get_filtered()
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+
+                    key = _read_raw_key(fd)
+
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count)
+                        return []
+
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count)
+                        return [options[i] for i in sorted(checked)]
+
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                        if cursor < scroll:
+                            scroll = cursor
+
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(filtered) - 1, cursor + 1)
+                        if cursor >= scroll + max_visible:
+                            scroll = cursor - max_visible + 1
+
+                    elif key.kind == _KEY_CHAR and key.char == " ":
+                        if 0 <= cursor < len(filtered):
+                            orig_idx = filtered[cursor][0]
+                            if orig_idx in checked:
+                                checked.discard(orig_idx)
+                            else:
+                                checked.add(orig_idx)
+
+                    elif key.kind == _KEY_BACKSPACE:
+                        if query:
+                            query = query[:-1]
+                            cursor = 0
+                            scroll = 0
+
+                    elif key.kind == _KEY_CHAR:
+                        query += key.char
+                        cursor = 0
+                        scroll = 0
+
+        except (termios.error, OSError):
+            return self._select_multi_fallback(title, options)
+
+    def _select_multi_fallback(self, title: str, options: list[str]) -> list[str]:
+        """Numbered-menu multi-select fallback for non-TTY environments."""
+        self._io.write(f"  {title}")
+        for i, opt in enumerate(options, 1):
+            self._io.write(f"    {i}. {opt}")
+        self._io.write("  Enter numbers (comma-separated): ", end="")
+        try:
+            raw = self._io.read("").strip()
+        except (EOFError, KeyboardInterrupt):
+            return []
+        if not raw:
+            return []
+        result = []
+        for part in raw.split(","):
+            part = part.strip()
+            if part.isdigit():
+                idx = int(part) - 1
+                if 0 <= idx < len(options):
+                    result.append(options[idx])
+        return result
+
+    # ── Confirm (y/n with arrow toggle) ───────────────────────────────────
+
+    def confirm(self, message: str, default: bool = False) -> bool:
+        """Interactive yes/no prompt with arrow-key toggle.
+
+        Args:
+            message: prompt text
+            default: default answer if Enter is pressed
+
+        Returns:
+            True for yes, False for no
+        """
+        if not self._is_tty:
+            return self._confirm_fallback(message, default)
+        return self._confirm_raw(message, default)
+
+    def _confirm_raw(self, message: str, default: bool) -> bool:
+        """Interactive confirm using raw terminal input."""
+        fd = self._get_fd()
+        hint = "Y/n" if default else "y/N"
+        selected = default
+
+        def _render() -> str:
+            if selected:
+                yes_text = f"{_REVERSE}{_GREEN} Yes {_RESET_REVERSE}{_RESET}"
+                no_text = f" No "
+            else:
+                yes_text = f" Yes "
+                no_text = f"{_REVERSE}{_RED} No {_RESET_REVERSE}{_RESET}"
+            return f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET} [{hint}]  {yes_text}  {no_text}{_HIDE_CURSOR}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+
+                    key = _read_raw_key(fd)
+
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear()
+                        return not default
+
+                    if key.kind == _KEY_ENTER:
+                        _clear()
+                        return selected
+
+                    if key.kind in (_KEY_UP, _KEY_DOWN):
+                        selected = not selected
+
+                    if key.kind == _KEY_CHAR:
+                        c = key.char.lower()
+                        if c in ("y", "1"):
+                            _clear()
+                            return True
+                        if c in ("n", "0"):
+                            _clear()
+                            return False
+
+        except (termios.error, OSError):
+            return self._confirm_fallback(message, default)
+
+    def _confirm_fallback(self, message: str, default: bool) -> bool:
+        """Line-mode fallback for non-TTY."""
+        hint = "Y/n" if default else "y/N"
+        self._io.write(f"  {message} [{hint}] ", end="")
+        try:
+            raw = self._io.read("").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return default
+        if not raw:
+            return default
+        return raw in ("y", "yes", "ye", "true", "1")
+
+    # ── Ask (free-form with cursor) ───────────────────────────────────────
+
+    def ask(self, message: str, default: str = "") -> str:
+        """Interactive text input with cursor movement.
+
+        Args:
+            message: prompt text
+            default: default value (shown in brackets, used if empty)
+
+        Returns:
+            the entered string, or the default if empty/cancelled
+        """
+        if not self._is_tty:
+            return self._ask_fallback(message, default)
+        return self._ask_raw(message, default)
+
+    def _ask_raw(self, message: str, default: str) -> str:
+        """Interactive ask using raw terminal input."""
+        fd = self._get_fd()
+        suffix = f" [{_DIM}{default}{_RESET}]" if default else ""
+        buf: list[str] = list(default) if default else []
+        cursor = 0
+
+        def _render() -> str:
+            display = "".join(buf)
+            before = display[:cursor]
+            after = display[cursor:]
+            return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}{suffix}: {before}{_REVERSE}|{_RESET_REVERSE}{after}{_HIDE_CURSOR}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+
+                    key = _read_raw_key(fd)
+
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear()
+                        return default
+
+                    if key.kind == _KEY_ENTER:
+                        _clear()
+                        text = "".join(buf)
+                        return text if text else default
+
+                    if key.kind == _KEY_BACKSPACE:
+                        if cursor > 0:
+                            buf.pop(cursor - 1)
+                            cursor -= 1
+
+                    elif key.kind == _KEY_DELETE:
+                        if cursor < len(buf):
+                            buf.pop(cursor)
+
+                    elif key.kind == _KEY_LEFT:
+                        cursor = max(0, cursor - 1)
+
+                    elif key.kind == _KEY_RIGHT:
+                        cursor = min(len(buf), cursor + 1)
+
+                    elif key.kind == _KEY_HOME:
+                        cursor = 0
+
+                    elif key.kind == _KEY_END:
+                        cursor = len(buf)
+
+                    elif key.kind in (_KEY_UP, _KEY_DOWN):
+                        pass  # no multi-line in ask
+
+                    elif key.kind == _KEY_CHAR:
+                        buf.insert(cursor, key.char)
+                        cursor += 1
+
+        except (termios.error, OSError):
+            return self._ask_fallback(message, default)
+
+    def _ask_fallback(self, message: str, default: str) -> str:
+        """Line-mode fallback for non-TTY."""
+        suffix = f" [{default}]" if default else ""
+        self._io.write(f"  {message}{suffix}: ", end="")
+        try:
+            raw = self._io.read("").strip()
+        except (EOFError, KeyboardInterrupt):
+            return default
+        return raw if raw else default
+
+    # ── Edit (validated text input) ────────────────────────────────────
+
+    def edit(self, message: str, default: str = "", validator: "Callable[[str], str | None] | None" = None) -> str:
+        """Interactive text input with inline validation.
+
+        Args:
+            message: prompt text
+            default: default value
+            validator: optional function that returns an error message if
+                       invalid, or None if valid
+
+        Returns:
+            the entered string, or the default if empty/cancelled
+        """
+        if not self._is_tty:
+            return self._ask_fallback(message, default)
+        return self._edit_raw(message, default, validator)
+
+    # ── Password input ─────────────────────────────────────────────────
+
+    def password(self, message: str) -> str:
+        """Interactive password input with masked characters."""
+        if not self._is_tty:
+            return self._ask_fallback(message, "")
+        return self._password_raw(message)
+
+    def _password_raw(self, message: str) -> str:
+        fd = self._get_fd()
+        buf: list[str] = []
+        cursor = 0
+
+        def _render() -> str:
+            masked = "*" * len(buf)
+            before = masked[:cursor]
+            after = masked[cursor:]
+            return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}: {before}{_REVERSE}|{_RESET_REVERSE}{after}{_HIDE_CURSOR}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return ""
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return "".join(buf)
+                    if key.kind == _KEY_BACKSPACE:
+                        if cursor > 0: buf.pop(cursor - 1); cursor -= 1
+                    elif key.kind == _KEY_DELETE:
+                        if cursor < len(buf): buf.pop(cursor)
+                    elif key.kind == _KEY_LEFT:
+                        cursor = max(0, cursor - 1)
+                    elif key.kind == _KEY_RIGHT:
+                        cursor = min(len(buf), cursor + 1)
+                    elif key.kind == _KEY_HOME:
+                        cursor = 0
+                    elif key.kind == _KEY_END:
+                        cursor = len(buf)
+                    elif key.kind == _KEY_CHAR:
+                        buf.insert(cursor, key.char); cursor += 1
+        except (termios.error, OSError):
+            return self._ask_fallback(message, "")
+
+    def pager(self, content: str, title: str = "Output") -> None:
+        """Display long content in a scrollable pager view.
+
+        Controls: ↑/↓ or j/k to scroll, Page Up/Down, q to quit.
+
+        Args:
+            content: the text content to display
+            title: title shown at top
+        """
+        if not self._is_tty:
+            self._io.write(content)
+            return
+        self._pager_raw(content, title)
+
+    def _pager_raw(self, content: str, title: str) -> None:
+        """Scrollable pager using raw terminal input."""
+        fd = self._get_fd()
+        lines = content.split("\n")
+        total = len(lines)
+        height = _terminal_height() - 3  # title + footer
+        offset = 0
+
+        def _render() -> None:
+            sys.stdout.write("\033[2J\033[H")  # clear + home
+            sys.stdout.write(f"{_BOLD}{_CYAN}{title}{_RESET}  ")
+            sys.stdout.write(f"{_DIM}(↑/↓/j/k scroll, q quit){_RESET}\n")
+            visible = lines[offset:offset + height]
+            for line in visible:
+                sys.stdout.write(f"  {line}\n")
+            pos = f"Line {offset + 1}-{min(offset + height, total)} of {total}"
+            sys.stdout.write(f"{_DIM}{pos}{_RESET}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                _render()
+                while True:
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC, _KEY_CHAR) and key.char == "q":
+                        break
+                    elif key.kind == _KEY_UP or (key.kind == _KEY_CHAR and key.char == "k"):
+                        offset = max(0, offset - 1)
+                    elif key.kind == _KEY_DOWN or (key.kind == _KEY_CHAR and key.char == "j"):
+                        offset = min(total - height, offset + 1)
+                    elif key.kind == _KEY_PAGE_UP:
+                        offset = max(0, offset - height)
+                    elif key.kind == _KEY_PAGE_DOWN:
+                        offset = min(total - height, offset + height)
+                    elif key.kind == _KEY_HOME:
+                        offset = 0
+                    elif key.kind == _KEY_END:
+                        offset = max(0, total - height)
+                    if offset < 0:
+                        offset = 0
+                    _render()
+                sys.stdout.write("\033[2J\033[H")
+                sys.stdout.flush()
+        except (termios.error, OSError):
+            self._io.write(content)
+
+    # ── Confirm action ─────────────────────────────────────────────────
+
+    def confirm_action(self, action: str, details: str = "",
+                       danger: bool = False) -> bool:
+        """Confirm an action with a descriptive prompt.
+
+        Args:
+            action: the action description (e.g. "Delete file")
+            details: optional additional details
+            danger: if True, shows a warning color
+
+        Returns:
+            True if confirmed, False otherwise
+        """
+        if not self._is_tty:
+            return self._confirm_fallback(f"{action}? (y/N)", False)
+        return self._confirm_action_raw(action, details, danger)
+
+    def _confirm_action_raw(self, action: str, details: str,
+                            danger: bool) -> bool:
+        fd = self._get_fd()
+        selected = False
+
+        def _render() -> str:
+            if selected:
+                yes_text = f"{_REVERSE}{_GREEN} Yes {_RESET_REVERSE}{_RESET}"
+                no_text = " No "
+            else:
+                yes_text = " Yes "
+                no_text = f"{_REVERSE}{_RED} No {_RESET_REVERSE}{_RESET}"
+            color = _RED if danger else _CYAN
+            detail = f"\n  {_DIM}{details}{_RESET}" if details else ""
+            return f"{_ERASE_LINE}\r  {_BOLD}{color}{action}{_RESET}?{detail}  {yes_text}  {no_text}{_HIDE_CURSOR}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            if details:
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return False
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return selected
+                    if key.kind in (_KEY_LEFT, _KEY_RIGHT):
+                        selected = not selected
+                    if key.kind == _KEY_CHAR:
+                        if key.char in ("y", "Y"):
+                            _clear(); return True
+                        if key.char in ("n", "N"):
+                            _clear(); return False
+        except (termios.error, OSError):
+            return self._confirm_fallback(f"{action}? (y/N)", False)
+
+    # ── Countdown ──────────────────────────────────────────────────────
+
+    def countdown(self, seconds: int, message: str = "Starting in") -> bool:
+        """Show a visual countdown timer. Returns True if completed."""
+        if not self._is_tty:
+            for i in range(seconds, 0, -1):
+                self._io.write(f"  {message} {i}...")
+            return True
+        return self._countdown_raw(seconds, message)
+
+    def _countdown_raw(self, seconds: int, message: str) -> bool:
+        fd = self._get_fd()
+        remaining = seconds
+        try:
+            with _RawTerminal(fd):
+                while remaining > 0:
+                    bar_w = 30
+                    filled = int((remaining / seconds) * bar_w)
+                    bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
+                    pct = remaining / seconds * 100
+                    sys.stdout.write(
+                        f"\r{_ERASE_LINE}\r  {_CYAN}{message}{_RESET} "
+                        f"{_BOLD}{remaining:>2}s{_RESET} "
+                        f"{_DIM}{bar}{_RESET} {pct:.0f}%{_HIDE_CURSOR}"
+                    )
+                    sys.stdout.flush()
+                    time.sleep(1)
+                    remaining -= 1
+                sys.stdout.write(
+                    f"\r{_ERASE_LINE}\r  {_GREEN}{_BOLD}\u2714 Done{_RESET}{_SHOW_CURSOR}\n"
+                )
+                sys.stdout.flush()
+                return True
+        except (termios.error, OSError):
+            for i in range(seconds, 0, -1):
+                self._io.write(f"  {message} {i}...")
+            return True
+
+    # ── Banner ─────────────────────────────────────────────────────────
+
+    def banner(self, text: str, style: str = "double") -> None:
+        """Display a styled banner with box-drawing characters.
+
+        Args:
+            text: the banner text
+            style: border style - "single", "double", "thick", "dashed"
+        """
+        width = max(len(text) + 4, 20)
+        styles = {
+            "single": ("\u250c", "\u2500", "\u2510", "\u2502", "\u2514", "\u2518"),
+            "double": ("\u2554", "\u2550", "\u2557", "\u2551", "\u255a", "\u255d"),
+            "thick":  ("\u250f", "\u2501", "\u2513", "\u2503", "\u2517", "\u251b"),
+            "dashed": ("\u250c", "\u2504", "\u2510", "\u2502", "\u2514", "\u2518"),
+        }
+        tl, h, tr, v, bl, br = styles.get(style, styles["double"])
+        inner = h * (width - 2)
+        pad = " " * max(0, width - len(text) - 3)
+        self._io.write(f"  {_BOLD}{_CYAN}{tl}{inner}{tr}{_RESET}")
+        self._io.write(f"  {_BOLD}{_CYAN}{v}{_RESET} {_BOLD}{text}{_RESET}{pad}{_BOLD}{_CYAN}{v}{_RESET}")
+        self._io.write(f"  {_BOLD}{_CYAN}{bl}{inner}{br}{_RESET}")
+
+    # ── Slider ─────────────────────────────────────────────────────────
+
+    def slider(self, message: str, min_val: int = 0, max_val: int = 100,
+               default: int = 50, step: int = 1) -> int:
+        """Interactive numeric slider with visual bar.
+
+        Args:
+            message: prompt text
+            min_val: minimum value
+            max_val: maximum value
+            default: starting value
+            step: increment per arrow press
+
+        Returns:
+            the selected integer value
+        """
+        if not self._is_tty:
+            raw = self._ask_fallback(message, str(default))
+            try:
+                return int(raw) if raw else default
+            except ValueError:
+                return default
+        return self._slider_raw(message, min_val, max_val, default, step)
+
+    def _slider_raw(self, message: str, min_val: int, max_val: int,
+                    default: int, step: int) -> int:
+        fd = self._get_fd()
+        value = default
+        bar_w = 30
+
+        def _render() -> str:
+            ratio = (value - min_val) / max(max_val - min_val, 1)
+            filled = int(ratio * bar_w)
+            bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
+            return (
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET} "
+                f"{_BOLD}{value:>4}{_RESET} "
+                f"{_DIM}[{min_val}]{_RESET} {bar} {_DIM}[{max_val}]{_RESET}"
+                f"{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return default
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return value
+                    if key.kind == _KEY_LEFT:
+                        value = max(min_val, value - step)
+                    elif key.kind == _KEY_RIGHT:
+                        value = min(max_val, value + step)
+                    elif key.kind == _KEY_HOME:
+                        value = min_val
+                    elif key.kind == _KEY_END:
+                        value = max_val
+        except (termios.error, OSError):
+            return default
+
+    # ── Toggle ─────────────────────────────────────────────────────────
+
+    def toggle(self, message: str, default: bool = False) -> bool:
+        """Interactive on/off toggle switch.
+
+        Args:
+            message: prompt text
+            default: starting state
+
+        Returns:
+            the toggled boolean value
+        """
+        if not self._is_tty:
+            return self._confirm_fallback(message, default)
+        return self._toggle_raw(message, default)
+
+    def _toggle_raw(self, message: str, default: bool) -> bool:
+        fd = self._get_fd()
+        on = default
+
+        def _render() -> str:
+            if on:
+                on_text = f"{_REVERSE}{_GREEN} ON {_RESET_REVERSE}{_RESET}"
+                off_text = f"OFF "
+            else:
+                on_text = f" ON "
+                off_text = f"{_REVERSE}{_RED}OFF{_RESET_REVERSE}{_RESET}"
+            return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {on_text}  {off_text}{_HIDE_CURSOR}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return default
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return on
+                    if key.kind in (_KEY_LEFT, _KEY_RIGHT):
+                        on = not on
+                    if key.kind == _KEY_CHAR:
+                        if key.char in ("1", "t", "T"):
+                            on = True
+                        elif key.char in ("0", "f", "F"):
+                            on = False
+        except (termios.error, OSError):
+            return default
+
+    # ── Tag input ──────────────────────────────────────────────────────
+
+    def tag_input(self, message: str, defaults: list[str] | None = None,
+                  placeholder: str = "Add tag...") -> list[str]:
+        """Interactive tag input. Type and press Enter to add, Backspace to remove.
+
+        Args:
+            message: prompt text
+            defaults: initial tags
+            placeholder: placeholder when empty
+
+        Returns:
+            list of entered tags
+        """
+        if not self._is_tty:
+            raw = self._ask_fallback(message, "")
+            return [t.strip() for t in raw.split(",") if t.strip()] if raw else (defaults or [])
+        return self._tag_input_raw(message, defaults or [], placeholder)
+
+    def _tag_input_raw(self, message: str, defaults: list[str],
+                       placeholder: str) -> list[str]:
+        fd = self._get_fd()
+        tags: list[str] = list(defaults)
+        buf: list[str] = []
+
+        def _render() -> str:
+            tag_str = ""
+            for t in tags:
+                tag_str += f" {_GREEN}\u25cf {t}{_RESET}\u2500"
+            if not tags and not buf:
+                tag_str = f" {_DIM}{placeholder}{_RESET}"
+            input_part = "".join(buf)
+            return (
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}"
+                f"{tag_str} {input_part}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return tags
+                    if key.kind == _KEY_ENTER:
+                        word = "".join(buf).strip()
+                        if word:
+                            tags.append(word)
+                            buf.clear()
+                    elif key.kind == _KEY_BACKSPACE:
+                        if buf:
+                            buf.pop()
+                        elif tags:
+                            tags.pop()
+                    elif key.kind == _KEY_DELETE:
+                        if buf:
+                            buf.clear()
+                    elif key.kind == _KEY_CHAR:
+                        if key.char == ",":
+                            word = "".join(buf).strip()
+                            if word:
+                                tags.append(word)
+                                buf.clear()
+                        else:
+                            buf.append(key.char)
+                    if key.kind == _KEY_ENTER and not "".join(buf).strip():
+                        _clear(); return tags
+        except (termios.error, OSError):
+            return tags
+
+    # ── Select tree ────────────────────────────────────────────────────
+
+    def select_tree(self, title: str, tree: dict[str, list[str] | dict],
+                    expanded: set[str] | None = None) -> str | None:
+        """Interactive tree selector with expand/collapse.
+
+        Args:
+            title: prompt text
+            tree: nested dict structure
+            expanded: set of initially expanded node names
+
+        Returns:
+            selected leaf label or None if cancelled
+        """
+        if not self._is_tty:
+            return self._select_fallback(title, self._tree_leaves(tree)) or None
+        return self._select_tree_raw(title, tree, expanded or set())
+
+    def _tree_leaves(self, tree: dict) -> list[str]:
+        leaves: list[str] = []
+        for k, v in tree.items():
+            if isinstance(v, dict):
+                leaves.extend(self._tree_leaves(v))
+            elif isinstance(v, list):
+                leaves.extend(v)
+        return leaves
+
+    def _select_tree_raw(self, title: str, tree: dict[str, list[str] | dict],
+                         expanded: set[str]) -> str | None:
+        fd = self._get_fd()
+        flat: list[tuple[str, int, str]] = []
+
+        def _flatten(d: dict, depth: int = 0) -> None:
+            for k, v in d.items():
+                is_branch = isinstance(v, dict)
+                kind = "branch" if is_branch else "leaf"
+                flat.append((k, depth, kind))
+                if is_branch and k in expanded:
+                    _flatten(v, depth + 1)
+                elif isinstance(v, list):
+                    for item in v:
+                        flat.append((item, depth + 1, "leaf"))
+
+        def _rebuild() -> None:
+            flat.clear()
+            _flatten(tree)
+
+        _rebuild()
+        cursor = 0
+        query = ""
+        max_visible = min(len(flat), 15)
+
+        def _get_filtered() -> list[tuple[str, int, str]]:
+            if query:
+                return [(n, d, k) for n, d, k in flat if query.lower() in n.lower()]
+            return list(flat)
+
+        def _render() -> list[str]:
+            filtered = _get_filtered()
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            if query:
+                lines.append(f"{_ERASE_LINE}\r  Filter: {_DIM}{query}{_RESET}{_HIDE_CURSOR}")
+            else:
+                lines.append("")
+
+            if not filtered:
+                lines.append(f"{_ERASE_LINE}\r  {_DIM}No matching items{_RESET}")
+            else:
+                for i in range(min(max_visible, len(filtered))):
+                    name, depth, kind = filtered[i]
+                    prefix = "  " * depth
+                    if kind == "branch":
+                        icon = "\u25bc" if name in expanded else "\u25b6"
+                        text = f"{_BOLD}{name}{_RESET}"
+                    else:
+                        icon = "\u25cf"
+                        text = f"{_DIM}{name}{_RESET}"
+                    display_text = f"{prefix}{icon} {text}"
+                    if flat.index(filtered[i]) == cursor:
+                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} {display_text}{_RESET_REVERSE}{_RESET}")
+                    else:
+                        lines.append(f"{_ERASE_LINE}\r  {display_text}")
+
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select/expand  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    filtered = _get_filtered()
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count); return None
+                    if key.kind == _KEY_ENTER:
+                        if 0 <= cursor < len(filtered):
+                            name, _, kind = filtered[cursor]
+                            if kind == "branch":
+                                if name in expanded:
+                                    expanded.discard(name)
+                                else:
+                                    expanded.add(name)
+                                _rebuild()
+                                cursor = min(cursor, len(flat) - 1)
+                            else:
+                                _clear(prev_count)
+                                return name
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(filtered) - 1, cursor + 1)
+                    elif key.kind == _KEY_BACKSPACE:
+                        if query:
+                            query = query[:-1]
+                            cursor = 0
+                    elif key.kind == _KEY_CHAR:
+                        query += key.char
+                        cursor = 0
+        except (termios.error, OSError):
+            leaves = self._tree_leaves(tree)
+            return leaves[0] if leaves else None
+
+    # ── Spin wait ──────────────────────────────────────────────────────
+
+    def spin_wait(self, message: str, check_fn: "Callable[[], bool]",
+                  interval: float = 0.1, timeout: float = 0) -> bool:
+        """Wait for a condition with a spinner. Returns True when ready.
+
+        Args:
+            message: message to display
+            check_fn: function that returns True when done
+            interval: check interval in seconds
+            timeout: max seconds to wait (0 = forever)
+
+        Returns:
+            True if condition met, False if timed out
+        """
+        if not self._is_tty:
+            import time as _t
+            start = _t.monotonic()
+            while not check_fn():
+                _t.sleep(interval)
+                if timeout and _t.monotonic() - start >= timeout:
+                    return False
+            return True
+        return self._spin_wait_raw(message, check_fn, interval, timeout)
+
+    def _spin_wait_raw(self, message: str, check_fn: "Callable[[], bool]",
+                       interval: float, timeout: float) -> bool:
+        import time as _t
+        fd = self._get_fd()
+        frames = ["\u25cf", "\u25cf\u25cf", "\u25cf\u25cf\u25cf", "\u25cf"]
+        idx = 0
+        start = _t.monotonic()
+        try:
+            with _RawTerminal(fd):
+                while True:
+                    frame = frames[idx % len(frames)]
+                    elapsed = _t.monotonic() - start
+                    sys.stdout.write(
+                        f"\r{_ERASE_LINE}\r  {_CYAN}{frame}{_RESET} {_BOLD}{message}{_RESET} "
+                        f"{_DIM}{elapsed:.1f}s{_RESET}{_HIDE_CURSOR}"
+                    )
+                    sys.stdout.flush()
+                    if check_fn():
+                        sys.stdout.write(
+                            f"\r{_ERASE_LINE}\r  {_GREEN}\u2714{_RESET} {_BOLD}{message}{_RESET} "
+                            f"{_GREEN}done{_RESET}{_SHOW_CURSOR}\n"
+                        )
+                        sys.stdout.flush()
+                        return True
+                    if timeout and elapsed >= timeout:
+                        sys.stdout.write(
+                            f"\r{_ERASE_LINE}\r  {_RED}\u2716{_RESET} {_BOLD}{message}{_RESET} "
+                            f"{_RED}timeout{_RESET}{_SHOW_CURSOR}\n"
+                        )
+                        sys.stdout.flush()
+                        return False
+                    _t.sleep(interval)
+                    idx += 1
+        except (termios.error, OSError):
+            while not check_fn():
+                _t.sleep(interval)
+                if timeout and _t.monotonic() - start >= timeout:
+                    return False
+            return True
+
+    # ── Confirm dangerous (typing) ─────────────────────────────────────
+
+    def confirm_dangerous(self, action: str, phrase: str = "yes, I am sure") -> bool:
+        """Confirm a dangerous action by typing a phrase."""
+        if not self._is_tty:
+            raw = self._ask_fallback(f"{action}. Type '{phrase}' to confirm", "")
+            return raw.strip().lower() == phrase.lower()
+        return self._confirm_dangerous_raw(action, phrase)
+
+    def _confirm_dangerous_raw(self, action: str, phrase: str) -> bool:
+        fd = self._get_fd()
+        buf: list[str] = []
+
+        def _render() -> str:
+            typed = "".join(buf)
+            match = typed.lower() == phrase.lower()
+            color = _GREEN if match else _RED
+            return (
+                f"{_ERASE_LINE}\r  {_RED}\u26a0 {_BOLD}{action}{_RESET}\n"
+                f"  {_DIM}Type {_BOLD}{phrase}{_DIM} to confirm{_RESET}: "
+                f"{color}{typed}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return False
+                    if key.kind == _KEY_ENTER:
+                        typed = "".join(buf).strip().lower()
+                        _clear(); return typed == phrase.lower()
+                    if key.kind == _KEY_BACKSPACE:
+                        if buf: buf.pop()
+                    elif key.kind == _KEY_CHAR:
+                        buf.append(key.char)
+        except (termios.error, OSError):
+            raw = self._ask_fallback(f"{action}. Type '{phrase}' to confirm", "")
+            return raw.strip().lower() == phrase.lower()
+
+    # ── File browser ───────────────────────────────────────────────────
+
+    def file_browser(self, title: str, start_dir: str = ".",
+                     pattern: str = "*") -> str | None:
+        """Interactive file browser with directory navigation."""
+        import os as _os
+        import glob as _glob
+        if not self._is_tty:
+            return self._select_fallback(title, ["(no TTY)"])
+
+        def _list_dir(path: str) -> list[str]:
+            try:
+                entries: list[str] = []
+                for e in sorted(_os.listdir(path)):
+                    full = _os.path.join(path, e)
+                    if _os.path.isdir(full):
+                        entries.append(f"\U0001f4c1 {e}/")
+                    elif _glob.fnmatch.fnmatch(e, pattern):
+                        entries.append(f"\U0001f4c4 {e}")
+                return entries
+            except PermissionError:
+                return [f"{_RED}(permission denied){_RESET}"]
+        return self._file_browser_raw(title, _os.path.abspath(start_dir), _list_dir)
+
+    def _file_browser_raw(self, title: str, start: str,
+                          list_fn: "Callable[[str], list[str]]") -> str | None:
+        import os as _os
+        fd = self._get_fd()
+        current = start
+        cursor = 0
+        query = ""
+        max_visible = 15
+
+        def _get_filtered() -> list[str]:
+            items = list_fn(current)
+            if query:
+                return [i for i in items if query.lower() in i.lower()]
+            return items
+
+        def _render() -> list[str]:
+            filtered = _get_filtered()
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}{current}{_RESET}")
+            if query:
+                lines.append(f"{_ERASE_LINE}\r  Filter: {_DIM}{query}{_RESET}{_HIDE_CURSOR}")
+            else:
+                lines.append("")
+            if not filtered:
+                lines.append(f"{_ERASE_LINE}\r  {_DIM}(empty){_RESET}")
+            else:
+                for i in range(min(max_visible, len(filtered))):
+                    text = filtered[i][:60]
+                    if i == cursor:
+                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {text}{_RESET_REVERSE}{_RESET}")
+                    else:
+                        lines.append(f"{_ERASE_LINE}\r   {text}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Backspace: parent{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    filtered = _get_filtered()
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count); return None
+                    if key.kind == _KEY_ENTER:
+                        if 0 <= cursor < len(filtered):
+                            selected = filtered[cursor]
+                            if selected.startswith("\U0001f4c1"):
+                                dirname = selected[2:].rstrip("/")
+                                current = _os.path.abspath(_os.path.join(current, dirname))
+                                cursor = 0; query = ""
+                            else:
+                                _clear(prev_count)
+                                return _os.path.join(current, selected[2:])
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(filtered) - 1, cursor + 1)
+                    elif key.kind == _KEY_BACKSPACE:
+                        if query:
+                            query = query[:-1]; cursor = 0
+                        elif current != "/":
+                            current = _os.path.dirname(current); cursor = 0
+                    elif key.kind == _KEY_CHAR:
+                        query += key.char; cursor = 0
+        except (termios.error, OSError):
+            return None
+
+    # ── Progress step ──────────────────────────────────────────────────
+
+    def progress_step(self, steps: list[str], current: int, done: bool = False) -> None:
+        """Display a step-by-step progress indicator."""
+        for i, step in enumerate(steps):
+            if done or i < current:
+                icon = f"{_GREEN}\u2714{_RESET}"
+            elif i == current:
+                icon = f"{_CYAN}\u25cf{_RESET}"
+            else:
+                icon = f"{_DIM}\u25cb{_RESET}"
+            self._io.write(f"  {icon} {step}")
+
+    # ── Multi choice ───────────────────────────────────────────────────
+
+    def multi_choice(self, title: str, options: list[str],
+                     defaults: list[int] | None = None) -> list[str]:
+        """Select multiple options with Space to toggle, Enter to confirm."""
+        if not options:
+            return []
+        if not self._is_tty:
+            return self._select_multi_fallback(title, options)
+        return self._multi_choice_raw(title, options, defaults or [])
+
+    def _multi_choice_raw(self, title: str, options: list[str],
+                          defaults: list[int]) -> list[str]:
+        fd = self._get_fd()
+        selected: set[int] = set(defaults)
+        cursor = 0
+        query = ""
+        max_visible = min(len(options), 15)
+
+        def _get_filtered() -> list[tuple[int, str]]:
+            if query:
+                return [(i, o) for i, o in enumerate(options) if query.lower() in o.lower()]
+            return [(i, o) for i, o in enumerate(options)]
+
+        def _render() -> list[str]:
+            filtered = _get_filtered()
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}({len(selected)} selected){_RESET}")
+            if query:
+                lines.append(f"{_ERASE_LINE}\r  Filter: {_DIM}{query}{_RESET}{_HIDE_CURSOR}")
+            else:
+                lines.append("")
+            if not filtered:
+                lines.append(f"{_ERASE_LINE}\r  {_DIM}No matching options{_RESET}")
+            else:
+                for i in range(min(max_visible, len(filtered))):
+                    orig_idx, text = filtered[i]
+                    check = f"{_GREEN}\u2611{_RESET}" if orig_idx in selected else f"{_DIM}\u2610{_RESET}"
+                    if orig_idx == cursor:
+                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} {check} {text}{_RESET_REVERSE}{_RESET}")
+                    else:
+                        lines.append(f"{_ERASE_LINE}\r  {check} {text}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Space: toggle  Enter: confirm  Type to filter{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count); return []
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count)
+                        filtered = _get_filtered()
+                        return [o for i, o in filtered if i in selected]
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(options) - 1, cursor + 1)
+                    elif key.kind == _KEY_SPACE:
+                        if cursor in selected:
+                            selected.discard(cursor)
+                        else:
+                            selected.add(cursor)
+                    elif key.kind == _KEY_BACKSPACE:
+                        if query:
+                            query = query[:-1]
+                            cursor = min(cursor, len(options) - 1)
+                    elif key.kind == _KEY_CHAR:
+                        query += key.char; cursor = 0
+        except (termios.error, OSError):
+            return self._select_multi_fallback(title, options)
+
+    # ── Date picker ────────────────────────────────────────────────────
+
+    def date_picker(self, message: str, default: str = "") -> str:
+        """Interactive date picker with year/month/day navigation.
+
+        Args:
+            message: prompt text
+            default: default date as "YYYY-MM-DD" (empty = today)
+
+        Returns:
+            selected date as "YYYY-MM-DD"
+        """
+        import datetime as _dt
+        if not self._is_tty:
+            return self._ask_fallback(message, default or _dt.date.today().isoformat())
+        return self._date_picker_raw(message, default)
+
+    def _date_picker_raw(self, message: str, default: str) -> str:
+        import datetime as _dt
+        fd = self._get_fd()
+        if default:
+            try:
+                parts = default.split("-")
+                cur = _dt.date(int(parts[0]), int(parts[1]), int(parts[2]))
+            except (ValueError, IndexError):
+                cur = _dt.date.today()
+        else:
+            cur = _dt.date.today()
+        focus = 0  # 0=year, 1=month, 2=day
+
+        labels = ["Year", "Month", "Day"]
+
+        def _render() -> str:
+            y_color = _CYAN if focus == 0 else ""
+            m_color = _CYAN if focus == 1 else ""
+            d_color = _CYAN if focus == 2 else ""
+            return (
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  "
+                f"{y_color}{_BOLD}{cur.year:>4}{_RESET}-"
+                f"{m_color}{_BOLD}{cur.month:>02}{_RESET}-"
+                f"{d_color}{_BOLD}{cur.day:>02}{_RESET}  "
+                f"{_DIM}{labels[focus]}{_RESET}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return default or _dt.date.today().isoformat()
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return cur.isoformat()
+                    if key.kind == _KEY_LEFT:
+                        focus = max(0, focus - 1)
+                    elif key.kind == _KEY_RIGHT:
+                        focus = min(2, focus + 1)
+                    elif key.kind == _KEY_UP:
+                        if focus == 0:
+                            cur = cur.replace(year=cur.year + 1)
+                        elif focus == 1:
+                            m = cur.month % 12 + 1
+                            cur = cur.replace(month=m)
+                        else:
+                            try:
+                                cur = cur.replace(day=cur.day + 1)
+                            except ValueError:
+                                cur = cur.replace(day=1)
+                    elif key.kind == _KEY_DOWN:
+                        if focus == 0:
+                            cur = cur.replace(year=cur.year - 1)
+                        elif focus == 1:
+                            m = (cur.month - 2) % 12 + 1
+                            cur = cur.replace(month=m)
+                        else:
+                            try:
+                                cur = cur.replace(day=cur.day - 1)
+                            except ValueError:
+                                import calendar
+                                cur = cur.replace(day=calendar.monthrange(cur.year, cur.month)[1])
+        except (termios.error, OSError):
+            return default or _dt.date.today().isoformat()
+
+    # ── Color picker ───────────────────────────────────────────────────
+
+    def color_picker(self, message: str, default: str = "#ffffff") -> str:
+        """Interactive hex color picker with RGB sliders.
+
+        Args:
+            message: prompt text
+            default: default hex color (e.g. "#ff0000")
+
+        Returns:
+            selected hex color string
+        """
+        if not self._is_tty:
+            return self._ask_fallback(message, default)
+        return self._color_picker_raw(message, default)
+
+    def _color_picker_raw(self, message: str, default: str) -> str:
+        fd = self._get_fd()
+        r, g, b = self._hex_to_rgb(default)
+        focus = 0  # 0=r, 1=g, 2=b
+        labels = ["R", "G", "B"]
+
+        def _render() -> str:
+            hex_str = f"#{r:02x}{g:02x}{b:02x}"
+            bar_w = 20
+            def _bar(val: int, color: str) -> str:
+                filled = int(val / 255 * bar_w)
+                return f"\u2588{color}{'\u2588' * filled}{_RESET}\u2591{' ' * (bar_w - filled)}"
+            r_bar = _bar(r, _RED if focus == 0 else "")
+            g_bar = _bar(g, _GREEN if focus == 1 else "")
+            b_bar = _bar(b, _CYAN if focus == 2 else "")
+            lines = [
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_BOLD}{hex_str}{_RESET}",
+                f"{_ERASE_LINE}\r  {_RED if focus==0 else ''}R {r:>3}{_RESET} {r_bar}",
+                f"{_ERASE_LINE}\r  {_GREEN if focus==1 else ''}G {g:>3}{_RESET} {g_bar}",
+                f"{_ERASE_LINE}\r  {_CYAN if focus==2 else ''}B {b:>3}{_RESET} {b_bar}",
+                f"{_ERASE_LINE}\r  {_DIM}Left/Right: channel  Up/Down: adjust  Enter: confirm{_RESET}{_HIDE_CURSOR}",
+            ]
+            return "\n".join(lines)
+
+        def _clear() -> None:
+            for _ in range(5):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return default
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return f"#{r:02x}{g:02x}{b:02x}"
+                    if key.kind == _KEY_LEFT:
+                        focus = (focus + 1) % 3
+                    elif key.kind == _KEY_RIGHT:
+                        focus = (focus + 2) % 3
+                    elif key.kind == _KEY_UP:
+                        vals = [r, g, b]
+                        vals[focus] = min(255, vals[focus] + 5)
+                        r, g, b = vals
+                    elif key.kind == _KEY_DOWN:
+                        vals = [r, g, b]
+                        vals[focus] = max(0, vals[focus] - 5)
+                        r, g, b = vals
+        except (termios.error, OSError):
+            return default
+
+    def _hex_to_rgb(self, hex_str: str) -> tuple[int, int, int]:
+        h = hex_str.lstrip("#")
+        if len(h) == 3:
+            h = h[0]*2 + h[1]*2 + h[2]*2
+        try:
+            return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+        except (ValueError, IndexError):
+            return (255, 255, 255)
+
+    # ── Confirm with timeout ───────────────────────────────────────────
+
+    def confirm_timeout(self, message: str, timeout: float = 5.0,
+                        default: bool = True) -> bool:
+        """Confirm with an auto-timeout. Returns default if not answered.
+
+        Args:
+            message: prompt text
+            timeout: seconds before auto-confirming
+            default: value to return on timeout
+
+        Returns:
+            True/False based on user choice or timeout
+        """
+        if not self._is_tty:
+            return self._confirm_fallback(message, default)
+        return self._confirm_timeout_raw(message, timeout, default)
+
+    def _confirm_timeout_raw(self, message: str, timeout: float,
+                             default: bool) -> bool:
+        fd = self._get_fd()
+        selected = not default  # opposite of default for visual
+        import select as _select
+        import time as _t
+
+        def _render(remaining: float) -> str:
+            if selected:
+                yes_text = f"{_REVERSE}{_GREEN} Yes {_RESET_REVERSE}{_RESET}"
+                no_text = " No "
+            else:
+                yes_text = " Yes "
+                no_text = f"{_REVERSE}{_RED} No {_RESET_REVERSE}{_RESET}"
+            bar_w = 20
+            filled = int(remaining / timeout * bar_w)
+            bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
+            return (
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  "
+                f"{yes_text}  {no_text}  "
+                f"{_DIM}{bar} {remaining:.0f}s{_RESET}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                start = _t.monotonic()
+                while True:
+                    elapsed = _t.monotonic() - start
+                    remaining = max(0, timeout - elapsed)
+                    if remaining <= 0:
+                        _clear(); return default
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render(remaining)}")
+                    sys.stdout.flush()
+                    r, _, _ = _select.select([fd], [], [], 0.1)
+                    if r:
+                        key = _read_raw_key(fd)
+                        if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                            _clear(); return default
+                        if key.kind == _KEY_ENTER:
+                            _clear(); return selected
+                        if key.kind in (_KEY_LEFT, _KEY_RIGHT):
+                            selected = not selected
+                        if key.kind == _KEY_CHAR:
+                            if key.char in ("y", "Y"):
+                                _clear(); return True
+                            if key.char in ("n", "N"):
+                                _clear(); return False
+        except (termios.error, OSError):
+            return default
+
+    # ── Spin until ─────────────────────────────────────────────────────
+
+    def spin_until(self, message: str, async_fn: "Callable[[], Any]",
+                   check: "Callable[[Any], bool]",
+                   interval: float = 0.1, timeout: float = 0) -> Any:
+        """Wait for an async function's result to satisfy a condition.
+
+        Args:
+            message: message to display
+            async_fn: function that returns a value each poll
+            check: function that returns True when result is acceptable
+            interval: poll interval in seconds
+            timeout: max seconds (0 = forever)
+
+        Returns:
+            the result from async_fn when check passes, or None on timeout
+        """
+        if not self._is_tty:
+            import time as _t
+            start = _t.monotonic()
+            while True:
+                result = async_fn()
+                if check(result):
+                    return result
+                _t.sleep(interval)
+                if timeout and _t.monotonic() - start >= timeout:
+                    return None
+        return self._spin_until_raw(message, async_fn, check, interval, timeout)
+
+    def _spin_until_raw(self, message: str, async_fn: "Callable[[], Any]",
+                        check: "Callable[[Any], bool]",
+                        interval: float, timeout: float) -> "Any":
+        import time as _t
+        fd = self._get_fd()
+        frames = ["\u25cf", "\u25cf\u25cf", "\u25cf\u25cf\u25cf", "\u25cf"]
+        idx = 0
+        start = _t.monotonic()
+        try:
+            with _RawTerminal(fd):
+                while True:
+                    result = async_fn()
+                    if check(result):
+                        sys.stdout.write(
+                            f"\r{_ERASE_LINE}\r  {_GREEN}\u2714{_RESET} {_BOLD}{message}{_RESET} "
+                            f"{_GREEN}done{_RESET}{_SHOW_CURSOR}\n"
+                        )
+                        sys.stdout.flush()
+                        return result
+                    elapsed = _t.monotonic() - start
+                    if timeout and elapsed >= timeout:
+                        sys.stdout.write(
+                            f"\r{_ERASE_LINE}\r  {_RED}\u2716{_RESET} {_BOLD}{message}{_RESET} "
+                            f"{_RED}timeout{_RESET}{_SHOW_CURSOR}\n"
+                        )
+                        sys.stdout.flush()
+                        return None
+                    frame = frames[idx % len(frames)]
+                    sys.stdout.write(
+                        f"\r{_ERASE_LINE}\r  {_CYAN}{frame}{_RESET} {_BOLD}{message}{_RESET} "
+                        f"{_DIM}{elapsed:.1f}s{_RESET}{_HIDE_CURSOR}"
+                    )
+                    sys.stdout.flush()
+                    _t.sleep(interval)
+                    idx += 1
+        except (termios.error, OSError):
+            import time as _t
+            start = _t.monotonic()
+            while True:
+                result = async_fn()
+                if check(result):
+                    return result
+                _t.sleep(interval)
+                if timeout and _t.monotonic() - start >= timeout:
+                    return None
+
+    # ── Time picker ────────────────────────────────────────────────────
+
+    def time_picker(self, message: str, default: str = "") -> str:
+        """Interactive time picker with hour/minute/AM-PM navigation."""
+        import datetime as _dt
+        if not self._is_tty:
+            now = _dt.datetime.now()
+            return self._ask_fallback(message, default or now.strftime("%I:%M %p"))
+        return self._time_picker_raw(message, default)
+
+    def _time_picker_raw(self, message: str, default: str) -> str:
+        import datetime as _dt
+        fd = self._get_fd()
+        now = _dt.datetime.now()
+        h, m = now.hour, now.minute
+        ampm = "AM" if h < 12 else "PM"
+        if default:
+            try:
+                parts = default.replace("  ", " ").split()
+                hm = parts[0].split(":")
+                h, m = int(hm[0]), int(hm[1])
+                ampm = parts[1].upper() if len(parts) > 1 else ampm
+            except (ValueError, IndexError):
+                pass
+        if h > 12: h -= 12
+        if h == 0: h = 12
+        focus = 0
+
+        def _render() -> str:
+            hc = _CYAN if focus == 0 else ""
+            mc = _CYAN if focus == 1 else ""
+            ac = _CYAN if focus == 2 else ""
+            return (
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  "
+                f"{hc}{_BOLD}{h:>2}{_RESET}:"
+                f"{mc}{_BOLD}{m:>02}{_RESET} "
+                f"{ac}{_BOLD}{ampm}{_RESET}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return default or now.strftime("%I:%M %p")
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return f"{h:>2}:{m:02d} {ampm}"
+                    if key.kind == _KEY_LEFT:
+                        focus = (focus - 1) % 3
+                    elif key.kind == _KEY_RIGHT:
+                        focus = (focus + 1) % 3
+                    elif key.kind == _KEY_UP:
+                        if focus == 0: h = h % 12 + 1
+                        elif focus == 1: m = (m + 5) % 60
+                        else: ampm = "PM" if ampm == "AM" else "AM"
+                    elif key.kind == _KEY_DOWN:
+                        if focus == 0: h = (h - 2) % 12 + 1
+                        elif focus == 1: m = (m - 5) % 60
+                        else: ampm = "PM" if ampm == "AM" else "AM"
+        except (termios.error, OSError):
+            return default or now.strftime("%I:%M %p")
+
+    # ── Progress ETA ───────────────────────────────────────────────────
+
+    def progress_eta(self, label: str, current: int, total: int,
+                     elapsed: float = 0) -> None:
+        """Display a progress bar with estimated time remaining."""
+        frac = current / max(total, 1)
+        bar_w = 25
+        filled = int(frac * bar_w)
+        bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
+        pct = f"{frac * 100:5.1f}%"
+        if current > 0 and elapsed > 0:
+            remaining = (total - current) / (current / elapsed)
+            if remaining >= 3600:
+                eta = f"{int(remaining // 3600)}h{int((remaining % 3600) // 60)}m"
+            elif remaining >= 60:
+                eta = f"{int(remaining // 60)}m{int(remaining % 60)}s"
+            else:
+                eta = f"{remaining:.0f}s"
+            eta_str = f"  {_DIM}ETA {eta}{_RESET}"
+        else:
+            eta_str = ""
+        self._io.write(f"  {_CYAN}{label}{_RESET} {_DIM}{bar}{_RESET} {pct}{eta_str}")
+
+    # ── Select with search ─────────────────────────────────────────────
+
+    def select_with_search(self, title: str, options: list[str]) -> str:
+        """Select with prominent search bar and live filtering."""
+        if not options:
+            return ""
+        if len(options) == 1:
+            return options[0]
+        if not self._is_tty:
+            return self._select_fallback(title, options)
+        return self._select_with_search_raw(title, options)
+
+    def _select_with_search_raw(self, title: str, options: list[str]) -> str:
+        fd = self._get_fd()
+        query = ""
+        cursor = 0
+        scroll = 0
+        max_visible = min(len(options), 15)
+
+        def _get_filtered() -> list[str]:
+            if query:
+                return [o for o in options if query.lower() in o.lower()]
+            return list(options)
+
+        def _render() -> list[str]:
+            filtered = _get_filtered()
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}\u26b2 Search:{_RESET} {_BOLD}{query}{_RESET}\u2502{_HIDE_CURSOR}")
+            if not filtered:
+                lines.append(f"{_ERASE_LINE}\r  {_DIM}No matching options{_RESET}")
+            else:
+                for i in range(min(max_visible, len(filtered))):
+                    idx = scroll + i
+                    if idx >= len(filtered): break
+                    text = _truncate(filtered[idx], 50)
+                    if idx == cursor:
+                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {text}{_RESET_REVERSE}{_RESET}")
+                    else:
+                        lines.append(f"{_ERASE_LINE}\r   {text}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines: sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    filtered = _get_filtered()
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count); return options[0]
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count)
+                        return filtered[cursor] if 0 <= cursor < len(filtered) else options[0]
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                        if cursor < scroll: scroll = cursor
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(filtered) - 1, cursor + 1)
+                        if cursor >= scroll + max_visible: scroll = cursor - max_visible + 1
+                    elif key.kind == _KEY_BACKSPACE:
+                        if query: query = query[:-1]; cursor = 0; scroll = 0
+                    elif key.kind == _KEY_CHAR:
+                        query += key.char; cursor = 0; scroll = 0
+        except (termios.error, OSError):
+            return self._select_fallback(title, options)
+
+    # ── Table select ───────────────────────────────────────────────────
+
+    def table_select(self, headers: list[str], rows: list[list[str]],
+                     title: str = "Select row") -> int | None:
+        """Interactive table with row selection. Returns selected row index."""
+        if not rows:
+            return None
+        if not self._is_tty:
+            return 0
+        return self._table_select_raw(headers, rows, title)
+
+    def _table_select_raw(self, headers: list[str], rows: list[list[str]],
+                          title: str) -> int | None:
+        fd = self._get_fd()
+        cursor = 0
+        scroll = 0
+        max_visible = min(len(rows), 12)
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i, cell in enumerate(row):
+                if i < len(widths): widths[i] = max(widths[i], len(str(cell)))
+
+        def _render() -> list[str]:
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths))}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}{'  '.join('\u2500' * w for w in widths)}{_RESET}")
+            for i in range(min(max_visible, len(rows))):
+                idx = scroll + i
+                if idx >= len(rows): break
+                cells = "  ".join(str(rows[idx][j]).ljust(widths[j]) for j in range(min(len(widths), len(rows[idx]))))
+                if idx == cursor:
+                    lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {cells}{_RESET_REVERSE}{_RESET}")
+                else:
+                    lines.append(f"{_ERASE_LINE}\r   {cells}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines: sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count); return None
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count); return cursor if 0 <= cursor < len(rows) else None
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                        if cursor < scroll: scroll = cursor
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(rows) - 1, cursor + 1)
+                        if cursor >= scroll + max_visible: scroll = cursor - max_visible + 1
+        except (termios.error, OSError):
+            return 0
+
+    # ── Year picker ────────────────────────────────────────────────────
+
+    def year_picker(self, message: str, default: int = 0,
+                    min_year: int = 1900, max_year: int = 2100) -> int:
+        """Interactive year picker with arrow keys.
+
+        Args:
+            message: prompt text
+            default: default year (0 = current year)
+            min_year: minimum selectable year
+            max_year: maximum selectable year
+
+        Returns:
+            selected year as integer
+        """
+        import datetime as _dt
+        if not self._is_tty:
+            return int(self._ask_fallback(message, str(default or _dt.date.today().year)))
+        return self._year_picker_raw(message, default or _dt.date.today().year, min_year, max_year)
+
+    def _year_picker_raw(self, message: str, year: int, min_y: int, max_y: int) -> int:
+        fd = self._get_fd()
+
+        def _render() -> str:
+            return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_BOLD}{_CYAN}{year:>4}{_RESET}{_HIDE_CURSOR}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return year
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return year
+                    if key.kind == _KEY_UP:
+                        year = min(max_y, year + 1)
+                    elif key.kind == _KEY_DOWN:
+                        year = max(min_y, year - 1)
+                    elif key.kind == _KEY_HOME:
+                        year = min_y
+                    elif key.kind == _KEY_END:
+                        year = max_y
+        except (termios.error, OSError):
+            return year
+
+    # ── Month picker ───────────────────────────────────────────────────
+
+    def month_picker(self, message: str, default: int = 0) -> int:
+        """Interactive month picker (1-12) with names.
+
+        Args:
+            message: prompt text
+            default: default month (0 = current month)
+
+        Returns:
+            selected month as integer (1-12)
+        """
+        import datetime as _dt
+        if not self._is_tty:
+            return int(self._ask_fallback(message, str(default or _dt.date.today().month)))
+        return self._month_picker_raw(message, default or _dt.date.today().month)
+
+    def _month_picker_raw(self, message: str, month: int) -> int:
+        fd = self._get_fd()
+        months = ["January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December"]
+
+        def _render() -> str:
+            return (
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  "
+                f"{_BOLD}{_CYAN}{months[month - 1]:>9}{_RESET} ({month:>2}/12){_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return month
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return month
+                    if key.kind == _KEY_UP:
+                        month = month % 12 + 1
+                    elif key.kind == _KEY_DOWN:
+                        month = (month - 2) % 12 + 1
+                    elif key.kind == _KEY_LEFT:
+                        month = max(1, month - 1)
+                    elif key.kind == _KEY_RIGHT:
+                        month = min(12, month + 1)
+        except (termios.error, OSError):
+            return month
+
+    # ── Confirm list ───────────────────────────────────────────────────
+
+    def confirm_list(self, title: str, items: list[str],
+                     default: bool = True) -> list[str]:
+        """Confirm each item in a list with y/N.
+
+        Args:
+            title: prompt text
+            items: list of items to confirm
+            default: default answer for each item
+
+        Returns:
+            list of confirmed items
+        """
+        if not items:
+            return []
+        if not self._is_tty:
+            return self._confirm_multi_fallback(title, items, default)
+        return self._confirm_list_raw(title, items, default)
+
+    def _confirm_list_raw(self, title: str, items: list[str],
+                          default: bool) -> list[str]:
+        fd = self._get_fd()
+        cursor = 0
+        answers: dict[int, bool] = {}
+
+        def _render() -> list[str]:
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            for i, item in enumerate(items):
+                ans = answers.get(i, default)
+                if ans:
+                    icon = f"{_GREEN}\u2714{_RESET}"
+                else:
+                    icon = f"{_RED}\u2718{_RESET}"
+                if i == cursor:
+                    lines.append(f"{_ERASE_LINE}\r{_REVERSE} {icon} {item}{_RESET_REVERSE}{_RESET}")
+                else:
+                    lines.append(f"{_ERASE_LINE}\r  {icon} {item}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Space: toggle  Enter: confirm  y/n: toggle all{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines: sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count); return []
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count)
+                        return [items[i] for i in range(len(items)) if answers.get(i, default)]
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(items) - 1, cursor + 1)
+                    elif key.kind == _KEY_SPACE:
+                        answers[cursor] = not answers.get(cursor, default)
+                    elif key.kind == _KEY_CHAR:
+                        if key.char in ("y", "Y"):
+                            for i in range(len(items)): answers[i] = True
+                        elif key.char in ("n", "N"):
+                            for i in range(len(items)): answers[i] = False
+        except (termios.error, OSError):
+            return self._confirm_multi_fallback(title, items, default)
+
+    # ── Table edit ─────────────────────────────────────────────────────
+
+    def table_edit(self, headers: list[str], rows: list[list[str]],
+                   title: str = "Edit table") -> list[list[str]]:
+        """Interactive table with cell editing.
+
+        Args:
+            headers: column headers
+            rows: table data rows
+            title: prompt text
+
+        Returns:
+            edited rows
+        """
+        if not rows:
+            return []
+        if not self._is_tty:
+            return rows
+        return self._table_edit_raw(headers, rows, title)
+
+    def _table_edit_raw(self, headers: list[str], rows: list[list[str]],
+                        title: str) -> list[list[str]]:
+        fd = self._get_fd()
+        cursor_row = 0
+        cursor_col = 0
+        editing = False
+        buf: list[str] = []
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i, cell in enumerate(row):
+                if i < len(widths): widths[i] = max(widths[i], len(str(cell)))
+
+        def _render() -> list[str]:
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: cell  Enter: edit/save  Esc: done){_RESET}")
+            lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths))}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}{'  '.join('\u2500' * w for w in widths)}{_RESET}")
+            for r_idx, row in enumerate(rows):
+                cells = []
+                for c_idx in range(min(len(widths), len(row))):
+                    val = "".join(buf) if editing and r_idx == cursor_row and c_idx == cursor_col else str(row[c_idx])
+                    val = val.ljust(widths[c_idx])
+                    if r_idx == cursor_row and c_idx == cursor_col:
+                        if editing:
+                            cells.append(f"{_REVERSE}{val}{_RESET_REVERSE}")
+                        else:
+                            cells.append(f"{_CYAN}{val}{_RESET}")
+                    else:
+                        cells.append(val)
+                lines.append(f"{_ERASE_LINE}\r  {'  '.join(cells)}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines: sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        if editing:
+                            editing = False; buf.clear()
+                        else:
+                            _clear(prev_count); return rows
+                    elif key.kind == _KEY_ENTER:
+                        if editing:
+                            rows[cursor_row][cursor_col] = "".join(buf)
+                            editing = False; buf.clear()
+                        else:
+                            editing = True; buf = list(str(rows[cursor_row][cursor_col]))
+                    elif not editing:
+                        if key.kind == _KEY_TAB:
+                            cursor_col = (cursor_col + 1) % len(widths)
+                        elif key.kind == _KEY_UP:
+                            cursor_row = max(0, cursor_row - 1)
+                        elif key.kind == _KEY_DOWN:
+                            cursor_row = min(len(rows) - 1, cursor_row + 1)
+                        elif key.kind == _KEY_LEFT:
+                            cursor_col = max(0, cursor_col - 1)
+                        elif key.kind == _KEY_RIGHT:
+                            cursor_col = min(len(widths) - 1, cursor_col + 1)
+                    else:
+                        if key.kind == _KEY_BACKSPACE:
+                            if buf: buf.pop()
+                        elif key.kind == _KEY_DELETE:
+                            if buf: buf.clear()
+                        elif key.kind == _KEY_CHAR:
+                            buf.append(key.char)
+        except (termios.error, OSError):
+            return rows
+
+    # ── Duration picker ────────────────────────────────────────────────
+
+    def duration_picker(self, message: str, default: int = 0) -> int:
+        """Interactive duration picker in seconds with h/m/s display.
+
+        Args:
+            message: prompt text
+            default: default duration in seconds
+
+        Returns:
+            selected duration in seconds
+        """
+        if not self._is_tty:
+            return int(self._ask_fallback(message, str(default)))
+        return self._duration_picker_raw(message, default)
+
+    def _duration_picker_raw(self, message: str, total: int) -> int:
+        fd = self._get_fd()
+        h = total // 3600
+        m = (total % 3600) // 60
+        s = total % 60
+        focus = 0  # 0=h, 1=m, 2=s
+
+        def _fmt() -> str:
+            return f"{h:>2}h {m:>02}m {s:>02}s"
+
+        def _render() -> str:
+            parts = [f"{h:>2}h", f"{m:>02}m", f"{s:>02}s"]
+            colored = []
+            for i, p in enumerate(parts):
+                if i == focus:
+                    colored.append(f"{_BOLD}{_CYAN}{p}{_RESET}")
+                else:
+                    colored.append(p)
+            return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {' '.join(colored)}{_HIDE_CURSOR}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return total
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return h * 3600 + m * 60 + s
+                    if key.kind == _KEY_LEFT:
+                        focus = (focus - 1) % 3
+                    elif key.kind == _KEY_RIGHT:
+                        focus = (focus + 1) % 3
+                    elif key.kind == _KEY_UP:
+                        if focus == 0: h = min(99, h + 1)
+                        elif focus == 1: m = (m + 5) % 60
+                        else: s = (s + 5) % 60
+                    elif key.kind == _KEY_DOWN:
+                        if focus == 0: h = max(0, h - 1)
+                        elif focus == 1: m = (m - 5) % 60
+                        else: s = (s - 5) % 60
+        except (termios.error, OSError):
+            return total
+
+    # ── Confirm text ───────────────────────────────────────────────────
+
+    def confirm_text(self, message: str, target: str,
+                     hint: str = "") -> bool:
+        """Confirm by typing exact text.
+
+        Args:
+            message: prompt text
+            target: text the user must type
+            hint: optional hint shown to user
+
+        Returns:
+            True if typed text matches target
+        """
+        if not self._is_tty:
+            raw = self._ask_fallback(f"{message} (type '{target}')", "")
+            return raw.strip() == target
+        return self._confirm_text_raw(message, target, hint)
+
+    def _confirm_text_raw(self, message: str, target: str, hint: str) -> bool:
+        fd = self._get_fd()
+        buf: list[str] = []
+
+        def _render() -> str:
+            typed = "".join(buf)
+            match = typed == target
+            color = _GREEN if match else _RED
+            h = f"\n  {_DIM}{hint}{_RESET}" if hint else ""
+            return (
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}{h}\n"
+                f"  {_DIM}Type{_RESET} {_BOLD}{target}{_RESET} {_DIM}to confirm{_RESET}: "
+                f"{color}{typed}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            if hint: sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return False
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return "".join(buf) == target
+                    if key.kind == _KEY_BACKSPACE:
+                        if buf: buf.pop()
+                    elif key.kind == _KEY_CHAR:
+                        buf.append(key.char)
+        except (termios.error, OSError):
+            raw = self._ask_fallback(f"{message} (type '{target}')", "")
+            return raw.strip() == target
+
+    # ── Week picker ────────────────────────────────────────────────────
+
+    def week_picker(self, message: str, default: int = 0) -> int:
+        """Interactive week-of-year picker (1-52).
+
+        Args:
+            message: prompt text
+            default: default week (0 = current week)
+
+        Returns:
+            selected week number (1-52)
+        """
+        import datetime as _dt
+        if not self._is_tty:
+            return int(self._ask_fallback(message, str(default or _dt.date.today().isocalendar()[1])))
+        return self._week_picker_raw(message, default or _dt.date.today().isocalendar()[1])
+
+    def _week_picker_raw(self, message: str, week: int) -> int:
+        fd = self._get_fd()
+
+        def _render() -> str:
+            import datetime as _dt
+            jan1 = _dt.date(_dt.date.today().year, 1, 1)
+            start = jan1 + _dt.timedelta(weeks=week - 1)
+            end = start + _dt.timedelta(days=6)
+            return (
+                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  "
+                f"{_BOLD}{_CYAN}Week {week:>2}{_RESET}  "
+                f"{_DIM}{start.strftime('%b %d')} - {end.strftime('%b %d')}{_RESET}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return week
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return week
+                    if key.kind == _KEY_UP:
+                        week = min(52, week + 1)
+                    elif key.kind == _KEY_DOWN:
+                        week = max(1, week - 1)
+        except (termios.error, OSError):
+            return week
+
+    # ── Quarter picker ─────────────────────────────────────────────────
+
+    def quarter_picker(self, message: str, default: int = 0) -> int:
+        """Interactive quarter picker (1-4).
+
+        Args:
+            message: prompt text
+            default: default quarter (0 = current quarter)
+
+        Returns:
+            selected quarter (1-4)
+        """
+        import datetime as _dt
+        if not self._is_tty:
+            return int(self._ask_fallback(message, str(default or (_dt.date.today().month - 1) // 3 + 1)))
+        return self._quarter_picker_raw(message, default or (_dt.date.today().month - 1) // 3 + 1)
+
+    def _quarter_picker_raw(self, message: str, q: int) -> int:
+        fd = self._get_fd()
+        quarters = {1: "Q1 (Jan-Mar)", 2: "Q2 (Apr-Jun)", 3: "Q3 (Jul-Sep)", 4: "Q4 (Oct-Dec)"}
+
+        def _render() -> str:
+            return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_BOLD}{_CYAN}{quarters[q]}{_RESET}{_HIDE_CURSOR}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return q
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return q
+                    if key.kind in (_KEY_UP, _KEY_RIGHT):
+                        q = q % 4 + 1
+                    elif key.kind in (_KEY_DOWN, _KEY_LEFT):
+                        q = (q - 2) % 4 + 1
+        except (termios.error, OSError):
+            return q
+
+    # ── Confirm delete ─────────────────────────────────────────────────
+
+    def confirm_delete(self, item: str, count: int = 1) -> bool:
+        """Confirm deletion of item(s) with type-to-confirm.
+
+        Args:
+            item: name/description of item to delete
+            count: number of items (for plural display)
+
+        Returns:
+            True if confirmed
+        """
+        word = f"{count} items" if count != 1 else item
+        return self.confirm_dangerous(f"Delete {word}", phrase="delete")
+
+    # ── Confirm overwrite ──────────────────────────────────────────────
+
+    def confirm_overwrite(self, path: str) -> bool:
+        """Confirm overwriting an existing file.
+
+        Args:
+            path: file path to overwrite
+
+        Returns:
+            True if confirmed
+        """
+        return self.confirm_dangerous(f"Overwrite {path}", phrase="overwrite")
+
+    # ── Progress ring ──────────────────────────────────────────────────
+
+    def progress_ring(self, label: str, current: int, total: int) -> None:
+        """Display a circular progress indicator with Unicode blocks.
+
+        Args:
+            label: label text
+            current: current progress value
+            total: total target value
+        """
+        frac = current / max(total, 1)
+        blocks = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"]
+        idx = int(frac * (len(blocks) - 1))
+        ring = blocks[idx] * 8
+        pct = f"{frac * 100:.0f}%"
+        self._io.write(f"  {_CYAN}{label}{_RESET} {_BOLD}{ring}{_RESET} {pct}")
+
+    # ── Timezone picker ────────────────────────────────────────────────
+
+    def timezone_picker(self, message: str, default: str = "UTC") -> str:
+        """Interactive timezone picker from common timezones.
+
+        Args:
+            message: prompt text
+            default: default timezone
+
+        Returns:
+            selected timezone string
+        """
+        timezones = [
+            "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
+            "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Moscow",
+            "Asia/Tokyo", "Asia/Shanghai", "Asia/Kolkata", "Asia/Dubai",
+            "Australia/Sydney", "Pacific/Auckland", "America/Sao_Paulo",
+            "Africa/Cairo", "Africa/Lagos", "Asia/Singapore", "Asia/Seoul",
+        ]
+        if not self._is_tty:
+            return self._ask_fallback(message, default)
+        return self._select_with_search_raw(message, timezones)
+
+    # ── Currency picker ────────────────────────────────────────────────
+
+    def currency_picker(self, message: str, default: str = "USD") -> str:
+        """Interactive currency picker from common currencies.
+
+        Args:
+            message: prompt text
+            default: default currency code
+
+        Returns:
+            selected 3-letter currency code
+        """
+        currencies = [
+            "USD - US Dollar", "EUR - Euro", "GBP - British Pound",
+            "JPY - Japanese Yen", "CNY - Chinese Yuan", "KRW - Korean Won",
+            "INR - Indian Rupee", "BRL - Brazilian Real", "CAD - Canadian Dollar",
+            "AUD - Australian Dollar", "CHF - Swiss Franc", "MXN - Mexican Peso",
+            "SGD - Singapore Dollar", "HKD - Hong Kong Dollar", "SEK - Swedish Krona",
+            "NOK - Norwegian Krone", "DKK - Danish Krone", "PLN - Polish Zloty",
+            "THB - Thai Baht", "ZAR - South African Rand",
+        ]
+        if not self._is_tty:
+            return self._ask_fallback(message, default)
+        result = self._select_with_search_raw(message, currencies)
+        return result[:3] if result else default
+
+    # ── Language picker ────────────────────────────────────────────────
+
+    def language_picker(self, message: str, default: str = "en") -> str:
+        """Interactive language picker from common languages.
+
+        Args:
+            message: prompt text
+            default: default language code
+
+        Returns:
+            selected 2-letter language code
+        """
+        languages = [
+            "en - English", "es - Spanish", "fr - French", "de - German",
+            "it - Italian", "pt - Portuguese", "ru - Russian", "zh - Chinese",
+            "ja - Japanese", "ko - Korean", "ar - Arabic", "hi - Hindi",
+            "nl - Dutch", "sv - Swedish", "pl - Polish", "tr - Turkish",
+            "vi - Vietnamese", "th - Thai", "uk - Ukrainian", "cs - Czech",
+        ]
+        if not self._is_tty:
+            return self._ask_fallback(message, default)
+        result = self._select_with_search_raw(message, languages)
+        return result[:2] if result else default
+
+    # ── Confirm with preview ───────────────────────────────────────────
+
+    def confirm_with_preview(self, message: str, preview: str,
+                             default: bool = False) -> bool:
+        """Confirm with a preview of what will happen.
+
+        Args:
+            message: confirmation prompt
+            preview: text preview of the action/result
+            default: default answer
+
+        Returns:
+            True if confirmed
+        """
+        if not self._is_tty:
+            return self._confirm_fallback(message, default)
+        return self._confirm_with_preview_raw(message, preview, default)
+
+    def _confirm_with_preview_raw(self, message: str, preview: str,
+                                  default: bool) -> bool:
+        fd = self._get_fd()
+        selected = not default
+
+        def _render() -> str:
+            if selected:
+                yes_text = f"{_REVERSE}{_GREEN} Yes {_RESET_REVERSE}{_RESET}"
+                no_text = " No "
+            else:
+                yes_text = " Yes "
+                no_text = f"{_REVERSE}{_RED} No {_RESET_REVERSE}{_RESET}"
+            preview_lines = preview.split("\n")[:5]
+            preview_str = "\n".join(f"  {_DIM}{line}{_RESET}" for line in preview_lines)
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
+                f"{preview_str}\n"
+                f"  {yes_text}  {no_text}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            line_count = 2 + min(len(preview.split("\n")), 5)
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return default
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return selected
+                    if key.kind in (_KEY_LEFT, _KEY_RIGHT):
+                        selected = not selected
+                    if key.kind == _KEY_CHAR:
+                        if key.char in ("y", "Y"):
+                            _clear(); return True
+                        if key.char in ("n", "N"):
+                            _clear(); return False
+        except (termios.error, OSError):
+            return default
+
+    # ── Table sort ─────────────────────────────────────────────────────
+
+    def table_sort(self, headers: list[str], rows: list[list[str]],
+                   title: str = "Sort table") -> list[list[str]]:
+        """Interactive table with column sorting via arrow keys.
+
+        Args:
+            headers: column headers
+            rows: table data rows
+            title: prompt text
+
+        Returns:
+            sorted rows
+        """
+        if not rows:
+            return []
+        if not self._is_tty:
+            return rows
+        return self._table_sort_raw(headers, rows, title)
+
+    def _table_sort_raw(self, headers: list[str], rows: list[list[str]],
+                        title: str) -> list[list[str]]:
+        import locale as _loc
+        fd = self._get_fd()
+        sort_col = 0
+        sort_asc = True
+        sorted_rows = list(rows)
+        cursor = 0
+        scroll = 0
+        max_visible = min(len(rows), 12)
+        widths = [len(h) for h in headers]
+        for row in sorted_rows:
+            for i, cell in enumerate(row):
+                if i < len(widths): widths[i] = max(widths[i], len(str(cell)))
+
+        def _do_sort() -> None:
+            nonlocal sorted_rows, cursor, scroll
+            def _key(row):
+                val = row[sort_col] if sort_col < len(row) else ""
+                try:
+                    return (0, float(val))
+                except ValueError:
+                    return (1, val.lower())
+            sorted_rows.sort(key=_key, reverse=not sort_asc)
+            cursor = 0; scroll = 0
+
+        _do_sort()
+
+        def _render() -> list[str]:
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: column  Space: asc/desc  Enter: confirm){_RESET}")
+            hdr_parts = []
+            for i, (h, w) in enumerate(zip(headers, widths)):
+                arrow = " \u25b2" if sort_asc and i == sort_col else (" \u25bc" if not sort_asc and i == sort_col else "")
+                if i == sort_col:
+                    hdr_parts.append(f"{_BOLD}{_CYAN}{h.ljust(w)}{arrow}{_RESET}")
+                else:
+                    hdr_parts.append(f"{_BOLD}{h.ljust(w)}{_RESET}")
+            lines.append(f"{_ERASE_LINE}\r  {'  '.join(hdr_parts)}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}{'  '.join('\u2500' * w for w in widths)}{_RESET}")
+            for i in range(min(max_visible, len(sorted_rows))):
+                idx = scroll + i
+                if idx >= len(sorted_rows): break
+                cells = "  ".join(str(sorted_rows[idx][j]).ljust(widths[j]) for j in range(min(len(widths), len(sorted_rows[idx]))))
+                if idx == cursor:
+                    lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {cells}{_RESET_REVERSE}{_RESET}")
+                else:
+                    lines.append(f"{_ERASE_LINE}\r   {cells}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}{len(sorted_rows)} rows{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines: sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count); return sorted_rows
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count); return sorted_rows
+                    if key.kind == _KEY_TAB:
+                        sort_col = (sort_col + 1) % len(headers)
+                        _do_sort()
+                    elif key.kind == _KEY_SPACE:
+                        sort_asc = not sort_asc
+                        _do_sort()
+                    elif key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                        if cursor < scroll: scroll = cursor
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(sorted_rows) - 1, cursor + 1)
+                        if cursor >= scroll + max_visible: scroll = cursor - max_visible + 1
+        except (termios.error, OSError):
+            return sorted_rows
+
+    # ── Notify ─────────────────────────────────────────────────────────
+
+    def notify(self, title: str, message: str, level: str = "info") -> None:
+        """Display a styled notification banner.
+
+        Args:
+            title: notification title
+            message: notification message
+            level: "info", "success", "warn", "error"
+        """
+        icons = {"info": "\u2139", "success": "\u2714", "warn": "\u26a0", "error": "\u2716"}
+        colors = {"info": _CYAN, "success": _GREEN, "warn": _RED, "error": _RED}
+        icon = icons.get(level, "\u2139")
+        color = colors.get(level, _CYAN)
+        self._io.write(f"  {color}{_BOLD}{icon} {title}{_RESET}")
+        if message:
+            self._io.write(f"  {_DIM}  {message}{_RESET}")
+
+    def progress_multi(self, items: list[tuple[str, int, int]]) -> None:
+        """Display multiple progress bars stacked.
+
+        Args:
+            items: list of (label, current, total) tuples
+        """
+        for label, current, total in items:
+            frac = current / max(total, 1)
+            bar_w = 20
+            filled = int(frac * bar_w)
+            bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
+            pct = f"{frac * 100:5.1f}%"
+            self._io.write(f"  {_CYAN}{label}{_RESET} {_DIM}{bar}{_RESET} {pct}")
+
+    def table(self, headers: list[str], rows: list[list[str]],
+              title: str = "") -> None:
+        """Display data in a formatted table with aligned columns.
+
+        Args:
+            headers: column header strings
+            rows: list of rows, each a list of cell strings
+            title: optional title above the table
+        """
+        if not headers:
+            return
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i, cell in enumerate(row):
+                if i < len(widths):
+                    widths[i] = max(widths[i], len(str(cell)))
+
+        def _fmt_row(cells: list[str], color: str = "") -> str:
+            parts = []
+            for i, w in enumerate(widths):
+                val = str(cells[i]) if i < len(cells) else ""
+                parts.append(val.ljust(w))
+            row_str = "  ".join(parts)
+            if color:
+                return f"{color}{row_str}{_RESET}"
+            return row_str
+
+        lines: list[str] = []
+        if title:
+            lines.append(f"  {_BOLD}{_CYAN}{title}{_RESET}")
+
+        header_str = "  ".join(f"{_BOLD}{h.ljust(w)}{_RESET}" for h, w in zip(headers, widths))
+        lines.append(f"  {_BOLD}{header_str}{_RESET}")
+        lines.append(f"  {_DIM}{'  '.join('\u2500' * w for w in widths)}{_RESET}")
+
+        for idx, row in enumerate(rows):
+            color = _DIM if idx % 2 == 1 else ""
+            lines.append(f"  {_fmt_row(row, color)}")
+
+        for line in lines:
+            self._io.write(line)
+
+    # ── Diff display ──────────────────────────────────────────────────
+
+    def diff(self, left_label: str, left_lines: list[str],
+             right_label: str, right_lines: list[str],
+             title: str = "") -> None:
+        """Show a side-by-side diff with colored additions/removals.
+
+        Args:
+            left_label: label for left pane
+            left_lines: content lines of left side
+            right_label: label for right pane
+            right_lines: content lines of right side
+            title: optional title above the diff
+        """
+        width = _terminal_width()
+        col_w = (width - 5) // 2
+
+        def _trunc(s: str, w: int) -> str:
+            if len(s) > w:
+                return s[:w - 1] + "\u2026"
+            return s
+
+        if title:
+            self._io.write(f"  {_BOLD}{_CYAN}{title}{_RESET}")
+
+        header = f"  {_DIM}{left_label:^{col_w}}{_RESET}  \u2502  {_DIM}{right_label:^{col_w}}{_RESET}"
+        self._io.write(header)
+        sep = f"  {'  \u2500' * col_w}\u2500  \u253c\u2500  {'\u2500  ' * col_w}\u2500"
+        self._io.write(f"{_DIM}{sep}{_RESET}")
+
+        max_len = max(len(left_lines), len(right_lines))
+        left_set = set(left_lines)
+        right_set = set(right_lines)
+
+        for i in range(max_len):
+            l = left_lines[i] if i < len(left_lines) else ""
+            r = right_lines[i] if i < len(right_lines) else ""
+
+            if l and l not in right_set:
+                l_display = f"{_RED}{_trunc(l, col_w)}{_RESET}"
+            else:
+                l_display = _trunc(l, col_w)
+
+            if r and r not in left_set:
+                r_display = f"{_GREEN}{_trunc(r, col_w)}{_RESET}"
+            else:
+                r_display = _trunc(r, col_w)
+
+            self._io.write(f"  {l_display:<{col_w + 10}}  \u2502  {r_display}")
+
+    def _edit_raw(self, message: str, default: str,
+                  validator: "Callable[[str], str | None] | None") -> str:
+        """Interactive edit using raw terminal input."""
+        fd = self._get_fd()
+        suffix = f" [{_DIM}{default}{_RESET}]" if default else ""
+        buf: list[str] = list(default) if default else []
+        cursor = 0
+        error = ""
+
+        def _render() -> str:
+            display = "".join(buf)
+            before = display[:cursor]
+            after = display[cursor:]
+            err = f"\n  {_RED}\u2718 {error}{_RESET}" if error else ""
+            return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}{suffix}: {before}{_REVERSE}|{_RESET_REVERSE}{after}{_HIDE_CURSOR}{err}"
+
+        def _clear() -> None:
+            sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
+            if error:
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+
+                    key = _read_raw_key(fd)
+
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear()
+                        return default
+
+                    if key.kind == _KEY_ENTER:
+                        text = "".join(buf)
+                        if validator:
+                            err = validator(text)
+                            if err:
+                                error = err
+                                continue
+                        _clear()
+                        return text if text else default
+
+                    error = ""
+
+                    if key.kind == _KEY_BACKSPACE:
+                        if cursor > 0:
+                            buf.pop(cursor - 1)
+                            cursor -= 1
+
+                    elif key.kind == _KEY_DELETE:
+                        if cursor < len(buf):
+                            buf.pop(cursor)
+
+                    elif key.kind == _KEY_LEFT:
+                        cursor = max(0, cursor - 1)
+
+                    elif key.kind == _KEY_RIGHT:
+                        cursor = min(len(buf), cursor + 1)
+
+                    elif key.kind == _KEY_HOME:
+                        cursor = 0
+
+                    elif key.kind == _KEY_END:
+                        cursor = len(buf)
+
+                    elif key.kind in (_KEY_UP, _KEY_DOWN):
+                        pass
+
+                    elif key.kind == _KEY_CHAR:
+                        buf.insert(cursor, key.char)
+                        cursor += 1
+
+        except (termios.error, OSError):
+            return self._ask_fallback(message, default)
+
+    # ── Screen helpers ─────────────────────────────────────────────────
+
+    def clear(self) -> None:
+        """Clear the terminal screen."""
+        if self._is_tty:
+            sys.stdout.write("\033[2J\033[H")
+            sys.stdout.flush()
+        else:
+            self._io.write("\033[2J\033[H", end="")
+
+    def status(self, kind: str, message: str) -> None:
+        """Print a colored status line.
+
+        Args:
+            kind: one of 'ok', 'warn', 'error', 'info', 'step'
+            message: status text
+        """
+        symbols = {
+            "ok": f"{_GREEN}\u2713{_RESET}",
+            "warn": f"\033[33m\u26a0{_RESET}",
+            "error": f"{_RED}\u2717{_RESET}",
+            "info": f"{_CYAN}\u2139{_RESET}",
+            "step": f"{_CYAN}\u2192{_RESET}",
+        }
+        symbol = symbols.get(kind, kind)
+        line = f"  {symbol} {message}"
+        if self._is_tty:
+            sys.stdout.write(f"{_ERASE_LINE}{line}\n")
+            sys.stdout.flush()
+        else:
+            self._io.write(line)
+
+    # ── Select with details ────────────────────────────────────────────
+
+    def select_with_details(self, title: str, options: list[str],
+                            details: list[str]) -> str:
+        """Show an interactive selector with a detail pane below the list.
+
+        Args:
+            title: prompt text
+            options: list of option strings
+            details: parallel list of description strings (same length as options)
+
+        Returns:
+            the selected option string
+        """
+        if not options:
+            return ""
+        if len(options) == 1:
+            return options[0]
+        if not self._is_tty:
+            return self._select_fallback(title, options)
+        return self._select_with_details_raw(title, options, details)
+
+    def _select_with_details_raw(self, title: str, options: list[str],
+                                 details: list[str]) -> str:
+        """Interactive select with details pane using raw terminal input."""
+        fd = self._get_fd()
+        query = ""
+        cursor = 0
+        scroll = 0
+        max_visible = min(len(options), 15)
+        width = _terminal_width()
+
+        def _get_filtered() -> list[tuple[int, str]]:
+            if query:
+                return [(i, o) for i, o in enumerate(options) if query.lower() in o.lower()]
+            return [(i, o) for i, o in enumerate(options)]
+
+        def _render() -> list[str]:
+            filtered = _get_filtered()
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            if query:
+                lines.append(f"{_ERASE_LINE}\r  Filter: {_DIM}{query}{_RESET}{_HIDE_CURSOR}")
+            else:
+                lines.append("")
+
+            if not filtered:
+                lines.append(f"{_ERASE_LINE}\r  {_DIM}No matching options{_RESET}")
+            else:
+                for i in range(min(max_visible, len(filtered))):
+                    idx = scroll + i
+                    if idx >= len(filtered):
+                        break
+                    orig_idx, text = filtered[idx]
+                    display = _truncate(text, width - 5)
+                    if idx == cursor:
+                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {display}{_RESET_REVERSE}{_RESET}")
+                    else:
+                        lines.append(f"{_ERASE_LINE}\r   {display}")
+
+                # Detail pane for selected item
+                if 0 <= cursor < len(filtered):
+                    orig_idx = filtered[cursor][0]
+                    if orig_idx < len(details):
+                        detail = _truncate(details[orig_idx], width - 6)
+                        lines.append(f"{_ERASE_LINE}\r")
+                        lines.append(f"{_ERASE_LINE}\r  {_DIM}{detail}{_RESET}")
+
+            if len(filtered) > max_visible:
+                lines.append(f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}")
+
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    filtered = _get_filtered()
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+
+                    key = _read_raw_key(fd)
+
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count)
+                        return options[0]
+
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count)
+                        if 0 <= cursor < len(filtered):
+                            return filtered[cursor][1]
+                        return options[0]
+
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                        if cursor < scroll:
+                            scroll = cursor
+
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(filtered) - 1, cursor + 1)
+                        if cursor >= scroll + max_visible:
+                            scroll = cursor - max_visible + 1
+
+                    elif key.kind == _KEY_BACKSPACE:
+                        if query:
+                            query = query[:-1]
+                            cursor = 0
+                            scroll = 0
+
+                    elif key.kind == _KEY_CHAR:
+                        query += key.char
+                        cursor = 0
+                        scroll = 0
+
+        except (termios.error, OSError):
+            return self._select_fallback(title, options)
+
+    # ── Select with preview ────────────────────────────────────────────
+
+    def select_with_preview(self, title: str, options: list[str],
+                            preview_fn: "Callable[[str], str]") -> str:
+        """Show an interactive selector with a live preview panel.
+
+        Args:
+            title: prompt text
+            options: list of option strings
+            preview_fn: function that takes an option and returns preview text
+
+        Returns:
+            the selected option string
+        """
+        if not options:
+            return ""
+        if len(options) == 1:
+            return options[0]
+        if not self._is_tty:
+            return self._select_fallback(title, options)
+        return self._select_with_preview_raw(title, options, preview_fn)
+
+    def _select_with_preview_raw(self, title: str, options: list[str],
+                                 preview_fn: "Callable[[str], str]") -> str:
+        """Interactive select with live preview using raw terminal input."""
+        fd = self._get_fd()
+        query = ""
+        cursor = 0
+        scroll = 0
+        max_visible = min(len(options), 15)
+        width = _terminal_width()
+        list_w = min(width // 2, 40)
+        preview_w = width - list_w - 3
+
+        def _get_filtered() -> list[str]:
+            if query:
+                return [o for o in options if query.lower() in o.lower()]
+            return list(options)
+
+        def _render() -> list[str]:
+            filtered = _get_filtered()
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            if query:
+                lines.append(f"{_ERASE_LINE}\r  Filter: {_DIM}{query}{_RESET}{_HIDE_CURSOR}")
+            else:
+                lines.append("")
+
+            if not filtered:
+                lines.append(f"{_ERASE_LINE}\r  {_DIM}No matching options{_RESET}")
+            else:
+                for i in range(min(max_visible, len(filtered))):
+                    idx = scroll + i
+                    if idx >= len(filtered):
+                        break
+                    text = _truncate(filtered[idx], list_w - 5)
+                    if idx == cursor:
+                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {text}{_RESET_REVERSE}{_RESET}")
+                    else:
+                        lines.append(f"{_ERASE_LINE}\r   {text}")
+
+                if 0 <= cursor < len(filtered):
+                    try:
+                        preview_text = preview_fn(filtered[cursor])
+                    except Exception:
+                        preview_text = "(preview unavailable)"
+                    for i, pline in enumerate(preview_text.split("\n")[:max_visible + 2]):
+                        t = _truncate(pline, preview_w)
+                        if i < len(lines):
+                            lines[i] = f"{lines[i]}{_DIM}\u2502{_RESET} {t}"
+                        else:
+                            lines.append(f"{' ' * (list_w + 2)}{_DIM}\u2502{_RESET} {t}")
+
+            if len(filtered) > max_visible:
+                lines.append(f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}")
+
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    filtered = _get_filtered()
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+
+                    key = _read_raw_key(fd)
+
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count)
+                        return options[0]
+
+                    if key.kind == _KEY_ENTER:
+                        _clear(prev_count)
+                        if 0 <= cursor < len(filtered):
+                            return filtered[cursor]
+                        return options[0]
+
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+                        if cursor < scroll:
+                            scroll = cursor
+
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(filtered) - 1, cursor + 1)
+                        if cursor >= scroll + max_visible:
+                            scroll = cursor - max_visible + 1
+
+                    elif key.kind == _KEY_BACKSPACE:
+                        if query:
+                            query = query[:-1]
+                            cursor = 0
+                            scroll = 0
+
+                    elif key.kind == _KEY_CHAR:
+                        query += key.char
+                        cursor = 0
+                        scroll = 0
+
+        except (termios.error, OSError):
+            return self._select_fallback(title, options)
+
+    def confirm_multi(self, title: str, items: list[str],
+                      default: bool = True) -> list[str]:
+        """Show a multi-confirm prompt: list items and ask y/N for each.
+
+        Args:
+            title: prompt text
+            items: list of items to confirm
+            default: default answer for each item
+
+        Returns:
+            list of items that were confirmed (y)
+        """
+        if not items:
+            return []
+        if not self._is_tty:
+            return self._confirm_multi_fallback(title, items, default)
+        return self._confirm_multi_raw(title, items, default)
+
+    def _confirm_multi_raw(self, title: str, items: list[str],
+                           default: bool) -> list[str]:
+        """Interactive multi-confirm using raw terminal input."""
+        fd = self._get_fd()
+        cursor = 0
+        answers: dict[int, bool] = {}
+        hint = "Y/n" if default else "y/N"
+        width = _terminal_width()
+
+        def _render() -> list[str]:
+            lines: list[str] = []
+            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
+            lines.append("")
+
+            for i, item in enumerate(items):
+                answered = answers.get(i)
+                if answered is True:
+                    check = f"{_GREEN}\u2713{_RESET}"
+                elif answered is False:
+                    check = f"{_RED}\u2717{_RESET}"
+                else:
+                    check = "\u25cb"
+
+                display = _truncate(item, width - 8)
+                if i == cursor:
+                    lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {check} {display}{_RESET_REVERSE}{_RESET}")
+                else:
+                    lines.append(f"{_ERASE_LINE}\r   {check} {display}")
+
+            n_yes = sum(1 for v in answers.values() if v)
+            n_no = sum(1 for v in answers.values() if not v)
+            lines.append(f"{_ERASE_LINE}\r")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}y: yes  n: no  a: yes all  Esc: finish ({n_yes} yes, {n_no} no){_RESET}{_HIDE_CURSOR}")
+            return lines
+
+        def _write_lines(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(line_count: int) -> None:
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                prev_count = 0
+                while True:
+                    _clear(prev_count)
+                    lines = _render()
+                    _write_lines(lines)
+                    prev_count = len(lines)
+
+                    key = _read_raw_key(fd)
+
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(prev_count)
+                        break
+
+                    if key.kind == _KEY_ENTER:
+                        cursor = min(len(items) - 1, cursor + 1)
+                        if cursor >= len(items):
+                            break
+
+                    if key.kind == _KEY_UP:
+                        cursor = max(0, cursor - 1)
+
+                    elif key.kind == _KEY_DOWN:
+                        cursor = min(len(items) - 1, cursor + 1)
+
+                    elif key.kind == _KEY_CHAR:
+                        c = key.char.lower()
+                        if c == "y":
+                            answers[cursor] = True
+                            cursor = min(len(items) - 1, cursor + 1)
+                        elif c == "n":
+                            answers[cursor] = False
+                            cursor = min(len(items) - 1, cursor + 1)
+                        elif c == "a":
+                            for i in range(len(items)):
+                                if i not in answers:
+                                    answers[i] = True
+                            break
+
+        except (termios.error, OSError):
+            return self._confirm_multi_fallback(title, items, default)
+
+        return [items[i] for i in sorted(answers) if answers[i]]
+
+    def _confirm_multi_fallback(self, title: str, items: list[str],
+                                default: bool) -> list[str]:
+        """Line-mode fallback for non-TTY."""
+        self._io.write(f"  {title}")
+        for i, item in enumerate(items, 1):
+            self._io.write(f"    {i}. {item}")
+        hint = "Y/n" if default else "y/N"
+        self._io.write(f"  Confirm all? [{hint}] ", end="")
+        try:
+            raw = self._io.read("").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return []
+        if raw in ("y", "yes", ""):
+            return list(items)
+        return []
+
+    # ── Progress bar ───────────────────────────────────────────────────
+
+    def progress(self, label: str, current: int, total: int,
+                 bar_width: int = 20) -> None:
+        """Show a progress bar. Overwrites the current line.
+
+        Args:
+            label: text label before the bar
+            current: current progress value
+            total: total value (100%)
+            bar_width: width of the bar in characters
+        """
+        frac = current / max(total, 1)
+        filled = int(frac * bar_width)
+        bar = f"{_GREEN}{'█' * filled}{_DIM}{'░' * (bar_width - filled)}{_RESET}"
+        pct = f"{frac * 100:5.1f}%"
+        line = f"\r  {label}: [{bar}] {pct} ({current}/{total})"
+        sys.stdout.write(f"{_ERASE_LINE}{line}")
+        sys.stdout.flush()
+        if current >= total:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+    # ── Spinner ────────────────────────────────────────────────────────
+
+    def spinner(self, message: str = "", rate: float = 0.1) -> "_InteractiveSpinner":
+        """Return a context manager that shows a spinner while a task runs.
+
+        Usage::
+
+            with prompt.spinner("Loading") as s:
+                do_work()
+            s.ok("done")
+            s.fail("error")
+        """
+        return _InteractiveSpinner(self, message, rate)
+
+
+class _InteractiveSpinner:
+    """Context manager that drives a spinner animation for InteractivePrompt."""
+
+    _FRAMES = ["\u280b", "\u2819", "\u2839", "\u2838", "\u283c", "\u2834", "\u2826", "\u2827", "\u2807", "\u280f"]
+
+    def __init__(self, prompt: InteractivePrompt, message: str, rate: float) -> None:
+        self._prompt = prompt
+        self._message = message
+        self._rate = rate
+        self._stop = False
+        self._thread: threading.Thread | None = None
+
+    def __enter__(self) -> "_InteractiveSpinner":
+        import threading
+        self._stop = False
+
+        def _spin() -> None:
+            i = 0
+            while not self._stop:
+                frame = self._FRAMES[i % len(self._FRAMES)]
+                sys.stdout.write(f"\r  {_CYAN}{frame}{_RESET} {self._message}\r")
+                sys.stdout.flush()
+                i += 1
+                time.sleep(self._rate)
+
+        self._thread = threading.Thread(target=_spin, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._stop = True
+        if self._thread:
+            self._thread.join()
+        sys.stdout.write(f"\r{_ERASE_LINE}")
+        sys.stdout.flush()
+
+    def ok(self, message: str = "") -> None:
+        """Replace spinner with a success line."""
+        self.__exit__()
+        sys.stdout.write(f"\r  {_GREEN}\u2713{_RESET} {message or self._message}\n")
+        sys.stdout.flush()
+
+    def fail(self, message: str = "") -> None:
+        """Replace spinner with a failure line."""
+        self.__exit__()
+        sys.stdout.write(f"\r  {_RED}\u2717{_RESET} {message or self._message}\n")
+        sys.stdout.flush()

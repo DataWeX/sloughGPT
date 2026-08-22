@@ -33,7 +33,6 @@ export default function ExportPage() {
   const [exportError, setExportError] = useState<string | null>(null)
   const [formatLoadError, setFormatLoadError] = useState<string | null>(null)
 
-  const [trainingPairs, setTrainingPairs] = useState<Record<string, unknown>[] | null>(null)
   const [exportingPairs, setExportingPairs] = useState(false)
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])

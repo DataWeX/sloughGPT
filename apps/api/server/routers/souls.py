@@ -245,9 +245,6 @@ Be yourself — let your personality shape how you respond."""
         Falls back to SloNet (NumPy) for checkpoints that don't match SloughGPTModel.
         """
         try:
-            from domains.slolib.gpu import get_accelerator
-
-            acc = get_accelerator()
             repo_root = self._get_repo_root()
             if not self._VALID_CKPT_NAME.match(req.checkpoint_name) or '..' in req.checkpoint_name:
                 raise_error("Invalid checkpoint name", code="E_VAL_REQUEST")
@@ -375,7 +372,7 @@ Be yourself — let your personality shape how you respond."""
 
             # Load checkpoint into main model if requested
             if req.checkpoint_name:
-                loaded = self._load_checkpoint_into_model(req.checkpoint_name)
+                loaded = await asyncio.to_thread(self._load_checkpoint_into_model, req.checkpoint_name)
                 result["checkpoint_loaded"] = loaded
                 try:
                     from domains.infrastructure.server_state import get_server_state

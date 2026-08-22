@@ -235,7 +235,7 @@ class DownloadManager:
                 return True
             return False
 
-    def _set_progress(self, model_id: str, **kwargs):
+    def _set_progress(self, model_id: str, **kwargs) -> None:
         with self._lock:
             if model_id not in self._downloads:
                 self._downloads[model_id] = DownloadProgress(
@@ -247,7 +247,7 @@ class DownloadManager:
                 if hasattr(entry, key):
                     setattr(entry, key, value)
 
-    def _notify_callbacks(self, model_id: str):
+    def _notify_callbacks(self, model_id: str) -> None:
         with self._lock:
             for cb in self._callbacks.get(model_id, []):
                 try:
@@ -257,7 +257,7 @@ class DownloadManager:
                         "model_id": model_id, "error": str(e),
                     })
 
-    def on_progress(self, model_id: str, callback: Callable):
+    def on_progress(self, model_id: str, callback: Callable) -> None:
         with self._lock:
             self._callbacks.setdefault(model_id, []).append(callback)
 
@@ -386,7 +386,7 @@ class DownloadManager:
             "elapsed_seconds": round(elapsed, 1),
         }
 
-    def cleanup_stale(self, max_age: float = 300):
+    def cleanup_stale(self, max_age: float = 300) -> None:
         now = time.time()
         with self._lock:
             stale = []
@@ -404,10 +404,20 @@ class DownloadManager:
 
 
 _download_manager: Optional[DownloadManager] = None
+_download_manager_lock = threading.Lock()
 
 
 def get_download_manager() -> DownloadManager:
     global _download_manager
     if _download_manager is None:
-        _download_manager = DownloadManager()
+        with _download_manager_lock:
+            if _download_manager is None:
+                _download_manager = DownloadManager()
     return _download_manager
+
+
+def reset_download_manager() -> None:
+    """Reset the singleton (for testing)."""
+    global _download_manager
+    with _download_manager_lock:
+        _download_manager = None

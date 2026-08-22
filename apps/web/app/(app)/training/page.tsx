@@ -76,7 +76,7 @@ export default function TrainingPage() {
       initialLoadDone.current = true
       datasets.setSelectedDataset(datasets.datasets[0].id)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   // Pause checkpoint polling when page is hidden
   const ready = useApiReady()

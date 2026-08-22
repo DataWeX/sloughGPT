@@ -12,7 +12,7 @@ Allows::
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 from domains.infrastructure.server_state import AtomicRef
 
 # Atomic state refs stored in a private dict so __getattr__/__setattr__ fire.

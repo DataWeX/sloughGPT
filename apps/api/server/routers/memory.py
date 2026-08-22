@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from domains.memory.memory_service import get_memory_service
-from schemas.common import raise_error, safe_audit_log
+from schemas.common import raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.memory")
 
@@ -130,7 +130,7 @@ class MemoryRouter:
             - none; read-only.
         """
         items = self._service().list_all(limit=limit)
-        return {"items": items, "total": len(items)}
+        return success_response(data={"items": items, "total": len(items)})
 
     def search(
         self,
@@ -151,7 +151,7 @@ class MemoryRouter:
             - none; read-only.
         """
         results = self._service().retrieve(q.strip(), limit=limit)
-        return {"results": results, "total": len(results)}
+        return success_response(data={"results": results, "total": len(results)})
 
     def store(self, req: StoreRequest) -> dict:
         """
@@ -177,7 +177,7 @@ class MemoryRouter:
             logger.error("Memory store failed (topic=%s): %s", topic, e, exc_info=True)
             raise
         safe_audit_log("memory.store", resource=topic, detail=f"stored={stored}")
-        return {"stored": stored, "content": content, "topic": topic, "source": source}
+        return success_response(data={"stored": stored, "content": content, "topic": topic, "source": source})
 
     def remember(self, req: RememberRequest) -> dict:
         """
@@ -202,7 +202,7 @@ class MemoryRouter:
             logger.error("Memory remember failed: %s", e, exc_info=True)
             raise
         reason = "stored" if stored else "skipped (disabled, too short, or nothing new)"
-        return {"stored": stored, "reason": reason}
+        return success_response(data={"stored": stored, "reason": reason})
 
     def set_config(self, req: ConfigRequest) -> dict:
         """
@@ -226,7 +226,7 @@ class MemoryRouter:
         if req.archive_retention_days is not None:
             svc.set_archive_retention(req.archive_retention_days)
         safe_audit_log("memory.config", resource="memory", detail=f"enabled={req.enabled} retention={req.archive_retention_days}")
-        return svc.config_snapshot()
+        return success_response(data=svc.config_snapshot())
 
     def get_config(self) -> dict:
         """
@@ -240,7 +240,7 @@ class MemoryRouter:
         Side effects:
             - none; read-only.
         """
-        return self._service().config_snapshot()
+        return success_response(data=self._service().config_snapshot())
 
     def delete_item(self, item_id: str) -> dict:
         """
@@ -259,7 +259,7 @@ class MemoryRouter:
             raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
         removed = self._service().delete([item_id.strip()])
         safe_audit_log("memory.delete", resource=item_id, detail=f"deleted={removed}")
-        return {"deleted": removed}
+        return success_response(data={"deleted": removed})
 
     def update_item(self, item_id: str, req: UpdateRequest) -> dict:
         """
@@ -282,7 +282,7 @@ class MemoryRouter:
             raise_error("content is required", "E_BAD_REQUEST", status_code=400)
         updated = self._service().update(item_id.strip(), req.content, topic=req.topic, importance=req.importance)
         safe_audit_log("memory.update", resource=item_id, detail=f"updated={updated}")
-        return {"updated": 1 if updated else 0, "duplicate": not updated}
+        return success_response(data={"updated": 1 if updated else 0, "duplicate": not updated})
 
     def clear(self) -> dict:
         """
@@ -296,7 +296,7 @@ class MemoryRouter:
         """
         removed = self._service().clear()
         safe_audit_log("memory.clear", resource="all", detail=f"cleared={removed}")
-        return {"cleared": removed}
+        return success_response(data={"cleared": removed})
     def consolidate(self, threshold: Optional[float] = None) -> dict:
         """
         Merge near-duplicate facts, keeping the longest in each cluster.
@@ -329,7 +329,7 @@ class MemoryRouter:
             logger.error("Memory consolidation delete failed (threshold=%s): %s", threshold, e, exc_info=True)
             raise
         safe_audit_log("memory.consolidate", resource="all", detail=f"removed={removed}, kept={len(plan['keep_ids'])}")
-        return {"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold}
+        return success_response(data={"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold})
 
     def archive(self, limit: Optional[int] = None) -> dict:
         """
@@ -349,7 +349,7 @@ class MemoryRouter:
             limit = 20
         limit = max(1, min(int(limit), 1000))
         records = list_archive(limit=limit)
-        return {"records": records, "total": len(records)}
+        return success_response(data={"records": records, "total": len(records)})
 
     def archive_stats(self) -> dict:
         """
@@ -362,7 +362,7 @@ class MemoryRouter:
             - none; read-only.
         """
         from domains.memory.task_memory import archive_stats
-        return archive_stats()
+        return success_response(data=archive_stats())
 
     def archive_prune(self, retain_days: Optional[float] = None) -> dict:
         """
@@ -386,7 +386,7 @@ class MemoryRouter:
             logger.error("Archive prune failed (retain_days=%s): %s", retain_days, e, exc_info=True)
             raise
         safe_audit_log("memory.archive_prune", resource="archive", detail=f"pruned={removed}")
-        return {"pruned": removed}
+        return success_response(data={"pruned": removed})
 
 
 router = MemoryRouter().router

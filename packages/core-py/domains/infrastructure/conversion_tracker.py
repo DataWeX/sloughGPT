@@ -18,6 +18,7 @@ Usage:
 """
 
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -133,7 +134,7 @@ class ConversionTracker:
                          ConversionStage.LOADING}
         return [s.to_dict() for s in self._statuses.values() if s.stage in active_stages]
 
-    def clear(self, model_id: str = None):
+    def clear(self, model_id: str = None) -> None:
         """Clear tracked status."""
         if model_id:
             self._statuses.pop(model_id, None)
@@ -156,11 +157,14 @@ class ConversionTracker:
 
 # Module-level singleton
 _tracker: ConversionTracker | None = None
+_tracker_lock = threading.Lock()
 
 
 def get_tracker() -> ConversionTracker:
     """Get or create the global conversion tracker."""
     global _tracker
     if _tracker is None:
-        _tracker = ConversionTracker()
+        with _tracker_lock:
+            if _tracker is None:
+                _tracker = ConversionTracker()
     return _tracker

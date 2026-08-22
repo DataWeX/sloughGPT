@@ -156,7 +156,7 @@ class KBRouter:
         self.router.add_api_route("/kg/pipeline-stats", self.kg_pipeline_stats, methods=["GET"])
 
     def _get_memory(self):
-        from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
+        from domains.learner.knowledge import get_knowledge_memory
         return get_knowledge_memory()
 
     def _fact_from_entry(self, entry: dict) -> KnowledgeItemOut:
@@ -248,6 +248,7 @@ class KBRouter:
             label = lr.label
         except Exception as exc:
             logger.debug("Truth labeler unavailable: %s", exc)
+        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         fact = KnowledgeFact(
             content=req.content,
@@ -707,10 +708,10 @@ class KBRouter:
 
         topic, suggestions = await asyncio.to_thread(_categorize)
 
-        return {
+        return success_response(data={
             "topic": topic,
             "suggestions": [{"topic": t, "score": round(s, 4)} for t, s in suggestions],
-        }
+        })
 
     async def knowledge_gaps(self) -> dict:
         """Find under-represented topics and knowledge gaps."""
@@ -725,11 +726,11 @@ class KBRouter:
 
         gaps, topic_counts = await asyncio.to_thread(_find_gaps)
 
-        return {
+        return success_response(data={
             "gaps": gaps,
             "total_facts": memory._fact_counter,
             "topics": list(topic_counts.keys()),
-        }
+        })
 
     async def bulk_ingest(self, req: BulkIngestRequest) -> dict:
         """Bulk ingest texts with automatic deduplication.
@@ -756,10 +757,10 @@ class KBRouter:
             detail="bulk",
             added=report.get("added", 0), skipped=report.get("skipped", 0),
         )
-        return {
+        return success_response(data={
             "status": "completed",
             **report,
-        }
+        })
 
     async def train_embedder_endpoint(self) -> dict:
         """Train the SloNet text embedder on all knowledge + dataset texts.
@@ -796,6 +797,7 @@ class KBRouter:
                         texts.extend(chunks[:500])
                     except Exception as exc:
                         logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
+                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             # 3. Dataset files
             datasets_dir = REPO / "datasets"
@@ -807,6 +809,7 @@ class KBRouter:
                         texts.extend(chunks[:500])
                     except Exception as exc:
                         logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
+                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             # Deduplicate
             seen = set()
@@ -821,17 +824,17 @@ class KBRouter:
                 embed_dim=64, vocab_size=1024, max_seq_len=32,
                 n_heads=2, n_layers=1,
             )
-            return {
+            return success_response(data={
                 "status": "trained",
                 "texts_used": len(texts),
                 "epochs": result["epochs"],
                 "final_loss": result["final_loss"],
                 "save_path": result["save_path"],
-            }
+            })
 
         result = await asyncio.to_thread(_train)
         safe_audit_log("knowledge.train", resource="embedder", detail=result.get("status", "ok"), texts_used=result.get("texts_used", 0))
-        return result
+        return success_response(data=result)
 
     async def embedder_status(self) -> dict:
         """Check if a trained embedder checkpoint exists."""
@@ -848,10 +851,10 @@ class KBRouter:
                     "path": str(_EMBEDDER_PATH),
                 }
 
-        return {
+        return success_response(data={
             "trained": exists,
             "info": info,
-        }
+        })
 
     def _get_spaced_rep(self):
         if self._spaced_rep_scheduler is None:

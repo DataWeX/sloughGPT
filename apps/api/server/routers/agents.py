@@ -382,7 +382,7 @@ class AgentsRouter:
         from domains.agents.run_history import get_agent_run_store
 
         runs = await asyncio.to_thread(get_agent_run_store().list_runs, limit=max(1, min(int(limit), 200)))
-        return {"runs": runs, "count": len(runs)}
+        return success_response(data={"runs": runs, "count": len(runs)})
 
     async def get_run(self, run_id: str) -> dict:
         """Return a single orchestration run record."""

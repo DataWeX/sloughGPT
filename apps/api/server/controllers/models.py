@@ -8,7 +8,6 @@ import logging
 import time
 import threading
 import os
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -343,7 +342,7 @@ class ModelsController:
         resolved_device = self._resolve_device(device)
 
         try:
-            result = self._load_hf_model(model_id, resolved_device)
+            self._load_hf_model(model_id, resolved_device)
             self._current_model = model_id
             self._current_device = resolved_device
             self._loaded_at = datetime.now()

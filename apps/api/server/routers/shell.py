@@ -7,6 +7,7 @@ in an isolated ``MemoryIO`` instance and returns captured output.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import threading
@@ -89,7 +90,7 @@ async def exec_command(req: ShellExecRequest):
     t0 = _time.monotonic()
 
     try:
-        output, exit_code = repl.execute(req.command)
+        output, exit_code = await asyncio.to_thread(repl.execute, req.command)
     except Exception as e:
         logger.warning("Shell exec error: %s", e, extra={"tag": "SHELL"})
         output = ""

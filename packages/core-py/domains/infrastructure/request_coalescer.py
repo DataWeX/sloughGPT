@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import threading
 import time
 from typing import Any, Optional
 
@@ -148,17 +149,21 @@ class RequestCoalescer:
 
 
 _coalescer: Optional[RequestCoalescer] = None
+_coalescer_lock = threading.Lock()
 
 
 def get_coalescer() -> RequestCoalescer:
     """Get or create the global request coalescer singleton."""
     global _coalescer
     if _coalescer is None:
-        _coalescer = RequestCoalescer()
+        with _coalescer_lock:
+            if _coalescer is None:
+                _coalescer = RequestCoalescer()
     return _coalescer
 
 
 def reset_coalescer() -> None:
     """Reset the global coalescer (for testing)."""
     global _coalescer
-    _coalescer = None
+    with _coalescer_lock:
+        _coalescer = None

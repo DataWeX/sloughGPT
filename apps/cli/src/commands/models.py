@@ -13,6 +13,16 @@ log = get_global()
 from utils.formatting import format_size, format_number, truncate
 
 
+def _fmt_model_option(model_id: str, display: str) -> str:
+    """Format a model option for InteractivePrompt.select()."""
+    return f"{model_id}  ({display})"
+
+
+def _parse_model_option(option: str) -> str:
+    """Extract model_id from a formatted option string."""
+    return option.split("  (")[0]
+
+
 def cmd_models(args):
     """List available models. Use subcommands for info, download, compare, personalities."""
     from utils.helpers import local_soul_candidate_paths
@@ -109,13 +119,12 @@ def _interactive_download_select():
     """Show an interactive fuzzy-searchable list of popular HuggingFace models.
 
     Queries the HuggingFace Hub API for trending text-generation models,
-    displays them in a curses-based fuzzy selector, and returns the selected
-    model ID. Returns None if the user cancels.
+    displays them in an interactive selector with arrow keys and type-to-filter,
+    and returns the selected model ID. Returns None if the user cancels.
 
     Returns:
         Selected model ID string, or None if cancelled.
     """
-    import curses
     import requests
 
     log.step("Fetching popular models from HuggingFace Hub...")
@@ -158,91 +167,21 @@ def _interactive_download_select():
     # Sort by downloads descending
     model_list.sort(key=lambda x: x[2], reverse=True)
 
-    # ── curses fuzzy selector ──
-    def _run_selector(stdscr):
-        curses.curs_set(0)
-        curses.use_default_colors()
-        stdscr.nodelay(False)
+    # Build formatted options for InteractivePrompt
+    from domains.shell.interactive import InteractivePrompt
+    from domains.shell.io import ConsoleIO
 
-        height, width = stdscr.getmaxyx()
-        query = ""
-        selected = 0
-        scroll_offset = 0
+    io = ConsoleIO()
+    prompt = InteractivePrompt(io)
 
-        while True:
-            stdscr.clear()
-            stdscr.addstr(0, 0, " Download Model from HuggingFace ", curses.A_REVERSE)
-            stdscr.addstr(2, 0, f" Search: {query}_")
-            stdscr.addstr(3, 0, "─" * min(width - 1, 60))
+    options = [_fmt_model_option(mid, display) for display, mid, _ in model_list]
+    result = prompt.select("Download Model from HuggingFace", options)
 
-            # Fuzzy filter
-            filtered = [
-                (display, mid, dl)
-                for display, mid, dl in model_list
-                if query.lower() in mid.lower() or query.lower() in display.lower()
-            ]
-
-            if not filtered:
-                stdscr.addstr(5, 0, " No matching models — type to search")
-                key = stdscr.getch()
-                if key == 27:
-                    return None
-                elif key == 263 or key == 127:
-                    query = query[:-1]
-                elif 32 <= key <= 126:
-                    query += chr(key)
-                continue
-
-            selected = min(selected, len(filtered) - 1)
-            if selected < scroll_offset:
-                scroll_offset = selected
-            if selected >= scroll_offset + height - 6:
-                scroll_offset = selected - height + 7
-
-            max_display = height - 6
-            for i, (display, mid, dl) in enumerate(filtered[scroll_offset:scroll_offset + max_display]):
-                line_y = 5 + i
-                prefix = "▸ " if i + scroll_offset == selected else "  "
-                label = f"{prefix}{display}"
-                if len(label) > width - 1:
-                    label = label[:width - 4] + "..."
-                if i + scroll_offset == selected:
-                    stdscr.addstr(line_y, 0, label, curses.A_REVERSE)
-                else:
-                    stdscr.addstr(line_y, 0, label)
-
-            footer = f" {len(filtered)} models  ↑↓ navigate  Enter select  ESC cancel  / search"
-            stdscr.addstr(height - 1, 0, footer[:width - 1])
-
-            key = stdscr.getch()
-            if key == 27:
-                return None
-            elif key in (10, 13):
-                return filtered[selected]
-            elif key == 259:
-                selected = max(0, selected - 1)
-            elif key == 258:
-                selected = min(len(filtered) - 1, selected + 1)
-            elif key == 338 or key == 261:
-                selected = min(len(filtered) - 1, selected + 10)
-            elif key == 339 or key == 260:
-                selected = max(0, selected - 10)
-            elif key == 263 or key == 127:
-                query = query[:-1]
-            elif 32 <= key <= 126:
-                query += chr(key)
-
-    try:
-        result = curses.wrapper(_run_selector)
-    except Exception as e:
-        log.error(f"Selector error: {e}")
-        return None
-
-    if result is None:
+    if not result:
         log.info("Selection cancelled")
         return None
 
-    name, model_id, _ = result
+    model_id = _parse_model_option(result)
     log.success(f"Selected: {model_id}")
     return model_id
 
@@ -750,95 +689,22 @@ def _cmd_models_select(args):
     model_list.sort(key=lambda x: x[0].lower())
     log.success(f"Found {len(model_list)} models")
 
-    # ── curses interactive selector ──
-    def _run_selector(stdscr):
-        curses.curs_set(0)
-        curses.use_default_colors()
-        stdscr.nodelay(False)
+    # Build formatted options for InteractivePrompt
+    from domains.shell.interactive import InteractivePrompt
+    from domains.shell.io import ConsoleIO
 
-        height, width = stdscr.getmaxyx()
-        query = ""
-        selected = 0
-        scroll_offset = 0
+    io = ConsoleIO()
+    prompt = InteractivePrompt(io)
 
-        while True:
-            stdscr.clear()
-            # Header
-            stdscr.addstr(0, 0, " SloughGPT Model Selector ", curses.A_REVERSE)
-            stdscr.addstr(2, 0, f" Search: {query}")
-            stdscr.addstr(3, 0, "─" * min(width - 1, 60))
+    options = [_fmt_model_option(mid, f"{name} [{'HF' if src == 'hf' else 'LOCAL'}]") for name, mid, src in model_list]
+    result = prompt.select("SloughGPT Model Selector", options)
 
-            # Filter models
-            filtered = [(n, i, s) for n, i, s in model_list
-                        if query.lower() in n.lower() or query.lower() in i.lower()]
-
-            if not filtered:
-                stdscr.addstr(5, 0, " No matching models")
-                key = stdscr.getch()
-                if key == 27:  # ESC
-                    return None
-                elif key in (10, 13):  # Enter
-                    continue
-                elif key == 263 or key == 127:  # Backspace
-                    query = query[:-1]
-                elif 32 <= key <= 126:
-                    query += chr(key)
-                continue
-
-            # Ensure selected index is valid
-            selected = min(selected, len(filtered) - 1)
-            if selected < scroll_offset:
-                scroll_offset = selected
-            if selected >= scroll_offset + height - 6:
-                scroll_offset = selected - height + 7
-
-            # Draw list
-            max_display = height - 6
-            for i, (name, mid, src) in enumerate(filtered[scroll_offset:scroll_offset + max_display]):
-                line_y = 5 + i
-                prefix = "▸ " if i + scroll_offset == selected else "  "
-                src_tag = " [HF]" if src == "hf" else " [LOCAL]"
-                label = f"{prefix}{name}{src_tag}"
-                if len(label) > width - 1:
-                    label = label[:width - 4] + "..."
-                if i + scroll_offset == selected:
-                    stdscr.addstr(line_y, 0, label, curses.A_REVERSE)
-                else:
-                    stdscr.addstr(line_y, 0, label)
-
-            # Footer
-            stdscr.addstr(height - 1, 0, f" {len(filtered)} matches  ↑↓ navigate  Enter select  ESC cancel  / search")
-
-            key = stdscr.getch()
-            if key == 27:  # ESC
-                return None
-            elif key in (10, 13):  # Enter
-                return filtered[selected]
-            elif key == 259:  # Up
-                selected = max(0, selected - 1)
-            elif key == 258:  # Down
-                selected = min(len(filtered) - 1, selected + 1)
-            elif key == 338 or key == 261:  # PageDown / Right
-                selected = min(len(filtered) - 1, selected + 10)
-            elif key == 339 or key == 260:  # PageUp / Left
-                selected = max(0, selected - 10)
-            elif key == 263 or key == 127:  # Backspace
-                query = query[:-1]
-            elif 32 <= key <= 126:
-                query += chr(key)
-
-    try:
-        result = curses.wrapper(_run_selector)
-    except Exception as e:
-        log.error(f"Selector error: {e}")
-        return
-
-    if result is None:
+    if not result:
         log.info("Selection cancelled")
         return
 
-    name, model_id, source = result
-    log.success(f"Selected: {name} ({model_id})")
+    model_id = _parse_model_option(result)
+    log.success(f"Selected: {model_id}")
 
     # Load the model
     log.step(f"Loading {model_id}...")

@@ -125,6 +125,7 @@ class ProcessGuard:
         self._worker: Optional[Any] = None
         self._restart_count = 0
         self._requests_served = 0
+        self._requests_served_lock = threading.Lock()
         self._crash_callbacks: list[Callable[[str], None]] = []
         self._restart_callbacks: list[Callable[[str], None]] = []
         self._monitor_thread: Optional[threading.Thread] = None
@@ -181,7 +182,8 @@ class ProcessGuard:
             except (TimeoutError, WorkerStreamStalledError) as e:
                 self._recover_from_stall()
                 raise
-        self._requests_served += 1
+        with self._requests_served_lock:
+            self._requests_served += 1
         return result
 
     def generate_stream(

@@ -1,6 +1,7 @@
 """
 Experiments Router - ML experiment tracking
 """
+import asyncio
 import json
 import logging
 import re
@@ -11,7 +12,7 @@ from typing import Optional, Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+from schemas.common import raise_error, success_response, safe_audit_log
 
 logger = logging.getLogger("slo.routers.experiments")
 
@@ -45,10 +46,14 @@ class ExperimentsRouter:
     async def create_experiment(self, req: ExperimentCreate) -> dict:
         """Create a new ML experiment with a timestamped directory."""
         try:
-            self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
             exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            exp_dir = self.EXPERIMENTS_DIR / exp_id
-            exp_dir.mkdir(exist_ok=True)
+
+            def _create():
+                self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+                exp_dir = self.EXPERIMENTS_DIR / exp_id
+                exp_dir.mkdir(exist_ok=True)
+
+            await asyncio.to_thread(_create)
             safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
             return success_response(data={"id": exp_id, "name": req.name, "created": True})
         except Exception as e:
@@ -63,9 +68,11 @@ class ExperimentsRouter:
         Returns:
             Success envelope with experiments array and count.
         """
-        if not self.EXPERIMENTS_DIR.exists():
-            return success_response(data={"experiments": [], "count": 0})
-        exps = [d.name for d in self.EXPERIMENTS_DIR.iterdir() if d.is_dir()]
+        def _scan():
+            if not self.EXPERIMENTS_DIR.exists():
+                return []
+            return [d.name for d in self.EXPERIMENTS_DIR.iterdir() if d.is_dir()]
+        exps = await asyncio.to_thread(_scan)
         return success_response(data={"experiments": exps, "count": len(exps)})
 
     async def get_experiment(self, experiment_id: str) -> dict:
@@ -86,34 +93,43 @@ class ExperimentsRouter:
         """
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-        if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
+        def _check():
+            p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
+            return p.exists() and str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())), str(p)
+        exists, path_str = await asyncio.to_thread(_check)
+        if not exists:
             raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-        return success_response(data={"id": experiment_id, "path": str(path)})
+        return success_response(data={"id": experiment_id, "path": path_str})
 
     async def delete_experiment(self, experiment_id: str) -> dict:
         """Delete an experiment and all its data."""
         import shutil
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-        if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
+        def _check_delete():
+            p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
+            if not p.exists() or not str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())):
+                return None
+            shutil.rmtree(p)
+            return True
+        result = await asyncio.to_thread(_check_delete)
+        if result is None:
             raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-        try:
-            shutil.rmtree(path)
-            safe_audit_log("experiment.delete", resource=experiment_id)
-            return success_response(data={"id": experiment_id, "deleted": True})
-        except Exception as e:
-            raise_error(f"Failed to delete experiment: {e}", "E_SERVER_ERROR", status_code=500)
+        safe_audit_log("experiment.delete", resource=experiment_id)
+        return success_response(data={"id": experiment_id, "deleted": True})
 
     async def get_experiment_runs(self, experiment_id: str) -> dict:
         """Get runs for an experiment"""
         if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-        if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
+        def _check_runs():
+            p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
+            if not p.exists() or not str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())):
+                return None
+            return list(p.glob("*.json"))
+        runs = await asyncio.to_thread(_check_runs)
+        if runs is None:
             raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-        runs = list(path.glob("*.json"))
         return success_response(data={"runs": len(runs)})
 
     async def get_experiment_data(self, experiment_id: str) -> dict:
@@ -124,10 +140,11 @@ class ExperimentsRouter:
         metrics_file = self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl"
         params_file = self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl"
         status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
-        metrics = []
-        params = []
-        status = None
-        try:
+
+        def _read_data():
+            metrics = []
+            params = []
+            status = None
             if metrics_file.exists():
                 with open(metrics_file) as f:
                     for line in f:
@@ -152,6 +169,10 @@ class ExperimentsRouter:
                         status = json.load(f)
                     except json.JSONDecodeError as e:
                         logger.warning("Corrupt status file %s: %s", status_file.name, e)
+            return metrics, params, status
+
+        try:
+            metrics, params, status = await asyncio.to_thread(_read_data)
             return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
         except Exception as e:
             raise_error(f"Failed to read experiment data: {e}", "E_SERVER_ERROR", status_code=500)
@@ -162,15 +183,17 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         try:
-            self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-            status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
-            status_data = {
-                "experiment_id": e_id,
-                "status": "completed",
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-            }
-            with open(status_file, "w") as f:
-                json.dump(status_data, f)
+            def _write_status():
+                self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+                status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
+                status_data = {
+                    "experiment_id": e_id,
+                    "status": "completed",
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                }
+                with open(status_file, "w") as f:
+                    json.dump(status_data, f)
+            await asyncio.to_thread(_write_status)
             safe_audit_log("experiment.complete", resource=e_id)
             return success_response(data={"id": e_id, "status": "completed"})
         except Exception as e:
@@ -182,10 +205,12 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         try:
-            self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-            entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
-            with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
-                f.write(json.dumps(entry) + "\n")
+            def _write_metric():
+                self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+                entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
+                with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
+                    f.write(json.dumps(entry) + "\n")
+            await asyncio.to_thread(_write_metric)
             safe_audit_log("experiment.log_metric", resource=e_id, detail=f"metric={metric_name} value={value}")
             return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
         except Exception as e:
@@ -197,10 +222,12 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         try:
-            self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-            entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
-            with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
-                f.write(json.dumps(entry) + "\n")
+            def _write_param():
+                self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+                entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
+                with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
+                    f.write(json.dumps(entry) + "\n")
+            await asyncio.to_thread(_write_param)
             safe_audit_log("experiment.log_param", resource=e_id, detail=f"param={param_name}")
             return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})
         except Exception as e:

@@ -46,7 +46,7 @@ class DatasetsController:
             visual_meta_path = d / ".visual_metadata.json"
             if visual_meta_path.exists():
                 try:
-                    visual_meta = json.loads(visual_meta_path.read_text())
+                    json.loads(visual_meta_path.read_text())
                     dataset_type = "visual"
                 except Exception:
                     dataset_type = "corpus" if has_corpus else "text"
@@ -204,14 +204,12 @@ class DatasetsController:
         word_count = len(sample.split())
 
         # Detect format
-        is_jsonl = False
         is_messages = False
         has_dialogue = False
         dialogue_markers = ["user:", "assistant:", "human:", "<|user|>", "<|assistant|>"]
 
         for line in lines[:10]:
             if line.startswith("{"):
-                is_jsonl = True
                 try:
                     import json
                     obj = json.loads(line)

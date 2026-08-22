@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {RefreshControl, Pressable, ScrollView, Alert, ActivityIndicator} from 'react-native';
+import {RefreshControl, Pressable, ScrollView, Alert} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';

@@ -8,11 +8,14 @@ allocation logic reads from, instead of calling ``os.cpu_count()`` or
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import re
 import subprocess
 from dataclasses import dataclass, field
+
+logger = logging.getLogger("slo.infrastructure.cpu_topology")
 from functools import lru_cache
 from typing import Optional
 
@@ -195,8 +198,8 @@ def _detect_numa() -> int:
         for line in out.splitlines():
             if "NUMA node(s)" in line or "NUMA nodes" in line:
                 return int(line.split(":")[1].strip())
-    except Exception:
-        pass
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as exc:
+        logger.debug("lscpu NUMA detection failed: %s", exc)
     try:
         nodes = os.listdir("/sys/devices/system/node/")
         numa = [n for n in nodes if n.startswith("node") and n[4:].isdigit()]
@@ -219,8 +222,8 @@ def _detect_freq_macos() -> float:
             m = re.search(r"(\d+\.?\d*)\s*GHz", brand)
             if m:
                 return float(m.group(1)) * 1000
-    except Exception:
-        pass
+    except (ValueError, AttributeError) as exc:
+        logger.debug("macOS frequency parse failed: %s", exc)
     return 0.0
 
 
@@ -238,16 +241,16 @@ def _detect_freq_linux() -> float:
             for line in f:
                 if line.startswith("cpu MHz"):
                     return float(line.split(":")[1].strip())
-    except Exception:
-        pass
+    except (FileNotFoundError, ValueError) as exc:
+        logger.debug("/proc/cpuinfo frequency read failed: %s", exc)
     try:
         for i in range(os.cpu_count() or 1):
             path = f"/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_cur_freq"
             if os.path.exists(path):
                 with open(path) as f:
                     return int(f.read().strip()) / 1000
-    except Exception:
-        pass
+    except (FileNotFoundError, ValueError) as exc:
+        logger.debug("sysfs frequency read failed: %s", exc)
     return 0.0
 
 
@@ -322,15 +325,15 @@ def detect_topology() -> CpuTopology:
                 ["sysctl", "-n", "machdep.cpu.core_count"], text=True
             ).strip()
             physical = int(out)
-        except Exception:
-            pass
+        except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as exc:
+            logger.debug("sysctl core_count failed: %s", exc)
         try:
             out = subprocess.check_output(
                 ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
             ).strip()
             model = out
-        except Exception:
-            pass
+        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            logger.debug("sysctl brand_string failed: %s", exc)
 
     if physical == 0:
         # Best-effort estimate
@@ -353,8 +356,8 @@ def detect_topology() -> CpuTopology:
                 model = subprocess.check_output(
                     ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
                 ).strip()
-            except Exception:
-                pass
+            except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+                logger.debug("sysctl brand_string fallback failed: %s", exc)
 
     return CpuTopology(
         logical_cores=logical,

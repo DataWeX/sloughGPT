@@ -134,7 +134,7 @@ async def training_handler(task) -> dict:
         early_stopping_patience=payload.get("early_stopping_patience", 5),
     )
 
-    def _on_progress(info):
+    def _on_progress(info) -> None:
         if cancel_event.is_set():
             raise InterruptedError("Training cancelled by user")
         loss = info.get("train_loss")

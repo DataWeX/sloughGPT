@@ -7,6 +7,7 @@ so the server knows what's available without re-scanning on every request.
 """
 
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -288,11 +289,21 @@ class ModelCatalog:
 
 # Module-level singleton
 _catalog: ModelCatalog | None = None
+_catalog_lock = threading.Lock()
 
 
 def get_model_catalog(db_path: str | Path | None = None) -> ModelCatalog:
     """Get or create the global model catalog."""
     global _catalog
     if _catalog is None:
-        _catalog = ModelCatalog(db_path or _DEFAULT_DB_PATH)
+        with _catalog_lock:
+            if _catalog is None:
+                _catalog = ModelCatalog(db_path or _DEFAULT_DB_PATH)
     return _catalog
+
+
+def reset_model_catalog() -> None:
+    """Reset the singleton (for testing)."""
+    global _catalog
+    with _catalog_lock:
+        _catalog = None

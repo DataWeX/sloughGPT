@@ -90,12 +90,11 @@ beforeEach(() => {
 })
 
 describe('AdaptersPage', () => {
-  it('shows loading initially and calls list + getQuality', () => {
+  it('shows loading initially and calls list', () => {
     mockList.mockReturnValue(new Promise(() => {}))
     render(<AdaptersPage />)
     expect(screen.getAllByText('Adapters').length).toBeGreaterThanOrEqual(1)
     expect(mockList).toHaveBeenCalledTimes(1)
-    expect(mockGetQuality).toHaveBeenCalledWith(3)
     expect(screen.queryByText('Adapter Stats')).toBeNull()
   })
 

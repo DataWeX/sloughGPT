@@ -1,6 +1,8 @@
 """
 LoRA Evaluation Router - Trigger adapter quality evaluation.
 """
+import asyncio
+import logging
 from fastapi import APIRouter, Query
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
@@ -47,7 +49,7 @@ class LoraEvalRouter:
 
             try:
                 from pathlib import Path
-                if Path(adapter_file).exists():
+                if await asyncio.to_thread(Path(adapter_file).exists):
                     with_adapter = evaluator.run(adapter_path=adapter_file, soul_name=soul, save=True)
                     delta = evaluator.compare(baseline, with_adapter)
                     _elapsed_ms = (_time.monotonic() - _t0) * 1000

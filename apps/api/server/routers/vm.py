@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from pydantic import model_validator
-from schemas.common import raise_error, safe_audit_log
+from schemas.common import raise_error, success_response, safe_audit_log
 
 logger = logging.getLogger("slo.api.vm")
 router = APIRouter(prefix="/vm", tags=["vm"])
@@ -100,7 +100,7 @@ async def run_assembly(req: VMRunRequest) -> dict:
     t0 = time.monotonic()
 
     try:
-        from domains.shell.vm import X86VirtualSystem, X86CPU, InsFault, MemFault
+        from domains.shell.vm import X86VirtualSystem, InsFault, MemFault
         from domains.shell.vm_permissions import Role
     except ImportError as e:
         raise_error(f"VM module not available: {e}", "E_BAD_REQUEST", status_code=503)
@@ -109,7 +109,7 @@ async def run_assembly(req: VMRunRequest) -> dict:
         try:
             from vm_builtins import get_builtin
             req_source = get_builtin(req.program)
-        except (KeyError, ImportError) as e:
+        except (KeyError, ImportError):
             raise_error(f"Unknown builtin program: {req.program}", "E_NOT_FOUND", status_code=404)
     else:
         req_source = req.source
@@ -361,7 +361,7 @@ async def training_job_stop(job_id: str) -> dict:
     ok = bridge.stop(job_num)
     if not ok:
         raise_error("Training job not found or not stoppable", "E_NOT_FOUND", status_code=404)
-    return {"status": "stopping", "job_id": job_num}
+    return success_response(data={"status": "stopping", "job_id": job_num})
 
 
 @router.get("/builtins")
@@ -374,8 +374,8 @@ async def list_builtins() -> dict:
             for name, entry in BUILTIN_PROGRAMS.items()
         ]
     except ImportError:
-        return {"programs": []}
-    return {"programs": programs}
+        return success_response(data={"programs": []})
+    return success_response(data={"programs": programs})
 
 
 @router.get("/info")
@@ -383,7 +383,7 @@ async def vm_info() -> dict:
     """Return VM capabilities and limits."""
     reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
     registers = {name: {"size_bits": 32, "name": name} for name in reg_names}
-    return {
+    return success_response(data={
         "isa": "x86-32",
         "max_steps": 1000000,
         "default_memory": 0x100000,
@@ -399,4 +399,4 @@ async def vm_info() -> dict:
             "process scheduling",
             "RBAC permissions",
         ],
-    }
+    })

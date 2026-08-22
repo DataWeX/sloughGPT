@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 import uuid
 import warnings
@@ -74,7 +75,6 @@ class EventBus:
         else:
             self._subscriptions[event].append(sub)
             self._subscriptions[event].sort(key=lambda s: s.priority, reverse=True)
-        self._subscriptions[event].sort(key=lambda s: s.priority, reverse=True)
 
     def once(
         self,
@@ -103,7 +103,7 @@ class EventBus:
         self._subscriptions[event] = [s for s in subs if s.handler != handler]
         return len(self._subscriptions[event]) < before
 
-    def clear(self, event: str | None = None):
+    def clear(self, event: str | None = None) -> None:
         """Remove all subscriptions. If event is None, clear everything."""
         if event is None:
             self._subscriptions.clear()
@@ -219,7 +219,7 @@ class EventBus:
                     logger.exception("Replay handler failed for %s", evt.name, extra={"tag": "INFRA"})
         return past
 
-    def _store_history(self, event: str, evt: Event):
+    def _store_history(self, event: str, evt: Event) -> None:
         h = self._history[event]
         h.append(evt)
         if len(h) > self._max_history:
@@ -236,18 +236,29 @@ class EventBus:
 # ── Singleton ──
 
 _default_bus: EventBus | None = None
+_event_bus_lock = threading.Lock()
 
 
 def get_event_bus() -> EventBus:
     global _default_bus
     if _default_bus is None:
-        _default_bus = EventBus()
+        with _event_bus_lock:
+            if _default_bus is None:
+                _default_bus = EventBus()
     return _default_bus
 
 
-def set_event_bus(bus: EventBus):
+def set_event_bus(bus: EventBus) -> None:
     global _default_bus
-    _default_bus = bus
+    with _event_bus_lock:
+        _default_bus = bus
+
+
+def reset_event_bus() -> None:
+    """Reset the singleton (for testing)."""
+    global _default_bus
+    with _event_bus_lock:
+        _default_bus = None
 
 
 # ── Log subscriber ───────────────────────────────────────────────────

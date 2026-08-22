@@ -9,10 +9,10 @@ Provides endpoints to:
 """
 import logging
 from fastapi import APIRouter, Query
-from typing import Optional, List
+from typing import List
 from pydantic import BaseModel, Field
 
-from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from schemas.common import success_response, raise_error, safe_audit_log
 from domains.infrastructure.errors import AppError
 
 logger = logging.getLogger("slo.api.collections")
@@ -82,9 +82,7 @@ class CollectionsRouter:
     async def create_pipeline(self, req: PipelineConfigRequest) -> dict:
         """Create and register a new collection pipeline."""
         try:
-            from domains.collections import (
-                CollectionPipeline, SourceConfig, StoreConfig, FilterConfig
-            )
+            from domains.collections import CollectionPipeline
             from domains.collections.registry import get_registry
 
             source = _build_source(req.source_type, req.source_config)

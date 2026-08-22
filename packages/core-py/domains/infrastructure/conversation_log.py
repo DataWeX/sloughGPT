@@ -129,6 +129,13 @@ def get_conversation_logger() -> ConversationLogger:
     return _logger
 
 
+def reset_conversation_logger() -> None:
+    """Reset the singleton (for testing)."""
+    global _logger
+    with _logger_lock:
+        _logger = None
+
+
 def capture(
     prompt: str,
     response: str,

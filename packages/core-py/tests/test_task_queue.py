@@ -487,6 +487,14 @@ class TestInProcessTaskQueue:
         finally:
             tq._default_queue = old
 
+    async def test_reset_task_queue_creates_new_instance(self):
+        from domains.infrastructure.task_queue import reset_task_queue
+        original = get_task_queue()
+        reset_task_queue()
+        new = get_task_queue()
+        assert new is not original
+        assert isinstance(new, InProcessTaskQueue)
+
 
 @pytest.mark.asyncio
 class TestWorkerPool:
@@ -536,3 +544,63 @@ class TestWorkerPool:
         await asyncio.sleep(0.2)
         await pool.stop()
         assert pool.active_workers == 0
+
+
+@pytest.mark.asyncio
+class TestPurgeCompleted:
+    async def test_purge_removes_old_completed_tasks(self, queue):
+        import time
+        t1 = Task(name="old", task_type="echo")
+        await queue.enqueue(t1)
+        # Simulate completion with old timestamp
+        async with queue._lock:
+            t1.status = TaskStatus.COMPLETED
+            t1.completed_at = time.time() - 7200  # 2 hours ago
+            queue._completed[t1.id] = t1
+            queue._running.pop(t1.id, None)
+
+        t2 = Task(name="new", task_type="echo")
+        await queue.enqueue(t2)
+        async with queue._lock:
+            t2.status = TaskStatus.COMPLETED
+            t2.completed_at = time.time()  # just now
+            queue._completed[t2.id] = t2
+            queue._running.pop(t2.id, None)
+
+        purged = await queue.purge_completed(max_age_s=3600)
+        assert purged == 1
+        assert t1.id not in queue._completed
+        assert t2.id in queue._completed
+
+    async def test_purge_removes_old_failed_tasks(self, queue):
+        import time
+        t = Task(name="fail", task_type="echo")
+        await queue.enqueue(t)
+        async with queue._lock:
+            t.status = TaskStatus.FAILED
+            t.error = "test error"
+            t.completed_at = time.time() - 7200
+            queue._failed[t.id] = t
+            queue._running.pop(t.id, None)
+
+        purged = await queue.purge_completed(max_age_s=3600)
+        assert purged == 1
+        assert t.id not in queue._failed
+
+    async def test_purge_returns_zero_when_nothing_to_purge(self, queue):
+        purged = await queue.purge_completed(max_age_s=3600)
+        assert purged == 0
+
+    async def test_purge_keeps_recent_tasks(self, queue):
+        import time
+        t = Task(name="recent", task_type="echo")
+        await queue.enqueue(t)
+        async with queue._lock:
+            t.status = TaskStatus.COMPLETED
+            t.completed_at = time.time()  # just now
+            queue._completed[t.id] = t
+            queue._running.pop(t.id, None)
+
+        purged = await queue.purge_completed(max_age_s=3600)
+        assert purged == 0
+        assert t.id in queue._completed

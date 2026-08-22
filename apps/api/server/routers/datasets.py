@@ -1,10 +1,10 @@
 """
 Datasets Router - MVC View layer
 """
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 import asyncio
 import json
 import time
@@ -105,7 +105,7 @@ class DatasetsRouter:
             directory on disk.
         """
         ctrl = get_datasets_controller()
-        datasets = ctrl.list_datasets(q, type)
+        datasets = await asyncio.to_thread(ctrl.list_datasets, q, type)
         return DatasetListResponse(
             datasets=[DatasetInfo(**d) for d in datasets],
             count=len(datasets),
@@ -285,7 +285,7 @@ class DatasetsRouter:
         try:
             name = request.name or request.dataset.replace("/", "_")
             output_dir = self._DATASETS_DIR / name
-            output_dir.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
 
             _t0 = time.monotonic()
             proc = await asyncio.create_subprocess_exec(
@@ -334,7 +334,7 @@ class DatasetsRouter:
         try:
             name = request.name
             output_dir = self._DATASETS_DIR / name
-            output_dir.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
 
             def _fetch_and_parse():
                 req = urllib.request.Request(request.url, headers={"User-Agent": "SloughGPT"})
@@ -717,7 +717,7 @@ class DatasetsRouter:
         """
         self._validate_dataset_id(dataset_id)
         ctrl = get_datasets_controller()
-        preview = ctrl.preview_dataset(dataset_id, limit)
+        preview = await asyncio.to_thread(ctrl.preview_dataset, dataset_id, limit)
         if not preview:
             raise_error("Dataset not found or empty", "E_NOT_FOUND")
         return preview
@@ -742,7 +742,7 @@ class DatasetsRouter:
         """
         self._validate_dataset_id(dataset_id)
         ctrl = get_datasets_controller()
-        export_path = ctrl.export_dataset(dataset_id, request.format)
+        export_path = await asyncio.to_thread(ctrl.export_dataset, dataset_id, request.format)
         if not export_path:
             raise_error("Dataset not found or empty", "E_NOT_FOUND")
         return FileResponse(
@@ -767,21 +767,25 @@ class DatasetsRouter:
         dataset = ctrl.create_dataset(name, description=f"Exported from chat ({len(messages)} messages)")
 
         dataset_dir = self._DATASETS_DIR / dataset["id"]
-        dataset_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(dataset_dir.mkdir, parents=True, exist_ok=True)
 
         jsonl_path = dataset_dir / "input.jsonl"
-        with open(jsonl_path, "w") as f:
-            for msg in messages:
-                if msg.role in ("user", "assistant") and msg.content:
-                    f.write(json.dumps({"messages": [{"role": msg.role, "content": msg.content}]}) + "\n")
+
+        def _write_chat():
+            with open(jsonl_path, "w") as f:
+                for msg in messages:
+                    if msg.role in ("user", "assistant") and msg.content:
+                        f.write(json.dumps({"messages": [{"role": msg.role, "content": msg.content}]}) + "\n")
+
+        await asyncio.to_thread(_write_chat)
 
         safe_audit_log("dataset.create", resource=name, detail=f"from-chat ({len(messages)} messages)", messages=len(messages))
-        return {
+        return success_response(data={
             "status": "created",
             "dataset_id": dataset["id"],
             "name": name,
             "messages_exported": len([m for m in messages if m.role in ("user", "assistant") and m.content]),
-        }
+        })
 
     async def convert_to_messages(self, dataset_id: str, system_prompt: str = "You are a helpful assistant.") -> dict:
         """Convert a dataset to chat message format for fine-tuning.
@@ -802,48 +806,56 @@ class DatasetsRouter:
 
         source_dir = self._DATASETS_DIR / dataset_id
         jsonl_path = source_dir / "input.jsonl"
-        if not jsonl_path.exists():
+        if not await asyncio.to_thread(jsonl_path.exists):
             raise_error("Dataset has no input.jsonl", "E_NOT_FOUND")
 
-        messages_out = []
-        with open(jsonl_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if "text" in row:
-                    messages_out.append({"messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": row["text"]},
-                        {"role": "assistant", "content": row["text"]},
-                    ]})
-                elif "messages" in row:
-                    msgs = row["messages"]
-                    if msgs and msgs[0].get("role") != "system":
-                        msgs = [{"role": "system", "content": system_prompt}] + msgs
-                    messages_out.append({"messages": msgs})
+        def _read_source():
+            msgs = []
+            with open(jsonl_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if "text" in row:
+                        msgs.append({"messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": row["text"]},
+                            {"role": "assistant", "content": row["text"]},
+                        ]})
+                    elif "messages" in row:
+                        m = row["messages"]
+                        if m and m[0].get("role") != "system":
+                            m = [{"role": "system", "content": system_prompt}] + m
+                        msgs.append({"messages": m})
+            return msgs
+
+        messages_out = await asyncio.to_thread(_read_source)
 
         new_ds = ctrl.create_dataset(
             name=f"{source['name']}-messages",
             description=f"Converted from {source['name']} ({len(messages_out)} conversations)",
         )
         new_dir = self._DATASETS_DIR / new_ds["id"]
-        new_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(new_dir.mkdir, parents=True, exist_ok=True)
         out_path = new_dir / "input.jsonl"
-        with open(out_path, "w") as f:
-            for entry in messages_out:
-                f.write(json.dumps(entry) + "\n")
+
+        def _write_output():
+            with open(out_path, "w") as f:
+                for entry in messages_out:
+                    f.write(json.dumps(entry) + "\n")
+
+        await asyncio.to_thread(_write_output)
 
         safe_audit_log("dataset.convert", resource=dataset_id, detail=str(new_ds["id"]), conversations=len(messages_out))
-        return {
+        return success_response(data={
             "status": "converted",
             "new_dataset_id": new_ds["id"],
             "total_conversations": len(messages_out),
-        }
+        })
 
 
 router = DatasetsRouter().router

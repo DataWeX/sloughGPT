@@ -90,7 +90,6 @@ class VoiceRouter:
         try:
             if self._tts_backend.load():
                 audio_bytes = await asyncio.to_thread(self._tts_backend.generate, request.text)
-                sample_rate = 24000
                 import wave
                 with wave.open(io.BytesIO(audio_bytes)) as wf:
                     frames = wf.getnframes()

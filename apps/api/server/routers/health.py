@@ -22,6 +22,7 @@ Side effects:
 """
 import asyncio
 import json
+import logging
 import time
 from typing import AsyncGenerator
 
@@ -31,6 +32,8 @@ from fastapi.responses import StreamingResponse
 from controllers.health import get_health_controller
 from startup_progress import STARTUP_PHASE
 from schemas.common import success_response, classify_and_raise
+
+logger = logging.getLogger(__name__)
 
 
 class HealthRouter:

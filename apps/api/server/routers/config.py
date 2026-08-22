@@ -5,7 +5,7 @@ from fastapi import APIRouter
 
 from schemas.config import ConfigUpdate
 from controllers.config import get_config_controller
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import success_response, safe_audit_log
 
 
 class ConfigRouter:

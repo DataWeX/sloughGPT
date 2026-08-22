@@ -408,8 +408,8 @@ class MorphTokenizer:
                     with open(tok_config_path) as f:
                         tok_config_data = json.load(f)
                     chat_tpl = tok_config_data.get("chat_template")
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, KeyError) as exc:
+                    logger.debug("chat template parse failed: %s", exc)
         if chat_tpl:
             instance._chat_template = chat_tpl
             instance._chat_template_jinja = True

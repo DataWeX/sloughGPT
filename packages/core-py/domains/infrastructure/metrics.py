@@ -12,8 +12,8 @@ Usage::
     print(collector.render())
 """
 
-import time
 import threading
+import time
 from collections import defaultdict
 from typing import Dict, List, Optional
 
@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover
 class MetricsCollector:
     """In-memory Prometheus-style metrics collector."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         self._start_time = time.time()
 
@@ -47,7 +47,7 @@ class MetricsCollector:
 
     # ── Recording methods ────────────────────────────────────────────
 
-    def record_request(self, path: str, status: int, duration: float):
+    def record_request(self, path: str, status: int, duration: float) -> None:
         """Record a completed HTTP request."""
         with self._lock:
             self._request_count[path] += 1
@@ -55,14 +55,14 @@ class MetricsCollector:
             if status >= 400:
                 self._request_errors[path] += 1
 
-    def record_inference(self, duration: float, tokens: int = 0):
+    def record_inference(self, duration: float, tokens: int = 0) -> None:
         """Record a model inference call."""
         with self._lock:
             self._inference_count += 1
             self._inference_latencies.append(duration)
             self._tokens_generated += tokens
 
-    def set_active_requests(self, count: int):
+    def set_active_requests(self, count: int) -> None:
         with self._lock:
             self._active_requests = count
 
@@ -71,7 +71,7 @@ class MetricsCollector:
         with self._lock:
             return self._active_requests
 
-    def set_model_info(self, loaded: bool, name: str = ""):
+    def set_model_info(self, loaded: bool, name: str = "") -> None:
         with self._lock:
             self._model_loaded = loaded
             self._model_name = name
@@ -167,10 +167,20 @@ class MetricsCollector:
 # ── Singleton ────────────────────────────────────────────────────────
 
 _collector: Optional[MetricsCollector] = None
+_metrics_lock = threading.Lock()
 
 
 def get_metrics_collector() -> MetricsCollector:
     global _collector
     if _collector is None:
-        _collector = MetricsCollector()
+        with _metrics_lock:
+            if _collector is None:
+                _collector = MetricsCollector()
     return _collector
+
+
+def reset_metrics_collector() -> None:
+    """Reset the singleton (for testing)."""
+    global _collector
+    with _metrics_lock:
+        _collector = None

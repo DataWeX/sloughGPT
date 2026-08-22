@@ -36,6 +36,8 @@ import time
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
+from .interactive import InteractivePrompt
+
 
 _COLOR_ENABLED = not os.environ.get("NO_COLOR")
 if _COLOR_ENABLED:
@@ -112,6 +114,7 @@ class Console:
         self._has_readline = has_readline
         self._blocks: list[Block] = []
         self._tui_repl = None
+        self._interactive = InteractivePrompt(io)
         if has_readline:
             try:
                 import readline  # noqa: F401
@@ -333,28 +336,22 @@ class Console:
     # ── Confirm ──────────────────────────────────────────────────────
 
     def confirm(self, message: str, default: bool = False) -> bool:
-        """Prompt yes/no and return True/False."""
-        self._emit("confirm", {"message": message, "default": default})
+        """Prompt yes/no with arrow-key toggle and return True/False."""
         if self._tui_repl is not None and hasattr(self._tui_repl, "prompt_confirm"):
-            return self._tui_repl.prompt_confirm(message, default)
-        hint = "Y/n" if default else "y/N"
-        self._io.write(f"  {message} [{hint}] ", end="")
-        raw = self._io.read("").strip().lower()
-        result = default if not raw else raw in ("y", "yes", "ye", "true", "1")
+            result = self._tui_repl.prompt_confirm(message, default)
+        else:
+            result = self._interactive.confirm(message, default)
+        self._emit("confirm", {"message": message, "default": default, "result": result})
         return result
 
     # ── Ask — prompt for free-form input ──────────────────────────────
 
     def ask(self, message: str, default: str = "") -> str:
-        """Prompt for free-form input with an optional default."""
+        """Prompt for free-form input with cursor movement and an optional default."""
         self._emit("ask", {"message": message, "default": default})
         if self._tui_repl is not None and hasattr(self._tui_repl, "prompt_ask"):
             return self._tui_repl.prompt_ask(message, default)
-        suffix = f" [{default}]" if default else ""
-        self._io.write(f"  {message}{suffix} ", end="")
-        raw = self._io.read("").strip()
-        result = raw if raw else default
-        return result
+        return self._interactive.ask(message, default)
 
     # ── JSON output ──────────────────────────────────────────────────
 
@@ -502,6 +499,33 @@ class Console:
                     c = "└── " if j == len(children) - 1 else "├── "
                     self._io.write(f"  {prefix}{ext}{c}{child}")
 
+    def tree_multi(self, data: dict[str, list[str] | dict],
+                   title: str = "Select items") -> list[str]:
+        """Show a tree and let user select multiple leaf items.
+
+        Returns list of selected leaf labels.
+        """
+        self._emit("tree_multi", {"data": data, "title": title})
+        leaves: list[str] = []
+
+        def _collect(d: dict, prefix: str = "") -> None:
+            for i, (label, children) in enumerate(d.items()):
+                is_last = i == len(d) - 1
+                connector = "\u251c\u2500\u2500 " if not is_last else "\u2514\u2500\u2500 "
+                if isinstance(children, dict):
+                    self._io.write(f"  {prefix}{connector}{label}")
+                    ext = "\u2502   " if not is_last else "    "
+                    _collect(children, prefix + ext)
+                elif isinstance(children, list):
+                    ext = "\u2502   " if not is_last else "    "
+                    for j, child in enumerate(children):
+                        c = "\u251c\u2500\u2500 " if j < len(children) - 1 else "\u2514\u2500\u2500 "
+                        self._io.write(f"  {prefix}{ext}{c}{child}")
+                        leaves.append(child)
+
+        _collect(data)
+        return self._interactive.select_multi(title, leaves)
+
     # ── Log ──────────────────────────────────────────────────────────
 
     def log(self, message: str, level: str = "info") -> None:
@@ -633,21 +657,279 @@ class Console:
     # ── Select (interactive numbered choice) ─────────────────────────
 
     def select(self, title: str, options: list[str]) -> str:
-        """Show a numbered menu and return the chosen option string."""
+        """Show an interactive arrow-key menu and return the chosen option.
+
+        Uses arrow keys and type-to-filter when the terminal supports it,
+        falling back to a numbered menu for non-TTY environments.
+        """
         self._emit("select", {"title": title, "options": options})
-        self._io.write(f"  {title}")
-        for i, opt in enumerate(options, 1):
-            self._io.write(f"    {i}. {opt}")
-        while True:
-            self._io.write("  Enter number: ", end="")
-            try:
-                raw = self._io.read("").strip()
-            except (EOFError, KeyboardInterrupt):
-                return options[0] if options else ""
-            if raw.isdigit():
-                idx = int(raw) - 1
-                if 0 <= idx < len(options):
-                    return options[idx]
+        if self._tui_repl is not None and hasattr(self._tui_repl, "prompt_select"):
+            return self._tui_repl.prompt_select(title, options)
+        return self._interactive.select(title, options)
+
+    def select_multi(self, title: str, options: list[str]) -> list[str]:
+        """Show an interactive multi-select menu with checkboxes.
+
+        Use Space to toggle items, arrows to move, Enter to confirm.
+        Falls back to comma-separated numbered input for non-TTY.
+        """
+        self._emit("select_multi", {"title": title, "options": options})
+        return self._interactive.select_multi(title, options)
+
+    def select_with_details(self, title: str, options: list[str],
+                            details: list[str]) -> str:
+        """Show an interactive selector with a detail pane below the list.
+
+        Uses arrow keys and type-to-filter when the terminal supports it,
+        falling back to a numbered menu for non-TTY environments.
+        """
+        self._emit("select_with_details", {"title": title, "options": options, "details": details})
+        return self._interactive.select_with_details(title, options, details)
+
+    def confirm_multi(self, title: str, items: list[str],
+                      default: bool = True) -> list[str]:
+        """Show a multi-confirm prompt: list items and ask y/N for each.
+
+        Returns list of items that were confirmed (y).
+        """
+        self._emit("confirm_multi", {"title": title, "items": items, "default": default})
+        return self._interactive.confirm_multi(title, items, default)
+
+    def select_with_preview(self, title: str, options: list[str],
+                            preview_fn: "Callable[[str], str]") -> str:
+        """Show an interactive selector with a live preview panel."""
+        self._emit("select_with_preview", {"title": title, "options": options})
+        return self._interactive.select_with_preview(title, options, preview_fn)
+
+    def edit(self, message: str, default: str = "",
+             validator: "Callable[[str], str | None] | None" = None) -> str:
+        """Interactive text input with inline validation."""
+        self._emit("edit", {"message": message, "default": default})
+        return self._interactive.edit(message, default, validator)
+
+    def pager(self, content: str, title: str = "Output") -> None:
+        """Display long content in a scrollable pager view."""
+        self._emit("pager", {"title": title})
+        self._interactive.pager(content, title)
+
+    def diff(self, left_label: str, left_lines: list[str],
+             right_label: str, right_lines: list[str],
+             title: str = "") -> None:
+        """Show a side-by-side diff with colored additions/removals."""
+        self._emit("diff", {"title": title})
+        self._interactive.diff(left_label, left_lines, right_label, right_lines, title)
+
+    def password(self, message: str) -> str:
+        """Interactive password input with masked characters."""
+        self._emit("password", {"message": message})
+        return self._interactive.password(message)
+
+    def confirm_action(self, action: str, details: str = "",
+                       danger: bool = False) -> bool:
+        """Confirm an action with a descriptive prompt."""
+        self._emit("confirm_action", {"action": action, "danger": danger})
+        return self._interactive.confirm_action(action, details, danger)
+
+    def countdown(self, seconds: int, message: str = "Starting in") -> bool:
+        """Show a visual countdown timer."""
+        self._emit("countdown", {"seconds": seconds, "message": message})
+        return self._interactive.countdown(seconds, message)
+
+    def banner(self, text: str, style: str = "double") -> None:
+        """Display a styled banner with box-drawing characters."""
+        self._emit("banner", {"text": text, "style": style})
+        self._interactive.banner(text, style)
+
+    def slider(self, message: str, min_val: int = 0, max_val: int = 100,
+               default: int = 50, step: int = 1) -> int:
+        """Interactive numeric slider."""
+        self._emit("slider", {"message": message, "min": min_val, "max": max_val})
+        return self._interactive.slider(message, min_val, max_val, default, step)
+
+    def toggle(self, message: str, default: bool = False) -> bool:
+        """Interactive on/off toggle switch."""
+        self._emit("toggle", {"message": message, "default": default})
+        return self._interactive.toggle(message, default)
+
+    def tag_input(self, message: str, defaults: list[str] | None = None,
+                  placeholder: str = "Add tag...") -> list[str]:
+        """Interactive tag input."""
+        self._emit("tag_input", {"message": message})
+        return self._interactive.tag_input(message, defaults, placeholder)
+
+    def select_tree(self, title: str, tree: dict[str, list[str] | dict],
+                    expanded: set[str] | None = None) -> str | None:
+        """Interactive tree selector with expand/collapse."""
+        self._emit("select_tree", {"title": title})
+        return self._interactive.select_tree(title, tree, expanded)
+
+    def spin_wait(self, message: str, check_fn: "Callable[[], bool]",
+                  interval: float = 0.1, timeout: float = 0) -> bool:
+        """Wait for a condition with a spinner."""
+        self._emit("spin_wait", {"message": message})
+        return self._interactive.spin_wait(message, check_fn, interval, timeout)
+
+    def confirm_dangerous(self, action: str, phrase: str = "yes, I am sure") -> bool:
+        """Confirm a dangerous action by typing a phrase."""
+        self._emit("confirm_dangerous", {"action": action})
+        return self._interactive.confirm_dangerous(action, phrase)
+
+    def file_browser(self, title: str, start_dir: str = ".",
+                     pattern: str = "*") -> str | None:
+        """Interactive file browser with directory navigation."""
+        self._emit("file_browser", {"title": title})
+        return self._interactive.file_browser(title, start_dir, pattern)
+
+    def progress_step(self, steps: list[str], current: int, done: bool = False) -> None:
+        """Display a step-by-step progress indicator."""
+        self._emit("progress_step", {"current": current, "done": done})
+        self._interactive.progress_step(steps, current, done)
+
+    def multi_choice(self, title: str, options: list[str],
+                     defaults: list[int] | None = None) -> list[str]:
+        """Select multiple options with numbered keys."""
+        self._emit("multi_choice", {"title": title, "options": options})
+        return self._interactive.multi_choice(title, options, defaults)
+
+    def date_picker(self, message: str, default: str = "") -> str:
+        """Interactive date picker with year/month/day navigation."""
+        self._emit("date_picker", {"message": message})
+        return self._interactive.date_picker(message, default)
+
+    def color_picker(self, message: str, default: str = "#ffffff") -> str:
+        """Interactive hex color picker with RGB sliders."""
+        self._emit("color_picker", {"message": message})
+        return self._interactive.color_picker(message, default)
+
+    def confirm_timeout(self, message: str, timeout: float = 5.0,
+                        default: bool = True) -> bool:
+        """Confirm with an auto-timeout."""
+        self._emit("confirm_timeout", {"message": message, "timeout": timeout})
+        return self._interactive.confirm_timeout(message, timeout, default)
+
+    def spin_until(self, message: str, async_fn: "Callable[[], Any]",
+                   check: "Callable[[Any], bool]",
+                   interval: float = 0.1, timeout: float = 0) -> "Any":
+        """Wait for an async function's result to satisfy a condition."""
+        self._emit("spin_until", {"message": message})
+        return self._interactive.spin_until(message, async_fn, check, interval, timeout)
+
+    def progress_multi(self, items: list[tuple[str, int, int]]) -> None:
+        """Display multiple progress bars stacked."""
+        self._emit("progress_multi", {})
+        self._interactive.progress_multi(items)
+
+    def time_picker(self, message: str, default: str = "") -> str:
+        """Interactive time picker with hour/minute/AM-PM navigation."""
+        self._emit("time_picker", {"message": message})
+        return self._interactive.time_picker(message, default)
+
+    def progress_eta(self, label: str, current: int, total: int,
+                     elapsed: float = 0) -> None:
+        """Display a progress bar with estimated time remaining."""
+        self._emit("progress_eta", {"label": label, "current": current, "total": total})
+        self._interactive.progress_eta(label, current, total, elapsed)
+
+    def select_with_search(self, title: str, options: list[str]) -> str:
+        """Select with prominent search bar and live filtering."""
+        self._emit("select_with_search", {"title": title})
+        return self._interactive.select_with_search(title, options)
+
+    def table_select(self, headers: list[str], rows: list[list[str]],
+                     title: str = "Select row") -> int | None:
+        """Interactive table with row selection."""
+        self._emit("table_select", {"title": title})
+        return self._interactive.table_select(headers, rows, title)
+
+    def year_picker(self, message: str, default: int = 0,
+                    min_year: int = 1900, max_year: int = 2100) -> int:
+        """Interactive year picker with arrow keys."""
+        self._emit("year_picker", {"message": message})
+        return self._interactive.year_picker(message, default, min_year, max_year)
+
+    def month_picker(self, message: str, default: int = 0) -> int:
+        """Interactive month picker with names."""
+        self._emit("month_picker", {"message": message})
+        return self._interactive.month_picker(message, default)
+
+    def confirm_list(self, title: str, items: list[str],
+                     default: bool = True) -> list[str]:
+        """Confirm each item in a list with y/N."""
+        self._emit("confirm_list", {"title": title, "items": items})
+        return self._interactive.confirm_list(title, items, default)
+
+    def table_edit(self, headers: list[str], rows: list[list[str]],
+                   title: str = "Edit table") -> list[list[str]]:
+        """Interactive table with cell editing."""
+        self._emit("table_edit", {"title": title})
+        return self._interactive.table_edit(headers, rows, title)
+
+    def duration_picker(self, message: str, default: int = 0) -> int:
+        """Interactive duration picker in seconds."""
+        self._emit("duration_picker", {"message": message})
+        return self._interactive.duration_picker(message, default)
+
+    def confirm_text(self, message: str, target: str, hint: str = "") -> bool:
+        """Confirm by typing exact text."""
+        self._emit("confirm_text", {"message": message, "target": target})
+        return self._interactive.confirm_text(message, target, hint)
+
+    def table_sort(self, headers: list[str], rows: list[list[str]],
+                   title: str = "Sort table") -> list[list[str]]:
+        """Interactive table with column sorting."""
+        self._emit("table_sort", {"title": title})
+        return self._interactive.table_sort(headers, rows, title)
+
+    def notify(self, title: str, message: str = "", level: str = "info") -> None:
+        """Display a styled notification banner."""
+        self._emit("notify", {"title": title, "level": level})
+        self._interactive.notify(title, message, level)
+
+    def week_picker(self, message: str, default: int = 0) -> int:
+        """Interactive week-of-year picker."""
+        self._emit("week_picker", {"message": message})
+        return self._interactive.week_picker(message, default)
+
+    def quarter_picker(self, message: str, default: int = 0) -> int:
+        """Interactive quarter picker."""
+        self._emit("quarter_picker", {"message": message})
+        return self._interactive.quarter_picker(message, default)
+
+    def confirm_delete(self, item: str, count: int = 1) -> bool:
+        """Confirm deletion with type-to-confirm."""
+        self._emit("confirm_delete", {"item": item})
+        return self._interactive.confirm_delete(item, count)
+
+    def confirm_overwrite(self, path: str) -> bool:
+        """Confirm overwriting an existing file."""
+        self._emit("confirm_overwrite", {"path": path})
+        return self._interactive.confirm_overwrite(path)
+
+    def progress_ring(self, label: str, current: int, total: int) -> None:
+        """Display a circular progress indicator."""
+        self._emit("progress_ring", {"label": label})
+        self._interactive.progress_ring(label, current, total)
+
+    def timezone_picker(self, message: str, default: str = "UTC") -> str:
+        """Interactive timezone picker."""
+        self._emit("timezone_picker", {"message": message})
+        return self._interactive.timezone_picker(message, default)
+
+    def currency_picker(self, message: str, default: str = "USD") -> str:
+        """Interactive currency picker."""
+        self._emit("currency_picker", {"message": message})
+        return self._interactive.currency_picker(message, default)
+
+    def language_picker(self, message: str, default: str = "en") -> str:
+        """Interactive language picker."""
+        self._emit("language_picker", {"message": message})
+        return self._interactive.language_picker(message, default)
+
+    def confirm_with_preview(self, message: str, preview: str,
+                             default: bool = False) -> bool:
+        """Confirm with a preview of what will happen."""
+        self._emit("confirm_with_preview", {"message": message})
+        return self._interactive.confirm_with_preview(message, preview, default)
 
     # ── Cursor control ───────────────────────────────────────────────
 

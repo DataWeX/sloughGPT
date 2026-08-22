@@ -45,6 +45,7 @@ export default function ModelsPage() {
   const router = useRouter()
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
   const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(null)
+  const [traitWeightsError, setTraitWeightsError] = useState<string | null>(null)
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
   const refreshHealth = useCallback(async () => {
     await modelController.getHealth()
@@ -88,9 +89,14 @@ export default function ModelsPage() {
 
   const fetchTraitWeights = useCallback(async () => {
     try {
+      setTraitWeightsError(null)
       const w = await soulsController.getTraitWeights()
       if (w && !('error' in w)) setTraitWeights(w)
-    } catch { addToast('Could not load trait weights', 'info') }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not load trait weights'
+      setTraitWeightsError(msg)
+      addToast(msg, 'info')
+    }
   }, [addToast])
 
   const [refreshing, setRefreshing] = useState(false)

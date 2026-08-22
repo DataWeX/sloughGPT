@@ -35,6 +35,11 @@ export interface TrainingShellState {
   visualSouPath: string | null
   avgQuality: number | null
   dataQuality: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number } | null
+  finetunedModelPath: string | null
+  finetunedModelLoss: number | null
+  distillCheckpoint: string | null
+  distillFinalLoss: number | null
+  distillEpochs: number | null
 }
 
 export interface AppShellState {
@@ -73,6 +78,11 @@ const DEFAULT_TRAINING: TrainingShellState = {
   avgQuality: null,
   dataQuality: null,
   visualSouPath: null,
+  finetunedModelPath: null,
+  finetunedModelLoss: null,
+  distillCheckpoint: null,
+  distillFinalLoss: null,
+  distillEpochs: null,
 }
 
 export const appShellStore = createStore<AppShellState>()(

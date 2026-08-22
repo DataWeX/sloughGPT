@@ -38,6 +38,7 @@ from .repl import ShellREPL
 from .commands import ShellCommands
 from .state import ShellState
 from .io import ShellIO, ConsoleIO, MemoryIO, capture_output
+from .interactive import InteractivePrompt
 from .audit import ShellAuditLogger, get_shell_audit_logger
 from .permissions import ShellPermissions, Risk
 from .init import InitSystem, ServiceDef, ServiceInstance, ServiceManager, get_init_system, reset_init_system
@@ -109,4 +110,5 @@ __all__ = [
     "create_cube",
     "CyclesDevice",
     "RenderNeuralDevice",
+    "InteractivePrompt",
 ]

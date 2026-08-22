@@ -253,7 +253,7 @@ class MobileRouter:
                 "updated_at": s.get("updated_at", ""),
             })
 
-        return {
+        return success_response(data={
             "status": health.get("status", "unknown"),
             "model": {
                 "name": health.get("model_type", "None"),
@@ -268,7 +268,7 @@ class MobileRouter:
                 "model_count": len(models) if isinstance(models, list) else 0,
                 "inference_count": health.get("inference_count", 0),
             },
-        }
+        })
 
     async def list_conversations(
         self,
@@ -327,12 +327,12 @@ class MobileRouter:
                 "pinned": s.get("pinned", False),
             })
 
-        return {
+        return success_response(data={
             "conversations": result,
             "total": total,
             "page": page,
             "per_page": per_page,
-        }
+        })
 
     async def get_conversation(self, request: Request, session_id: str) -> dict:
         """
@@ -348,11 +348,11 @@ class MobileRouter:
             - Calls /session/{id}/messages internally.
         """
         data = await self._internal_get(request, f"/session/{session_id}/messages") or {}
-        return {
+        return success_response(data={
             "id": session_id,
             "messages": data.get("messages", []),
             "created_at": data.get("created_at", ""),
-        }
+        })
 
     async def get_models(self, request: Request) -> dict:
         """
@@ -400,7 +400,7 @@ class MobileRouter:
                     "steps": cp.get("steps"),
                 })
 
-        return {
+        return success_response(data={
             "current": {
                 "model_id": health.get("model_type", ""),
                 "soul": current_soul.get("name", ""),
@@ -409,7 +409,7 @@ class MobileRouter:
             "models": model_list,
             "souls": soul_list,
             "checkpoints": cp_list,
-        }
+        })
 
     async def switch_model(self, request: Request, body: SwitchRequest) -> dict:
         """
@@ -424,11 +424,8 @@ class MobileRouter:
         Side effects:
             - Calls /models/load and/or /souls/switch internally.
         """
-        model_result = None
-        soul_result = None
-
         if body.model_id:
-            model_result = await self._internal_post(request, "/models/load", {
+            await self._internal_post(request, "/models/load", {
                 "model_id": body.model_id,
             })
 
@@ -436,16 +433,16 @@ class MobileRouter:
             soul_body = {"soul": body.soul_name}
             if body.checkpoint_name:
                 soul_body["checkpoint_name"] = body.checkpoint_name
-            soul_result = await self._internal_post(request, "/souls/switch", soul_body)
+            await self._internal_post(request, "/souls/switch", soul_body)
 
         health = await self._internal_get(request, "/health") or {}
 
-        return {
+        return success_response(data={
             "status": "ok",
             "model": health.get("model_type", ""),
             "soul": body.soul_name or "",
             "checkpoint": body.checkpoint_name,
-        }
+        })
 
     async def get_health(self, request: Request) -> dict:
         """
@@ -462,7 +459,7 @@ class MobileRouter:
 
         system_info = detailed.get("system", {})
 
-        return {
+        return success_response(data={
             "status": detailed.get("status", "unknown"),
             "model": {
                 "name": detailed.get("model_type", ""),
@@ -480,7 +477,7 @@ class MobileRouter:
             "inference_count": detailed.get("inference", {}).get(
                 "inference_count", detailed.get("inference_count", 0)
             ),
-        }
+        })
 
     async def list_knowledge(
         self,
@@ -527,7 +524,7 @@ class MobileRouter:
         end = start + per_page
         page_items = items[start:end]
 
-        return {
+        return success_response(data={
             "items": [
                 {
                     "id": i.get("id", ""),
@@ -541,7 +538,7 @@ class MobileRouter:
             "total": total,
             "page": page,
             "per_page": per_page,
-        }
+        })
 
     async def create_knowledge(self, request: Request, body: KnowledgeCreateRequest) -> dict:
         """
@@ -600,9 +597,9 @@ class MobileRouter:
         Side effects:
             - Calls DELETE /knowledge/{id} internally.
         """
-        result = await self._internal_delete(request, f"/knowledge/{item_id}")
+        await self._internal_delete(request, f"/knowledge/{item_id}")
         safe_audit_log("mobile.knowledge_delete", resource=item_id)
-        return {"status": "deleted", "id": item_id}
+        return success_response(data={"status": "deleted", "id": item_id})
 
     async def sync_offline(self, request: Request, body: SyncRequest) -> dict:
         """
@@ -708,23 +705,15 @@ class MobileRouter:
             user_id=body.user_id,
             topics=body.topics,
         )
-        return result
+        return success_response(data=result)
 
     async def unregister_device(self, body: UnregisterDeviceRequest) -> dict:
-        """
-        Unregister a device from push notifications.
-
-        Args:
-            body: {"token": "expo-push-token..."}.
-
-        Returns:
-            Unregistration status.
-        """
+        """Unregister a device from push notifications."""
         from domains.mobile.notifications import get_notification_service
 
         svc = get_notification_service()
         removed = svc.unregister_device(body.token)
-        return {"status": "removed" if removed else "not_found"}
+        return success_response(data={"status": "removed" if removed else "not_found"})
 
     async def list_devices(self, topic: Optional[str] = Query(None)) -> dict:
         """
@@ -739,7 +728,7 @@ class MobileRouter:
         from domains.mobile.notifications import get_notification_service
 
         svc = get_notification_service()
-        return {"devices": svc.get_devices(topic=topic)}
+        return success_response(data={"devices": svc.get_devices(topic=topic)})
 
     async def send_notification(self, body: NotificationSendRequest) -> dict:
         """
@@ -766,22 +755,14 @@ class MobileRouter:
             tokens=body.tokens,
             topic=body.topic,
         )
-        return result
+        return success_response(data=result)
 
     async def notification_history(self, limit: int = Query(50, ge=1, le=200)) -> dict:
-        """
-        Get recent notification history.
-
-        Args:
-            limit: Max entries to return.
-
-        Returns:
-            Recent notification records.
-        """
+        """Get recent notification history."""
         from domains.mobile.notifications import get_notification_service
 
         svc = get_notification_service()
-        return {"history": svc.get_history(limit=limit)}
+        return success_response(data={"history": svc.get_history(limit=limit)})
 
     async def cleanup_devices(self) -> dict:
         """
@@ -794,7 +775,7 @@ class MobileRouter:
 
         svc = get_notification_service()
         removed = svc.cleanup_stale()
-        return {"removed": removed}
+        return success_response(data={"removed": removed})
 
     async def notify_training_complete(self, request: Request) -> dict:
         """
@@ -820,36 +801,18 @@ class MobileRouter:
         )
 
         result = svc.send_notification(payload=payload, topic="training")
-        return result
+        return success_response(data=result)
 
     async def mobile_train(self, body: MobileTrainRequest) -> dict:
-        """
-        Train the SloNet model on conversation pairs from the mobile app.
-
-        Receives (user_msg, assistant_msg) pairs collected on-device,
-        stores them in MogDB, runs a short fine-tune via subprocess
-        (using the venv Python with torch), and returns the new checkpoint.
-
-        Args:
-            body: Batch of training pairs + base checkpoint name.
-
-        Returns:
-            MobileTrainResult with checkpoint name, loss, steps, timing.
-
-        Side effects:
-            - Stores pairs in MogDB training data collection.
-            - Spawns subprocess for HF fine-tuning.
-            - Saves new checkpoint to models/auto-training/.
-        """
-        import time
+        """Train the SloNet model on conversation pairs from the mobile app."""
+        import time as _time
         from pathlib import Path
 
         if len(body.pairs) < 5:
             raise_error("Need at least 5 training pairs", "E_BAD_REQUEST", status_code=400)
 
-        t0 = int(time.time() * 1000)
+        t0 = int(_time.time() * 1000)
 
-        # Store pairs in MogDB
         from domains.training.mobile_training_store import get_training_store
 
         store = get_training_store()
@@ -863,12 +826,11 @@ class MobileRouter:
             for p in body.pairs
         ])
 
-        # Write training text file
         repo_root = Path(__file__).resolve().parents[4]
         train_dir = repo_root / "data" / "mobile_training"
-        train_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(train_dir.mkdir, parents=True, exist_ok=True)
 
-        ts = int(time.time())
+        ts = int(_time.time())
         text_file = train_dir / f"mobile_{ts}.txt"
 
         def _write_pairs():
@@ -880,13 +842,12 @@ class MobileRouter:
 
         checkpoint_name = f"mobile_{ts}"
         output_dir = repo_root / "models" / "auto-training" / checkpoint_name
-        output_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
 
-        # Find venv Python with torch
         venv_python = repo_root / ".venv" / "bin" / "python3"
         train_script = repo_root / "scripts" / "hf_train.py"
 
-        if not venv_python.exists():
+        if not await asyncio.to_thread(venv_python.exists):
             raise_error("Training environment not found (.venv missing)", "E_INFRA_STARTUP", status_code=500)
 
         try:
@@ -919,20 +880,19 @@ class MobileRouter:
             if not result.get("success"):
                 raise_error(f"Training failed: {result.get('error', 'unknown')}", "E_INFRA_STARTUP", status_code=500)
 
-            # Mark pairs as used for training
             store.mark_used(pair_ids)
             store.mark_synced(pair_ids)
 
-            elapsed = int(time.time() * 1000) - t0
+            elapsed = int(_time.time() * 1000) - t0
             safe_audit_log("mobile.train", resource=checkpoint_name, detail=f"elapsed_ms={elapsed}", pairs=len(body.pairs), loss=result.get("loss", 0.0))
 
-            return MobileTrainResult(
+            return success_response(data=MobileTrainResult(
                 success=True,
                 checkpoint_name=checkpoint_name,
                 loss=result.get("loss", 0.0),
                 steps=result.get("steps", 0),
                 elapsed_ms=elapsed,
-            )
+            ).model_dump())
 
         except subprocess.TimeoutExpired:
             raise_error("Training timed out (300s limit)", "E_TIMEOUT", status_code=504)
@@ -961,13 +921,13 @@ class MobileRouter:
         stats = store.stats()
         quality_counts = store.quality_breakdown()
 
-        return {
+        return success_response(data={
             "total": stats["total"],
             "pending": stats["pending"],
             "synced": stats["synced"],
             "used": stats["used"],
             "by_quality": quality_counts,
-        }
+        })
 
     async def get_pending_pairs(self, limit: int = Query(50, ge=1, le=500)) -> dict:
         """
@@ -986,7 +946,7 @@ class MobileRouter:
 
         store = get_training_store()
         pairs = store.get_pending_pairs(limit=limit)
-        return {
+        return success_response(data={
             "pairs": [
                 {
                     "id": p.get("_id", ""),
@@ -999,7 +959,7 @@ class MobileRouter:
                 for p in pairs
             ],
             "count": len(pairs),
-        }
+        })
 
     async def list_training_pairs(
         self,
@@ -1036,7 +996,7 @@ class MobileRouter:
             search=search,
         )
         total = store.count()
-        return {
+        return success_response(data={
             "pairs": [
                 {
                     "id": p.get("_id", ""),
@@ -1051,7 +1011,7 @@ class MobileRouter:
             "total": total,
             "count": len(pairs),
             "offset": offset,
-        }
+        })
 
     async def export_training_pairs(
         self,
@@ -1111,7 +1071,7 @@ class MobileRouter:
 
         store = get_training_store()
         pairs = store.get_pairs_by_session(session_id)
-        return {
+        return success_response(data={
             "session_id": session_id,
             "pairs": [
                 {
@@ -1124,7 +1084,7 @@ class MobileRouter:
                 for p in pairs
             ],
             "count": len(pairs),
-        }
+        })
 
     async def update_pair_quality(self, pair_id: str, body: QualityUpdateRequest) -> dict:
         """
@@ -1147,7 +1107,7 @@ class MobileRouter:
         if not updated:
 
             raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
-        return {"status": "updated", "pair_id": pair_id, "quality": body.quality}
+        return success_response(data={"status": "updated", "pair_id": pair_id, "quality": body.quality})
 
     async def delete_pair(self, pair_id: str) -> dict:
         """
@@ -1170,7 +1130,7 @@ class MobileRouter:
 
             raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("mobile.pair_delete", resource=pair_id)
-        return {"status": "deleted", "pair_id": pair_id}
+        return success_response(data={"status": "deleted", "pair_id": pair_id})
 
     async def delete_synced_pairs(self) -> dict:
         """
@@ -1187,21 +1147,10 @@ class MobileRouter:
         store = get_training_store()
         count = store.delete_synced()
         safe_audit_log("mobile.pairs_delete_synced", detail=f"count={count}")
-        return {"status": "deleted", "count": count}
+        return success_response(data={"status": "deleted", "count": count})
 
     async def delete_pairs_bulk(self, ids: list[str] = Query(..., description="Pair IDs to delete")) -> dict:
-        """
-        Delete multiple training pairs by ID.
-
-        Args:
-            ids: List of pair IDs to delete.
-
-        Returns:
-            Count of deleted pairs.
-
-        Side effects:
-            - Deletes matching pairs from MogDB training data collection.
-        """
+        """Delete multiple training pairs by ID."""
         from domains.training.mobile_training_store import get_training_store
 
         store = get_training_store()
@@ -1210,23 +1159,15 @@ class MobileRouter:
             if store.delete_pair(pair_id):
                 count += 1
         safe_audit_log("mobile.pairs_delete_bulk", detail=f"count={count} requested={len(ids)}")
-        return {"status": "deleted", "count": count}
+        return success_response(data={"status": "deleted", "count": count})
 
     async def compact_training_store(self) -> dict:
-        """
-        Compact the training data store (reclaim space from deleted records).
-
-        Returns:
-            Remaining document count after compaction.
-
-        Side effects:
-            - Compacts MogDB training data collection journals.
-        """
+        """Compact the training data store (reclaim space from deleted records)."""
         from domains.training.mobile_training_store import get_training_store
 
         store = get_training_store()
         count = store.compact()
-        return {"status": "compacted", "count": count}
+        return success_response(data={"status": "compacted", "count": count})
 
     async def train_from_sessions(self, body: FromSessionsRequest = FromSessionsRequest(), request: Request = None) -> AsyncGenerator[str, None]:
         """
@@ -1384,7 +1325,6 @@ class MobileRouter:
                     continue
 
                 phase = event.get("phase", "TRAIN")
-                status = event.get("status", "working")
 
                 # Check if this is the final result
                 if event.get("success") is not None or phase == "COMPLETE":
@@ -1459,7 +1399,7 @@ class MobileRouter:
         from domains.training.auto_trainer import get_auto_trainer
 
         trainer = get_auto_trainer()
-        return trainer.status()
+        return success_response(data=trainer.status())
 
     async def update_auto_train_config(
         self,
@@ -1486,7 +1426,4 @@ class MobileRouter:
             trainer.threshold = threshold
         if interval_s is not None:
             trainer.interval_s = interval_s
-        return trainer.status()
-
-
-router = MobileRouter().router
+        return success_response(data=trainer.status())

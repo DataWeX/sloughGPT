@@ -2,7 +2,7 @@
 Feedback Router - MVC View layer
 """
 import logging
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query
 
 from pydantic import BaseModel, Field
 from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
@@ -180,7 +180,7 @@ class FeedbackRouter:
         ctrl = get_feedback_controller()
         ctrl.delete_conversation(conv_id)
         safe_audit_log("feedback.conversation_delete", resource=conv_id)
-        return {"status": "deleted", "id": conv_id}
+        return success_response(data={"status": "deleted", "id": conv_id})
 
     async def get_feedback(self, message_id: str) -> dict:
         """Get feedback for a message"""

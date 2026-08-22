@@ -3,9 +3,8 @@ World Render Router — rendering endpoints for the programmable world.
 """
 import logging
 import time as _time
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import Response
-from typing import Optional
 from pydantic import BaseModel, Field
 
 from schemas.common import success_response, raise_error, safe_audit_log

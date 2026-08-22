@@ -23,12 +23,6 @@ interface ModeInfo {
   capacity?: number
 }
 
-interface SoulStats {
-  total_souls: number
-  current_soul: string | null
-  available_souls: string[]
-}
-
 function traitLabel(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
@@ -145,7 +139,6 @@ export default function SoulsPage() {
   const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(null)
   const [modes, setModes] = useState<Record<string, ModeInfo> | null>(null)
   const [snapshots, setSnapshots] = useState<Array<{ name: string; saved_at?: string }>>([])
-  const [stats, setStats] = useState<SoulStats | null>(null)
 
   // ── UI State ──
   const [searchQuery, setSearchQuery] = useState('')
@@ -166,17 +159,15 @@ export default function SoulsPage() {
 
   // ── Data Loading ──
   const loadData = useCallback(async () => {
-    const [s, c, snaps, st] = await Promise.all([
+    const [s, c, snaps] = await Promise.all([
       soulsController.list().catch(() => ({ souls: [], current_soul: null })),
       soulsController.listCheckpoints().catch(() => ({ checkpoints: [] })),
       soulsController.listWeightSnapshots().catch(() => []),
-      soulsController.getStats().catch(() => null),
     ])
     setSouls(s.souls)
     setCurrentSoul(s.current_soul ?? null)
     setCheckpoints(c.checkpoints)
     setSnapshots(snaps)
-    if (st) setStats(st)
   }, [])
 
   useEffect(() => {

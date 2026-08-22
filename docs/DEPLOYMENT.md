@@ -103,13 +103,16 @@ helm upgrade --install sloughgpt ./infra/k8s/helm/sloughgpt/ -n sloughgpt --crea
 
 ## API Endpoints
 
-The server exposes **412 routes across 43 routers**. For the complete endpoint reference, see:
+### Generation
+- `POST /generate` - Text generation
+- `POST /generate/stream` - Streaming generation
+- `POST /chat/stream` - Chat completion
 
-- [`docs/routers.md`](routers.md) — hand-written router documentation
-- `http://localhost:8000/docs` — auto-generated FastAPI Swagger UI
-- `http://localhost:8000/openapi.json` — machine-readable OpenAPI spec
-
-Key router groups: `/inference`, `/chat`, `/training`, `/auto-train`, `/models`, `/souls`, `/memory`, `/knowledge`, `/feedback`, `/tokenizer`, `/shell`, `/vm`, `/benchmark`, `/companion`, `/collections`, `/world`, `/images`, `/voice`, `/experiments`, `/learner`
+### Model
+- `GET /models` - List models
+- `POST /models/load` - Load model
+- `GET /health` - Health check
+- `GET /health/detailed` - Detailed health with model info
 
 ## Health Checks
 
@@ -118,10 +121,10 @@ Key router groups: `/inference`, `/chat`, `/training`, `/auto-train`, `/models`,
 curl http://localhost:8000/health
 
 # Detailed health
-curl http://localhost:8000/system/lifecycle
+curl http://localhost:8000/health/detailed
 
 # Readiness
-curl http://localhost:8000/ready
+curl http://localhost:8000/health/ready
 ```
 
 ## Scaling

@@ -31,6 +31,14 @@ class TestSingleton:
         finally:
             mod._limiter = original
 
+    def test_reset_creates_new_instance(self):
+        from domains.infrastructure.rate_limiter import reset_rate_limiter
+        original = get_rate_limiter()
+        reset_rate_limiter()
+        new = get_rate_limiter()
+        assert new is not original
+        assert isinstance(new, RateLimiter)
+
 
 class TestRateLimiter:
     def test_first_request_allowed(self):

@@ -292,3 +292,65 @@ class TestModelStatus:
         assert "degraded" in statuses
         assert "error" in statuses
         assert "unloaded" in statuses
+
+
+# ── ModelMetrics.reset ────────────────────────────────────────────────
+
+
+class TestModelMetricsReset:
+    def test_reset_clears_all_counters(self):
+        m = ModelMetrics()
+        m.requests_total = 10
+        m.requests_completed = 8
+        m.requests_failed = 2
+        m.total_generation_time_ms = 5000.0
+        m.tokens_generated_total = 1000
+        m.consecutive_failures = 3
+        m.last_error = "test error"
+
+        m.reset()
+
+        assert m.requests_total == 0
+        assert m.requests_completed == 0
+        assert m.requests_failed == 0
+        assert m.total_generation_time_ms == 0.0
+        assert m.tokens_generated_total == 0
+        assert m.consecutive_failures == 0
+        assert m.last_error is None
+
+    def test_reset_restores_defaults(self):
+        m = ModelMetrics()
+        m.min_generation_time_ms = 100.0
+        m.max_generation_time_ms = 5000.0
+        m.reset()
+        assert m.min_generation_time_ms == float("inf")
+        assert m.max_generation_time_ms == 0.0
+
+
+# ── IdleManager.reset ────────────────────────────────────────────────
+
+
+class TestIdleManagerReset:
+    def test_reset_clears_all_models(self):
+        im = IdleManager(idle_timeout_s=60)
+        im.register("model_a")
+        im.register("model_b")
+        assert len(im._models) == 2
+
+        im.reset()
+        assert len(im._models) == 0
+
+    def test_reset_stops_background_thread(self):
+        im = IdleManager(idle_timeout_s=60)
+        im.register("model_a")
+        import time
+        time.sleep(0.1)  # let thread start
+        assert im._running is True
+
+        im.reset()
+        assert im._running is False
+
+    def test_reset_is_idempotent(self):
+        im = IdleManager()
+        im.reset()
+        im.reset()  # should not raise

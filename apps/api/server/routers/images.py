@@ -1,5 +1,6 @@
 """Image Generation Router - text-to-image generation with style selection."""
 
+import asyncio
 import base64
 import io
 import logging
@@ -215,7 +216,7 @@ class ImagesRouter:
     def _generate_fantasy_image(self, prompt: str, width: int = 512, height: int = 512) -> bytes:
         """Generate a fantasy-style image with magical colors and glow."""
         try:
-            from PIL import Image, ImageDraw, ImageFilter
+            from PIL import Image, ImageDraw
         except ImportError:
             raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
@@ -317,18 +318,20 @@ class ImagesRouter:
         """List all generated images in the gallery."""
         gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
 
-        if not gallery_dir.exists():
-            return success_response(data={"images": []})
+        def _scan_gallery():
+            if not gallery_dir.exists():
+                return []
+            images = []
+            for filepath in sorted(gallery_dir.glob("generated_*.png"), key=lambda x: x.stat().st_mtime, reverse=True):
+                images.append({
+                    "id": filepath.stem,
+                    "path": f"/data/gallery/{filepath.name}",
+                    "created": int(filepath.stat().st_mtime),
+                })
+            return images[:50]
 
-        images = []
-        for filepath in sorted(gallery_dir.glob("generated_*.png"), key=lambda x: x.stat().st_mtime, reverse=True):
-            images.append({
-                "id": filepath.stem,
-                "path": f"/data/gallery/{filepath.name}",
-                "created": int(filepath.stat().st_mtime),
-            })
-
-        return success_response(data={"images": images[:50]})
+        images = await asyncio.to_thread(_scan_gallery)
+        return success_response(data={"images": images})
 
     async def list_styles(self) -> dict:
         """List available image generation styles."""

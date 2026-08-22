@@ -17,6 +17,7 @@ Usage:
 """
 import hashlib
 import json
+import threading
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -133,11 +134,21 @@ class EmbeddingService:
 
 # Module-level singleton
 _service: Optional[EmbeddingService] = None
+_embedding_service_lock = threading.Lock()
 
 
 def get_embedding_service(dimension: int = 384) -> EmbeddingService:
     """Get or create the embedding service singleton."""
     global _service
     if _service is None or _service.dimension != dimension:
-        _service = EmbeddingService(dimension=dimension)
+        with _embedding_service_lock:
+            if _service is None or _service.dimension != dimension:
+                _service = EmbeddingService(dimension=dimension)
     return _service
+
+
+def reset_embedding_service() -> None:
+    """Reset the singleton (for testing)."""
+    global _service
+    with _embedding_service_lock:
+        _service = None

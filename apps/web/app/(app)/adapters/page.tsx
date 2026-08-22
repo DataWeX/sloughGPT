@@ -15,7 +15,6 @@ export default function AdaptersPage() {
   const router = useRouter()
   const [stats, setStats] = useState<UserAdapterStats | null>(null)
   const [adapters, setAdapters] = useState<UserAdapterInfo[]>([])
-  const [quality, setQuality] = useState<{ count: number; adapters: UserAdapterInfo[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
@@ -28,13 +27,9 @@ export default function AdaptersPage() {
   const refreshData = async () => {
     try {
       setError(null)
-      const [listRes, qualityRes] = await Promise.all([
-        userAdaptersController.list(),
-        userAdaptersController.getQuality(3),
-      ])
+      const listRes = await userAdaptersController.list()
       setStats(listRes.stats)
       setAdapters(listRes.adapters ?? [])
-      setQuality(qualityRes)
     } catch (e) {
       addToast(extractErrorMessage(e, 'Failed to refresh adapters'), 'error')
     }
@@ -46,13 +41,9 @@ export default function AdaptersPage() {
       setLoading(true)
       setError(null)
       try {
-        const [listRes, qualityRes] = await Promise.all([
-          userAdaptersController.list(),
-          userAdaptersController.getQuality(3),
-        ])
+        const listRes = await userAdaptersController.list()
         if (ignore) return
         setStats(listRes.stats)
-        setQuality(qualityRes)
         setAdapters(listRes.adapters ?? [])
       } catch (e) {
         if (!ignore) setError(extractErrorMessage(e, 'Failed to load adapters'))

@@ -26,7 +26,7 @@ class HealthWatchdog:
         watchdog.start(poll_interval=10, max_failures=3)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._poll_interval = 10
@@ -49,7 +49,7 @@ class HealthWatchdog:
         """Set callback after successful recovery."""
         self._on_recovery = fn
 
-    def start(self, poll_interval: int = 10, max_failures: int = 3):
+    def start(self, poll_interval: int = 10, max_failures: int = 3) -> None:
         """Start the watchdog background thread."""
         if self._running:
             return
@@ -61,7 +61,7 @@ class HealthWatchdog:
         logger.info("Health watchdog started (interval=%ds, max_failures=%d)", poll_interval, max_failures,
             extra={"tag": "INFRA"})
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the watchdog."""
         self._running = False
         if self._thread:
@@ -69,7 +69,7 @@ class HealthWatchdog:
         logger.info("Health watchdog stopped",
             extra={"tag": "INFRA"})
 
-    def _run(self):
+    def _run(self) -> None:
         """Main watchdog loop."""
         while self._running:
             try:
@@ -137,10 +137,20 @@ class HealthWatchdog:
 
 
 _watchdog: Optional[HealthWatchdog] = None
+_watchdog_lock = threading.Lock()
 
 
 def get_watchdog() -> HealthWatchdog:
     global _watchdog
     if _watchdog is None:
-        _watchdog = HealthWatchdog()
+        with _watchdog_lock:
+            if _watchdog is None:
+                _watchdog = HealthWatchdog()
     return _watchdog
+
+
+def reset_watchdog() -> None:
+    """Reset the singleton (for testing)."""
+    global _watchdog
+    with _watchdog_lock:
+        _watchdog = None

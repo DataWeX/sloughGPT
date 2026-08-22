@@ -260,7 +260,7 @@ class TaskQueue:
             try:
                 cb(event, task)
             except Exception as exc:
-                logger.warning("SSE callback %s failed: %s", cb, exc, exc_info=True)
+                logger.debug("SSE emit failed: %s", exc)
         bus_event = f"task.{event}"
         self._emit_event(bus_event, task)
 
@@ -574,7 +574,7 @@ def get_task_queue() -> InProcessTaskQueue:
     return _default_queue
 
 
-def set_task_queue(queue: InProcessTaskQueue):
+def set_task_queue(queue: InProcessTaskQueue) -> None:
     global _default_queue
     with _task_queue_lock:
         _default_queue = queue

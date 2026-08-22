@@ -411,13 +411,23 @@ def _norm_level(raw: str) -> str:
 # ── Singletons + installation ──────────────────────────────────────────
 
 _server_buffer: OutputBuffer | None = None
+_server_buffer_lock = threading.Lock()
 
 
 def get_server_buffer() -> OutputBuffer:
     global _server_buffer
     if _server_buffer is None:
-        _server_buffer = OutputBuffer(max_lines=10_000)
+        with _server_buffer_lock:
+            if _server_buffer is None:
+                _server_buffer = OutputBuffer(max_lines=10_000)
     return _server_buffer
+
+
+def reset_server_buffer() -> None:
+    """Reset the singleton (for testing)."""
+    global _server_buffer
+    with _server_buffer_lock:
+        _server_buffer = None
 
 
 def install_log_bridge(buffer: OutputBuffer | None = None, level: int = logging.INFO) -> BufferLogHandler:
@@ -428,7 +438,7 @@ def install_log_bridge(buffer: OutputBuffer | None = None, level: int = logging.
     return handler
 
 
-def install_stdio_bridge(buffer: OutputBuffer | None = None):
+def install_stdio_bridge(buffer: OutputBuffer | None = None) -> None:
     """Tee stdout/stderr into the OutputBuffer with structured parsing."""
     buf = buffer or get_server_buffer()
     import sys

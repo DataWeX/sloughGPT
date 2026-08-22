@@ -542,7 +542,7 @@ export default function SettingsPage() {
               <Button variant="ghost" size="sm" className="text-xs" onClick={fetchHealth}>
                 Refresh health
               </Button>
-              <span className="text-xs text-muted-foreground font-mono">v1.0.0</span>
+              <span className="text-xs text-muted-foreground font-mono">v3.0.0</span>
             </div>
             </>
             )}

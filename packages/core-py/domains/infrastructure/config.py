@@ -291,7 +291,7 @@ class ConfigManager:
 
         return new_config
 
-    def on_reload(self, callback: callable):
+    def on_reload(self, callback: callable) -> None:
         """Register a callback for config reloads. Receives (new, old)."""
         self._reload_callbacks.append(callback)
 
@@ -314,7 +314,7 @@ def get_config_manager() -> ConfigManager:
     return _default_manager
 
 
-def set_config_manager(manager: ConfigManager):
+def set_config_manager(manager: ConfigManager) -> None:
     global _default_manager
     _default_manager = manager
 

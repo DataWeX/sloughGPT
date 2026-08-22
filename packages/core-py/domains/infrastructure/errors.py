@@ -200,7 +200,7 @@ class AuthError(AppError):
 # ── Integration helpers ──
 
 
-def emit_error_event(error: AppError, source: str = ""):
+def emit_error_event(error: AppError, source: str = "") -> None:
     """Emit an error event on the EventBus (fire-and-forget)."""
     try:
         from domains.infrastructure.event_bus import get_event_bus

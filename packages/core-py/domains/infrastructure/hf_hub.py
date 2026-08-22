@@ -325,8 +325,8 @@ def _deep_check(model_id: str, target_dir: Path) -> bool:
                         return False
                 except OSError:
                     return False
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("deep check failed for %s: %s", model_id, exc)
     return True
 
 

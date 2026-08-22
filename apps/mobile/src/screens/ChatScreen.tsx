@@ -203,9 +203,9 @@ export function ChatScreen() {
             borderBottomWidth={0.5} borderBottomColor={colors.errorAlpha(0.12)}
             alignItems="center" gap={8}
             onPress={a.clearError}>
-            <YStack width={6} height={6} borderRadius={3} backgroundColor="#EF4444" />
-            <Text fontSize={12} color="#EF4444" flex={1} numberOfLines={2}>{a.error}</Text>
-            <Icon name="x" size={14} color="#EF4444" />
+            <YStack width={6} height={6} borderRadius={3} backgroundColor={colors.error} />
+            <Text fontSize={12} color={colors.error} flex={1} numberOfLines={2}>{a.error}</Text>
+            <Icon name="x" size={14} color={colors.error} />
           </XStack>
         )}
 
@@ -214,7 +214,7 @@ export function ChatScreen() {
             paddingHorizontal={16} paddingVertical={8}
             borderBottomWidth={0.5} borderBottomColor="$borderColor"
             alignItems="center" gap={6}>
-            <YStack width={5} height={5} borderRadius={3} backgroundColor="#F59E0B" />
+            <YStack width={5} height={5} borderRadius={3} backgroundColor={colors.warning} />
             <Text fontSize={11} fontWeight="500" color="$color10">Offline</Text>
             {a.offlineQueue > 0 && (
               <YStack onPress={a.retryPendingSends}>

@@ -72,8 +72,8 @@ def _get_hub_file_size_gb(model_id: str) -> Optional[float]:
                 total += sib.get("size")
         if total > 0:
             return round(total / (1024 ** 3), 2)
-    except Exception:
-        pass
+    except (OSError, ValueError) as exc:
+        logger.debug("sibling estimate failed: %s", exc)
     return None
 
 

@@ -407,22 +407,21 @@ class ShellREPL(LinuxCommandsMixin):
                 Risk.CRITICAL: _C_RED,
             }
             color = risk_colors.get(risk, _C_RED)
-            self._print(f"  {_C_YELLOW}⚡ {cmd}{_C_RESET} requires {_C_BOLD}{color}{risk}{_C_RESET} permissions.")
-            self._print(f"  Allow this command? {_C_DIM}[y/N/always]{_C_RESET}")
+            self._print(f"  {_C_YELLOW}\u26a1 {cmd}{_C_RESET} requires {_C_BOLD}{color}{risk}{_C_RESET} permissions.")
             try:
-                answer = self.io.read("  > ").strip().lower()
+                answer = self.console.ask("Allow this command? [y/N/always]", default="n")
             except (EOFError, KeyboardInterrupt):
                 answer = ""
             if answer == "always":
                 self._perms.grant(cmd, persist=True)
-                self._print(f"  {_C_GREEN}✓ Granted (persistent){_C_RESET} — {cmd} allowed for this and future sessions.")
+                self._print(f"  {_C_GREEN}\u2713 Granted (persistent){_C_RESET} \u2014 {cmd} allowed for this and future sessions.")
                 return True
-            elif answer == "y":
+            elif answer in ("y", "yes"):
                 self._perms.grant(cmd)
-                self._print(f"  {_C_GREEN}✓ Granted{_C_RESET} — {cmd} allowed this session.")
+                self._print(f"  {_C_GREEN}\u2713 Granted{_C_RESET} \u2014 {cmd} allowed this session.")
                 return True
             else:
-                self._print(f"  {_C_DIM}Denied{_C_RESET} — {cmd} skipped.")
+                self._print(f"  {_C_DIM}Denied{_C_RESET} \u2014 {cmd} skipped.")
                 return False
 
     # ── Programmatic API (TUI / tests) ─────────────────────────────
@@ -1602,32 +1601,6 @@ class ShellREPL(LinuxCommandsMixin):
         if t.is_alive():
             self._print(f"  [bg-{bg_id}] still running (use `bg` to check)")
 
-    def _cmd_watch(self, args: str = "") -> None:
-        """Run a command repeatedly every N seconds."""
-        parts = args.strip().split(maxsplit=1)
-        if len(parts) < 2:
-            self._print("  Usage: watch <interval_sec> <command>")
-            self._print("  Example: watch 2 health")
-            return
-        try:
-            interval = float(parts[0])
-        except ValueError:
-            self._print(f"  Invalid interval: {parts[0]}")
-            return
-        cmd = parts[1]
-        import time as _time
-        iteration = 1
-        self._print(f"  Watching every {interval}s — Ctrl+C to stop")
-        try:
-            while True:
-                out = self._execute_single(cmd, "")
-                self._print(f"{_C_DIM}--- iteration {iteration} ---{_C_RESET}")
-                self._print(out, end="")
-                iteration += 1
-                _time.sleep(interval)
-        except KeyboardInterrupt:
-            self._print(f"  {_C_DIM}Stopped{_C_RESET}")
-
     def _cmd_export(self, args: str = "") -> None:
         """POSIX-style export: export NAME=VALUE or export NAME."""
         if not args:
@@ -1695,24 +1668,24 @@ class ShellREPL(LinuxCommandsMixin):
                 "touch": "  touch <file> [file...]  — Create empty files or update timestamps",
                 "cp": "  cp <src> <dst>  — Copy files/directories",
                 "mv": "  mv <src> <dst>  — Move or rename files",
-                "head": "  head [-N] <file>  — Output first N lines (default 10, VFS-aware)",
-                "tail": "  tail [-N] <file>  — Output last N lines (default 10, VFS-aware)",
-                "wc": "  wc <file>  — Count lines, words, characters (VFS-aware)",
+                "head": "  head [-n N] [-c N] [-q] <file>  — Output first N lines/bytes",
+                "tail": "  tail [-n N] [-c N] [-q] <file>  — Output last N lines/bytes",
+                "wc": "  wc [-l] [-w] [-c] [-m] [-L] <file>  — Count lines/words/chars/longest",
                 "grep": "  grep [-i] [-v] <pattern> [file]  — Search for patterns (VFS-aware, supports pipes)",
                 "sort": "  sort [-r] [-n] [-u] [file]  — Sort lines (supports pipes)",
-                "uniq": "  uniq [file]  — Remove adjacent duplicate lines (supports pipes)",
-                "find": "  find [dir] -name <pattern>  — Search for files by name",
+                "uniq": "  uniq [-c] [-d] [-u] [-f N] [-s N] [file]  — Remove adjacent duplicates",
+                "find": "  find [dir] [-name pattern] [-type f|d] [-maxdepth N]  — Search for files",
                 "tee": "  tee [-a] <file>  — Copy stdin to file and stdout",
                 "xargs": "  xargs [-n N] <cmd>  — Build and execute command from stdin",
                 "chmod": "  chmod <mode> <file>  — Change file permissions (octal)",
                 "du": "  du [-h] [path...]  — Estimate disk usage",
-                "diff": "  diff <file1> <file2>  — Compare files line by line",
-                "stat": "  stat <path>  — Display file metadata",
+                "diff": "  diff [-u] [-w] [-q] <file1> <file2>  — Compare files",
+                "stat": "  stat [-c FMT] <path>  — Display file metadata (%n %s %f %F %A %m %x %u %g %h)",
                 "cut": "  cut -f<N> [-d<delim>] [file]  — Cut fields from lines (supports pipes)",
-                "tr": "  tr <set1> <set2>  — Translate characters (piped input)",
+                "tr": "  tr [-d] [-s] [-c] [-t] <set1> [set2]  — Translate/delete/squeeze chars",
                 "seq": "  seq [first [inc]] last  — Generate number sequence",
                 "nl": "  nl [file]  — Number lines of a file or piped input",
-                "fold": "  fold [-w width] [file]  — Wrap long lines at a specified width",
+                "fold": "  fold [-w width] [-s] [file]  — Wrap long lines (-s: break at spaces)",
                 "tac": "  tac [file]  — Reverse lines (cat backwards)",
                 "env": "  env  — Print environment variables",
                 "printenv": "  printenv  — Print environment variables",
@@ -1725,19 +1698,20 @@ class ShellREPL(LinuxCommandsMixin):
                 "uname": "  uname [-a] [-srm]  — Print system information",
                 "shuf": "  shuf [file]  — Shuffle lines randomly",
                 "rev": "  rev [file]  — Reverse characters in each line",
-                "paste": "  paste <file1> [file2 ...]  — Merge lines of files side by side",
-                "comm": "  comm <file1> <file2>  — Compare two sorted files line by line",
+                "paste": "  paste [-d DELIM] [-s] <file1> [file2 ...]  — Merge lines side by side",
+                "comm": "  comm [-1] [-2] [-3] <file1> <file2>  — Compare sorted files (-1/-2/-3 suppress)",
+                "column": "  column [-t] [-s SEP] [file]  — Display input in columns",
                 "test": "  test <expr>  — Evaluate conditional expression (sets $? 0=true 1=false)",
                 "[": "  [ <expr> ]  — Synonym for test",
                 "printf": "  printf <format> [args...]  — Format and print data (%s %d %f \\n \\t)",
-                "expand": "  expand [file]  — Convert tabs to spaces",
-                "unexpand": "  unexpand [file]  — Convert spaces to tabs",
+                "expand": "  expand [-t N] [file]  — Convert tabs to spaces (default 8)",
+                "unexpand": "  unexpand [-t N] [file]  — Convert spaces to tabs (default 8)",
                 "id": "  id  — Print user identity",
                 "logname": "  logname  — Print login name",
                 "mktemp": "  mktemp [-d]  — Create a temporary file or directory",
                 "who": "  who  — Show who is logged on",
-                "od": "  od [-x] <file>  — Dump file in octal/hex format",
-                "join": "  join <file1> <file2>  — Join lines on common field",
+                "od": "  od [-A base] [-t type] <file>  — Dump file (o/x/d/n address, o/x/d/c/u data)",
+                "join": "  join [-1 F] [-2 F] [-t C] [-a F] [-e STR] <f1> <f2>  — Join files on field",
                 "history": "  history [n]  — Show command history (last n entries, default 20)",
                 "fc": "  fc [-l] [n]  — List history, or re-run command by number (fc 42)",
                 "alias": "  alias [name=cmd]  — List or set aliases",
@@ -1747,8 +1721,19 @@ class ShellREPL(LinuxCommandsMixin):
                 "source": "  source <file> | . <file>  — Execute commands from a file",
                 "which": "  which <command>  — Locate a command",
                 "type": "  type <command>  — Describe a command",
-
-                "watch": "  watch <sec> <cmd>  — Run command repeatedly every N seconds",
+                "tsort": "  tsort [file]  — Topological sort of dependency pairs",
+                "df": "  df [-h] [path]  — Report disk space usage",
+                "readlink": "  readlink [-f] <path>  — Resolve symbolic link",
+                "file": "  file [-b] [-i] <file>  — Determine file type",
+                "export": "  export [NAME=VALUE]  — Set environment variable",
+                "unset": "  unset <name> [...]  — Remove environment variable",
+                "setenv": "  setenv <name> <value>  — Set environment variable",
+                "timeout": "  timeout [-s SIG] SEC CMD  — Run with time limit",
+                "watch": "  watch [-n SEC] CMD  — Repeat command and display",
+                "strings": "  strings [-n N] <file>  — Extract printable strings from binary",
+                "base64": "  base64 [-d] [file]  — Base64 encode or decode",
+                "cksum": "  cksum <file>...  — Compute CRC checksum",
+                "split": "  split [-l N] [-b N] [-d] [file] [prefix]  — Split file into pieces",
 
                 "procs": "  procs  — List running training jobs",
                 "ps": "  ps  — List kernel processes (AI workloads)",
@@ -3498,29 +3483,34 @@ Examples:
     # ── Scripting commands ────────────────────────────────────────
 
     def _cmd_which(self, args: str = "") -> None:
-        """Locate a command (like Unix which)."""
+        """Locate commands. Supports -a (show all matches)."""
         if not args:
-            self._print("  Usage: which <command>")
+            self._print("  Usage: which <command>...")
             self._last_exit_code = 1
             return
-        cmd = args.strip().lower()
-        if cmd in self.COMMANDS or cmd in self._ext_cmds or cmd in self._aliases:
-            if cmd in self._aliases:
-                self._print(f"  {cmd}: aliased to {self._aliases[cmd]}")
+        parts = args.strip().split()
+        commands = [p for p in parts if not p.startswith("-")]
+        if not commands:
+            self._print("  Usage: which <command>...")
+            self._last_exit_code = 1
+            return
+        all_found = True
+        for cmd in commands:
+            if cmd in self.COMMANDS:
+                self._print(f"  {cmd}: shell built-in command")
             elif cmd in self._ext_cmds:
                 h = getattr(self._ext_cmds[cmd], "help", "")
                 self._print(f"  {cmd}: external command — {h}")
+            elif cmd in self._aliases:
+                self._print(f"  {cmd}: aliased to {self._aliases[cmd]}")
             else:
-                self._print(f"  {cmd}: shell built-in command")
-            self._last_exit_code = 0
-        else:
-            found = shutil.which(cmd)
-            if found:
-                self._print(f"  {found}")
-                self._last_exit_code = 0
-            else:
-                self._print(f"  {cmd}: not found")
-                self._last_exit_code = 1
+                found = shutil.which(cmd)
+                if found:
+                    self._print(f"  {found}")
+                else:
+                    self._print(f"  which: no {cmd} in ({os.environ.get('PATH', '')})")
+                    all_found = False
+        self._last_exit_code = 0 if all_found else 1
 
     def _cmd_type(self, args: str = "") -> None:
         """Describe a command (like Unix type)."""
@@ -4623,6 +4613,7 @@ _shell_commands = {
     "rev": ShellREPL._cmd_rev,
     "paste": ShellREPL._cmd_paste,
     "comm": ShellREPL._cmd_comm,
+    "column": ShellREPL._cmd_column,
     "test": ShellREPL._cmd_test,
     "[": ShellREPL._cmd_test,
     "printf": ShellREPL._cmd_printf,
@@ -4638,6 +4629,19 @@ _shell_commands = {
     "awk": ShellREPL._cmd_awk,
     "which": ShellREPL._cmd_which,
     "type": ShellREPL._cmd_type,
+    "tsort": ShellREPL._cmd_tsort,
+    "df": ShellREPL._cmd_df,
+    "readlink": ShellREPL._cmd_readlink,
+    "file": ShellREPL._cmd_file,
+    "export": ShellREPL._cmd_export,
+    "unset": ShellREPL._cmd_unset,
+    "setenv": ShellREPL._cmd_setenv,
+    "timeout": ShellREPL._cmd_timeout,
+    "watch": ShellREPL._cmd_watch,
+    "strings": ShellREPL._cmd_strings,
+    "base64": ShellREPL._cmd_base64,
+    "cksum": ShellREPL._cmd_cksum,
+    "split": ShellREPL._cmd_split,
     "history": ShellREPL._cmd_history,
     "fc": ShellREPL._cmd_fc,
     "alias": ShellREPL._cmd_alias,

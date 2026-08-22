@@ -10,6 +10,8 @@ Usage:
     maintainer = TruthMaintainer()
     maintainer.run_maintenance(encoder, texts, meaning_tags, optimizer)
 """
+import threading
+
 import numpy as np
 from typing import Dict, List, Optional, Tuple
 
@@ -212,11 +214,21 @@ def _encode_tokens(text: str, vocab: dict, max_len: int) -> np.ndarray:
 
 # Module-level singleton
 _maintainer: Optional[TruthMaintainer] = None
+_maintainer_lock = threading.Lock()
 
 
 def get_truth_maintainer() -> TruthMaintainer:
     """Get or create the truth maintainer singleton."""
     global _maintainer
     if _maintainer is None:
-        _maintainer = TruthMaintainer()
+        with _maintainer_lock:
+            if _maintainer is None:
+                _maintainer = TruthMaintainer()
     return _maintainer
+
+
+def reset_truth_maintainer() -> None:
+    """Reset the singleton (for testing)."""
+    global _maintainer
+    with _maintainer_lock:
+        _maintainer = None

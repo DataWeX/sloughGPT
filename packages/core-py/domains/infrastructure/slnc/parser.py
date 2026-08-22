@@ -274,24 +274,24 @@ class SLNCParser:
         try:
             if self._mm is not None:
                 self._mm.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("mmap close failed: %s", exc)
         try:
             os.close(self._fd)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("fd close failed: %s", exc)
         self._mm = None
 
     def __del__(self):
         try:
             if self._mm is not None:
                 self._mm.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("mmap close failed in __del__: %s", exc)
         try:
             os.close(self._fd)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("fd close failed in __del__: %s", exc)
 
     def __repr__(self) -> str:
         return (

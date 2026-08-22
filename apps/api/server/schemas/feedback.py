@@ -3,7 +3,6 @@ Feedback Schemas - Data models for feedback
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
-from datetime import datetime
 
 
 class FeedbackRequest(BaseModel):

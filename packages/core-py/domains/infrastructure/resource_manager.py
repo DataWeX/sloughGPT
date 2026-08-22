@@ -30,6 +30,7 @@ All values are computable from ``CpuTopology`` and overridable via env vars:
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from contextlib import contextmanager
@@ -38,6 +39,8 @@ from functools import lru_cache
 from typing import Optional
 
 from domains.infrastructure.cpu_topology import CpuTopology, detect_topology
+
+logger = logging.getLogger("slo.infrastructure.resource_manager")
 
 
 def _env_int(name: str, default: int) -> int:

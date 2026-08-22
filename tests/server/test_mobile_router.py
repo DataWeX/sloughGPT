@@ -8,7 +8,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.mobile import MobileRouter, router
+from apps.api.server.routers.mobile import MobileRouter
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 

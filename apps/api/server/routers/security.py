@@ -1,6 +1,7 @@
 """
 Security Router - Audit logs and API key management
 """
+import asyncio
 from fastapi import APIRouter, Query
 from typing import Optional
 
@@ -34,7 +35,7 @@ class SecurityRouter:
         from infrastructure.auth import get_audit_logger
         audit_logger = get_audit_logger()
         if history:
-            logs = audit_logger.file_query(limit=limit, event_type=event_type, before=before)
+            logs = await asyncio.to_thread(audit_logger.file_query, limit=limit, event_type=event_type, before=before)
         else:
             logs = audit_logger.logs[-limit:]
             if event_type:

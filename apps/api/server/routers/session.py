@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import time
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, AsyncIterator
@@ -103,9 +103,11 @@ class SessionRouter:
         _inspector_start = time.time()
         try:
             def _fetch_messages():
+                from domains.infrastructure.session_core import SessionCore
                 return SessionCore.get_messages(session_id)
 
             def _fetch_feedback():
+                from domains.feedback.message_feedback import get_message_feedback
                 fb = get_message_feedback()
                 return fb.get_stats()
 
@@ -188,7 +190,6 @@ class SessionRouter:
     async def regenerate_session(self, session_id: str, request: Request) -> StreamingResponse:
         """Regenerate the last assistant response for a session."""
         from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
-        _regen_t0 = time.time()
         _op_id = None
         try:
             mgr = get_cancel_manager()

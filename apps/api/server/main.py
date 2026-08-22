@@ -26,7 +26,6 @@ import sys
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,7 +67,7 @@ logger.info(
 
 
 # ── Config ──────────────────────────────────────────────────────────
-from config import GenerationConfig, ServerConfig  # noqa: E402
+from config import ServerConfig  # noqa: E402
 
 cfg = ServerConfig.from_env()
 
