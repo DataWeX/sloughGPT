@@ -310,9 +310,8 @@ class InferRouter:
                 if tokenizer is not None and hasattr(tokenizer, 'decode'):
                     text = tokenizer.decode(req.ids)
                     return DetokenizeResponse(text=text, count=len(req.ids))
-            except Exception:
-                pass
-            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            except Exception as exc:
+                logger.debug("Tokenizer decode failed: %s", exc)
 
         # Fallback: interpret IDs as byte values
         try:

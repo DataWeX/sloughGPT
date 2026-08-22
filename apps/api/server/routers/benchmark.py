@@ -58,24 +58,21 @@ def _process_memory_mb() -> float:
     try:
         import psutil
         return psutil.Process().memory_info().rss / (1024 * 1024)
-    except Exception:
-        pass
-    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+    except Exception as exc:
+        logger.debug("psutil memory check failed: %s", exc)
     try:
         import os
         with open("/proc/self/statm") as fh:
             resident_pages = int(fh.read().split()[1])
         page_size_kb = os.sysconf("SC_PAGE_SIZE") / 1024
         return resident_pages * page_size_kb / 1024
-    except Exception:
-        pass
-    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+    except Exception as exc:
+        logger.debug("/proc/self/statm fallback failed: %s", exc)
     try:
         import resource
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-    except Exception:
-        pass
-    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+    except Exception as exc:
+        logger.debug("resource module fallback failed: %s", exc)
     return 0.0
 
 

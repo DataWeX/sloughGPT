@@ -194,8 +194,8 @@ class SessionRouter:
             mgr = get_cancel_manager()
             _op_id = mgr.register(OpType.INFERENCE, f"regenerate:{session_id}")
             mgr.start(_op_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("CancelManager registration failed for regenerate: %s", exc)
 
         async def generate() -> AsyncIterator[str]:
             """generate."""
@@ -263,8 +263,8 @@ class SessionRouter:
                 if _op_id:
                     try:
                         get_cancel_manager().finish(_op_id)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("CancelManager.finish failed for regenerate: %s", exc)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 

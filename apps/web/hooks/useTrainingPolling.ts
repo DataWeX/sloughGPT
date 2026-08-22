@@ -4,6 +4,8 @@ import { useCallback, useRef, useEffect } from 'react'
 import { trainingJobsController, type TrainingJob } from '@/lib/controllers'
 import { readTraining, writeTraining, type TrainingToastFn } from '@/lib/app-shell'
 
+const MAX_POLL_RETRIES = 10
+
 export interface TrainingPolling {
   startStandardPoll: (jobId: string, opts?: { addToast?: TrainingToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string }) => void
   startTurboPoll: (addToast?: TrainingToastFn) => void
@@ -16,14 +18,21 @@ export interface TrainingPolling {
  *
  * - Standard poll: GET /training/jobs/{id} every 3s.
  * - Turbo poll: GET /auto-train/status every 3s.
+ *
+ * Resilient: retries on transient network errors, warns user after
+ * MAX_POLL_RETRIES consecutive failures, only kills poll after threshold.
  */
 export function useTrainingPolling(): TrainingPolling {
   const standardPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const turboPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const standardRetryRef = useRef(0)
+  const turboRetryRef = useRef(0)
 
   const clearAllPolls = useCallback(() => {
     if (standardPollRef.current) { clearInterval(standardPollRef.current); standardPollRef.current = null }
     if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
+    standardRetryRef.current = 0
+    turboRetryRef.current = 0
   }, [])
 
   const startStandardPoll = useCallback((
@@ -31,10 +40,12 @@ export function useTrainingPolling(): TrainingPolling {
     opts?: { addToast?: TrainingToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string },
   ) => {
     if (standardPollRef.current) { clearInterval(standardPollRef.current); standardPollRef.current = null }
+    standardRetryRef.current = 0
 
     const pollId = setInterval(async () => {
       try {
         const job = await trainingJobsController.get(jobId)
+        standardRetryRef.current = 0
         if (!job) { clearInterval(pollId); standardPollRef.current = null; return }
 
         if (job.status === 'running') {
@@ -49,6 +60,7 @@ export function useTrainingPolling(): TrainingPolling {
             stepsPerSec: job.steps_per_sec ?? current.stepsPerSec,
             eta: job.eta_s ?? current.eta,
             elapsedSeconds: job.elapsed_s ?? current.elapsedSeconds,
+            avgQuality: job.avg_quality ?? current.avgQuality,
           }
           if (job.loss != null || job.train_loss != null) {
             const loss = (job.loss ?? job.train_loss) as number
@@ -69,6 +81,7 @@ export function useTrainingPolling(): TrainingPolling {
             checkpoint: job.checkpoint ?? null,
             finalLoss: (result?.final_loss as number) ?? job.loss ?? job.train_loss ?? null,
             modelPath: (result?.model_path as string) ?? null,
+            avgQuality: job.avg_quality ?? (result?.avg_quality as number) ?? null,
           })
           opts?.addToast?.(opts.completeMessage ?? 'Training complete', 'success')
           opts?.onComplete?.(job)
@@ -76,8 +89,13 @@ export function useTrainingPolling(): TrainingPolling {
           writeTraining({ phase: 'error', error: job.error || 'Training failed' })
           opts?.addToast?.(job.error || 'Training failed', 'error')
         }
-      } catch {
-        clearInterval(pollId); standardPollRef.current = null
+      } catch (e) {
+        standardRetryRef.current++
+        if (standardRetryRef.current >= MAX_POLL_RETRIES) {
+          clearInterval(pollId); standardPollRef.current = null
+          writeTraining({ phase: 'error', error: 'Lost connection to training server' })
+          opts?.addToast?.('Lost connection to training — check server status', 'error')
+        }
       }
     }, 3000)
     standardPollRef.current = pollId
@@ -85,10 +103,12 @@ export function useTrainingPolling(): TrainingPolling {
 
   const startTurboPoll = useCallback((addToast?: TrainingToastFn) => {
     if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
+    turboRetryRef.current = 0
 
     const pollId = setInterval(async () => {
       try {
         const s = await trainingJobsController.getTurboStatus()
+        turboRetryRef.current = 0
         const current = readTraining()
 
         if (s.status === 'running' || s.status === 'idle') {
@@ -100,6 +120,7 @@ export function useTrainingPolling(): TrainingPolling {
             stepsPerSec: s.steps_per_sec ?? current.stepsPerSec,
             eta: s.eta_s ?? current.eta,
             elapsedSeconds: s.elapsed_s ?? current.elapsedSeconds,
+            avgQuality: s.avg_quality ?? current.avgQuality,
           })
           return
         }
@@ -111,14 +132,20 @@ export function useTrainingPolling(): TrainingPolling {
             phase: 'complete', progress: 100,
             checkpoint: (s.result?.checkpoint as string) ?? null,
             finalLoss: (s.result?.final_loss as number) ?? null,
+            avgQuality: (s.result?.avg_quality as number) ?? s.avg_quality ?? null,
           })
           addToast?.('Turbo training complete!', 'success')
         } else {
           writeTraining({ phase: 'error', error: s.error || 'Training failed' })
           addToast?.(s.error || 'Training failed', 'error')
         }
-      } catch {
-        clearInterval(pollId); turboPollRef.current = null
+      } catch (e) {
+        turboRetryRef.current++
+        if (turboRetryRef.current >= MAX_POLL_RETRIES) {
+          clearInterval(pollId); turboPollRef.current = null
+          writeTraining({ phase: 'error', error: 'Lost connection to training server' })
+          addToast?.('Lost connection to training — check server status', 'error')
+        }
       }
     }, 3000)
     turboPollRef.current = pollId

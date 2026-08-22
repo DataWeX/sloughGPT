@@ -47,8 +47,8 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
   setEvalResult: (r: string | null) => void
   resetTraining: () => void
   stopTraining: () => void
-  pauseTraining: () => Promise<void>
-  resumeTraining: () => Promise<void>
+  pauseTraining: (addToast?: TrainingToastFn) => Promise<void>
+  resumeTraining: (addToast?: TrainingToastFn) => Promise<void>
   startSSETraining: (body: Record<string, unknown>, addToast: TrainingToastFn, onCheckpointUpdate?: () => void) => void
   startFineTune: (params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean; loraRank?: number; loraAlpha?: number }, addToast: TrainingToastFn, onComplete?: () => void) => void
   startVisualTraining: (params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean }, addToast: TrainingToastFn, onComplete?: () => void) => void
@@ -152,12 +152,22 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     resetTraining()
   }, [resetTraining])
 
-  const pauseTraining = useCallback(async () => {
-    try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch (e: unknown) { console.warn('[training] pause failed:', (e instanceof Error ? e.message : e) || e) }
+  const pauseTraining = useCallback(async (addToast?: TrainingToastFn) => {
+    try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch (e: unknown) {
+      const msg = extractErrorMessage(e, 'Pause failed')
+      _log.warning('pause failed', { error: msg })
+      addToast?.(msg, 'error')
+      writeTraining({ message: msg })
+    }
   }, [])
 
-  const resumeTraining = useCallback(async () => {
-    try { await trainingJobsController.resumeTraining(); writeTraining({ message: '' }) } catch (e: unknown) { console.warn('[training] resume failed:', (e instanceof Error ? e.message : e) || e) }
+  const resumeTraining = useCallback(async (addToast?: TrainingToastFn) => {
+    try { await trainingJobsController.resumeTraining(); writeTraining({ message: '' }) } catch (e: unknown) {
+      const msg = extractErrorMessage(e, 'Resume failed')
+      _log.warning('resume failed', { error: msg })
+      addToast?.(msg, 'error')
+      writeTraining({ message: msg })
+    }
   }, [])
 
   const startFineTune = useCallback((
