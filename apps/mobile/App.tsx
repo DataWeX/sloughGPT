@@ -27,36 +27,22 @@ import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
 import {SearchScreen} from './src/screens/SearchScreen';
 import {ProvidersScreen} from './src/screens/ProvidersScreen';
 import {SoulsScreen} from './src/screens/SoulsScreen';
-import {TokenizerScreen} from './src/screens/TokenizerScreen';
-import {CompareScreen} from './src/screens/CompareScreen';
 import {DatasetsScreen} from './src/screens/DatasetsScreen';
 import {DatasetDetailScreen} from './src/screens/DatasetDetailScreen';
-import {ExportScreen} from './src/screens/ExportScreen';
-import {ImportScreen} from './src/screens/ImportScreen';
 import {NotificationSettingsScreen} from './src/screens/NotificationSettingsScreen';
 import {WhatsNewScreen} from './src/screens/WhatsNewScreen';
 import {LegalScreen} from './src/screens/LegalScreen';
-import {BenchmarkScreen} from './src/screens/BenchmarkScreen';
 import {AdaptersScreen} from './src/screens/AdaptersScreen';
 import {FeedbackScreen} from './src/screens/FeedbackScreen';
-import {WorkflowScreen} from './src/screens/WorkflowScreen';
 import {VoiceScreen} from './src/screens/VoiceScreen';
 import {CompanionScreen} from './src/screens/CompanionScreen';
 import {LearnScreen} from './src/screens/LearnScreen';
 import {AgentsScreen} from './src/screens/AgentsScreen';
 import {MultimodalScreen} from './src/screens/MultimodalScreen';
 import {ModelDetailScreen} from './src/screens/ModelDetailScreen';
-import {ErrorsScreen} from './src/screens/ErrorsScreen';
-import {SecurityScreen} from './src/screens/SecurityScreen';
 import {ImagesScreen} from './src/screens/ImagesScreen';
-import {ExperimentsScreen} from './src/screens/ExperimentsScreen';
-import {FilesScreen} from './src/screens/FilesScreen';
-import {RegistryScreen} from './src/screens/RegistryScreen';
 import {MemoryScreen} from './src/screens/MemoryScreen';
 import {AuthScreen} from './src/screens/AuthScreen';
-import {MonitoringScreen} from './src/screens/MonitoringScreen';
-import {ShellScreen} from './src/screens/ShellScreen';
-import {VMConsoleScreen} from './src/screens/VMConsoleScreen';
 import {useSettingsStore} from './src/stores/settings-store';
 import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
@@ -86,35 +72,21 @@ function ToolsStack() {
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="Health" component={HealthScreen} />
       <Stack.Screen name="Souls" component={SoulsScreen} />
-      <Stack.Screen name="Tokenizer" component={TokenizerScreen} />
-      <Stack.Screen name="Compare" component={CompareScreen} />
       <Stack.Screen name="Datasets" component={DatasetsScreen} />
       <Stack.Screen name="DatasetDetail" component={DatasetDetailScreen} />
-      <Stack.Screen name="Export" component={ExportScreen} />
-      <Stack.Screen name="Import" component={ImportScreen} />
       <Stack.Screen name="Notifications" component={NotificationSettingsScreen} />
       <Stack.Screen name="WhatsNew" component={WhatsNewScreen} />
       <Stack.Screen name="Legal" component={LegalScreen} />
-      <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
       <Stack.Screen name="Adapters" component={AdaptersScreen} />
       <Stack.Screen name="Feedback" component={FeedbackScreen} />
-      <Stack.Screen name="Workflow" component={WorkflowScreen} />
       <Stack.Screen name="Voice" component={VoiceScreen} />
       <Stack.Screen name="Companion" component={CompanionScreen} />
       <Stack.Screen name="Learn" component={LearnScreen} />
       <Stack.Screen name="Agents" component={AgentsScreen} />
       <Stack.Screen name="Multimodal" component={MultimodalScreen} />
       <Stack.Screen name="ModelDetail" component={ModelDetailScreen} />
-      <Stack.Screen name="Errors" component={ErrorsScreen} />
-      <Stack.Screen name="Security" component={SecurityScreen} />
       <Stack.Screen name="Images" component={ImagesScreen} />
-      <Stack.Screen name="Experiments" component={ExperimentsScreen} />
-      <Stack.Screen name="Files" component={FilesScreen} />
-      <Stack.Screen name="Registry" component={RegistryScreen} />
       <Stack.Screen name="Memory" component={MemoryScreen} />
-      <Stack.Screen name="Monitoring" component={MonitoringScreen} />
-      <Stack.Screen name="Shell" component={ShellScreen} />
-      <Stack.Screen name="VMConsole" component={VMConsoleScreen} />
       <Stack.Screen name="Auth" component={AuthScreen} />
     </Stack.Navigator>
   );
@@ -133,35 +105,21 @@ function SettingsStack() {
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="Providers" component={ProvidersScreen} />
       <Stack.Screen name="Souls" component={SoulsScreen} />
-      <Stack.Screen name="Tokenizer" component={TokenizerScreen} />
-      <Stack.Screen name="Compare" component={CompareScreen} />
       <Stack.Screen name="Datasets" component={DatasetsScreen} />
       <Stack.Screen name="DatasetDetail" component={DatasetDetailScreen} />
-      <Stack.Screen name="Export" component={ExportScreen} />
-      <Stack.Screen name="Import" component={ImportScreen} />
       <Stack.Screen name="Notifications" component={NotificationSettingsScreen} />
       <Stack.Screen name="WhatsNew" component={WhatsNewScreen} />
       <Stack.Screen name="Legal" component={LegalScreen} />
-      <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
       <Stack.Screen name="Adapters" component={AdaptersScreen} />
       <Stack.Screen name="Feedback" component={FeedbackScreen} />
-      <Stack.Screen name="Workflow" component={WorkflowScreen} />
       <Stack.Screen name="Voice" component={VoiceScreen} />
       <Stack.Screen name="Companion" component={CompanionScreen} />
       <Stack.Screen name="Learn" component={LearnScreen} />
       <Stack.Screen name="Agents" component={AgentsScreen} />
       <Stack.Screen name="Multimodal" component={MultimodalScreen} />
       <Stack.Screen name="ModelDetail" component={ModelDetailScreen} />
-      <Stack.Screen name="Errors" component={ErrorsScreen} />
-      <Stack.Screen name="Security" component={SecurityScreen} />
       <Stack.Screen name="Images" component={ImagesScreen} />
-      <Stack.Screen name="Experiments" component={ExperimentsScreen} />
-      <Stack.Screen name="Files" component={FilesScreen} />
-      <Stack.Screen name="Registry" component={RegistryScreen} />
       <Stack.Screen name="Memory" component={MemoryScreen} />
-      <Stack.Screen name="Monitoring" component={MonitoringScreen} />
-      <Stack.Screen name="Shell" component={ShellScreen} />
-      <Stack.Screen name="VMConsole" component={VMConsoleScreen} />
       <Stack.Screen name="Auth" component={AuthScreen} />
     </Stack.Navigator>
   );

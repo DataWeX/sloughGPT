@@ -31,6 +31,7 @@ export default function ExportPage() {
   const [exporting, setExporting] = useState(false)
   const [exportResult, setExportResult] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [formatLoadError, setFormatLoadError] = useState<string | null>(null)
 
   const [trainingPairs, setTrainingPairs] = useState<Record<string, unknown>[] | null>(null)
   const [exportingPairs, setExportingPairs] = useState(false)
@@ -48,14 +49,9 @@ export default function ExportPage() {
         }))
         setFormats(list)
       })
-      .catch(() => {
-        setFormats([
-          { key: 'sou', label: 'SOU', description: 'SloughGPT self-contained + personality' },
-          { key: 'safetensors', label: 'SafeTensors', description: 'Safe, fast (recommended)' },
-          { key: 'onnx', label: 'ONNX', description: 'Cross-platform (server, web, TF.js)' },
-          { key: 'gguf_q4_k_m', label: 'GGUF Q4_K_M', description: 'Mobile (llama.rn)' },
-          { key: 'torch', label: 'PyTorch', description: 'Training checkpoint' },
-        ])
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        setFormatLoadError(`Failed to load export formats: ${msg}`)
       })
   }, [])
 
@@ -132,6 +128,11 @@ export default function ExportPage() {
         <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {exportError}
           <button className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
+        </div>
+      )}
+      {formatLoadError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {formatLoadError}
         </div>
       )}
 

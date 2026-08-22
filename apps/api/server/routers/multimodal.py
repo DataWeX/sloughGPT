@@ -442,10 +442,10 @@ class MultimodalRouter:
         try:
             processor = PDFVLMProcessor(max_pages=10)
             if per_page:
-                results = processor.analyze_pages(tmp_path, question=question, max_new_tokens=max_new_tokens)
+                results = await asyncio.to_thread(processor.analyze_pages, tmp_path, question=question, max_new_tokens=max_new_tokens)
                 text = "\n\n".join(f"--- Page {r['page']} ---\n{r['text']}" for r in results)
             else:
-                text = processor.analyze(tmp_path, question=question, max_new_tokens=max_new_tokens)
+                text = await asyncio.to_thread(processor.analyze, tmp_path, question=question, max_new_tokens=max_new_tokens)
             return success_response(data={
                 "analysis": text, "filename": file.filename, "pages_analyzed": 10,
                 "method": "vlm" if processor._get_vlm() is not None else "text_extract",
@@ -466,14 +466,14 @@ class MultimodalRouter:
                 tmp_path = tmp.name
             try:
                 processor = VideoProcessor(max_frames=num_frames)
-                frames = processor.extract_frames(tmp_path, num_frames)
+                frames = await asyncio.to_thread(processor.extract_frames, tmp_path, num_frames)
                 mgr = get_multimodal_manager()
                 engine = getattr(mgr, "_multimodal_engine", None)
                 if engine is None:
                     raise_error("Multimodal engine not initialized", "E_INTERNAL", status_code=500)
-                video_embedding = processor.encode_video(frames, engine.vision)
+                video_embedding = await asyncio.to_thread(processor.encode_video, frames, engine.vision)
                 first_frame = frames[0].reshape(1, 224, 224, 3)
-                caption = engine.generate(first_frame, max_len=20, temperature=0.8)
+                caption = await asyncio.to_thread(engine.generate, first_frame, max_len=20, temperature=0.8)
                 return success_response(data={"caption": caption.text, "num_frames": len(frames),
                         "video_embedding_shape": list(video_embedding.data.shape)})
             finally:
@@ -494,7 +494,8 @@ class MultimodalRouter:
         if not mgr.capabilities.speech_to_text:
             raise_error("Server ASR not available.", "E_NOT_IMPLEMENTED", status_code=501)
         try:
-            result = mgr.recognize_speech(await file.read(), language=language)
+            audio_data = await file.read()
+            result = await asyncio.to_thread(mgr.recognize_speech, audio_data, language=language)
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
             return success_response(data={"text": result.text, "confidence": result.confidence,
                     "language": result.language or language, "duration": result.duration, "elapsed_ms": round(_elapsed_ms, 1)})
@@ -512,7 +513,7 @@ class MultimodalRouter:
             if self._tts is None:
                 self._tts = TTSEngine()
             tts = self._tts
-            waveform = tts.text_to_waveform(text)
+            waveform = await asyncio.to_thread(tts.text_to_waveform, text)
             buffer = io.BytesIO()
             with wave.open(buffer, 'wb') as wf:
                 wf.setnchannels(1)
@@ -541,9 +542,9 @@ class MultimodalRouter:
                 self._vae = SloVAE(latent_dim=64)
                 self._diffusion = LatentDiffusionModel(latent_dim=64)
                 self._text_encoder = TextEncoder(vocab_size=4096, embed_dim=256)
-            text_embeddings = self._text_encoder.encode_text([prompt])
-            latents = self._diffusion.sample(text_embeddings, num_steps=steps, guidance_scale=guidance_scale)
-            image_np = self._vae.decode(latents)
+            text_embeddings = await asyncio.to_thread(self._text_encoder.encode_text, [prompt])
+            latents = await asyncio.to_thread(self._diffusion.sample, text_embeddings, num_steps=steps, guidance_scale=guidance_scale)
+            image_np = await asyncio.to_thread(self._vae.decode, latents)
             image_np = np.clip(image_np[0].transpose(1, 2, 0), 0, 1)
             image_np = (image_np * 255).astype(np.uint8)
             img = Image.fromarray(image_np)
@@ -575,7 +576,6 @@ class MultimodalRouter:
         datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
         datasets_dir.mkdir(parents=True, exist_ok=True)
         output_path = datasets_dir / f"{req.name}.jsonl"
-        entries = 0
         auto_captioned = False
         if req.auto_caption:
             try:
@@ -584,18 +584,23 @@ class MultimodalRouter:
             except Exception as exc:
                 auto_captioned = False
                 logger.debug("Auto-caption init failed: %s", exc)
-        with open(output_path, "w") as f:
-            for img_path in image_files:
-                entry = {"image_path": str(img_path), "caption": ""}
-                if req.auto_caption and auto_captioned:
-                    try:
-                        caps = mgr.caption_image(str(img_path))
-                        if caps:
-                            entry["caption"] = caps[0].text
-                    except Exception as exc:
-                        logger.debug("Per-image caption failed for %s: %s", img_path, exc)
-                f.write(json.dumps(entry) + "\n")
-                entries += 1
+        def _build_dataset():
+            entries = 0
+            with open(output_path, "w") as f:
+                for img_path in image_files:
+                    entry = {"image_path": str(img_path), "caption": ""}
+                    if req.auto_caption and auto_captioned:
+                        try:
+                            caps = mgr.caption_image(str(img_path))
+                            if caps:
+                                entry["caption"] = caps[0].text
+                        except Exception as exc:
+                            logger.debug("Per-image caption failed for %s: %s", img_path, exc)
+                    f.write(json.dumps(entry) + "\n")
+                    entries += 1
+            return entries
+
+        entries = await asyncio.to_thread(_build_dataset)
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         safe_audit_log("multimodal.visual_dataset", resource=req.name, detail=f"entries={entries} auto_caption={auto_captioned} elapsed={_elapsed_ms:.0f}ms")
         return success_response(data={"status": "created", "dataset": req.name, "path": str(output_path),

@@ -566,11 +566,15 @@ class KBRouter:
         try:
             from domains.cognitive.rag_service import get_rag_service
             rag_svc = get_rag_service()
-            for chunk in chunks:
-                rag_svc.add_document(
-                    content=chunk,
-                    metadata={"source": f"file:{file.filename or 'unknown'}", "topic": topic},
-                )
+
+            def _ingest_rag():
+                for chunk in chunks:
+                    rag_svc.add_document(
+                        content=chunk,
+                        metadata={"source": f"file:{file.filename or 'unknown'}", "topic": topic},
+                    )
+
+            await asyncio.to_thread(_ingest_rag)
         except Exception as e:
             logger.warning("RAG auto-ingest failed for file ingest (file=%s): %s", file.filename, e, exc_info=True)
 
@@ -652,8 +656,13 @@ class KBRouter:
 
         idx = FileIndex()
         extensions = set(req.extensions) if req.extensions else None
-        stats = idx.index_directory(req.path, extensions=extensions)
-        results = idx.search(req.query, top_k=req.top_k)
+
+        def _index_and_search():
+            stats = idx.index_directory(req.path, extensions=extensions)
+            results = idx.search(req.query, top_k=req.top_k)
+            return stats, results
+
+        stats, results = await asyncio.to_thread(_index_and_search)
 
         return success_response(data={
             "results": results,
@@ -670,9 +679,12 @@ class KBRouter:
 
         memory = self._get_memory()
         dup = DuplicateDetector(threshold=req.threshold)
-        dup.load_from_store(memory._vector_store)
 
-        is_dup, best_match, score = dup.check(req.content, embed_fn=memory._get_embedding)
+        def _check_dup():
+            dup.load_from_store(memory._vector_store)
+            return dup.check(req.content, embed_fn=memory._get_embedding)
+
+        is_dup, best_match, score = await asyncio.to_thread(_check_dup)
 
         return success_response(data={
             "is_duplicate": is_dup,
@@ -687,10 +699,14 @@ class KBRouter:
 
         memory = self._get_memory()
         cat = AutoCategorizer()
-        cat.load_from_store(memory._vector_store)
 
-        topic = cat.categorize(req.content, embed_fn=memory._get_embedding)
-        suggestions = cat.suggest_topics(req.content, top_k=3)
+        def _categorize():
+            cat.load_from_store(memory._vector_store)
+            topic = cat.categorize(req.content, embed_fn=memory._get_embedding)
+            suggestions = cat.suggest_topics(req.content, top_k=3)
+            return topic, suggestions
+
+        topic, suggestions = await asyncio.to_thread(_categorize)
 
         return {
             "topic": topic,
@@ -703,14 +719,17 @@ class KBRouter:
 
         memory = self._get_memory()
         gap = KnowledgeGapDetector()
-        gap.load_from_store(memory._vector_store)
 
-        gaps = gap.find_gaps()
+        def _find_gaps():
+            gap.load_from_store(memory._vector_store)
+            return gap.find_gaps(), gap._topic_counts
+
+        gaps, topic_counts = await asyncio.to_thread(_find_gaps)
 
         return {
             "gaps": gaps,
             "total_facts": memory._fact_counter,
-            "topics": list(gap._topic_counts.keys()),
+            "topics": list(topic_counts.keys()),
         }
 
     async def bulk_ingest(self, req: BulkIngestRequest) -> dict:
@@ -821,10 +840,10 @@ class KBRouter:
         """Check if a trained embedder checkpoint exists."""
         from domains.inference.slo_embedder import _EMBEDDER_PATH, SloTextEmbedder
 
-        exists = _EMBEDDER_PATH.exists()
+        exists = await asyncio.to_thread(lambda: _EMBEDDER_PATH.exists())
         info = None
         if exists:
-            emb = SloTextEmbedder.load()
+            emb = await asyncio.to_thread(SloTextEmbedder.load)
             if emb:
                 info = {
                     "embed_dim": emb.embed_dim,

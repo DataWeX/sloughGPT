@@ -91,8 +91,14 @@ export default function VoicePage() {
   return (
     <PageContainer title="Voice" subtitle="Text-to-speech via browser speech synthesis">
       <KpiGrid>
-        <StatCard label="Server TTS" value="Not supported" />
-        <StatCard label="Engine" value="Browser SpeechSynthesis" />
+        <StatCard
+          label="Server TTS"
+          value={status?.server_tts ? 'Available' : 'Not supported'}
+        />
+        <StatCard
+          label="Engine"
+          value={status?.model ? `Server (${status.model})` : 'Browser SpeechSynthesis'}
+        />
         <StatCard label="TTS Calls" value={ttsCount} />
       </KpiGrid>
 

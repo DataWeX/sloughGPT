@@ -88,7 +88,9 @@ class AgentsRouter:
         Side effects:
             Reads from the agent system singleton.
         """
-        return [AgentOut(**a) for a in self._get_system().list()]
+        system = self._get_system()
+        agents = await asyncio.to_thread(system.list)
+        return [AgentOut(**a) for a in agents]
 
     async def create_agent(self, req: AgentCreate) -> dict:
         """Create a new agent with the given name, description, tools, and instructions.
@@ -108,9 +110,11 @@ class AgentsRouter:
         """
         agent_id = req.id or req.name.lower().replace(" ", "-").replace("_", "-")[:32]
         system = self._get_system()
-        if system.get(agent_id):
+        existing = await asyncio.to_thread(system.get, agent_id)
+        if existing:
             raise_error("Agent ID already exists", "E_INFRA_BUSY", status_code=409)
-        result = system.create(
+        result = await asyncio.to_thread(
+            system.create,
             agent_id=agent_id,
             name=req.name,
             description=req.description,
@@ -145,7 +149,8 @@ class AgentsRouter:
             Raises 404 if no agent with the given ID is found.
         """
         system = self._get_system()
-        result = system.update(
+        result = await asyncio.to_thread(
+            system.update,
             agent_id=agent_id,
             name=req.name,
             description=req.description,
@@ -172,7 +177,7 @@ class AgentsRouter:
             Logs an audit entry for agent deletion.
             Raises 404 if no agent with the given ID is found.
         """
-        if not self._get_system().delete(agent_id):
+        if not await asyncio.to_thread(self._get_system().delete, agent_id):
             raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("agent.delete", resource=agent_id)
         return success_response(data={"status": "deleted"})
@@ -376,14 +381,14 @@ class AgentsRouter:
         """List orchestration run history, newest first."""
         from domains.agents.run_history import get_agent_run_store
 
-        runs = get_agent_run_store().list_runs(limit=max(1, min(int(limit), 200)))
+        runs = await asyncio.to_thread(get_agent_run_store().list_runs, limit=max(1, min(int(limit), 200)))
         return {"runs": runs, "count": len(runs)}
 
     async def get_run(self, run_id: str) -> dict:
         """Return a single orchestration run record."""
         from domains.agents.run_history import get_agent_run_store
 
-        record = get_agent_run_store().get(run_id)
+        record = await asyncio.to_thread(get_agent_run_store().get, run_id)
         if record is None:
             raise_error("Run not found", "E_NOT_FOUND", status_code=404)
         return record

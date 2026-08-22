@@ -4634,6 +4634,8 @@ _shell_commands = {
     "who": ShellREPL._cmd_who,
     "od": ShellREPL._cmd_od,
     "join": ShellREPL._cmd_join,
+    "sed": ShellREPL._cmd_sed,
+    "awk": ShellREPL._cmd_awk,
     "which": ShellREPL._cmd_which,
     "type": ShellREPL._cmd_type,
     "history": ShellREPL._cmd_history,

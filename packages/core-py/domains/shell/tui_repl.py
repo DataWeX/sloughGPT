@@ -200,6 +200,32 @@ class TuiRepl:
         self._output_surface = TextSurface()
         self._tui_io = TuiIo(self._output_surface)
 
+        # Wire interactive prompts into Console
+        self._repl.console._tui_repl = self
+
+        # Interactive select state (thread-safe signal between command thread and UI thread)
+        self._select_event = threading.Event()
+        self._select_title = ""
+        self._select_options: list[str] = []
+        self._select_result: str | None = None
+        self._select_idx = 0
+        self._select_scroll = 0
+        self._select_filter = ""
+
+        # Interactive confirm state
+        self._confirm_event = threading.Event()
+        self._confirm_message = ""
+        self._confirm_default = False
+        self._confirm_result: bool | None = None
+
+        # Interactive ask state
+        self._ask_event = threading.Event()
+        self._ask_message = ""
+        self._ask_default = ""
+        self._ask_result: str | None = None
+        self._ask_buf: list[str] = []
+        self._ask_cursor = 0
+
         self._old_io = None
         self._old_console_io = None
         self._log_surface = LogSurface(log_buffer)
@@ -227,6 +253,90 @@ class TuiRepl:
             fwd=fwd,
         )
         self._out_search_q = ""
+
+    # ── Interactive prompts (called from command threads) ──────────────
+
+    def prompt_select(self, title: str, options: list[str]) -> str:
+        """Block the calling thread until the user picks an option."""
+        if not options:
+            return ""
+        self._select_title = title
+        self._select_options = list(options)
+        self._select_idx = 0
+        self._select_scroll = 0
+        self._select_filter = ""
+        self._select_result = None
+        self._select_event.clear()
+        self._select_event.wait(timeout=300)
+        return self._select_result if self._select_result is not None else options[0]
+
+    def prompt_confirm(self, message: str, default: bool = False) -> bool:
+        """Block the calling thread until the user confirms yes/no."""
+        self._confirm_message = message
+        self._confirm_default = default
+        self._confirm_result = None
+        self._confirm_event.clear()
+        self._confirm_event.wait(timeout=300)
+        return self._confirm_result if self._confirm_result is not None else default
+
+    def prompt_ask(self, message: str, default: str = "") -> str:
+        """Block the calling thread until the user provides text input."""
+        self._ask_message = message
+        self._ask_default = default
+        self._ask_result = None
+        self._ask_buf = list(default) if default else []
+        self._ask_cursor = len(self._ask_buf)
+        self._ask_event.clear()
+        self._ask_event.wait(timeout=300)
+        return self._ask_result if self._ask_result is not None else default
+
+    def _render_select(self, regions: dict, win_output) -> None:
+        """Render the interactive select overlay on the output pane."""
+        filtered = [o for o in self._select_options if self._select_filter.lower() in o.lower()]
+        if not filtered:
+            filtered = list(self._select_options)
+        rows = regions["output"].rows
+        cols = regions["output"].cols
+        max_show = min(len(filtered), rows - 2)
+        lines: list[str] = []
+        lines.append(f"  {self._select_title}")
+        if self._select_filter:
+            lines.append(f"  Filter: {self._select_filter}_")
+        lines.append("")
+        for i in range(max_show):
+            idx = self._select_scroll + i
+            if idx >= len(filtered):
+                break
+            prefix = " > " if idx == self._select_idx else "   "
+            text = filtered[idx]
+            if len(prefix) + len(text) > cols - 2:
+                text = text[:cols - 2 - len(prefix)]
+            lines.append(f"{prefix}{text}")
+        if len(filtered) > max_show:
+            lines.append(f"   ({len(filtered)} items, {self._select_idx + 1}/{len(filtered)})")
+        lines.append("")
+        lines.append("  Enter: select  Esc: cancel  Type to filter")
+        self._output_surface.clear()
+        for line in lines:
+            self._output_surface.write(line)
+        self._blit(win_output, self._output_surface.render(rows, 0))
+
+    def _render_confirm(self, regions: dict, win_input) -> None:
+        """Render the confirm prompt overlay on the input pane."""
+        hint = "Y/n" if self._confirm_default else "y/N"
+        prompt = f"  {self._confirm_message} [{hint}] "
+        self._input_surface.clear()
+        self._input_surface.write(prompt)
+        self._blit(win_input, self._input_surface.render(1, 0))
+
+    def _render_ask(self, regions: dict, win_input) -> None:
+        """Render the ask prompt overlay on the input pane."""
+        suffix = f" [{self._ask_default}]" if self._ask_default else ""
+        prompt = f"  {self._ask_message}{suffix}: "
+        display = prompt + "".join(self._ask_buf) + "_"
+        self._input_surface.clear()
+        self._input_surface.write(display)
+        self._blit(win_input, self._input_surface.render(1, 0))
 
     def run(self) -> None:
         """Enter curses mode and start the event loop."""
@@ -872,6 +982,116 @@ class TuiRepl:
                 self._blit(win_console, self._log_surface.render(regions["console"].rows, self._log_scroll))
                 self._render_status(win_status, regions["status"].cols)
                 self._render_input(win_input, regions["input"].cols)
+                continue
+
+            # ── Interactive select mode ──────────────────────────────────
+            if self._select_event.is_set():
+                filtered = [o for o in self._select_options if self._select_filter.lower() in o.lower()]
+                if not filtered:
+                    filtered = list(self._select_options)
+                max_show = min(len(filtered), regions["output"].rows - 2)
+                if ch in (27, 7, 3):  # Esc / Ctrl+G / Ctrl+C — cancel
+                    self._select_result = None
+                    self._select_event.clear()
+                    _redraw()
+                elif ch == ord("\n"):  # Enter — accept
+                    if 0 <= self._select_idx < len(filtered):
+                        self._select_result = filtered[self._select_idx]
+                    else:
+                        self._select_result = None
+                    self._select_event.clear()
+                    _redraw()
+                elif ch in (curses.KEY_UP, 16):  # Up / Ctrl+P
+                    self._select_idx = max(0, self._select_idx - 1)
+                    if self._select_idx < self._select_scroll:
+                        self._select_scroll = self._select_idx
+                    _redraw()
+                elif ch in (curses.KEY_DOWN, 14):  # Down / Ctrl+N
+                    self._select_idx = min(len(filtered) - 1, self._select_idx + 1)
+                    if self._select_idx >= self._select_scroll + max_show:
+                        self._select_scroll = self._select_idx - max_show + 1
+                    _redraw()
+                elif ch == curses.KEY_PPAGE:  # Page Up
+                    self._select_idx = max(0, self._select_idx - max_show)
+                    self._select_scroll = max(0, self._select_scroll - max_show)
+                    _redraw()
+                elif ch == curses.KEY_NPAGE:  # Page Down
+                    self._select_idx = min(len(filtered) - 1, self._select_idx + max_show)
+                    if self._select_idx >= self._select_scroll + max_show:
+                        self._select_scroll = self._select_idx - max_show + 1
+                    _redraw()
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):  # Backspace — filter
+                    self._select_filter = self._select_filter[:-1]
+                    self._select_idx = 0
+                    self._select_scroll = 0
+                    _redraw()
+                elif 32 <= ch < 127:  # Printable — filter
+                    self._select_filter += chr(ch)
+                    self._select_idx = 0
+                    self._select_scroll = 0
+                    _redraw()
+                elif ch == -1:
+                    self._render_select(regions, win_output)
+                    continue
+                if self._select_event.is_set():
+                    self._render_select(regions, win_output)
+                continue
+
+            # ── Interactive confirm mode ──────────────────────────────────
+            if self._confirm_event.is_set():
+                if ch in (27, 7, 3):  # Esc / Ctrl+G / Ctrl+C — cancel
+                    self._confirm_result = not self._confirm_default
+                    self._confirm_event.clear()
+                    _redraw()
+                elif ch == ord("\n"):  # Enter — use default
+                    self._confirm_result = self._confirm_default
+                    self._confirm_event.clear()
+                    _redraw()
+                elif ch in (ord("y"), ord("Y")):
+                    self._confirm_result = True
+                    self._confirm_event.clear()
+                    _redraw()
+                elif ch in (ord("n"), ord("N")):
+                    self._confirm_result = False
+                    self._confirm_event.clear()
+                    _redraw()
+                elif ch == -1:
+                    self._render_confirm(regions, win_input)
+                    continue
+                if self._confirm_event.is_set():
+                    self._render_confirm(regions, win_input)
+                continue
+
+            # ── Interactive ask mode ──────────────────────────────────────
+            if self._ask_event.is_set():
+                if ch in (27, 7, 3):  # Esc / Ctrl+G / Ctrl+C — cancel
+                    self._ask_result = self._ask_default
+                    self._ask_event.clear()
+                    _redraw()
+                elif ch == ord("\n"):  # Enter — accept
+                    self._ask_result = "".join(self._ask_buf)
+                    self._ask_event.clear()
+                    _redraw()
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    if self._ask_buf:
+                        self._ask_buf.pop()
+                        self._ask_cursor = max(0, self._ask_cursor - 1)
+                    _redraw()
+                elif ch == curses.KEY_LEFT:
+                    self._ask_cursor = max(0, self._ask_cursor - 1)
+                    _redraw()
+                elif ch == curses.KEY_RIGHT:
+                    self._ask_cursor = min(len(self._ask_buf), self._ask_cursor + 1)
+                    _redraw()
+                elif 32 <= ch < 127:  # Printable — insert
+                    self._ask_buf.insert(self._ask_cursor, chr(ch))
+                    self._ask_cursor += 1
+                    _redraw()
+                elif ch == -1:
+                    self._render_ask(regions, win_input)
+                    continue
+                if self._ask_event.is_set():
+                    self._render_ask(regions, win_input)
                 continue
 
             if self._searching:

@@ -3,6 +3,9 @@ apps/mobile/ios/Pods/
 apps/mobile/ios/build/
 apps/mobile/ios/
 
+# Releases
+releases/
+
 # Design docs (not committed)
 LLM.md
 

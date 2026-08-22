@@ -608,10 +608,11 @@ class LinuxCommandsMixin:
         # Re-parse non-flags from clean_parts
         non_flags = [p for p in clean_parts if not p.startswith("-")]
         pattern = non_flags[0] if non_flags else ""
-        target = non_flags[1] if len(non_flags) > 1 else None
+        targets = non_flags[1:] if len(non_flags) > 1 else []
+        recursive = any(f in ("-r", "-R") for f in flags)
 
         if not pattern:
-            self._print("  Usage: grep <pattern> [file]")
+            self._print("  Usage: grep <pattern> [file...]")
             self._last_exit_code = 1
             return
 
@@ -621,86 +622,112 @@ class LinuxCommandsMixin:
             before_context = max(before_context, context)
 
         try:
-            if target:
-                target_path = os.path.expanduser(target)
-                vfs = self.os.vfs
-                if vfs and (target_path.startswith("/dev") or target_path.startswith("/proc")):
-                    content = vfs.read(target_path)
-                else:
-                    content = Path(target_path).read_text()
-                if content is None:
-                    self._print(f"  grep: {target}: No such file or directory")
-                    self._last_exit_code = 1
-                    return
-                lines = content.splitlines()
-            else:
-                lines = self._piped_input.splitlines()
-
             # Build regex
             kwargs = {"flags": _re.IGNORECASE} if ignore_case else {}
             if word_boundary:
                 pat = _re.compile(r"\b" + pattern + r"\b", **kwargs) if kwargs else _re.compile(r"\b" + pattern + r"\b")
             else:
                 pat = _re.compile(pattern, **kwargs) if kwargs else _re.compile(pattern)
-
-            matched_indices = set()
-            for idx, line in enumerate(lines):
-                found = bool(pat.search(line))
-                if invert:
-                    found = not found
-                if found:
-                    matched_indices.add(idx)
-
-            if count_only:
-                self._print(str(len(matched_indices)))
-                self._last_exit_code = 0 if matched_indices else 1
-                return
-
-            if files_only:
-                if matched_indices:
-                    self._print(target or "<stdin>")
-                self._last_exit_code = 0 if matched_indices else 1
-                return
-
-            # Build output with context
-            output_indices = set()
-            for idx in matched_indices:
-                for b in range(max(0, idx - before_context), idx):
-                    output_indices.add(b)
-                for a in range(idx + 1, min(len(lines), idx + 1 + after_context)):
-                    output_indices.add(a)
-                output_indices.add(idx)
-
-            matched = 0
-            prev_printed = -2  # sentinel: no previous line printed
-            for idx in sorted(output_indices):
-                if before_context > 0 or after_context > 0:
-                    if idx not in matched_indices and (prev_printed < idx - 1):
-                        if prev_printed >= 0:
-                            self._print("--")
-                        # Print before-context lines that precede this match
-                        for b in range(max(0, idx - before_context), idx):
-                            if b not in output_indices or b in matched_indices:
-                                continue
-                            prefix = f"{b + 1}:" if line_numbers else ""
-                            self._print(f"{prefix}{lines[b]}")
-                if idx in matched_indices:
-                    prefix = f"{idx + 1}:" if line_numbers else ""
-                    self._print(f"{prefix}{lines[idx]}")
-                    matched += 1
-                    prev_printed = idx
-                elif after_context > 0 or before_context > 0:
-                    prefix = f"{idx + 1}:" if line_numbers else ""
-                    self._print(f"{prefix}{lines[idx]}")
-                    prev_printed = idx
-
-            self._last_exit_code = 0 if matched else 1
         except _re.error as e:
             self._print(f"  grep: invalid pattern: {e}")
             self._last_exit_code = 2
+            return
+
+        matched_any = False
+        try:
+            if targets:
+                # Collect (label, content) pairs from all targets
+                file_pairs: list[tuple[str, str]] = []
+                for t in targets:
+                    t_path = os.path.expanduser(t)
+                    if recursive and os.path.isdir(t_path):
+                        for root, _dirs, fnames in os.walk(t_path):
+                            for fn in sorted(fnames):
+                                fp = os.path.join(root, fn)
+                                try:
+                                    c = Path(fp).read_text()
+                                    file_pairs.append((fp, c))
+                                except (OSError, UnicodeDecodeError):
+                                    pass
+                    elif os.path.isdir(t_path):
+                        self._print(f"  grep: {t}: Is a directory")
+                        self._last_exit_code = 2
+                        return
+                    else:
+                        vfs = self.os.vfs
+                        if vfs and (t_path.startswith("/dev") or t_path.startswith("/proc")):
+                            content = vfs.read(t_path)
+                        else:
+                            content = Path(t_path).read_text()
+                        if content is None:
+                            self._print(f"  grep: {t}: No such file or directory")
+                            self._last_exit_code = 1
+                            return
+                        file_pairs.append((t, content))
+                for label, content in file_pairs:
+                    lines = content.splitlines()
+                    found = self._grep_search(lines, pat, invert, count_only, files_only,
+                                              line_numbers, after_context, before_context, label)
+                    if found:
+                        matched_any = True
+            else:
+                lines = self._piped_input.splitlines()
+                matched_any = self._grep_search(lines, pat, invert, count_only, files_only,
+                                                line_numbers, after_context, before_context, None)
+            self._last_exit_code = 0 if matched_any else 1
         except FileNotFoundError:
-            self._print(f"  grep: {target}: No such file or directory")
+            self._print(f"  grep: {targets[0]}: No such file or directory")
             self._last_exit_code = 1
+
+    def _grep_search(self, lines, pat, invert, count_only, files_only,
+                     line_numbers, after_context, before_context, label):
+        """Core grep logic on a list of lines. Returns True if any match."""
+        matched_indices = set()
+        for idx, line in enumerate(lines):
+            found = bool(pat.search(line))
+            if invert:
+                found = not found
+            if found:
+                matched_indices.add(idx)
+
+        if count_only:
+            if label and len(lines) > 0:
+                self._print(f"  {label}:{len(matched_indices)}")
+            else:
+                self._print(f"  {len(matched_indices)}")
+            return bool(matched_indices)
+
+        if files_only:
+            if matched_indices:
+                self._print(f"  {label or '<stdin>'}")
+            return bool(matched_indices)
+
+        # Build output with context
+        output_indices = set()
+        for idx in matched_indices:
+            for b in range(max(0, idx - before_context), idx):
+                output_indices.add(b)
+            for a in range(idx + 1, min(len(lines), idx + 1 + after_context)):
+                output_indices.add(a)
+            output_indices.add(idx)
+
+        matched = 0
+        prev_printed = -2
+        for idx in sorted(output_indices):
+            if before_context > 0 or after_context > 0:
+                if idx not in matched_indices and (prev_printed < idx - 1):
+                    if prev_printed >= 0:
+                        self._print("  --")
+                    for b in range(max(0, idx - before_context), idx):
+                        if b in output_indices and b not in matched_indices:
+                            prefix = f"{b + 1}:" if line_numbers else ""
+                            self._print(f"  {prefix}{lines[b]}")
+            prefix = f"{idx + 1}:" if line_numbers else ""
+            self._print(f"  {prefix}{lines[idx]}")
+            if idx in matched_indices:
+                matched += 1
+            prev_printed = idx
+        return matched > 0
 
     def _cmd_sort(self, args: str = "") -> None:
         """Sort lines of text (from file or piped input)."""
@@ -1828,3 +1855,243 @@ class LinuxCommandsMixin:
                 line = ""
         if line.strip():
             self._print(f"  {line}")
+
+    def _cmd_sed(self, args: str = "") -> None:
+        """Stream editor: sed 's/pattern/replacement/[g]', '/pattern/d', 'd', 'Np', 'N,Mp', 'N,Md'."""
+        import re as _re
+        if not args:
+            self._print("  Usage: sed [-n] 's/pattern/replacement/[g]' [file]")
+            self._print("         sed [-n] '/pattern/d' [file]")
+            self._print("         sed [-n] 'd' [file]")
+            self._print("         sed [-n] 'Np' [file]")
+            self._print("         sed [-n] 'N,Mp' [file]")
+            self._print("         sed [-n] 'N,Md' [file]")
+            self._last_exit_code = 1
+            return
+        quiet = False
+        script = ""
+        target = None
+        raw_parts = args.strip().split()
+        i = 0
+        while i < len(raw_parts):
+            p = raw_parts[i]
+            if p == "-n":
+                quiet = True
+                i += 1
+            elif p.startswith("s/") or p.startswith("s#"):
+                script = p
+                i += 1
+            elif p.startswith("/") and p.endswith("/d"):
+                script = p
+                i += 1
+            elif p.startswith("/") and p.endswith("/p"):
+                script = p
+                i += 1
+            elif _re.match(r'^\d+,?\d*p$', p):
+                script = p
+                i += 1
+            elif _re.match(r'^\d+,?\d*d$', p):
+                script = p
+                i += 1
+            elif p.strip() == "d":
+                script = p
+                i += 1
+            elif not p.startswith("-") and not script:
+                script = p
+                i += 1
+            elif not p.startswith("-"):
+                target = p
+                i += 1
+            else:
+                i += 1
+        if not script:
+            self._print("  Usage: sed [-n] 's/pattern/replacement/[g]' [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if target:
+                content = Path(os.path.expanduser(target)).read_text()
+            elif self._piped_input:
+                content = self._piped_input
+            else:
+                self._print("  sed: no input")
+                self._last_exit_code = 1
+                return
+        except FileNotFoundError:
+            self._print(f"  sed: {target}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        out_lines = []
+        NR = 0
+        for line in content.splitlines(keepends=True):
+            NR += 1
+            matched = False
+            if script.startswith("s/") or script.startswith("s#"):
+                sep = script[1]
+                rest = script[2:]
+                parts_r = rest.split(sep, 2)
+                if len(parts_r) >= 3:
+                    pat, repl, flags = parts_r[0], parts_r[1], parts_r[2]
+                    try:
+                        compiled = _re.compile(pat)
+                    except _re.error:
+                        self._print(f"  sed: invalid regex '{pat}'")
+                        self._last_exit_code = 1
+                        return
+                    def _unescape(s):
+                        s = s.replace("\\t", "\t")
+                        s = s.replace("\\n", "\n")
+                        s = s.replace("\\\\", "\\")
+                        return s
+                    new_line = compiled.sub(_unescape(repl), line, count=0 if "g" in flags else 1)
+                    if quiet:
+                        if new_line != line:
+                            out_lines.append(new_line)
+                    else:
+                        out_lines.append(new_line)
+                else:
+                    if not quiet:
+                        out_lines.append(line)
+            elif script.endswith("/d"):
+                pat_d = script[1:-2]
+                try:
+                    matched = _re.search(pat_d, line) is not None
+                except _re.error:
+                    self._print(f"  sed: invalid regex '{pat_d}'")
+                    self._last_exit_code = 1
+                    return
+                if not matched:
+                    out_lines.append(line)
+            elif script.endswith("/p"):
+                pat_p = script[1:-2]
+                try:
+                    matched = _re.search(pat_p, line) is not None
+                except _re.error:
+                    self._print(f"  sed: invalid regex '{pat_p}'")
+                    self._last_exit_code = 1
+                    return
+                if matched:
+                    out_lines.append(line)
+            elif script.strip() == "d":
+                continue
+            elif _re.match(r'^\d+,\d+d$', script):
+                m = _re.match(r'^(\d+),(\d+)d$', script)
+                start = int(m.group(1))
+                end = int(m.group(2))
+                if start <= NR <= end:
+                    continue
+                else:
+                    out_lines.append(line)
+            elif _re.match(r'^(\d+)(,(\d+))?p$', script):
+                m = _re.match(r'^(\d+)(?:,(\d+))?p$', script)
+                start = int(m.group(1))
+                end = int(m.group(2)) if m.group(2) else start
+                if start <= NR <= end:
+                    out_lines.append(line)
+            else:
+                if not quiet:
+                    out_lines.append(line)
+        self._print("".join(out_lines), end="")
+
+    def _cmd_awk(self, args: str = "") -> None:
+        """AWK-like processor: awk '-F<sep>' '{print $1,$2}' [file]"""
+        import re as _re
+        if not args:
+            self._print("  Usage: awk '-F<sep>' '{print $1}' [file]")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        fs = None
+        target = None
+        script = None
+        i = 0
+        while i < len(parts):
+            p = parts[i]
+            if p.startswith("-F") and len(p) > 2:
+                fs = p[2:]
+                i += 1
+            elif p.startswith("-F"):
+                if i + 1 < len(parts):
+                    fs = parts[i + 1]
+                    i += 2
+                else:
+                    i += 1
+            elif p.startswith("{") and p.endswith("}"):
+                script = p[1:-1]
+                i += 1
+            elif not p.startswith("-") and not script:
+                script = p
+                i += 1
+            elif not p.startswith("-"):
+                target = p
+                i += 1
+            else:
+                i += 1
+        if not script:
+            self._print("  Usage: awk '-F<sep>' '{print $1}' [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if target:
+                content = Path(os.path.expanduser(target)).read_text()
+            elif self._piped_input:
+                content = self._piped_input
+            else:
+                self._print("  awk: no input")
+                self._last_exit_code = 1
+                return
+        except FileNotFoundError:
+            self._print(f"  awk: {target}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        out_lines = []
+        NR = 0
+        for raw_line in content.splitlines():
+            NR += 1
+            line = raw_line.rstrip("\n").rstrip("\r")
+            if fs is not None:
+                fields = line.split(fs) if fs else [line]
+            else:
+                fields = line.split()
+            NF = len(fields)
+            result = self._awk_resolve(script, line, fields, NF, NR)
+            out_lines.append(result)
+        self._print("\n".join(out_lines))
+
+    def _awk_resolve(self, expr, line, fields, NF, NR):
+        """Resolve an awk expression against a line's fields."""
+        result = expr
+        tokens = {}
+        token_idx = [0]
+        def _save_field(m):
+            key = f"\x00T{token_idx[0]}\x00"
+            token_idx[0] += 1
+            idx = int(m.group(1))
+            tokens[key] = fields[idx - 1] if 1 <= idx <= NF else ""
+            return key
+        # Protect $0 from digit matching
+        result = result.replace("$0", "\x00DOLLAR0\x00")
+        result = _re.sub(r'\$(\d+)', _save_field, result)
+        result = result.replace("\x00DOLLAR0\x00", line)
+        result = _re.sub(r'\$NF', fields[-1] if fields else "", result)
+        for key, val in tokens.items():
+            result = result.replace(key, val)
+        result = result.replace("NR", str(NR))
+        result = result.replace("NF", str(NF))
+        # Handle comma-separated print args
+        if result.startswith("print "):
+            inner = result[6:]
+            parts = [p.strip() for p in inner.split(",")]
+            if len(parts) > 1:
+                quoted = []
+                for p in parts:
+                    if (p.startswith('"') and p.endswith('"')) or (p.startswith("'") and p.endswith("'")):
+                        quoted.append(p[1:-1])
+                    else:
+                        quoted.append(p)
+                result = " ".join(quoted)
+            elif inner.startswith('"') and inner.endswith('"'):
+                result = inner[1:-1]
+            elif inner.startswith("'") and inner.endswith("'"):
+                result = inner[1:-1]
+        return result

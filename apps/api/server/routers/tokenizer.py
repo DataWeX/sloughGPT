@@ -67,11 +67,14 @@ class TokenizerRouter:
                 vocab_size=256, min_frequency=1, lowercase=True,
             )
 
+    async def _ensure_trained(self):
+        await asyncio.to_thread(self._require_trained)
+
     async def get_tokenizer_stats(self) -> dict:
         """get_tokenizer_stats."""
-        self._require_trained()
+        await self._ensure_trained()
         mgr = get_tokenizer_manager()
-        stats = mgr.stats()
+        stats = await asyncio.to_thread(mgr.stats)
         return success_response(data={
             "vocab_size": stats["vocab_size"],
             "base_chars": stats.get("base_chars", 0),
@@ -83,44 +86,44 @@ class TokenizerRouter:
 
     async def pretokenize_text(self, req: PretokenizeRequest) -> dict:
         """Show how text splits into pretokens before BPE encoding."""
-        self._require_trained()
+        await self._ensure_trained()
         mgr = get_tokenizer_manager()
-        return success_response(data=mgr.show_pretokenization(req.text))
+        return success_response(data=await asyncio.to_thread(mgr.show_pretokenization, req.text))
 
     async def decompose_token(self, req: DecomposeRequest) -> dict:
         """Show a token's merge tree decomposition."""
-        self._require_trained()
+        await self._ensure_trained()
         mgr = get_tokenizer_manager()
         try:
-            return success_response(data=mgr.decompose_token(req.text))
+            return success_response(data=await asyncio.to_thread(mgr.decompose_token, req.text))
         except ValueError as e:
             raise_error(str(e), "E_NOT_FOUND", status_code=404)
 
     async def analyze_corpus(self, req: AnalyzeRequest) -> dict:
         """Compute token frequency and compression stats on a corpus."""
-        self._require_trained()
+        await self._ensure_trained()
         mgr = get_tokenizer_manager()
-        return success_response(data=mgr.analyze_corpus(req.texts))
+        return success_response(data=await asyncio.to_thread(mgr.analyze_corpus, req.texts))
 
     async def tokenize_text(self, req: TokenizeRequest) -> dict:
         """tokenize_text."""
-        self._require_trained()
+        await self._ensure_trained()
         mgr = get_tokenizer_manager()
-        ids = mgr.tokenize(req.text)
+        ids = await asyncio.to_thread(mgr.tokenize, req.text)
         tok = mgr.get_tokenizer()
         tokens = [tok.itos.get(i, "<?>") for i in ids]
         return success_response(data={"tokens": tokens, "ids": ids})
 
     async def detokenize_ids(self, req: DetokenizeRequest) -> dict:
         """detokenize_ids."""
-        self._require_trained()
+        await self._ensure_trained()
         mgr = get_tokenizer_manager()
-        text = mgr.detokenize(req.ids)
+        text = await asyncio.to_thread(mgr.detokenize, req.ids)
         return success_response(data={"text": text})
 
     async def get_vocab(self, limit: int = 50, offset: int = 0) -> dict:
         """get_vocab."""
-        self._require_trained()
+        await self._ensure_trained()
         tok = get_tokenizer_manager().get_tokenizer()
         total = tok.vocab_size
         entries = []
@@ -131,7 +134,7 @@ class TokenizerRouter:
 
     async def get_merges(self, limit: int = 30) -> dict:
         """get_merges."""
-        self._require_trained()
+        await self._ensure_trained()
         tok = get_tokenizer_manager().get_tokenizer()
         merges = getattr(tok, "merges", [])
         result = []
@@ -160,25 +163,29 @@ class TokenizerRouter:
             text = await asyncio.to_thread(_fetch)
             lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
         mgr = get_tokenizer_manager()
-        mgr.train(lines, vocab_size=req.vocab_size, min_frequency=3)
+        await asyncio.to_thread(mgr.train, lines, vocab_size=req.vocab_size, min_frequency=3)
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         safe_audit_log("tokenizer.train", resource="bpe", detail=f"elapsed={_elapsed_ms:.0f}ms", vocab_size=req.vocab_size, corpus_size=len(lines))
-        return success_response(data={"status": "trained", "corpus_size": len(lines), "stats": mgr.stats(), "elapsed_ms": round(_elapsed_ms, 1)})
+        stats = await asyncio.to_thread(mgr.stats)
+        return success_response(data={"status": "trained", "corpus_size": len(lines), "stats": stats, "elapsed_ms": round(_elapsed_ms, 1)})
 
     async def get_tokenization_sample(self) -> dict:
         """get_tokenization_sample."""
-        self._require_trained()
+        await self._ensure_trained()
         tok = get_tokenizer_manager().get_tokenizer()
         sample_words = [
             "the", "and", "to", "of", "a", "in", "that", "is",
             "was", "he", "for", "it", "with", "as", "his", "on",
             "hello", "world", "machine", "learning", "neural", "network",
         ]
-        results = []
-        for word in sample_words:
-            ids = tok.encode(word)
-            tokens = [tok.itos.get(i, "<?>") for i in ids]
-            results.append({"word": word, "ids": ids, "tokens": tokens, "count": len(ids)})
+        def _encode_all():
+            results = []
+            for word in sample_words:
+                ids = tok.encode(word)
+                tokens = [tok.itos.get(i, "<?>") for i in ids]
+                results.append({"word": word, "ids": ids, "tokens": tokens, "count": len(ids)})
+            return results
+        results = await asyncio.to_thread(_encode_all)
         return success_response(data={"samples": results})
 
 

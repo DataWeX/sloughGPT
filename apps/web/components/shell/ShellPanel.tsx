@@ -27,6 +27,7 @@ export function ShellPanel({
   const [input, setInput] = useState('')
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
+  const [hideExit, setHideExit] = useState(false)
   const outputRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -41,6 +42,16 @@ export function ShellPanel({
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Auto-hide exit code badge after 5s for success, keep showing for errors
+  useEffect(() => {
+    if (state.exitCode === 0 && !state.isRunning) {
+      setHideExit(false)
+      const timer = setTimeout(() => setHideExit(true), 5000)
+      return () => clearTimeout(timer)
+    }
+    setHideExit(false)
+  }, [state.exitCode, state.isRunning])
 
   const handleSubmit = () => {
     const cmd = input.trim()
@@ -142,7 +153,7 @@ export function ShellPanel({
           data-testid="shell-input"
           aria-label="Shell command input"
         />
-        {state.exitCode !== null && (
+        {state.exitCode !== null && !hideExit && (
           <span
             data-testid="shell-exit-code"
             className={cn(
