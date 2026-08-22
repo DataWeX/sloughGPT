@@ -97,8 +97,8 @@ async def training_handler(task) -> dict:
                 if at_cancel is not None and at_cancel.is_set():
                     cancel_event.set()
                     return
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Cancel bridge auto_train import failed: %s", exc)
             await asyncio.sleep(0.1)
 
     async def _bridge_pause():
@@ -258,8 +258,8 @@ async def training_sessions_handler(task) -> dict:
                 if at_cancel is not None and at_cancel.is_set():
                     cancel_event.set()
                     return
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Cancel bridge auto_train import failed: %s", exc)
             await asyncio.sleep(0.1)
 
     cancel_task = asyncio.create_task(_bridge_cancel())

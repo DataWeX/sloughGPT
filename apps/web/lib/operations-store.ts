@@ -3,6 +3,9 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { apiGet, apiPost } from './http-client'
+import { logger } from './dev-log'
+
+const _log = logger.child('operations-store')
 
 export type OpType = 'training' | 'inference' | 'download' | 'import' | 'batch' | 'other'
 export type OpStatus = 'registered' | 'running' | 'cancelling' | 'cancelled' | 'completed' | 'failed'
@@ -61,9 +64,7 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
       await get().fetch()
       return true
     } catch (e) {
-      if (typeof console !== 'undefined') {
-        console.warn('[operations] Cancel failed for op', opId, e)
-      }
+      _log.warning('Cancel failed for op', { opId, error: e instanceof Error ? e.message : String(e) })
       return false
     }
   },
@@ -75,9 +76,7 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
       await get().fetch()
       return res.count
     } catch (e) {
-      if (typeof console !== 'undefined') {
-        console.warn('[operations] CancelAll failed:', e)
-      }
+      _log.warning('CancelAll failed', { error: e instanceof Error ? e.message : String(e) })
       return 0
     }
   },

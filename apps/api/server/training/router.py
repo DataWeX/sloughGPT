@@ -70,8 +70,8 @@ def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
             OpStatus.CANCELLED, OpStatus.COMPLETED, OpStatus.FAILED,
         ):
             mgr.finish(job_id, error=error or "")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("_finish_job CancelManager.finish failed for %s: %s", job_id, exc)
 
 
 def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
