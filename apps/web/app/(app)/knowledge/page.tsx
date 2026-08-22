@@ -23,6 +23,7 @@ import { LearnSection } from '@/components/learn/LearnSection'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, MS_PER_SECOND } from '@/lib/format-bytes'
 import { knowledgeSchema } from '@/lib/validation-schemas'
+import { logger } from '@/lib/dev-log'
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -241,7 +242,10 @@ export default function KnowledgePage() {
       addToast(`Deleted ${deletedIds.size} items`, 'info', undefined, () => {
         setItems(prev => [...deletedItems, ...prev])
         setStats(prev => prev ? { ...prev, total_items: prev.total_items + deletedIds.size } : prev)
-        knowledgeController.batchIngest(deletedItems.map(i => ({ content: i.content, tags: [i.topic] }))).catch(() => {})
+        knowledgeController.batchIngest(deletedItems.map(i => ({ content: i.content, tags: [i.topic] }))).catch(e => {
+          logger.error('knowledge batch undo re-ingest failed', { count: deletedIds.size, exception: String(e) })
+          addToast('Failed to restore deleted items', 'error')
+        })
       })
     } catch {
       setItems(prev => [...deletedItems, ...prev])

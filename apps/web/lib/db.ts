@@ -1,4 +1,5 @@
 import { apiGet, apiPut, apiPatch, apiDelete, apiPost } from './http-client'
+import { logger } from './dev-log'
 
 export interface ChatMessage {
   id: string
@@ -122,7 +123,7 @@ export class DbCircuitBreaker {
     if (this._dead) return
     this._dead = true
     const msg = err instanceof Error ? err.message : String(err)
-    console.warn('[ManDB] DocStore marked dead — all further error writes will be skipped:', msg)
+    logger.warning('ManDB DocStore marked dead — all further error writes will be skipped', { error: msg })
   }
 }
 

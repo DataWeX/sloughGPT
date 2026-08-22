@@ -146,16 +146,17 @@ describe('shellExecStream', () => {
     expect(onError).toHaveBeenCalledWith('Unknown error')
   })
 
-  it('falls back to console.error when onError is not provided', async () => {
+  it('falls back to logger.error when onError is not provided', async () => {
     async function* mockGen() {
       yield { status: 'error', message: 'some error' } as any
     }
     vi.mocked(streamSSE).mockReturnValue(mockGen())
 
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { logger } = await import('@/lib/dev-log')
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {})
     await shellExecStream('cmd', {})
 
-    expect(spy).toHaveBeenCalledWith('[shell]', 'some error')
+    expect(spy).toHaveBeenCalledWith('shell event error', { exception: 'some error' })
     spy.mockRestore()
   })
 

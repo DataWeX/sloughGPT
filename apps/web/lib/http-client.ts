@@ -9,6 +9,7 @@ export class ApiError extends Error {
     this.name = 'ApiError'
   }
 }
+import { logger } from './dev-log'
 
 import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
@@ -317,9 +318,7 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
         try {
           yield JSON.parse(payload) as SSEEvent
         } catch (e) {
-          if (typeof console !== 'undefined') {
-            console.warn('[SSE] Malformed JSON payload skipped:', payload.slice(0, 80), e)
-          }
+          logger.warning('SSE malformed JSON payload skipped', { payload: payload.slice(0, 80), exception: String(e) })
         }
       }
     }

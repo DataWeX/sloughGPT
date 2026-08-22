@@ -8,6 +8,7 @@ import { ChatArea, ErrorBanner } from '@/features/chat/components'
 import { ImageDropZone } from '@/features/chat/components/layout/ImageDropZone'
 import { ModeBar } from '@/features/chat/components/toolbar/ModeBar'
 import { ChatToolbar } from '@/features/chat/components/toolbar/ChatToolbar'
+import { logger } from '@/lib/dev-log'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
 
 const VoiceChatMode = dynamicNext(() => import('@/features/chat/components/input/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
@@ -68,11 +69,11 @@ export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
       availableModels={model.availableModels}
       onTemperatureChange={(temp) => {
         model.setTemperature(temp)
-        generationConfigController.update({ temperature: temp }).catch(() => /* config save failed — UI already updated */ {})
+        generationConfigController.update({ temperature: temp }).catch(e => { logger.warning('generation config temperature save failed', { exception: String(e) }) })
       }}
       onMaxTokensChange={(tokens) => {
         model.setMaxTokens(tokens)
-        generationConfigController.update({ max_new_tokens: tokens }).catch(() => /* config save failed — UI already updated */ {})
+        generationConfigController.update({ max_new_tokens: tokens }).catch(e => { logger.warning('generation config max_tokens save failed', { exception: String(e) }) })
       }}
       onClear={clearChat}
       hasMessages={chat.messages.length > 0}

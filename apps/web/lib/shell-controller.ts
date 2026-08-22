@@ -7,6 +7,7 @@
 'use client'
 
 import { apiPost, streamSSE, type SSEEvent } from '@/lib/http-client'
+import { logger } from '@/lib/dev-log'
 
 export interface ShellExecResult {
   output: string
@@ -70,17 +71,17 @@ export async function shellExecStream(
         completed = true
         errored = true
         const msg = d.error || 'Command failed'
-        callbacks.onError?.(msg) ?? console.error('[shell]', msg)
+        callbacks.onError?.(msg) ?? logger.error('shell command error', { exception: msg })
       } else if (event.status === 'error') {
         errored = true
         const msg = event.message || 'Unknown error'
-        callbacks.onError?.(msg) ?? console.error('[shell]', msg)
+        callbacks.onError?.(msg) ?? logger.error('shell event error', { exception: msg })
       }
     }
   } catch (err) {
     errored = true
     const msg = err instanceof Error ? err.message : 'Connection error'
-    callbacks.onError?.(msg) ?? console.error('[shell]', msg)
+    callbacks.onError?.(msg) ?? logger.error('shell connection error', { exception: msg })
   }
 
   if (!completed && !errored) {

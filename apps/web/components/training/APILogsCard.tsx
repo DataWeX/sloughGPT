@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { trainingController, type TrainFromSessionsParams } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
+import { logger } from '@/lib/dev-log'
 
 type Phase = 'idle' | 'extracting' | 'training' | 'complete' | 'error'
 
@@ -106,9 +107,12 @@ export function APILogsCard({
   }, [config, addToast])
 
   const stop = useCallback(() => {
-    trainingController.cancelFromSessionsSloNet().catch(() => {})
+    trainingController.cancelFromSessionsSloNet().catch(e => {
+      logger.error('training cancel failed', { exception: String(e) })
+      addToast('Failed to cancel training', 'error')
+    })
     setPhase('idle')
-  }, [])
+  }, [addToast])
 
   const loadForChat = useCallback(async () => {
     const raw = result?.checkpoint
