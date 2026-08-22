@@ -36,7 +36,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       const data = await trainingJobsController.listCheckpoints()
       setCheckpoints(data)
-    } catch { /* ignore */ }
+    } catch (e) { console.warn('[checkpoints] fetch failed:', e instanceof Error ? e.message : e) }
     finally { setLoadingCheckpoints(false) }
   }, [])
 
@@ -44,13 +44,13 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       const data = await trainingJobsController.listBuilds()
       setBuilds(data)
-    } catch { /* ignore */ }
+    } catch (e) { console.warn('[checkpoints] builds fetch failed:', e instanceof Error ? e.message : e) }
     finally { setLoadingBuilds(false) }
   }, [])
 
   const fetchJobs = useCallback(async () => {
     try { setJobs(await trainingJobsController.list()) }
-    catch { /* ignore */ }
+    catch (e) { console.warn('[checkpoints] jobs fetch failed:', e instanceof Error ? e.message : e) }
     finally { setLoadingJobs(false) }
   }, [])
 

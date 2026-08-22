@@ -13,6 +13,8 @@ from schemas.common import success_response, raise_error, classify_and_raise, sa
 from infrastructure.auth import require_auth_if_enabled
 from typing import AsyncGenerator
 
+logger = logging.getLogger("slo.routers.system")
+
 logger = logging.getLogger("slo.api.system")
 
 
@@ -53,7 +55,8 @@ class SystemRouter:
                     rm = get_resource_manager()
                     logical = rm.topology.logical_cores
                     physical = rm.topology.physical_cores
-                except Exception:
+                except Exception as exc:
+                    logger.debug("system: resource_manager unavailable for metrics: %s", exc)
                     logical = psutil.cpu_count(logical=True) or 1
                     physical = psutil.cpu_count(logical=False) or 1
                 return {
@@ -86,7 +89,8 @@ class SystemRouter:
                 from domains.infrastructure.resource_manager import get_resource_manager
                 rm = get_resource_manager()
                 cpu_count = rm.topology.logical_cores
-            except Exception:
+            except Exception as exc:
+                logger.debug("system: resource_manager unavailable for info: %s", exc)
                 cpu_count = psutil.cpu_count()
             return {
                 "platform": platform.system(),

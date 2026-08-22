@@ -205,8 +205,8 @@ class TaskQueue:
                 asyncio.ensure_future(
                     self._event_bus.emit(event_name, data, source="task_queue")
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("task_queue: event emit failed for %s: %s", event_name, exc)
 
     # ── Lifecycle ──
 
