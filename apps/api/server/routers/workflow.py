@@ -8,7 +8,7 @@ from typing import Dict, Any
 from pydantic import BaseModel
 from fastapi import APIRouter
 
-from schemas.common import raise_error, success_response, classify_and_raise
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.api.workflow")
 

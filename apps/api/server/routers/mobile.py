@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
 
-from schemas.common import success_response, raise_error, classify_and_raise
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 
 logger = logging.getLogger(__name__)
