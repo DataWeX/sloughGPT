@@ -131,7 +131,8 @@ class MultimodalRouter:
         try:
             import state as server_state
             return server_state.model, server_state.tokenizer
-        except Exception:
+        except Exception as exc:
+            logger.debug("Model/state unavailable for multimodal: %s", exc)
             return None, None
 
     # ── Unified Status ────────────────────────────────────────────────
@@ -276,9 +277,10 @@ class MultimodalRouter:
                 self._background_job["current_image"] = name
                 self._background_job["current_caption"] = caption.text
                 self._background_job["completed"] += 1
-            except Exception:
+            except Exception as exc:
                 self._background_job["errors"] += 1
                 self._background_job["completed"] += 1
+                logger.warning("Batch image training failed for %s: %s", name, exc)
             if self._background_job["completed"] % 5 == 0:
                 await asyncio.sleep(0)
         self._background_job["running"] = False
@@ -579,8 +581,9 @@ class MultimodalRouter:
             try:
                 mgr = self._ensure_initialized()
                 auto_captioned = True
-            except Exception:
+            except Exception as exc:
                 auto_captioned = False
+                logger.debug("Auto-caption init failed: %s", exc)
         with open(output_path, "w") as f:
             for img_path in image_files:
                 entry = {"image_path": str(img_path), "caption": ""}
@@ -589,9 +592,8 @@ class MultimodalRouter:
                         caps = mgr.caption_image(str(img_path))
                         if caps:
                             entry["caption"] = caps[0].text
-                    except Exception:
-                        pass
-                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                    except Exception as exc:
+                        logger.debug("Per-image caption failed for %s: %s", img_path, exc)
                 f.write(json.dumps(entry) + "\n")
                 entries += 1
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
@@ -609,7 +611,8 @@ class MultimodalRouter:
             if not ckpts:
                 ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
             return ckpts
-        except Exception:
+        except Exception as exc:
+            logger.warning("list_checkpoints failed: %s", exc)
             return []
 
     async def load_checkpoint(self, name: str) -> dict:

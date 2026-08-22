@@ -246,8 +246,8 @@ class KBRouter:
             labeler = get_truth_labeler()
             lr = labeler.label(req.content)
             label = lr.label
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Truth labeler unavailable: %s", exc)
         logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         fact = KnowledgeFact(
@@ -776,8 +776,8 @@ class KBRouter:
                         raw = fp.read_text(errors="ignore")
                         chunks = [p.strip() for p in raw.split("\n\n") if len(p.strip()) > 40]
                         texts.extend(chunks[:500])
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
                     logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             # 3. Dataset files
@@ -788,8 +788,8 @@ class KBRouter:
                         raw = fp.read_text(errors="ignore")
                         chunks = [p.strip() for p in raw.split("\n\n") if len(p.strip()) > 40]
                         texts.extend(chunks[:500])
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
                     logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             # Deduplicate
@@ -866,11 +866,9 @@ class KBRouter:
     # ── Production RAG Endpoints ───────────────────────────────────────────
 
     def rag_ingest(self, req: RAGIngestRequest) -> dict:
-        """Ingest a document into the production RAG index.
-
-        The document is chunked with overlap, embedded via n-gram TF-IDF,
-        and indexed for hybrid (BM25 + dense) retrieval.
-        """
+        """Ingest a document into the production RAG index."""
+        import time as _time
+        _t0 = _time.monotonic()
         from domains.cognitive.rag_service import get_rag_service
         rag_svc = get_rag_service()
         chunk_ids = rag_svc.add_document(
@@ -878,6 +876,8 @@ class KBRouter:
             metadata={"source": req.source, "topic": req.topic},
             chunk_size=req.chunk_size,
         )
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("knowledge.rag_ingest", resource=req.source or "unknown", detail=f"chunks={len(chunk_ids)} elapsed={_elapsed_ms:.0f}ms")
         return success_response(data={
             "chunk_ids": chunk_ids,
             "num_chunks": len(chunk_ids),

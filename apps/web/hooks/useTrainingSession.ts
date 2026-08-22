@@ -28,6 +28,8 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
   distillCheckpoint: string | null
   distillFinalLoss: number | null
   distillEpochs: number | null
+  avgQuality: number | null
+  dataQuality: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number } | null
   finetunedModelPath: string | null
   finetunedModelLoss: number | null
   setPhase: (p: string) => void
@@ -122,7 +124,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             finalLoss: (turboStatus.result?.final_loss as number) ?? null,
           })
         }
-      } catch { /* Server offline — shell state is still valid */ }
+      } catch (e) { console.warn('[training] server reconciliation failed:', e?.message || e) }
     }
     reconcile()
     return () => { cancelled = true }
@@ -144,16 +146,16 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const stopTraining = useCallback(() => {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
-    operationsStore.getState().cancelAll('training').catch(() => {})
+    operationsStore.getState().cancelAll('training').catch((e) => console.warn('[training] cancelAll failed:', e?.message || e))
     resetTraining()
   }, [resetTraining])
 
   const pauseTraining = useCallback(async () => {
-    try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch { /* */ }
+    try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch (e) { console.warn('[training] pause failed:', e?.message || e) }
   }, [])
 
   const resumeTraining = useCallback(async () => {
-    try { await trainingJobsController.resumeTraining(); writeTraining({ message: '' }) } catch { /* */ }
+    try { await trainingJobsController.resumeTraining(); writeTraining({ message: '' }) } catch (e) { console.warn('[training] resume failed:', e?.message || e) }
   }, [])
 
   const startFineTune = useCallback((
@@ -249,6 +251,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     distillCheckpoint: training.checkpoint,
     distillFinalLoss: training.finalLoss,
     distillEpochs: training.totalEpochs ?? null,
+    avgQuality: training.avgQuality ?? null,
+    dataQuality: training.dataQuality ?? null,
     finetunedModelPath: training.modelPath,
     finetunedModelLoss: training.finalLoss,
     setPhase: (p: string) => writeTraining({ phase: p as TrainingShellState['phase'] }),
