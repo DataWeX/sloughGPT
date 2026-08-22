@@ -74,7 +74,6 @@ class EventBus:
         else:
             self._subscriptions[event].append(sub)
             self._subscriptions[event].sort(key=lambda s: s.priority, reverse=True)
-        self._subscriptions[event].sort(key=lambda s: s.priority, reverse=True)
 
     def once(
         self,
@@ -174,10 +173,14 @@ class EventBus:
             try:
                 result = sub.handler(event, data or {})
                 if asyncio.iscoroutine(result):
-                    logger.warning("event_bus: async handler %s ignored by emit_sync (coroutine not awaited)",
-                        getattr(sub.handler, "__name__", "?"),
-                        extra={"tag": "INFRA", "event": event},
-                    )
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(result)
+                    except RuntimeError:
+                        logger.warning("event_bus: async handler %s ignored by emit_sync (no running loop)",
+                            getattr(sub.handler, "__name__", "?"),
+                            extra={"tag": "INFRA", "event": event},
+                        )
                     continue
             except Exception:
                 logger.exception(
