@@ -527,7 +527,7 @@ class InferenceRouter:
             actual_model = _gen_state.model_type or req.model
             try:
 
-                get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=actual_model)
+                get_server_state().record_inference(tokens=tokens, elapsed_ms=round((time.monotonic() - _t0) * 1000, 1), model=actual_model)
             except Exception as e:
                 logger.warning("Failed to record inference metrics: %s", e)
             try:
@@ -1310,6 +1310,7 @@ class InferenceRouter:
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
         """chat."""
+        _chat_t0 = time.monotonic()
         from domains import get_chat_domain
         from startup_progress import STARTUP_PHASE
         import state as _chat_state
@@ -1406,8 +1407,9 @@ class InferenceRouter:
         try:
 
             tokens = _count_tokens(result.text, _chat_state)
+            _chat_elapsed_ms = round((time.monotonic() - _chat_t0) * 1000, 1)
             get_server_state().record_inference(
-                tokens=tokens, elapsed_ms=0, model=_chat_state.model_type or req.model
+                tokens=tokens, elapsed_ms=_chat_elapsed_ms, model=_chat_state.model_type or req.model
             )
         except Exception as e:
             logger.warning("Failed to record inference metrics: %s", e)
@@ -1663,17 +1665,13 @@ class InferenceRouter:
         return success_response(data={"cancelled": cancelled, "count": len(cancelled)})
 
     async def purge_operations(self, max_age_s: float = 3600.0) -> dict:
-        """Remove finished operations older than max_age_s.
-
-        Args:
-            max_age_s: Max age in seconds. Default 1 hour.
-
-        Returns:
-            Dict with count of purged operations.
-        """
-
+        """Remove finished operations older than max_age_s."""
+        import time as _time
+        _t0 = _time.monotonic()
         removed = get_cancel_manager().purge(max_age_s=max_age_s)
-        return success_response(data={"purged": removed})
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("inference.purge_operations", detail=f"removed={removed} max_age={max_age_s}s elapsed={_elapsed_ms:.0f}ms")
+        return success_response(data={"purged": removed, "elapsed_ms": round(_elapsed_ms, 1)})
 
     # ── Route registration ──
 

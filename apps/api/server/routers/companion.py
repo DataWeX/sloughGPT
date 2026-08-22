@@ -53,6 +53,7 @@ class ChatResponse(BaseModel):
     """Companion response."""
     response: str
     system_prompt: str
+    elapsed_ms: float = 0.0
 
 
 class CompanionRouter:
@@ -106,6 +107,7 @@ class CompanionRouter:
             confidence=req.confidence,
             humor=req.humor,
         )
+        safe_audit_log("companion.set_personality", detail=f"name={req.name}")
         return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
 
     async def patch_personality(self, req: PatchPersonalityRequest) -> dict:
@@ -192,6 +194,7 @@ class CompanionRouter:
 
         response_text = ""
         error_msg = None
+        _chat_t0 = _time.monotonic()
         try:
             from domains.models.provider import get_provider
             provider = get_provider("default")
@@ -207,12 +210,15 @@ class CompanionRouter:
             error_msg = str(e)
             logger.warning("Companion chat failed: %s", e, extra={"tag": "MODEL", "context": {"error": str(e)}})
 
+        _chat_elapsed_ms = (_time.monotonic() - _chat_t0) * 1000
+
         if not response_text and error_msg:
             response_text = f"[Error: {error_msg}]"
 
         return ChatResponse(
             response=response_text,
             system_prompt=system_prompt,
+            elapsed_ms=round(_chat_elapsed_ms, 1),
         )
 
     async def list_presets(self) -> dict:

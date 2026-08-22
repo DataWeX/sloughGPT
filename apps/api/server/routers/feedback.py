@@ -49,6 +49,7 @@ class FeedbackRouter:
                 user_message=req.user_message,
                 assistant_response=req.assistant_response,
             )
+            safe_audit_log("feedback.record_workflow", resource=req.conversation_id, detail=f"rating={req.rating}")
             return success_response(data={
                 "feedback_id": feedback.get("feedback_id", ""),
                 "workflow_active": True,
@@ -69,6 +70,7 @@ class FeedbackRouter:
                 user_message=getattr(req, 'user_message', None),
                 assistant_response=getattr(req, 'assistant_response', None),
             )
+            safe_audit_log("feedback.record", resource=req.message_id, detail=f"rating={req.rating}")
             return FeedbackResponse(**feedback)
         except Exception as e:
             logger.error("Failed to record feedback (message=%s): %s", req.message_id, e)
