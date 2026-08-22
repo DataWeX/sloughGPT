@@ -471,29 +471,29 @@ class ModelsRouter:
                 if cm_op:
                     try:
                         get_cancel_manager().finish(cm_op)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("CancelManager.finish failed for download %s: %s", model_id, exc)
             elif result.get("status") == "cancelled":
                 if cm_op:
                     try:
                         get_cancel_manager().finish(cm_op, error="cancelled")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("CancelManager.finish failed for cancelled download %s: %s", model_id, exc)
             else:
                 safe_audit_log("model.download.failed", resource=model_id, detail=f"elapsed={_download_elapsed_ms:.0f}ms error={result.get('error', 'unknown')}")
                 if cm_op:
                     try:
                         get_cancel_manager().finish(cm_op, error=result.get("error", "download failed"))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("CancelManager.finish failed for failed download %s: %s", model_id, exc)
         except Exception as e:
             _download_elapsed_ms = (_time.monotonic() - _download_t0) * 1000
             safe_audit_log("model.download.failed", resource=model_id, detail=f"elapsed={_download_elapsed_ms:.0f}ms error={e}")
             if cm_op:
                 try:
                     get_cancel_manager().finish(cm_op, error=str(e))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("CancelManager.finish failed for download exception %s: %s", model_id, exc)
 
     async def get_download_status(self, model_id: str) -> Dict[str, Any]:
         """Get download progress for a specific model."""

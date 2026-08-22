@@ -72,6 +72,7 @@ _turbo_state: Dict[str, Any] = {
     "steps_per_sec": None,
     "eta_s": None,
     "elapsed_s": None,
+    "avg_quality": None,
     "result": None,
     "error": None,
 }
@@ -303,12 +304,15 @@ def _get_soul_traits(soul) -> dict:
 
 def _read_slo_json_header(path: Path) -> dict:
     try:
-        raw = path.read_bytes()
-        if raw[:4] != SOU_MAGIC:
-            return {}
         import struct
-        json_len = struct.unpack("<I", raw[8:12])[0]
-        return json.loads(raw[12:12+json_len].decode())
+        with open(path, "rb") as f:
+            magic = f.read(4)
+            if magic != SOU_MAGIC:
+                return {}
+            f.seek(8)
+            json_len = struct.unpack("<I", f.read(4))[0]
+            header = f.read(json_len)
+            return json.loads(header.decode())
     except Exception:
         return {}
 
@@ -398,6 +402,8 @@ class AutoTrainRouter:
         self.TURBO_DIR = REPO_ROOT / "models" / "turbo-trained"
         self.TURBO_DIR.mkdir(parents=True, exist_ok=True)
         self.LORA_DIR = LORA_DIR
+        self._checkpoints_cache: Optional[tuple] = None
+        self._checkpoints_cache_ts: float = 0
         self._register_routes()
 
     def _find_checkpoint(self, name: str) -> Optional[Path]:
@@ -624,6 +630,7 @@ class AutoTrainRouter:
                 _turbo_state["steps_per_sec"] = info.get("steps_per_sec", _turbo_state["steps_per_sec"])
                 _turbo_state["eta_s"] = info.get("eta_s", _turbo_state["eta_s"])
                 _turbo_state["elapsed_s"] = info.get("elapsed_s", _turbo_state["elapsed_s"])
+                _turbo_state["avg_quality"] = info.get("avg_quality", _turbo_state.get("avg_quality"))
             job = get_training_runtime().get(job_id)
             if job is not None:
                 with _turbo_lock:
@@ -745,14 +752,13 @@ class AutoTrainRouter:
             if job_id:
                 try:
                     _auto_train_pgq.cancel_training(job_id)
-                except Exception:
-                    pass
-                    autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                except Exception as exc:
+                    autotrain_logger.warning("Failed to cancel turbo training job %s: %s", job_id, exc)
         try:
             from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
             get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
-        except Exception:
-            pass
+        except Exception as exc:
+            autotrain_logger.warning("CancelManager.cancel_all failed: %s", exc)
         if _auto_train_cancel_event is not None:
             safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelling")
             return {"status": "cancelling", "message": "Cancelling auto-training"}
@@ -867,8 +873,8 @@ class AutoTrainRouter:
                     try:
                         from domains.infrastructure.cancel_manager import get_cancel_manager
                         get_cancel_manager().finish(_stream_cm_op_id, error=error if status != "complete" else "")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        autotrain_logger.debug("CancelManager.finish failed: %s", exc)
 
             deadline = time.time() + 3600
             heartbeat_interval = 10.0
@@ -963,31 +969,50 @@ class AutoTrainRouter:
 
     async def list_checkpoints(self) -> dict:
         """list_checkpoints."""
+        import time
+        now = time.monotonic()
+        if self._checkpoints_cache and (now - self._checkpoints_cache_ts) < 5:
+            return success_response(data=self._checkpoints_cache[0])
+
+        def _stat_key(p: Path):
+            try:
+                return p.stat().st_mtime, p
+            except OSError:
+                return (0, p)
+
         checkpoints = []
         seen = set()
 
         for ext in ("*.soul", "*.slo"):
-            for f in sorted(self.CHECKPOINTS_DIR.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
+            for f in sorted(self.CHECKPOINTS_DIR.glob(ext), key=_stat_key, reverse=True):
                 if f.name in seen:
                     continue
                 seen.add(f.name)
-                if f.suffix == ".soul" and f.stat().st_size < 4096:
+                try:
+                    st = f.stat()
+                except OSError:
+                    continue
+                if f.suffix == ".soul" and st.st_size < 4096:
                     autotrain_logger.debug("Skipping corrupt header-only checkpoint: %s", f.name)
                     continue
-                info = self._load_soul(f.name)
+                info = self._load_soul_from_path(f, st)
                 if info:
                     checkpoints.append(info)
 
-        for f in sorted(self.TURBO_DIR.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
+        for f in sorted(self.TURBO_DIR.glob("*.soul"), key=_stat_key, reverse=True):
             if f.name in seen:
                 continue
             seen.add(f.name)
-            info = self._load_soul(f.name)
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            info = self._load_soul_from_path(f, st)
             if info:
                 info["source"] = "turbo"
                 checkpoints.append(info)
 
-        for npz in sorted(self.LORA_DIR.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
+        for npz in sorted(self.LORA_DIR.glob("*.soul"), key=_stat_key, reverse=True):
             if npz.name not in seen:
                 seen.add(npz.name)
                 info = self._load_lora_soul(npz.name)
@@ -996,6 +1021,9 @@ class AutoTrainRouter:
 
         for ckpt in checkpoints:
             ckpt["description"] = _describe_checkpoint(ckpt)
+
+        self._checkpoints_cache = (checkpoints,)
+        self._checkpoints_cache_ts = now
 
         return success_response(data=checkpoints)
 
@@ -1017,6 +1045,7 @@ class AutoTrainRouter:
                         meta.unlink()
 
         if deleted:
+            self._checkpoints_cache = None
             safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
             return success_response(data={"name": deleted}, message="deleted")
         return success_response(data={"name": name}, message="not_found")
@@ -1072,6 +1101,7 @@ class AutoTrainRouter:
 
             safe_audit_log("training.checkpoint.load", resource=cp.name, detail=f"vocab={len(stoi)} params={soul_net.num_parameters()}")
 
+            self._checkpoints_cache = None
             return success_response(data={
                 "name": cp.name,
                 "soul": soul_meta.get("soul_name", soul_net.soul_name),
@@ -1302,8 +1332,8 @@ class AutoTrainRouter:
                 cancel_fn=lambda: _auto_train_cancel_event.set() if _auto_train_cancel_event else None,
             )
             _mgr.start(_sess_cm_op_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            autotrain_logger.warning("CancelManager registration failed for from-sessions: %s", exc)
 
         from training.runtime import get_training_runtime
         runtime_job = {
@@ -1335,8 +1365,8 @@ class AutoTrainRouter:
                     try:
                         from domains.infrastructure.cancel_manager import get_cancel_manager
                         get_cancel_manager().finish(_sess_cm_op_id, error=error if status != "complete" else "")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        autotrain_logger.debug("CancelManager.finish failed: %s", exc)
 
             deadline = time.time() + 3600
             heartbeat_interval = 10.0
@@ -1429,17 +1459,15 @@ class AutoTrainRouter:
         try:
             from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
             get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
-        except Exception:
-            pass
+        except Exception as exc:
+            autotrain_logger.warning("CancelManager.cancel_all failed for from-sessions: %s", exc)
         safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelled")
         return success_response(message="Cancel signal sent")
 
-    def _load_soul(self, name: str) -> dict:
-        ckpt_file = self._find_checkpoint(name)
-        if ckpt_file is None:
-            return {"name": name, "soul": "unknown"}
-
-        size_mb = round(ckpt_file.stat().st_size / (1024 * 1024), 2)
+    def _load_soul_from_path(self, ckpt_file: Path, st: Any = None) -> dict:
+        if st is None:
+            st = ckpt_file.stat()
+        size_mb = round(st.st_size / (1024 * 1024), 2)
         meta = _load_soul_meta(ckpt_file)
 
         if meta:
@@ -1470,9 +1498,13 @@ class AutoTrainRouter:
 
         return {"name": ckpt_file.name, "soul": "unknown", "size_mb": size_mb}
 
-    def _load_lora_soul(self, name: str) -> Optional[dict]:
-        from domains.inference import load_soul
+    def _load_soul(self, name: str) -> dict:
+        ckpt_file = self._find_checkpoint(name)
+        if ckpt_file is None:
+            return {"name": name, "soul": "unknown"}
+        return self._load_soul_from_path(ckpt_file)
 
+    def _load_lora_soul(self, name: str) -> Optional[dict]:
         candidate = None
         for lora_dir in (self.LORA_DIR, self.CHECKPOINTS_DIR):
             for ext in ("", ".soul"):

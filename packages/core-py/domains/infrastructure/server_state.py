@@ -434,9 +434,9 @@ class ServerState:
             rss_mb = proc_mem.rss / (1024 * 1024)
             virtual_mb = proc_mem.vms / (1024 * 1024)
             system_percent = mem.percent
-        except Exception:
+        except Exception as exc:
+            logger.debug("Memory stats collection failed: %s", exc)
             rss_mb = 0.0
-            virtual_mb = 0.0
             system_percent = 0.0
         with self._lock:
             self._memory_history.append({

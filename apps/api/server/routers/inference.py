@@ -83,8 +83,8 @@ def _check_memory_pressure() -> Optional[str]:
             return f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
         if mem.percent > 85:
             logger.warning("Memory pressure: %.0f%% used — inference may be slow", mem.percent, extra={"tag": "INF"})
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Memory pressure check failed: %s", exc)
     return None
 
 class CreateSessionRequest(BaseModel):

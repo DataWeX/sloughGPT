@@ -248,9 +248,8 @@ async def run_assembly(req: VMRunRequest) -> dict:
                 if line:
                     lines.append(line)
             vga_text = "\n".join(lines) if lines else None
-        except Exception:
-            pass
-        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+        except Exception as exc:
+            logger.debug("VGA text render failed: %s", exc)
 
         mem_dump = None
         if req.debug:
@@ -265,18 +264,16 @@ async def run_assembly(req: VMRunRequest) -> dict:
                     ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
                     rows.append(f"{base + row:08X}  {hex_part:<48s}  {ascii_part}")
                 mem_dump = "\n".join(rows)
-            except Exception:
-                pass
-            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            except Exception as exc:
+                logger.debug("Memory dump failed: %s", exc)
 
         kbd_state = None
         try:
             kbd = vs.devices.get("keyboard")
             if kbd and hasattr(kbd, "_scancode_buffer"):
                 kbd_state = "".join(chr(b) for b in kbd._scancode_buffer if 32 <= b < 127)
-        except Exception:
-            pass
-        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+        except Exception as exc:
+            logger.debug("Keyboard state capture failed: %s", exc)
 
         return VMRunResponse(
             success=True,

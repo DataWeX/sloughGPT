@@ -336,18 +336,22 @@ class DatasetsRouter:
             output_dir = self._DATASETS_DIR / name
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            req = urllib.request.Request(request.url, headers={"User-Agent": "SloughGPT"})
-            raw = await asyncio.to_thread(urllib.request.urlopen, req, 30)
-            content = raw.read().decode(request.encoding or "utf-8")
+            def _fetch_and_parse():
+                req = urllib.request.Request(request.url, headers={"User-Agent": "SloughGPT"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    content = resp.read().decode(request.encoding or "utf-8")
+                lines = content.strip().split("\n")
+                if not lines:
+                    return None, None, 0
+                dialect = csv.Sniffer().sniff(lines[0][:1000], delimiters=",;\t")
+                reader = csv.reader(lines, dialect=dialect)
+                headers = next(reader)
+                rows = list(reader)
+                return headers, rows, len(rows)
 
-            lines = content.strip().split("\n")
-            if not lines:
+            headers, rows, row_count = await asyncio.to_thread(_fetch_and_parse)
+            if headers is None:
                 raise_error("CSV file is empty", "E_BAD_REQUEST")
-
-            dialect = csv.Sniffer().sniff(lines[0][:1000], delimiters=",;\t")
-            reader = csv.reader(lines, dialect=dialect)
-            headers = next(reader)
-            rows = list(reader)
 
             jsonl_path = output_dir / f"{name}.jsonl"
             meta_path = output_dir / "metadata.json"
@@ -362,11 +366,11 @@ class DatasetsRouter:
 
             await asyncio.to_thread(_write_csv)
 
-            safe_audit_log("dataset.import", resource=name, detail="csv", url=request.url, rows=len(rows), columns=len(headers))
+            safe_audit_log("dataset.import", resource=name, detail="csv", url=request.url, rows=row_count, columns=len(headers))
             return ImportResponse(
                 success=True,
                 dataset_id=name,
-                message=f"Imported CSV with {len(rows)} rows, {len(headers)} columns",
+                message=f"Imported CSV with {row_count} rows, {len(headers)} columns",
                 output_path=str(output_dir),
             )
         except HTTPException:
@@ -429,15 +433,15 @@ class DatasetsRouter:
                 try:
                     from domains.infrastructure.cancel_manager import get_cancel_manager
                     get_cancel_manager().finish(cm_op)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("CancelManager.finish failed for batch import: %s", exc)
         except Exception as e:
             if cm_op:
                 try:
                     from domains.infrastructure.cancel_manager import get_cancel_manager
                     get_cancel_manager().finish(cm_op, error=str(e))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("CancelManager.finish failed for batch import error: %s", exc)
 
         _batch_elapsed_ms = (time.monotonic() - _batch_t0) * 1000
         safe_audit_log("dataset.import", resource=f"batch({len(request.sources)})", detail=f"batch elapsed={_batch_elapsed_ms:.0f}ms", imported=len(results), errors=len(errors))
