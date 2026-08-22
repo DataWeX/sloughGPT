@@ -130,21 +130,21 @@ export function ChatScreen() {
         keyboardVerticalOffset={0}>
         {/* Header */}
         <XStack
-          paddingHorizontal={16}
-          paddingVertical={12}
-          borderBottomWidth={0.5}
-          borderBottomColor="$borderColor"
+          paddingHorizontal={20}
+          paddingVertical={14}
+          borderBottomWidth={0}
           backgroundColor="$background"
           alignItems="center"
           justifyContent="space-between">
-          <XStack alignItems="center" gap={12}>
+          <XStack alignItems="center" gap={14}>
             <YStack
-              width={36} height={36} borderRadius={12}
+              width={40} height={40} borderRadius={14}
               alignItems="center" justifyContent="center"
+              backgroundColor={colors.primaryAlpha(0.08)}
               onPress={openSidebar}
               pressStyle={{opacity: 0.6, scale: 0.95}}
               accessible accessibilityRole="button" accessibilityLabel="Open menu">
-              <Icon name="menu" size={18} color={colors.textSecondary} />
+              <Icon name="menu" size={18} color={colors.primary} />
             </YStack>
             <YStack
               alignItems="flex-start"
@@ -155,16 +155,14 @@ export function ChatScreen() {
                 }
                 a.lastHeaderTap.current = now;
               }}>
-              <XStack alignItems="center" gap={6}>
-                <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Chat</Text>
+              <XStack alignItems="center" gap={8}>
+                <Text fontSize={20} fontWeight="700" letterSpacing={-0.5} color="$color">Chat</Text>
                 {a.currentSoul && (
                   <YStack
-                    backgroundColor={colors.primaryAlpha(0.1)}
+                    backgroundColor={colors.primaryAlpha(0.12)}
                     paddingHorizontal={10}
-                    paddingVertical={3}
+                    paddingVertical={4}
                     borderRadius={999}
-                    borderWidth={0.5}
-                    borderColor={colors.primaryAlpha(0.18)}
                     onPress={() => a.setShowSoulPicker(true)}
                     pressStyle={{opacity: 0.7, scale: 0.95}}>
                     <Text fontSize={11} fontWeight="600" color="$color9">{a.currentSoul.name}</Text>
@@ -174,24 +172,26 @@ export function ChatScreen() {
             </YStack>
           </XStack>
 
-          <XStack alignItems="center" gap={4}>
+          <XStack alignItems="center" gap={6}>
             {a.messages.length > 0 && (
               <YStack
-                width={36} height={36} borderRadius={12}
+                width={40} height={40} borderRadius={14}
                 alignItems="center" justifyContent="center"
+                backgroundColor={colors.primaryAlpha(0.08)}
                 onPress={a.handleExportChat}
                 pressStyle={{opacity: 0.6, scale: 0.95}}
                 accessible accessibilityRole="button" accessibilityLabel="Export conversation">
-                <Icon name="share-2" size={18} color={colors.textSecondary} />
+                <Icon name="share-2" size={18} color={colors.primary} />
               </YStack>
             )}
             <YStack
-              width={36} height={36} borderRadius={12}
+              width={40} height={40} borderRadius={14}
               alignItems="center" justifyContent="center"
+              backgroundColor={colors.primaryAlpha(0.08)}
               onPress={() => a.setShowSettings(true)}
               pressStyle={{opacity: 0.6, scale: 0.95}}
               accessible accessibilityRole="button" accessibilityLabel="Settings">
-              <Icon name="more-vertical" size={18} color={colors.textSecondary} />
+              <Icon name="more-vertical" size={18} color={colors.primary} />
             </YStack>
           </XStack>
         </XStack>
@@ -309,50 +309,53 @@ export function ChatScreen() {
             paddingHorizontal={32}
             backgroundColor={a.chatBackground || 'var(--background)'}>
             <YStack
-              width={80} height={80} borderRadius={40}
-              backgroundColor={colors.primaryAlpha(0.08)}
+              width={88} height={88} borderRadius={28}
+              backgroundColor={colors.primaryAlpha(0.1)}
               alignItems="center" justifyContent="center"
-              marginBottom={24}
-              borderWidth={0.5}
-              borderColor={colors.primaryAlpha(0.15)}>
+              marginBottom={28}
+              shadowColor={colors.primary}
+              shadowOffset={{width: 0, height: 8}}
+              shadowOpacity={0.15}
+              shadowRadius={24}
+              elevation={8}>
               <YStack
-                width={56} height={56} borderRadius={28}
-                backgroundColor={colors.primaryAlpha(0.1)}
+                width={56} height={56} borderRadius={18}
+                backgroundColor={colors.primaryAlpha(0.15)}
                 alignItems="center" justifyContent="center">
                 <Icon name="message-circle" size={26} color={colors.primary} />
               </YStack>
             </YStack>
 
-            <Text fontSize={22} fontWeight="700" letterSpacing={-0.5} color="$color" marginBottom={8} textAlign="center">
-              {a.currentSoul ? a.currentSoul.name : 'Chat'}
+            <Text fontSize={24} fontWeight="700" letterSpacing={-0.5} color="$color" marginBottom={8} textAlign="center">
+              {a.currentSoul ? a.currentSoul.name : 'Start chatting'}
             </Text>
 
-            <Text fontSize={14} color="$color11" textAlign="center" marginBottom={36} lineHeight={20} maxWidth={260}>
+            <Text fontSize={15} color="$color10" textAlign="center" marginBottom={40} lineHeight={22} maxWidth={280}>
               {a.currentSoul
                 ? (a.currentSoul.description || 'Ask me anything')
-                : 'Start a conversation'}
+                : 'Send a message to begin a conversation with your AI'}
             </Text>
 
-            <YStack gap={12} width="100%" maxWidth={320}>
+            <YStack gap={10} width="100%" maxWidth={340}>
               {SUGGESTIONS.map(s => (
                 <YStack
                   key={s.text}
                   flexDirection="row"
                   alignItems="center"
-                  gap={12}
-                  paddingHorizontal={16}
-                  paddingVertical={14}
-                  borderRadius={14}
+                  gap={14}
+                  paddingHorizontal={18}
+                  paddingVertical={16}
+                  borderRadius={16}
                   backgroundColor={colors.primaryAlpha(0.06)}
-                  borderWidth={0.5}
-                  borderColor={colors.primaryAlpha(0.12)}
+                  borderWidth={1}
+                  borderColor={colors.primaryAlpha(0.08)}
                   onPress={() => a.handleSuggestion(s.prompt)}
-                  pressStyle={{opacity: 0.7, scale: 0.98, backgroundColor: colors.primaryAlpha(0.1)}}>
+                  pressStyle={{opacity: 0.7, scale: 0.98, backgroundColor: colors.primaryAlpha(0.12)}}>
                   <YStack
-                    width={32} height={32} borderRadius={10}
-                    backgroundColor={colors.primaryAlpha(0.1)}
+                    width={36} height={36} borderRadius={12}
+                    backgroundColor={colors.primaryAlpha(0.12)}
                     alignItems="center" justifyContent="center">
-                    <Icon name={s.icon} size={16} color={colors.primary} />
+                    <Icon name={s.icon} size={18} color={colors.primary} />
                   </YStack>
                   <Text fontSize={14} fontWeight="500" color="$color" flex={1}>{s.text}</Text>
                   <YStack style={{transform: [{rotate: '-90deg'}]}}>
@@ -362,7 +365,7 @@ export function ChatScreen() {
               ))}
             </YStack>
 
-            <Text fontSize={11} color="$color10" marginTop={32} textAlign="center" letterSpacing={0.3}>
+            <Text fontSize={11} color="$color10" marginTop={36} textAlign="center" letterSpacing={0.3}>
               Swipe left on a message to delete it
             </Text>
           </YStack>

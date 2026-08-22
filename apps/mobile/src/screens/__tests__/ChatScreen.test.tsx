@@ -341,7 +341,7 @@ describe('ChatScreen — ReasoningPanel', () => {
 
   it('renders with empty state when no messages', async () => {
     const view = await render(<ChatScreen />);
-    // Empty state shows "Chat" as title and "Start a conversation" as subtitle
-    expect(view.getByText('Start a conversation')).toBeTruthy();
+    // Empty state shows soul name or "Start chatting" as title
+    expect(view.getByText('Send a message to begin a conversation with your AI')).toBeTruthy();
   });
 });

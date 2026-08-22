@@ -154,6 +154,7 @@ async def training_handler(task) -> dict:
                 "learning_rate": info.get("learning_rate", 0),
                 "done": info.get("done", False),
                 "done_reason": info.get("done_reason"),
+                "avg_quality": info.get("avg_quality"),
             },
             meta={
                 "epoch": info.get("epoch", 0),

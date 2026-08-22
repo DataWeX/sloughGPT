@@ -60,6 +60,8 @@ class TrainResult:
         checkpoint_name: Name of the saved checkpoint (if any).
         method: Training method used (``"hf"``, ``"slonet"``, ``"nanogpt"``, etc.).
         metrics: Additional metrics dict (perplexity, BLEU, accuracy, etc.).
+        avg_quality: Average quality score of training data (0-5 scale).
+        data_quality: Full data quality breakdown (repetition, diversity, language).
         error: Error message if success is False.
     """
     success: bool = True
@@ -73,6 +75,8 @@ class TrainResult:
     checkpoint_name: Optional[str] = None
     method: str = ""
     metrics: Dict[str, Any] = field(default_factory=dict)
+    avg_quality: Optional[float] = None
+    data_quality: Optional[Dict[str, float]] = None
     error: Optional[str] = None
 
     # Backward-compat aliases for old code that expects dict fields
@@ -117,6 +121,8 @@ class TrainResult:
             "elapsed": self.elapsed,
             "phases": self.phases,
             "checkpoint": self.checkpoint_name,
+            "avg_quality": self.avg_quality,
+            "data_quality": self.data_quality,
         }
         d.update(self.metrics)
         return d

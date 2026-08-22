@@ -53,10 +53,13 @@ import {ExperimentsScreen} from './src/screens/ExperimentsScreen';
 import {FilesScreen} from './src/screens/FilesScreen';
 import {RegistryScreen} from './src/screens/RegistryScreen';
 import {MemoryScreen} from './src/screens/MemoryScreen';
+import {AuthScreen} from './src/screens/AuthScreen';
+import {MonitoringScreen} from './src/screens/MonitoringScreen';
+import {ShellScreen} from './src/screens/ShellScreen';
+import {VMConsoleScreen} from './src/screens/VMConsoleScreen';
 import {useSettingsStore} from './src/stores/settings-store';
 import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
-import {SplashScreen} from './src/components/SplashAnimated';
 import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
 import {ToastContainer} from './src/components/ToastContainer';
 import {OnboardingScreen, isFirstLaunch} from './src/screens/OnboardingScreen';
@@ -109,6 +112,10 @@ function ToolsStack() {
       <Stack.Screen name="Files" component={FilesScreen} />
       <Stack.Screen name="Registry" component={RegistryScreen} />
       <Stack.Screen name="Memory" component={MemoryScreen} />
+      <Stack.Screen name="Monitoring" component={MonitoringScreen} />
+      <Stack.Screen name="Shell" component={ShellScreen} />
+      <Stack.Screen name="VMConsole" component={VMConsoleScreen} />
+      <Stack.Screen name="Auth" component={AuthScreen} />
     </Stack.Navigator>
   );
 }
@@ -152,6 +159,10 @@ function SettingsStack() {
       <Stack.Screen name="Files" component={FilesScreen} />
       <Stack.Screen name="Registry" component={RegistryScreen} />
       <Stack.Screen name="Memory" component={MemoryScreen} />
+      <Stack.Screen name="Monitoring" component={MonitoringScreen} />
+      <Stack.Screen name="Shell" component={ShellScreen} />
+      <Stack.Screen name="VMConsole" component={VMConsoleScreen} />
+      <Stack.Screen name="Auth" component={AuthScreen} />
     </Stack.Navigator>
   );
 }
@@ -186,14 +197,12 @@ function MainContent() {
 
 function AppInner() {
   const isDark = useColorScheme() === 'dark';
-  const [ready, setReady] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const sidebarState = useSidebar();
   const useSidebarRef = useRef(sidebarState);
   useSidebarRef.current = sidebarState;
 
   useEffect(() => {
-    setReady(true);
     isFirstLaunch().then(setNeedsOnboarding).catch(() => {});
     registerForPushNotifications().catch(() => {});
     const unsub = onNotification((_title, _body, _data) => {
@@ -231,26 +240,6 @@ function AppInner() {
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
   }, []);
-
-  if (!ready) {
-    return (
-      <SafeAreaProvider>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
-        <SplashScreen />
-      </SafeAreaProvider>
-    );
-  }
-
-  if (needsOnboarding) {
-    return (
-      <TamaguiProvider>
-        <SafeAreaProvider>
-          <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
-          <OnboardingScreen onComplete={() => setNeedsOnboarding(false)} />
-        </SafeAreaProvider>
-      </TamaguiProvider>
-    );
-  }
 
   const navTheme = isDark
     ? {
@@ -297,14 +286,20 @@ function AppInner() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
-      <SidebarProvider>
-        <NavigationContainer theme={navTheme} linking={linking}>
-          <ConnectionStatusBar />
-          <ToastContainer />
-          <MainContent />
-          <SidebarDrawer />
-        </NavigationContainer>
-      </SidebarProvider>
+      {needsOnboarding ? (
+        <TamaguiProvider>
+          <OnboardingScreen onComplete={() => setNeedsOnboarding(false)} />
+        </TamaguiProvider>
+      ) : (
+        <SidebarProvider>
+          <NavigationContainer theme={navTheme} linking={linking}>
+            <ConnectionStatusBar />
+            <ToastContainer />
+            <MainContent />
+            <SidebarDrawer />
+          </NavigationContainer>
+        </SidebarProvider>
+      )}
     </SafeAreaProvider>
   );
 }

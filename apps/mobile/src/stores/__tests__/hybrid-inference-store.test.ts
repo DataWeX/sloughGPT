@@ -7,12 +7,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as slonet from '../../services/onnx-inference-service';
 import * as llamaRn from '../../services/llama-rn-service';
+import * as souLoader from '../../services/sou-loader';
 
 jest.mock('../../services/onnx-inference-service');
 jest.mock('../../services/llama-rn-service');
+jest.mock('../../services/sou-loader');
 
 const mockSloNet = slonet as jest.Mocked<typeof slonet>;
 const mockLlamaRn = llamaRn as jest.Mocked<typeof llamaRn>;
+const mockSouLoader = souLoader as jest.Mocked<typeof souLoader>;
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {useHybridStore} = require('../hybrid-inference-store');
@@ -132,6 +135,28 @@ describe('loadSloNet', () => {
     const s = useHybridStore.getState();
     expect(s.slonet.loaded).toBe(false);
     expect(s.lastError).toBe('bad checkpoint');
+  });
+});
+
+// ── loadSloNetFromSou ────────────────────────────────────────────────────
+
+describe('loadSloNetFromSou', () => {
+  it('marks slonet as loaded when picker succeeds', async () => {
+    mockSouLoader.pickAndLoadSou.mockResolvedValue({ name: 'my-model', config: { n_embed: 128, n_head: 4, n_layer: 2, vocab_size: 100, block_size: 64 } });
+    await useHybridStore.getState().loadSloNetFromSou();
+
+    const s = useHybridStore.getState();
+    expect(s.slonet.loaded).toBe(true);
+    expect(s.slonet.modelName).toBe('my-model');
+  });
+
+  it('sets error when picker throws', async () => {
+    mockSouLoader.pickAndLoadSou.mockRejectedValue(new Error('picker failed'));
+    await useHybridStore.getState().loadSloNetFromSou();
+
+    const s = useHybridStore.getState();
+    expect(s.slonet.loaded).toBe(false);
+    expect(s.lastError).toBe('picker failed');
   });
 });
 

@@ -16,6 +16,7 @@ host ``ShellREPL`` class.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 # ── ANSI helpers (imported from the parent module at class level) ──────
@@ -395,18 +396,25 @@ class LinuxCommandsMixin:
         parts = args.strip().split() if args else []
         n = 10
         targets = []
-        for p in parts:
+        i = 0
+        while i < len(parts):
+            p = parts[i]
             if p.startswith("-") and p[1:].isdigit():
                 n = int(p[1:])
+                i += 1
+            elif p == "-n" and i + 1 < len(parts):
+                n = int(parts[i + 1])
+                i += 2
             else:
                 targets.append(p)
+                i += 1
         if not targets:
             if self._piped_input:
                 lines = self._piped_input.splitlines()
                 self._print("\n".join(lines[:n]))
                 self._last_exit_code = 0
                 return
-            self._print("  Usage: head [-N] <file>")
+            self._print("  Usage: head [-N | -n N] <file>")
             self._last_exit_code = 1
             return
         for path in targets:
@@ -436,18 +444,25 @@ class LinuxCommandsMixin:
         parts = args.strip().split() if args else []
         n = 10
         targets = []
-        for p in parts:
+        i = 0
+        while i < len(parts):
+            p = parts[i]
             if p.startswith("-") and p[1:].isdigit():
                 n = int(p[1:])
+                i += 1
+            elif p == "-n" and i + 1 < len(parts):
+                n = int(parts[i + 1])
+                i += 2
             else:
                 targets.append(p)
+                i += 1
         if not targets:
             if self._piped_input:
                 lines = self._piped_input.splitlines()
                 self._print("\n".join(lines[-n:]))
                 self._last_exit_code = 0
                 return
-            self._print("  Usage: tail [-N] <file>")
+            self._print("  Usage: tail [-N | -n N] <file>")
             self._last_exit_code = 1
             return
         for path in targets:
@@ -474,55 +489,137 @@ class LinuxCommandsMixin:
 
     def _cmd_wc(self, args: str = "") -> None:
         """Count lines, words, and characters (VFS-aware)."""
-        if not args:
+        parts = args.strip().split() if args else []
+        show_lines = show_words = show_chars = False
+        targets = []
+        for p in parts:
+            if p == "-l":
+                show_lines = True
+            elif p == "-w":
+                show_words = True
+            elif p == "-c" or p == "-m":
+                show_chars = True
+            elif not p.startswith("-"):
+                targets.append(p)
+        if not show_lines and not show_words and not show_chars:
+            show_lines = show_words = show_chars = True
+        if not targets:
             if self._piped_input:
                 lines = len(self._piped_input.splitlines())
                 words = len(self._piped_input.split())
                 chars = len(self._piped_input)
-                self._print(f"  {lines:4} {words:4} {chars:4}")
+                parts_list = []
+                if show_lines:
+                    parts_list.append(f"{lines:4}")
+                if show_words:
+                    parts_list.append(f"{words:4}")
+                if show_chars:
+                    parts_list.append(f"{chars:4}")
+                self._print(" ".join(parts_list))
                 self._last_exit_code = 0
                 return
-            self._print("  Usage: wc <file>")
+            self._print("  Usage: wc [-l] [-w] [-c] <file>")
             self._last_exit_code = 1
             return
-        target = os.path.expanduser(args.strip())
-        try:
-            vfs = self.os.vfs
-            if vfs and (target.startswith("/dev") or target.startswith("/proc")):
-                content = vfs.read(target)
-            else:
-                content = Path(target).read_text()
-            if content is None:
-                self._print(f"  wc: {args.strip()}: No such file or directory")
+        for target in targets:
+            target = os.path.expanduser(target)
+            try:
+                vfs = self.os.vfs
+                if vfs and (target.startswith("/dev") or target.startswith("/proc")):
+                    content = vfs.read(target)
+                else:
+                    content = Path(target).read_text()
+                if content is None:
+                    self._print(f"  wc: {target}: No such file or directory")
+                    self._last_exit_code = 1
+                    return
+                lines = len(content.splitlines())
+                words = len(content.split())
+                chars = len(content)
+                parts_list = []
+                if show_lines:
+                    parts_list.append(f"{lines:4}")
+                if show_words:
+                    parts_list.append(f"{words:4}")
+                if show_chars:
+                    parts_list.append(f"{chars:4}")
+                if len(targets) > 1:
+                    parts_list.append(target)
+                self._print(" ".join(parts_list))
+                self._last_exit_code = 0
+            except FileNotFoundError:
+                self._print(f"  wc: {target}: No such file or directory")
                 self._last_exit_code = 1
-                return
-            lines = len(content.splitlines())
-            words = len(content.split())
-            chars = len(content)
-            self._print(f"  {lines:4} {words:4} {chars:4} {args.strip()}")
-            self._last_exit_code = 0
-        except FileNotFoundError:
-            self._print(f"  wc: {args.strip()}: No such file or directory")
-            self._last_exit_code = 1
 
     def _cmd_grep(self, args: str = "") -> None:
-        """Search for patterns in files or piped input (VFS-aware)."""
+        """Search for patterns in files or piped input (VFS-aware).
+
+        Flags:
+            -i  Ignore case
+            -v  Invert match
+            -c  Count matching lines only
+            -l  Print only filenames with matches
+            -n  Prefix each output line with line number
+            -w  Match whole words only
+            -A N  Print N lines after each match
+            -B N  Print N lines before each match
+            -C N  Print N lines of context (both sides)
+        """
         if not args and not self._piped_input:
-            self._print("  Usage: grep <pattern> [file]")
+            self._print("  Usage: grep [-i] [-v] [-c] [-l] [-n] [-w] [-A N] [-B N] [-C N] <pattern> [file]")
             self._last_exit_code = 1
             return
         import re as _re
         parts = args.strip().split()
         flags = [p for p in parts if p.startswith("-")]
         non_flags = [p for p in parts if not p.startswith("-")]
+
+        # Parse simple flags
         ignore_case = any(f in ("-i", "-vi") for f in flags)
         invert = any(f in ("-v", "-vi") for f in flags)
+        count_only = "-c" in flags
+        files_only = "-l" in flags
+        line_numbers = "-n" in flags
+        word_boundary = "-w" in flags
+
+        # Parse -A/-B/-C with numeric args
+        after_context = 0
+        before_context = 0
+        context = 0
+        i = 0
+        clean_parts = []
+        while i < len(parts):
+            if parts[i] in ("-A", "-B", "-C") and i + 1 < len(parts):
+                try:
+                    n = int(parts[i + 1])
+                    if parts[i] == "-A":
+                        after_context = n
+                    elif parts[i] == "-B":
+                        before_context = n
+                    else:
+                        context = n
+                    i += 2
+                    continue
+                except ValueError:
+                    pass
+            clean_parts.append(parts[i])
+            i += 1
+
+        # Re-parse non-flags from clean_parts
+        non_flags = [p for p in clean_parts if not p.startswith("-")]
         pattern = non_flags[0] if non_flags else ""
         target = non_flags[1] if len(non_flags) > 1 else None
+
         if not pattern:
             self._print("  Usage: grep <pattern> [file]")
             self._last_exit_code = 1
             return
+
+        # Apply -C as both -A and -B
+        if context > 0:
+            after_context = max(after_context, context)
+            before_context = max(before_context, context)
+
         try:
             if target:
                 target_path = os.path.expanduser(target)
@@ -538,15 +635,65 @@ class LinuxCommandsMixin:
                 lines = content.splitlines()
             else:
                 lines = self._piped_input.splitlines()
+
+            # Build regex
             kwargs = {"flags": _re.IGNORECASE} if ignore_case else {}
-            matched = 0
-            for line in lines:
-                found = _re.search(pattern, line, **kwargs) if kwargs else _re.search(pattern, line)
+            if word_boundary:
+                pat = _re.compile(r"\b" + pattern + r"\b", **kwargs) if kwargs else _re.compile(r"\b" + pattern + r"\b")
+            else:
+                pat = _re.compile(pattern, **kwargs) if kwargs else _re.compile(pattern)
+
+            matched_indices = set()
+            for idx, line in enumerate(lines):
+                found = bool(pat.search(line))
                 if invert:
                     found = not found
                 if found:
-                    self._print(line)
+                    matched_indices.add(idx)
+
+            if count_only:
+                self._print(str(len(matched_indices)))
+                self._last_exit_code = 0 if matched_indices else 1
+                return
+
+            if files_only:
+                if matched_indices:
+                    self._print(target or "<stdin>")
+                self._last_exit_code = 0 if matched_indices else 1
+                return
+
+            # Build output with context
+            output_indices = set()
+            for idx in matched_indices:
+                for b in range(max(0, idx - before_context), idx):
+                    output_indices.add(b)
+                for a in range(idx + 1, min(len(lines), idx + 1 + after_context)):
+                    output_indices.add(a)
+                output_indices.add(idx)
+
+            matched = 0
+            prev_printed = -2  # sentinel: no previous line printed
+            for idx in sorted(output_indices):
+                if before_context > 0 or after_context > 0:
+                    if idx not in matched_indices and (prev_printed < idx - 1):
+                        if prev_printed >= 0:
+                            self._print("--")
+                        # Print before-context lines that precede this match
+                        for b in range(max(0, idx - before_context), idx):
+                            if b not in output_indices or b in matched_indices:
+                                continue
+                            prefix = f"{b + 1}:" if line_numbers else ""
+                            self._print(f"{prefix}{lines[b]}")
+                if idx in matched_indices:
+                    prefix = f"{idx + 1}:" if line_numbers else ""
+                    self._print(f"{prefix}{lines[idx]}")
                     matched += 1
+                    prev_printed = idx
+                elif after_context > 0 or before_context > 0:
+                    prefix = f"{idx + 1}:" if line_numbers else ""
+                    self._print(f"{prefix}{lines[idx]}")
+                    prev_printed = idx
+
             self._last_exit_code = 0 if matched else 1
         except _re.error as e:
             self._print(f"  grep: invalid pattern: {e}")
@@ -594,26 +741,51 @@ class LinuxCommandsMixin:
 
     def _cmd_uniq(self, args: str = "") -> None:
         """Remove adjacent duplicate lines (from file or piped input)."""
-        if args:
-            target = os.path.expanduser(args.strip())
+        parts = args.strip().split() if args else []
+        count_mode = False
+        ignore_case = False
+        target = None
+        for p in parts:
+            if p == "-c":
+                count_mode = True
+            elif p == "-i":
+                ignore_case = True
+            elif not p.startswith("-"):
+                target = p
+        if target:
             try:
-                lines = Path(target).read_text().splitlines()
+                lines = Path(os.path.expanduser(target)).read_text().splitlines()
             except FileNotFoundError:
-                self._print(f"  uniq: {args.strip()}: No such file or directory")
+                self._print(f"  uniq: {target}: No such file or directory")
                 self._last_exit_code = 1
                 return
         elif self._piped_input:
             lines = self._piped_input.splitlines()
         else:
-            self._print("  Usage: uniq [file]")
+            self._print("  Usage: uniq [-c] [-i] [file]")
             self._last_exit_code = 1
             return
         out = []
         prev = None
+        count = 0
         for l in lines:
-            if l != prev:
-                out.append(l)
+            key = l.lower() if ignore_case else l
+            prev_key = prev.lower() if ignore_case and prev is not None else prev
+            if key == prev_key:
+                count += 1
+            else:
+                if prev is not None:
+                    if count_mode:
+                        out.append(f"{count:>7} {prev}")
+                    else:
+                        out.append(prev)
                 prev = l
+                count = 1
+        if prev is not None:
+            if count_mode:
+                out.append(f"{count:>7} {prev}")
+            else:
+                out.append(prev)
         self._print("\n".join(out))
         self._last_exit_code = 0
 
@@ -687,19 +859,44 @@ class LinuxCommandsMixin:
         self._print(self._piped_input.rstrip("\n"))
         self._last_exit_code = 0
 
+    @staticmethod
+    def _expand_posix_class(s: str) -> str:
+        """Expand POSIX character class notation like [:alpha:] to character list."""
+        s = s.strip("'\"")
+        if not (s.startswith("[:") and s.endswith(":]")):
+            return s
+        cls = s[2:-2]
+        classes = {
+            "alpha": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "digit": "0123456789",
+            "alnum": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "lower": "abcdefghijklmnopqrstuvwxyz",
+            "upper": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "space": " \t\n\r\f\v",
+            "blank": " \t",
+            "punct": '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~',
+            "xdigit": "0123456789abcdefABCDEF",
+        }
+        return classes.get(cls, s)
+
     def _cmd_cut(self, args: str = "") -> None:
-        """Cut fields from lines of text (file or piped input)."""
+        """Cut fields, characters, or bytes from lines of text (file or piped input)."""
         if not args and not self._piped_input:
-            self._print("  Usage: cut -f<N> [-d<delim>] [file]")
+            self._print("  Usage: cut -f<N>[,...] [-d<delim>] [-s] [file]  or  cut -c<N>[,...] [file]  or  cut -b<N>[,...] [file]")
             self._last_exit_code = 1
             return
         parts = args.strip().split() if args else []
         delim = "\t"
         fields = []
+        char_ranges = []
+        byte_ranges = []
+        suppress_no_delim = False
         target = None
         for p in parts:
             if p.startswith("-d") and len(p) > 2:
-                delim = p[2:]
+                delim = self._expand_posix_class(p[2:])
+            elif p == "-s":
+                suppress_no_delim = True
             elif p.startswith("-f") and len(p) > 2:
                 for part in p[2:].split(","):
                     if "-" in part:
@@ -707,10 +904,31 @@ class LinuxCommandsMixin:
                         fields.extend(range(int(a) if a else 1, (int(b) if b else 9999) + 1))
                     else:
                         fields.append(int(part))
+            elif p.startswith("-b") and len(p) > 2:
+                for part in p[2:].split(","):
+                    if "-" in part:
+                        a, b = part.split("-", 1)
+                        byte_ranges.append((int(a) if a else 1, int(b) if b else 9999))
+                    else:
+                        n = int(part)
+                        byte_ranges.append((n, n))
+            elif p.startswith("-c") and len(p) > 2:
+                for part in p[2:].split(","):
+                    if "-" in part:
+                        a, b = part.split("-", 1)
+                        char_ranges.append((int(a) if a else 1, int(b) if b else 9999))
+                    else:
+                        n = int(part)
+                        char_ranges.append((n, n))
             elif not p.startswith("-"):
                 target = p
-        if not fields:
-            self._print("  cut: you must specify a list of fields (-f)")
+        mode_count = (1 if fields else 0) + (1 if char_ranges else 0) + (1 if byte_ranges else 0)
+        if mode_count == 0:
+            self._print("  cut: you must specify fields (-f), characters (-c), or bytes (-b)")
+            self._last_exit_code = 1
+            return
+        if mode_count > 1:
+            self._print("  cut: you cannot combine -f, -c, and -b")
             self._last_exit_code = 1
             return
         try:
@@ -728,12 +946,38 @@ class LinuxCommandsMixin:
             return
         out_lines = []
         for line in content.splitlines():
-            cols = line.split(delim)
-            chosen = []
-            for f in fields:
-                if f <= len(cols):
-                    chosen.append(cols[f - 1])
-            out_lines.append(delim.join(chosen))
+            if byte_ranges:
+                raw = line.encode("utf-8", errors="replace")
+                chosen = []
+                for lo, hi in byte_ranges:
+                    for i in range(lo, hi + 1):
+                        if i <= len(raw):
+                            chosen.append(raw[i - 1:i])
+                out_lines.append(b"".join(chosen).decode("utf-8", errors="replace"))
+            elif char_ranges:
+                chars = list(line)
+                chosen = []
+                for lo, hi in char_ranges:
+                    for i in range(lo, hi + 1):
+                        if i <= len(chars):
+                            chosen.append(chars[i - 1])
+                out_lines.append("".join(chosen))
+            else:
+                if len(delim) > 1:
+                    has_delim = re.search(f"[{re.escape(delim)}]", line) is not None
+                    cols = re.split(f"[{re.escape(delim)}]", line)
+                    join_delim = delim[0]
+                else:
+                    has_delim = delim in line
+                    cols = line.split(delim)
+                    join_delim = delim
+                if suppress_no_delim and not has_delim:
+                    continue
+                chosen = []
+                for f in fields:
+                    if f <= len(cols):
+                        chosen.append(cols[f - 1])
+                out_lines.append(join_delim.join(chosen))
         self._print("\n".join(out_lines))
         self._last_exit_code = 0
 
@@ -758,7 +1002,39 @@ class LinuxCommandsMixin:
             result = []
             i = 0
             while i < len(s):
-                if i + 2 < len(s) and s[i + 1] == "-" and ord(s[i]) < ord(s[i + 2]):
+                # POSIX character classes: [:alpha:], [:digit:], etc.
+                if s[i:i+2] == "[:" and ":]" in s[i:]:
+                    end = s.index(":]", i)
+                    cls = s[i+2:end]
+                    if cls == "alpha":
+                        result.extend("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                    elif cls == "digit":
+                        result.extend("0123456789")
+                    elif cls == "alnum":
+                        result.extend("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+                    elif cls == "lower":
+                        result.extend("abcdefghijklmnopqrstuvwxyz")
+                    elif cls == "upper":
+                        result.extend("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                    elif cls == "space":
+                        result.extend(" \t\n\r\f\v")
+                    elif cls == "blank":
+                        result.extend(" \t")
+                    elif cls == "punct":
+                        result.extend('!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')
+                    elif cls == "cntrl":
+                        result.extend(chr(c) for c in range(32))
+                    elif cls == "graph":
+                        result.extend(chr(c) for c in range(33, 127))
+                    elif cls == "print":
+                        result.extend(chr(c) for c in range(32, 127))
+                    elif cls == "xdigit":
+                        result.extend("0123456789abcdefABCDEF")
+                    else:
+                        # Unknown class: treat as literal
+                        result.extend(s[i:end+2])
+                    i = end + 2
+                elif i + 2 < len(s) and s[i + 1] == "-" and ord(s[i]) < ord(s[i + 2]):
                     result.extend(chr(c) for c in range(ord(s[i]), ord(s[i + 2]) + 1))
                     i += 3
                 else:
@@ -903,20 +1179,36 @@ class LinuxCommandsMixin:
 
     def _cmd_paste(self, args: str = "") -> None:
         """Merge lines of files side by side."""
-        if not args:
-            self._print("  Usage: paste <file1> [file2 ...]")
+        parts = args.strip().split() if args else []
+        delim = "\t"
+        files = []
+        i = 0
+        while i < len(parts):
+            if parts[i] == "-d" and i + 1 < len(parts):
+                delim = parts[i + 1]
+                i += 2
+            elif parts[i].startswith("-d") and len(parts[i]) > 2:
+                delim = parts[i][2:]
+                i += 1
+            else:
+                files.append(parts[i])
+                i += 1
+        if not files and not self._piped_input:
+            self._print("  Usage: paste [-d DELIM] <file1> [file2 ...]")
             self._last_exit_code = 1
             return
-        files = args.strip().split()
         try:
-            readers = [Path(os.path.expanduser(f)).read_text().splitlines() for f in files]
+            if files:
+                readers = [Path(os.path.expanduser(f)).read_text().splitlines() for f in files]
+            else:
+                readers = [self._piped_input.splitlines()]
         except FileNotFoundError as e:
             self._print(f"  paste: {e.filename}: No such file or directory")
             self._last_exit_code = 1
             return
         import itertools as _itertools
         for row in _itertools.zip_longest(*readers, fillvalue=""):
-            self._print("\t".join(row))
+            self._print(delim.join(row))
         self._last_exit_code = 0
 
     def _cmd_comm(self, args: str = "") -> None:
@@ -1029,15 +1321,19 @@ class LinuxCommandsMixin:
             self._print(f"  seq: invalid number")
             self._last_exit_code = 1
             return
-        if first == int(first) and inc == int(inc) and last == int(last):
-            fmt = "{:d}" if inc == int(inc) else "{:g}"
+
+        # Check if any argument had a decimal point (preserves user intent)
+        has_decimal = any("." in p for p in parts)
+
+        if not has_decimal and first == int(first) and inc == int(inc) and last == int(last):
             nums = range(int(first), int(last) + 1, int(inc))
-            self._print("\n".join(fmt.format(n) for n in nums))
+            self._print("\n".join(str(n) for n in nums))
         else:
             nums = []
             cur = first
             while cur <= last if inc > 0 else cur >= last:
-                nums.append(str(cur))
+                # Use :g format to avoid floating-point noise (e.g. 0.30000000000000004)
+                nums.append(f"{cur:g}")
                 cur += inc
             self._print("\n".join(nums))
         self._last_exit_code = 0
@@ -1101,17 +1397,23 @@ class LinuxCommandsMixin:
     # ── comparison / conditionals ───────────────────────────────────
 
     def _cmd_diff(self, args: str = "") -> None:
-        """Compare two files line by line."""
-        if not args:
-            self._print("  Usage: diff <file1> <file2>")
+        """Compare two files line by line. Supports -u (unified) and -w (ignore whitespace)."""
+        parts = args.strip().split() if args else []
+        unified = False
+        ignore_ws = False
+        targets = []
+        for p in parts:
+            if p == "-u":
+                unified = True
+            elif p == "-w":
+                ignore_ws = True
+            elif not p.startswith("-"):
+                targets.append(p)
+        if len(targets) < 2:
+            self._print("  Usage: diff [-u] [-w] <file1> <file2>")
             self._last_exit_code = 1
             return
-        parts = args.strip().split()
-        if len(parts) < 2:
-            self._print("  Usage: diff <file1> <file2>")
-            self._last_exit_code = 1
-            return
-        f1, f2 = os.path.expanduser(parts[0]), os.path.expanduser(parts[1])
+        f1, f2 = os.path.expanduser(targets[0]), os.path.expanduser(targets[1])
         try:
             lines1 = Path(f1).read_text().splitlines()
             lines2 = Path(f2).read_text().splitlines()
@@ -1120,22 +1422,49 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import difflib as _difflib
-        differ = _difflib.Differ()
-        diffs = list(differ.compare(lines1, lines2))
-        changes = [l for l in diffs if l.startswith(("+ ", "- ", "? "))]
-        if not changes:
-            self._last_exit_code = 0
-            return
-        # Lazy import of color constants from parent module
-        from ..repl import _C_GREEN, _C_RED, _C_DIM, _C_RESET
-        for l in diffs:
-            if l.startswith("+ "):
-                self._print(f"  {_C_GREEN}{l}{_C_RESET}")
-            elif l.startswith("- "):
-                self._print(f"  {_C_RED}{l}{_C_RESET}")
-            elif l.startswith("? "):
-                self._print(f"  {_C_DIM}{l}{_C_RESET}")
-        self._last_exit_code = 1
+        if ignore_ws:
+            norm = lambda s: " ".join(s.split())
+            lines1 = [norm(l) for l in lines1]
+            lines2 = [norm(l) for l in lines2]
+        if unified:
+            diff_gen = _difflib.unified_diff(
+                lines1, lines2,
+                fromfile=targets[0], tofile=targets[1],
+            )
+            from ..repl import _C_GREEN, _C_RED, _C_DIM, _C_RESET
+            has_output = False
+            for l in diff_gen:
+                has_output = True
+                if l.startswith("+++") or l.startswith("---"):
+                    self._print(f"  {_C_DIM}{l.rstrip()}{_C_RESET}")
+                elif l.startswith("+"):
+                    self._print(f"  {_C_GREEN}{l.rstrip()}{_C_RESET}")
+                elif l.startswith("-"):
+                    self._print(f"  {_C_RED}{l.rstrip()}{_C_RESET}")
+                elif l.startswith("@"):
+                    self._print(f"  {_C_DIM}{l.rstrip()}{_C_RESET}")
+                else:
+                    self._print(f"  {l.rstrip()}")
+            if not has_output:
+                self._last_exit_code = 0
+            else:
+                self._last_exit_code = 1
+        else:
+            differ = _difflib.Differ()
+            diffs = list(differ.compare(lines1, lines2))
+            changes = [l for l in diffs if l.startswith(("+ ", "- ", "? "))]
+            if not changes:
+                self._last_exit_code = 0
+                return
+            from ..repl import _C_GREEN, _C_RED, _C_DIM, _C_RESET
+            for l in diffs:
+                if l.startswith("+ "):
+                    self._print(f"  {_C_GREEN}{l}{_C_RESET}")
+                elif l.startswith("- "):
+                    self._print(f"  {_C_RED}{l}{_C_RESET}")
+                elif l.startswith("? "):
+                    self._print(f"  {_C_DIM}{l}{_C_RESET}")
+            self._last_exit_code = 1
 
     def _cmd_test(self, args: str = "") -> None:
         """Evaluate conditional expression. Sets exit code 0=true, 1=false."""
@@ -1180,32 +1509,62 @@ class LinuxCommandsMixin:
     def _cmd_xargs(self, args: str = "") -> None:
         """Build and execute command from stdin."""
         if not self._piped_input:
-            self._print("  Usage: <command> | xargs [-n N] <cmd> [args...]")
+            self._print("  Usage: <command> | xargs [-n N] [-0] [-r] [-I{}] <cmd> [args...]")
             self._last_exit_code = 1
             return
         parts = args.strip().split()
         n = None
+        placeholder = null_terminated = no_run_if_empty = False
         cmd_parts = []
         i = 0
         while i < len(parts):
             if parts[i] == "-n" and i + 1 < len(parts):
                 n = int(parts[i + 1])
                 i += 2
+            elif parts[i].startswith("-I") and len(parts[i]) > 2:
+                placeholder = parts[i][2:]
+                i += 1
+            elif parts[i] == "-I" and i + 1 < len(parts):
+                placeholder = parts[i + 1]
+                i += 2
+            elif parts[i] == "-0":
+                null_terminated = True
+                i += 1
+            elif parts[i] == "-r":
+                no_run_if_empty = True
+                i += 1
             else:
                 cmd_parts.append(parts[i])
                 i += 1
-        items = self._piped_input.split()
+        if null_terminated:
+            items = [x for x in self._piped_input.split("\0") if x]
+        else:
+            items = self._piped_input.split()
+        if no_run_if_empty and not items:
+            self._last_exit_code = 0
+            return
         if not cmd_parts:
             for item in items:
                 self._print(item)
             self._last_exit_code = 0
             return
-        if n:
+        if placeholder:
+            for item in items:
+                substituted = [part.replace(placeholder, item) for part in cmd_parts]
+                if self._check_permission(substituted[0], " ".join(substituted[1:]) if len(substituted) > 1 else ""):
+                    result = self._execute_single(" ".join(substituted))
+                    if result:
+                        self._print(result.rstrip("\n"))
+        elif n:
             chunks = [items[i:i + n] for i in range(0, len(items), n)]
+            for chunk in chunks:
+                full_cmd = cmd_parts + chunk
+                if self._check_permission(full_cmd[0], " ".join(full_cmd[1:]) if len(full_cmd) > 1 else ""):
+                    result = self._execute_single(" ".join(full_cmd))
+                    if result:
+                        self._print(result.rstrip("\n"))
         else:
-            chunks = [items]
-        for chunk in chunks:
-            full_cmd = cmd_parts + chunk
+            full_cmd = cmd_parts + items
             if self._check_permission(full_cmd[0], " ".join(full_cmd[1:]) if len(full_cmd) > 1 else ""):
                 result = self._execute_single(" ".join(full_cmd))
                 if result:

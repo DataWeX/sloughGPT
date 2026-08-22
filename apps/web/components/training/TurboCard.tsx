@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/components/training/formatDuration'
@@ -12,7 +12,7 @@ export const TURBO_DEFAULTS = { epochs: 10, lr: 1e-3, embed: 128, heads: 4, laye
 
 export type TurboConfig = { epochs: number; lr: number; embed: number; heads: number; layers: number }
 
-export function TurboCard({
+export const TurboCard = memo(function TurboCard({
   datasets,
   session,
   addToast,
@@ -72,6 +72,7 @@ export function TurboCard({
               <span>Elapsed {formatDuration(session.turboElapsedSeconds)}</span>
             </div>
             {session.turboLoss != null && <p className="text-xs text-muted-foreground">Loss {session.turboLoss.toFixed(4)}</p>}
+            {session.avgQuality != null && <p className="text-xs text-muted-foreground">Quality {session.avgQuality.toFixed(1)}/5</p>}
             <Button variant="destructive" size="sm" onClick={session.stopTurboTrain}>
               Stop
             </Button>
@@ -85,6 +86,7 @@ export function TurboCard({
                   Final loss: {typeof session.turboResult.final_loss === 'number' ? session.turboResult.final_loss.toFixed(4) : '--'}
                 </p>
                 <p>Steps: {session.turboResult.total_steps ?? '--'}</p>
+                {session.avgQuality != null && <p>Quality: {session.avgQuality.toFixed(1)}/5</p>}
                 {session.turboResult.model_path && <p className="truncate">Model: {session.turboResult.model_path}</p>}
               </div>
             )}
@@ -148,4 +150,4 @@ export function TurboCard({
       </CardContent>
     </Card>
   )
-}
+})

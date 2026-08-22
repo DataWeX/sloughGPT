@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {RefreshControl, Pressable, ScrollView} from 'react-native';
+import {RefreshControl, Pressable, ScrollView, Alert, ActivityIndicator} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
@@ -37,12 +37,11 @@ function traitLabel(key: string): string {
 export function SoulsScreen() {
   const colors = useColors();
 
-  const {souls, currentSoul, checkpoints, switchSoul, refresh} = useModelStore();
+  const {souls, currentSoul, checkpoints, switchSoul, switchingSoul, refresh} = useModelStore();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSoul, setSelectedSoul] = useState<SoulDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [switching, setSwitching] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     await refresh();
@@ -79,18 +78,56 @@ export function SoulsScreen() {
     }
   };
 
-  const handleSwitch = async (name: string) => {
-    setSwitching(name);
-    try {
-      await switchSoul(name);
-      triggerHaptic('success');
-      toast.success(`Switched to ${name}`);
-    } catch {
-      toast.error('Failed to switch soul');
-    } finally {
-      setSwitching(null);
-    }
-  };
+  const handleSwitch = useCallback(
+    (name: string) => {
+      if (switchingSoul) return;
+      Alert.alert(
+        'Switch Soul',
+        `Switch to ${name}? This will change the AI personality.`,
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: 'Switch',
+            onPress: async () => {
+              triggerHaptic('selection');
+              const ok = await switchSoul(name);
+              if (ok) {
+                toast.success('Switched to ' + name);
+              } else {
+                toast.error('Failed to switch soul');
+              }
+            },
+          },
+        ],
+      );
+    },
+    [switchSoul, switchingSoul],
+  );
+
+  const handleActivateCheckpoint = useCallback(
+    (cp: CheckpointInfo) => {
+      Alert.alert(
+        'Activate Checkpoint',
+        'Load checkpoint ' + cp.name + ' for soul ' + cp.soul + '?',
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: 'Activate',
+            onPress: async () => {
+              triggerHaptic('selection');
+              const ok = await switchSoul(cp.soul, cp.name);
+              if (ok) {
+                toast.success('Loaded checkpoint ' + cp.name);
+              } else {
+                toast.error('Failed to load checkpoint');
+              }
+            },
+          },
+        ],
+      );
+    },
+    [switchSoul],
+  );
 
   const soulCheckpoints = checkpoints.filter(
     cp => !selectedSoul || cp.soul === selectedSoul.name,
@@ -127,7 +164,7 @@ export function SoulsScreen() {
           souls.map(soul => {
             const isActive = currentSoul?.name === soul.name;
             const isExpanded = selectedSoul?.name === soul.name;
-            const isSwitching = switching === soul.name;
+            const isSwitching = switchingSoul === soul.name;
 
             return (
               <YStack

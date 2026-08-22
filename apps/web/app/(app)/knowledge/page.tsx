@@ -100,7 +100,9 @@ export default function KnowledgePage() {
       const [s, docs] = await Promise.all([getRAGStats(), listRAGDocuments()])
       setRagStats(s)
       setRagDocs(docs.documents || [])
-    } catch { /* RAG not available */ }
+    } catch {
+      addToast('Failed to load RAG data. Is the RAG server running?', 'error')
+    }
   }, [])
 
   useEffect(() => { fetchRAGData() }, [fetchRAGData])

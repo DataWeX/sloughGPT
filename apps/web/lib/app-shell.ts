@@ -33,6 +33,8 @@ export interface TrainingShellState {
   jobId: string | null
   visualOutputDir: string | null
   visualSouPath: string | null
+  avgQuality: number | null
+  dataQuality: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number } | null
 }
 
 export interface AppShellState {
@@ -68,6 +70,8 @@ const DEFAULT_TRAINING: TrainingShellState = {
   error: null,
   jobId: null,
   visualOutputDir: null,
+  avgQuality: null,
+  dataQuality: null,
   visualSouPath: null,
 }
 

@@ -9,16 +9,6 @@ const DB_NAME = 'soulnet-weights'
 const STORE = 'checkpoints'
 const DB_VERSION = 1
 
-function openDB(): IDBDatabase | null {
-  try {
-    if (typeof indexedDB === 'undefined') return null
-    // Synchronous open via workaround: we use a stored reference
-    return null
-  } catch {
-    return null
-  }
-}
-
 function idbRequest<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result)
@@ -36,6 +26,7 @@ function idbTxComplete(tx: IDBTransaction): Promise<void> {
 
 export class WeightCache {
   private dbPromise: Promise<IDBDatabase> | null = null
+  private openAttempted = false
 
   private getDB(): Promise<IDBDatabase> | null {
     if (typeof indexedDB === 'undefined') return null
@@ -45,17 +36,24 @@ export class WeightCache {
         req.onupgradeneeded = () => {
           req.result.createObjectStore(STORE)
         }
-        req.onsuccess = () => resolve(req.result)
-        req.onerror = () => reject(req.error)
+        req.onsuccess = () => {
+          this.openAttempted = false
+          resolve(req.result)
+        }
+        req.onerror = () => {
+          this.openAttempted = true
+          this.dbPromise = null
+          reject(req.error)
+        }
       })
     }
     return this.dbPromise
   }
 
   async get(url: string): Promise<ArrayBuffer | null> {
-    const db = await this.getDB()
-    if (!db) return null
     try {
+      const db = await this.getDB()
+      if (!db) return null
       const tx = db.transaction(STORE, 'readonly')
       const store = tx.objectStore(STORE)
       const result = await idbRequest<ArrayBuffer | undefined>(store.get(url))
@@ -66,9 +64,9 @@ export class WeightCache {
   }
 
   async put(url: string, buffer: ArrayBuffer): Promise<void> {
-    const db = await this.getDB()
-    if (!db) return
     try {
+      const db = await this.getDB()
+      if (!db) return
       const tx = db.transaction(STORE, 'readwrite')
       const store = tx.objectStore(STORE)
       store.put(buffer, url)
@@ -78,10 +76,23 @@ export class WeightCache {
     }
   }
 
-  async clear(): Promise<void> {
-    const db = await this.getDB()
-    if (!db) return
+  async delete(url: string): Promise<void> {
     try {
+      const db = await this.getDB()
+      if (!db) return
+      const tx = db.transaction(STORE, 'readwrite')
+      const store = tx.objectStore(STORE)
+      store.delete(url)
+      await idbTxComplete(tx)
+    } catch {
+      // silently ignore delete failures
+    }
+  }
+
+  async clear(): Promise<void> {
+    try {
+      const db = await this.getDB()
+      if (!db) return
       const tx = db.transaction(STORE, 'readwrite')
       const store = tx.objectStore(STORE)
       store.clear()

@@ -39,6 +39,7 @@ try:
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domains.training.trainer_protocol import TrainResult
+from domains.training.quality_scorer import compute_data_quality
 from domains.training.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domains.training.slonet import load_checkpoint_npz
 from domains.training.lora import apply_lora_to_model, LoRAConfig
@@ -645,6 +646,8 @@ class SloughGPTTrainer:
         self._best_model_path = None  # path to best checkpoint
         self._best_checkpoint_loss = float("inf")  # best train loss for save_best_only
         self._early_stopped = False  # True if early stopping triggered
+        self._quality_scores: List[float] = []  # rolling quality scores of training data
+        self._avg_quality: Optional[float] = None  # running average quality
 
         self.device = self._setup_device()
         self.config.device = self.device
@@ -670,6 +673,18 @@ class SloughGPTTrainer:
         n = int(0.9 * len(self.data))
         self.train_data = self.data[:n]
         self.val_data = self.data[n:]
+
+        # Compute data quality metrics
+        try:
+            raw_text = "".join(self.itos.get(int(i), "") for i in self.data[:min(50000, len(self.data))])
+            self._data_quality = compute_data_quality(raw_text)
+            self._avg_quality = self._data_quality.get("avg_quality")
+            logger.info("Data quality: avg=%.2f repetition=%.2f diversity=%.2f language=%.2f",
+                self._data_quality["avg_quality"], self._data_quality["repetition_rate"],
+                self._data_quality["diversity"], self._data_quality["language_quality"],
+                extra={"tag": "TRAIN"})
+        except Exception:
+            self._data_quality = {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0}
 
         # Create model
         self._create_model()
@@ -1091,6 +1106,7 @@ class SloughGPTTrainer:
                         "elapsed_s": round(self._training_elapsed(), 1),
                         "done": done,
                         "done_reason": done_reason,
+                        "avg_quality": self._avg_quality,
                     }
                 )
             except Exception:
@@ -1286,6 +1302,8 @@ class SloughGPTTrainer:
             epochs_completed=self._completed_epochs,
             model_path=self._best_model_path or model_path,
             checkpoint_name=checkpoint_name,
+            avg_quality=self._avg_quality,
+            data_quality=getattr(self, '_data_quality', None),
         )
 
     def save_checkpoint(self, metrics: Optional[Dict[str, float]] = None, is_final: bool = False):
@@ -1343,7 +1361,8 @@ class SloughGPTTrainer:
         self.save(str(checkpoint_path),
                   stoi=self.stoi, itos=self.itos, chars=chars_list,
                   training_duration=training_duration,
-                  include_optimizer_state=not is_final)
+                  include_optimizer_state=not is_final,
+                  avg_quality=self._avg_quality)
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
         self._prune_stale_checkpoints(keep_final=is_final)
 
@@ -1404,7 +1423,7 @@ class SloughGPTTrainer:
             self._best_model_path = None
 
     def save(self, path: str, format: Optional[str] = None, stoi=None, itos=None, chars=None,
-             training_duration=None, include_optimizer_state: bool = True):
+             training_duration=None, include_optimizer_state: bool = True, avg_quality: Optional[float] = None):
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
         Args:
@@ -1498,6 +1517,8 @@ class SloughGPTTrainer:
         }
         if training_duration is not None:
             soul.metadata["training_duration_s"] = training_duration
+        if avg_quality is not None:
+            soul.metadata["avg_quality"] = avg_quality
 
         # Embed the tokenizer (e.g. a trained TokenTree) so the .soul is fully
         # self-contained and inference can reproduce BPE-level encoding.

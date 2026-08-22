@@ -48,6 +48,14 @@ const checkpointsWithTurbo: UseTrainingCheckpointsReturn = {
   ],
 }
 
+const checkpointsWithQuality: UseTrainingCheckpointsReturn = {
+  ...emptyCheckpoints,
+  checkpoints: [
+    { name: 'cp-1', soul: 'soul-1', loss: 0.45, avg_quality: 4.2, tags: ['distill'] },
+    { name: 'cp-2', soul: 'soul-2', loss: 0.32, avg_quality: 3.8, tags: [] },
+  ],
+}
+
 const renderStep = (checkpoints: UseTrainingCheckpointsReturn, addToast = vi.fn()) =>
   render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} addToast={addToast} />)
 
@@ -79,6 +87,17 @@ describe('ResultsStep', () => {
     renderStep(checkpointsWithData)
     expect(screen.getByText('Loss: 0.4500')).toBeDefined()
     expect(screen.getByText('Loss: 0.3200')).toBeDefined()
+  })
+
+  it('displays quality values when present', () => {
+    renderStep(checkpointsWithQuality)
+    expect(screen.getByText('Quality: 4.2/5')).toBeDefined()
+    expect(screen.getByText('Quality: 3.8/5')).toBeDefined()
+  })
+
+  it('hides quality when not present', () => {
+    renderStep(checkpointsWithData)
+    expect(screen.queryByText(/Quality:/)).toBeNull()
   })
 
   it('shows Test model button when checkpoints exist', () => {

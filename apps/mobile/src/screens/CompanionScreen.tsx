@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useCallback} from 'react';
-import {FlatList, Pressable, RefreshControl, TextInput as RNTextInput} from 'react-native';
+import {ScrollView, Pressable, RefreshControl, TextInput as RNTextInput} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
@@ -142,11 +142,10 @@ export function CompanionScreen() {
           <StatusBadge label="Loading..." variant="info" />
         </YStack>
       ) : (
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          ListHeaderComponent={
-            <YStack padding={16} gap={12}>
+        <ScrollView
+          contentContainerStyle={{paddingBottom: 32}}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <YStack padding={16} gap={12}>
               {/* KPI */}
               <XStack gap={8}>
                 <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
@@ -235,10 +234,7 @@ export function CompanionScreen() {
                 ) : null}
               </YStack>
             </YStack>
-          }
-          contentContainerStyle={{paddingBottom: 32}}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
+          </ScrollView>
       )}
     </SafeAreaView>
   );

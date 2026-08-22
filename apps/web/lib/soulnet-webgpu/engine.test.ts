@@ -70,6 +70,28 @@ describe('SoulNetWebGPU', () => {
     expect(tokens).toEqual(['b', 'b', 'b'])
   })
 
+  it('generate stops early on eosToken', async () => {
+    makeWebGPU(new Float32Array([0, 0]))
+    const engine = new SoulNetWebGPU()
+    await engine.init()
+    // p7 bias makes token 1 (b) the argmax
+    await engine.load(lstmSou({ p7: new Float32Array([1, 5, 2]) }), CFG)
+    const tokens: string[] = []
+    // eosToken=1 means stop when producing 'b' (token 1)
+    for await (const t of engine.generate('', 10, 0, 1)) tokens.push(t)
+    expect(tokens).toEqual([])
+  })
+
+  it('generate with eosToken=0 never stops early', async () => {
+    makeWebGPU(new Float32Array([0, 0]))
+    const engine = new SoulNetWebGPU()
+    await engine.init()
+    await engine.load(lstmSou({ p7: new Float32Array([1, 5, 2]) }), CFG)
+    const tokens: string[] = []
+    for await (const t of engine.generate('', 5, 0, 0)) tokens.push(t)
+    expect(tokens).toHaveLength(5)
+  })
+
   it('forward before load throws', async () => {
     makeWebGPU()
     const engine = new SoulNetWebGPU()

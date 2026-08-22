@@ -29,7 +29,7 @@ interface SettingsState {
 const STORAGE_KEY = '@sloughgpt/settings';
 
 const defaults: Omit<SettingsState, 'setTheme' | 'setFontFamily' | 'setFontSizeScale' | 'update' | 'reset'> = {
-  theme: 'system',
+  theme: 'dark',
   fontFamily: 'outfit',
   fontSizeScale: 1.0,
   accentColor: 'violet',

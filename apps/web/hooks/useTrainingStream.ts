@@ -5,7 +5,6 @@ import { trainingJobsController } from '@/lib/controllers'
 import { readTraining, writeTraining, type TrainingToastFn } from '@/lib/app-shell'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { logger } from '@/lib/dev-log'
-import { extractErrorMessage } from '@/lib/error-utils'
 
 const _log = logger.child('training-stream')
 
@@ -112,7 +111,7 @@ export function useTrainingStream() {
           addToast('Connection lost during training', 'error')
         } else { esRetries++ }
       }
-    }).catch((e: unknown) => addToast(extractErrorMessage(e, 'Failed to start training'), 'error'))
+    }).catch(() => addToast('Failed to start training', 'error'))
   }, [closeStream])
 
   useEffect(() => () => closeStream(), [closeStream])

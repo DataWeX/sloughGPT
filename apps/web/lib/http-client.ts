@@ -273,12 +273,19 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${PUBLIC_API_URL}${url}`, {
-    method,
-    headers,
-    body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
-    signal: opts?.signal,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${PUBLIC_API_URL}${url}`, {
+      method,
+      headers,
+      body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
+      signal: opts?.signal,
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Network error'
+    yield { status: 'error', message: `Connection error: ${msg}` }
+    return
+  }
 
   if (!res.ok || !res.body) {
     yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}` }
@@ -290,9 +297,16 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
   let buffer = ''
   try {
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
+      let chunk: ReadableStreamReadResult<Uint8Array>
+      try {
+        chunk = await reader.read()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Read error'
+        yield { status: 'error', message: `Stream disconnected: ${msg}` }
+        return
+      }
+      if (chunk.done) break
+      buffer += decoder.decode(chunk.value, { stream: true })
       const lines = buffer.split('\n')
       buffer = lines.pop() || ''
       for (const line of lines) {

@@ -171,11 +171,11 @@ export function ChatModeBar({
   };
 
   return (
-    <YStack borderBottomWidth={0.5} borderBottomColor={colors.border} backgroundColor={colors.background}>
+    <YStack borderBottomWidth={0} backgroundColor="$background">
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{paddingHorizontal: 12, paddingVertical: 6, gap: 6}}>
+        contentContainerStyle={{paddingHorizontal: 16, paddingVertical: 8, gap: 8}}>
         {MODES.map(m => (
           <Pressable
             key={m.value}
@@ -184,25 +184,27 @@ export function ChatModeBar({
             style={({pressed}) => ({
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 4,
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-              borderRadius: 14,
+              gap: 6,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 20,
               backgroundColor: mode === m.value
-                ? colors.primaryAlpha(0.12)
+                ? colors.primary
                 : pressed
-                  ? colors.primaryAlpha(0.04)
-                  : 'transparent',
+                  ? colors.primaryAlpha(0.08)
+                  : colors.primaryAlpha(0.04),
+              borderWidth: mode === m.value ? 0 : 1,
+              borderColor: colors.primaryAlpha(0.1),
             })}>
             <Icon
               name={m.icon as any}
-              size={13}
-              color={mode === m.value ? colors.primary : colors.textMuted}
+              size={14}
+              color={mode === m.value ? '#FFFFFF' : colors.textMuted}
             />
             <Text
-              fontSize={12}
-              fontWeight={mode === m.value ? '600' : '400'}
-              color={mode === m.value ? colors.primary : colors.textMuted}>
+              fontSize={13}
+              fontWeight={mode === m.value ? '600' : '500'}
+              color={mode === m.value ? '#FFFFFF' : colors.textMuted}>
               {m.label}
             </Text>
           </Pressable>

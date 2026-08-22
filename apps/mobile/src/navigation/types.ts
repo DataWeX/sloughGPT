@@ -37,6 +37,10 @@ export type SettingsStackParamList = {
   Files: undefined;
   Registry: undefined;
   Memory: undefined;
+  Monitoring: undefined;
+  Shell: undefined;
+  VMConsole: undefined;
+  Auth: undefined;
 };
 
 export type ToolsStackParamList = {
@@ -73,6 +77,10 @@ export type ToolsStackParamList = {
   Files: undefined;
   Registry: undefined;
   Memory: undefined;
+  Monitoring: undefined;
+  Shell: undefined;
+  VMConsole: undefined;
+  Auth: undefined;
 };
 
 export type SettingsScreenProps<T extends keyof SettingsStackParamList> =

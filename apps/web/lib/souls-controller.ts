@@ -54,6 +54,8 @@ export interface Checkpoint {
   training_dataset?: string
   training_duration_s?: number
   source?: string
+  avg_quality?: number
+  data_quality?: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number }
 }
 
 export interface SoulsResponse {

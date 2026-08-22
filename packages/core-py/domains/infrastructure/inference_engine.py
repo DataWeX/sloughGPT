@@ -200,8 +200,8 @@ class InferenceEngine:
             with open(pid_path, "w") as f:
                 f.write(str(os.getpid()))
             self._pid_file = pid_path
-        except Exception as exc:
-            logger.debug("Failed to write PID file: %s", exc)
+        except Exception:
+            pass
 
         try:
             self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

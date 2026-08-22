@@ -13,11 +13,13 @@ vi.mock('@/lib/soulnet-webgpu', () => ({
     init: mockSoulNetInit,
     load: mockSoulNetLoad,
     generate: vi.fn(),
+    destroy: vi.fn(),
   })),
   SoulTransformerWebGPU: vi.fn().mockImplementation(() => ({
     init: mockTransformerInit,
     load: mockTransformerLoad,
     generate: vi.fn(),
+    destroy: vi.fn(),
   })),
 }))
 
@@ -68,7 +70,10 @@ describe('useChatLocalEngine', () => {
     (navigator as any).gpu = {}
     const buf = new ArrayBuffer(100)
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: () => buf })
-    mockInferArch.mockReturnValue({ archType: 'transformer', embedDim: 256, numLayers: 6, vocabSize: 32000 })
+    mockInferArch.mockReturnValue({
+      archType: 'transformer', embedDim: 256, numLayers: 6, vocabSize: 32000,
+      hiddenDim: 256, numHeads: 8, numKVHeads: 8, dimFF: 1024, maxSeqLen: 2048, eps: 1e-5,
+    })
     mockTransformerInit.mockResolvedValue(undefined)
     mockTransformerLoad.mockResolvedValue(undefined)
 
@@ -101,5 +106,23 @@ describe('useChatLocalEngine', () => {
     await act(async () => { await result.current.initLocalEngine() })
     await act(async () => { result.current.handleToggleLocalEngine() })
     expect(result.current.useLocalEngine).toBe(true)
+  })
+
+  it('destroyEngine cleans up engine and resets state', async () => {
+    (navigator as any).gpu = {}
+    const buf = new ArrayBuffer(100)
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: () => buf })
+    mockInferArch.mockReturnValue({ archType: 'lstm', embedDim: 64, hiddenDim: 128 })
+    mockSoulNetInit.mockResolvedValue(undefined)
+    mockSoulNetLoad.mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useChatLocalEngine(showToast))
+    act(() => { result.current.setLocalModelUrl('/sou/m.soul') })
+    await act(async () => { await result.current.initLocalEngine() })
+    expect(result.current.localArchInfo).toContain('LSTM')
+    act(() => { result.current.destroyEngine() })
+    expect(result.current.useLocalEngine).toBe(false)
+    expect(result.current.localArchInfo).toBeNull()
+    expect(result.current.engineRef.current).toBeNull()
   })
 })

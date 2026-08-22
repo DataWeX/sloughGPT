@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { SoulNetWebGPU, SoulTransformerWebGPU, inferArch } from '@/lib/soulnet-webgpu'
+import type { SoulTransformerArch } from '@/lib/soulnet-webgpu'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/dev-log'
@@ -37,25 +38,14 @@ export function useChatLocalEngine(
       logger.debug('Inferred architecture', { arch })
 
       if (arch.archType === 'transformer') {
+        const t = arch as SoulTransformerArch
         const engine = new SoulTransformerWebGPU()
         await engine.init()
-        const embedDim = arch.embedDim
-        const numLayers = arch.numLayers
-        await engine.load(buf, {
-          archType: 'transformer',
-          embedDim,
-          numHeads: 8,
-          numKVHeads: 8,
-          numLayers,
-          dimFF: 1024,
-          vocabSize: arch.vocabSize,
-          maxSeqLen: 2048,
-          eps: 1e-5,
-        })
+        await engine.load(buf, t)
         engineRef.current = engine
         const mode = engine.cpuOnly ? 'CPU' : 'WebGPU'
-        setLocalArchInfo(`${embedDim}×${numLayers}×8 Transformer (${mode})`)
-        showToast(`On-device AI ready (${embedDim}×${numLayers}L, ${mode})`)
+        setLocalArchInfo(`${t.embedDim}×${t.numLayers}×${t.numHeads} Transformer (${mode})`)
+        showToast(`On-device AI ready (${t.embedDim}×${t.numLayers}L, ${mode})`)
       } else {
         const engine = new SoulNetWebGPU()
         await engine.init()
@@ -100,6 +90,16 @@ export function useChatLocalEngine(
     }
   }, [useLocalEngine, localArchInfo, localModelUrl, showToast, initLocalEngine])
 
+  const destroyEngine = useCallback(() => {
+    if (engineRef.current) {
+      engineRef.current.destroy()
+      engineRef.current = null
+      setUseLocalEngine(false)
+      setLocalArchInfo(null)
+      logger.debug('Local engine destroyed')
+    }
+  }, [])
+
   return {
     useLocalEngine, setUseLocalEngine,
     localEngineLoading, setLocalEngineLoading,
@@ -109,5 +109,6 @@ export function useChatLocalEngine(
     engineLoadingRef,
     initLocalEngine,
     handleToggleLocalEngine,
+    destroyEngine,
   }
 }

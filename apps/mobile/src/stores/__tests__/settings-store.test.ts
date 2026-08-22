@@ -118,7 +118,7 @@ describe('reset', () => {
     useSettingsStore.getState().reset();
     const s = useSettingsStore.getState();
     expect(s.temperature).toBe(0.8);
-    expect(s.theme).toBe('system');
+    expect(s.theme).toBe('dark');
     expect(s.fontFamily).toBe('outfit');
   });
 

@@ -388,9 +388,10 @@ export class SoulNetWebGPU {
       @param prompt - input string
       @param maxTokens - max tokens to generate
       @param temperature - sampling temperature (0 = argmax, higher = more random)
+      @param eosToken - stop generating when this token ID is produced (0 = no stop)
       @yields each generated character
   */
-  async *generate(prompt: string, maxTokens: number, temperature = 1.0): AsyncGenerator<string, void, unknown> {
+  async *generate(prompt: string, maxTokens: number, temperature = 1.0, eosToken = 0): AsyncGenerator<string, void, unknown> {
     const ids: number[] = []
     for (const ch of prompt.toLowerCase()) { if (ch in this.stoi) ids.push(this.stoi[ch]) }
     if (ids.length === 0) ids.push(this.stoi[' '] ?? 0)
@@ -401,6 +402,7 @@ export class SoulNetWebGPU {
     for (let t = 0; t < maxTokens; t++) {
       const logits = await this.forward(ids[ids.length - 1])
       const nextId = temperature > 0 ? sampleMultinomial(logits, temperature) : sampleArgmax(logits)
+      if (eosToken > 0 && nextId === eosToken) return
       const token = this.itos[nextId] ?? '?'
       ids.push(nextId)
       yield token
@@ -411,6 +413,7 @@ export class SoulNetWebGPU {
     for (const b of [this.bufIn, this.bufHOut, this.bufCOut, this.bufParams, this.bufRead,
       ...this.wIh, ...this.wHh, this.wFc, this.bFc, ...this.stateH, ...this.stateC])
       b?.destroy()
+    this.device?.destroy()
     this.device = null; this.ready = false
   }
 }

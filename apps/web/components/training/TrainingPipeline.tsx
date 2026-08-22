@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button, Progress } from '@sloughgpt/strui'
 import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
@@ -70,7 +70,7 @@ function StepIndicator({ current, completed, onStepClick }: { current: StepId; c
   )
 }
 
-export function TrainingPipeline({
+export const TrainingPipeline = memo(function TrainingPipeline({
   form,
   datasets,
   session,
@@ -244,4 +244,4 @@ export function TrainingPipeline({
       {step === 'results' && <ResultsStep checkpoints={checkpoints} goToTrain={goToTrain} onTest={onTest} addToast={addToast} />}
     </div>
   )
-}
+})

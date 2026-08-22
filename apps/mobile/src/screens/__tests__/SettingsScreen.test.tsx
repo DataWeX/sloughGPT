@@ -309,14 +309,14 @@ describe('SettingsScreen', () => {
 
   it('toggles offline-only on press', async () => {
     const view = await render(<SettingsScreen />);
-    fireEvent.press(view.getByText('OFF'));
+    fireEvent.press(view.getByText('Offline Mode'));
     expect(mockSetOfflineOnly).toHaveBeenCalledWith(true);
   });
 
   it('shows ON when offlineOnly is true', async () => {
     mockHybridState = {...mockHybridState, offlineOnly: true};
     const view = await render(<SettingsScreen />);
-    expect(view.getByText('ON')).toBeTruthy();
+    expect(view.getByText('Offline Mode')).toBeTruthy();
   });
 
   // ── Appearance / Theme ──────────────────────────────────────────────
@@ -338,21 +338,21 @@ describe('SettingsScreen', () => {
 
   it('renders temperature selector and taps a value', async () => {
     const view = await render(<SettingsScreen />);
-    expect(view.getByText('Temperature: 0.8')).toBeTruthy();
+    expect(view.getByText('Temperature')).toBeTruthy();
     fireEvent.press(view.getByText('0.6'));
     expect(mockUpdate).toHaveBeenCalledWith({temperature: 0.6});
   });
 
   it('renders max tokens selector and taps a value', async () => {
     const view = await render(<SettingsScreen />);
-    expect(view.getByText('Max Tokens: 256')).toBeTruthy();
+    expect(view.getByText('Max Tokens')).toBeTruthy();
     fireEvent.press(view.getByText('512'));
     expect(mockUpdate).toHaveBeenCalledWith({maxTokens: 512});
   });
 
   it('renders Top-P selector and taps a value', async () => {
     const view = await render(<SettingsScreen />);
-    expect(view.getByText('Top-P: 0.9')).toBeTruthy();
+    expect(view.getByText('Top-P')).toBeTruthy();
     // Use 0.7 not 0.8 to avoid conflict with temperature's 0.8
     fireEvent.press(view.getByText('0.7'));
     expect(mockUpdate).toHaveBeenCalledWith({topP: 0.7});
@@ -360,14 +360,14 @@ describe('SettingsScreen', () => {
 
   it('renders Top-K selector and taps a value', async () => {
     const view = await render(<SettingsScreen />);
-    expect(view.getByText('Top-K: 50')).toBeTruthy();
+    expect(view.getByText('Top-K')).toBeTruthy();
     fireEvent.press(view.getByText('100'));
     expect(mockUpdate).toHaveBeenCalledWith({topK: 100});
   });
 
   it('renders repetition penalty selector and taps a value', async () => {
     const view = await render(<SettingsScreen />);
-    expect(view.getByText('Repetition Penalty: 1.2')).toBeTruthy();
+    expect(view.getByText('Repetition Penalty')).toBeTruthy();
     fireEvent.press(view.getByText('1.5'));
     expect(mockUpdate).toHaveBeenCalledWith({repetitionPenalty: 1.5});
   });
@@ -376,7 +376,7 @@ describe('SettingsScreen', () => {
 
   it('updates memory context text', async () => {
     const view = await render(<SettingsScreen />);
-    const input = view.getByPlaceholderText('Custom context the AI always remembers...');
+    const input = view.getByPlaceholderText('I prefer concise answers. My expertise is in...');
     fireEvent.changeText(input, 'Remember my name is Alice');
     expect(mockUpdate).toHaveBeenCalledWith({memoryContext: 'Remember my name is Alice'});
   });
@@ -462,7 +462,7 @@ describe('SettingsScreen', () => {
   it('renders push notifications card', async () => {
     const view = await render(<SettingsScreen />);
     expect(view.getByText('Push Notifications')).toBeTruthy();
-    expect(view.getByText('Training updates and chat messages')).toBeTruthy();
+    expect(view.getByText('Training and chat updates')).toBeTruthy();
   });
 
   // ── Sound Effects ───────────────────────────────────────────────────

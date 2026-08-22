@@ -33,6 +33,11 @@ from typing import List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "core-py"))
 
 
+def log(msg: str = ""):
+    """Print progress to stderr so JSON output stays clean."""
+    print(msg, file=sys.stderr)
+
+
 EVAL_PROMPTS = {
     "What is 2+2?": "4 is the answer to 2+2.",
     "The capital of France is": "The capital of France is Paris.",
@@ -444,6 +449,30 @@ def print_comparison(results: List[ModelMetrics]):
     print()
 
 
+def print_summary(results: List[ModelMetrics]):
+    """Print compact summary table."""
+    header = f"{'Model':<25} {'Params':>10} {'BLEU':>6} {'Lat(ms)':>8} {'tok/s':>7} {'RepRate':>8} {'Diversity':>9}"
+    log()
+    log(header)
+    log("-" * len(header))
+    for r in results:
+        bleu_str = f"{r.bleu:.1f}" if r.bleu is not None else "n/a"
+        # Estimate params from response patterns
+        log(
+            f"{r.model_name:<25} {'':>10} {bleu_str:>6} {r.mean_latency_ms:>8.1f} "
+            f"{r.tokens_per_sec:>7.1f} {r.repetition_rate:>8.3f} {r.diversity:>9.3f}"
+        )
+    if len(results) >= 2:
+        log()
+        faster = min(results, key=lambda r: r.mean_latency_ms)
+        slower = max(results, key=lambda r: r.mean_latency_ms)
+        speedup = slower.mean_latency_ms / max(faster.mean_latency_ms, 0.1)
+        more_diverse = max(results, key=lambda r: r.diversity)
+        log(f"  Fastest: {faster.model_name} ({speedup:.1f}x faster)")
+        log(f"  Most diverse: {more_diverse.model_name} (diversity={more_diverse.diversity:.3f})")
+    log()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Model Comparison Benchmark")
     parser.add_argument("--sou", nargs="*", default=[], help="SOU checkpoint paths")
@@ -453,13 +482,113 @@ def main():
     parser.add_argument("--max-new-tokens", type=int, default=50)
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--quick", action="store_true", help="Use fewer prompts")
+    parser.add_argument("--compare", action="store_true",
+                        help="Compare trained transformer vs small LSTM side-by-side")
+    parser.add_argument("--summary", action="store_true",
+                        help="Show compact table only (no response details)")
+    parser.add_argument("--save", type=str, default=None,
+                        help="Save results to JSON file for tracking over time")
+    parser.add_argument("--history", action="store_true",
+                        help="Show saved benchmark history and exit")
     parser.add_argument("--epochs", type=int, default=30, help="Training epochs for native mode")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
+    BENCH_HISTORY = Path(__file__).resolve().parent.parent / "models" / "benchmark_history.json"
+
+    # --history: show saved results and exit
+    if args.history:
+        if BENCH_HISTORY.exists():
+            with open(BENCH_HISTORY) as f:
+                history = json.load(f)
+            log(f"\nBenchmark History ({len(history)} runs):\n")
+            log(f"{'Date':<20} {'Model':<25} {'BLEU':>6} {'tok/s':>7} {'Diversity':>9}")
+            log("-" * 70)
+            for entry in history[-20:]:
+                for m in entry.get("models", []):
+                    bleu = f"{m['bleu']:.1f}" if m.get("bleu") else "n/a"
+                    log(f"{entry['timestamp']:<20} {m['model_name']:<25} {bleu:>6} {m['tokens_per_sec']:>7.1f} {m['diversity']:>9.3f}")
+        else:
+            log("No benchmark history found.")
+        return
+
     prompts_dict = QUICK_PROMPTS if args.quick else EVAL_PROMPTS
     prompts = list(prompts_dict.keys())
     results = []
+
+    # --compare mode: benchmark trained transformer AND small LSTM
+    if args.compare:
+        prompts_dict = SHAKESPEARE_PROMPTS
+        prompts = list(prompts_dict.keys())
+
+        # 1. Trained transformer
+        trained_path = _find_best_trained_model()
+        if trained_path:
+            print(f"\n=== Comparing: trained transformer vs small LSTM ===\n")
+            try:
+                from domains.training.slonet import import_from_sou
+                net = import_from_sou(str(trained_path))
+                meta_raw = _read_soul_metadata(str(trained_path))
+                md = meta_raw.get("metadata", {}) if meta_raw else {}
+                stoi = md.get("stoi", {})
+                itos = md.get("itos", {})
+                charset = md.get("chars", "")
+                if isinstance(charset, list):
+                    charset = "".join(charset)
+                itos_map = {int(k): v for k, v in itos.items()}
+                stoi_map = {v: k for k, v in itos_map.items()}
+                encode = lambda text: np.array([stoi_map.get(c, 0) for c in text], dtype=np.int64).reshape(1, -1)
+                decode_tokens = lambda ids: "".join(itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map)
+                responses, latencies, token_counts = [], [], []
+                print(f"Model: Transformer ({sum(p.numel() for p in net.parameters()):,} params)")
+                for prompt in prompts:
+                    for _ in range(args.runs):
+                        resp, lat, tokens = run_native_inference(net, None, encode, decode_tokens, prompt, args.max_new_tokens)
+                        responses.append(resp)
+                        latencies.append(lat)
+                        token_counts.append(tokens)
+                results.append(evaluate_model("Transformer", responses, latencies, token_counts, prompts))
+            except Exception as e:
+                print(f"  Transformer benchmark failed: {e}")
+
+        # 2. Small LSTM (trained on-the-fly)
+        try:
+            net2, lstm2, encode2, decode2, charset2 = train_native_model(epochs=args.epochs)
+            responses, latencies, token_counts = [], [], []
+            print(f"\nModel: LSTM ({sum(p.numel() for p in net2.parameters()):,} params)")
+            for prompt in prompts:
+                for _ in range(args.runs):
+                    resp, lat, tokens = run_native_inference(net2, lstm2, encode2, decode2, prompt, args.max_new_tokens)
+                    responses.append(resp)
+                    latencies.append(lat)
+                    token_counts.append(tokens)
+            results.append(evaluate_model("LSTM", responses, latencies, token_counts, prompts))
+        except Exception as e:
+            print(f"  LSTM benchmark failed: {e}")
+
+        if results:
+            if args.json:
+                report = ComparisonReport(models=results, eval_prompts=len(prompts), timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"))
+                print(json.dumps(asdict(report), indent=2))
+            else:
+                print_comparison(results)
+            # Save to history
+            entry = {
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "models": [asdict(r) for r in results],
+                "prompts": prompts,
+            }
+            history = []
+            if BENCH_HISTORY.exists():
+                try:
+                    with open(BENCH_HISTORY) as f:
+                        history = json.load(f)
+                except (json.JSONDecodeError, FileNotFoundError):
+                    history = []
+            history.append(entry)
+            with open(BENCH_HISTORY, "w") as f:
+                json.dump(history, f, indent=2)
+        return
 
     # Native mode: load pre-trained or train small model
     if args.mode in ("native", "both"):
@@ -532,8 +661,53 @@ def main():
     if args.json:
         report = ComparisonReport(models=results, eval_prompts=len(prompts), timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"))
         print(json.dumps(asdict(report), indent=2))
+    elif args.summary:
+        print_summary(results)
     else:
         print_comparison(results)
+
+    # --save: persist results to history file
+    if args.save and results:
+        save_path = Path(args.save)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "models": [asdict(r) for r in results],
+            "prompts": prompts,
+            "max_new_tokens": args.max_new_tokens,
+            "runs": args.runs,
+        }
+        # Append to existing history
+        history = []
+        if BENCH_HISTORY.exists():
+            try:
+                with open(BENCH_HISTORY) as f:
+                    history = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                history = []
+        history.append(entry)
+        with open(save_path, "w") as f:
+            json.dump(history, f, indent=2)
+        log(f"\nResults saved to {save_path}")
+
+    # Auto-save to benchmark_history.json (skip if --save already wrote there)
+    already_saved = args.save and Path(args.save).resolve() == BENCH_HISTORY.resolve()
+    if results and not already_saved:
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "models": [asdict(r) for r in results],
+            "prompts": prompts,
+        }
+        history = []
+        if BENCH_HISTORY.exists():
+            try:
+                with open(BENCH_HISTORY) as f:
+                    history = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                history = []
+        history.append(entry)
+        with open(BENCH_HISTORY, "w") as f:
+            json.dump(history, f, indent=2)
 
 
 if __name__ == "__main__":

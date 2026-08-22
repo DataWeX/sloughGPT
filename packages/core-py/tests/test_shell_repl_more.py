@@ -29,13 +29,14 @@ from domains.shell.state import ShellState
 def repl():
     import tempfile
     from domains.shell.init import reset_init_system
+    from domains.shell.state import set_shell_state_db, reset_shell_state_db
     reset_init_system()
     with tempfile.TemporaryDirectory() as tmp:
         st = Path(tmp) / "sloughgpt"
         st.mkdir(parents=True, exist_ok=True)
-        state_file = st / "shell_state.json"
-        with patch("domains.shell.state._STATE_FILE", state_file), \
-             patch("domains.shell.runtime._probe_api", return_value={"available": False, "error": "mock"}), \
+        state_db = str(st / "shell_state_mogdb")
+        set_shell_state_db(state_db)
+        with patch("domains.shell.runtime._probe_api", return_value={"available": False, "error": "mock"}), \
              patch("domains.shell.repl.ShellREPL._get_current_model", return_value=""), \
              patch("domains.shell.repl.ShellREPL._get_current_soul", return_value=""), \
              patch.object(ShellREPL, "_setup_readline"), \
@@ -45,6 +46,7 @@ def repl():
             r._perms._granted.update(["tee", "xargs", "cp", "mv", "touch", "chmod"])
             yield r
             reset_init_system()
+            reset_shell_state_db()
 
 
 def _run_with_io(repl, inputs, fn):
@@ -1407,13 +1409,11 @@ class TestVmRun:
         assert "vmrun:" in out
         assert repl._last_exit_code == 1
 
-    @pytest.mark.skip(reason="X86CPU missing _trace attribute — pre-existing VM bug")
     def test_vmrun_builtin_hello(self, repl):
         out = capture_cmd(repl, repl._cmd_vmrun, "hello")
         assert "Hello from x86 VM!" in out
         assert "[exit:" in out
 
-    @pytest.mark.skip(reason="X86CPU missing _trace attribute — pre-existing VM bug")
     def test_vmrun_builtin_hello_admin_debug(self, repl):
         out = capture_cmd(repl, repl._cmd_vmrun, "--admin --debug --steps=100000 hello")
         assert "Hello from x86 VM!" in out
@@ -24986,6 +24986,43 @@ class TestCmdDiffDeeper:
             repl._cmd_diff("")
         assert "Usage" in cap.getvalue()
 
+    def test_unified_diff(self, repl, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_text("line1\nline2\n")
+        f2.write_text("line1\nline3\n")
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_diff(f"-u {f1} {f2}")
+        out = cap.getvalue()
+        assert "---" in out
+        assert "+++" in out
+        assert "-line2" in out
+        assert "+line3" in out
+        assert repl._last_exit_code == 1
+
+    def test_unified_no_changes(self, repl, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_text("same\n")
+        f2.write_text("same\n")
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_diff(f"-u {f1} {f2}")
+        assert repl._last_exit_code == 0
+
+    def test_ignore_whitespace(self, repl, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_text("hello world\n")
+        f2.write_text("hello  world\n")
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_diff(f"-w {f1} {f2}")
+        assert repl._last_exit_code == 0
+
+    def test_unified_usage(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_diff("-u")
+        assert "Usage" in cap.getvalue()
+
 
 # ── Round 15: _expand_globs, _cmd_svc, _cmd_note, _dispatch, _print_header ──
 
@@ -25769,6 +25806,55 @@ class TestCmdXargs:
         out = cap.getvalue()
         assert "a" in out or "b" in out or len(out) > 0
 
+    def test_xargs_placeholder(self, repl):
+        repl._piped_input = "a b c"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_xargs("-I{} echo item:{}")
+        out = cap.getvalue()
+        assert "item:a" in out and "item:b" in out and "item:c" in out
+
+    def test_xargs_placeholder_multi_sub(self, repl):
+        repl._piped_input = "x y"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_xargs("-I{} echo {}-{}")
+        out = cap.getvalue()
+        assert "x-x" in out and "y-y" in out
+
+    def test_xargs_placeholder_long_flag(self, repl):
+        repl._piped_input = "foo bar"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_xargs("-I @ echo @")
+        out = cap.getvalue()
+        assert "foo" in out and "bar" in out
+
+    def test_xargs_null_terminated(self, repl):
+        repl._piped_input = "a\0b\0c"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_xargs("-0 echo")
+        out = cap.getvalue()
+        assert "a" in out and "b" in out and "c" in out
+
+    def test_xargs_null_terminated_vs_whitespace(self, repl):
+        repl._piped_input = "a b\0c d"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_xargs("-0 echo")
+        out = cap.getvalue()
+        assert "a b" in out and "c d" in out
+
+    def test_xargs_no_run_if_empty(self, repl):
+        repl._piped_input = "   "
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_xargs("-r echo")
+        assert cap.getvalue() == ""
+        assert repl._last_exit_code == 0
+
+    def test_xargs_no_run_if_empty_with_items(self, repl):
+        repl._piped_input = "hello"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_xargs("-r echo")
+        out = cap.getvalue()
+        assert "hello" in out
+
 
 class TestCmdChmod:
     def test_chmod_no_args(self, repl):
@@ -26123,6 +26209,15 @@ class TestCmdHeadDeeper:
         lines = [l for l in cap.getvalue().strip().split("\n") if l]
         assert len(lines) == 3
 
+    def test_head_minus_n_flag(self, repl):
+        repl._piped_input = "a\nb\nc\nd\ne\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_head("-n 2")
+        lines = [l for l in cap.getvalue().strip().split("\n") if l]
+        assert len(lines) == 2
+        assert lines[0] == "a"
+        assert lines[1] == "b"
+
 
 class TestCmdTailDeeper:
     def test_tail_negative(self, repl):
@@ -26131,6 +26226,15 @@ class TestCmdTailDeeper:
             repl._cmd_tail("-3")
         lines = [l for l in cap.getvalue().strip().split("\n") if l]
         assert len(lines) == 3
+
+    def test_tail_minus_n_flag(self, repl):
+        repl._piped_input = "a\nb\nc\nd\ne\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_tail("-n 2")
+        lines = [l for l in cap.getvalue().strip().split("\n") if l]
+        assert len(lines) == 2
+        assert lines[0] == "d"
+        assert lines[1] == "e"
 
 
 class TestCmdSortDeeper:
@@ -26170,6 +26274,55 @@ class TestCmdUniqDeeper:
             repl._cmd_uniq("")
         assert "Usage" in cap.getvalue() or repl._last_exit_code == 1
 
+    def test_uniq_count(self, repl):
+        repl._piped_input = "a\na\nb\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_uniq("-c")
+        lines = cap.getvalue().strip().split("\n")
+        assert lines[0].strip().endswith("a")
+        assert lines[0].strip().startswith("2")
+        assert lines[1].strip().endswith("b")
+        assert lines[1].strip().startswith("1")
+
+    def test_uniq_count_all_unique(self, repl):
+        repl._piped_input = "x\ny\nz\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_uniq("-c")
+        lines = cap.getvalue().strip().split("\n")
+        for line in lines:
+            assert line.strip().startswith("1")
+
+    def test_uniq_count_mixed(self, repl):
+        repl._piped_input = "a\na\na\nb\nb\nc\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_uniq("-c")
+        out = cap.getvalue().strip()
+        assert "3 a" in out
+        assert "2 b" in out
+        assert "1 c" in out
+
+    def test_uniq_case_insensitive(self, repl):
+        repl._piped_input = "Hello\nhello\nHELLO\nworld\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_uniq("-i")
+        lines = [l.strip() for l in cap.getvalue().strip().split("\n") if l.strip()]
+        assert lines == ["Hello", "world"]
+
+    def test_uniq_non_adjacent_preserved(self, repl):
+        repl._piped_input = "a\nb\na\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_uniq("")
+        lines = [l.strip() for l in cap.getvalue().strip().split("\n") if l.strip()]
+        assert lines == ["a", "b", "a"]
+
+    def test_uniq_count_insensitive(self, repl):
+        repl._piped_input = "A\na\nA\nb\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_uniq("-c -i")
+        out = cap.getvalue().strip()
+        assert "3 A" in out
+        assert "1 b" in out
+
 
 class TestCmdCutDeeper:
     def test_cut_delimited(self, repl):
@@ -26185,6 +26338,150 @@ class TestCmdCutDeeper:
             repl._cmd_cut("-c1,3")
         out = cap.getvalue()
         assert "ac" in out or "a" in out
+
+    def test_cut_field_range(self, repl):
+        repl._piped_input = "a:b:c:d:e\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-d: -f2-4")
+        out = cap.getvalue().strip()
+        assert out == "b:c:d"
+
+    def test_cut_posix_digit_delim(self, repl):
+        repl._piped_input = "a1b2c3d\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-d'[:digit:]' -f2")
+        out = cap.getvalue().strip()
+        assert out == "b"
+
+    def test_cut_posix_space_delim(self, repl):
+        repl._piped_input = "hello world foo\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-d'[:space:]' -f1,3")
+        out = cap.getvalue().strip()
+        assert out == "hello foo"
+
+    def test_cut_no_matching_fields(self, repl):
+        repl._piped_input = "a:b\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-d: -f5")
+        out = cap.getvalue().strip()
+        assert out == ""
+
+    def test_cut_suppress_no_delim(self, repl):
+        repl._piped_input = "a:b\nc\nd:e\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-d: -s -f1")
+        out = cap.getvalue().strip().split("\n")
+        assert out == ["a", "d"]
+
+    def test_cut_suppress_mixed(self, repl):
+        repl._piped_input = "x,y,z\nno-delim\n1:2:3\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-d, -s -f2")
+        out = cap.getvalue().strip()
+        assert "y" in out
+        assert "no-delim" not in out
+        assert "2" not in out
+
+    def test_cut_file_not_found(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-d: -f1 /nonexistent/file.txt")
+        assert repl._last_exit_code == 1
+
+    def test_cut_char_single(self, repl):
+        repl._piped_input = "hello\nworld\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-c1")
+        out = cap.getvalue().strip().split("\n")
+        assert out == ["h", "w"]
+
+    def test_cut_char_range(self, repl):
+        repl._piped_input = "hello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-c1-3")
+        out = cap.getvalue().strip()
+        assert out == "hel"
+
+    def test_cut_char_multiple(self, repl):
+        repl._piped_input = "hello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-c1,3,5")
+        out = cap.getvalue().strip()
+        assert out == "hlo"
+
+    def test_cut_char_beyond_length(self, repl):
+        repl._piped_input = "ab\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-c1-10")
+        out = cap.getvalue().strip()
+        assert out == "ab"
+
+    def test_cut_no_args(self, repl):
+        repl._piped_input = ""
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("")
+        assert repl._last_exit_code == 1
+
+    def test_cut_suppress_ignored_in_char_mode(self, repl):
+        repl._piped_input = "hello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-s -c1")
+        out = cap.getvalue().strip()
+        assert out == "h"  # -s has no effect in character mode
+
+    def test_cut_rejects_combined_cf(self, repl):
+        repl._piped_input = "abc\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-c1 -f2")
+        assert repl._last_exit_code == 1
+        assert "cannot combine" in cap.getvalue().lower()
+
+    def test_cut_no_input(self, repl):
+        repl._piped_input = ""
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-f1")
+        assert repl._last_exit_code == 1
+
+    def test_cut_byte_single(self, repl):
+        repl._piped_input = "hello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-b1")
+        out = cap.getvalue().strip()
+        assert out == "h"
+
+    def test_cut_byte_range(self, repl):
+        repl._piped_input = "hello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-b2-4")
+        out = cap.getvalue().strip()
+        assert out == "ell"
+
+    def test_cut_byte_multi(self, repl):
+        repl._piped_input = "hello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-b1,3,5")
+        out = cap.getvalue().strip()
+        assert out == "hlo"
+
+    def test_cut_byte_utf8(self, repl):
+        repl._piped_input = "cafe\u0301\n"  # 'cafe' + combining acute
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-b1-4")
+        out = cap.getvalue().strip()
+        assert out == "cafe"
+
+    def test_cut_rejects_combined_bf(self, repl):
+        repl._piped_input = "abc\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-b1 -f2")
+        assert repl._last_exit_code == 1
+        assert "cannot combine" in cap.getvalue().lower()
+
+    def test_cut_rejects_combined_bc(self, repl):
+        repl._piped_input = "abc\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_cut("-b1 -c2")
+        assert repl._last_exit_code == 1
 
 
 class TestCmdTrDeeper:
@@ -26206,6 +26503,24 @@ class TestCmdTrDeeper:
             repl._cmd_tr("a b")
         assert cap.getvalue() == "" or repl._last_exit_code == 1
 
+    def test_tr_posix_lower_to_upper(self, repl):
+        repl._piped_input = "hello world\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_tr("[:lower:] [:upper:]")
+        assert "HELLO WORLD" in cap.getvalue()
+
+    def test_tr_posix_delete_digits(self, repl):
+        repl._piped_input = "abc123def456\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_tr("-d [:digit:]")
+        assert "abcdef" in cap.getvalue()
+
+    def test_tr_posix_replace_alpha(self, repl):
+        repl._piped_input = "hello 123\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_tr("[:alpha:] X")
+        assert "XXXXX 123" in cap.getvalue()
+
 
 class TestCmdSeqDeeper:
     def test_seq_reverse(self, repl):
@@ -26219,6 +26534,22 @@ class TestCmdSeqDeeper:
             repl._cmd_seq("1 2 7")
         out = cap.getvalue().strip()
         assert "1" in out and "7" in out
+
+    def test_seq_float_whole_numbers(self, repl):
+        """seq 1.0 1.0 3.0 should output 1.0, 2.0, 3.0 (not 1, 2, 3)."""
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_seq("1.0 1.0 3.0")
+        out = cap.getvalue().strip().split("\n")
+        assert out == ["1", "2", "3"]
+
+    def test_seq_float_precision(self, repl):
+        """seq 0 0.5 2.0 should not produce floating-point noise."""
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_seq("0 0.5 2.0")
+        out = cap.getvalue().strip().split("\n")
+        assert "0.30000000000000004" not in out
+        assert "1.5000000000000002" not in out
+        assert len(out) == 5  # 0, 0.5, 1, 1.5, 2
 
 
 class TestCmdNlDeeper:
@@ -26243,24 +26574,91 @@ class TestCmdGrepDeeper:
     def test_grep_count(self, repl):
         repl._piped_input = "hello\nworld\nhello\n"
         with _CaptureOutput(repl) as cap:
-            repl._cmd_grep("hello")
+            repl._cmd_grep("-c hello")
         out = cap.getvalue()
-        assert "hello" in out
+        assert "2" in out
+        assert "hello" not in out
         assert "world" not in out
 
     def test_grep_line_numbers(self, repl):
         repl._piped_input = "hello\nworld\nhello\n"
         with _CaptureOutput(repl) as cap:
-            repl._cmd_grep("hello")
+            repl._cmd_grep("-n hello")
         out = cap.getvalue()
-        assert "hello" in out
+        assert "1:hello" in out
+        assert "3:hello" in out
 
     def test_grep_word_boundary(self, repl):
         repl._piped_input = "cat cats concatenate\n"
         with _CaptureOutput(repl) as cap:
-            repl._cmd_grep("cat")
+            repl._cmd_grep("-w cat")
         out = cap.getvalue()
-        assert "cat" in out
+        lines = [l.strip() for l in out.strip().splitlines() if l.strip()]
+        assert len(lines) == 1
+        assert "cat" in lines[0]
+
+    def test_grep_context_after(self, repl):
+        repl._piped_input = "a\nb\nc\nd\ne\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-A 1 c")
+        out = cap.getvalue()
+        assert "c" in out
+        assert "d" in out
+        assert "a" not in out
+        assert "b" not in out
+
+    def test_grep_context_before(self, repl):
+        repl._piped_input = "a\nb\nc\nd\ne\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-B 1 c")
+        out = cap.getvalue()
+        assert "b" in out
+        assert "c" in out
+        assert "d" not in out
+        assert "e" not in out
+
+    def test_grep_context_both(self, repl):
+        repl._piped_input = "a\nb\nc\nd\ne\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-C 1 c")
+        out = cap.getvalue()
+        assert "b" in out
+        assert "c" in out
+        assert "d" in out
+        assert "a" not in out
+        assert "e" not in out
+
+    def test_grep_files_only(self, repl):
+        repl._piped_input = "hello\nworld\nhello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-l hello")
+        out = cap.getvalue()
+        assert "<stdin>" in out
+        assert "hello" not in out
+
+    def test_grep_files_only_no_match(self, repl):
+        repl._piped_input = "hello\nworld\nhello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-l xyz")
+        out = cap.getvalue()
+        assert "<stdin>" not in out
+        assert repl._last_exit_code == 1
+
+    def test_grep_count_no_match(self, repl):
+        repl._piped_input = "hello\nworld\nhello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-c xyz")
+        out = cap.getvalue()
+        assert "0" in out
+        assert repl._last_exit_code == 1
+
+    def test_grep_word_boundary_no_match(self, repl):
+        repl._piped_input = "cats concatenate\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-w cat")
+        out = cap.getvalue()
+        assert "cat" not in out
+        assert repl._last_exit_code == 1
 
 
 class TestCmdTeeDeeper:
@@ -26409,6 +26807,45 @@ class TestCmdPasteEdges:
         with _CaptureOutput(repl) as cap:
             repl._cmd_paste("")
         assert "a" in cap.getvalue()
+
+    def test_paste_custom_delim(self, repl, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("x\ny\n")
+        f2 = tmp_path / "b.txt"
+        f2.write_text("1\n2\n")
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_paste(f"-d, {f1} {f2}")
+        out = cap.getvalue().strip()
+        assert "x,1" in out and "y,2" in out
+
+    def test_paste_long_delim_flag(self, repl, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f1.write_text("a\nb\n")
+        f2 = tmp_path / "b.txt"
+        f2.write_text("c\nd\n")
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_paste(f"-d: {f1} {f2}")
+        out = cap.getvalue().strip()
+        assert "a:c" in out and "b:d" in out
+
+    def test_paste_no_files(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_paste("-d,")
+        assert repl._last_exit_code == 1
+
+    def test_paste_piped_input(self, repl):
+        repl._piped_input = "a\nb\nc\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_paste("")
+        out = cap.getvalue().strip()
+        assert "a" in out and "b" in out and "c" in out
+
+    def test_paste_piped_input_with_delim(self, repl):
+        repl._piped_input = "x\ny\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_paste("-d,")
+        out = cap.getvalue().strip().split("\n")
+        assert out == ["x", "y"]  # single column: delimiter has no effect
 
 
 class TestCmdJoinEdges:
@@ -26811,3 +27248,108 @@ class TestInit:
 
     def test_init_aborted_false(self, repl):
         assert repl._aborted is False
+
+
+class TestCmdGrepFlagsExtended:
+    def test_grep_c_flag(self, repl):
+        repl._piped_input = "hello\nworld\nhello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-c hello")
+        out = cap.getvalue().strip()
+        assert "2" in out
+
+    def test_grep_n_flag(self, repl):
+        repl._piped_input = "aaa\nbbb\naaa\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-n aaa")
+        out = cap.getvalue()
+        assert "1:" in out
+        assert "3:" in out
+
+    def test_grep_w_flag(self, repl):
+        repl._piped_input = "cat cats concat\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-w cat")
+        out = cap.getvalue()
+        lines = [l.strip() for l in out.strip().splitlines() if l.strip()]
+        assert len(lines) == 1
+        assert "cat" in lines[0]
+
+    def test_grep_l_flag(self, repl):
+        repl._piped_input = "hello\nworld\nhello\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-l hello")
+        out = cap.getvalue().strip()
+        assert "1 match" in out or out != ""
+
+    def test_grep_A_context_after(self, repl):
+        repl._piped_input = "a\nb\nc\nd\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-A 1 b")
+        out = cap.getvalue()
+        assert "b" in out
+        assert "c" in out
+
+    def test_grep_B_context_before(self, repl):
+        repl._piped_input = "a\nb\nc\nd\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-B 1 c")
+        out = cap.getvalue()
+        assert "c" in out
+        assert "b" in out
+
+    def test_grep_C_context_both(self, repl):
+        repl._piped_input = "a\nb\nc\nd\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-C 1 c")
+        out = cap.getvalue()
+        assert "b" in out
+        assert "c" in out
+        assert "d" in out
+
+    def test_grep_multiple_files(self, repl, tmp_path):
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_text("hello\nworld\n")
+        f2.write_text("foo\nhello\n")
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep(f"hello {f1} {f2}")
+        out = cap.getvalue()
+        assert "hello" in out
+
+    def test_grep_recursive(self, repl, tmp_path):
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        (tmp_path / "a.txt").write_text("hello\n")
+        (sub / "b.txt").write_text("world\nhello\n")
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep(f"-r hello {tmp_path}")
+        out = cap.getvalue()
+        assert "hello" in out
+
+    def test_grep_recursive_no_match(self, repl, tmp_path):
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        (tmp_path / "a.txt").write_text("hello\n")
+        (sub / "b.txt").write_text("world\n")
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep(f"-r foo {tmp_path}")
+        out = cap.getvalue()
+        assert "hello" not in out
+        assert "world" not in out
+
+
+class TestCmdSedAddressRange:
+    def test_sed_bare_d(self, repl):
+        repl._piped_input = "a\nb\nc\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_sed("d")
+        out = cap.getvalue().strip()
+        assert out == ""
+
+    def test_sed_address_range_d(self, repl):
+        repl._piped_input = "a\nb\nc\nd\ne\n"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_sed("2,4d")
+        out = cap.getvalue().strip().split("\n")
+        assert out == ["a", "e"]

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
 import { TrainingHealthCard } from './TrainingHealthCard'
 import type { Checkpoint } from '@/lib/souls-controller'
 
@@ -9,6 +9,7 @@ function mkCp(overrides: Partial<Checkpoint> = {}): Checkpoint {
 }
 
 describe('TrainingHealthCard', () => {
+  afterEach(cleanup)
   it('returns null for empty checkpoints', () => {
     const { container } = render(<TrainingHealthCard checkpoints={[]} />)
     expect(container.innerHTML).toBe('')
@@ -84,13 +85,26 @@ describe('TrainingHealthCard', () => {
     expect(screen.getAllByText(/Best loss: 1\.0000/).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows checkpoint count', () => {
+  it('shows avg quality when checkpoints have quality data', () => {
     render(
       <TrainingHealthCard
-        checkpoints={[mkCp({ loss: 1.0 }), mkCp({ loss: 2.0 })]}
+        checkpoints={[
+          mkCp({ name: 'a', loss: 3.0, avg_quality: 4.2 }),
+          mkCp({ name: 'b', loss: 2.0, avg_quality: 3.8 }),
+          mkCp({ name: 'c', loss: 1.0, avg_quality: 4.5 }),
+        ]}
       />
     )
-    expect(screen.getAllByText(/2 checkpoints/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/Data quality: 4\.2\/5/).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('omits quality display when no quality data', () => {
+    render(
+      <TrainingHealthCard
+        checkpoints={[mkCp({ loss: 2.0 }), mkCp({ loss: 1.0 })]}
+      />
+    )
+    expect(screen.queryByText(/Data quality/)).toBeNull()
   })
 
   it('handles two checkpoints with same loss as stagnant', () => {

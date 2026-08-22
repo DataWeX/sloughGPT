@@ -40,6 +40,7 @@ export interface SouArch {
   nLayer: number;
   nHead: number;
   dimFF: number;
+  blockSize: number;
 }
 
 function parseSou(buffer: ArrayBuffer): SoulCheckpoint {
@@ -93,6 +94,8 @@ function inferArch(buffer: ArrayBuffer): SouArch {
   }
   const version = view.getUint32(4, true);
   const jsonLen = view.getUint32(8, true);
+  const metaStr = new TextDecoder().decode(new Uint8Array(buffer, 12, jsonLen));
+  const meta = JSON.parse(metaStr);
   let offset = 12 + jsonLen;
 
   const sizes: Record<string, number> = {};
@@ -117,11 +120,14 @@ function inferArch(buffer: ArrayBuffer): SouArch {
   }
 
   const N = Object.keys(sizes).length;
+  const blockSize = meta?.metadata?.block_size ?? meta?.metadata?.max_seq_len ?? meta?.block_size ?? meta?.max_seq_len ?? 128;
   if (N > 14) {
     const embedDim = Math.round(Math.sqrt(sizes['p2']!));
     const vocabSize = sizes['p0']! / embedDim;
     const numLayers = Math.floor((N - 3) / 9);
-    return { archType: 'transformer', vocabSize, nEmbed: embedDim, nLayer: numLayers, nHead: embedDim / 64, dimFF: Math.ceil(embedDim * 8 / 3 / 64) * 64 };
+    const dimFF = sizes['p7'] ? Math.round(sizes['p7'] / embedDim) : Math.ceil(embedDim * 8 / 3 / 64) * 64;
+    const nHead = meta?.metadata?.n_head ?? meta?.n_head ?? Math.min(8, embedDim);
+    return { archType: 'transformer', vocabSize, nEmbed: embedDim, nLayer: numLayers, nHead, dimFF, blockSize };
   }
   const vocabSize = sizes[`p${N - 1}`]!;
   const hiddenDim = sizes[`p${N - 2}`]! / vocabSize;
@@ -132,7 +138,7 @@ function inferArch(buffer: ArrayBuffer): SouArch {
   } else {
     numLayers = Math.max(1, Math.round((N - 3) / 2));
   }
-  return { archType: 'lstm', vocabSize, nEmbed: embedDim, nLayer: numLayers, nHead: 0, dimFF: 0 };
+  return { archType: 'lstm', vocabSize, nEmbed: embedDim, nLayer: numLayers, nHead: 0, dimFF: 0, blockSize };
 }
 
 // ── Weight conversion: indexed p0..pN → flat layout for mobile engine ───
@@ -225,7 +231,7 @@ function buildMobileConfig(arch: SouArch): {
     n_embed: arch.nEmbed,
     n_layer: arch.nLayer,
     n_head: arch.nHead || Math.min(8, arch.nEmbed),
-    block_size: 128,
+    block_size: arch.blockSize,
   };
 }
 
@@ -366,6 +372,7 @@ export async function generateFromSou(
   topP = 0.9,
   eosToken = 0,
   onToken?: (token: string) => void,
+  signal?: AbortSignal,
 ): Promise<{ text: string; tokens_generated: number; elapsed_ms: number }> {
   if (!_loaded || !_flatWeights || !_config) throw new Error('No .sou checkpoint loaded');
 
@@ -377,6 +384,6 @@ export async function generateFromSou(
   onnx.loadFlatWeights(_config, _flatWeights);
 
   // Generate
-  const result = await onnx.generate(prompt, maxNewTokens, temperature, topK, topP, eosToken, onToken);
+  const result = await onnx.generate(prompt, maxNewTokens, temperature, topK, topP, eosToken, onToken, signal);
   return result;
 }

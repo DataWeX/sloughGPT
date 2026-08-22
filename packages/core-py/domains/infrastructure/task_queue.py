@@ -258,8 +258,8 @@ class TaskQueue:
         for cb in self._sse_callbacks:
             try:
                 cb(event, task)
-            except Exception as exc:
-                logger.debug("SSE callback failed for %s: %s", event, exc)
+            except Exception:
+                pass
         bus_event = f"task.{event}"
         self._emit_event(bus_event, task)
 

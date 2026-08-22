@@ -360,7 +360,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
         const prompt = buildLocalPrompt(messagesWithNew, systemPrompt)
         let hasContent = false
         let assistantContentLen = 0
+        const signal = loadingRef.current?.signal
         for await (const token of engineRef.current.generate(prompt, maxTokens, temperature)) {
+          if (signal?.aborted) break
           hasContent = true
           let cleanedToken = token
           if (assistantContentLen < 50) {

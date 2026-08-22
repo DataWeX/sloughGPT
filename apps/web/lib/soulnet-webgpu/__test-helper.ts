@@ -78,6 +78,7 @@ export function makeSouV2(metadata: Record<string, unknown>, weightsJson: string
 }
 
 const META = { version: 3, soul_name: 'test-soul', soul_traits: {}, system_prompt: '', lineage: 'unit' }
+const TRANSFORMER_META = { ...META, metadata: { n_head: 4, n_kv_head: 4, max_seq_len: 256, eps: 1e-5 } }
 
 /** New-format LSTM checkpoint: p0 embed, p1 lstm_embed, 4 params/layer, fc_w, fc_b. */
 export function makeLstmSou(
@@ -132,7 +133,7 @@ export function makeTransformerSou(
     const p = params.find(x => x.name === key)
     if (p) p.data = data
   }
-  return makeSou(META, params)
+  return makeSou(TRANSFORMER_META, params)
 }
 
 export interface FakeDevice {
@@ -144,6 +145,7 @@ export interface FakeDevice {
     createBindGroup: ReturnType<typeof vi.fn>
     createBuffer: ReturnType<typeof vi.fn>
     createCommandEncoder: ReturnType<typeof vi.fn>
+    destroy: ReturnType<typeof vi.fn>
     queue: {
       writeBuffer: ReturnType<typeof vi.fn>
       submit: ReturnType<typeof vi.fn>
@@ -175,6 +177,7 @@ export function makeWebGPU(readback?: Float32Array): FakeDevice {
     createPipelineLayout: vi.fn(() => ({})),
     createComputePipeline: vi.fn(() => ({ getBindGroupLayout: vi.fn(() => ({})) })),
     createBindGroup: vi.fn(() => ({})),
+    destroy: vi.fn(),
     createBuffer: vi.fn(({ size }: { size: number }) => {
       const buf: FakeDevice['buffers'][number] = {
         size,

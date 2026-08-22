@@ -66,6 +66,7 @@ export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: Result
                     </div>
                     <div className="text-[10px] text-muted-foreground">
                       {cp.loss != null && <span>Loss: {cp.loss.toFixed(4)}</span>}
+                      {cp.avg_quality != null && <span className="ml-2">Quality: {cp.avg_quality.toFixed(1)}/5</span>}
                       {cp.tags && cp.tags.length > 0 && <span className="ml-2">Tags: {cp.tags.join(', ')}</span>}
                     </div>
                   </div>

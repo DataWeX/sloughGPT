@@ -327,6 +327,15 @@ export function Markdown({content, streaming = false, highlight}: MarkdownProps)
             return null;
         }
       })}
+      {streaming && (
+        <YStack alignSelf="flex-start" marginLeft={2}>
+          <YStack
+            width={6} height={6} borderRadius={3}
+            backgroundColor={colors.primary}
+            opacity={0.8}
+          />
+        </YStack>
+      )}
     </YStack>
   );
 }

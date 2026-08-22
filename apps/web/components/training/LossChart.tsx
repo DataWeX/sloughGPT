@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, memo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ComposedChart } from 'recharts'
 import { downloadBlob } from '@/lib/download-utils'
 import { IconDownload } from '@sloughgpt/strui'
@@ -45,14 +45,18 @@ function exportLossCSV(data: LossPoint[], rewardData?: RewardPoint[]) {
   downloadBlob(csv, `loss-data-${todayDateString()}.csv`, 'text/csv')
 }
 
-export function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40, onExportData }: LossChartProps) {
-  const hasReward = Boolean(rewardData?.length)
-
-  // Build union of all steps
-  const allSteps = new Set<number>()
-  data.forEach(d => allSteps.add(d.step))
-  rewardData?.forEach(d => allSteps.add(d.step))
-  const steps = [...allSteps].sort((a, b) => a - b)
+export const LossChart = memo(function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40, onExportData }: LossChartProps) {
+  // Memoize step union computation
+  const { steps, hasTrain, hasEval } = useMemo(() => {
+    const allSteps = new Set<number>()
+    data.forEach(d => allSteps.add(d.step))
+    rewardData?.forEach(d => allSteps.add(d.step))
+    return {
+      steps: [...allSteps].sort((a, b) => a - b),
+      hasTrain: data.some(d => d.type === 'train'),
+      hasEval: data.some(d => d.type === 'eval'),
+    }
+  }, [data, rewardData])
 
   // Sliding window: show last N steps during live training
   const visibleSteps = useMemo(() => {
@@ -60,21 +64,33 @@ export function LossChart({ data, rewardData, height = 200, showLegend = true, l
     return steps.slice(-windowSize)
   }, [live, steps, windowSize])
 
+  // Memoize chart data build — O(visibleSteps * data.length) but stable refs
+  const chartData = useMemo(() => {
+    // Build lookup maps for O(1) access instead of O(n) find
+    const trainMap = new Map<number, number>()
+    const evalMap = new Map<number, number>()
+    const rewardMap = new Map<number, number>()
+    for (const d of data) {
+      if (d.type === 'train') trainMap.set(d.step, d.value)
+      else evalMap.set(d.step, d.value)
+    }
+    rewardData?.forEach(d => rewardMap.set(d.step, d.value))
+
+    return visibleSteps.map(s => {
+      const point: Record<string, number | undefined> = { step: s }
+      const train = trainMap.get(s)
+      const eval_ = evalMap.get(s)
+      const reward = rewardMap.get(s)
+      if (train !== undefined) point['train'] = train
+      if (eval_ !== undefined) point['eval'] = eval_
+      if (reward !== undefined) point['reward'] = reward
+      return point
+    })
+  }, [visibleSteps, data, rewardData])
+
+  const hasReward = Boolean(rewardData?.length)
+
   if (!data.length && !rewardData?.length) return null
-
-  const chartData = visibleSteps.map(s => {
-    const point: Record<string, number | undefined> = { step: s }
-    const train = data.find(d => d.step === s && d.type === 'train')
-    const eval_ = data.find(d => d.step === s && d.type === 'eval')
-    const reward = rewardData?.find(d => d.step === s)
-    if (train) point['train'] = train.value
-    if (eval_) point['eval'] = eval_.value
-    if (reward) point['reward'] = reward.value
-    return point
-  })
-
-  const hasTrain = data.some(d => d.type === 'train')
-  const hasEval = data.some(d => d.type === 'eval')
 
   const Chart = hasReward ? ComposedChart : LineChart
 
@@ -171,4 +187,4 @@ export function LossChart({ data, rewardData, height = 200, showLegend = true, l
       </ResponsiveContainer>
     </div>
   )
-}
+})

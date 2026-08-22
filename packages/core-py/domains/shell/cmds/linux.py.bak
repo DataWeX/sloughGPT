@@ -1,0 +1,126 @@
+    def _cmd_awk(self, args: str = "") -> None:
+        """Minimal awk: awk -F<sep> '{print $1,$2}' or awk '/pattern/ {print $1}'."""
+        import re as _re
+        if not args:
+            self._print("  Usage: awk -F<sep> '{print $1}' [file]")
+            self._last_exit_code = 1
+            return
+        sep = " "
+        script = ""
+        target = None
+        rest = args
+        if "-F" in rest:
+            fi = rest.index("-F")
+            after_f = rest[fi + 2:].lstrip()
+            if after_f.startswith(("'", '"')):
+                q = after_f[0]
+                end = after_f.find(q, 1)
+                if end > 0:
+                    sep = after_f[1:end]
+                    rest = after_f[end + 1:].lstrip()
+                else:
+                    sep = after_f[1:2]
+                    rest = after_f[3:].lstrip()
+            elif after_f:
+                sep = after_f[0]
+                rest = after_f[1:].lstrip()
+        if rest.startswith(("'", '"')):
+            q = rest[0]
+            end = rest.find(q, 1)
+            if end > 0:
+                script = rest[1:end]
+                rest = rest[end + 1:].lstrip()
+            else:
+                script = rest[1:]
+                rest = ""
+        else:
+            tokens = rest.split(None, 1)
+            if tokens:
+                script = tokens[0]
+                rest = tokens[1] if len(tokens) > 1 else ""
+            else:
+                self._print("  Usage: awk -F<sep> '{print $1}' [file]")
+                self._last_exit_code = 1
+                return
+        target = rest.strip() if rest.strip() else None
+        try:
+            if target:
+                content = Path(os.path.expanduser(target)).read_text()
+            elif self._piped_input:
+                content = self._piped_input
+            else:
+                self._print("  awk: no input")
+                self._last_exit_code = 1
+                return
+        except FileNotFoundError:
+            self._print(f"  awk: {target}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        pat = None
+        body = script
+        if script.startswith("/"):
+            pm = _re.match(r'/([^/]*)/\s*\{(.+)\}\s*$', script)
+            if pm:
+                pat = pm.group(1)
+                body = pm.group(2)
+            else:
+                pm2 = _re.match(r'/([^/]*)/', script)
+                if pm2:
+                    pat = pm2.group(1)
+                    body = script[pm2.end():].strip().strip("{}").strip()
+        elif script.startswith("{") and script.endswith("}"):
+            body = script[1:-1].strip()
+        print_expr = None
+        pm = _re.match(r'print\s+(.+)', body)
+        if pm:
+            print_expr = pm.group(1).strip()
+        out_lines = []
+        NR = 0
+        for raw_line in content.splitlines():
+            NR += 1
+            line = raw_line.rstrip("\n\r")
+            fields = line.split(sep) if sep else list(line)
+            NF = len(fields)
+            match = True
+            if pat is not None:
+                try:
+                    match = _re.search(pat, line) is not None
+                except _re.error:
+                    self._print(f"  awk: invalid regex '{pat}'")
+                    self._last_exit_code = 1
+                    return
+            if not match:
+                continue
+            if print_expr is not None:
+                def _resolve(expr: str) -> str:
+                    result = expr
+                    result = result.replace("$0", line)
+                    result = _re.sub(r'\$NF', fields[-1] if fields else "", result)
+                    def _replace_field(m):
+                        idx = int(m.group(1))
+                        return fields[idx - 1] if 1 <= idx <= NF else ""
+                    result = _re.sub(r'\$(\d+)', _replace_field, result)
+                    result = result.replace("NR", str(NR))
+                    result = result.replace("NF", str(NF))
+                    if result.startswith('"') and result.endswith('"'):
+                        result = result[1:-1]
+                    elif result.startswith("'") and result.endswith("'"):
+                        result = result[1:-1]
+                    else:
+                        parts = result.split(",")
+                        resolved = []
+                        for p in parts:
+                            p = p.strip()
+                            if p.startswith('"') and p.endswith('"'):
+                                resolved.append(p[1:-1])
+                            elif p.startswith("'") and p.endswith("'"):
+                                resolved.append(p[1:-1])
+                            else:
+                                resolved.append(p)
+                        result = " ".join(resolved)
+                    return result
+                out_lines.append(_resolve(print_expr))
+            else:
+                out_lines.append(line)
+        self._print("\n".join(out_lines))
+        self._last_exit_code = 0

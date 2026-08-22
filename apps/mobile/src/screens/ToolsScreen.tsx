@@ -55,6 +55,10 @@ const TOOLS: ToolItem[] = [
   {icon: 'book', title: 'Files', desc: 'File management and upload', target: 'Files'},
   {icon: 'package', title: 'Registry', desc: 'Model registry and health', target: 'Registry'},
   {icon: 'brain', title: 'Memory', desc: 'Auto-memory store and search', target: 'Memory'},
+  {icon: 'activity', title: 'System Health', desc: 'Real-time monitoring dashboard', target: 'Monitoring'},
+  {icon: 'terminal', title: 'Shell', desc: 'Interactive terminal (Dait Shell)', target: 'Shell'},
+  {icon: 'cpu', title: 'VM Console', desc: 'x86 assembly sandbox + Linux VM', target: 'VMConsole'},
+  {icon: 'shield', title: 'Auth', desc: 'Login and authentication', target: 'Auth'},
 ];
 
 function formatUptime(seconds: number): string {

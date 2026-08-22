@@ -28,33 +28,69 @@ function formatUptime(seconds: number): string {
   return `${h}h ${m}m`;
 }
 
-function QuickAction({icon, label, onPress, color}: {icon: string; label: string; onPress: () => void; color: string}) {
+function QuickAction({icon, label, onPress}: {icon: string; label: string; onPress: () => void}) {
   const colors = useColors();
   return (
     <Pressable onPress={onPress}>
       {({pressed}) => (
         <YStack
-          width={72}
+          flex={1}
           alignItems="center"
-          gap={6}
-          padding={10}
-          borderRadius={12}
-          backgroundColor={pressed ? colors.primaryAlpha(0.08) : 'transparent'}>
+          gap={8}
+          padding={14}
+          borderRadius={14}
+          backgroundColor={pressed ? colors.primaryAlpha(0.08) : colors.backgroundHover}
+          borderWidth={1}
+          borderColor={colors.border}
+          pressStyle={{opacity: 0.8, scale: 0.97}}>
           <YStack
             width={44}
             height={44}
-            borderRadius={12}
-            backgroundColor={color + '18'}
+            borderRadius={14}
+            backgroundColor={colors.primaryAlpha(0.12)}
             alignItems="center"
             justifyContent="center">
-            <Icon name={icon as any} size={20} color={color} />
+            <Icon name={icon as any} size={20} color={colors.primary} />
           </YStack>
-          <Text fontSize={11} fontWeight="500" color={colors.text} textAlign="center" numberOfLines={1}>
+          <Text fontSize={12} fontWeight="600" color={colors.text} textAlign="center">
             {label}
           </Text>
         </YStack>
       )}
     </Pressable>
+  );
+}
+
+function Card({children, ...props}: {children: React.ReactNode;[key: string]: any}) {
+  const colors = useColors();
+  return (
+    <YStack
+      backgroundColor="$background"
+      borderRadius={16}
+      borderWidth={1}
+      borderColor={colors.border}
+      padding={16}
+      gap={12}
+      shadowColor="black"
+      shadowOffset={{width: 0, height: 2}}
+      shadowOpacity={0.06}
+      shadowRadius={8}
+      elevation={2}
+      {...props}>
+      {children}
+    </YStack>
+  );
+}
+
+function SectionHeader({icon, title}: {icon: string; title: string}) {
+  const colors = useColors();
+  return (
+    <XStack alignItems="center" gap={10}>
+      <YStack width={32} height={32} borderRadius={10} backgroundColor={colors.primaryAlpha(0.1)} alignItems="center" justifyContent="center">
+        <Icon name={icon as any} size={16} color={colors.primary} />
+      </YStack>
+      <Text fontSize={15} fontWeight="600" color="$color">{title}</Text>
+    </XStack>
   );
 }
 
@@ -95,39 +131,40 @@ export function HomeScreen() {
   const apiOk = systemHealth != null;
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
+    <SafeAreaView style={{flex: 1, backgroundColor: 'var(--background)'}} edges={['top']}>
       <ScrollView
         style={{flex: 1}}
-        contentContainerStyle={{padding: 16, gap: 16, paddingBottom: 32}}
+        contentContainerStyle={{padding: 16, gap: 12, paddingBottom: 32}}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
 
         {/* Header */}
-        <XStack justifyContent="space-between" alignItems="center">
-          <XStack alignItems="center" gap={12}>
-            <YStack
-              width={36} height={36} borderRadius={12}
-              alignItems="center" justifyContent="center"
-              onPress={openSidebar}
-              pressStyle={{opacity: 0.6, scale: 0.95}}
-              accessible accessibilityRole="button" accessibilityLabel="Open menu">
-              <Icon name="menu" size={20} color={colors.textSecondary} />
-            </YStack>
-            <YStack gap={1}>
-              <Text fontSize={20} fontWeight="700" letterSpacing={-0.3} color={colors.text}>Home</Text>
-              <Text fontSize={11} color={colors.textMuted}>SloughGPT Mobile</Text>
-            </YStack>
-          </XStack>
+        <XStack alignItems="center" gap={12} marginBottom={4}>
+          <YStack
+            width={40} height={40} borderRadius={14}
+            alignItems="center" justifyContent="center"
+            backgroundColor={colors.primaryAlpha(0.08)}
+            onPress={openSidebar}
+            pressStyle={{opacity: 0.6, scale: 0.95}}
+            accessible accessibilityRole="button" accessibilityLabel="Open menu">
+            <Icon name="menu" size={20} color={colors.primary} />
+          </YStack>
+          <YStack flex={1}>
+            <Text fontSize={22} fontWeight="700" letterSpacing={-0.5} color="$color">Home</Text>
+            <Text fontSize={12} color="$color10">SloughGPT Mobile</Text>
+          </YStack>
           <Pressable onPress={() => navigate('Settings/Health')}>
             <YStack
-              paddingHorizontal={8}
-              paddingVertical={4}
-              borderRadius={8}
+              paddingHorizontal={10}
+              paddingVertical={5}
+              borderRadius={10}
               backgroundColor={apiOk ? colors.successAlpha(0.1) : colors.errorAlpha(0.1)}
-              gap={4}
+              borderWidth={1}
+              borderColor={apiOk ? colors.successAlpha(0.2) : colors.errorAlpha(0.2)}
+              flexDirection="row"
               alignItems="center"
-              flexDirection="row">
+              gap={6}>
               <YStack width={6} height={6} borderRadius={3} backgroundColor={apiOk ? colors.success : colors.error} />
-              <Text fontSize={11} fontWeight="500" color={apiOk ? colors.success : colors.error}>
+              <Text fontSize={11} fontWeight="600" color={apiOk ? colors.success : colors.error}>
                 {apiOk ? 'Online' : 'Offline'}
               </Text>
             </YStack>
@@ -136,101 +173,83 @@ export function HomeScreen() {
 
         {/* Status Row */}
         <XStack gap={8}>
-          <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={6}>
+          <Card flex={1} padding={14} gap={8}>
             <XStack justifyContent="space-between" alignItems="center">
-              <Text fontSize={11} color={colors.textMuted}>Model</Text>
+              <Text fontSize={11} color="$color10">Model</Text>
               <StatusBadge
                 label={isModelLoaded ? 'Loaded' : 'None'}
                 variant={isModelLoaded ? 'success' : 'default'}
               />
             </XStack>
-            <Text fontSize={13} fontWeight="600" color={colors.text} numberOfLines={1}>
+            <Text fontSize={13} fontWeight="600" color="$color" numberOfLines={1}>
               {health?.model_name || systemHealth?.model_name || 'No model loaded'}
             </Text>
-          </YStack>
+          </Card>
 
-          <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={6}>
-            <Text fontSize={11} color={colors.textMuted}>Soul</Text>
-            <Text fontSize={13} fontWeight="600" color={colors.text} numberOfLines={1}>
+          <Card flex={1} padding={14} gap={8}>
+            <Text fontSize={11} color="$color10">Soul</Text>
+            <Text fontSize={13} fontWeight="600" color="$color" numberOfLines={1}>
               {currentSoul?.name || 'Default'}
             </Text>
             {currentSoul?.description && (
-              <Text fontSize={11} color={colors.textMuted} numberOfLines={1}>{currentSoul.description}</Text>
+              <Text fontSize={11} color="$color10" numberOfLines={1}>{currentSoul.description}</Text>
             )}
-          </YStack>
+          </Card>
         </XStack>
 
         {/* Quick Actions */}
-        <YStack padding={14} borderRadius={12} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={10}>
-          <Text fontSize={14} fontWeight="600" color={colors.text}>Quick Actions</Text>
-          <XStack justifyContent="space-between">
-            <QuickAction
-              icon="message-circle"
-              label="Chat"
-              color={colors.primary}
-              onPress={() => navigate('Chat')}
-            />
-            <QuickAction
-              icon="brain"
-              label="Models"
-              color={colors.primary}
-              onPress={() => navigate('Models')}
-            />
-            <QuickAction
-              icon="dumbbell"
-              label="Train"
-              color={colors.primary}
-              onPress={() => navigate('Tools/Training')}
-            />
-            <QuickAction
-              icon="database"
-              label="Datasets"
-              color={colors.primary}
-              onPress={() => navigate('Tools/Datasets')}
-            />
+        <Card>
+          <SectionHeader icon="zap" title="Quick Actions" />
+          <XStack gap={8}>
+            <QuickAction icon="message-circle" label="Chat" onPress={() => navigate('Chat')} />
+            <QuickAction icon="brain" label="Models" onPress={() => navigate('Models')} />
+            <QuickAction icon="dumbbell" label="Train" onPress={() => navigate('Tools/Training')} />
+            <QuickAction icon="book-open" label="Datasets" onPress={() => navigate('Tools/Datasets')} />
           </XStack>
-        </YStack>
+        </Card>
 
         {/* System Stats */}
         {systemHealth && (
-          <YStack padding={14} borderRadius={12} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
-            <Text fontSize={14} fontWeight="600" color={colors.text}>System</Text>
+          <Card>
+            <SectionHeader icon="heart-pulse" title="System" />
             <XStack gap={16}>
-              <YStack gap={2}>
-                <Text fontSize={10} color={colors.textMuted}>Uptime</Text>
-                <Text fontSize={13} fontWeight="500" color={colors.text}>{formatUptime(systemHealth.uptime_s)}</Text>
+              <YStack gap={4}>
+                <Text fontSize={10} color="$color10">Uptime</Text>
+                <Text fontSize={14} fontWeight="600" color="$color">{formatUptime(systemHealth.uptime_s)}</Text>
               </YStack>
-              <YStack gap={2}>
-                <Text fontSize={10} color={colors.textMuted}>Requests</Text>
-                <Text fontSize={13} fontWeight="500" color={colors.text}>{systemHealth.request_count.toLocaleString()}</Text>
+              <YStack gap={4}>
+                <Text fontSize={10} color="$color10">Requests</Text>
+                <Text fontSize={14} fontWeight="600" color="$color">{systemHealth.request_count.toLocaleString()}</Text>
               </YStack>
-              <YStack gap={2}>
-                <Text fontSize={10} color={colors.textMuted}>Errors</Text>
-                <Text fontSize={13} fontWeight="500" color={systemHealth.error_count > 0 ? colors.error : colors.text}>
+              <YStack gap={4}>
+                <Text fontSize={10} color="$color10">Errors</Text>
+                <Text fontSize={14} fontWeight="600" color={systemHealth.error_count > 0 ? colors.error : '$color'}>
                   {systemHealth.error_count}
                 </Text>
               </YStack>
-              <YStack gap={2}>
-                <Text fontSize={10} color={colors.textMuted}>Models</Text>
-                <Text fontSize={13} fontWeight="500" color={colors.text}>{models.length}</Text>
+              <YStack gap={4}>
+                <Text fontSize={10} color="$color10">Models</Text>
+                <Text fontSize={14} fontWeight="600" color="$color">{models.length}</Text>
               </YStack>
             </XStack>
-          </YStack>
+          </Card>
         )}
 
         {/* Recent Sessions */}
-        <YStack padding={14} borderRadius={12} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={10}>
+        <Card>
           <XStack justifyContent="space-between" alignItems="center">
-            <Text fontSize={14} fontWeight="600" color={colors.text}>Recent Chats</Text>
+            <SectionHeader icon="message-square" title="Recent Chats" />
             <Pressable onPress={() => navigate('Chat')}>
-              <Text fontSize={12} color={colors.primary}>View all</Text>
+              <Text fontSize={12} fontWeight="600" color={colors.primary}>View all</Text>
             </Pressable>
           </XStack>
           {recentSessions.length === 0 ? (
-            <YStack padding={16} alignItems="center" gap={6}>
-              <Icon name="message-circle" size={24} color={colors.textMuted} />
-              <Text fontSize={13} color={colors.textMuted}>No conversations yet</Text>
-              <Text fontSize={11} color={colors.textMuted}>Start a chat to begin</Text>
+            <YStack padding={24} alignItems="center" gap={8}>
+              <YStack width={48} height={48} borderRadius={14} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
+                <Icon name="message-circle" size={24} color={colors.primary} />
+              </YStack>
+              <Text fontSize={14} fontWeight="600" color="$color">No conversations yet</Text>
+              <Text fontSize={12} color="$color10">Start a chat to begin</Text>
             </YStack>
           ) : (
             recentSessions.map((session: Session) => (
@@ -242,19 +261,20 @@ export function HomeScreen() {
                 }}>
                 {({pressed}) => (
                   <XStack
-                    padding={10}
-                    borderRadius={8}
-                    backgroundColor={pressed ? colors.primaryAlpha(0.04) : 'transparent'}
-                    gap={10}
-                    alignItems="center">
-                    <YStack width={32} height={32} borderRadius={8} backgroundColor={colors.primaryAlpha(0.1)} alignItems="center" justifyContent="center">
-                      <Icon name="message-circle" size={14} color={colors.primary} />
+                    padding={12}
+                    borderRadius={12}
+                    backgroundColor={pressed ? colors.primaryAlpha(0.06) : 'transparent'}
+                    gap={12}
+                    alignItems="center"
+                    pressStyle={{opacity: 0.8}}>
+                    <YStack width={36} height={36} borderRadius={10} backgroundColor={colors.primaryAlpha(0.1)} alignItems="center" justifyContent="center">
+                      <Icon name="message-circle" size={16} color={colors.primary} />
                     </YStack>
                     <YStack flex={1} gap={2}>
-                      <Text fontSize={13} fontWeight="500" color={colors.text} numberOfLines={1}>
+                      <Text fontSize={13} fontWeight="600" color="$color" numberOfLines={1}>
                         {session.name || 'New chat'}
                       </Text>
-                      <Text fontSize={11} color={colors.textMuted} numberOfLines={1}>
+                      <Text fontSize={11} color="$color10" numberOfLines={1}>
                         {session.message_count ?? 0} messages
                       </Text>
                     </YStack>
@@ -264,7 +284,7 @@ export function HomeScreen() {
               </Pressable>
             ))
           )}
-        </YStack>
+        </Card>
 
       </ScrollView>
     </SafeAreaView>

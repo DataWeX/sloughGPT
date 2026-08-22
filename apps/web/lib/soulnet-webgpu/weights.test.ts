@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseSou, inferArch, guessShapes } from './weights'
+import type { SoulTransformerArch } from './weights'
 import { makeSou, makeSouV2, makeLstmSou, makeTransformerSou } from './__test-helper'
 
 const META = { version: 3, soul_name: 'test-soul', soul_traits: {}, system_prompt: '', lineage: 'unit' }
@@ -90,6 +91,13 @@ describe('inferArch', () => {
     expect(arch.embedDim).toBe(4)
     expect(arch.vocabSize).toBe(3)
     expect(arch.numLayers).toBe(2)
+    // Transformer-specific fields
+    const t = arch as SoulTransformerArch
+    expect(t.numHeads).toBe(4)      // from metadata
+    expect(t.numKVHeads).toBe(4)    // from metadata
+    expect(t.dimFF).toBe(8)         // inferred from w1 shape (p7 = [8, 4])
+    expect(t.maxSeqLen).toBe(256)   // from metadata
+    expect(t.eps).toBe(1e-5)        // from metadata
   })
 
   it('throws on invalid magic', () => {

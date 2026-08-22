@@ -25,11 +25,13 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   const withLoss = checkpoints.filter(c => c.loss != null && c.loss > 0)
   const withDuration = checkpoints.filter(c => c.training_duration_s != null && c.training_duration_s > 0)
   const withVocab = checkpoints.filter(c => c.vocab_size != null && c.vocab_size > 0)
+  const withQuality = checkpoints.filter(c => c.avg_quality != null && c.avg_quality > 0)
 
   const bestLoss = withLoss.length > 0 ? Math.min(...withLoss.map(c => c.loss!)) : null
   const avgLoss = withLoss.length > 0 ? withLoss.reduce((s, c) => s + c.loss!, 0) / withLoss.length : null
   const totalDuration = withDuration.reduce((s, c) => s + c.training_duration_s!, 0)
   const bestDuration = withDuration.length > 0 ? Math.min(...withDuration.map(c => c.training_duration_s!)) : null
+  const avgQuality = withQuality.length > 0 ? withQuality.reduce((s, c) => s + c.avg_quality!, 0) / withQuality.length : null
 
   const modelTypes = new Map<string, number>()
   for (const c of checkpoints) {
@@ -50,6 +52,7 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   }
   if (totalDuration > 0) stats.push({ label: 'Total training time', value: fmtDuration(totalDuration) })
   if (bestDuration != null) stats.push({ label: 'Fastest run', value: fmtDuration(bestDuration) })
+  if (avgQuality != null) stats.push({ label: 'Avg quality', value: `${avgQuality.toFixed(1)}/5` })
   if (withVocab.length > 0) {
     const maxVocab = Math.max(...withVocab.map(c => c.vocab_size!))
     stats.push({ label: 'Max vocab size', value: String(maxVocab) })

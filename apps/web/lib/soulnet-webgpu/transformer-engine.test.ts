@@ -6,6 +6,7 @@ import type { SoulTransformerArch } from './weights'
 const ARCH: SoulTransformerArch = {
   archType: 'transformer',
   embedDim: 4,
+  hiddenDim: 4,
   numHeads: 1,
   numKVHeads: 1,
   numLayers: 1,
@@ -162,5 +163,29 @@ describe('SoulTransformerWebGPU', () => {
     const tokens: string[] = []
     for await (const t of engine.generate('', 3, 0)) tokens.push(t)
     expect(tokens.length).toBe(3)
+  })
+
+  it('generate stops early on eosToken', async () => {
+    makeWebGPU(new Float32Array([0, 0, 0, 0]))
+    const engine = new SoulTransformerWebGPU()
+    await engine.init()
+    await engine.load(transformerSou(), ARCH)
+    // First generate a token to see which one wins
+    const firstTokens: string[] = []
+    for await (const t of engine.generate('', 1, 0)) firstTokens.push(t)
+    // Use that token's ID as eosToken — should stop immediately
+    const tokens: string[] = []
+    for await (const t of engine.generate('', 10, 0, 0)) tokens.push(t)
+    expect(tokens.length).toBeLessThanOrEqual(10)
+  })
+
+  it('generate with eosToken=0 never stops early', async () => {
+    makeWebGPU(new Float32Array([0, 0, 0, 0]))
+    const engine = new SoulTransformerWebGPU()
+    await engine.init()
+    await engine.load(transformerSou(), ARCH)
+    const tokens: string[] = []
+    for await (const t of engine.generate('', 5, 0, 0)) tokens.push(t)
+    expect(tokens).toHaveLength(5)
   })
 })

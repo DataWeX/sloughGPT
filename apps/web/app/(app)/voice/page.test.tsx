@@ -73,29 +73,29 @@ describe('VoicePage — initial load flow', () => {
 })
 
 describe('VoicePage — voice UI flow', () => {
-  it('shows Not supported for server TTS', async () => {
+  it('shows Available for server TTS', async () => {
     render(<VoicePage />)
     await waitFor(() => {
-      expect(screen.getByText('Not supported')).toBeTruthy()
+      expect(screen.getByText('Available')).toBeTruthy()
     })
   })
 
-  it('shows browser speech synthesis engine', async () => {
+  it('shows server engine name', async () => {
     render(<VoicePage />)
     await waitFor(() => {
-      expect(screen.getByText('Browser SpeechSynthesis')).toBeTruthy()
+      expect(screen.getByText('Server (bark)')).toBeTruthy()
     })
   })
 
   it('renders TTS textarea', async () => {
     render(<VoicePage />)
-    await waitFor(() => { expect(screen.getByText('Not supported')).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByText('Available')).toBeTruthy() })
     expect(screen.getAllByPlaceholderText(/enter text/i).length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders generate button', async () => {
     render(<VoicePage />)
-    await waitFor(() => { expect(screen.getByText('Not supported')).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByText('Available')).toBeTruthy() })
     expect(screen.getAllByText(/generate/i).length).toBeGreaterThanOrEqual(1)
   })
 
@@ -108,7 +108,7 @@ describe('VoicePage — voice UI flow', () => {
 describe('VoicePage — generate flow', () => {
   it('generate button calls tts', async () => {
     render(<VoicePage />)
-    await waitFor(() => { expect(screen.getByText('Not supported')).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByText('Available')).toBeTruthy() })
 
     const textarea = screen.getAllByPlaceholderText(/enter text/i)[0]
     fireEvent.change(textarea, { target: { value: 'Hello world' } })
@@ -126,7 +126,7 @@ describe('VoicePage — generate flow', () => {
 
   it('shows result after generation', async () => {
     render(<VoicePage />)
-    await waitFor(() => { expect(screen.getByText('Not supported')).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByText('Available')).toBeTruthy() })
 
     const textarea = screen.getAllByPlaceholderText(/enter text/i)[0]
     fireEvent.change(textarea, { target: { value: 'Hello' } })
@@ -155,7 +155,7 @@ describe('VoicePage — error handling', () => {
   it('handles tts failure gracefully', async () => {
     mockTts.mockRejectedValue(new Error('TTS error'))
     render(<VoicePage />)
-    await waitFor(() => { expect(screen.getByText('Not supported')).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByText('Available')).toBeTruthy() })
 
     const textarea = screen.getAllByPlaceholderText(/enter text/i)[0]
     fireEvent.change(textarea, { target: { value: 'test' } })

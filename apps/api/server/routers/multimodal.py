@@ -203,7 +203,7 @@ class MultimodalRouter:
             from PIL import Image
             import io
             img = Image.open(io.BytesIO(contents)).convert("RGB")
-            caption = mgr.caption_image(img, ground_truth=label)
+            caption = await asyncio.to_thread(mgr.caption_image, img, ground_truth=label)
             safe_audit_log("multimodal.train", resource="image", detail="single", supervised=label is not None and label.strip() != "", accuracy=caption.accuracy)
             return success_response(data={
                 "status": "ok",
@@ -343,9 +343,9 @@ class MultimodalRouter:
                 raise_error("No trained video model. Train via /multimodal/train-video first.", "E_BAD_REQUEST")
             latest = checkpoints[0]
             trainer = VideoCaptionTrainer()
-            trainer.load_checkpoint(latest["path"])
+            await asyncio.to_thread(trainer.load_checkpoint, latest["path"])
             t0 = time.time()
-            text = trainer.generate(video_path=req.video_path, max_len=req.max_len, temperature=req.temperature)
+            text = await asyncio.to_thread(trainer.generate, video_path=req.video_path, max_len=req.max_len, temperature=req.temperature)
             return success_response(data={"text": text, "checkpoint": latest["name"], "elapsed_ms": round((time.time() - t0) * 1000, 1)})
         except HTTPException:
             raise
@@ -408,7 +408,7 @@ class MultimodalRouter:
             from PIL import Image
             import io
             img = Image.open(io.BytesIO(contents)).convert("RGB")
-            cap = mgr.caption_image(img)
+            cap = await asyncio.to_thread(mgr.caption_image, img)
             learning = getattr(mgr, "_learning_count", 0)
             engine = getattr(mgr, "_multimodal_engine", None)
             buf = getattr(mgr, "_replay_buffer", None)

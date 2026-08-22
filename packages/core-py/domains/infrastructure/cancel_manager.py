@@ -44,6 +44,22 @@ logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 
 
+def _emit_op_event(action: str, op: "Operation") -> None:
+    """Emit an operation lifecycle event to the global EventBus."""
+    try:
+        from domains.infrastructure.event_bus import get_event_bus
+        get_event_bus().emit_sync(
+            "operations",
+            {
+                "action": action,
+                "operation": op.to_dict(),
+            },
+            source="cancel_manager",
+        )
+    except Exception:
+        pass  # Never let event emission break cancellation logic
+
+
 # ── Operation types ────────────────────────────────────────────────────
 
 class OpType(enum.Enum):

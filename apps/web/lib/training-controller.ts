@@ -40,6 +40,7 @@ export interface TrainingJob {
   error?: string
   explanation?: string
   status_message?: string
+  avg_quality?: number
 }
 
 export interface TrainingStatus {
@@ -166,6 +167,7 @@ export interface TurboJobStatus {
   steps_per_sec?: number | null
   eta_s?: number | null
   elapsed_s?: number | null
+  avg_quality?: number | null
   error?: string | null
   result?: Record<string, unknown> | null
 }

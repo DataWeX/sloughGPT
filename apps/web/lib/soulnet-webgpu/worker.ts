@@ -15,6 +15,7 @@
 import { SoulNetWebGPU, SoulNetConfig } from './engine'
 import { SoulTransformerWebGPU } from './transformer-engine'
 import { inferArch } from './weights'
+import type { SoulTransformerArch } from './weights'
 
 export interface WorkerScope {
   postMessage(message: unknown): void
@@ -56,21 +57,10 @@ export function createWorkerHandler(workerScope: WorkerScope) {
           const arch = inferArch(raw)
 
           if (arch.archType === 'transformer') {
+            const t = arch as SoulTransformerArch
             const e = new SoulTransformerWebGPU()
             await e.init()
-            const numHeads = Math.min(8, arch.embedDim)
-            const dimFF = Math.min(1024, arch.embedDim * 4)
-            await e.load(raw, {
-              archType: 'transformer',
-              embedDim: arch.embedDim,
-              numHeads,
-              numKVHeads: numHeads,
-              numLayers: arch.numLayers,
-              dimFF,
-              vocabSize: arch.vocabSize,
-              maxSeqLen: 2048,
-              eps: 1e-5,
-            })
+            await e.load(raw, t)
             engine = e
           } else {
             const e = new SoulNetWebGPU()
@@ -90,7 +80,7 @@ export function createWorkerHandler(workerScope: WorkerScope) {
         }
         case 'generate': {
           if (!engine) throw new Error('Not initialized')
-          const gen = engine.generate(msg.prompt, msg.maxTokens, msg.temperature)
+          const gen = engine.generate(msg.prompt, msg.maxTokens, msg.temperature, msg.eosToken ?? 0)
           for await (const token of gen) {
             workerScope.postMessage({ type: 'token', token })
           }

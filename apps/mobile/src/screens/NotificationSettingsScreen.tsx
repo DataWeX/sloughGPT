@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {FlatList, Pressable, RefreshControl, Alert} from 'react-native';
+import {ScrollView, Pressable, RefreshControl, Alert} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text, Switch} from 'tamagui';
 import {useColors} from '../theme/colors';
@@ -149,11 +149,10 @@ export function NotificationSettingsScreen() {
           <StatusBadge label="Loading..." variant="info" />
         </YStack>
       ) : (
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          ListHeaderComponent={
-            <YStack padding={16} gap={20}>
+        <ScrollView
+          contentContainerStyle={{paddingBottom: 32}}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <YStack padding={16} gap={20}>
               {/* Master Toggle */}
               <YStack gap={8}>
                 <XStack
@@ -300,10 +299,7 @@ export function NotificationSettingsScreen() {
                 )}
               </YStack>
             </YStack>
-          }
-          contentContainerStyle={{paddingBottom: 32}}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
+          </ScrollView>
       )}
     </SafeAreaView>
   );

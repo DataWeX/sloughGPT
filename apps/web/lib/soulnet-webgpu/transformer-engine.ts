@@ -805,8 +805,10 @@ export class SoulTransformerWebGPU {
     return logits
   }
 
-  /** Generate text autoregressively. */
-  async *generate(prompt: string, maxTokens: number, temperature = 1.0): AsyncGenerator<string, void, unknown> {
+  /** Generate text autoregressively.
+   *  @param eosToken - stop generating when this token ID is produced (0 = no stop)
+   */
+  async *generate(prompt: string, maxTokens: number, temperature = 1.0, eosToken = 0): AsyncGenerator<string, void, unknown> {
     const ids: number[] = []
     for (const ch of prompt.toLowerCase()) {
       if (ch in this.stoi) ids.push(this.stoi[ch])
@@ -821,6 +823,7 @@ export class SoulTransformerWebGPU {
     for (let t = 0; t < maxTokens; t++) {
       const logits = await this.forward(ids[ids.length - 1])
       const nextId = temperature > 0 ? sampleMultinomial(logits, temperature) : sampleArgmax(logits)
+      if (eosToken > 0 && nextId === eosToken) return
       const token = this.itos[nextId] ?? '\ufffd'
       ids.push(nextId)
       yield token
@@ -833,6 +836,7 @@ export class SoulTransformerWebGPU {
       this.gpuMatmulIn, this.gpuMatmulW, this.gpuMatmulOut, this.gpuMatmulParams]) {
       b?.destroy()
     }
+    this.device?.destroy()
     this.device = null
     this.ready = false
   }

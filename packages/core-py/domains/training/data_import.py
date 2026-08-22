@@ -618,7 +618,7 @@ class BooksSearch:
         else:
             q = f"title:{self._sanitize_query(query)}"
 
-        url = f"https://openlibrary.org/search.json?q={q}&limit={limit}"
+        url = f"https://openlibrary.org/search.json?q={q}&limit={limit}&fields=title,author_name,first_publish_year,cover_i,isbn,key"
         try:
             req = urllib.request.Request(url)
             req.add_header("User-Agent", "SloughGPT/1.0")

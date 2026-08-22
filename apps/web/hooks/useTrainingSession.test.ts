@@ -136,6 +136,43 @@ describe('useTrainingSession', () => {
     }
   })
 
+  it('startSSETraining captures avg_quality from SSE', async () => {
+    mockStartAutoTrain.mockResolvedValue(undefined)
+    const { result } = renderHook(() => useTrainingSession())
+    await act(async () => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast) })
+
+    const es = (globalThis as any).__lastES as MockEventSource | null
+    expect(es).toBeTruthy()
+    if (es) {
+      await act(async () => { es.dispatchMessage(JSON.stringify({
+        stream: 'auto-train', phase: 'TRAIN',
+        data: { progress: 60, avg_quality: 4.2 },
+      })) })
+      expect(result.current.avgQuality).toBe(4.2)
+    }
+  })
+
+  it('startSSETraining passes avg_quality on completion', async () => {
+    mockStartAutoTrain.mockResolvedValue(undefined)
+    const { result } = renderHook(() => useTrainingSession())
+    await act(async () => { result.current.startSSETraining({ soul: 'friendly' }, mockAddToast) })
+
+    const es = (globalThis as any).__lastES as MockEventSource | null
+    expect(es).toBeTruthy()
+    if (es) {
+      await act(async () => { es.dispatchMessage(JSON.stringify({
+        stream: 'auto-train', phase: 'TRAIN',
+        data: { progress: 80, avg_quality: 3.9 },
+      })) })
+      await act(async () => { es.dispatchMessage(JSON.stringify({
+        stream: 'auto-train', phase: 'COMPLETE', status: 'complete',
+        data: { checkpoint: 'ckpt1', final_loss: 0.3 },
+      })) })
+      expect(result.current.avgQuality).toBe(3.9)
+      expect(result.current.phase).toBe('complete')
+    }
+  })
+
   it('startSSETraining handles complete status', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const onCheckpointUpdate = vi.fn()
@@ -193,11 +230,11 @@ describe('useTrainingSession', () => {
       .mockResolvedValueOnce({ status: 'idle' }) // reconcile on mount
       .mockResolvedValueOnce({
         status: 'running', job_id: 't-1', progress: 40, global_step: 40, total_steps: 100,
-        steps_per_sec: 4.25, eta_s: 14, elapsed_s: 9, loss: 0.5,
+        steps_per_sec: 4.25, eta_s: 14, elapsed_s: 9, loss: 0.5, avg_quality: 4.1,
       })
       .mockResolvedValue({
         status: 'complete', job_id: 't-1',
-        result: { status: 'ok', final_loss: 0.32, total_steps: 100, model_path: '/models/turbo/final.soul' },
+        result: { status: 'ok', final_loss: 0.32, total_steps: 100, model_path: '/models/turbo/final.soul', avg_quality: 4.3 },
       })
 
     const { result } = renderHook(() => useTrainingSession())
@@ -215,12 +252,14 @@ describe('useTrainingSession', () => {
     expect(result.current.eta).toBe(14)
     expect(result.current.elapsedSeconds).toBe(9)
     expect(result.current.loss).toBe(0.5)
+    expect(result.current.avgQuality).toBe(4.1)
 
     await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
     expect(result.current.turboPhase).toBe('complete')
     expect(result.current.turboResult?.final_loss).toBe(0.32)
     expect(result.current.turboResult?.total_steps).toBe(100)
     expect(result.current.progress).toBe(100)
+    expect(result.current.avgQuality).toBe(4.3)
     expect(mockAddToast).toHaveBeenCalledWith('Turbo training complete!', 'success')
   })
 

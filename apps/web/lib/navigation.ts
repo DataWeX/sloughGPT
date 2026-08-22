@@ -71,6 +71,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/images', labelKey: 'nav.images', icon: '🖼️', description: 'Image generation' },
       { path: '/registry', labelKey: 'nav.registry', icon: '📋', description: 'Model registry' },
       { path: '/vm', labelKey: 'nav.vm', icon: '💻', description: 'VM sandbox console' },
+      { path: '/shell', labelKey: 'nav.shell', icon: '⌨️', description: 'Dait shell terminal' },
     ],
   },
   {
@@ -121,6 +122,7 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/images': IconVision,
   '/registry': IconBrain,
   '/vm': IconBrain,
+  '/shell': IconActivity,
   '/feedback': IconActivity,
   '/adapters': IconSettings,
   '/learn': IconBrain,

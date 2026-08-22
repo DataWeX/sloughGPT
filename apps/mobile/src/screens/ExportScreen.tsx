@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useCallback} from 'react';
-import {FlatList, Pressable, RefreshControl, Alert, Share} from 'react-native';
+import {ScrollView, Pressable, RefreshControl, Share} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
@@ -107,11 +107,10 @@ export function ExportScreen() {
           <StatusBadge label="Loading..." variant="info" />
         </YStack>
       ) : (
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          ListHeaderComponent={
-            <YStack padding={16} gap={16}>
+        <ScrollView
+          contentContainerStyle={{paddingBottom: 32}}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <YStack padding={16} gap={16}>
               {/* Model Export */}
               <YStack gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Model Export</Text>
@@ -139,6 +138,37 @@ export function ExportScreen() {
                     ))}
                   </YStack>
                 )}
+
+                {/* Checkpoint selector for model export */}
+                {checkpoints.length > 0 && (
+                  <YStack gap={4}>
+                    <Text fontSize={12} color={colors.textMuted}>Select checkpoint (optional)</Text>
+                    <YStack gap={4}>
+                      {checkpoints.map(cp => (
+                        <Pressable key={cp.name} onPress={() => setSelectedCheckpoint(selectedCheckpoint === cp.name ? null : cp.name)}>
+                          <XStack
+                            padding={8}
+                            borderRadius={6}
+                            borderWidth={1}
+                            borderColor={selectedCheckpoint === cp.name ? colors.primary : colors.border}
+                            backgroundColor={selectedCheckpoint === cp.name ? colors.primary + '10' : colors.white}
+                            gap={6}
+                            alignItems="center">
+                            <Icon name={selectedCheckpoint === cp.name ? 'check' : 'download'} size={14} color={selectedCheckpoint === cp.name ? colors.primary : colors.textMuted} />
+                            <YStack flex={1}>
+                              <Text fontSize={12} fontWeight="500" color={colors.text}>{cp.name}</Text>
+                              <XStack gap={4}>
+                                <StatusBadge label={cp.soul} variant="info" />
+                                <StatusBadge label={`loss: ${formatLoss(cp.loss)}`} variant="default" />
+                              </XStack>
+                            </YStack>
+                          </XStack>
+                        </Pressable>
+                      ))}
+                    </YStack>
+                  </YStack>
+                )}
+
                 <Pressable onPress={handleExportModel} disabled={!selectedFormat || exporting}>
                   <XStack
                     padding={10}
@@ -188,12 +218,9 @@ export function ExportScreen() {
                     </XStack>
                   ))
                 )}
-              </YStack>
             </YStack>
-          }
-          contentContainerStyle={{paddingBottom: 32}}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
+          </YStack>
+        </ScrollView>
       )}
     </SafeAreaView>
   );

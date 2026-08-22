@@ -12,6 +12,7 @@
 import {create} from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as slonet from '../services/onnx-inference-service';
+import * as souLoader from '../services/sou-loader';
 import * as llamaRn from '../services/llama-rn-service';
 import {useProvidersStore} from './providers-store';
 import type {LocalGenerateResult, HybridState, RoutingDecision, ActiveEngine, OnTokenCallback} from '../types/local-inference';
@@ -70,6 +71,7 @@ interface HybridStoreState extends HybridState {
   setActiveEngine: (engine: ActiveEngine) => Promise<void>;
   setOfflineOnly: (enabled: boolean) => Promise<void>;
   loadSloNet: (checkpointName?: string) => Promise<void>;
+  loadSloNetFromSou: () => Promise<void>;
   loadQwen: (onProgress?: (f: number) => void) => Promise<void>;
   unloadSloNet: () => void;
   unloadQwen: () => Promise<void>;
@@ -79,6 +81,7 @@ interface HybridStoreState extends HybridState {
     content: string,
     messages: Array<{role: string; content: string}>,
     onToken?: OnTokenCallback,
+    opts?: { maxTokens?: number; temperature?: number; topK?: number; topP?: number },
   ) => Promise<LocalGenerateResult | null>;
 }
 
@@ -129,6 +132,22 @@ export const useHybridStore = create<HybridStoreState>((set, get) => ({
     }
   },
 
+  loadSloNetFromSou: async () => {
+    set({downloadProgress: 0, lastError: null});
+    try {
+      const result = await souLoader.pickAndLoadSou();
+      if (result) {
+        set({
+          slonet: {...get().slonet, loaded: true, modelName: result.name},
+          downloadProgress: 1,
+          activeEngine: 'slonet',
+        });
+      }
+    } catch (err: any) {
+      set({lastError: err.message, downloadProgress: 0});
+    }
+  },
+
   loadQwen: async onProgress => {
     set({downloadProgress: 0, lastError: null});
     try {
@@ -162,13 +181,18 @@ export const useHybridStore = create<HybridStoreState>((set, get) => ({
 
   decideRoute: (content: string) => _route(content, get()),
 
-  executeLocal: async (content, messages, onToken) => {
+  executeLocal: async (content, messages, onToken, opts) => {
     const route = get().decideRoute(content);
     if (route.target !== 'local') return null;
 
+    const maxTokens = opts?.maxTokens ?? 64;
+    const temperature = opts?.temperature ?? 0.8;
+    const topK = opts?.topK ?? 40;
+    const topP = opts?.topP ?? 0.9;
+
     try {
       if (route.engine === 'slonet') {
-        const result = await slonet.generate(content, 64, 0.8, 40, 0.9, 0, onToken);
+        const result = await slonet.generate(content, maxTokens, temperature, topK, topP, 0, onToken);
         return result;
       }
 

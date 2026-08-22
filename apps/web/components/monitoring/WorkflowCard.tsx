@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController, type WorkflowStatus } from '@/lib/workflow-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 interface WorkflowCardProps {
   onRefresh?: () => void
@@ -13,7 +12,6 @@ interface WorkflowCardProps {
 export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
   const [status, setStatus] = useState<WorkflowStatus | null>(null)
   const [loading, setLoading] = useState(true)
-  const addToast = useToastStore(s => s.addToast)
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -66,7 +64,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       await refetch()
       onRefresh?.()
     } catch {
-      addToast('Failed to start background training', 'error')
+      // silent
     }
   }
 
@@ -76,7 +74,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       await refetch()
       onRefresh?.()
     } catch {
-      addToast('Failed to stop background training', 'error')
+      // silent
     }
   }
 

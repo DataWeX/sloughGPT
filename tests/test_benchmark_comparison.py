@@ -234,5 +234,57 @@ class TestBenchmarkIntegration:
         Path(adapter_path).unlink()
 
 
+class TestBenchmarkCompare:
+    def test_compare_models_independence(self):
+        from scripts.benchmark_model_comparison import ModelMetrics, evaluate_model
+        responses_a = ["hello world", "foo bar"]
+        responses_b = ["hello world", "baz qux"]
+        latencies = [0.1, 0.2]
+        token_counts = [2, 2]
+        prompts = ["hello", "foo"]
+        r1 = evaluate_model("ModelA", responses_a, latencies, token_counts, prompts)
+        r2 = evaluate_model("ModelB", responses_b, latencies, token_counts, prompts)
+        assert r1.model_name == "ModelA"
+        assert r2.model_name == "ModelB"
+        assert r1.diversity == r2.diversity  # same structure
+
+    def test_evaluate_model_empty_responses(self):
+        from scripts.benchmark_model_comparison import evaluate_model
+        r = evaluate_model("empty", [], [], [], [])
+        assert r.mean_latency_ms == 0.0
+        assert r.tokens_per_sec == 0.0
+        assert r.responses == []
+
+    def test_run_native_inference_lstm(self):
+        from scripts.benchmark_model_comparison import run_native_inference
+        from domains.training.slonet import SloNet, SloEmbedding, SloLSTM, tensor
+        net = SloNet(
+            layers=[SloEmbedding(10, 8), SloLSTM(10, 8, 16, num_layers=1, dropout=0.0)],
+            soul_name="test",
+        )
+        lstm = net.layers[1]
+        stoi = {c: i + 1 for i, c in enumerate("abcdefghij")}
+        itos = {i + 1: c for i, c in enumerate("abcdefghij")}
+        encode = lambda t: np.array([stoi.get(c, 0) for c in t], dtype=np.int64)
+        decode = lambda ids: "".join(itos.get(int(i), "?") for i in ids if i > 0)
+        resp, lat, tokens = run_native_inference(net, lstm, encode, decode, "abc", max_new_tokens=10)
+        assert isinstance(resp, str)
+        assert lat > 0
+        assert tokens >= 0
+
+    def test_run_native_inference_transformer(self):
+        from scripts.benchmark_model_comparison import run_native_inference
+        from domains.training.slonet import SloTransformer
+        net = SloTransformer(vocab_size=32, n_embed=32, n_layer=1, n_head=2, block_size=16)
+        stoi = {c: i + 1 for i, c in enumerate("abcdefghijklmnopqrstuvwxyz012345")}
+        itos = {i + 1: c for i, c in enumerate("abcdefghijklmnopqrstuvwxyz012345")}
+        encode = lambda t: np.array([stoi.get(c, 0) for c in t], dtype=np.int64).reshape(1, -1)
+        decode = lambda ids: "".join(itos.get(int(i), "?") for i in ids.flatten() if int(i) in itos)
+        resp, lat, tokens = run_native_inference(net, None, encode, decode, "abc", max_new_tokens=10)
+        assert isinstance(resp, str)
+        assert lat > 0
+        assert tokens >= 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

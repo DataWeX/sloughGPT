@@ -1235,10 +1235,7 @@ class InferenceRouter:
                     logger.warning("Continual learner ingest failed: %s", e)
 
                 if _post_gen_tasks:
-                    _results = await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
-                    for _r in _results:
-                        if isinstance(_r, Exception):
-                            logger.warning("Post-gen task failed: %s", _r, extra={"tag": "INF"})
+                    await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
 
                 # Send RAG verification results as a separate SSE event
                 if rag_verification is not None:

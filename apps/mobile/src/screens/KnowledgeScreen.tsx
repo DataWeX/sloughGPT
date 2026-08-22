@@ -82,9 +82,10 @@ export function KnowledgeScreen() {
   };
 
   const debouncedSearch = (text: string) => {
-    setSearch(text);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(() => {}, 300);
+    searchTimeout.current = setTimeout(() => {
+      setSearch(text);
+    }, 300);
   };
 
   const handleAdd = async () => {

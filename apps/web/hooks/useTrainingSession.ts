@@ -58,7 +58,29 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
 
 function useShellTraining(): TrainingShellState {
   const [training, setTraining] = useState<TrainingShellState>(() => readTraining())
-  useEffect(() => appShellStore.subscribe((s) => setTraining(s.training)), [])
+  useEffect(() => {
+    // Subscribe with shallow equality check to avoid re-renders when
+    // the same field values are written (common with batched writes).
+    return appShellStore.subscribe((s) => {
+      const next = s.training
+      setTraining(prev => {
+        // Shallow compare — skip update if all fields are equal
+        if (prev.phase === next.phase && prev.loss === next.loss
+          && prev.progress === next.progress && prev.epoch === next.epoch
+          && prev.totalEpochs === next.totalEpochs && prev.globalStep === next.globalStep
+          && prev.totalSteps === next.totalSteps && prev.stepsPerSec === next.stepsPerSec
+          && prev.eta === next.eta && prev.elapsedSeconds === next.elapsedSeconds
+          && prev.jobId === next.jobId && prev.method === next.method
+          && prev.error === next.error && prev.message === next.message
+          && prev.checkpoint === next.checkpoint && prev.finalLoss === next.finalLoss
+          && prev.modelPath === next.modelPath && prev.avgQuality === next.avgQuality
+          && prev.lossHistory === next.lossHistory) {
+          return prev
+        }
+        return next
+      })
+    })
+  }, [])
   return training
 }
 
@@ -147,8 +169,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [closeStream, clearAllPolls])
 
   const stopTraining = useCallback(() => {
-    trainingJobsController.stopAutoTrain().catch((e) => _log.warning('Failed to stop training', e))
-    operationsStore.getState().cancelAll('training').catch((e) => _log.warning('cancelAll failed', e))
+    trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
+    operationsStore.getState().cancelAll('training').catch((e) => console.warn('[training] cancelAll failed:', e?.message || e))
     resetTraining()
   }, [resetTraining])
 
@@ -190,7 +212,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       writeTraining({ totalEpochs: params.epochs, jobId })
       operationsStore.getState().fetch().catch(() => {})
       startStandardPoll(jobId, { addToast, onComplete })
-    }).catch((e: unknown) => addToast(extractErrorMessage(e, 'Something went wrong starting training'), 'error'))
+    }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [startStandardPoll])
 
   const startVisualTraining = useCallback((
@@ -218,7 +240,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           onComplete?.()
         },
       })
-    }).catch((e: unknown) => addToast(extractErrorMessage(e, 'Something went wrong starting image model training'), 'error'))
+    }).catch(() => addToast('Something went wrong starting image model training', 'error'))
   }, [startStandardPoll])
 
   const startTurboTrain = useCallback((

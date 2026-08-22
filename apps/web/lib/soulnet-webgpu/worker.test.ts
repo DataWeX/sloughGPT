@@ -185,4 +185,24 @@ describe('worker.ts protocol', () => {
     expect(post).toHaveBeenCalledWith({ type: 'token', token: expect.any(String) })
     expect(post).toHaveBeenCalledWith({ type: 'done' })
   })
+
+  it('passes eosToken to engine.generate()', async () => {
+    makeWebGPU(new Float32Array([0, 0]))
+    const sou = makeLstmSou({ e: 2, h: 2, v: 3, nl: 1 }, { p7: new Float32Array([1, 5, 2]) })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou })))
+    const post = vi.fn()
+    const onmessage = createWorkerHandler({ postMessage: post, onmessage: null })
+    const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
+
+    await onmessage(msg({ type: 'init' }))
+    await onmessage(msg({ type: 'load', url: 'https://models.example/lstm.sou' }))
+
+    // Token 1 is 'b' (argmax). eosToken=1 should stop immediately.
+    post.mockClear()
+    await onmessage(msg({ type: 'generate', prompt: '', maxTokens: 10, temperature: 0, eosToken: 1 }))
+    // Should get 'done' without any 'token' messages
+    const tokenCalls = post.mock.calls.filter(c => c[0].type === 'token')
+    expect(tokenCalls).toHaveLength(0)
+    expect(post).toHaveBeenCalledWith({ type: 'done' })
+  })
 })

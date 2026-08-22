@@ -59,6 +59,8 @@ const session: UseTrainingSessionReturn = {
   distillCheckpoint: null,
   distillFinalLoss: null,
   distillEpochs: null,
+  avgQuality: null,
+  dataQuality: null,
   turboPhase: 'idle',
   turboResult: null,
   turboError: null,

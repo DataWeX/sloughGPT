@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback} from 'react';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {FlatList, Pressable, RefreshControl, Alert, TextInput, Modal} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
@@ -22,10 +22,15 @@ export function DatasetsScreen() {
   const [importing, setImporting] = useState(false);
   const [urlModalVisible, setUrlModalVisible] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [search, setSearch] = useState('');
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchDatasets = useCallback(async () => {
+  const fetchDatasets = useCallback(async (query?: string) => {
     try {
-      const data = await api.get<{datasets: Dataset[]}>('/datasets');
+      const url = query?.trim()
+        ? `/datasets/search?q=${encodeURIComponent(query.trim())}`
+        : '/datasets';
+      const data = await api.get<{datasets: Dataset[]}>(url);
       setDatasets(data.datasets || []);
     } catch {
       setDatasets([]);
@@ -35,6 +40,14 @@ export function DatasetsScreen() {
   useEffect(() => {
     fetchDatasets().finally(() => setLoading(false));
   }, [fetchDatasets]);
+
+  const debouncedSearch = (text: string) => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {
+      setSearch(text);
+      fetchDatasets(text);
+    }, 300);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -148,11 +161,16 @@ export function DatasetsScreen() {
         <YStack flex={1} alignItems="center" justifyContent="center">
           <StatusBadge label="Loading..." variant="info" />
         </YStack>
-      ) : datasets.length === 0 ? (
+      ) : datasets.length === 0 && !search ? (
         <YStack flex={1} alignItems="center" justifyContent="center" gap={8}>
           <Icon name="package" size={32} color={colors.textMuted} />
           <Text fontSize={14} color={colors.textMuted}>No datasets</Text>
           <Text fontSize={12} color={colors.textMuted}>Import a dataset to get started</Text>
+        </YStack>
+      ) : datasets.length === 0 && search ? (
+        <YStack flex={1} alignItems="center" justifyContent="center" gap={8}>
+          <Icon name="search" size={32} color={colors.textMuted} />
+          <Text fontSize={14} color={colors.textMuted}>No results for "{search}"</Text>
         </YStack>
       ) : (
         <FlatList
@@ -160,6 +178,32 @@ export function DatasetsScreen() {
           keyExtractor={item => item.id}
           renderItem={renderItem}
           contentContainerStyle={{padding: 16, gap: 8}}
+          ListHeaderComponent={
+            <XStack
+              gap={8}
+              alignItems="center"
+              padding={10}
+              borderRadius={10}
+              borderWidth={1}
+              borderColor={colors.border}
+              backgroundColor={colors.white}>
+              <Icon name="search" size={16} color={colors.textMuted} />
+              <TextInput
+                value={search}
+                onChangeText={debouncedSearch}
+                placeholder="Search datasets..."
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{flex: 1, fontSize: 14, color: colors.text, padding: 0}}
+              />
+              {search.length > 0 && (
+                <Pressable onPress={() => { setSearch(''); fetchDatasets(); }}>
+                  <Icon name="x" size={14} color={colors.textMuted} />
+                </Pressable>
+              )}
+            </XStack>
+          }
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
       )}

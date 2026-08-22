@@ -34,6 +34,8 @@ describe('app-shell', () => {
         jobId: null,
         visualOutputDir: null,
         visualSouPath: null,
+        avgQuality: null,
+        dataQuality: null,
       },
       lastActiveRoute: '/chat',
       lastActivity: Date.now(),

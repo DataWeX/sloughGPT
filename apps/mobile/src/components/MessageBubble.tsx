@@ -138,10 +138,10 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
       borderBottomRightRadius: R.sm,
     },
     assistantBubble: {
-      backgroundColor: colors.primaryAlpha(0.06),
-      borderWidth: 0.5,
-      borderColor: colors.primaryAlpha(0.1),
-      borderBottomLeftRadius: R.sm,
+      backgroundColor: colors.primaryAlpha(0.04),
+      borderRadius: 4,
+      paddingHorizontal: S.sm,
+      paddingVertical: 2,
     },
     pinnedBubble: {
       borderWidth: 1,
@@ -559,6 +559,51 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
           )}
         </Text>
       </Pressable>
+
+      {/* Compact action bar for AI messages */}
+      {!isUser && !streaming && message.content && (
+        <View style={{flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 6, marginLeft: 2}}>
+          <Pressable
+            style={{paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6}}
+            onPress={() => {
+              copyToClipboard(message.content || '');
+              triggerHaptic('light');
+              toast.success('Copied');
+            }}>
+            <Icon name="copy" size={14} color={textMuted} />
+          </Pressable>
+          {onFeedback && (
+            <>
+              <Pressable
+                style={{paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6}}
+                onPress={() => {
+                  triggerHaptic('light');
+                  onFeedback(true);
+                }}>
+                <Icon name="thumbs-up" size={14} color={textMuted} />
+              </Pressable>
+              <Pressable
+                style={{paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6}}
+                onPress={() => {
+                  triggerHaptic('light');
+                  onFeedback(false);
+                }}>
+                <Icon name="thumbs-down" size={14} color={textMuted} />
+              </Pressable>
+            </>
+          )}
+          {onRegenerate && (
+            <Pressable
+              style={{paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6}}
+              onPress={() => {
+                triggerHaptic('medium');
+                onRegenerate();
+              }}>
+              <Icon name="refresh-cw" size={14} color={textMuted} />
+            </Pressable>
+          )}
+        </View>
+      )}
 
       {message.status === 'failed' && (
         <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4}}>

@@ -60,8 +60,8 @@ vi.mock('@/lib/conversations-utils', () => ({
   formatDate: (d: string) => d,
 }))
 
-vi.mock('@/components/DatasetInlineImportModal', () => ({
-  default: ({ open, onClose }: any) => open ? <div data-testid="import-modal">Import Modal</div> : null,
+vi.mock('@/components/DatasetImportModal', () => ({
+  DatasetImportModal: ({ open, onOpenChange }: any) => open ? <div data-testid="import-modal">Import Modal</div> : null,
 }))
 
 import DatasetsPage from './page'

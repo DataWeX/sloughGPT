@@ -96,12 +96,11 @@ describe('ExportPage — initial load flow', () => {
     })
   })
 
-  it('shows fallback formats when controller fails', async () => {
+  it('shows error when controller fails', async () => {
     mockGetExportFormats.mockRejectedValue(new Error('no formats'))
     render(<ExportPage />)
     await waitFor(() => {
-      expect(screen.getAllByText(/sou|soul/i).length).toBeGreaterThanOrEqual(1)
-      expect(screen.getByText(/onnx/i)).toBeTruthy()
+      expect(screen.getByText(/failed to load export formats/i)).toBeTruthy()
     })
   })
 })
@@ -219,8 +218,7 @@ describe('ExportPage — error handling flow', () => {
     mockGetExportFormats.mockRejectedValue(new Error('no formats'))
     render(<ExportPage />)
     await waitFor(() => {
-      // Should show fallback formats
-      expect(screen.getByText(/sou|soul/i)).toBeTruthy()
+      expect(screen.getByText(/failed to load export formats/i)).toBeTruthy()
     })
   })
 })

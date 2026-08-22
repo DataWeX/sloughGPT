@@ -17,7 +17,7 @@ import {
   ArchiveX, MessageSquare,
   SmilePlus, HeartPulse,
   Layers, ChevronDown, ChevronUp, Terminal,
-  Home,
+  Home, Activity, Shield, Pause, Play, Send, Cpu,
 } from 'lucide-react-native';
 import type {LucideIcon} from 'lucide-react-native';
 export type IconName =
@@ -39,7 +39,7 @@ export type IconName =
   | 'archive-x' | 'message-square'
   | 'heart-pulse'
   | 'layers' | 'chevron-down' | 'chevron-up' | 'terminal'
-  | 'home'
+  | 'home' | 'activity' | 'shield' | 'pause' | 'play' | 'send' | 'cpu'
   ;
 
 interface IconProps {
@@ -111,6 +111,12 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'chevron-up': ChevronUp,
   'terminal': Terminal,
   'home': Home,
+  'activity': Activity,
+  'shield': Shield,
+  'pause': Pause,
+  'play': Play,
+  'send': Send,
+  'cpu': Cpu,
 };
 
 export function Icon({name, size = 20, color}: IconProps) {

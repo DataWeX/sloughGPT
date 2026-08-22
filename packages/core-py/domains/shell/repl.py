@@ -721,7 +721,7 @@ class ShellREPL(LinuxCommandsMixin):
         is_first_word = len(parts) <= 1 or line.endswith(" ")
 
         if is_first_word:
-            candidates = list(self.COMMANDS.keys()) + list(self._ext_cmds.keys()) + list(self._aliases.keys())
+            candidates = list(self._aliases.keys()) + list(self.COMMANDS.keys()) + list(self._ext_cmds.keys())
         else:
             cmd = parts[0].lower()
             if cmd == "note" and len(parts) >= 2:
@@ -742,7 +742,12 @@ class ShellREPL(LinuxCommandsMixin):
             else:
                 candidates = self._complete_args_for(cmd)
 
-        matches = [c for c in sorted(set(candidates)) if c.startswith(text)]
+        seen = set()
+        matches = []
+        for c in candidates:
+            if c.startswith(text) and c not in seen:
+                seen.add(c)
+                matches.append(c)
         try:
             return matches[state]
         except IndexError:
@@ -1869,7 +1874,8 @@ Most common commands (help [cmd] for details, help for full list):
   head [-N] <file>       Output first N lines (VFS-aware)
   tail [-N] <file>       Output last N lines (VFS-aware)
   wc <file>              Count lines/words/chars (VFS-aware)
-  grep [-i] <pattern>    Search for pattern in file or pipe (VFS-aware)
+  grep [-i] [-v] [-c] [-l] [-n] [-w] [-A/-B/-C N] <pattern> [file]
+                           Search for pattern in file or pipe (VFS-aware)
   sort [-rnu] [file]     Sort lines (supports pipes)
   uniq [file]            Remove adjacent duplicate lines (supports pipes)
   find [dir] -name <p>   Search for files by name pattern
@@ -1897,6 +1903,16 @@ Most common commands (help [cmd] for details, help for full list):
   printf <fmt> [args..]  Format and print data (%s %d %f \n \t)
   expand [file]          Convert tabs to spaces (piped input)
   unexpand [file]        Convert spaces to tabs (piped input)
+  cut [-d d] [-f n]      Cut fields from each line
+  tr [-d] <set> [rep]    Translate or delete characters
+  seq [first] [last]     Print a sequence of numbers
+  xargs [cmd]            Build command lines from stdin
+  sleep <sec>            Pause for N seconds
+  date [+fmt]            Print date/time (strftime format)
+  cal [month] [year]     Print a calendar
+  ln [-s] <target> <name> Create a link
+  read <var>             Read a line from stdin into a variable
+  clear                  Clear the terminal screen
   id                     Print user identity
   logname                Print login name
   mktemp [-d]            Create a temporary file or directory
@@ -1957,6 +1973,7 @@ Most common commands (help [cmd] for details, help for full list):
 {_C_CYAN}System:{_C_RESET}
   health                  Quick health check (colored status)
   status                  Detailed system status
+  events                  Show recent system events
   metrics                 CPU/memory/disk metrics
   uptime                  How long Dait has been running
 
@@ -1986,6 +2003,16 @@ Most common commands (help [cmd] for details, help for full list):
   /dev/random             Random tokens: cat /dev/random
   /dev/embedding          Compute embeddings: echo text > /dev/embedding
   /dev/knowledge          Knowledge base: read/write facts
+  tutorial                Interactive shell tutorial
+  read                    Read input from stdin (for scripts)
+  protect <file>          Mark file as read-only
+  unprotect <file>        Remove read-only protection
+  api <method> <url>      Make an HTTP API request
+  chat                    Start an interactive AI chat session
+  logs [n]                Show recent log entries
+  console                 Show console output
+  tui                     Launch the TUI interface
+  ops / operations        Show active operations (training, inference)
 
 {_C_CYAN}Permissions:{_C_RESET}
   permit <cmd>            Grant permission for a blocked command (this session)
@@ -3173,7 +3200,7 @@ Examples:
             self._print("  Usage:")
             self._print("    agents <goal>     — Run multi-agent on a goal")
             self._print("    agents list       — List available agents")
-            self._print("    agents add <name> <role> <prompt> — Add agent (NYI)")
+            self._print("    agents add <name> <role> <prompt> — Add agent")
         elif verb in ("add",):
             rest = args.strip().split(maxsplit=1)[1] if len(args.strip().split()) > 1 else ""
             add_parts = rest.split(maxsplit=2)

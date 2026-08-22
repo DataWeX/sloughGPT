@@ -220,6 +220,25 @@ export default function ExperimentsPage() {
               </div>
             ) : (
               <>
+                <div className="flex items-center gap-2 mb-3">
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCreateDialogOpen(!createDialogOpen)}>
+                    {createDialogOpen ? 'Cancel' : 'New Experiment'}
+                  </Button>
+                </div>
+                {createDialogOpen && (
+                  <div className="flex gap-2 mb-3">
+                    <Input
+                      value={newName}
+                      onChange={e => setNewName(e.target.value)}
+                      placeholder="Experiment name"
+                      className="h-8 text-xs flex-1"
+                      onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
+                    />
+                    <Button size="sm" className="h-8 text-xs" onClick={handleCreate} disabled={creating || !newName.trim()}>
+                      {creating ? 'Creating...' : 'Create'}
+                    </Button>
+                  </div>
+                )}
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 mb-2">
                     <span className="text-sm text-destructive font-medium">{selectedIds.size} selected</span>

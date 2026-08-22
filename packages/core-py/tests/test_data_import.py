@@ -458,7 +458,7 @@ class TestBooksSearch:
         assert r["isbn"] == "123"
         assert r["year"] == 1999
         assert r["cover"] == 5
-        assert calls[0][0] == "https://openlibrary.org/search.json?q=title:hello%20world&limit=10"
+        assert calls[0][0] == "https://openlibrary.org/search.json?q=title:hello%20world&limit=10&fields=title,author_name,first_publish_year,cover_i,isbn,key"
 
     def test_search_isbn(self, fake_urlopen):
         calls, responses = fake_urlopen

@@ -6,6 +6,15 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+jest.mock('expo-file-system', () => ({
+  readAsStringAsync: jest.fn(),
+  writeAsStringAsync: jest.fn(),
+  deleteAsync: jest.fn(),
+  getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
+  documentDirectory: 'file:///mock-documents/',
+  cacheDirectory: 'file:///mock-cache/',
+}));
+
 let mockPickDocument: jest.Mock;
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: (...args: any[]) => mockPickDocument(...args),
@@ -147,12 +156,10 @@ describe('sou-loader', () => {
       { soul_name: 'picker-test', soul_traits: {}, system_prompt: '', lineage: '' },
       { p0: emb, p1: fcW, p2: fcB },
     );
-    // Mock expo-file-system read
-    jest.doMock('expo-file-system', () => ({
-      readAsStringAsync: jest.fn().mockResolvedValue(
-        btoa(String.fromCharCode(...new Uint8Array(buf))),
-      ),
-    }));
+    const FileSystem = require('expo-file-system');
+    FileSystem.readAsStringAsync.mockResolvedValue(
+      btoa(String.fromCharCode(...new Uint8Array(buf))),
+    );
     mockPickDocument.mockResolvedValue({
       canceled: false,
       assets: [{ name: 'test.sou', uri: 'file:///tmp/test.sou', size: buf.byteLength }],
