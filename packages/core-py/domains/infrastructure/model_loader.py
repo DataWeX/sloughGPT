@@ -16,6 +16,7 @@ Usage:
 """
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -83,7 +84,8 @@ class ModelLoader:
             from domains.infrastructure.safetensors_loader import _get_model_dir
             cache_dir = _get_model_dir(model_id)
             has_slnc = (cache_dir / "model.slnc").exists()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to check for .slnc file: %s", exc)
             has_slnc = False
 
         if not has_slnc:
@@ -145,7 +147,8 @@ class ModelLoader:
         try:
             from domains.infrastructure.safetensors_loader import _get_model_dir
             cache_dir = _get_model_dir(model_id)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to resolve model directory: %s", exc)
             return None
 
         slnc_path = cache_dir / "model.slnc"
@@ -305,8 +308,8 @@ class ModelLoader:
             try:
                 from domains.infrastructure.model_protector import protect_model
                 protect_model(model_id, [str(slnc_path)])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Model protection failed: %s", exc)
             tracker.update(model_id, progress=0.95)
 
             logger.info("Converted to .slnc: %s", slnc_path, extra={"tag": "MODEL"})
@@ -339,13 +342,16 @@ class ModelLoader:
 
 
 _loader: Optional[ModelLoader] = None
+_loader_lock = threading.Lock()
 
 
 def get_model_loader() -> ModelLoader:
     """Get the global ModelLoader instance."""
     global _loader
     if _loader is None:
-        _loader = ModelLoader()
+        with _loader_lock:
+            if _loader is None:
+                _loader = ModelLoader()
     return _loader
 
 

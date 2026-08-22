@@ -113,8 +113,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       }
       try {
         const [turboStatus, jobs] = await Promise.all([
-          trainingJobsController.getTurboStatus().catch(() => null),
-          trainingJobsController.list().catch(() => []),
+          trainingJobsController.getTurboStatus().catch((e) => { _log.debug('Failed to fetch turbo status', { error: e instanceof Error ? e.message : String(e) }); return null }),
+          trainingJobsController.list().catch((e) => { _log.debug('Failed to fetch training jobs', { error: e instanceof Error ? e.message : String(e) }); return [] }),
         ])
         if (cancelled) return
         if (turboStatus?.status === 'running') {
@@ -214,7 +214,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       const jobId = resp.job_id as string
       addToast('LoRA training queued', 'info')
       writeTraining({ totalEpochs: params.epochs, jobId })
-      operationsStore.getState().fetch().catch(() => {})
+      operationsStore.getState().fetch().catch((e) => _log.debug('Failed to fetch operations', { error: e instanceof Error ? e.message : String(e) }))
       startStandardPoll(jobId, { addToast, onComplete })
     }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [startStandardPoll])
@@ -233,7 +233,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       const jobId = resp.job_id as string
       addToast(resp.message || 'Image model training queued', 'info')
       writeTraining({ totalEpochs: params.stage1Epochs + params.stage2Epochs, jobId })
-      operationsStore.getState().fetch().catch(() => {})
+      operationsStore.getState().fetch().catch((e) => _log.debug('Failed to fetch operations', { error: e instanceof Error ? e.message : String(e) }))
       startStandardPoll(jobId, {
         addToast, completeMessage: 'Image model training complete',
         onComplete: (job) => {
@@ -260,14 +260,14 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     }).then(result => {
       if (result.status === 'error') { writeTraining({ error: result.message || 'Training failed', phase: 'error' }); return }
       addToast('Turbo training started', 'info')
-      operationsStore.getState().fetch().catch(() => {})
+      operationsStore.getState().fetch().catch((e) => _log.debug('Failed to fetch operations', { error: e instanceof Error ? e.message : String(e) }))
       startTurboPoll(addToast)
     }).catch((e: unknown) => { writeTraining({ error: extractErrorMessage(e, 'Training request failed'), phase: 'error' }) })
   }, [clearAllPolls, startTurboPoll])
 
   const stopTurboTrain = useCallback(() => {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop turbo training', e))
-    operationsStore.getState().cancelAll('training').catch(() => {})
+    operationsStore.getState().cancelAll('training').catch((e) => _log.debug('Failed to cancel all training ops', { error: e instanceof Error ? e.message : String(e) }))
     resetTraining()
   }, [resetTraining])
 
