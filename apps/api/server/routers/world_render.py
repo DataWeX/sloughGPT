@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from typing import Optional
 from pydantic import BaseModel, Field
 
-from schemas.common import success_response, raise_error
+from schemas.common import success_response, raise_error, safe_audit_log
 
 logger = logging.getLogger("slo.routers.world_render")
 
@@ -69,6 +69,7 @@ class WorldRenderRouter:
 
             shapes = {k: list(v.shape) for k, v in tensors.items()}
             logger.info("World render in %.1fms (shapes=%s)", _elapsed_ms, list(shapes.keys()))
+            safe_audit_log("world.render", resource="state_tensors", detail=f"elapsed={_elapsed_ms:.0f}ms shapes={list(shapes.keys())}")
 
             return success_response(data={
                 "shapes": shapes,
@@ -80,6 +81,7 @@ class WorldRenderRouter:
 
     async def render_world_image(self, config: RenderConfigRequest | None = None) -> Response:
         """Render the world and return a PNG image."""
+        _t0 = _time.monotonic()
         try:
             from domains.shell.world_render import RenderBridge, RenderConfig
             from domains.shell.simulation import WorldGrid
@@ -105,12 +107,16 @@ class WorldRenderRouter:
             header = f"P6\n{img_uint8.shape[1]} {img_uint8.shape[0]}\n255\n"
             ppm_data = header.encode() + img_uint8.tobytes()
 
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("world.render_image", resource="ppm", detail=f"elapsed={_elapsed_ms:.0f}ms size={img_uint8.shape}")
+
             return Response(content=ppm_data, media_type="image/x-portable-pixmap")
         except Exception as e:
             raise_error(f"Render failed: {e}", code="E_RENDER_FAILED", status_code=500)
 
     async def neural_process(self, config: RenderConfigRequest | None = None) -> dict:
         """Render the world and process through the neural pipeline."""
+        _t0 = _time.monotonic()
         try:
             from domains.shell.world_render import NeuralRenderBridge, RenderConfig
             from domains.shell.simulation import WorldGrid
@@ -132,6 +138,9 @@ class WorldRenderRouter:
             embedding = neural_result.get("embedding")
             descriptor = bridge.get_descriptor()
 
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("world.neural_process", resource="neural", detail=f"elapsed={_elapsed_ms:.0f}ms embedding_shape={list(embedding.shape) if embedding is not None else None}")
+
             return success_response(data={
                 "embedding_shape": list(embedding.shape) if embedding is not None else None,
                 "descriptor": descriptor,
@@ -142,6 +151,7 @@ class WorldRenderRouter:
 
     async def run_tick(self, config: SimTickRequest | None = None) -> dict:
         """Run a simulation tick with optional rendering."""
+        _t0 = _time.monotonic()
         try:
             from domains.shell.simulation import SimScene, Simulation, WorldParams
 
@@ -156,6 +166,9 @@ class WorldRenderRouter:
             sim = Simulation(scene, max_ticks=config.max_ticks if config else 1,
                            render_bridge=render_bridge)
             results = sim.step()
+
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("world.run_tick", resource="simulation", detail=f"elapsed={_elapsed_ms:.0f}ms tick={scene.tick} babies={len(results)}")
 
             return success_response(data={
                 "tick": scene.tick,

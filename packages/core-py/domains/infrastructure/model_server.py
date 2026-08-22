@@ -410,6 +410,8 @@ def _is_intel_mac() -> bool:
 
 
 class ModelStatus(Enum):
+    """Lifecycle states of a ModelServer instance."""
+
     UNINITIALIZED = "uninitialized"
     LOADING = "loading"
     READY = "ready"
@@ -455,6 +457,10 @@ class ModelMetrics:
     def record_timeout(self) -> None:
         self.requests_timed_out += 1
         self.consecutive_failures += 1
+
+    def reset(self) -> None:
+        """Reset all counters to defaults."""
+        self.__init__()
 
     @property
     def avg_generation_time_ms(self) -> float:
@@ -622,6 +628,13 @@ class IdleManager:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
 
+    def reset(self) -> None:
+        """Stop background thread and clear all tracked models (for testing)."""
+        self.shutdown()
+        with self._lock:
+            self._models.clear()
+        self._running = False
+
 
 _idle_manager: Optional[IdleManager] = None
 
@@ -635,6 +648,8 @@ def get_idle_manager() -> IdleManager:
 
 
 class CircuitBreakerState(Enum):
+    """States of a circuit breaker: closed (normal), open (failing), half_open (testing)."""
+
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -705,6 +720,7 @@ def _mps_oom_recovery() -> None:
 
 _GC_COUNTER = 0
 _GC_INTERVAL = 10  # Run GC every N generations
+_gc_counter_lock = Lock()
 
 
 def _schedule_gc() -> None:
@@ -715,9 +731,10 @@ def _schedule_gc() -> None:
     Throttling reduces GIL contention from frequent thread creation.
     """
     global _GC_COUNTER
-    _GC_COUNTER += 1
-    if _GC_COUNTER % _GC_INTERVAL != 0:
-        return
+    with _gc_counter_lock:
+        _GC_COUNTER += 1
+        if _GC_COUNTER % _GC_INTERVAL != 0:
+            return
     try:
         Thread(target=gc.collect, daemon=True).start()
     except Exception as exc:
@@ -869,9 +886,6 @@ class _TokenStreamer:
 
     def end(self):
         self.text_queue.put(self.stop_signal)
-
-
-import queue as queue
 
 
 class LocalBackend(GenerateBackend):
@@ -1093,6 +1107,9 @@ class LocalBackend(GenerateBackend):
                 text = streamer.text_queue.get(timeout=0.005)
             except queue.Empty:
                 time.sleep(0.001)
+                continue
+            if isinstance(text, Exception):
+                _error.append(text)
                 continue
             if text == streamer.stop_signal:
                 break
@@ -2071,7 +2088,8 @@ class ModelServer:
             except StopIteration:
                 pass
             except Exception as e:
-                logger.debug("Streaming pump generator failed: %s", e)
+                logger.warning("Streaming pump generator failed: %s", e, extra={"tag": "MODEL"})
+                q.put(e)  # Propagate exception to caller
             finally:
                 q.put(stop_signal)
 
