@@ -116,8 +116,8 @@ LORA_DIR = REPO_ROOT / "data" / "user_adapters"
 try:
     CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
     LORA_DIR.mkdir(parents=True, exist_ok=True)
-except Exception:
-    pass
+except Exception as exc:
+    autotrain_logger.warning("Failed to create auto-train directories: %s", exc)
 
 try:
     from domains.infrastructure.pugqeep import PGQ
@@ -125,7 +125,8 @@ try:
         name="auto-train",
         storage_dir=REPO_ROOT / "models" / "auto-training" / ".pgq",
     )
-except Exception:
+except Exception as exc:
+    autotrain_logger.warning("PGQ queue init failed (queue-based training disabled): %s", exc)
     _auto_train_pgq = None
 
 MAX_CHECKPOINT_DISK_MB = 500
@@ -510,7 +511,6 @@ class AutoTrainRouter:
         _srv_state.training_active = True
         autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs, extra={"tag": "TRAIN"})
         safe_audit_log("training.start", resource=req.dataset_id or req.checkpoint_name or (req.soul_name if req.source_text else "inline"), detail="resume" if resume else "fresh", method=method, epochs=req.epochs, dataset_id=req.dataset_id or "", checkpoint_name=req.checkpoint_name or "")
-        autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
         return {"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": self.state.config}
 
     async def start_turbo(self, req: TurboStartRequest) -> dict:
@@ -538,6 +538,7 @@ class AutoTrainRouter:
                 "steps_per_sec": None,
                 "eta_s": None,
                 "elapsed_s": None,
+                "avg_quality": None,
                 "result": None,
                 "error": None,
             }
@@ -616,8 +617,8 @@ class AutoTrainRouter:
                 try:
                     from domains.infrastructure.cancel_manager import get_cancel_manager
                     get_cancel_manager().finish(op_id, error=error if status != "completed" else "")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    autotrain_logger.debug("CancelManager.finish failed: %s", exc)
 
         def on_progress(info: Dict[str, Any]) -> None:
             """on_progress."""
@@ -920,9 +921,8 @@ class AutoTrainRouter:
                                         soul_files = sorted(CHECKPOINTS_DIR.glob("*.soul"))
                                         if soul_files:
                                             job["checkpoint"] = str(soul_files[-1])
-                                    except Exception:
-                                        pass
-                                    autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                                    except Exception as exc:
+                                        autotrain_logger.debug("Checkpoint glob failed: %s", exc)
                                     get_training_runtime().sync(task_id)
                                 _finish_cm(
                                     "complete" if ev.get("status") == "complete" else "failed",
@@ -955,9 +955,8 @@ class AutoTrainRouter:
                 try:
                     import state as _srv_state
                     _srv_state.training_active = False
-                except Exception:
-                    pass
-                autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                except Exception as exc:
+                    autotrain_logger.debug("Failed to reset training_active: %s", exc)
                 from training.runtime import get_training_runtime
                 job = get_training_runtime().get(task_id)
                 if job is not None and job.get("status") not in ("completed", "failed", "cancelled"):
@@ -1411,9 +1410,8 @@ class AutoTrainRouter:
                                         soul_files = sorted(CHECKPOINTS_DIR.glob("*.soul"))
                                         if soul_files:
                                             job["checkpoint"] = str(soul_files[-1])
-                                    except Exception:
-                                        pass
-                                    autotrain_logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+                                    except Exception as exc:
+                                        autotrain_logger.debug("Checkpoint glob failed: %s", exc)
                                     get_training_runtime().sync(task_id)
                                 _finish_cm(
                                     "complete" if ev.get("status") == "complete" else "failed",
@@ -1489,6 +1487,7 @@ class AutoTrainRouter:
                 "size_mb": size_mb,
                 "tokenizer_type": m.get("tokenizer_type", "char"),
                 "vocab_size": m.get("vocab_size", meta.get("vocab_size", 0)),
+                "avg_quality": meta.get("avg_quality"),
                 **{k: meta[k] for k in ("tagline", "description", "born_at", "epochs_trained",
                    "final_train_loss", "final_val_loss", "system_prompt",
                    "tags", "base_model", "training_dataset", "personality",
@@ -1542,6 +1541,7 @@ class AutoTrainRouter:
                 "perplexity_delta": meta.get("perplexity_delta"),
                 "bleu_delta": meta.get("bleu_delta"),
                 "size_mb": size_mb,
+                "avg_quality": meta.get("avg_quality"),
                 **{k: meta[k] for k in ("tagline", "description", "born_at", "system_prompt", "tags")
                    if k in meta and meta[k]},
             }

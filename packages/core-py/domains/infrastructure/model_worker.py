@@ -369,7 +369,8 @@ def _slo_worker_main(
             if decoded:
                 try:
                     resp_q_inner.put(("token", session_id, decoded), timeout=_STREAM_PUT_TIMEOUT_S)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("worker: token put failed for session %s: %s", session_id, exc)
                     break
                 tokens_generated += 1
 
@@ -380,8 +381,8 @@ def _slo_worker_main(
                 "tokens_generated": tokens_generated,
                 "elapsed_ms": round(elapsed_ms, 1),
             }), timeout=_STREAM_PUT_TIMEOUT_S)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("worker: result put failed for session %s: %s", session_id, exc)
 
     def _cleanup():
         nonlocal provider
@@ -453,8 +454,8 @@ def _slo_worker_main(
                 if hasattr(mod, 'lora_A') or hasattr(mod, 'lora_B'):
                     has_lora = True
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("worker: LoRA detection failed: %s", exc)
 
         if not has_lora:
             return {"status": "no_adapter", "message": "No LoRA adapter loaded."}
@@ -621,7 +622,8 @@ def _hf_worker_main(
                     pass
             try:
                 resp_q_inner.put(("token", session_id, text_chunk), timeout=_STREAM_PUT_TIMEOUT_S)
-            except Exception:
+            except Exception as exc:
+                logger.debug("worker: HF token put failed for session %s: %s", session_id, exc)
                 break
             tokens_generated += 1
 
@@ -634,8 +636,8 @@ def _hf_worker_main(
                 "tokens_generated": tokens_generated,
                 "elapsed_ms": round(elapsed_ms, 1),
             }), timeout=_STREAM_PUT_TIMEOUT_S)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("worker: HF result put failed for session %s: %s", session_id, exc)
 
     def _cleanup():
         nonlocal model, tokenizer

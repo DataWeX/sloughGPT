@@ -98,8 +98,8 @@ class InferenceClient:
         if self._socket is not None:
             try:
                 self._socket.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("InferenceClient: socket close failed: %s", exc)
             self._socket = None
 
     def health(self) -> dict:
@@ -213,8 +213,8 @@ class InferenceClient:
                 if cancel_event is not None and cancel_event.is_set():
                     try:
                         self._send_message({"type": "stream_stop", "id": req_id})
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("InferenceClient: stream_stop send failed: %s", exc)
                     break
                 yield token
         finally:
@@ -296,7 +296,8 @@ class InferenceClient:
         try:
             self._send_message(msg)
             return self._recv_message()
-        except Exception:
+        except Exception as exc:
+            logger.debug("InferenceClient: _send_and_recv_unlocked failed: %s", exc)
             return None
 
     def _send_message(self, msg: dict) -> None:
