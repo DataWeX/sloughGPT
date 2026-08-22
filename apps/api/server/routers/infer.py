@@ -18,8 +18,9 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncIterator, AsyncGenerator
 import datetime
 import logging
-from schemas.common import success_response, raise_error, classify_and_raise
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
+import time as _time
 
 logger = logging.getLogger("slo.infer")
 
@@ -183,6 +184,7 @@ class InferRouter:
                 logger.warning("Failed to record inference metrics: %s", e)
             model = self._get_model()
             model_name = req.model or (getattr(model, 'model_id', None) or type(model).__name__ if model else 'unknown')
+            safe_audit_log("infer.generate", resource=model_name, detail=f"elapsed={elapsed_ms:.0f}ms tokens={tokens}")
             return InferResponse(text=result, model=model_name, tokens_generated=tokens, elapsed_ms=round(elapsed_ms, 1))
         except AppError:
             raise
@@ -238,6 +240,7 @@ class InferRouter:
                 get_server_state().record_inference(tokens=token_count, elapsed_ms=elapsed_ms, model=req.model)
             except Exception as e:
                 logger.warning("Failed to record inference metrics: %s", e)
+            safe_audit_log("infer.stream", resource=req.model or "default", detail=f"elapsed={elapsed_ms:.0f}ms tokens={token_count}")
             import json
             yield "data: " + json.dumps({
                 "stream": "infer", "phase": "STREAMING", "status": "complete",
@@ -252,6 +255,7 @@ class InferRouter:
         Uses the loaded model's embed() method if available, otherwise falls back
         to the n-gram TF-IDF embedder.
         """
+        _t0 = _time.monotonic()
         model = self._get_model_interface()
         if model is not None and hasattr(model, 'embed'):
             try:
@@ -260,6 +264,8 @@ class InferRouter:
                 if isinstance(vec, np.ndarray):
                     vec = vec.tolist()
                 model_name = req.model or getattr(model, 'model_id', 'unknown')
+                _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                safe_audit_log("infer.embed", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms dims={len(vec)}")
                 return EmbedResponse(embedding=vec, dimensions=len(vec), model=model_name)
             except NotImplementedError:
                 pass
@@ -274,6 +280,8 @@ class InferRouter:
             if isinstance(vec, np.ndarray):
                 vec = vec.tolist()
             model_name = req.model or "ngram-tfidf"
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("infer.embed", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms dims={len(vec)} fallback=ngram")
             return EmbedResponse(embedding=vec, dimensions=len(vec), model=model_name)
         except ImportError:
             raise_error("No embedding backend available", "E_BAD_REQUEST", status_code=503)
@@ -284,6 +292,7 @@ class InferRouter:
         Uses the loaded model's tokenizer if available, otherwise falls back to
         simple byte-level tokenization.
         """
+        _t0 = _time.monotonic()
         model = self._get_model_interface()
         if model is not None:
             try:
@@ -292,6 +301,8 @@ class InferRouter:
                     ids = tokenizer.encode(req.text)
                     tokens = [getattr(tokenizer, 'itos', {}).get(i, f"<{i}>") for i in ids]
                     model_name = req.model or "model-tokenizer"
+                    _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                    safe_audit_log("infer.tokenize", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)}")
                     return TokenizeResponse(tokens=tokens, ids=ids, count=len(ids))
             except Exception as e:
                 logger.debug("Model tokenize failed, falling back to byte-level: %s", e)
@@ -299,16 +310,21 @@ class InferRouter:
         # Fallback: byte-level tokenization (always works, no dependencies)
         ids = list(req.text.encode("utf-8"))
         tokens = [f"b{b}" for b in ids]
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("infer.tokenize", resource="byte-level", detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)}")
         return TokenizeResponse(tokens=tokens, ids=ids, count=len(ids))
 
     async def infer_detokenize(self, req: DetokenizeRequest) -> DetokenizeResponse:
         """Convert token IDs back to text."""
+        _t0 = _time.monotonic()
         model = self._get_model_interface()
         if model is not None:
             try:
                 tokenizer = getattr(model, '_tokenizer', None) or getattr(model, 'tokenizer', None)
                 if tokenizer is not None and hasattr(tokenizer, 'decode'):
                     text = tokenizer.decode(req.ids)
+                    _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                    safe_audit_log("infer.detokenize", resource="model", detail=f"elapsed={_elapsed_ms:.0f}ms ids={len(req.ids)}")
                     return DetokenizeResponse(text=text, count=len(req.ids))
             except Exception as exc:
                 logger.debug("Tokenizer decode failed: %s", exc)
@@ -316,6 +332,8 @@ class InferRouter:
         # Fallback: interpret IDs as byte values
         try:
             text = bytes(req.ids).decode("utf-8", errors="replace")
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("infer.detokenize", resource="byte-level", detail=f"elapsed={_elapsed_ms:.0f}ms ids={len(req.ids)}")
             return DetokenizeResponse(text=text, count=len(req.ids))
         except Exception:
             return DetokenizeResponse(text="", count=len(req.ids))

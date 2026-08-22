@@ -7,7 +7,7 @@ Includes quality evaluation:
 - Real model metrics
 """
 import logging
-import time
+import time as _time
 from fastapi import APIRouter
 from typing import Optional, Dict, Any
 
