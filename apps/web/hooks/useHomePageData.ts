@@ -11,6 +11,7 @@ import { feedbackController, type FeedbackStats } from '@/lib/feedback-controlle
 import { datasetController } from '@/lib/dataset-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { useApiReady } from '@/hooks/useLiveStatus'
+import { logger } from '@/lib/dev-log'
 
 export interface HomePageData {
   modelCount: number | null
@@ -76,7 +77,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     const cancelled = { current: false }
     modelController.status().then(status => {
       if (!cancelled.current) setModelStatus({ loaded: status.loaded, model: status.model_type })
-    }).catch(e => { console.warn('[home] model status failed:', e?.message || e); if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
+    }).catch(e => { logger.warning('home model status failed', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
     soulsController.list().then(data => {
       if (!cancelled.current) {
         const active = data.current_soul
@@ -84,10 +85,10 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           : null
         setCurrentSoul(active || null)
       }
-    }).catch(e => { console.warn('[home] souls list failed:', e?.message || e); if (!cancelled.current) setErrors(p => ({ ...p, soul: true })) })
+    }).catch(e => { logger.warning('home souls list failed', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, soul: true })) })
     modelController.list().then(models => {
       if (!cancelled.current) setModelCount(models.length)
-    }).catch(e => { console.warn('[home] model list failed:', e?.message || e); if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
+    }).catch(e => { logger.warning('home model list failed', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
     sessionController.list().then(sessions => {
       if (!cancelled.current) {
         const sorted = [...sessions]
@@ -104,7 +105,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           }))
         setRecentSessions(sorted)
       }
-    }).catch(e => { console.warn('[home] sessions list failed:', e?.message || e); if (!cancelled.current) setErrors(p => ({ ...p, sessions: true })) })
+    }).catch(e => { logger.warning('home sessions list failed', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, sessions: true })) })
     trainingController.list().then(jobs => {
       if (!cancelled.current) {
         const running = jobs.find(j => j.status === 'running')
@@ -114,13 +115,13 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           .slice(0, 3)
         setRecentJobs(recent)
       }
-    }).catch(e => { console.warn('[home] training list failed:', e?.message || e); if (!cancelled.current) setErrors(p => ({ ...p, training: true })) })
+    }).catch(e => { logger.warning('home training list failed', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, training: true })) })
     knowledgeController.stats().then(s => {
       if (!cancelled.current) setKnowledgeCount(s.total_items)
-    }).catch(e => { console.warn('[home] knowledge stats failed:', e?.message || e); if (!cancelled.current) setErrors(p => ({ ...p, knowledge: true })) })
+    }).catch(e => { logger.warning('home knowledge stats failed', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, knowledge: true })) })
     feedbackController.getFeedbackStats().then(s => {
       if (!cancelled.current) setFeedbackStats(s)
-    }).catch(e => { console.warn('[home] feedback stats failed:', e?.message || e); if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
+    }).catch(e => { logger.warning('home feedback stats failed', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
     datasetController.list().then(list => {
       if (!cancelled.current) {
         const sorted = [...list]
@@ -135,7 +136,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           }))
         setRecentDatasets(sorted)
       }
-    }).catch(e => { console.warn('[home] datasets list failed:', e?.message || e); if (!cancelled.current) setErrors(p => ({ ...p, datasets: true })) })
+    }).catch(e => { logger.warning('home datasets list failed', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, datasets: true })) })
     return () => { cancelled.current = true }
   }, [ready])
 

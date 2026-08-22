@@ -99,9 +99,7 @@ export const modelController = {
     try {
       return await apiGet<HealthStatus>('/health', undefined, { silent: true })
     } catch (e) {
-      if (typeof console !== 'undefined') {
-        console.warn('[model-controller] Health check failed:', e)
-      }
+      _log.warning('Health check failed', { exception: String(e) })
       return null
     }
   },
@@ -121,9 +119,7 @@ export const modelController = {
         device: data.device ?? null,
       }
     } catch (e) {
-      if (typeof console !== 'undefined') {
-        console.warn('[model-controller] Status check failed:', e)
-      }
+      _log.warning('Status check failed', { exception: String(e) })
       return { loaded: false, model_type: null, device: null }
     }
   },
@@ -133,9 +129,7 @@ export const modelController = {
       const models = await this.list()
       return models.find((m) => m.id === modelId) || null
     } catch (e) {
-      if (typeof console !== 'undefined') {
-        console.warn('[model-controller] Model info fetch failed:', e)
-      }
+      _log.warning('Model info fetch failed', { exception: String(e) })
       return null
     }
   },

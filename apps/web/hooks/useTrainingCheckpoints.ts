@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { trainingJobsController } from '@/lib/controllers'
 import type { Checkpoint } from '@/lib/souls-controller'
 import type { TrainingBuild, TrainingJob } from '@/lib/training-controller'
+import { logger } from '@/lib/dev-log'
 
 export interface UseTrainingCheckpointsReturn {
   checkpoints: Checkpoint[]
@@ -36,7 +37,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       const data = await trainingJobsController.listCheckpoints()
       setCheckpoints(data)
-    } catch (e) { console.warn('[checkpoints] fetch failed:', e instanceof Error ? e.message : e) }
+    } catch (e) { logger.warning('checkpoints fetch failed', { exception: String(e instanceof Error ? e.message : e) }) }
     finally { setLoadingCheckpoints(false) }
   }, [])
 
@@ -44,13 +45,13 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       const data = await trainingJobsController.listBuilds()
       setBuilds(data)
-    } catch (e) { console.warn('[checkpoints] builds fetch failed:', e instanceof Error ? e.message : e) }
+    } catch (e) { logger.warning('checkpoints builds fetch failed', { exception: String(e instanceof Error ? e.message : e) }) }
     finally { setLoadingBuilds(false) }
   }, [])
 
   const fetchJobs = useCallback(async () => {
     try { setJobs(await trainingJobsController.list()) }
-    catch (e) { console.warn('[checkpoints] jobs fetch failed:', e instanceof Error ? e.message : e) }
+    catch (e) { logger.warning('checkpoints jobs fetch failed', { exception: String(e instanceof Error ? e.message : e) }) }
     finally { setLoadingJobs(false) }
   }, [])
 

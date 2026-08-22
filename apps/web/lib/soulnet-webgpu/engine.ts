@@ -19,6 +19,7 @@
 
 import { parseSou, SoulCheckpoint, SoulMetadata } from './weights'
 import { WeightCache } from './cache'
+import { logger } from '@/lib/dev-log'
 
 const _weightCache = new WeightCache()
 
@@ -193,7 +194,7 @@ export class SoulNetWebGPU {
           const resp = await fetch(urlOrBuffer)
           if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${urlOrBuffer}`)
           raw = await resp.arrayBuffer()
-          _weightCache.put(urlOrBuffer, raw).catch(() => {})
+          _weightCache.put(urlOrBuffer, raw).catch(e => { logger.debug('weight cache put failed', { url: String(urlOrBuffer), exception: String(e) }) })
         }
       } else {
         raw = urlOrBuffer

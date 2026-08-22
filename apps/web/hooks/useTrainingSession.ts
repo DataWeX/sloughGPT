@@ -152,7 +152,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             dataQuality: (turboStatus.result?.data_quality as TrainingShellState['dataQuality']) ?? null,
           })
         }
-      } catch (e: unknown) { console.warn('[training] server reconciliation failed:', (e instanceof Error ? e.message : e) || e) }
+      } catch (e: unknown) { logger.warning('training server reconciliation failed', { exception: String((e instanceof Error ? e.message : e) || e) }) }
     }
     reconcile()
     return () => { cancelled = true }
@@ -174,7 +174,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const stopTraining = useCallback(() => {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
-    operationsStore.getState().cancelAll('training').catch((e) => console.warn('[training] cancelAll failed:', e?.message || e))
+    operationsStore.getState().cancelAll('training').catch((e) => logger.warning('training cancelAll failed', { exception: String(e?.message || e) }))
     resetTraining()
   }, [resetTraining])
 
