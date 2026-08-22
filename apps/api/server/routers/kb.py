@@ -885,23 +885,25 @@ class KBRouter:
         })
 
     def rag_query(self, req: RAGQueryRequest) -> dict:
-        """Query the production RAG index for relevant context.
-
-        Returns ranked results with BM25 + dense scores and combined ranking.
-        """
+        """Query the production RAG index for relevant context."""
+        import time as _time
+        _t0 = _time.monotonic()
         from domains.cognitive.rag_service import get_rag_service
         rag_svc = get_rag_service()
         result = rag_svc.query(req.question, top_k=req.top_k)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        logger.info("RAG query in %.1fms (top_k=%d)", _elapsed_ms, req.top_k)
         return success_response(data=result)
 
     def rag_verify(self, req: RAGVerifyRequest) -> dict:
-        """Verify generated text against the RAG index for hallucinations.
-
-        Returns grounded claims, hallucination rate, and citations.
-        """
+        """Verify generated text against the RAG index for hallucinations."""
+        import time as _time
+        _t0 = _time.monotonic()
         from domains.cognitive.rag_service import get_rag_service
         rag_svc = get_rag_service()
         result = rag_svc.verify_and_ground(req.text, req.question)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        logger.info("RAG verify in %.1fms", _elapsed_ms)
         return success_response(data=result)
 
     def rag_list_documents(self) -> dict:

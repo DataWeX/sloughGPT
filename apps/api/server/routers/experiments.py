@@ -171,6 +171,7 @@ class ExperimentsRouter:
             }
             with open(status_file, "w") as f:
                 json.dump(status_data, f)
+            safe_audit_log("experiment.complete", resource=e_id)
             return success_response(data={"id": e_id, "status": "completed"})
         except Exception as e:
             raise_error(f"Failed to complete experiment: {e}", "E_SERVER_ERROR", status_code=500)
@@ -185,6 +186,7 @@ class ExperimentsRouter:
             entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
             with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
                 f.write(json.dumps(entry) + "\n")
+            safe_audit_log("experiment.log_metric", resource=e_id, detail=f"metric={metric_name} value={value}")
             return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
         except Exception as e:
             raise_error(f"Failed to log metric: {e}", "E_SERVER_ERROR", status_code=500)
@@ -199,6 +201,7 @@ class ExperimentsRouter:
             entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
             with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
                 f.write(json.dumps(entry) + "\n")
+            safe_audit_log("experiment.log_param", resource=e_id, detail=f"param={param_name}")
             return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})
         except Exception as e:
             raise_error(f"Failed to log param: {e}", "E_SERVER_ERROR", status_code=500)

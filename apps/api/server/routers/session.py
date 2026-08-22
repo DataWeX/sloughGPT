@@ -186,11 +186,17 @@ class SessionRouter:
             classify_and_raise(e, source="session_inspector")
 
     async def regenerate_session(self, session_id: str, request: Request) -> StreamingResponse:
-        """Regenerate the last assistant response for a session.
+        """Regenerate the last assistant response for a session."""
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        _regen_t0 = time.time()
+        _op_id = None
+        try:
+            mgr = get_cancel_manager()
+            _op_id = mgr.register(OpType.INFERENCE, f"regenerate:{session_id}")
+            mgr.start(_op_id)
+        except Exception:
+            pass
 
-        Loads stored session messages, calls the provider to regenerate
-        the next assistant response, and streams the result via SSE.
-        """
         async def generate() -> AsyncIterator[str]:
             """generate."""
             _regen_start = time.time()
@@ -241,6 +247,7 @@ class SessionRouter:
                             return
                     yield self._sse_token("chat", "", done=True)
                     _regen_elapsed_ms = round((time.time() - _regen_start) * 1000)
+                    safe_audit_log("session.regenerate", resource=session_id, detail=f"chars={len(full_response)} elapsed={_regen_elapsed_ms}ms")
                     logger.info("Regenerate completed: %d chars in %dms", len(full_response), _regen_elapsed_ms, extra={"tag": "REQ"})
                 except GeneratorExit:
                     return
@@ -252,6 +259,12 @@ class SessionRouter:
             except Exception as e:
                 logger.error("Regenerate error: %s", e, exc_info=True, extra={"tag": "REQ"})
                 yield self._sse_error("chat", "REGENERATE", str(e))
+            finally:
+                if _op_id:
+                    try:
+                        get_cancel_manager().finish(_op_id)
+                    except Exception:
+                        pass
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
