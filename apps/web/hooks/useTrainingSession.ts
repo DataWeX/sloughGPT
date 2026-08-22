@@ -74,7 +74,11 @@ function useShellTraining(): TrainingShellState {
           && prev.error === next.error && prev.message === next.message
           && prev.checkpoint === next.checkpoint && prev.finalLoss === next.finalLoss
           && prev.modelPath === next.modelPath && prev.avgQuality === next.avgQuality
-          && prev.lossHistory === next.lossHistory) {
+          && prev.lossHistory === next.lossHistory
+          && prev.visualOutputDir === next.visualOutputDir && prev.visualSouPath === next.visualSouPath
+          && prev.finetunedModelPath === next.finetunedModelPath && prev.finetunedModelLoss === next.finetunedModelLoss
+          && prev.dataQuality === next.dataQuality && prev.distillCheckpoint === next.distillCheckpoint
+          && prev.distillFinalLoss === next.distillFinalLoss && prev.distillEpochs === next.distillEpochs) {
           return prev
         }
         return next
