@@ -250,6 +250,7 @@ def _search_sessions_sync(q: str, limit: int) -> list:
     """Synchronous full-text search across session files on disk."""
     q_lower = q.lower().strip()
     results = []
+    max_matches_per_session = 3  # stop scanning messages after this many matches
 
     search_dirs: list[Path] = []
     sessions_dir = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
@@ -280,6 +281,8 @@ def _search_sessions_sync(q: str, limit: int) -> list:
                     matches.append({"role": "session", "content": name, "timestamp": data.get("updated_at", "")})
 
                 for msg in messages:
+                    if len(matches) >= max_matches_per_session:
+                        break
                     content = msg.get("content", "")
                     if q_lower in content.lower():
                         matches.append({
@@ -727,7 +730,6 @@ class InferenceRouter:
             })
 
         se = server_state.soul_engine
-        cs = server_state.current_soul
         if se is not None and getattr(se, 'is_loaded', False):
             data["soul_engine"] = se.get_stats()
 
@@ -922,7 +924,6 @@ class InferenceRouter:
 
             # Production RAG: query for relevant context from ingested documents
             rag_context = ""
-            rag_info = {}
             if req.use_rag:
                 try:
 
@@ -1447,12 +1448,12 @@ class InferenceRouter:
         session_msg_dir = (self._VOICE_DIR / session_id).resolve()
         if not str(session_msg_dir).startswith(str(self._VOICE_DIR.resolve())):
             raise_error("Invalid session ID", "E_BAD_REQUEST", status_code=400)
-        session_msg_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(session_msg_dir.mkdir, parents=True, exist_ok=True)
         ext = Path(file.filename or "audio.m4a").suffix or ".m4a"
         audio_path = session_msg_dir / f"{msg_id}{ext}"
 
         content = await file.read()
-        audio_path.write_bytes(content)
+        await asyncio.to_thread(audio_path.write_bytes, content)
 
         session_data = self._get_session(session_id)
         session_data.setdefault("messages", []).append({
@@ -1477,15 +1478,20 @@ class InferenceRouter:
         audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
         if not str(audio_path).startswith(str(base)):
             raise_error("Invalid path", "E_AUTH_FORBIDDEN", status_code=403)
-        if not audio_path.exists():
+
+        def _resolve():
+            if audio_path.exists():
+                return audio_path
             for ext in [".m4a", ".wav", ".mp3", ".ogg", ".webm"]:
                 candidate = audio_path.parent / f"{audio_path.stem}{ext}"
                 if candidate.exists():
-                    audio_path = candidate
-                    break
-            else:
-                raise_error("Audio not found", "E_NOT_FOUND", status_code=404)
-        return FileResponse(str(audio_path), media_type="audio/m4a")
+                    return candidate
+            return None
+
+        resolved = await asyncio.to_thread(_resolve)
+        if resolved is None:
+            raise_error("Audio not found", "E_NOT_FOUND", status_code=404)
+        return FileResponse(str(resolved), media_type="audio/m4a")
 
     async def list_sessions(self, archived: Optional[bool] = None) -> dict:
         """list_sessions."""
