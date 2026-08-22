@@ -237,7 +237,6 @@ class HealthRouter:
             Standard SSE envelope dict ready for JSON serialisation.
         """
         detailed = ctrl.get_detailed_health()
-        basic = ctrl.get_basic_health()
         hs = detailed.get("health_score", {})
         return {
             "stream": "health",
@@ -248,8 +247,8 @@ class HealthRouter:
                 "model_loading": detailed.get("model_loading", False),
                 "model_type": detailed.get("model_type"),
                 "soul": detailed.get("soul"),
-                "is_inferencing": basic.get("is_inferencing", False),
-                "inference_count": basic.get("inference_count", 0),
+                "is_inferencing": detailed.get("is_inferencing", False),
+                "inference_count": detailed.get("inference_count", 0),
                 "uptime_seconds": detailed.get("uptime_seconds", 0),
                 "request_count": detailed.get("request_count", 0),
                 "error_count": detailed.get("error_count", 0),

@@ -124,6 +124,8 @@ class CancelManager:
     No domain logic — each caller provides its own ``cancel_fn``.
     """
 
+    MAX_OPS = 500  # auto-purge threshold
+
     def __init__(self) -> None:
         self._ops: Dict[str, Operation] = {}
         self._lock = threading.Lock()
@@ -150,6 +152,8 @@ class CancelManager:
                 created_at=time.time(),
                 meta=meta or {},
             )
+            if len(self._ops) > self.MAX_OPS:
+                self._purge_locked(max_age_s=1800.0)
         logger.debug("Registered %s operation: %s (%s)", op_type.value, label, oid)
         return oid
 
@@ -169,6 +173,8 @@ class CancelManager:
                 op.status = OpStatus.FAILED if error else OpStatus.COMPLETED
                 op.finished_at = time.time()
                 op.error = error
+                if len(self._ops) > self.MAX_OPS:
+                    self._purge_locked(max_age_s=1800.0)
 
     # ── Cancel ────────────────────────────────────────────────────────
 
@@ -229,24 +235,29 @@ class CancelManager:
                 and (op_type is None or op.op_type == op_type)
             ]
 
-    def list_all(self, op_type: Optional[OpType] = None) -> List[Operation]:
+    def list_all(self, op_type: Optional[OpType] = None, limit: int = 200) -> List[Operation]:
         with self._lock:
-            return [
+            ops = [
                 op for op in self._ops.values()
                 if op_type is None or op.op_type == op_type
             ]
+            return ops[-limit:]
 
     def purge(self, max_age_s: float = 3600.0) -> int:
         """Remove finished operations older than max_age_s. Returns count removed."""
-        cutoff = time.time() - max_age_s
         with self._lock:
-            to_remove = [
-                oid for oid, op in self._ops.items()
-                if op.status in (OpStatus.COMPLETED, OpStatus.CANCELLED, OpStatus.FAILED)
-                and (op.finished_at or 0) < cutoff
-            ]
-            for oid in to_remove:
-                del self._ops[oid]
+            return self._purge_locked(max_age_s)
+
+    def _purge_locked(self, max_age_s: float = 3600.0) -> int:
+        """Remove finished operations older than max_age_s. Caller must hold lock."""
+        cutoff = time.time() - max_age_s
+        to_remove = [
+            oid for oid, op in self._ops.items()
+            if op.status in (OpStatus.COMPLETED, OpStatus.CANCELLED, OpStatus.FAILED)
+            and (op.finished_at or 0) < cutoff
+        ]
+        for oid in to_remove:
+            del self._ops[oid]
         return len(to_remove)
 
     def count(self, op_type: Optional[OpType] = None) -> Dict[str, int]:

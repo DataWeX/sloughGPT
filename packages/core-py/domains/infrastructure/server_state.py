@@ -8,7 +8,8 @@ which ensures atomic access from any thread.
 
 from __future__ import annotations
 
-from threading import Lock, RLock
+from collections import deque
+from threading import Lock
 from typing import Any, Optional, Callable, TypeVar
 import time
 import logging
@@ -94,52 +95,44 @@ class ServerState:
         self._started_at: float = time.time()
         self._request_count: int = 0
         self._error_count: int = 0
-        self._lock = RLock()
+        self._lock = Lock()
 
         # Request history ring buffer (last 500 requests)
-        self._request_history: list[dict] = []
-        self._request_history_max: int = 500
+        self._request_history: deque[dict] = deque(maxlen=500)
 
         # Error history ring buffer (last 20 errors)
-        self._error_history: list[dict] = []
-        self._error_history_max: int = 20
+        self._error_history: deque[dict] = deque(maxlen=20)
 
-        # Per-path latency accumulator: {path: [latency_ms, ...]}
-        self._path_latencies: dict[str, list[float]] = {}
+        # Per-path latency accumulator: {path: deque[float]}
+        self._path_latencies: dict[str, deque[float]] = {}
         self._path_latencies_max: int = 100
 
         # Inference-specific metrics
         self._inference_count: int = 0
         self._total_tokens: int = 0
         self._total_inference_ms: float = 0.0
-        self._tokens_per_request: list[int] = []
-        self._tokens_per_request_max: int = 100
+        self._tokens_per_request: deque[int] = deque(maxlen=100)
 
         # Sliding window for recent tokens/s (last 30 inferences)
-        self._recent_inferences: list[dict] = []  # [{tokens, elapsed_ms, ts}, ...]
-        self._recent_inferences_max: int = 30
+        self._recent_inferences: deque[dict] = deque(maxlen=30)
 
         # Per-model inference tracking: {model: {tokens, time_ms, count}}
         self._model_metrics: dict[str, dict] = {}
 
         # Model lifecycle events (load/unload/error)
-        self._model_events: list[dict] = []
-        self._model_events_max: int = 30
+        self._model_events: deque[dict] = deque(maxlen=30)
 
         # Health score history (snapshots over time)
-        self._health_history: list[dict] = []
-        self._health_history_max: int = 30
+        self._health_history: deque[dict] = deque(maxlen=30)
 
         self._last_trend_ts: float = 0.0
 
         # Memory snapshots (periodic RSS/virtual memory tracking)
-        self._memory_history: list[dict] = []
-        self._memory_history_max: int = 30
+        self._memory_history: deque[dict] = deque(maxlen=30)
 
         # Rate limiting: {path: {window_start, count}}
         self._rate_limits: dict[str, dict] = {}
-        self._rate_limit_violations: list[dict] = []
-        self._rate_limit_violations_max: int = 20
+        self._rate_limit_violations: deque[dict] = deque(maxlen=20)
 
         # Memory pressure tracking
         self._memory_pressure_blocks: int = 0  # times inference was blocked by >95% memory
@@ -169,8 +162,6 @@ class ServerState:
                 "elapsed_ms": round(elapsed_ms, 1),
                 "ts": time.time(),
             })
-            if len(self._request_history) > self._request_history_max:
-                self._request_history = self._request_history[-self._request_history_max:]
 
     def get_request_history(self, limit: int = 20) -> list[dict]:
         """Return the most recent requests (newest first)."""
@@ -209,8 +200,6 @@ class ServerState:
                 "error_type": error_type,
                 "ts": time.time(),
             })
-            if len(self._error_history) > self._error_history_max:
-                self._error_history = self._error_history[-self._error_history_max:]
 
     def get_error_history(self, limit: int = 10) -> list[dict]:
         """Return the most recent errors (newest first)."""
@@ -221,10 +210,8 @@ class ServerState:
         """Track per-path latency for breakdown analysis."""
         with self._lock:
             if path not in self._path_latencies:
-                self._path_latencies[path] = []
+                self._path_latencies[path] = deque(maxlen=self._path_latencies_max)
             self._path_latencies[path].append(elapsed_ms)
-            if len(self._path_latencies[path]) > self._path_latencies_max:
-                self._path_latencies[path] = self._path_latencies[path][-self._path_latencies_max:]
 
     def get_path_latencies(self, top_n: int = 5) -> list[dict]:
         """Return per-path average latency for the top N busiest paths."""
@@ -256,16 +243,12 @@ class ServerState:
             self._total_tokens += tokens
             self._total_inference_ms += elapsed_ms
             self._tokens_per_request.append(tokens)
-            if len(self._tokens_per_request) > self._tokens_per_request_max:
-                self._tokens_per_request = self._tokens_per_request[-self._tokens_per_request_max:]
             # Sliding window for recent tokens/s
             self._recent_inferences.append({
                 "tokens": tokens,
                 "elapsed_ms": elapsed_ms,
                 "ts": time.time(),
             })
-            if len(self._recent_inferences) > self._recent_inferences_max:
-                self._recent_inferences = self._recent_inferences[-self._recent_inferences_max:]
             if model:
                 if model not in self._model_metrics:
                     self._model_metrics[model] = {"tokens": 0, "time_ms": 0.0, "count": 0}
@@ -376,8 +359,6 @@ class ServerState:
                 "detail": detail[:200],
                 "ts": time.time(),
             })
-            if len(self._model_events) > self._model_events_max:
-                self._model_events = self._model_events[-self._model_events_max:]
 
     def get_model_events(self, limit: int = 10) -> list[dict]:
         """Return the most recent model events (newest first)."""
@@ -393,8 +374,6 @@ class ServerState:
                 "status": score_data["status"],
                 "ts": time.time(),
             })
-            if len(self._health_history) > self._health_history_max:
-                self._health_history = self._health_history[-self._health_history_max:]
 
     def record_trend_snapshots(self, interval_s: float = 5.0) -> None:
         """Record health + memory trend snapshots if interval_s has elapsed.
@@ -445,8 +424,6 @@ class ServerState:
                 "system_percent": round(system_percent, 1),
                 "ts": time.time(),
             })
-            if len(self._memory_history) > self._memory_history_max:
-                self._memory_history = self._memory_history[-self._memory_history_max:]
 
     def get_memory_history(self, limit: int = 20) -> list[dict]:
         """Return memory usage history (oldest first, for charting)."""
@@ -471,8 +448,6 @@ class ServerState:
                     "limit": max_per_second,
                     "ts": now,
                 })
-                if len(self._rate_limit_violations) > self._rate_limit_violations_max:
-                    self._rate_limit_violations = self._rate_limit_violations[-self._rate_limit_violations_max:]
                 return False
             return True
 
@@ -522,3 +497,10 @@ def get_server_state() -> ServerState:
             if _server_state is None:
                 _server_state = ServerState()
     return _server_state
+
+
+def reset_server_state() -> None:
+    """Reset the singleton (for testing)."""
+    global _server_state
+    with _server_state_lock:
+        _server_state = None

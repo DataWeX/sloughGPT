@@ -122,22 +122,23 @@ export const useOperationsStore = Object.assign(
   { getState: operationsStore.getState }
 )
 
+const ACTIVE_STATUSES = ['registered', 'running', 'cancelling'] as const
+
+function _activeFilter(op: Operation, type?: OpType): boolean {
+  return ACTIVE_STATUSES.includes(op.status as any) && (!type || op.type === type)
+}
+
 export function useActiveOperations(type?: OpType): Operation[] {
-  return useOperationsStore((s) =>
-    s.operations.filter(
-      (op) =>
-        ['registered', 'running', 'cancelling'].includes(op.status) &&
-        (!type || op.type === type)
-    )
-  )
+  return useOperationsStore((s) => s.operations.filter((op) => _activeFilter(op, type)))
 }
 
 export function useHasActiveOperations(type?: OpType): boolean {
-  return useOperationsStore((s) =>
-    s.operations.some(
-      (op) =>
-        ['registered', 'running', 'cancelling'].includes(op.status) &&
-        (!type || op.type === type)
-    )
-  )
+  return useOperationsStore((s) => s.operations.some((op) => _activeFilter(op, type)))
+}
+
+let _emptyOps: Operation[] = []
+export function useActiveOperationsStable(type?: OpType): Operation[] {
+  const result = useActiveOperations(type)
+  if (result.length === 0) return _emptyOps
+  return result
 }
