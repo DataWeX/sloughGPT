@@ -41,7 +41,7 @@ import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
-const POLL_INTERVAL_MS = 5000
+const POLL_INTERVAL_MS = 10_000
 const POLL_MAX_BACKOFF_MS = 60_000
 const MAX_ALERT_HISTORY = 20
 

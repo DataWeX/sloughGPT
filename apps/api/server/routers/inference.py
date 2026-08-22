@@ -70,21 +70,34 @@ def _model_ready() -> bool:
     return server_state.model is not None or server_state.provider is not None
 
 
+_memory_pressure_cache: Optional[str] = None
+_memory_pressure_cache_ts: float = 0.0
+
+
 def _check_memory_pressure() -> Optional[str]:
     """Return an error message if system memory is critically low, else None.
 
     Blocks new inference when >95% memory used to prevent OOM kills (SIGKILL -9).
     Allows inference to proceed (with a warning log) when 85-95% used.
+    Caches result for 2 seconds to avoid repeated psutil calls.
     """
+    global _memory_pressure_cache, _memory_pressure_cache_ts
+    now = time.time()
+    if _memory_pressure_cache is not None and now - _memory_pressure_cache_ts < 2.0:
+        return _memory_pressure_cache if _memory_pressure_cache else None
     try:
         import psutil
         mem = psutil.virtual_memory()
         if mem.percent > 95:
-            return f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
+            _memory_pressure_cache = f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
+            _memory_pressure_cache_ts = now
+            return _memory_pressure_cache
         if mem.percent > 85:
             logger.warning("Memory pressure: %.0f%% used — inference may be slow", mem.percent, extra={"tag": "INF"})
     except Exception as exc:
         logger.warning("Memory pressure check failed: %s", exc)
+    _memory_pressure_cache = ""
+    _memory_pressure_cache_ts = now
     return None
 
 class CreateSessionRequest(BaseModel):
@@ -617,10 +630,6 @@ class InferenceRouter:
                 yield sse_error("generate", "IDLE", mem_err)
             return StreamingResponse(oom_stream(), media_type="text/event-stream")
 
-        # Trigger GC before inference to free stale KV caches
-        import gc
-        gc.collect(0)
-
         async def generate() -> AsyncIterator[str]:
             """generate."""
 
@@ -860,11 +869,6 @@ class InferenceRouter:
             async def oom_stream() -> AsyncIterator[str]:
                 yield sse_error("chat", "IDLE", mem_err)
             return StreamingResponse(oom_stream(), media_type="text/event-stream")
-
-        # Trigger GC before inference to free stale KV caches and temporary objects
-        import gc
-        gc.collect(0)
-        get_server_state().record_gc_cycle()
 
         async def generate() -> AsyncIterator[str]:
             """generate."""
@@ -1208,22 +1212,21 @@ class InferenceRouter:
                 tokens = len(full_response.split())
                 _post_gen_tasks = []
 
-                # Production RAG: verify response against knowledge base
+                # Production RAG: verify response against knowledge base (parallel)
                 rag_verification = None
                 if req.use_rag and full_response.strip():
                     try:
-
                         rag_svc = get_rag_service()
                         if rag_svc.stats().get("total_chunks", 0) > 0:
-                            rag_verification = await asyncio.to_thread(
+                            _post_gen_tasks.append(asyncio.to_thread(
                                 rag_svc.verify_and_ground, full_response, user_msg or "",
-                            )
+                            ))
                     except Exception as e:
                         logger.debug("RAG verification skipped: %s", e)
 
                 try:
-
-                    capture(
+                    _post_gen_tasks.append(asyncio.to_thread(
+                        capture,
                         user_msg or "",
                         full_response,
                         model=_check_state.model_type or req.model,
@@ -1231,7 +1234,7 @@ class InferenceRouter:
                         elapsed_ms=duration_ms,
                         temperature=req.temperature,
                         meta={"session_id": session_id},
-                    )
+                    ))
                 except Exception as e:
                     logger.warning("Failed to capture conversation: %s", e)
 
@@ -1274,7 +1277,13 @@ class InferenceRouter:
                     logger.warning("Continual learner ingest failed: %s", e)
 
                 if _post_gen_tasks:
-                    await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
+                    results = await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
+                    # Extract RAG verification result if it was in the tasks
+                    if req.use_rag and full_response.strip():
+                        for r in results:
+                            if isinstance(r, dict) and "confidence" in r:
+                                rag_verification = r
+                                break
 
                 # Send RAG verification results as a separate SSE event
                 if rag_verification is not None:
