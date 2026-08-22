@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { V86Controller } from '@/lib/v86-controller'
+import { logger } from '@/lib/dev-log'
 
 const LINUX_IMAGE_URL = 'https://copy.sh/v86/images/buildroot'
 const LINUX_IMAGE_SIZE = 8 * 1024 * 1024 // 8MB for Buildroot
@@ -65,7 +66,7 @@ export function useV86(): UseV86Result {
 
       // Start auto-save
       autoSaveRef.current = setInterval(() => {
-        ctrl.persistState().catch(() => {})
+        ctrl.persistState().catch(e => { logger.warning('VM auto-save failed', { exception: String(e) }) })
       }, AUTO_SAVE_INTERVAL_MS)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to start Linux VM')

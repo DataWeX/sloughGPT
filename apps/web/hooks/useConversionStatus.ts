@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiGet } from '@/lib/http-client'
+import { logger } from '@/lib/dev-log'
 
 interface ConversionStatus {
   model_id: string
@@ -51,7 +52,7 @@ export function useConversionStatus(modelId: string | null) {
   const startTracking = useCallback((id: string) => {
     apiGet<{ data?: ConversionStatus }>(`/models/conversion-status?model_id=${encodeURIComponent(id)}`, undefined, { silent: true })
       .then(data => { if (data?.data) setStatus(data.data) })
-      .catch(() => {})
+      .catch(e => { logger.warning('startTracking conversion status failed', { model_id: id, exception: String(e) }) })
   }, [])
 
   return { status, startTracking }
