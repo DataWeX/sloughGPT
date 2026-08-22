@@ -229,8 +229,8 @@ async def train(request: TrainRequest):
         )
         _mgr.start(op_id)
         training_jobs[job_id]["_cancel_manager_op_id"] = op_id
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager registration failed for %s: %s", job_id, exc)
 
     executor.submit(train_model, job_id)
 
@@ -857,8 +857,8 @@ async def start_visual_training(request: VisualTrainRequest):
         )
         _mgr.start(op_id)
         job["_cancel_manager_op_id"] = op_id
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager registration failed for visual training %s: %s", job_id, exc)
 
     def run_visual_training(job_id_: str = job_id) -> None:
         try:
@@ -1570,8 +1570,8 @@ async def train_from_feedback():
             )
             _mgr.start(op_id)
             training_jobs[jid]["_cancel_manager_op_id"] = op_id
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("CancelManager registration failed for feedback training %s: %s", jid, exc)
 
         # Update global training controller
         get_training_controller().start(jid, f"Feedback Training {timestamp}")
@@ -2396,8 +2396,8 @@ async def recover_job(job_id: str):
         )
         _mgr.start(op_id)
         recovery_job["_cancel_manager_op_id"] = op_id
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("CancelManager registration failed for recovery training %s: %s", jid, exc)
 
     def run_recovery(job_id_: str = jid):
         try:
