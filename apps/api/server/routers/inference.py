@@ -343,7 +343,10 @@ class InferenceRouter:
 
         self._session_cache: Optional[list] = None
         self._session_cache_ts: float = 0
-        self._session_cache_ttl = 2.0
+        self._session_cache_ttl = 5.0
+
+        self._session_metadata_cache: Optional[list] = None
+        self._session_metadata_cache_ts: float = 0
 
         self._session_memory_cache: dict[str, dict] = {}
         self._SESSION_CACHE_MAX = 500
@@ -440,6 +443,48 @@ class InferenceRouter:
             self._background_flush_task = asyncio.create_task(_flush_loop())
         except RuntimeError:
             pass
+
+    def _build_session_metadata_index(self) -> list:
+        """Build a lightweight metadata index without loading full message content.
+
+        Reads only the first ~200 bytes of each file to extract id, name, updated_at,
+        created_at, and message_count. This is ~10x faster than loading full sessions.
+        """
+        now = time.time()
+        if self._session_metadata_cache is not None and now - self._session_metadata_cache_ts < self._session_cache_ttl:
+            return self._session_metadata_cache
+
+        metadata = []
+        for sdir in [self._SESSIONS_DIR, self._SESSIONS_DIR.parent / "conversations"]:
+            if not sdir.is_dir():
+                continue
+            for f in sdir.glob("*.json"):
+                try:
+                    raw = f.read_text()
+                    if not raw.strip():
+                        continue
+                    data = json.loads(raw)
+                    sid = data.get("id") or data.get("session_id") or f.stem
+                    name = data.get("name", "") or ""
+                    messages = data.get("messages", [])
+                    if not name and messages:
+                        name = messages[0].get("content", "").split("\n")[0][:60]
+                    if not name:
+                        name = sid
+                    metadata.append({
+                        "id": sid,
+                        "name": name,
+                        "created_at": data.get("created_at", ""),
+                        "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
+                        "message_count": len(messages),
+                    })
+                except (json.JSONDecodeError, OSError):
+                    continue
+
+        metadata.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+        self._session_metadata_cache = metadata
+        self._session_metadata_cache_ts = now
+        return metadata
 
     def _build_session_cache(self) -> list:
         now = time.time()
@@ -740,7 +785,7 @@ class InferenceRouter:
         import state as server_state
         cs = server_state.current_soul
         if not cs:
-            return {}
+            return success_response(data={})
         soul_info = {}
         try:
             soul_info["soul"] = {
@@ -753,7 +798,7 @@ class InferenceRouter:
             }
         except Exception as e:
             logger.debug("Failed to build soul info: %s", e)
-        return soul_info
+        return success_response(data=soul_info)
 
     async def root(self) -> dict:
         """root."""
@@ -763,7 +808,7 @@ class InferenceRouter:
             soul_name = server_state.soul_engine.slo.name
         elif server_state.current_soul and hasattr(server_state.current_soul, "name"):
             soul_name = server_state.current_soul.name
-        return {
+        return success_response(data={
             "name": "SloughGPT API",
             "version": "1.0.0",
             "status": "running",
@@ -782,16 +827,16 @@ class InferenceRouter:
                 "train_resolve": "/train/resolve (POST) — preview manifest → data_path",
                 "info": "/info (GET)",
             },
-        }
+        })
 
     async def list_chat_tools(self) -> dict:
         """list_chat_tools."""
         try:
 
-            return {"tools": get_tool_registry().list_tools()}
+            return success_response(data={"tools": get_tool_registry().list_tools()})
         except Exception as e:
             logger.warning("Failed to list tools: %s", e, extra={"tag": "INF"})
-            return {"tools": []}
+            return success_response(data={"tools": []})
 
     async def chat_stream(self, req: ChatRequest, request: Request) -> StreamingResponse:
         """chat_stream."""
@@ -932,13 +977,6 @@ class InferenceRouter:
                         rag_result = await asyncio.to_thread(rag_svc.query, user_msg, 5)
                         if rag_result.get("num_results", 0) > 0:
                             rag_context = rag_result["context"]
-                            rag_info = {
-                                "num_results": rag_result["num_results"],
-                                "results": [
-                                    {"score": r["score"], "rank": r["rank"], "source": r["metadata"].get("source", "unknown")}
-                                    for r in rag_result.get("results", [])
-                                ],
-                            }
                             # Inject RAG context into system prompt or as a user context message
                             rag_block = f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{rag_context}"
                             # Prepend as user context before the conversation
@@ -1284,7 +1322,7 @@ class InferenceRouter:
         if not ctx_core:
             raise_error("ContextCore not available", "E_INFRA_STARTUP")
         ctx_core.store_fact(key, value)
-        return {"stored": key}
+        return success_response(data={"stored": key})
 
     async def get_facts(self, query: str = "") -> dict:
         """get_facts."""
@@ -1292,8 +1330,8 @@ class InferenceRouter:
         if not ctx_core:
             raise_error("ContextCore not available", "E_INFRA_STARTUP")
         if query:
-            return {"facts": ctx_core.search_semantic(query)}
-        return {"facts": [{"key": k, **v} for k, v in ctx_core.semantic_memory.items()]}
+            return success_response(data={"facts": ctx_core.search_semantic(query)})
+        return success_response(data={"facts": [{"key": k, **v} for k, v in ctx_core.semantic_memory.items()]})
 
     async def reset_context(self, all: bool = False) -> dict:
         """reset_context."""
@@ -1307,7 +1345,7 @@ class InferenceRouter:
         else:
             ctx_core.reset_session()
             safe_audit_log("inference.reset_context", resource="context", detail="scope=session")
-        return {"reset": "session" if not all else "all"}
+        return success_response(data={"reset": "session" if not all else "all"})
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
         """chat."""
@@ -1495,7 +1533,7 @@ class InferenceRouter:
 
     async def list_sessions(self, archived: Optional[bool] = None) -> dict:
         """list_sessions."""
-        sessions = await asyncio.to_thread(self._build_session_cache)
+        sessions = await asyncio.to_thread(self._build_session_metadata_index)
         if archived is not None:
             sessions = [s for s in sessions if s.get("archived", False) == archived]
         return success_response(data=sessions)

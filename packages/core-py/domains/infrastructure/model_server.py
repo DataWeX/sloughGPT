@@ -402,10 +402,11 @@ def _optimize_cpu_threads() -> None:
 
 
 def _is_intel_mac() -> bool:
+    """Return True when running on macOS with Intel (x86_64) architecture."""
     try:
         import platform
         return platform.system() == "Darwin" and platform.machine() == "x86_64"
-    except Exception:
+    except (ImportError, AttributeError):
         return False
 
 
@@ -637,13 +638,16 @@ class IdleManager:
 
 
 _idle_manager: Optional[IdleManager] = None
+_idle_manager_lock = Lock()
 
 
 def get_idle_manager() -> IdleManager:
     """Get or create the global IdleManager singleton."""
     global _idle_manager
     if _idle_manager is None:
-        _idle_manager = IdleManager()
+        with _idle_manager_lock:
+            if _idle_manager is None:
+                _idle_manager = IdleManager()
     return _idle_manager
 
 
@@ -777,7 +781,7 @@ class GenerateBackend:
         top_p: float,
         top_k: int,
         repetition_penalty: float,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeneratorType[str, None, dict]:
         """Streaming generation.  Yields tokens, returns final result dict."""
@@ -836,7 +840,7 @@ class GuardBackend(GenerateBackend):
         top_p: float,
         top_k: int,
         repetition_penalty: float,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeneratorType[str, None, dict]:
         safe_kwargs = {k: v for k, v in kwargs.items()
@@ -1020,7 +1024,7 @@ class LocalBackend(GenerateBackend):
         top_p: float,
         top_k: int,
         repetition_penalty: float,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         session_id: Optional[str] = None,
         _pre_tokenized: Optional[dict] = None,
         **kwargs: Any,
@@ -1382,6 +1386,7 @@ class ModelServer:
                 extra={"tag": "IDLE"},
             )
         except Exception as e:
+            self._status = ModelStatus.ERROR
             logger.error(
                 "Idle reload failed for %s: %s", self.model_id, e,
                 extra={"tag": "IDLE"},
@@ -1597,6 +1602,8 @@ class ModelServer:
             return None
         loop_id = id(loop)
         if loop_id not in self._read_semaphores:
+            if len(self._read_semaphores) > 10:
+                self._read_semaphores.clear()
             self._read_semaphores[loop_id] = asyncio.Semaphore(self._max_readers)
         return self._read_semaphores[loop_id]
 
@@ -1830,7 +1837,7 @@ class ModelServer:
         top_p: float = 0.9,
         top_k: int = 50,
         repetition_penalty: float = 1.0,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
@@ -1859,7 +1866,7 @@ class ModelServer:
         top_p: float = 0.9,
         top_k: int = 50,
         repetition_penalty: float = 1.0,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         session_id: Optional[str] = None,
         priority: Priority = Priority.MEDIUM,
         **kwargs: Any,

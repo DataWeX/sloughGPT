@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useCallback, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 import {
   operationsStore,
   useOperationsStore,
-  useActiveOperations,
-  useHasActiveOperations,
   type Operation,
   type OpType,
 } from '@/lib/operations-store'
@@ -127,18 +126,26 @@ function decrementRef() {
  *   const { operations, isActive, cancel, cancelAll } = useLiveOperations('training')
  */
 export function useLiveOperations(type?: OpType) {
-  const operations = useOperationsStore((s) => s.operations)
-  const counts = useOperationsStore((s) => s.counts)
-  const loading = useOperationsStore((s) => s.loading)
-  const error = useOperationsStore((s) => s.error)
-  const fetchOps = useOperationsStore((s) => s.fetch)
-  const cancel = useOperationsStore((s) => s.cancel)
-  const cancelAll = useOperationsStore((s) => s.cancelAll)
-
-  const activeOps = useActiveOperations(type)
-  const isActive = useHasActiveOperations(type)
-  const hasTraining = useHasActiveOperations('training')
-  const hasInference = useHasActiveOperations('inference')
+  const { operations, counts, loading, error, fetchOps, cancel, cancelAll, activeOps, isActive, hasTraining, hasInference } = useOperationsStore(
+    useShallow((s) => {
+      const active = s.operations.filter(
+        (op) => ['registered', 'running', 'cancelling'].includes(op.status) && (!type || op.type === type)
+      )
+      return {
+        operations: s.operations,
+        counts: s.counts,
+        loading: s.loading,
+        error: s.error,
+        fetchOps: s.fetch,
+        cancel: s.cancel,
+        cancelAll: s.cancelAll,
+        activeOps: active,
+        isActive: active.length > 0,
+        hasTraining: s.operations.some((op) => ['registered', 'running', 'cancelling'].includes(op.status) && op.type === 'training'),
+        hasInference: s.operations.some((op) => ['registered', 'running', 'cancelling'].includes(op.status) && op.type === 'inference'),
+      }
+    })
+  )
 
   // Manage singleton lifecycle
   const cleanupRef = useRef<(() => void) | null>(null)
