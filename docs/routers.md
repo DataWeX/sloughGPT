@@ -9,7 +9,7 @@ This document provides a brief overview of the newly added backend routers and t
 | `GET` | `/system/info` | Returns general system information (OS, CPU count, memory, etc.). |
 | `GET` | `/system/metrics` | Returns real‑time metrics (CPU, memory, disk, GPU usage). |
 | `GET` | `/system/disk` | Disk usage details per mount point. |
-| `GET` | `/system/detailed` | Full health snapshot combining model status, inference counts, and system metrics.
+| `GET` | `/system/lifecycle` | Full health snapshot combining model status, inference counts, and system metrics.
 
 ## Tokenizer Router (`/tokenizer`)
 
@@ -21,7 +21,7 @@ This document provides a brief overview of the newly added backend routers and t
 | `GET` | `/tokenizer/vocab` | Returns the full vocabulary list. |
 | `GET` | `/tokenizer/merges` | Returns BPE merge operations. |
 | `GET` | `/tokenizer/samples` | Returns a handful of sample tokens/words for UI playgrounds. |
-| `POST` | `/tokenizer/train-shakespeare` | Trains a fresh BPE tokenizer on the Shakespeare corpus. |
+| `POST` | `/tokenizer/train` | Trains a fresh BPE tokenizer on the provided corpus. |
 
 ## Token Tree Router (`/token-tree`)
 

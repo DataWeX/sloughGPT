@@ -3,6 +3,9 @@
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
+import { logger } from './dev-log'
+
+const _log = logger.child('session-controller')
 
 export interface Conversation {
   id: string
@@ -64,7 +67,8 @@ export const sessionController = {
   async getCurrent(): Promise<Session | null> {
     try {
       return await apiGet<Session>('/chat/sessions/current')
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get current session', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
@@ -72,7 +76,8 @@ export const sessionController = {
   async getSoul(): Promise<{ name: string; traits: string[]; personality?: Record<string, number> } | null> {
     try {
       return await apiGet<{ name: string; traits: string[]; personality?: Record<string, number> }>('/souls/current')
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get soul for session', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },

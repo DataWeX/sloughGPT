@@ -29,6 +29,8 @@ from typing import Any
 
 from domains.logging.bridge import record_extra_context
 
+logger = logging.getLogger("slo.infrastructure.output_buffer")
+
 
 @dataclass
 class OutputLine:
@@ -302,8 +304,8 @@ class BufferLogHandler(logging.Handler):
                 tag=tag,
                 context=context,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to write log line to output buffer: %s", exc)
 
 
 class _TeeWriter:

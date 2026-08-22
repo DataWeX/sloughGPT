@@ -56,8 +56,8 @@ def _emit_gen_event(event: str, data: dict) -> None:
     try:
         bus = _get_gen_bus()
         bus.emit_sync(event, data, source="model_server")
-    except Exception:
-        pass  # EventBus unavailable or disabled — generation still works
+    except Exception as exc:
+        logger.debug("EventBus emit failed: %s", exc)  # EventBus unavailable or disabled — generation still works
 
 
 # ---------------------------------------------------------------------------
@@ -1926,7 +1926,8 @@ class ModelServer:
                 _pre_tokenized = await asyncio.to_thread(
                     self._tokenizer, prompt, return_tensors="pt"
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("Pre-tokenization failed, using slow path: %s", exc)
                 _pre_tokenized = None
 
         start = time.time()

@@ -692,8 +692,8 @@ class TrainingDataPipeline:
             latest_export = self.exports_dir / "latest.jsonl"
             if latest_export.exists():
                 shutil.copy2(latest_export, backup_path / "latest.jsonl")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Export backup copy failed: %s", exc)
 
         return str(backup_path)
 

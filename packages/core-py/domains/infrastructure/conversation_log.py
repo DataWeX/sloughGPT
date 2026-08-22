@@ -13,12 +13,15 @@ Capture is opt-out via ``MAN_CAPTURE_CONVERSATIONS=0``.
 """
 
 import json
+import logging
 import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 from domains.shared import find_repo_root
+
+logger = logging.getLogger("slo.infrastructure.conversation_log")
 
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _DEFAULT_DIR = _REPO_ROOT / "datasets" / "api_conversations"
@@ -163,5 +166,6 @@ def capture(
             meta=meta,
         )
         return result is not None
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to log conversation turn: %s", exc)
         return False

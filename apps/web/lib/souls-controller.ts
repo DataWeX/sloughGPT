@@ -3,6 +3,9 @@
  */
 
 import { apiGet, apiPost, apiDelete, authFetch } from './http-client'
+import { logger } from './dev-log'
+
+const _log = logger.child('souls-controller')
 
 export interface Soul {
   name: string
@@ -79,7 +82,8 @@ export const soulsController = {
   async getCurrent(): Promise<Soul | null> {
     try {
       return await apiGet<Soul>('/souls/current')
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get current soul', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
@@ -159,7 +163,8 @@ export const soulsController = {
   async getSoul(name: string): Promise<Soul | null> {
     try {
       return await apiGet<Soul>(`/souls/${encodeURIComponent(name)}`)
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get soul', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
@@ -171,7 +176,8 @@ export const soulsController = {
   async checkpointInfo(name: string): Promise<Checkpoint | null> {
     try {
       return await apiGet<Checkpoint>(`/auto-train/checkpoints/${encodeURIComponent(name)}/info`)
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get checkpoint info', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
