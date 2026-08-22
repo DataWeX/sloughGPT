@@ -1261,16 +1261,17 @@ class InferenceRouter:
                     logger.warning("ResponseTracker.log failed: %s", e)
 
                 try:
-
-                    _post_gen_tasks.append(asyncio.to_thread(
-                        get_server_state().record_inference,
+                    get_server_state().record_inference(
                         tokens=tokens, elapsed_ms=duration_ms, model=_check_state.model_type or req.model,
-                    ))
+                    )
                 except Exception as e:
                     logger.warning("Failed to record inference metrics: %s", e)
 
                 if ctx_core and req.use_context_core:
-                    _post_gen_tasks.append(asyncio.to_thread(ctx_core.add_response, full_response, model=req.model))
+                    try:
+                        ctx_core.add_response(full_response, model=req.model)
+                    except Exception as e:
+                        logger.warning("ContextCore.add_response failed: %s", e)
 
                 try:
 
