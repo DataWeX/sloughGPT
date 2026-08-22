@@ -248,7 +248,6 @@ class KBRouter:
             label = lr.label
         except Exception as exc:
             logger.debug("Truth labeler unavailable: %s", exc)
-        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
         fact = KnowledgeFact(
             content=req.content,
@@ -797,7 +796,6 @@ class KBRouter:
                         texts.extend(chunks[:500])
                     except Exception as exc:
                         logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
-                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             # 3. Dataset files
             datasets_dir = REPO / "datasets"
@@ -809,7 +807,6 @@ class KBRouter:
                         texts.extend(chunks[:500])
                     except Exception as exc:
                         logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
-                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
             # Deduplicate
             seen = set()

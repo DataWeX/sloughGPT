@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -258,8 +259,8 @@ class TaskQueue:
         for cb in self._sse_callbacks:
             try:
                 cb(event, task)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("SSE callback %s failed: %s", cb, exc, exc_info=True)
         bus_event = f"task.{event}"
         self._emit_event(bus_event, task)
 
@@ -452,6 +453,24 @@ class TaskQueue:
         """Check pause/cancel events and run the task's handler."""
         raise NotImplementedError("Subclasses must implement _run_with_controls or set handler")
 
+    async def purge_completed(self, max_age_s: float = 3600.0) -> int:
+        """Remove completed/failed/cancelled tasks older than max_age_s.
+
+        Returns the number of tasks purged.
+        """
+        cutoff = time.time() - max_age_s
+        async with self._lock:
+            purged = 0
+            for store in (self._completed, self._failed, self._cancelled):
+                to_remove = [
+                    tid for tid, task in store.items()
+                    if task.completed_at and task.completed_at < cutoff
+                ]
+                for tid in to_remove:
+                    del store[tid]
+                    purged += 1
+        return purged
+
 
 class InProcessTaskQueue(TaskQueue):
     """TaskQueue that runs handlers via registered callbacks (no subprocess)."""
@@ -541,17 +560,28 @@ class InProcessTaskQueue(TaskQueue):
 # ── Singleton ──
 
 _default_queue: InProcessTaskQueue | None = None
+_task_queue_lock = threading.Lock()
 
 
 def get_task_queue() -> InProcessTaskQueue:
     global _default_queue
     if _default_queue is None:
-        from domains.infrastructure.resource_manager import get_resource_manager
-        n = get_resource_manager().task_queue_workers
-        _default_queue = InProcessTaskQueue(num_workers=n)
+        with _task_queue_lock:
+            if _default_queue is None:
+                from domains.infrastructure.resource_manager import get_resource_manager
+                n = get_resource_manager().task_queue_workers
+                _default_queue = InProcessTaskQueue(num_workers=n)
     return _default_queue
 
 
 def set_task_queue(queue: InProcessTaskQueue):
     global _default_queue
-    _default_queue = queue
+    with _task_queue_lock:
+        _default_queue = queue
+
+
+def reset_task_queue() -> None:
+    """Reset the singleton (for testing)."""
+    global _default_queue
+    with _task_queue_lock:
+        _default_queue = None

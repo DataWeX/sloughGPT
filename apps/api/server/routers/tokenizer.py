@@ -5,6 +5,7 @@ All business logic lives in ``packages/core-py/domains/training/tokenizer_manage
 This router just exposes manager methods as HTTP endpoints.
 """
 
+import asyncio
 import urllib.request
 
 from fastapi import APIRouter
