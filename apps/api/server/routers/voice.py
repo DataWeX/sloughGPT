@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import logging
+import time as _time
 from typing import Optional
 
 from fastapi import APIRouter
@@ -81,17 +82,11 @@ class VoiceRouter:
         self.router.add_api_route("/status", self.voice_status, methods=["GET"])
 
     async def text_to_speech(self, request: TTSRequest) -> TTSResponse:
-        """Convert text to speech audio.
-
-        Uses HuggingFace TTS model (bark-small) if available.
-        Returns base64-encoded WAV audio with sample rate metadata.
-
-        Falls back with a browser-fallback signal so the frontend
-        can use native speechSynthesis instead.
-        """
+        """Convert text to speech audio."""
         if not request.text.strip():
             raise_error("No text provided", "E_BAD_REQUEST", status_code=400)
 
+        _t0 = _time.monotonic()
         try:
             if self._tts_backend.load():
                 audio_bytes = await asyncio.to_thread(self._tts_backend.generate, request.text)
@@ -102,6 +97,8 @@ class VoiceRouter:
                     sr = wf.getframerate()
                     duration_ms = int(frames / sr * 1000) if sr > 0 else 0
 
+                _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                logger.info("TTS generated in %.1fms (duration=%dms)", _elapsed_ms, duration_ms)
                 return TTSResponse(
                     audio=base64.b64encode(audio_bytes).decode("utf-8"),
                     sample_rate=sr,

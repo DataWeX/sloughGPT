@@ -1,18 +1,16 @@
 """
 World Render Router — rendering endpoints for the programmable world.
-
-Provides endpoints to:
-- Render the current world state as an image
-- Get neural embeddings of the rendered scene
-- Run a simulation tick with rendering enabled
-- Get world statistics
 """
+import logging
+import time as _time
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
 from typing import Optional
 from pydantic import BaseModel, Field
 
 from schemas.common import success_response, raise_error
+
+logger = logging.getLogger("slo.routers.world_render")
 
 
 class RenderConfigRequest(BaseModel):
@@ -45,6 +43,7 @@ class WorldRenderRouter:
 
     async def render_world(self, config: RenderConfigRequest | None = None) -> dict:
         """Render the current world state and return state tensors."""
+        _t0 = _time.monotonic()
         try:
             from domains.shell.world_render import RenderBridge, RenderConfig
             from domains.shell.simulation import WorldGrid
@@ -66,8 +65,10 @@ class WorldRenderRouter:
 
             bridge.build_scene(world)
             tensors = bridge.render_state_tensors()
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
 
             shapes = {k: list(v.shape) for k, v in tensors.items()}
+            logger.info("World render in %.1fms (shapes=%s)", _elapsed_ms, list(shapes.keys()))
 
             return success_response(data={
                 "shapes": shapes,

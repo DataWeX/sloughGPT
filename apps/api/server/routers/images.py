@@ -288,17 +288,9 @@ class ImagesRouter:
         request: GenerateRequest,
         background_tasks: BackgroundTasks = None,
     ) -> dict:
-        """Generate an image from text description.
-
-        Creates an AI-generated image using procedural generation (no external APIs required).
-        Returns a base64-encoded PNG image.
-
-        Args:
-            request: GenerateRequest with prompt and style
-
-        Returns:
-            GenerateResponse with image data, style, prompt, and ID
-        """
+        """Generate an image from text description."""
+        import time as _time
+        _t0 = _time.monotonic()
         try:
             image_bytes = self._generate_image(request.prompt, request.style)
 
@@ -306,6 +298,7 @@ class ImagesRouter:
 
             base64_image = base64.b64encode(image_bytes).decode("utf-8")
             data_url = f"data:image/png;base64,{base64_image}"
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
 
             return GenerateResponse(
                 image=data_url,
@@ -315,7 +308,8 @@ class ImagesRouter:
             )
 
         except Exception as e:
-            logger.warning("Image generation failed: %s", e)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            logger.warning("Image generation failed: %s (elapsed=%.0fms)", e, _elapsed_ms)
             classify_and_raise(e, source="images_generate")
 
     async def list_gallery(self) -> dict:
