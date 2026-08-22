@@ -6,6 +6,9 @@
 
 import { apiPost, apiGet, streamSSE } from './http-client'
 import { modelController, type ModelStatus } from './model-controller'
+import { logger } from './dev-log'
+
+const _log = logger.child('chat-controller')
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -41,7 +44,8 @@ export const chatController = {
         session_id: data.session_id || options?.session_id || 'default',
         done: true,
       }
-    } catch {
+    } catch (err) {
+      _log.warning('chat endpoint failed, falling back to /inference/generate', { error: err instanceof Error ? err.message : String(err) })
       const fallback = await apiPost<{ text?: string }>(
         '/inference/generate',
         {
@@ -122,7 +126,8 @@ export const chatController = {
     try {
       const data = await apiGet<{ suggestions?: { text: string; icon: string }[] }>('/chat/suggestions')
       return data.suggestions || []
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to fetch suggestions', { error: err instanceof Error ? err.message : String(err) })
       return []
     }
   },
@@ -130,7 +135,8 @@ export const chatController = {
   async inspectContext(): Promise<ContextInspector | null> {
     try {
       return await apiGet<ContextInspector>('/context/inspect')
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to inspect context', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },

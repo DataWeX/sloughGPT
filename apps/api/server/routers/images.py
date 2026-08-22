@@ -10,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
 from schemas.common import raise_error, success_response, classify_and_raise
+from domains.infrastructure.logging import safe_audit_log
 
 logger = logging.getLogger("slo.routers.images")
 
@@ -299,6 +300,7 @@ class ImagesRouter:
             base64_image = base64.b64encode(image_bytes).decode("utf-8")
             data_url = f"data:image/png;base64,{base64_image}"
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("images.generate", resource=request.prompt[:80], detail=f"style={request.style} elapsed={_elapsed_ms:.0f}ms")
 
             return GenerateResponse(
                 image=data_url,

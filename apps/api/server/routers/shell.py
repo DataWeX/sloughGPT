@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from domains.shell.io import MemoryIO
 from domains.shell.repl import ShellREPL
 from domains.shell.runtime import DaitRuntime
+from domains.infrastructure.logging import safe_audit_log
 
 logger = logging.getLogger("slo.api.shell")
 
@@ -96,6 +97,8 @@ async def exec_command(req: ShellExecRequest):
 
     elapsed = (_time.monotonic() - t0) * 1000
 
+    safe_audit_log("shell.exec", resource=req.command[:80], detail=f"exit={exit_code} elapsed={elapsed:.0f}ms")
+
     return ShellExecResponse(
         output=output,
         exit_code=exit_code,
@@ -131,6 +134,7 @@ async def exec_command_stream(req: ShellExecRequest, request: Request):
                 yield _sse_line("shell", "STREAMING", "working", {"line": line, "index": i})
 
         elapsed = (_time.monotonic() - t0) * 1000
+        safe_audit_log("shell.exec_stream", resource=req.command[:80], detail=f"exit={exit_code} elapsed={elapsed:.0f}ms lines={len(output_lines)}")
         yield _sse_line("shell", "STREAMING", "complete", {
             "exit_code": exit_code,
             "lines": len(output_lines),

@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from schemas.common import raise_error, success_response
+from domains.infrastructure.logging import safe_audit_log
 
 logger = logging.getLogger("slo.routers.voice")
 
@@ -99,6 +100,7 @@ class VoiceRouter:
 
                 _elapsed_ms = (_time.monotonic() - _t0) * 1000
                 logger.info("TTS generated in %.1fms (duration=%dms)", _elapsed_ms, duration_ms)
+                safe_audit_log("voice.tts", resource=request.text[:80], detail=f"duration={duration_ms}ms elapsed={_elapsed_ms:.0f}ms")
                 return TTSResponse(
                     audio=base64.b64encode(audio_bytes).decode("utf-8"),
                     sample_rate=sr,
