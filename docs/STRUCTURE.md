@@ -1,6 +1,6 @@
 # Monorepo structure
 
-**Repository root** keeps packaging and primary entrypoints (`pyproject.toml`, `README.md`, `config.yaml`, `cli.py`, `sloughgpt_colab.ipynb`, `package.json` (optional npm: **`dev:stack`**, **`test:repo-root`**), `Makefile`, `verify.sh`, `install.sh`, `run.sh`, …). Secondary docs live under **`docs/`** (e.g. `docs/TODO.md`, `docs/INSTALL.md`, `docs/misc/`). Sample / auxiliary config files live under **`config/`** (see **`config/README.md`**). Runtime experiment, feature-store, tuning, and vector DB files live under **`data/`** (see **`data/README.md`**). Operational shell scripts live under **`scripts/deploy/`**; full local setup also uses **`scripts/setup.sh`**. Standalone Python utilities are in **`scripts/tools/`**; one-off legacy snippets are in **`scripts/legacy/`**.
+**Repository root** keeps packaging and primary entrypoints (`pyproject.toml`, `README.md`, `config.yaml`, `cli.py`, `sloughgpt_colab.ipynb`, `package.json` (optional npm: **`dev:stack`**, **`test:repo-root`**), `Makefile`, `verify.sh`, `install.sh`, `run.sh`, …). Secondary docs live under **`docs/`** (e.g. `docs/INSTALL.md`, `docs/misc/`). Sample / auxiliary config files live under **`config/`** (see **`config/README.md`**). Runtime experiment, feature-store, tuning, and vector DB files live under **`data/`**. Operational shell scripts live under **`scripts/deploy/`**; full local setup also uses **`scripts/setup.sh`**. Standalone Python utilities are in **`scripts/tools/`**; one-off legacy snippets are in **`scripts/legacy/`**.
 
 Lightweight layout:
 
