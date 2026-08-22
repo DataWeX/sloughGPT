@@ -699,8 +699,8 @@ def _mps_oom_recovery() -> None:
         from domains.infrastructure.ml_types import mps as ml_mps
         if _has_mps():
             ml_mps.empty_cache()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("MPS OOM recovery failed: %s", exc)
 
 
 _GC_COUNTER = 0
@@ -720,8 +720,8 @@ def _schedule_gc() -> None:
         return
     try:
         Thread(target=gc.collect, daemon=True).start()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("GC thread start failed: %s", exc)
 
 
 # ── Generate Backends ─────────────────────────────────────────────────────────

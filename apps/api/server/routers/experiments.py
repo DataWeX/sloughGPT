@@ -1,15 +1,19 @@
 """
 Experiments Router - ML experiment tracking
 """
+import json
+import logging
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional, Any
+
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional, Any
-from datetime import datetime, timezone
-import json
-import re
-from pathlib import Path
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+
+logger = logging.getLogger("slo.routers.experiments")
 
 
 class ExperimentCreate(BaseModel):
@@ -131,8 +135,8 @@ class ExperimentsRouter:
                         if line:
                             try:
                                 metrics.append(json.loads(line))
-                            except json.JSONDecodeError:
-                                pass
+                            except json.JSONDecodeError as e:
+                                logger.warning("Corrupt metric line in %s: %s", e_id, e)
             if params_file.exists():
                 with open(params_file) as f:
                     for line in f:
@@ -140,14 +144,14 @@ class ExperimentsRouter:
                         if line:
                             try:
                                 params.append(json.loads(line))
-                            except json.JSONDecodeError:
-                                pass
+                            except json.JSONDecodeError as e:
+                                logger.warning("Corrupt param line in %s: %s", e_id, e)
             if status_file.exists():
                 with open(status_file) as f:
                     try:
                         status = json.load(f)
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.warning("Corrupt status file %s: %s", status_file.name, e)
             return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
         except Exception as e:
             raise_error(f"Failed to read experiment data: {e}", "E_SERVER_ERROR", status_code=500)
