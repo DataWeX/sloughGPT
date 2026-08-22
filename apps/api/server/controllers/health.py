@@ -286,6 +286,17 @@ def _get_resource_allocation() -> Dict[str, Any]:
         return {}
 
 
+_cached_process: Optional["psutil.Process"] = None
+
+
+def _get_process() -> "psutil.Process":
+    """Return a cached psutil.Process instance for the current process."""
+    global _cached_process
+    if _cached_process is None:
+        _cached_process = psutil.Process()
+    return _cached_process
+
+
 def _get_process_info() -> Dict[str, Any]:
     """Compute real process metrics for the current server process.
 
@@ -302,9 +313,8 @@ def _get_process_info() -> Dict[str, Any]:
     """
     try:
         import gc
-        proc = psutil.Process()
+        proc = _get_process()
         info: Dict[str, Any] = {
-            "open_files": len(proc.open_files()),
             "threads": proc.num_threads(),
             "process_cpu_percent": round(proc.cpu_percent(interval=None), 1),
             "process_memory_percent": round(proc.memory_percent(), 1),

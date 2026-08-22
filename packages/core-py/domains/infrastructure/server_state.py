@@ -106,6 +106,7 @@ class ServerState:
         # Per-path latency accumulator: {path: deque[float]}
         self._path_latencies: dict[str, deque[float]] = {}
         self._path_latencies_max: int = 100
+        self._path_latencies_dict_max: int = 50
 
         # Inference-specific metrics
         self._inference_count: int = 0
@@ -118,6 +119,7 @@ class ServerState:
 
         # Per-model inference tracking: {model: {tokens, time_ms, count}}
         self._model_metrics: dict[str, dict] = {}
+        self._model_metrics_max: int = 20
 
         # Model lifecycle events (load/unload/error)
         self._model_events: deque[dict] = deque(maxlen=30)
@@ -132,6 +134,7 @@ class ServerState:
 
         # Rate limiting: {path: {window_start, count}}
         self._rate_limits: dict[str, dict] = {}
+        self._rate_limits_max: int = 100
         self._rate_limit_violations: deque[dict] = deque(maxlen=20)
 
         # Memory pressure tracking
@@ -395,8 +398,44 @@ class ServerState:
             if now - self._last_trend_ts < interval_s:
                 return
             self._last_trend_ts = now
+            self._purge_stale_dicts()
         self.record_health_snapshot()
         self.record_memory_snapshot()
+
+    def _purge_stale_dicts(self) -> None:
+        """Evict oldest entries from unbounded dicts to prevent memory leak.
+
+        Called from record_trend_snapshots (every ~5s). Caller must hold lock.
+        """
+        # _rate_limits: evict if over cap (keep most recent by window_start)
+        if len(self._rate_limits) > self._rate_limits_max:
+            sorted_paths = sorted(
+                self._rate_limits.items(),
+                key=lambda x: x[1].get("window_start", 0),
+            )
+            to_remove = sorted_paths[: len(sorted_paths) - self._rate_limits_max]
+            for path, _ in to_remove:
+                del self._rate_limits[path]
+
+        # _model_metrics: evict if over cap (keep models with highest count)
+        if len(self._model_metrics) > self._model_metrics_max:
+            sorted_models = sorted(
+                self._model_metrics.items(),
+                key=lambda x: x[1].get("count", 0),
+            )
+            to_remove = sorted_models[: len(sorted_models) - self._model_metrics_max]
+            for model, _ in to_remove:
+                del self._model_metrics[model]
+
+        # _path_latencies: evict if over cap (keep paths with most data points)
+        if len(self._path_latencies) > self._path_latencies_dict_max:
+            sorted_paths = sorted(
+                self._path_latencies.items(),
+                key=lambda x: len(x[1]),
+            )
+            to_remove = sorted_paths[: len(sorted_paths) - self._path_latencies_dict_max]
+            for path, _ in to_remove:
+                del self._path_latencies[path]
 
     def get_health_history(self, limit: int = 20) -> list[dict]:
         """Return health score history (oldest first, for charting)."""
