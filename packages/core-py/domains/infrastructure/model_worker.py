@@ -291,8 +291,8 @@ def _slo_worker_main(
             while not _hb_stop.is_set():
                 try:
                     hb_q.put_nowait(("alive", os.getpid()))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: heartbeat put failed: %s", exc)
                 _hb_stop.wait(timeout=5.0)
 
         hb_thread = _threading.Thread(target=_hb_tick, daemon=True)
@@ -363,8 +363,8 @@ def _slo_worker_main(
             if hb_q is not None:
                 try:
                     hb_q.put_nowait(("alive", os.getpid()))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: heartbeat put failed: %s", exc)
             decoded = provider._tokenizer.decode([tok_id])
             if decoded:
                 try:
@@ -618,8 +618,8 @@ def _hf_worker_main(
             if hb_q is not None:
                 try:
                     hb_q.put_nowait(("alive", os.getpid()))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: heartbeat put failed: %s", exc)
             try:
                 resp_q_inner.put(("token", session_id, text_chunk), timeout=_STREAM_PUT_TIMEOUT_S)
             except Exception as exc:
@@ -829,12 +829,12 @@ class ModelWorkerProcess:
             if q is not None:
                 try:
                     q.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: queue close failed for %s: %s", q_name, exc)
                 try:
                     q.join_thread()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: queue join_thread failed for %s: %s", q_name, exc)
 
     # ── Health ─────────────────────────────────────────────────────────
 
