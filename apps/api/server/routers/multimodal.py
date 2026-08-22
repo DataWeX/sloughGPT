@@ -544,6 +544,8 @@ class MultimodalRouter:
 
     async def create_visual_dataset(self, req: VisualDatasetRequest) -> dict:
         """create_visual_dataset."""
+        import time as _time
+        _t0 = _time.monotonic()
         image_dir = Path(req.image_dir).resolve()
         _REPO_ROOT = Path(__file__).resolve().parents[4]
         allowed_bases = {_REPO_ROOT / "datasets", _REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
@@ -579,8 +581,10 @@ class MultimodalRouter:
                     logger.debug("Suppressed exception in %s", __name__, exc_info=True)
                 f.write(json.dumps(entry) + "\n")
                 entries += 1
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("multimodal.visual_dataset", resource=req.name, detail=f"entries={entries} auto_caption={auto_captioned} elapsed={_elapsed_ms:.0f}ms")
         return success_response(data={"status": "created", "dataset": req.name, "path": str(output_path),
-                "entries": entries, "auto_captioned": auto_captioned})
+                "entries": entries, "auto_captioned": auto_captioned, "elapsed_ms": round(_elapsed_ms, 1)})
 
     # ── Checkpoints ──────────────────────────────────────────────────
 
@@ -648,6 +652,7 @@ class MultimodalRouter:
         if getattr(mgr, "_replay_buffer", None):
             mgr._replay_buffer.clear()
         mgr._multimodal_engine = None
+        logger.info("Multimodal engine reset: all state cleared")
         safe_audit_log("multimodal.reset", resource="all")
         return success_response(data={"status": "ok", "message": "Multimodal engine reset"})
 

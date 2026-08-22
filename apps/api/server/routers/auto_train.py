@@ -756,6 +756,7 @@ class AutoTrainRouter:
         if _auto_train_cancel_event is not None:
             safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelling")
             return {"status": "cancelling", "message": "Cancelling auto-training"}
+        safe_audit_log("training.stop", detail="not_running")
         return {"status": "stopped"}
 
     async def pause(self) -> dict:

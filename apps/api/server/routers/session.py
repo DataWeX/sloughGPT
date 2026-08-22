@@ -98,10 +98,9 @@ class SessionRouter:
 
         Combines session context, knowledge stats, trait weights, manager
         modes, and workspace memory into a single response. Fetches all
-        data sources concurrently.
+        sources concurrently for low latency.
         """
-        from domains.infrastructure.session_core import SessionCore
-        from domains.feedback.message_feedback import get_message_feedback
+        _inspector_start = time.time()
         try:
             def _fetch_messages():
                 return SessionCore.get_messages(session_id)
@@ -162,6 +161,7 @@ class SessionRouter:
                 asyncio.to_thread(_fetch_traits),
                 asyncio.to_thread(_fetch_workspace),
             )
+            _elapsed_ms = round((time.time() - _inspector_start) * 1000)
 
             return success_response(data={
                 "session": {
@@ -178,6 +178,7 @@ class SessionRouter:
                     "thumbs_down": fb_stats.get("thumbs_down", 0),
                 },
                 "workspace": workspace,
+                "elapsed_ms": _elapsed_ms,
             })
 
         except Exception as e:
