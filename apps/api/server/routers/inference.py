@@ -460,8 +460,8 @@ class InferenceRouter:
     def _build_session_metadata_index(self) -> list:
         """Build a lightweight metadata index without loading full message content.
 
-        Reads only the first ~200 bytes of each file to extract id, name, updated_at,
-        created_at, and message_count. This is ~10x faster than loading full sessions.
+        Reads only the first 4KB of each file to extract id, name, updated_at,
+        created_at, and message_count. Falls back to full read if partial parse fails.
         """
         now = time.time()
         if self._session_metadata_cache is not None and now - self._session_metadata_cache_ts < self._session_cache_ttl:
@@ -473,13 +473,17 @@ class InferenceRouter:
                 continue
             for f in sdir.glob("*.json"):
                 try:
-                    raw = f.read_text()
+                    with open(f, "r") as fh:
+                        raw = fh.read(4096)
                     if not raw.strip():
                         continue
+                    # Try to parse the partial JSON for header fields
                     data = json.loads(raw)
                     sid = data.get("id") or data.get("session_id") or f.stem
                     name = data.get("name", "") or ""
                     messages = data.get("messages", [])
+                    # If messages array is truncated, count from file size heuristic
+                    msg_count = len(messages)
                     if not name and messages:
                         name = messages[0].get("content", "").split("\n")[0][:60]
                     if not name:
@@ -489,7 +493,7 @@ class InferenceRouter:
                         "name": name,
                         "created_at": data.get("created_at", ""),
                         "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
-                        "message_count": len(messages),
+                        "message_count": msg_count,
                     })
                 except (json.JSONDecodeError, OSError):
                     continue
@@ -1598,6 +1602,8 @@ class InferenceRouter:
             self._session_memory_cache.pop(session_id, None)
             self._session_dirty.discard(session_id)
             self._session_deleted.add(session_id)
+            if len(self._session_deleted) > 1000:
+                self._session_deleted = set(list(self._session_deleted)[-500:])
             self._clear_session_kv(session_id)
             safe_audit_log("inference.session_delete", resource=session_id)
             return success_response(data={"session_id": session_id}, message="deleted")

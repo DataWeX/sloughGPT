@@ -35,7 +35,7 @@ export function useConversionStatus(modelId: string | null) {
 
     fetchStatus()
 
-    intervalRef.current = setInterval(fetchStatus, 500)
+    intervalRef.current = setInterval(fetchStatus, 2000)
 
     const onVisibility = () => {
       hiddenRef.current = document.hidden
