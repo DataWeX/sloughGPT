@@ -143,7 +143,11 @@ class BenchmarkRouter:
 
     async def run_benchmark(self, model: str = "gpt2") -> dict:
         """Run model benchmark - returns real metrics"""
-        return success_response(data=self._get_model_metrics(model))
+        _t0 = _time.monotonic()
+        result = self._get_model_metrics(model)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("benchmark.run", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms")
+        return success_response(data=result)
 
     async def get_model_metrics(self, model: str = "gpt2") -> dict:
         """Return real-time metrics for the currently loaded model.
@@ -162,7 +166,11 @@ class BenchmarkRouter:
             Reads the ModelsController for inference counters.
             Returns model_loaded=False if no provider is resident.
         """
-        return success_response(data=self._get_model_metrics(model))
+        _t0 = _time.monotonic()
+        result = self._get_model_metrics(model)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("benchmark.metrics", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms")
+        return success_response(data=result)
 
     async def get_benchmark_by_id(self, model_id: str) -> dict:
         """Return benchmark results for a specific model.
@@ -178,7 +186,11 @@ class BenchmarkRouter:
         Side effects:
             Reads the ServerState singleton for the active provider.
         """
-        return success_response(data=self._get_model_metrics(model_id))
+        _t0 = _time.monotonic()
+        result = self._get_model_metrics(model_id)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("benchmark.get", resource=model_id, detail=f"elapsed={_elapsed_ms:.0f}ms")
+        return success_response(data=result)
 
     async def calculate_perplexity(self, text: str = "Sample text for evaluation") -> dict:
         """Calculate next-token perplexity on text using the active SloNet model.
@@ -196,6 +208,7 @@ class BenchmarkRouter:
             - May materialize a lazy guard-backed model in the parent process
               for the duration of the forward pass.
         """
+        _t0 = _time.monotonic()
         try:
             from domains.infrastructure.server_state import get_server_state
 
@@ -211,6 +224,9 @@ class BenchmarkRouter:
                 raise_error("Input produced fewer than 2 tokens", "E_BAD_REQUEST", status_code=400)
 
             perplexity, loss = _numpy_perplexity(model, ids)
+
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("benchmark.perplexity", resource="model", detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)} perplexity={round(perplexity, 2)}")
 
             return success_response(data={
                 "text": text[:30],
@@ -235,11 +251,15 @@ class BenchmarkRouter:
         Returns coherence_score, quality_score, repetition_rate, etc.
         Uses BenchmarkDomain for clean architecture.
         """
+        _t0 = _time.monotonic()
         try:
             from domains import get_benchmark_domain
 
             bench = get_benchmark_domain()
-            return success_response(data=bench.evaluate_latest(limit=limit))
+            result = bench.evaluate_latest(limit=limit)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("benchmark.quality", resource="responses", detail=f"elapsed={_elapsed_ms:.0f}ms limit={limit}")
+            return success_response(data=result)
         except Exception as e:
             logger.warning("Quality metrics failed: %s", e)
             classify_and_raise(e, source="benchmark")
@@ -250,11 +270,15 @@ class BenchmarkRouter:
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get recent logged responses for review."""
+        _t0 = _time.monotonic()
         try:
             from domains.feedback.response_tracker import get_response_tracker
 
             tracker = get_response_tracker()
             responses = tracker.get_responses(limit=limit, model=model)
+
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("benchmark.responses", resource="log", detail=f"elapsed={_elapsed_ms:.0f}ms count={len(responses)}")
 
             return success_response(data={
                 "responses": [
@@ -276,11 +300,15 @@ class BenchmarkRouter:
 
     async def get_tracker_stats(self) -> Dict[str, Any]:
         """Get response tracker statistics - uses BenchmarkDomain."""
+        _t0 = _time.monotonic()
         try:
             from domains import get_benchmark_domain
 
             bench = get_benchmark_domain()
-            return success_response(data=bench.get_stats())
+            result = bench.get_stats()
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("benchmark.stats", resource="tracker", detail=f"elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data=result)
         except Exception as e:
             logger.warning("Tracker stats failed: %s", e)
             classify_and_raise(e, source="benchmark")

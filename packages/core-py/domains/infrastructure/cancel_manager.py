@@ -56,8 +56,8 @@ def _emit_op_event(action: str, op: "Operation") -> None:
             },
             source="cancel_manager",
         )
-    except Exception:
-        pass  # Never let event emission break cancellation logic
+    except Exception as exc:
+        logger.debug("EventBus emit failed in CancelManager: %s", exc)  # Never let event emission break cancellation logic
 
 
 # ── Operation types ────────────────────────────────────────────────────
