@@ -288,6 +288,8 @@ class MultimodalRouter:
 
     async def train_video(self, req: VideoTrainRequest) -> dict:
         """train_video."""
+        import time as _time
+        _t0 = _time.monotonic()
         with self._video_training_lock:
             if self._video_training_state["status"] == "running":
                 raise_error("Video training already in progress", "E_INFRA_BUSY")
@@ -324,7 +326,8 @@ class MultimodalRouter:
         from domains.training.executor import get_training_executor
         executor = get_training_executor()
         executor.submit(_run, f"vtrain_{job_id}")
-        safe_audit_log("multimodal.train", resource=req.data_path or job_id, detail="video", epochs=req.epochs, batch_size=req.batch_size)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("multimodal.train", resource=req.data_path or job_id, detail=f"video elapsed={_elapsed_ms:.0f}ms", epochs=req.epochs, batch_size=req.batch_size)
         return success_response(data={"status": "started", "job_id": job_id, "data_path": req.data_path})
 
     async def video_infer(self, req: VideoInferRequest) -> dict:
@@ -393,6 +396,8 @@ class MultimodalRouter:
 
     async def analyze_image(self, file: UploadFile = File(...)) -> dict:
         """analyze_image."""
+        import time as _time
+        _t0 = _time.monotonic()
         if not file.content_type or not file.content_type.startswith("image/"):
             raise_error("Only image files accepted", "E_BAD_REQUEST")
         mgr = self._ensure_initialized()
@@ -406,12 +411,14 @@ class MultimodalRouter:
             engine = getattr(mgr, "_multimodal_engine", None)
             buf = getattr(mgr, "_replay_buffer", None)
             accuracy_history = getattr(mgr, "_accuracy_history", [])
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
             return success_response(data={
                 "caption": cap.text, "confidence": cap.confidence, "tags": cap.tags or [],
                 "accuracy": cap.accuracy, "supervised": cap.accuracy > 0,
                 "images_learned": learning, "trained": getattr(engine, "_trained", False) if engine else False,
                 "replay_buffer_size": buf.size if buf else 0,
                 "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
+                "elapsed_ms": round(_elapsed_ms, 1),
             })
         except Exception as e:
             logger.warning("Multimodal analyze image failed: %s", e)
@@ -477,6 +484,8 @@ class MultimodalRouter:
 
     async def transcribe_audio(self, file: UploadFile = File(...), language: str = Form("en")) -> dict:
         """transcribe_audio."""
+        import time as _time
+        _t0 = _time.monotonic()
         if not file.content_type or not file.content_type.startswith("audio/"):
             raise_error("Only audio files accepted", "E_BAD_REQUEST")
         mgr = self._ensure_initialized()
@@ -484,14 +493,17 @@ class MultimodalRouter:
             raise_error("Server ASR not available.", "E_NOT_IMPLEMENTED", status_code=501)
         try:
             result = mgr.recognize_speech(await file.read(), language=language)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
             return success_response(data={"text": result.text, "confidence": result.confidence,
-                    "language": result.language or language, "duration": result.duration})
+                    "language": result.language or language, "duration": result.duration, "elapsed_ms": round(_elapsed_ms, 1)})
         except Exception as e:
             logger.warning("Multimodal transcribe failed: %s", e)
             classify_and_raise(e, source="multimodal_transcribe")
 
     async def synthesize_speech(self, text: str = Form(...)) -> dict:
         """synthesize_speech."""
+        import time as _time
+        _t0 = _time.monotonic()
         try:
             from domains.multimodal.tts import TTSEngine
             import base64, io, wave, numpy as np
@@ -505,8 +517,9 @@ class MultimodalRouter:
                 wf.setsampwidth(2)
                 wf.setframerate(tts.sample_rate)
                 wf.writeframes((waveform * 32767).astype(np.int16).tobytes())
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
             return success_response(data={"audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
-                    "text": text, "duration_sec": len(waveform) / tts.sample_rate})
+                    "text": text, "duration_sec": len(waveform) / tts.sample_rate, "elapsed_ms": round(_elapsed_ms, 1)})
         except Exception as e:
             logger.warning("Multimodal TTS failed: %s", e)
             classify_and_raise(e, source="multimodal_tts")

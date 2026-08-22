@@ -75,12 +75,15 @@ class WorkflowRouter:
         workflow = self._get_workflow()
         if action == "aggregate":
             logger.info("Workflow action triggered: aggregate")
+            safe_audit_log("workflow.trigger", resource="aggregate")
             return workflow.trigger_aggregate()
         elif action == "prune":
             logger.info("Workflow action triggered: prune")
+            safe_audit_log("workflow.trigger", resource="prune")
             return workflow.trigger_prune()
         elif action == "export":
             logger.info("Workflow action triggered: export")
+            safe_audit_log("workflow.trigger", resource="export")
             return workflow.trigger_export()
         else:
             raise_error(f"Unknown action: {action}", "E_BAD_REQUEST", status_code=400)

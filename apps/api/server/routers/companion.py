@@ -122,6 +122,7 @@ class CompanionRouter:
             confidence=merged.get("confidence", current.get("confidence", 0.5)),
             humor=merged.get("humor", current.get("humor", 0.4)),
         )
+        safe_audit_log("companion.patch", detail=f"fields={list(updates.keys())}")
         return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
 
     async def reset_companion(self) -> dict:
@@ -149,6 +150,7 @@ class CompanionRouter:
         from domains.companion import create_companion
 
         self._companion = create_companion(name=req.name, personality=req.preset)
+        safe_audit_log("companion.preset", resource=req.preset, detail=f"name={req.name}")
 
         return success_response(data={
             "status": "ok",

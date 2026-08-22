@@ -12,7 +12,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response, raise_error
+from schemas.common import success_response, raise_error, safe_audit_log
 
 
 # ---------- request / response models ----------
@@ -172,15 +172,18 @@ class AuthRouter:
             """
             user = self._users.find_one({"username": req.username})
             if not user:
+                safe_audit_log("auth.login_failed", resource=req.username, detail="user_not_found")
                 raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
             uid = user["_id"]
             if not self._verify_password(req.password, user.get("password_hash", "")):
+                safe_audit_log("auth.login_failed", resource=req.username, detail="invalid_password")
                 raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
             if not user.get("password_hash", "").startswith("v1:"):
                 user["password_hash"] = self._hash_password(req.password)
                 self._save_user(uid, user)
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
             token = jwt_auth.create_token(user_id=uid)
+            safe_audit_log("auth.login_success", resource=uid, detail=f"username={req.username}")
             return AuthResponse(
                 token=token,
                 user=UserInfo(id=uid, username=user["username"], email=user["email"]),
@@ -214,6 +217,7 @@ class AuthRouter:
             self._save_user(uid, user_data)
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
             token = jwt_auth.create_token(user_id=uid)
+            safe_audit_log("auth.register", resource=uid, detail=f"username={req.username}")
             return AuthResponse(
                 token=token,
                 user=UserInfo(id=uid, username=req.username, email=req.email),
@@ -307,6 +311,7 @@ class AuthRouter:
             new_token = jwt_auth.refresh_token(token)
             if not new_token:
                 raise_error("Invalid or expired token", "E_AUTH_MISSING", status_code=401)
+            safe_audit_log("auth.token_refresh")
             return TokenResponse(access_token=new_token, token_type="bearer", expires_in=exp_hours * 3600)
 
         self.router.add_api_route("/login", login, methods=["POST"], response_model=AuthResponse)
