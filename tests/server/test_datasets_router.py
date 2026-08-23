@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.datasets import DatasetsRouter
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 
 @pytest.fixture
@@ -23,6 +24,7 @@ def router(tmp_path):
 @pytest.fixture
 def app(router):
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router.router)
     return _app
 
@@ -427,7 +429,7 @@ class TestImportHuggingface:
         result.total_chars = 100
         result.output_path = "/tmp/hf"
         result.error = None
-        mock_cls.return_value.download_dataset.return_value = result
+        mock_cls.return_value.downloadDataset.return_value = result
         resp = client.post("/datasets/import/huggingface", json={"dataset_id": "org/myds"})
         assert resp.status_code == 200
         body = resp.json()
@@ -441,7 +443,7 @@ class TestImportHuggingface:
         result.error = "download failed"
         result.files_imported = 0
         result.total_chars = 0
-        mock_cls.return_value.download_dataset.return_value = result
+        mock_cls.return_value.downloadDataset.return_value = result
         resp = client.post("/datasets/import/huggingface", json={"dataset_id": "org/myds"})
         assert resp.status_code == 400
         assert resp.json()["detail"] == "download failed"

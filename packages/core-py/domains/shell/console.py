@@ -796,6 +796,29 @@ class Console:
         self._emit("log_viewer", {"message": message})
         return self._interactive.log_viewer(logs, message)
 
+    def config_editor(self, config: dict[str, str | int | float | bool],
+                      message: str = "Config:") -> dict[str, str | int | float | bool]:
+        """Interactive config editor for key-value pairs."""
+        self._emit("config_editor", {"message": message})
+        return self._interactive.config_editor(config, message)
+
+    def diff_viewer(self, old: str, new: str, message: str = "Diff:") -> str:
+        """Interactive side-by-side diff viewer."""
+        self._emit("diff_viewer", {"message": message})
+        return self._interactive.diff_viewer(old, new, message)
+
+    def interactive_search(self, items: list[str], preview_fn: Callable[[str], str] | None = None,
+                           message: str = "Search:") -> str | None:
+        """Interactive search with type-to-filter and optional preview."""
+        self._emit("interactive_search", {"message": message})
+        return self._interactive.interactive_search(items, preview_fn, message)
+
+    def wizard(self, steps: list[dict[str, str | list[str] | None]],
+               message: str = "Wizard") -> dict[str, str]:
+        """Multi-step wizard with labeled steps."""
+        self._emit("wizard", {"message": message})
+        return self._interactive.wizard(steps, message)
+
     def progress_step(self, steps: list[str], current: int, done: bool = False) -> None:
         """Display a step-by-step progress indicator."""
         self._emit("progress_step", {"current": current, "done": done})

@@ -2972,3 +2972,167 @@ class TestSelectWithFilterAndConfirmFallback:
         c = Console(io, has_readline=False)
         result = c.select_with_filter_and_confirm("Pick:", ["A", "B"])
         assert result in ["A", "B"]
+
+
+# ── history_search fallback ───────────────────────────────────────────────────
+
+class TestHistorySearchFallback:
+    def test_history_search_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        result = p.history_search(["ls", "cd", "pwd"])
+        assert result in ["ls", "cd", "pwd"]
+
+    def test_history_search_empty(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.history_search([])
+        assert result is None
+
+    def test_console_history_search(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.history_search(["cmd1", "cmd2"])
+        assert result in ["cmd1", "cmd2"]
+
+
+# ── process_manager fallback ─────────────────────────────────────────────────
+
+class TestProcessManagerFallback:
+    def test_process_manager_returns_dict(self):
+        p, io = _make_prompt(feeds=["1"])
+        result = p.process_manager([{"name": "train", "status": "running"}])
+        assert result is not None
+        assert result["name"] == "train"
+
+    def test_process_manager_empty(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.process_manager([])
+        assert result is None
+
+    def test_console_process_manager(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.process_manager([{"name": "job1", "status": "running"}])
+        assert result is not None
+
+
+# ── log_viewer fallback ──────────────────────────────────────────────────────
+
+class TestLogViewerFallback:
+    def test_log_viewer_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        result = p.log_viewer(["INFO: started", "ERROR: failed"])
+        assert result in ["INFO: started", "ERROR: failed"]
+
+    def test_log_viewer_empty(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.log_viewer([])
+        assert result is None
+
+    def test_console_log_viewer(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.log_viewer(["log1", "log2"])
+        assert result in ["log1", "log2"]
+
+
+# ── config_editor fallback ────────────────────────────────────────────────────
+
+class TestConfigEditorFallback:
+    def test_config_editor_returns_dict(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.config_editor({"host": "localhost", "port": 8000})
+        assert isinstance(result, dict)
+        assert result["host"] == "localhost"
+
+    def test_config_editor_empty(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.config_editor({})
+        assert result == {}
+
+    def test_console_config_editor(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.config_editor({"key": "val"})
+        assert result["key"] == "val"
+
+
+# ── diff_viewer fallback ─────────────────────────────────────────────────────
+
+class TestDiffViewerFallback:
+    def test_diff_viewer_returns_string(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.diff_viewer("old", "new")
+        assert result == "new"
+
+    def test_diff_viewer_same(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.diff_viewer("same", "same")
+        assert result == "same"
+
+    def test_console_diff_viewer(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.diff_viewer("a", "b")
+        assert result == "b"
+
+
+# ── interactive_search fallback ──────────────────────────────────────────────
+
+class TestInteractiveSearchFallback:
+    def test_interactive_search_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        result = p.interactive_search(["apple", "banana", "cherry"])
+        assert result in ["apple", "banana", "cherry"]
+
+    def test_interactive_search_with_preview(self):
+        def preview(item):
+            return f"Info: {item}"
+        p, io = _make_prompt(feeds=["1"])
+        result = p.interactive_search(["x", "y"], preview_fn=preview)
+        assert result in ["x", "y"]
+
+    def test_console_interactive_search(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.interactive_search(["a", "b"])
+        assert result in ["a", "b"]
+
+
+# ── wizard fallback ──────────────────────────────────────────────────────────
+
+class TestWizardFallback:
+    def test_wizard_returns_dict(self):
+        p, io = _make_prompt(feeds=["hello", ""])
+        result = p.wizard([
+            {"label": "Name", "type": "input", "default": ""},
+            {"label": "OK", "type": "confirm", "default": "true"},
+        ])
+        assert isinstance(result, dict)
+        assert "Name" in result
+
+    def test_wizard_with_select(self):
+        p, io = _make_prompt(feeds=["1", ""])
+        result = p.wizard([
+            {"label": "Choice", "type": "select", "options": ["A", "B"]},
+        ])
+        assert isinstance(result, dict)
+
+    def test_console_wizard(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("val")
+        c = Console(io, has_readline=False)
+        result = c.wizard([{"label": "X", "type": "input", "default": ""}])
+        assert "X" in result

@@ -1952,6 +1952,329 @@ class InteractivePrompt:
         except (termios.error, OSError):
             return logs[-1] if logs else None
 
+    # ── Config editor ─────────────────────────────────────────────────
+
+    def config_editor(self, config: dict[str, str | int | float | bool],
+                      message: str = "Config:") -> dict[str, str | int | float | bool]:
+        """Interactive config editor for key-value pairs."""
+        if not self._is_tty:
+            return config
+        return self._config_editor_raw(config, message)
+
+    def _config_editor_raw(self, config: dict[str, str | int | float | bool],
+                           message: str) -> dict[str, str | int | float | bool]:
+        fd = self._get_fd()
+        keys = list(config.keys())
+        idx = 0
+        editing = False
+        edit_buf = ""
+
+        def _render() -> str:
+            lines = []
+            for i, key in enumerate(keys):
+                val = config[key]
+                val_str = str(val)
+                if editing and i == idx:
+                    lines.append(f"  {_REVERSE}{_CYAN}>> {key} = {edit_buf}\u2502{_RESET_REVERSE}{_RESET}")
+                else:
+                    prefix = ">> " if i == idx else "   "
+                    color = _CYAN if i == idx else ""
+                    reset = _RESET if i == idx else ""
+                    lines.append(f"  {prefix}{color}{key} = {val_str}{_RESET}")
+            help_text = f"  {_DIM}(arrows=navigate, enter=edit, esc=save){_RESET}" if not editing else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
+                + "\n".join(lines)
+                + f"\n{help_text}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(3 + len(keys)):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if editing:
+                        if key.kind == _KEY_ENTER:
+                            val = config[keys[idx]]
+                            if isinstance(val, bool):
+                                config[keys[idx]] = edit_buf.lower() in ("true", "1", "yes")
+                            elif isinstance(val, int):
+                                try:
+                                    config[keys[idx]] = int(edit_buf)
+                                except ValueError:
+                                    config[keys[idx]] = val
+                            elif isinstance(val, float):
+                                try:
+                                    config[keys[idx]] = float(edit_buf)
+                                except ValueError:
+                                    config[keys[idx]] = val
+                            else:
+                                config[keys[idx]] = edit_buf
+                            editing = False
+                        elif key.kind == _KEY_ESC:
+                            editing = False
+                        elif key.kind == _KEY_CHAR:
+                            if key.char == "\x7f":
+                                edit_buf = edit_buf[:-1]
+                            else:
+                                edit_buf += key.char
+                        elif key.kind == _KEY_BACKSPACE:
+                            edit_buf = edit_buf[:-1]
+                    else:
+                        if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                            _clear(); return config
+                        if key.kind == _KEY_ENTER:
+                            editing = True
+                            edit_buf = str(config[keys[idx]])
+                        if key.kind == _KEY_UP:
+                            idx = (idx - 1) % len(keys)
+                        elif key.kind == _KEY_DOWN:
+                            idx = (idx + 1) % len(keys)
+        except (termios.error, OSError):
+            return config
+
+    # ── Diff viewer ───────────────────────────────────────────────────
+
+    def diff_viewer(self, old: str, new: str, message: str = "Diff:") -> str:
+        """Interactive side-by-side diff viewer."""
+        if not self._is_tty:
+            return new
+        return self._diff_viewer_raw(old, new, message)
+
+    def _diff_viewer_raw(self, old: str, new: str, message: str) -> str:
+        fd = self._get_fd()
+        old_lines = old.splitlines()
+        new_lines = new.splitlines()
+        scroll = 0
+        max_visible = 20
+
+        def _render() -> str:
+            visible_old = old_lines[scroll:scroll + max_visible]
+            visible_new = new_lines[scroll:scroll + max_visible]
+            lines = []
+            max_len = max(len(visible_old), len(visible_new))
+            for i in range(max_len):
+                old_line = visible_old[i] if i < len(visible_old) else ""
+                new_line = visible_new[i] if i < len(visible_new) else ""
+                old_display = old_line[:35] + "..." if len(old_line) > 35 else old_line
+                new_display = new_line[:35] + "..." if len(new_line) > 35 else new_line
+                if old_line != new_line:
+                    lines.append(
+                        f"  {_RED}{old_display:<38}{_RESET} {_GREEN}{new_display}{_RESET}"
+                    )
+                else:
+                    lines.append(
+                        f"  {_DIM}{old_display:<38}{_RESET} {_DIM}{new_display}{_RESET}"
+                    )
+            if not lines:
+                lines = [f"  {_DIM}(no differences){_RESET}"]
+            pos = f"  {_DIM}{scroll + 1}-{min(scroll + max_visible, max(len(old_lines), len(new_lines)))}/{max(len(old_lines), len(new_lines))}{_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows=scroll){_RESET}\n"
+                + "\n".join(lines)
+                + f"\n{pos}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(3 + max_visible + 1):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC, _KEY_ENTER):
+                        _clear(); return new
+                    if key.kind == _KEY_UP:
+                        scroll = max(0, scroll - 1)
+                    elif key.kind == _KEY_DOWN:
+                        max_scroll = max(0, max(len(old_lines), len(new_lines)) - max_visible)
+                        scroll = min(max_scroll, scroll + 1)
+                    elif key.kind == _KEY_PAGE_UP:
+                        scroll = max(0, scroll - max_visible)
+                    elif key.kind == _KEY_PAGE_DOWN:
+                        max_scroll = max(0, max(len(old_lines), len(new_lines)) - max_visible)
+                        scroll = min(max_scroll, scroll + max_visible)
+        except (termios.error, OSError):
+            return new
+
+    # ── Interactive search ────────────────────────────────────────────
+
+    def interactive_search(self, items: list[str], preview_fn: Callable[[str], str] | None = None,
+                           message: str = "Search:") -> str | None:
+        """Interactive search with type-to-filter and optional preview."""
+        if not self._is_tty:
+            return self._select_fallback(message, items[:10]) if items else None
+        return self._interactive_search_raw(items, preview_fn, message)
+
+    def _interactive_search_raw(self, items: list[str],
+                                preview_fn: Callable[[str], str] | None,
+                                message: str) -> str | None:
+        fd = self._get_fd()
+        query = ""
+        idx = 0
+
+        def _filtered() -> list[str]:
+            if not query:
+                return items
+            q = query.lower()
+            return [i for i in items if q in i.lower()]
+
+        def _render() -> str:
+            flt = _filtered()
+            preview_str = ""
+            if preview_fn and flt:
+                preview_text = preview_fn(flt[idx])
+                preview_lines = preview_text.split("\n")[:5]
+                preview_str = "\n".join(f"  {_DIM}{line}{_RESET}" for line in preview_lines)
+            lines = []
+            for i, item in enumerate(flt):
+                prefix = ">> " if i == idx else "   "
+                color = _CYAN if i == idx else ""
+                reset = _RESET if i == idx else ""
+                display = item[:50] + "..." if len(item) > 50 else item
+                lines.append(f"  {prefix}{color}{display}{_RESET}")
+            if not lines:
+                lines = [f"  {_DIM}(no matches){_RESET}"]
+            count = f"  {_DIM}{len(flt)}/{len(items)} results{_RESET}"
+            query_display = f"  {_BOLD}Search:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to search{_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, type=search){_RESET}\n"
+                + query_display
+                + "\n" + "\n".join(lines)
+                + f"\n{count}\n{preview_str}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(4 + len(items[:50])):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    flt = _filtered()
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return None
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return flt[idx] if flt else None
+                    if key.kind == _KEY_UP:
+                        idx = (idx - 1) % max(len(flt), 1)
+                    elif key.kind == _KEY_DOWN:
+                        idx = (idx + 1) % max(len(flt), 1)
+                    elif key.kind == _KEY_CHAR:
+                        if key.char == "\x7f":
+                            query = query[:-1]
+                        else:
+                            query += key.char
+                        idx = 0
+                    elif key.kind == _KEY_BACKSPACE:
+                        query = query[:-1]
+                        idx = 0
+        except (termios.error, OSError):
+            flt = _filtered()
+            return flt[0] if flt else None
+
+    # ── Wizard builder ────────────────────────────────────────────────
+
+    def wizard(self, steps: list[dict[str, str | list[str] | None]],
+               message: str = "Wizard") -> dict[str, str]:
+        """Multi-step wizard with labeled steps.
+
+        Each step is a dict with:
+            'label': step label
+            'type': 'input' | 'select' | 'confirm'
+            'options': list of options (for select type)
+            'default': default value
+        """
+        if not self._is_tty:
+            return {s.get("label", f"step{i}"): str(s.get("default", ""))
+                    for i, s in enumerate(steps)}
+        return self._wizard_raw(steps, message)
+
+    def _wizard_raw(self, steps: list[dict[str, str | list[str] | None]],
+                    message: str) -> dict[str, str]:
+        fd = self._get_fd()
+        results: dict[str, str] = {}
+        current = 0
+
+        def _render() -> str:
+            lines = []
+            for i, step in enumerate(steps):
+                label = str(step.get("label", f"Step {i + 1}"))
+                step_type = str(step.get("type", "input"))
+                if i < current:
+                    lines.append(f"  {_GREEN}\u2713{_RESET} {label}")
+                elif i == current:
+                    lines.append(f"  {_CYAN}\u25b6{_RESET} {_BOLD}{label}{_RESET}  {_DIM}({step_type}){_RESET}")
+                else:
+                    lines.append(f"  {_DIM}\u25fb{label}{_RESET}")
+            step = steps[current]
+            label = str(step.get("label", f"Step {current + 1}"))
+            step_type = str(step.get("type", "input"))
+            help_text = f"  {_DIM}Step {current + 1}/{len(steps)} — {step_type}{_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
+                + "\n".join(lines)
+                + f"\n{help_text}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(3 + len(steps)):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while current < len(steps):
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    step = steps[current]
+                    label = str(step.get("label", f"step{current}"))
+                    step_type = str(step.get("type", "input"))
+                    default = str(step.get("default", ""))
+                    if step_type == "confirm":
+                        result = self._confirm_fallback(f"  {label}?", default.lower() in ("true", "1", "yes"))
+                        results[label] = str(result)
+                        current += 1
+                    elif step_type == "select":
+                        options = step.get("options", []) or []
+                        if options:
+                            result = self._select_fallback(f"  {label}", [str(o) for o in options])
+                            results[label] = result
+                            current += 1
+                        else:
+                            current += 1
+                    else:
+                        result = self._ask_fallback(f"  {label}", default)
+                        results[label] = result
+                        current += 1
+                _clear()
+                return results
+        except (termios.error, OSError):
+            _clear()
+            return results
+
     # ── Color picker ───────────────────────────────────────────────────
 
     def color_picker_rgb(self, message: str, default: str = "#ffffff") -> str:
