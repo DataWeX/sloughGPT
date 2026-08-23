@@ -409,7 +409,8 @@ class ShellREPL(LinuxCommandsMixin):
             color = risk_colors.get(risk, _C_RED)
             self._print(f"  {_C_YELLOW}\u26a1 {cmd}{_C_RESET} requires {_C_BOLD}{color}{risk}{_C_RESET} permissions.")
             try:
-                answer = self.console.ask("Allow this command? [y/N/always]", default="n")
+                self.io.write(f"  Allow this command? [y/N/always] [{_DIM}n{_RESET}]: ", end="")
+                answer = self.io.read("").strip().lower()
             except (EOFError, KeyboardInterrupt):
                 answer = ""
             if answer == "always":
@@ -2951,6 +2952,115 @@ Examples:
 
         self._print(f"  Job {job_id} still running after {max_polls} polls — detached")
 
+    def _cmd_models(self, args: str = "") -> None:
+        """List available models."""
+        if not self._require_api("models"):
+            return
+        try:
+            models = self._spinner_call("Fetching models", lambda: self.cmds.models(), ok_msg=None)
+            if not models:
+                self._print("  No models available")
+                return
+            rows = []
+            for m in models:
+                name = m.get("name", m.get("id", "?"))
+                mtype = m.get("type", m.get("backend", ""))
+                status = "loaded" if m.get("loaded") else ""
+                rows.append([name, mtype, status])
+            self._table(rows, ["Model", "Type", "Status"])
+        except Exception as e:
+            self._print(f"  Error: {e}")
+
+    def _cmd_souls(self, args: str = "") -> None:
+        """List available souls."""
+        if not self._require_api("souls"):
+            return
+        try:
+            souls = self._spinner_call("Fetching souls", lambda: self.cmds.souls(), ok_msg=None)
+            if not souls:
+                self._print("  No souls available")
+                return
+            for s in souls:
+                name = s.get("name", "?")
+                desc = s.get("description", "")
+                current = " (active)" if s.get("current") else ""
+                line = f"  {name}{current}"
+                if desc:
+                    line += f"  — {desc}"
+                self._print(line)
+        except Exception as e:
+            self._print(f"  Error: {e}")
+
+    def _cmd_datasets(self, args: str = "") -> None:
+        """List datasets."""
+        if not self._require_api("datasets"):
+            return
+        try:
+            datasets = self._spinner_call("Fetching datasets", lambda: self.cmds.datasets(), ok_msg=None)
+            if not datasets:
+                self._print("  No datasets available")
+                return
+            for d in datasets:
+                name = d.get("name", "?")
+                count = d.get("count", d.get("rows", ""))
+                size = d.get("size", "")
+                info = f"  {name}"
+                if count:
+                    info += f"  ({count} rows)"
+                if size:
+                    info += f"  {size}"
+                self._print(info)
+        except Exception as e:
+            self._print(f"  Error: {e}")
+
+    def _cmd_knowledge(self, args: str = "") -> None:
+        """List or search knowledge base entries."""
+        if not self._require_api("knowledge"):
+            return
+        try:
+            if args.strip():
+                results = self._spinner_call("Searching", lambda: self.cmds.search_knowledge(args.strip()), ok_msg=None)
+                if not results:
+                    self._print("  No results found")
+                    return
+                for r in results[:10]:
+                    score = r.get("score", 0)
+                    path = r.get("path", "?")
+                    line = r.get("line", "")
+                    text = r.get("text", r.get("content", ""))[:80]
+                    self._print(f"  [{score:.3f}] {path}:{line}  {text}")
+            else:
+                results = self._spinner_call("Fetching knowledge", lambda: self.cmds.list_knowledge(), ok_msg=None)
+                if not results:
+                    self._print("  No knowledge entries")
+                    return
+                for r in results[:20]:
+                    self._print(f"  {r.get('content', r.get('text', '?'))[:80]}")
+        except Exception as e:
+            self._print(f"  Error: {e}")
+
+    def _cmd_checkpoints(self, args: str = "") -> None:
+        """List training checkpoints."""
+        if not self._require_api("checkpoints"):
+            return
+        try:
+            cps = self._spinner_call("Fetching checkpoints", lambda: self.cmds.checkpoints(), ok_msg=None)
+            if not cps:
+                self._print("  No checkpoints available")
+                return
+            for cp in cps:
+                name = cp.get("name", "?")
+                step = cp.get("step", cp.get("global_step", ""))
+                loss = cp.get("loss", "")
+                info = f"  {name}"
+                if step:
+                    info += f"  step {step}"
+                if loss:
+                    info += f"  loss={loss}"
+                self._print(info)
+        except Exception as e:
+            self._print(f"  Error: {e}")
+
     def _cmd_gen(self, args: str = "") -> None:
         if not args:
             self._print("  Usage: gen <prompt>")
@@ -3269,8 +3379,6 @@ Examples:
         status = self.os.api_status
         if not status.get("available"):
             self._print("  \u2717 API server is not connected. Use \u2018api start\u2019 to launch it.")
-            self._print("  Falling back to keyword matching...")
-            self._interpret_natural(args)
             return
 
         available_commands = "\n".join(
@@ -3343,37 +3451,6 @@ Examples:
                 self._print(f"  \u274c AI server is not running. Start it with: api start")
             else:
                 self._print(f"  \u274c AI interpretation failed: {error}")
-            self._print("  Falling back to keyword matching...")
-            self._interpret_natural(args)
-
-    def _interpret_natural(self, query: str) -> None:
-        """Keyword-based NL fallback when LLM is unavailable."""
-        q = query.lower()
-        if any(w in q for w in ["process", "job", "running", "ps", "procs"]):
-            self._execute_single("procs")
-        elif any(w in q for w in ["model", "models"]):
-            self._print(self._execute_single("models"), end="")
-        elif any(w in q for w in ["soul", "personality"]):
-            self._print(self._execute_single("whoami"), end="")
-        elif any(w in q for w in ["health", "status"]):
-            self._print(self._execute_single("health"), end="")
-        elif any(w in q for w in ["dataset", "data"]):
-            self._print(self._execute_single("datasets"), end="")
-        elif any(w in q for w in ["knowledge", "fact"]):
-            self._print(self._execute_single("knowledge"), end="")
-        elif any(w in q for w in ["checkpoint"]):
-            self._print(self._execute_single("checkpoints"), end="")
-        elif any(w in q for w in ["finetune", "trained"]):
-            self._print(self._execute_single("finetuned"), end="")
-        elif any(w in q for w in ["metric", "cpu", "memory", "disk"]):
-            self._print(self._execute_single("metrics"), end="")
-        elif any(w in q for w in ["tokenizer", "vocab"]):
-            self._print(self._execute_single("tokenizer"), end="")
-        elif any(w in q for w in ["help", "command"]):
-            self._cmd_help()
-        else:
-            self._print(f"  Unknown query: {query}")
-            self._print("  Try: ai show me running processes")
 
     def _show_welcome(self) -> None:
         """Show first-run welcome message."""
@@ -4701,6 +4778,11 @@ _shell_commands = {
     "gen": ShellREPL._cmd_gen,
     "chat": ShellREPL._cmd_chat,
     "ai": ShellREPL._cmd_ai,
+    "models": ShellREPL._cmd_models,
+    "souls": ShellREPL._cmd_souls,
+    "datasets": ShellREPL._cmd_datasets,
+    "knowledge": ShellREPL._cmd_knowledge,
+    "checkpoints": ShellREPL._cmd_checkpoints,
     "agents": ShellREPL._cmd_agents,
     "tutorial": ShellREPL._cmd_tutorial,
     "read": ShellREPL._cmd_read,

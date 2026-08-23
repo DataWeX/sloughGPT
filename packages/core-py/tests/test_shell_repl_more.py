@@ -825,39 +825,42 @@ class TestCheckPermission:
         assert repl._check_permission("help", "") is True
 
     def test_non_interactive_denied(self, repl):
+        repl._perms._granted.discard("mount")
         repl.console._has_readline = False
-        out = capture_cmd(repl, repl._check_permission, "fdisk", "", False)
+        out = capture_cmd(repl, repl._check_permission, "mount", "", False)
         repl.console._has_readline = True
         assert repl._last_exit_code == 0
         assert "Permission denied" in out
         assert "risk=" in out
 
     def test_interactive_yes_grants_session(self, repl, monkeypatch):
+        repl._perms._granted.discard("mount")
         monkeypatch.setattr(repl.console, "ask", lambda msg, default="": "y")
-        repl._check_permission("fdisk", "", True)
-        assert "fdisk" in repl._perms._granted
+        repl._check_permission("mount", "", True)
+        assert "mount" in repl._perms._granted
 
     def test_interactive_no_denies(self, repl, monkeypatch):
+        repl._perms._granted.discard("mount")
         monkeypatch.setattr(repl.console, "ask", lambda msg, default="": "N")
-        repl._check_permission("fdisk", "", True)
-        assert "fdisk" not in repl._perms._granted
+        repl._check_permission("mount", "", True)
+        assert "mount" not in repl._perms._granted
 
     def test_interactive_always_grants_persistent(self, repl, tmp_path, monkeypatch):
         db_path = str(tmp_path / "perms_db")
         monkeypatch.setattr(repl._perms, "_col", None)
         repl._perms.__init__(db_path)
+        repl._perms._granted.discard("mount")
         monkeypatch.setattr(repl.console, "ask", lambda msg, default="": "always")
-        repl._check_permission("fdisk", "", True)
-        assert "fdisk" in repl._perms._granted
+        repl._check_permission("mount", "", True)
+        assert "mount" in repl._perms._granted
 
     def test_interactive_eof_denies(self, repl, monkeypatch):
-        repl._perms._granted.discard("fdisk")
+        repl._perms._granted.discard("mount")
         def raise_eof(msg, default=""):
             raise EOFError
         monkeypatch.setattr(repl.console, "ask", raise_eof)
-        repl._check_permission("fdisk", "", True)
-        assert "fdisk" not in repl._perms._granted
-        assert "rm" not in repl._perms._granted
+        repl._check_permission("mount", "", True)
+        assert "mount" not in repl._perms._granted
 
 
 class TestPermitDeny:

@@ -227,12 +227,12 @@ class TestVmBuiltins:
     def test_returns_10_programs(self, client):
         resp = client.get("/vm/builtins")
         assert resp.status_code == 200
-        programs = resp.json()["programs"]
+        programs = resp.json()["data"]["programs"]
         assert len(programs) >= 10
 
     def test_programs_have_name_and_description(self, client):
         resp = client.get("/vm/builtins")
-        programs = resp.json()["programs"]
+        programs = resp.json()["data"]["programs"]
         for p in programs:
             assert "name" in p
             assert "description" in p
@@ -245,12 +245,12 @@ class TestVmBuiltins:
 
     def test_builtin_names_unique(self, client):
         resp = client.get("/vm/builtins")
-        names = [p["name"] for p in resp.json()["programs"]]
+        names = [p["name"] for p in resp.json()["data"]["programs"]]
         assert len(names) == len(set(names))
 
     def test_all_builtin_descriptions_nonempty(self, client):
         resp = client.get("/vm/builtins")
-        for p in resp.json()["programs"]:
+        for p in resp.json()["data"]["programs"]:
             assert len(p["description"]) > 0
 
 
@@ -263,7 +263,7 @@ class TestVmInfo:
     def test_returns_required_fields(self, client):
         resp = client.get("/vm/info")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert "isa" in body
         assert "max_steps" in body
         assert "registers" in body
@@ -271,13 +271,13 @@ class TestVmInfo:
 
     def test_registers_include_eax_esp(self, client):
         resp = client.get("/vm/info")
-        regs = resp.json()["registers"]
+        regs = resp.json()["data"]["registers"]
         assert "EAX" in regs
         assert "ESP" in regs
 
     def test_features_list_nonempty(self, client):
         resp = client.get("/vm/info")
-        features = resp.json()["features"]
+        features = resp.json()["data"]["features"]
         assert len(features) > 0
         assert isinstance(features, list)
 
@@ -287,11 +287,11 @@ class TestVmInfo:
 
     def test_default_isa_fields(self, client):
         resp = client.get("/vm/info")
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["max_steps"] == 1000000
         assert body["default_memory"] == 0x100000
         assert body["max_memory"] == 0x1000000
 
     def test_x86_32_isa(self, client):
         resp = client.get("/vm/info")
-        assert resp.json()["isa"] == "x86-32"
+        assert resp.json()["data"]["isa"] == "x86-32"

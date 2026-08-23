@@ -394,12 +394,16 @@ class TestTrain:
             min_frequency=3,
         )
 
-    @patch("apps.api.server.routers.tokenizer.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     @patch(MGR_TARGET)
     def test_train_empty_texts_downloads_default(self, mock_get_mgr, mock_urlopen):
         mgr = _mock_manager()
         mock_get_mgr.return_value = mgr
-        mock_urlopen.return_value.read.return_value = b"line1\nline2\nline3\n"
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"line1\nline2\nline3\n"
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
 
         resp = client.post("/tokenizer/train", json={"vocab_size": 64, "texts": []})
         assert resp.status_code == 200
@@ -419,13 +423,17 @@ class TestTrain:
             min_frequency=3,
         )
 
-    @patch("apps.api.server.routers.tokenizer.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     @patch(MGR_TARGET)
     def test_train_missing_body(self, mock_get_mgr, mock_urlopen):
         mgr = _mock_manager()
         mgr.stats.return_value = {"vocab_size": 256}
         mock_get_mgr.return_value = mgr
-        mock_urlopen.return_value.read.return_value = b"line1\nline2\n"
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"line1\nline2\n"
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
         resp = client.post("/tokenizer/train", json={})
         assert resp.status_code == 200
 

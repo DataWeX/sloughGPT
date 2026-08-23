@@ -73,6 +73,7 @@ class TestGenerate:
         mock_prov = MagicMock()
         mock_prov.chat = AsyncMock(return_value="Hello world")
         mock_get_provider.return_value = mock_prov
+        MOCK_STATE.provider = mock_prov
 
         resp = client.post("/inference/generate", json={"prompt": "Hi", "max_new_tokens": 16})
         assert resp.status_code == 200
@@ -87,6 +88,7 @@ class TestGenerate:
         mock_prov = MagicMock()
         mock_prov.chat = AsyncMock(side_effect=RuntimeError("inference failed"))
         mock_get_provider.return_value = mock_prov
+        MOCK_STATE.provider = mock_prov
 
         resp = client.post("/inference/generate", json={"prompt": "Hi"})
         assert resp.status_code == 500

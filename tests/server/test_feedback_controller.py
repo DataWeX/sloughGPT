@@ -18,8 +18,7 @@ def ctrl(tmp_path):
 class TestInit:
     def test_creates_dirs(self, tmp_path):
         ctrl = FeedbackController(tmp_path)
-        assert ctrl.feedback_dir.exists()
-        assert ctrl.conversations_dir.exists()
+        assert ctrl._db is not None
 
     def test_workflow_initially_none(self, ctrl):
         assert ctrl._workflow is None
@@ -107,12 +106,9 @@ class TestFeedbackStats:
         assert stats["total"] == 0
 
     def test_stats_after_record(self, ctrl):
-        # Write feedback directly to test stats
-        fb_file = ctrl.feedback_dir / "feedback.jsonl"
-        with open(fb_file, "w") as f:
-            f.write(json.dumps({"rating": "thumbs_up", "message_id": "m1"}) + "\n")
-            f.write(json.dumps({"rating": "thumbs_down", "message_id": "m2"}) + "\n")
-            f.write(json.dumps({"rating": "thumbs_up", "message_id": "m3"}) + "\n")
+        ctrl._feedback.insert_one({"rating": "thumbs_up", "message_id": "m1"})
+        ctrl._feedback.insert_one({"rating": "thumbs_down", "message_id": "m2"})
+        ctrl._feedback.insert_one({"rating": "thumbs_up", "message_id": "m3"})
         stats = ctrl.get_stats()
         assert stats["thumbs_up"] == 2
         assert stats["thumbs_down"] == 1
@@ -124,9 +120,7 @@ class TestFeedbackStats:
         assert result is None
 
     def test_get_feedback_found(self, ctrl):
-        fb_file = ctrl.feedback_dir / "feedback.jsonl"
-        with open(fb_file, "w") as f:
-            f.write(json.dumps({"message_id": "m1", "rating": "thumbs_up"}) + "\n")
+        ctrl._feedback.insert_one({"message_id": "m1", "rating": "thumbs_up"})
         result = ctrl.get_feedback("m1")
         assert result is not None
         assert result["rating"] == "thumbs_up"
@@ -280,17 +274,13 @@ class TestTriggerHFDpo:
 
 class TestFeedbackEdgeCases:
     def test_get_feedback_returns_first_match(self, ctrl):
-        fb_file = ctrl.feedback_dir / "feedback.jsonl"
-        with open(fb_file, "w") as f:
-            f.write(json.dumps({"message_id": "m1", "rating": "thumbs_up"}) + "\n")
-            f.write(json.dumps({"message_id": "m1", "rating": "thumbs_down"}) + "\n")
+        ctrl._feedback.insert_one({"message_id": "m1", "rating": "thumbs_up"})
+        ctrl._feedback.insert_one({"message_id": "m1", "rating": "thumbs_down"})
         result = ctrl.get_feedback("m1")
         assert result["rating"] == "thumbs_up"
 
     def test_stats_unknown_rating_counts_total(self, ctrl):
-        fb_file = ctrl.feedback_dir / "feedback.jsonl"
-        with open(fb_file, "w") as f:
-            f.write(json.dumps({"message_id": "m1", "rating": "neutral"}) + "\n")
+        ctrl._feedback.insert_one({"message_id": "m1", "rating": "neutral"})
         stats = ctrl.get_stats()
         assert stats["total"] == 1
         assert stats["thumbs_up"] == 0

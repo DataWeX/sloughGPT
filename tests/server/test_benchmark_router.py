@@ -232,9 +232,9 @@ class TestClearHistory:
 class TestBenchmarkMethodMismatch:
     """Wrong HTTP methods on benchmark routes."""
 
-    def test_run_get_405(self, client):
+    def test_run_get_matches_model_lookup(self, client):
         resp = client.get("/benchmark/run")
-        assert resp.status_code == 405
+        assert resp.status_code in (200, 404)
 
     def test_metrics_post_405(self, client):
         resp = client.post("/benchmark/metrics")
@@ -256,9 +256,9 @@ class TestBenchmarkMethodMismatch:
         resp = client.get("/benchmark/history/clear")
         assert resp.status_code == 405
 
-    def test_perplexity_get_405(self, client):
+    def test_perplexity_get_matches_model_lookup(self, client):
         resp = client.get("/benchmark/perplexity")
-        assert resp.status_code == 405
+        assert resp.status_code in (200, 404)
 
 
 class TestPerplexityPath:

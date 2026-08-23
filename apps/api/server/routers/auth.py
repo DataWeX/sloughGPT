@@ -149,7 +149,7 @@ class AuthRouter:
         user = self._users.find_one({"_id": user_id})
         if not user:
             raise_error("User not found", "E_AUTH_MISSING", status_code=401)
-        return success_response(data={"id": user_id, "username": user["username"], "email": user["email"]})
+        return {"id": user_id, "username": user["username"], "email": user["email"]}
 
     # ---------- route registration ----------
 
