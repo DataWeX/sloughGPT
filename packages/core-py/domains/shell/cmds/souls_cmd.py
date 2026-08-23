@@ -33,8 +33,15 @@ def run(argv: list[str], out: Console, api: ShellCommands,
     if cmd == "switch":
         soul_name = " ".join(argv[1:]) if len(argv) > 1 else ""
         if not soul_name:
-            out.print("  Usage: switch <soul_name>")
-            return 1
+            souls = []
+            with out.spinner("Fetching souls") as s:
+                souls = api.souls()
+            s.ok("Souls loaded")
+            if not souls:
+                out.print("  No souls available")
+                return 1
+            names = [s.get("name", s.get("id", "?")) for s in souls]
+            soul_name = out.select("Switch to soul:", names)
         with out.spinner("Switching soul") as s:
             result = api.switch_soul(soul_name)
         s.ok(f"Switched to {soul_name}")

@@ -1221,6 +1221,45 @@ class Console:
         self._emit("spinner_with_messages", {"message": message})
         self._interactive.spinner_with_messages(message, messages, duration)
 
+    def multi_select_with_filter(self, message: str, options: list[str],
+                                 default: list[str] | None = None) -> list[str]:
+        """Multi-select with type-to-filter."""
+        self._emit("multi_select_with_filter", {"message": message})
+        return self._interactive.multi_select_with_filter(message, options, default)
+
+    def confirm_with_countdown_and_preview(self, message: str, preview: str,
+                                           timeout: int = 10,
+                                           default: bool = True) -> bool:
+        """Confirm with preview and countdown."""
+        self._emit("confirm_with_countdown_and_preview", {"message": message})
+        return self._interactive.confirm_with_countdown_and_preview(message, preview, timeout, default)
+
+    def progress_bar_with_steps(self, label: str, steps: list[str],
+                                current_step: int, width: int = 30) -> None:
+        """Display a multi-step progress bar."""
+        self._emit("progress_bar_with_steps", {"label": label})
+        self._interactive.progress_bar_with_steps(label, steps, current_step, width)
+
+    def spinner_with_eta_message(self, message: str, total: int,
+                                 duration: float = 3.0) -> None:
+        """Display a spinner with ETA message."""
+        self._emit("spinner_with_eta_message", {"message": message})
+        self._interactive.spinner_with_eta_message(message, total, duration)
+
+    def table_with_search_and_preview(self, headers: list[str],
+                                      rows: list[list[str]],
+                                      preview_fn: Callable[[list[str]], str]) -> list[str]:
+        """Searchable table with live preview."""
+        self._emit("table_with_search_and_preview", {})
+        return self._interactive.table_with_search_and_preview(headers, rows, preview_fn)
+
+    def select_with_filter_and_confirm(self, message: str,
+                                       options: list[str],
+                                       default: str = "") -> str:
+        """Select with type-to-filter and confirm."""
+        self._emit("select_with_filter_and_confirm", {"message": message})
+        return self._interactive.select_with_filter_and_confirm(message, options, default)
+
     def select_with_filter_and_preview(self, message: str,
                                        options: list[str],
                                        preview_fn: Callable[[str], str]) -> str:

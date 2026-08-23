@@ -2845,3 +2845,130 @@ class TestSelectWithPreviewAndCountdownFallback:
         c = Console(io, has_readline=False)
         result = c.select_with_preview_and_countdown("Pick:", ["A", "B"], preview, timeout=5)
         assert result in ["A", "B"]
+
+
+# ── multi_select_with_filter fallback ─────────────────────────────────────────
+
+class TestMultiSelectWithFilterFallback:
+    def test_multi_select_with_filter_returns_list(self):
+        p, io = _make_prompt(feeds=["1"])
+        result = p.multi_select_with_filter("Pick:", ["A", "B", "C"])
+        assert isinstance(result, list)
+
+    def test_multi_select_with_filter_with_default(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.multi_select_with_filter("Pick:", ["X", "Y"], default=["X"])
+        assert isinstance(result, list)
+
+    def test_console_multi_select_with_filter(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.multi_select_with_filter("Pick:", ["A", "B"])
+        assert isinstance(result, list)
+
+
+# ── confirm_with_countdown_and_preview fallback ──────────────────────────────
+
+class TestConfirmWithCountdownAndPreviewFallback:
+    def test_confirm_with_countdown_and_preview_default(self):
+        p, io = _make_prompt(feeds=[""])
+        assert p.confirm_with_countdown_and_preview("Apply?", "diff", timeout=1) is True
+
+    def test_confirm_with_countdown_and_preview_n(self):
+        p, io = _make_prompt(feeds=["n"])
+        assert p.confirm_with_countdown_and_preview("OK?", "preview", timeout=5) is False
+
+    def test_console_confirm_with_countdown_and_preview(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("y")
+        c = Console(io, has_readline=False)
+        assert c.confirm_with_countdown_and_preview("Apply?", "text", timeout=5) is True
+
+
+# ── progress_bar_with_steps ──────────────────────────────────────────────────
+
+class TestProgressBarWithSteps:
+    def test_progress_bar_with_steps_does_not_crash(self):
+        p, io = _make_prompt()
+        p.progress_bar_with_steps("Build", ["compile", "link", "test"], 0)
+        assert len(io._output) > 0
+
+    def test_progress_bar_with_steps_middle(self):
+        p, io = _make_prompt()
+        p.progress_bar_with_steps("Build", ["compile", "link", "test"], 1)
+        assert len(io._output) > 0
+
+    def test_console_progress_bar_with_steps(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar_with_steps("Task", ["a", "b", "c"], 2)
+        assert len(io._output) > 0
+
+
+# ── spinner_with_eta_message fallback ────────────────────────────────────────
+
+class TestSpinnerWithEtaMessageFallback:
+    def test_spinner_with_eta_message_does_not_crash(self):
+        p, io = _make_prompt()
+        p.spinner_with_eta_message("Loading", 100, duration=0.1)
+        assert len(io._output) > 0
+
+    def test_spinner_with_eta_message_contains_message(self):
+        p, io = _make_prompt()
+        p.spinner_with_eta_message("Building", 50, duration=0.1)
+        output = io._output[0]
+        assert "Building" in output
+
+    def test_console_spinner_with_eta_message(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.spinner_with_eta_message("Working", 100, duration=0.1)
+        assert len(io._output) > 0
+
+
+# ── table_with_search_and_preview fallback ───────────────────────────────────
+
+class TestTableWithSearchAndPreviewFallback:
+    def test_table_with_search_and_preview_returns_row(self):
+        def preview(row):
+            return f"Details: {row[0]}"
+        p, io = _make_prompt(feeds=["1"])
+        result = p.table_with_search_and_preview(["Name"], [["A"], ["B"]], preview)
+        assert result in [["A"], ["B"]]
+
+    def test_console_table_with_search_and_preview(self):
+        def preview(row):
+            return f"Info: {row[0]}"
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.table_with_search_and_preview(["A"], [["X"], ["Y"]], preview)
+        assert result in [["X"], ["Y"]]
+
+
+# ── select_with_filter_and_confirm fallback ──────────────────────────────────
+
+class TestSelectWithFilterAndConfirmFallback:
+    def test_select_with_filter_and_confirm_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        result = p.select_with_filter_and_confirm("Pick:", ["A", "B", "C"])
+        assert result in ["A", "B", "C"]
+
+    def test_select_with_filter_and_confirm_with_default(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.select_with_filter_and_confirm("Pick:", ["X", "Y"], default="Y")
+        assert result in ["X", "Y"]
+
+    def test_console_select_with_filter_and_confirm(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.select_with_filter_and_confirm("Pick:", ["A", "B"])
+        assert result in ["A", "B"]

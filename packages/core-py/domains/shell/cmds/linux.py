@@ -385,9 +385,7 @@ class LinuxCommandsMixin:
                 _shutil.copytree(src, dst, dirs_exist_ok=True)
             else:
                 if interactive and os.path.exists(dst):
-                    self._print(f"  cp: overwrite '{paths[1]}'? ")
-                    ans = input().strip().lower()
-                    if ans not in ("y", "yes"):
+                    if not self.console.confirm_overwrite(paths[1]):
                         self._last_exit_code = 1
                         return
                 _shutil.copy2(src, dst) if preserve else _shutil.copy(src, dst)
@@ -436,9 +434,7 @@ class LinuxCommandsMixin:
         src, dst = os.path.expanduser(paths[0]), os.path.expanduser(paths[1])
         try:
             if interactive and os.path.exists(dst):
-                self._print(f"  mv: overwrite '{paths[1]}'? ")
-                ans = input().strip().lower()
-                if ans not in ("y", "yes"):
+                if not self.console.confirm_overwrite(paths[1]):
                     self._last_exit_code = 1
                     return
             os.rename(src, dst)
