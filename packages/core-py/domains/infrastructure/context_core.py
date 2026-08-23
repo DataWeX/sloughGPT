@@ -79,7 +79,6 @@ Be concise, accurate, and helpful."""
 
         # Session context
         self.session_messages: List[Dict[str, str]] = []
-        self.session_messages_max: int = 200
         self.session_id: Optional[str] = None
 
         # Working memory (Miller's law: 7 +/- 2 items)
@@ -95,10 +94,7 @@ Be concise, accurate, and helpful."""
 
         # Long-term memory (in-memory, persisted separately)
         self.episodic_memory: Dict[str, List[Dict]] = {}
-        self.episodic_memory_max_per_session: int = 100
-        self.episodic_memory_max_sessions: int = 50
         self.semantic_memory: Dict[str, Dict] = {}
-        self.semantic_memory_max: int = 500
         self.sensory_buffer: List[Dict] = []
 
         # RAG
@@ -176,16 +172,12 @@ Be concise, accurate, and helpful."""
     def add_message(self, role: str, content: str) -> None:
         """Add message to session."""
         self.session_messages.append({"role": role, "content": content})
-        if len(self.session_messages) > self.session_messages_max:
-            self.session_messages = self.session_messages[-self.session_messages_max:]
         self._add_sensory(f"User message: {content[:50]}...")
         self._to_working({"role": role, "content": content})
 
     def add_response(self, content: str, model: str = "gpt2") -> None:
         """Add assistant response."""
         self.session_messages.append({"role": "assistant", "content": content})
-        if len(self.session_messages) > self.session_messages_max:
-            self.session_messages = self.session_messages[-self.session_messages_max:]
         self._add_sensory(f"Response: {content[:50]}...")
         self._to_working({"role": "assistant", "content": content, "model": model})
 
@@ -209,29 +201,17 @@ Be concise, accurate, and helpful."""
     def _consolidate_episode(self, item: Dict) -> None:
         """Consolidate to episodic memory."""
         if self.session_id:
-            if self.session_id not in self.episodic_memory:
-                self.episodic_memory[self.session_id] = []
             self.episodic_memory[self.session_id].append({
                 "content": item,
                 "timestamp": datetime.now().isoformat(),
                 "importance": 1.0,
             })
-            if len(self.episodic_memory[self.session_id]) > self.episodic_memory_max_per_session:
-                self.episodic_memory[self.session_id] = self.episodic_memory[self.session_id][-self.episodic_memory_max_per_session:]
-            if len(self.episodic_memory) > self.episodic_memory_max_sessions:
-                oldest = sorted(self.episodic_memory.keys(), key=lambda k: self.episodic_memory[k][0].get("timestamp", "") if self.episodic_memory[k] else "")[:len(self.episodic_memory) - self.episodic_memory_max_sessions]
-                for k in oldest:
-                    del self.episodic_memory[k]
 
     def store_fact(self, key: str, value: Any) -> None:
         """Store in semantic memory."""
         if key in self.semantic_memory:
             self.semantic_memory[key]["strength"] += 0.1
-            self.semantic_memory[key]["accessed"] = datetime.now().isoformat()
         else:
-            if len(self.semantic_memory) >= self.semantic_memory_max:
-                weakest = min(self.semantic_memory.keys(), key=lambda k: self.semantic_memory[k].get("strength", 0))
-                del self.semantic_memory[weakest]
             self.semantic_memory[key] = {
                 "value": value,
                 "strength": 1.0,
@@ -357,7 +337,8 @@ Be concise, accurate, and helpful."""
                 parts.append(f"[Doc: {r.id}] {text}")
 
             return "\n".join(parts)
-        except Exception:
+        except Exception as e:
+            logger.warning("Vector store RAG query failed, falling back to semantic memory: %s", e)
             # Fallback to semantic memory
             facts = self.search_semantic(query, limit=self.rag_top_k)
             if facts:

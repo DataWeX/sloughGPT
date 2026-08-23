@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController, type WorkflowStatus } from '@/lib/workflow-controller'
+import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 interface WorkflowCardProps {
   onRefresh?: () => void
@@ -12,14 +14,15 @@ interface WorkflowCardProps {
 export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
   const [status, setStatus] = useState<WorkflowStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const addToast = useToastStore((s) => s.addToast)
 
   const refetch = useCallback(async () => {
     setLoading(true)
     try {
       const s = await workflowController.status()
       setStatus(s)
-    } catch {
-      // silent
+    } catch (e: unknown) {
+      logger.warning('Workflow status fetch failed', { exception: String(e) })
     } finally {
       setLoading(false)
     }
@@ -37,8 +40,11 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       try {
         const s = await workflowController.status()
         if (gen === generation) { setStatus(s); failures = 0 }
-      } catch {
-        if (gen === generation) failures++
+      } catch (e: unknown) {
+        if (gen === generation) {
+          failures++
+          logger.warning('Workflow poll failed', { exception: String(e) })
+        }
       } finally {
         if (gen === generation) setLoading(false)
         fetching = false
@@ -63,8 +69,9 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       await workflowController.start()
       await refetch()
       onRefresh?.()
-    } catch {
-      // silent
+    } catch (e: unknown) {
+      logger.warning('Workflow start failed', { exception: String(e) })
+      addToast('Failed to start workflow', 'error')
     }
   }
 
@@ -73,8 +80,9 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       await workflowController.stop()
       await refetch()
       onRefresh?.()
-    } catch {
-      // silent
+    } catch (e: unknown) {
+      logger.warning('Workflow stop failed', { exception: String(e) })
+      addToast('Failed to stop workflow', 'error')
     }
   }
 
