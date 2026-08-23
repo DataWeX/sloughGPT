@@ -408,7 +408,7 @@ class TestImportGithub:
             "url": "https://github.com/org/repo", "name": "repo",
         })
         assert resp.status_code == 400
-        assert resp.json()["detail"] == "clone timeout"
+        assert resp.json()["error"] == "clone timeout"
 
     def test_missing_url_422(self, client):
         resp = client.post("/datasets/import/github", json={"name": "repo"})
@@ -486,7 +486,7 @@ class TestImportUrl:
             "url": "https://x.example/missing.txt", "name": "u",
         })
         assert resp.status_code == 400
-        assert resp.json()["detail"] == "404 not found"
+        assert resp.json()["error"] == "404 not found"
 
     def test_missing_url_422(self, client):
         resp = client.post("/datasets/import/url", json={"name": "u"})
@@ -683,8 +683,8 @@ class TestFromChatValidation:
         resp = client.post("/datasets/from-chat", json={"messages": []})
         assert resp.status_code == 400
         body = resp.json()
-        detail = body.get("detail") or body.get("message") or ""
-        assert "No messages provided" in detail or "required" in detail.lower()
+        msg = body.get("error") or body.get("detail") or body.get("message") or ""
+        assert "No messages provided" in msg
 
     def test_missing_messages_422(self, client):
         resp = client.post("/datasets/from-chat", json={})
