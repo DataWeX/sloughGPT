@@ -931,6 +931,218 @@ class Console:
         self._emit("confirm_with_preview", {"message": message})
         return self._interactive.confirm_with_preview(message, preview, default)
 
+    def select_with_preview(self, message: str, options: list[str],
+                            preview_fn: Callable[[str], str],
+                            default: str = "") -> str:
+        """Select from options with a live preview panel."""
+        self._emit("select_with_preview", {"message": message})
+        return self._interactive.select_with_preview(message, options, preview_fn)
+
+    def progress_bar(self, label: str, current: int, total: int,
+                     width: int = 30) -> None:
+        """Display a progress bar with percentage."""
+        self._emit("progress_bar", {"label": label})
+        self._interactive.progress_bar(label, current, total, width)
+
+    def date_range_picker(self, message: str,
+                          default_start: str = "", default_end: str = "") -> tuple[str, str]:
+        """Pick a date range."""
+        self._emit("date_range_picker", {"message": message})
+        return self._interactive.date_range_picker(message, default_start, default_end)
+
+    def color_picker(self, message: str, default: str = "#ffffff") -> str:
+        """Interactive color picker."""
+        self._emit("color_picker", {"message": message})
+        return self._interactive.color_picker(message, default)
+
+    def time_range_picker(self, message: str,
+                          default_start: str = "", default_end: str = "") -> tuple[str, str]:
+        """Pick a time range."""
+        self._emit("time_range_picker", {"message": message})
+        return self._interactive.time_range_picker(message, default_start, default_end)
+
+    def number_range_picker(self, message: str, min_val: int = 0,
+                            max_val: int = 100, default: int = 0,
+                            step: int = 1) -> int:
+        """Pick a number from a range."""
+        self._emit("number_range_picker", {"message": message})
+        return self._interactive.number_range_picker(message, min_val, max_val, default, step)
+
+    def confirm_with_details(self, message: str, details: dict[str, str],
+                             default: bool = False) -> bool:
+        """Confirm with key-value details displayed."""
+        self._emit("confirm_with_details", {"message": message})
+        return self._interactive.confirm_with_details(message, details, default)
+
+    def spinner_with_status(self, message: str, status: str) -> None:
+        """Display a spinner with a status message."""
+        self._emit("spinner_with_status", {"message": message})
+        self._interactive.spinner_with_status(message, status)
+
+    def select_with_filter(self, message: str, options: list[str],
+                           default: str = "") -> str:
+        """Select from options with type-to-filter."""
+        self._emit("select_with_filter", {"message": message})
+        return self._interactive.select_with_filter(message, options, default)
+
+    def confirm_with_preview_and_edit(self, message: str, preview: str,
+                                      edit_prompt: str = "Edit: ",
+                                      default: bool = False) -> tuple[bool, str]:
+        """Confirm with preview, with option to edit."""
+        self._emit("confirm_with_preview_and_edit", {"message": message})
+        return self._interactive.confirm_with_preview_and_edit(message, preview, edit_prompt, default)
+
+    def progress_bar_colored(self, label: str, current: int, total: int,
+                             width: int = 30) -> None:
+        """Display a colored progress bar."""
+        self._emit("progress_bar_colored", {"label": label})
+        self._interactive.progress_bar_colored(label, current, total, width)
+
+    def spinner_with_progress(self, message: str, current: int, total: int) -> None:
+        """Display a spinner with progress percentage."""
+        self._emit("spinner_with_progress", {"message": message})
+        self._interactive.spinner_with_progress(message, current, total)
+
+    def select_with_icons(self, message: str, options: list[tuple[str, str]],
+                          default: str = "") -> str:
+        """Select from options with icons."""
+        self._emit("select_with_icons", {"message": message})
+        return self._interactive.select_with_icons(message, options, default)
+
+    def confirm_with_warning(self, message: str, warning: str,
+                             default: bool = False) -> bool:
+        """Confirm with a warning message displayed."""
+        self._emit("confirm_with_warning", {"message": message})
+        return self._interactive.confirm_with_warning(message, warning, default)
+
+    def progress_bar_eta(self, label: str, current: int, total: int,
+                         elapsed: float, width: int = 30) -> None:
+        """Display a progress bar with percentage and ETA."""
+        self._emit("progress_bar_eta", {"label": label})
+        self._interactive.progress_bar_eta(label, current, total, elapsed, width)
+
+    def spinner_with_dots(self, message: str) -> None:
+        """Display a spinner with dots animation."""
+        self._emit("spinner_with_dots", {"message": message})
+        self._interactive.spinner_with_dots(message)
+
+    def select_with_pagination(self, message: str, options: list[str],
+                               page_size: int = 10, default: str = "") -> str:
+        """Select from options with page navigation."""
+        self._emit("select_with_pagination", {"message": message})
+        return self._interactive.select_with_pagination(message, options, page_size, default)
+
+    def select_with_search_and_preview(self, message: str, options: list[str],
+                                       preview_fn: Callable[[str], str]) -> str:
+        """Select from options with type-to-filter and live preview."""
+        self._emit("select_with_search_and_preview", {"message": message})
+        return self._interactive.select_with_search_and_preview(message, options, preview_fn)
+
+    def progress_bar_with_status(self, label: str, current: int, total: int,
+                                 status: str = "", width: int = 30) -> None:
+        """Display a progress bar with percentage and status message."""
+        self._emit("progress_bar_with_status", {"label": label})
+        self._interactive.progress_bar_with_status(label, current, total, status, width)
+
+    def spinner_with_eta(self, message: str, elapsed: float, progress: float = 0) -> None:
+        """Display a spinner with elapsed time and optional ETA."""
+        self._emit("spinner_with_eta", {"message": message})
+        self._interactive.spinner_with_eta(message, elapsed, progress)
+
+    def select_with_grouping(self, message: str,
+                             groups: dict[str, list[str]],
+                             default: str = "") -> str:
+        """Select from categorized options with group headers."""
+        self._emit("select_with_grouping", {"message": message})
+        return self._interactive.select_with_grouping(message, groups, default)
+
+    def multi_select_with_preview(self, message: str, options: list[str],
+                                  preview_fn: Callable[[str], str]) -> list[str]:
+        """Multi-select from options with live preview."""
+        self._emit("multi_select_with_preview", {"message": message})
+        return self._interactive.multi_select_with_preview(message, options, preview_fn)
+
+    def progress_bar_indeterminate(self, label: str, status: str = "") -> None:
+        """Display an indeterminate progress bar."""
+        self._emit("progress_bar_indeterminate", {"label": label})
+        self._interactive.progress_bar_indeterminate(label, status)
+
+    def table_with_search(self, headers: list[str], rows: list[list[str]],
+                          title: str = "") -> list[list[str]]:
+        """Display a searchable table."""
+        self._emit("table_with_search", {"title": title})
+        return self._interactive.table_with_search(headers, rows, title)
+
+    def select_with_countdown(self, message: str, options: list[str],
+                              timeout: int = 10, default: int = 0) -> str:
+        """Select from options with auto-select countdown."""
+        self._emit("select_with_countdown", {"message": message})
+        return self._interactive.select_with_countdown(message, options, timeout, default)
+
+    def confirm_with_countdown(self, message: str, timeout: int = 10,
+                               default: bool = False) -> bool:
+        """Confirm with auto-confirm countdown."""
+        self._emit("confirm_with_countdown", {"message": message})
+        return self._interactive.confirm_with_countdown(message, timeout, default)
+
+    def progress_bar_stripe(self, label: str, current: int, total: int,
+                            width: int = 30) -> None:
+        """Display a striped progress bar."""
+        self._emit("progress_bar_stripe", {"label": label})
+        self._interactive.progress_bar_stripe(label, current, total, width)
+
+    def spinner_with_dots_eta(self, message: str, elapsed: float,
+                              progress: float = 0) -> None:
+        """Display a spinner with dots and ETA."""
+        self._emit("spinner_with_dots_eta", {"message": message})
+        self._interactive.spinner_with_dots_eta(message, elapsed, progress)
+
+    def confirm_with_phrase(self, message: str, phrase: str = "yes") -> bool:
+        """Confirm by typing a specific phrase."""
+        self._emit("confirm_with_phrase", {"message": message})
+        return self._interactive.confirm_with_phrase(message, phrase)
+
+    def progress_bar_gradient(self, label: str, current: int, total: int,
+                              width: int = 30) -> None:
+        """Display a gradient-colored progress bar."""
+        self._emit("progress_bar_gradient", {"label": label})
+        self._interactive.progress_bar_gradient(label, current, total, width)
+
+    def spinner_pulse(self, message: str, duration: float = 2.0) -> None:
+        """Display a pulsing dot spinner."""
+        self._emit("spinner_pulse", {"message": message})
+        self._interactive.spinner_pulse(message, duration)
+
+    def select_with_preview_and_icons(self, message: str,
+                                      options: list[tuple[str, str]],
+                                      preview_fn: Callable[[str], str]) -> str:
+        """Select from icon+label options with live preview."""
+        self._emit("select_with_preview_and_icons", {"message": message})
+        return self._interactive.select_with_preview_and_icons(message, options, preview_fn)
+
+    def multi_confirm(self, message: str, items: list[str],
+                      default: bool = True) -> dict[str, bool]:
+        """Confirm multiple items with toggle."""
+        self._emit("multi_confirm", {"message": message})
+        return self._interactive.multi_confirm(message, items, default)
+
+    def progress_bar_segmented(self, label: str, segments: list[tuple[str, int]],
+                               width: int = 30) -> None:
+        """Display a segmented progress bar."""
+        self._emit("progress_bar_segmented", {"label": label})
+        self._interactive.progress_bar_segmented(label, segments, width)
+
+    def spinner_wave(self, message: str, duration: float = 2.0) -> None:
+        """Display a wave animation spinner."""
+        self._emit("spinner_wave", {"message": message})
+        self._interactive.spinner_wave(message, duration)
+
+    def select_with_tags(self, message: str, options: list[str],
+                         tags: dict[str, list[str]]) -> str:
+        """Select from options filtered by tags."""
+        self._emit("select_with_tags", {"message": message})
+        return self._interactive.select_with_tags(message, options, tags)
+
     # ── Cursor control ───────────────────────────────────────────────
 
     def hide_cursor(self) -> None:

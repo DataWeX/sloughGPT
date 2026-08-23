@@ -1526,3 +1526,907 @@ class TestConfirmWithPreviewFallback:
         io.feed("y")
         c = Console(io, has_readline=False)
         assert c.confirm_with_preview("Apply?", "preview text") is True
+
+
+# ── select_with_preview fallback ──────────────────────────────────────────────
+
+class TestSelectWithPreviewFallback:
+    def test_select_with_preview_returns_string(self):
+        def preview(opt):
+            return f"Preview for {opt}"
+        p, io = _make_prompt(feeds=["1"])
+        result = p.select_with_preview("Pick:", ["A", "B", "C"], preview)
+        assert result in ["A", "B", "C"]
+
+    def test_select_with_preview_with_default(self):
+        def preview(opt):
+            return f"Detail: {opt}"
+        p, io = _make_prompt(feeds=[""])
+        result = p.select_with_preview("Pick:", ["X", "Y"], preview)
+        assert result in ["X", "Y"]
+
+    def test_console_select_with_preview(self):
+        def preview(opt):
+            return f"Preview: {opt}"
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("2")
+        c = Console(io, has_readline=False)
+        result = c.select_with_preview("Pick:", ["A", "B"], preview)
+        assert result in ["A", "B"]
+
+
+# ── progress_bar ──────────────────────────────────────────────────────────────
+
+class TestProgressBar:
+    def test_progress_bar_zero(self):
+        p, io = _make_prompt()
+        p.progress_bar("Build", 0, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_half(self):
+        p, io = _make_prompt()
+        p.progress_bar("Build", 50, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_full(self):
+        p, io = _make_prompt()
+        p.progress_bar("Done", 100, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_custom_width(self):
+        p, io = _make_prompt()
+        p.progress_bar("Test", 30, 100, width=50)
+        assert len(io._output) > 0
+
+    def test_console_progress_bar(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar("Task", 75, 100)
+        assert len(io._output) > 0
+
+
+# ── date_range_picker fallback ────────────────────────────────────────────────
+
+class TestDateRangePickerFallback:
+    def test_date_range_picker_returns_tuple(self):
+        p, io = _make_prompt(feeds=["2025-01-01", "2025-12-31"])
+        result = p.date_range_picker("Range:")
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+    def test_date_range_picker_with_defaults(self):
+        p, io = _make_prompt(feeds=["", ""])
+        result = p.date_range_picker("Range:", default_start="2025-06-01", default_end="2025-06-30")
+        assert result[0] == "2025-06-01"
+        assert result[1] == "2025-06-30"
+
+    def test_console_date_range_picker(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("2025-03-01")
+        io.feed("2025-03-31")
+        c = Console(io, has_readline=False)
+        result = c.date_range_picker("Range:")
+        assert isinstance(result, tuple)
+
+
+# ── color_picker fallback ─────────────────────────────────────────────────────
+
+class TestColorPickerFallback:
+    def test_color_picker_returns_string(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.color_picker("Color:")
+        assert isinstance(result, str)
+        assert result.startswith("#")
+
+    def test_color_picker_with_default(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.color_picker("Color:", default="#ff0000")
+        assert result == "#ff0000"
+
+    def test_console_color_picker(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.color_picker("Color:")
+        assert isinstance(result, str)
+
+
+# ── time_range_picker fallback ────────────────────────────────────────────────
+
+class TestTimeRangePickerFallback:
+    def test_time_range_picker_returns_tuple(self):
+        p, io = _make_prompt(feeds=["09:00", "17:00"])
+        result = p.time_range_picker("Range:")
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+    def test_time_range_picker_with_defaults(self):
+        p, io = _make_prompt(feeds=["", ""])
+        result = p.time_range_picker("Range:", default_start="08:00", default_end="18:00")
+        assert result[0] == "08:00"
+        assert result[1] == "18:00"
+
+    def test_console_time_range_picker(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("09:00")
+        io.feed("17:00")
+        c = Console(io, has_readline=False)
+        result = c.time_range_picker("Range:")
+        assert isinstance(result, tuple)
+
+
+# ── number_range_picker fallback ──────────────────────────────────────────────
+
+class TestNumberRangePickerFallback:
+    def test_number_range_picker_returns_int(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.number_range_picker("Number:")
+        assert isinstance(result, int)
+
+    def test_number_range_picker_with_default(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.number_range_picker("Number:", default=42)
+        assert result == 42
+
+    def test_number_range_picker_custom_range(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.number_range_picker("Num:", min_val=10, max_val=50, default=25)
+        assert result == 25
+
+    def test_console_number_range_picker(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.number_range_picker("Number:", default=10)
+        assert result == 10
+
+
+# ── confirm_with_details fallback ─────────────────────────────────────────────
+
+class TestConfirmWithDetailsFallback:
+    def test_confirm_with_details_default(self):
+        p, io = _make_prompt(feeds=[""])
+        details = {"file": "test.txt", "size": "100KB"}
+        assert p.confirm_with_details("Apply?", details) is False
+
+    def test_confirm_with_details_y(self):
+        p, io = _make_prompt(feeds=["y"])
+        details = {"name": "John", "age": "30"}
+        assert p.confirm_with_details("Save?", details) is True
+
+    def test_confirm_with_details_n(self):
+        p, io = _make_prompt(feeds=["n"])
+        details = {"action": "delete"}
+        assert p.confirm_with_details("Proceed?", details, default=True) is False
+
+    def test_console_confirm_with_details(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("y")
+        c = Console(io, has_readline=False)
+        details = {"key": "value"}
+        assert c.confirm_with_details("OK?", details) is True
+
+
+# ── spinner_with_status fallback ──────────────────────────────────────────────
+
+class TestSpinnerWithStatusFallback:
+    def test_spinner_with_status_does_not_crash(self):
+        p, io = _make_prompt()
+        p.spinner_with_status("Loading", "please wait")
+        assert len(io._output) > 0
+
+    def test_spinner_with_status_contains_message(self):
+        p, io = _make_prompt()
+        p.spinner_with_status("Building", "step 1/5")
+        output = io._output[0]
+        assert "Building" in output
+
+    def test_console_spinner_with_status(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.spinner_with_status("Working", "in progress")
+        assert len(io._output) > 0
+
+
+# ── select_with_filter fallback ───────────────────────────────────────────────
+
+class TestSelectWithFilterFallback:
+    def test_select_with_filter_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        result = p.select_with_filter("Pick:", ["A", "B", "C"])
+        assert result in ["A", "B", "C"]
+
+    def test_select_with_filter_with_default(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.select_with_filter("Pick:", ["X", "Y"])
+        assert result in ["X", "Y"]
+
+    def test_console_select_with_filter(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.select_with_filter("Pick:", ["A", "B"])
+        assert result in ["A", "B"]
+
+
+# ── confirm_with_preview_and_edit fallback ────────────────────────────────────
+
+class TestConfirmWithPreviewAndEditFallback:
+    def test_confirm_with_preview_and_edit_default(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.confirm_with_preview_and_edit("Apply?", "diff here")
+        assert isinstance(result, tuple)
+        assert result[0] is False
+
+    def test_confirm_with_preview_and_edit_y(self):
+        p, io = _make_prompt(feeds=["y"])
+        result = p.confirm_with_preview_and_edit("Apply?", "changes")
+        assert result[0] is True
+        assert result[1] == "changes"
+
+    def test_confirm_with_preview_and_edit_e(self):
+        p, io = _make_prompt(feeds=["e", "edited text"])
+        result = p.confirm_with_preview_and_edit("Apply?", "original")
+        assert isinstance(result, tuple)
+        assert result[1] in ["original", "edited text"]
+
+    def test_console_confirm_with_preview_and_edit(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("y")
+        c = Console(io, has_readline=False)
+        result = c.confirm_with_preview_and_edit("Apply?", "preview")
+        assert result[0] is True
+
+
+# ── progress_bar_colored ──────────────────────────────────────────────────────
+
+class TestProgressBarColored:
+    def test_progress_bar_colored_zero(self):
+        p, io = _make_prompt()
+        p.progress_bar_colored("Build", 0, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_colored_half(self):
+        p, io = _make_prompt()
+        p.progress_bar_colored("Build", 50, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_colored_full(self):
+        p, io = _make_prompt()
+        p.progress_bar_colored("Done", 100, 100)
+        assert len(io._output) > 0
+
+    def test_console_progress_bar_colored(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar_colored("Task", 75, 100)
+        assert len(io._output) > 0
+
+
+# ── spinner_with_progress fallback ────────────────────────────────────────────
+
+class TestSpinnerWithProgressFallback:
+    def test_spinner_with_progress_does_not_crash(self):
+        p, io = _make_prompt()
+        p.spinner_with_progress("Loading", 50, 100)
+        assert len(io._output) > 0
+
+    def test_spinner_with_progress_contains_message(self):
+        p, io = _make_prompt()
+        p.spinner_with_progress("Building", 25, 100)
+        output = io._output[0]
+        assert "Building" in output
+
+    def test_console_spinner_with_progress(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.spinner_with_progress("Working", 75, 100)
+        assert len(io._output) > 0
+
+
+# ── select_with_icons fallback ────────────────────────────────────────────────
+
+class TestSelectWithIconsFallback:
+    def test_select_with_icons_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        options = [("\u2605", "Favorite"), ("\u2606", "Not Favorite")]
+        result = p.select_with_icons("Pick:", options)
+        assert result in ["Favorite", "Not Favorite"]
+
+    def test_select_with_icons_with_default(self):
+        p, io = _make_prompt(feeds=[""])
+        options = [("\u2714", "Yes"), ("\u2718", "No")]
+        result = p.select_with_icons("Pick:", options)
+        assert result in ["Yes", "No"]
+
+    def test_console_select_with_icons(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        options = [("\u2605", "Star"), ("\u2606", "No Star")]
+        result = c.select_with_icons("Pick:", options)
+        assert result in ["Star", "No Star"]
+
+
+# ── confirm_with_warning fallback ─────────────────────────────────────────────
+
+class TestConfirmWithWarningFallback:
+    def test_confirm_with_warning_default(self):
+        p, io = _make_prompt(feeds=[""])
+        assert p.confirm_with_warning("Delete?", "This cannot be undone") is False
+
+    def test_confirm_with_warning_y(self):
+        p, io = _make_prompt(feeds=["y"])
+        assert p.confirm_with_warning("Proceed?", "Warning!") is True
+
+    def test_confirm_with_warning_n(self):
+        p, io = _make_prompt(feeds=["n"])
+        assert p.confirm_with_warning("Continue?", "Caution", default=True) is False
+
+    def test_console_confirm_with_warning(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("y")
+        c = Console(io, has_readline=False)
+        assert c.confirm_with_warning("Delete?", "Irreversible") is True
+
+
+# ── progress_bar_eta ──────────────────────────────────────────────────────────
+
+class TestProgressBarETA:
+    def test_progress_bar_eta_zero(self):
+        p, io = _make_prompt()
+        p.progress_bar_eta("Build", 0, 100, 0.0)
+        assert len(io._output) > 0
+
+    def test_progress_bar_eta_with_time(self):
+        p, io = _make_prompt()
+        p.progress_bar_eta("Build", 50, 100, 10.0)
+        assert len(io._output) > 0
+
+    def test_progress_bar_eta_full(self):
+        p, io = _make_prompt()
+        p.progress_bar_eta("Done", 100, 100, 20.0)
+        assert len(io._output) > 0
+
+    def test_console_progress_bar_eta(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar_eta("Task", 75, 100, 15.0)
+        assert len(io._output) > 0
+
+
+# ── spinner_with_dots fallback ────────────────────────────────────────────────
+
+class TestSpinnerWithDotsFallback:
+    def test_spinner_with_dots_does_not_crash(self):
+        p, io = _make_prompt()
+        p.spinner_with_dots("Loading")
+        assert len(io._output) > 0
+
+    def test_spinner_with_dots_contains_message(self):
+        p, io = _make_prompt()
+        p.spinner_with_dots("Building")
+        output = io._output[0]
+        assert "Building" in output
+
+    def test_console_spinner_with_dots(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.spinner_with_dots("Working")
+        assert len(io._output) > 0
+
+
+# ── select_with_pagination fallback ───────────────────────────────────────────
+
+class TestSelectWithPaginationFallback:
+    def test_select_with_pagination_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        options = [f"Item {i}" for i in range(25)]
+        result = p.select_with_pagination("Pick:", options, page_size=10)
+        assert result in options
+
+    def test_select_with_pagination_small_list(self):
+        p, io = _make_prompt(feeds=[""])
+        options = ["A", "B", "C"]
+        result = p.select_with_pagination("Pick:", options, page_size=10)
+        assert result in options
+
+    def test_console_select_with_pagination(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        options = [f"Item {i}" for i in range(20)]
+        result = c.select_with_pagination("Pick:", options, page_size=5)
+        assert result in options
+
+
+# ── select_with_search_and_preview fallback ───────────────────────────────────
+
+class TestSelectWithSearchAndPreviewFallback:
+    def test_select_with_search_and_preview_returns_string(self):
+        def preview(opt):
+            return f"Preview for {opt}"
+        p, io = _make_prompt(feeds=["1"])
+        options = ["Apple", "Banana", "Cherry"]
+        result = p.select_with_search_and_preview("Pick:", options, preview)
+        assert result in options
+
+    def test_select_with_search_and_preview_empty(self):
+        def preview(opt):
+            return f"Detail: {opt}"
+        p, io = _make_prompt(feeds=[""])
+        result = p.select_with_search_and_preview("Pick:", ["X"], preview)
+        assert result == "X"
+
+    def test_console_select_with_search_and_preview(self):
+        def preview(opt):
+            return f"Info: {opt}"
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.select_with_search_and_preview("Pick:", ["A", "B"], preview)
+        assert result in ["A", "B"]
+
+
+# ── progress_bar_with_status ──────────────────────────────────────────────────
+
+class TestProgressBarWithStatus:
+    def test_progress_bar_with_status_zero(self):
+        p, io = _make_prompt()
+        p.progress_bar_with_status("Build", 0, 100, "starting")
+        assert len(io._output) > 0
+
+    def test_progress_bar_with_status_half(self):
+        p, io = _make_prompt()
+        p.progress_bar_with_status("Build", 50, 100, "in progress")
+        assert len(io._output) > 0
+
+    def test_progress_bar_with_status_full(self):
+        p, io = _make_prompt()
+        p.progress_bar_with_status("Done", 100, 100, "complete")
+        assert len(io._output) > 0
+
+    def test_progress_bar_with_status_no_status(self):
+        p, io = _make_prompt()
+        p.progress_bar_with_status("Test", 25, 100)
+        assert len(io._output) > 0
+
+    def test_console_progress_bar_with_status(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar_with_status("Task", 75, 100, "almost done")
+        assert len(io._output) > 0
+
+
+# ── spinner_with_eta fallback ─────────────────────────────────────────────────
+
+class TestSpinnerWithEtaFallback:
+    def test_spinner_with_eta_does_not_crash(self):
+        p, io = _make_prompt()
+        p.spinner_with_eta("Loading", 5.0)
+        assert len(io._output) > 0
+
+    def test_spinner_with_eta_with_progress(self):
+        p, io = _make_prompt()
+        p.spinner_with_eta("Building", 10.0, progress=0.5)
+        assert len(io._output) > 0
+
+    def test_spinner_with_eta_contains_message(self):
+        p, io = _make_prompt()
+        p.spinner_with_eta("Working", 2.0)
+        output = io._output[0]
+        assert "Working" in output
+
+    def test_console_spinner_with_eta(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.spinner_with_eta("Task", 3.0, progress=0.25)
+        assert len(io._output) > 0
+
+
+# ── select_with_grouping fallback ─────────────────────────────────────────────
+
+class TestSelectWithGroupingFallback:
+    def test_select_with_grouping_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        groups = {"Fruits": ["Apple", "Banana"], "Veggies": ["Carrot"]}
+        result = p.select_with_grouping("Pick:", groups)
+        assert result in ["Apple", "Banana", "Carrot"]
+
+    def test_select_with_grouping_with_default(self):
+        p, io = _make_prompt(feeds=[""])
+        groups = {"A": ["X", "Y"]}
+        result = p.select_with_grouping("Pick:", groups, default="Y")
+        assert result in ["X", "Y"]
+
+    def test_console_select_with_grouping(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        groups = {"Cat1": ["A", "B"], "Cat2": ["C"]}
+        result = c.select_with_grouping("Pick:", groups)
+        assert result in ["A", "B", "C"]
+
+
+# ── multi_select_with_preview fallback ────────────────────────────────────────
+
+class TestMultiSelectWithPreviewFallback:
+    def test_multi_select_with_preview_returns_list(self):
+        def preview(opt):
+            return f"Preview: {opt}"
+        p, io = _make_prompt(feeds=[""])
+        result = p.multi_select_with_preview("Pick:", ["A", "B", "C"], preview)
+        assert isinstance(result, list)
+
+    def test_multi_select_with_preview_empty(self):
+        def preview(opt):
+            return f"Detail: {opt}"
+        p, io = _make_prompt(feeds=[""])
+        result = p.multi_select_with_preview("Pick:", ["X"], preview)
+        assert isinstance(result, list)
+
+    def test_console_multi_select_with_preview(self):
+        def preview(opt):
+            return f"Info: {opt}"
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.multi_select_with_preview("Pick:", ["A", "B"], preview)
+        assert isinstance(result, list)
+
+
+# ── progress_bar_indeterminate fallback ───────────────────────────────────────
+
+class TestProgressBarIndeterminateFallback:
+    def test_progress_bar_indeterminate_does_not_crash(self):
+        p, io = _make_prompt()
+        p.progress_bar_indeterminate("Loading")
+        assert len(io._output) > 0
+
+    def test_progress_bar_indeterminate_with_status(self):
+        p, io = _make_prompt()
+        p.progress_bar_indeterminate("Building", "please wait")
+        assert len(io._output) > 0
+
+    def test_console_progress_bar_indeterminate(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar_indeterminate("Task", "working")
+        assert len(io._output) > 0
+
+
+# ── table_with_search fallback ────────────────────────────────────────────────
+
+class TestTableWithSearchFallback:
+    def test_table_with_search_returns_all(self):
+        p, io = _make_prompt(feeds=[""])
+        headers = ["Name", "Age"]
+        rows = [["Alice", "30"], ["Bob", "25"]]
+        result = p.table_with_search(headers, rows)
+        assert len(result) == 2
+
+    def test_table_with_search_with_title(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.table_with_search(["A"], [["1"]], title="Test")
+        assert len(result) == 1
+
+    def test_console_table_with_search(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.table_with_search(["Col"], [["val"]], title="T")
+        assert len(result) == 1
+
+
+# ── select_with_countdown fallback ────────────────────────────────────────────
+
+class TestSelectWithCountdownFallback:
+    def test_select_with_countdown_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        result = p.select_with_countdown("Pick:", ["A", "B", "C"], timeout=5)
+        assert result in ["A", "B", "C"]
+
+    def test_select_with_countdown_with_default(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.select_with_countdown("Pick:", ["X", "Y"], timeout=1, default=1)
+        assert result in ["X", "Y"]
+
+    def test_console_select_with_countdown(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.select_with_countdown("Pick:", ["A", "B"], timeout=5)
+        assert result in ["A", "B"]
+
+
+# ── confirm_with_countdown fallback ───────────────────────────────────────────
+
+class TestConfirmWithCountdownFallback:
+    def test_confirm_with_countdown_default(self):
+        p, io = _make_prompt(feeds=[""])
+        assert p.confirm_with_countdown("Proceed?", timeout=1) is False
+
+    def test_confirm_with_countdown_y(self):
+        p, io = _make_prompt(feeds=["y"])
+        assert p.confirm_with_countdown("OK?", timeout=5) is True
+
+    def test_confirm_with_countdown_n(self):
+        p, io = _make_prompt(feeds=["n"])
+        assert p.confirm_with_countdown("Go?", timeout=5, default=True) is False
+
+    def test_console_confirm_with_countdown(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("y")
+        c = Console(io, has_readline=False)
+        assert c.confirm_with_countdown("Yes?", timeout=5) is True
+
+
+# ── progress_bar_stripe ──────────────────────────────────────────────────────
+
+class TestProgressBarStripe:
+    def test_progress_bar_stripe_zero(self):
+        p, io = _make_prompt()
+        p.progress_bar_stripe("Build", 0, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_stripe_half(self):
+        p, io = _make_prompt()
+        p.progress_bar_stripe("Build", 50, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_stripe_full(self):
+        p, io = _make_prompt()
+        p.progress_bar_stripe("Done", 100, 100)
+        assert len(io._output) > 0
+
+    def test_console_progress_bar_stripe(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar_stripe("Task", 75, 100)
+        assert len(io._output) > 0
+
+
+# ── spinner_with_dots_eta fallback ────────────────────────────────────────────
+
+class TestSpinnerWithDotsEtaFallback:
+    def test_spinner_with_dots_eta_does_not_crash(self):
+        p, io = _make_prompt()
+        p.spinner_with_dots_eta("Loading", 5.0)
+        assert len(io._output) > 0
+
+    def test_spinner_with_dots_eta_with_progress(self):
+        p, io = _make_prompt()
+        p.spinner_with_dots_eta("Building", 10.0, progress=0.5)
+        assert len(io._output) > 0
+
+    def test_spinner_with_dots_eta_contains_message(self):
+        p, io = _make_prompt()
+        p.spinner_with_dots_eta("Working", 2.0)
+        output = io._output[0]
+        assert "Working" in output
+
+    def test_console_spinner_with_dots_eta(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.spinner_with_dots_eta("Task", 3.0, progress=0.25)
+        assert len(io._output) > 0
+
+
+# ── confirm_with_phrase fallback ──────────────────────────────────────────────
+
+class TestConfirmWithPhraseFallback:
+    def test_confirm_with_phrase_wrong(self):
+        p, io = _make_prompt(feeds=["no"])
+        assert p.confirm_with_phrase("Confirm:", phrase="yes") is False
+
+    def test_confirm_with_phrase_right(self):
+        p, io = _make_prompt(feeds=["delete"])
+        assert p.confirm_with_phrase("Type to confirm:", phrase="delete") is True
+
+    def test_confirm_with_phrase_empty(self):
+        p, io = _make_prompt(feeds=[""])
+        assert p.confirm_with_phrase("Confirm:") is False
+
+    def test_console_confirm_with_phrase(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("yes")
+        c = Console(io, has_readline=False)
+        assert c.confirm_with_phrase("Confirm:", phrase="yes") is True
+
+
+# ── progress_bar_gradient ─────────────────────────────────────────────────────
+
+class TestProgressBarGradient:
+    def test_progress_bar_gradient_zero(self):
+        p, io = _make_prompt()
+        p.progress_bar_gradient("Build", 0, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_gradient_half(self):
+        p, io = _make_prompt()
+        p.progress_bar_gradient("Build", 50, 100)
+        assert len(io._output) > 0
+
+    def test_progress_bar_gradient_full(self):
+        p, io = _make_prompt()
+        p.progress_bar_gradient("Done", 100, 100)
+        assert len(io._output) > 0
+
+    def test_console_progress_bar_gradient(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar_gradient("Task", 75, 100)
+        assert len(io._output) > 0
+
+
+# ── spinner_pulse fallback ────────────────────────────────────────────────────
+
+class TestSpinnerPulseFallback:
+    def test_spinner_pulse_does_not_crash(self):
+        p, io = _make_prompt()
+        p.spinner_pulse("Loading", duration=0.1)
+        assert len(io._output) > 0
+
+    def test_spinner_pulse_contains_message(self):
+        p, io = _make_prompt()
+        p.spinner_pulse("Building", duration=0.1)
+        output = io._output[0]
+        assert "Building" in output
+
+    def test_console_spinner_pulse(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.spinner_pulse("Working", duration=0.1)
+        assert len(io._output) > 0
+
+
+# ── select_with_preview_and_icons fallback ────────────────────────────────────
+
+class TestSelectWithPreviewAndIconsFallback:
+    def test_select_with_preview_and_icons_returns_string(self):
+        def preview(label):
+            return f"Preview for {label}"
+        p, io = _make_prompt(feeds=["1"])
+        options = [("\u2605", "Favorite"), ("\u2606", "Not Favorite")]
+        result = p.select_with_preview_and_icons("Pick:", options, preview)
+        assert result in ["Favorite", "Not Favorite"]
+
+    def test_select_with_preview_and_icons_empty(self):
+        def preview(label):
+            return f"Detail: {label}"
+        p, io = _make_prompt(feeds=[""])
+        options = [("\u2714", "Yes")]
+        result = p.select_with_preview_and_icons("Pick:", options, preview)
+        assert result == "Yes"
+
+    def test_console_select_with_preview_and_icons(self):
+        def preview(label):
+            return f"Info: {label}"
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        options = [("\u2605", "Star"), ("\u2606", "No Star")]
+        result = c.select_with_preview_and_icons("Pick:", options, preview)
+        assert result in ["Star", "No Star"]
+
+
+# ── multi_confirm fallback ────────────────────────────────────────────────────
+
+class TestMultiConfirmFallback:
+    def test_multi_confirm_returns_dict(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.multi_confirm("Confirm:", ["A", "B", "C"])
+        assert isinstance(result, dict)
+        assert len(result) == 3
+
+    def test_multi_confirm_all_default(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.multi_confirm("Confirm:", ["X", "Y"], default=True)
+        assert all(result.values())
+
+    def test_console_multi_confirm(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.multi_confirm("Confirm:", ["A", "B"])
+        assert isinstance(result, dict)
+
+
+# ── progress_bar_segmented ────────────────────────────────────────────────────
+
+class TestProgressBarSegmented:
+    def test_progress_bar_segmented_does_not_crash(self):
+        p, io = _make_prompt()
+        p.progress_bar_segmented("Build", [("green", 50), ("yellow", 30), ("red", 20)])
+        assert len(io._output) > 0
+
+    def test_progress_bar_segmented_single(self):
+        p, io = _make_prompt()
+        p.progress_bar_segmented("Test", [("cyan", 100)])
+        assert len(io._output) > 0
+
+    def test_console_progress_bar_segmented(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.progress_bar_segmented("Task", [("green", 70), ("red", 30)])
+        assert len(io._output) > 0
+
+
+# ── spinner_wave fallback ─────────────────────────────────────────────────────
+
+class TestSpinnerWaveFallback:
+    def test_spinner_wave_does_not_crash(self):
+        p, io = _make_prompt()
+        p.spinner_wave("Loading", duration=0.1)
+        assert len(io._output) > 0
+
+    def test_spinner_wave_contains_message(self):
+        p, io = _make_prompt()
+        p.spinner_wave("Building", duration=0.1)
+        output = io._output[0]
+        assert "Building" in output
+
+    def test_console_spinner_wave(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        c = Console(io, has_readline=False)
+        c.spinner_wave("Working", duration=0.1)
+        assert len(io._output) > 0
+
+
+# ── select_with_tags fallback ─────────────────────────────────────────────────
+
+class TestSelectWithTagsFallback:
+    def test_select_with_tags_returns_string(self):
+        p, io = _make_prompt(feeds=["1"])
+        options = ["Apple", "Banana", "Cherry"]
+        tags = {"Apple": ["fruit"], "Banana": ["fruit"], "Cherry": ["fruit", "red"]}
+        result = p.select_with_tags("Pick:", options, tags)
+        assert result in options
+
+    def test_select_with_tags_no_tags(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.select_with_tags("Pick:", ["A", "B"], {})
+        assert result in ["A", "B"]
+
+    def test_console_select_with_tags(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("1")
+        c = Console(io, has_readline=False)
+        result = c.select_with_tags("Pick:", ["A", "B"], {"A": ["x"]})
+        assert result in ["A", "B"]
