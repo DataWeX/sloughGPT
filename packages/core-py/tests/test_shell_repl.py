@@ -1008,7 +1008,7 @@ class TestWatch:
 
     def test_watch_invalid_interval(self, repl):
         with _CaptureOutput() as cap:
-            repl._cmd_watch("abc health")
+            repl._cmd_watch("-n abc echo test")
         assert "Invalid" in cap.getvalue()
 
 

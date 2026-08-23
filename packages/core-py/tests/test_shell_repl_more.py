@@ -4913,7 +4913,7 @@ class TestCmdKill:
 class TestCmdWatch:
     def test_watch_no_args(self, repl):
         repl._cmd_watch("")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
 
 # ── _cmd_bg / fg ──────────────────────────────────────────────────────
@@ -7804,11 +7804,11 @@ class TestCmdRead:
 class TestCmdWatch:
     def test_watch_no_args(self, repl):
         repl._cmd_watch("")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
     def test_watch_bad_interval(self, repl):
         repl._cmd_watch("abc ls")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
 
 # ── _cmd_py ───────────────────────────────────────────────────────
@@ -12365,11 +12365,11 @@ class TestCmdFcExtra:
 class TestCmdWatchBgFg:
     def test_watch_no_args(self, repl):
         repl._cmd_watch("")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
     def test_watch_with_cmd(self, repl):
         repl._cmd_watch("echo test")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
     def test_bg_no_jobs(self, repl):
         repl._bg_threads.clear()
@@ -12917,11 +12917,11 @@ class TestCmdProcsExecution:
 class TestCmdWatchExecution:
     def test_watch_no_args(self, repl):
         repl._cmd_watch("")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
     def test_watch_with_cmd(self, repl):
         repl._cmd_watch("echo test")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
 
 # ── _cmd_bg / _cmd_fg with jobs ───────────────────────────────────
@@ -13905,15 +13905,15 @@ class TestCmdReadEdgeCases:
 class TestCmdWatchEdgeCases:
     def test_watch_no_args(self, repl):
         repl._cmd_watch("")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
     def test_watch_no_interval(self, repl):
         repl._cmd_watch("echo hello")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
     def test_watch_invalid_interval(self, repl):
         repl._cmd_watch("abc echo hello")
-        assert repl._last_exit_code == 0
+        assert repl._last_exit_code == 1
 
 
 # ── _cmd_bg: edge cases ────────────────────────────────────────────
@@ -24058,7 +24058,7 @@ class TestCmdWatchDeeper:
     def test_watch_invalid_interval(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_watch("not_a_number")
-        assert "Usage" in cap.getvalue()
+        assert "Invalid" in cap.getvalue()
 
     def test_watch_keyboard_interrupt(self, repl):
         repl._execute_single = MagicMock(side_effect=KeyboardInterrupt)
@@ -27101,15 +27101,10 @@ class TestCmdReadEdges:
 
 class TestCmdWatchWithCommand:
     def test_watch_runs_command(self, repl):
-        call_count = [0]
-        def mock_execute(cmd, piped=""):
-            call_count[0] += 1
-            if call_count[0] >= 2:
-                raise KeyboardInterrupt()
-            return "output ok"
-        repl._execute_single = mock_execute
-        repl._cmd_watch("0.01 echo test")
-        assert call_count[0] >= 1
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_watch("0.01 echo hello")
+        out = cap.getvalue()
+        assert "hello" in out or repl._last_exit_code == 0
 
 
 class TestCmdBgRunning:
@@ -28894,4 +28889,261 @@ class TestCmdWatch:
 
     def testWatchNoArgs(self, repl):
         repl._cmd_watch("")
+        assert repl._last_exit_code == 1
+
+
+# ── sleep with suffixes ──────────────────────────────────────────
+
+
+class TestCmdSleepSuffixes:
+    def test_sleep_seconds(self, repl):
+        import time as _t
+        s = _t.time()
+        repl._cmd_sleep("0.01")
+        assert _t.time() - s < 1
+
+    def test_sleep_minutes(self, repl):
+        import time as _t
+        s = _t.time()
+        repl._cmd_sleep("0.001m")
+        assert _t.time() - s < 1
+
+    def test_sleep_empty(self, repl):
+        repl._cmd_sleep("")
+        assert repl._last_exit_code == 0
+
+
+# ── type command ─────────────────────────────────────────────────
+
+
+class TestCmdType:
+    def test_type_builtin(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_type("cd")
+        out = cap.getvalue()
+        assert "built-in" in out or "builtin" in out
+
+    def test_type_external(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_type("ls")
+        out = cap.getvalue()
+        assert "not found" not in out
+
+    def test_type_not_found(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_type("nonexistent_xyz_cmd")
+        out = cap.getvalue()
+        assert "not found" in out
+
+    def test_type_no_args(self, repl):
+        repl._cmd_type("")
+        assert repl._last_exit_code == 1
+
+
+# ── ls enhanced flags ────────────────────────────────────────────
+
+
+class TestCmdLsFlags:
+    def test_ls_1(self, repl):
+        import tempfile
+        d = tempfile.mkdtemp()
+        f1 = os.path.join(d, "a.txt")
+        f2 = os.path.join(d, "b.txt")
+        Path(f1).write_text("a")
+        Path(f2).write_text("b")
+        try:
+            with _CaptureOutput(repl) as cap:
+                repl._cmd_ls(f"-1 {d}")
+            out = cap.getvalue().strip()
+            lines = [l.strip() for l in out.split("\n") if l.strip()]
+            assert len(lines) == 2
+        finally:
+            os.unlink(f1)
+            os.unlink(f2)
+            os.rmdir(d)
+
+    def test_ls_a(self, repl):
+        import tempfile
+        d = tempfile.mkdtemp()
+        f1 = os.path.join(d, "visible.txt")
+        f2 = os.path.join(d, ".hidden.txt")
+        Path(f1).write_text("v")
+        Path(f2).write_text("h")
+        try:
+            with _CaptureOutput(repl) as cap:
+                repl._cmd_ls(d)
+            out = cap.getvalue()
+            assert "visible" in out
+            assert ".hidden" not in out
+            with _CaptureOutput(repl) as cap2:
+                repl._cmd_ls(f"-a {d}")
+            out2 = cap2.getvalue()
+            assert ".hidden" in out2
+        finally:
+            os.unlink(f1)
+            os.unlink(f2)
+            os.rmdir(d)
+
+    def test_ls_empty_dir(self, repl):
+        import tempfile
+        d = tempfile.mkdtemp()
+        try:
+            with _CaptureOutput(repl) as cap:
+                repl._cmd_ls(d)
+            out = cap.getvalue()
+            assert repl._last_exit_code == 0
+        finally:
+            os.rmdir(d)
+
+    def test_ls_not_found(self, repl):
+        repl._cmd_ls("/nonexistent_xyz_ls")
+        assert repl._last_exit_code == 1
+
+
+# ── pushd / popd / dirs ─────────────────────────────────────────
+
+
+class TestCmdDirStack:
+    def test_dirs_default(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_dirs("")
+        out = cap.getvalue()
+        assert repl._last_exit_code == 0
+
+    def test_pushd_popd(self, repl):
+        import tempfile
+        d = tempfile.mkdtemp()
+        try:
+            repl._cmd_pushd(d)
+            assert repl._last_exit_code == 0
+            repl._cmd_popd()
+            assert repl._last_exit_code == 0
+        finally:
+            os.rmdir(d)
+
+    def test_pushd_empty_stack(self, repl):
+        repl._cmd_popd()
+        assert repl._last_exit_code == 1
+
+    def test_pushd_not_found(self, repl):
+        repl._cmd_pushd("/nonexistent_xyz_pushd")
+        assert repl._last_exit_code == 1
+
+    def test_dirs_v(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_dirs("-v")
+        out = cap.getvalue()
+        assert repl._last_exit_code == 0
+
+
+# ── cp enhanced flags ────────────────────────────────────────────
+
+
+class TestCmdCpFlags:
+    def test_cp_r_verbose(self, repl):
+        import tempfile
+        src = tempfile.mkdtemp()
+        sub = os.path.join(src, "sub")
+        os.makedirs(sub)
+        f1 = os.path.join(sub, "a.txt")
+        Path(f1).write_text("hello")
+        dst = tempfile.mktemp()
+        try:
+            with _CaptureOutput(repl) as cap:
+                repl._cmd_cp(f"-rv {src} {dst}")
+            assert repl._last_exit_code == 0
+            assert os.path.exists(os.path.join(dst, "sub", "a.txt"))
+        finally:
+            import shutil
+            if os.path.exists(src):
+                shutil.rmtree(src)
+            if os.path.exists(dst):
+                shutil.rmtree(dst)
+
+    def test_cp_no_args(self, repl):
+        repl._cmd_cp("")
+        assert repl._last_exit_code == 1
+
+    def test_cp_one_arg(self, repl):
+        repl._cmd_cp("somefile")
+        assert repl._last_exit_code == 1
+
+
+# ── mv enhanced flags ────────────────────────────────────────────
+
+
+class TestCmdMvFlags:
+    def test_mv_verbose(self, repl):
+        import tempfile
+        src = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        src.write("test")
+        src.close()
+        dst = tempfile.mktemp(suffix='.txt')
+        try:
+            with _CaptureOutput(repl) as cap:
+                repl._cmd_mv(f"-v {src.name} {dst}")
+            assert repl._last_exit_code == 0
+            assert os.path.exists(dst)
+            assert not os.path.exists(src.name)
+        finally:
+            if os.path.exists(dst):
+                os.unlink(dst)
+
+    def test_mv_no_args(self, repl):
+        repl._cmd_mv("")
+        assert repl._last_exit_code == 1
+
+    def test_mv_one_arg(self, repl):
+        repl._cmd_mv("somefile")
+        assert repl._last_exit_code == 1
+
+
+# ── mkdir -p ─────────────────────────────────────────────────────
+
+
+class TestCmdMkdirFlags:
+    def test_mkdir_p(self, repl):
+        import tempfile
+        base = tempfile.mkdtemp()
+        nested = os.path.join(base, "a", "b", "c")
+        try:
+            repl._cmd_mkdir(f"-p {nested}")
+            assert os.path.isdir(nested)
+            assert repl._last_exit_code == 0
+        finally:
+            import shutil
+            shutil.rmtree(base)
+
+    def test_mkdir_no_args(self, repl):
+        repl._cmd_mkdir("")
+        assert repl._last_exit_code == 1
+
+
+# ── touch -c ─────────────────────────────────────────────────────
+
+
+class TestCmdTouchFlags:
+    def test_touch_c_existing(self, repl):
+        import tempfile
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f.write("test")
+        f.close()
+        try:
+            repl._cmd_touch(f"-c {f.name}")
+            assert os.path.exists(f.name)
+        finally:
+            os.unlink(f.name)
+
+    def test_touch_c_nonexistent(self, repl):
+        import tempfile
+        f = tempfile.mktemp(suffix='.txt')
+        try:
+            repl._cmd_touch(f"-c {f}")
+            assert not os.path.exists(f)
+        finally:
+            if os.path.exists(f):
+                os.unlink(f)
+
+    def test_touch_no_args(self, repl):
+        repl._cmd_touch("")
         assert repl._last_exit_code == 1

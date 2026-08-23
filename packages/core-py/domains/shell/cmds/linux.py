@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from pathlib import Path
 
 # ── ANSI helpers (imported from the parent module at class level) ──────
@@ -75,40 +76,106 @@ class LinuxCommandsMixin:
         self._last_exit_code = 0
 
     def _cmd_ls(self, args: str = "") -> None:
-        """List directory contents."""
-        target = args.strip() or "."
-        try:
-            vfs = self.os.vfs
-            if vfs and (target.startswith("/dev") or target.startswith("/proc")):
-                entries = vfs.listdir(target)
+        """List directory contents (VFS-aware).
+
+        Flags:
+          -1    One entry per line
+          -a    Show hidden entries (starting with .)
+          -l    Long listing format
+          -S    Sort by file size (largest first)
+          -r    Reverse sort order
+        """
+        parts = args.strip().split() if args else []
+        one_per_line = False
+        show_hidden = False
+        long_format = False
+        sort_by_size = False
+        reverse_sort = False
+        targets = []
+        for p in parts:
+            if p.startswith("-") and len(p) > 1:
+                flags = p[1:]
+                if "1" in flags:
+                    one_per_line = True
+                if "a" in flags:
+                    show_hidden = True
+                if "l" in flags:
+                    long_format = True
+                if "S" in flags:
+                    sort_by_size = True
+                if "r" in flags:
+                    reverse_sort = True
             else:
-                entries = os.listdir(os.path.expanduser(target))
-            if entries is None:
+                targets.append(p)
+        if not targets:
+            targets = ["."]
+        for target in targets:
+            try:
+                vfs = self.os.vfs
+                if vfs and (target.startswith("/dev") or target.startswith("/proc")):
+                    entries = vfs.listdir(target)
+                else:
+                    entries = os.listdir(os.path.expanduser(target))
+                if entries is None:
+                    self._print(f"  ls: cannot access '{target}': No such file or directory")
+                    self._last_exit_code = 1
+                    continue
+                if not show_hidden:
+                    entries = [e for e in entries if not e.startswith(".")]
+                if sort_by_size:
+                    def _size_key(e):
+                        p2 = os.path.join(target, e) if target != "." else e
+                        try:
+                            return os.path.getsize(os.path.expanduser(p2))
+                        except OSError:
+                            return 0
+                    entries.sort(key=_size_key, reverse=True)
+                elif long_format:
+                    pass
+                else:
+                    entries.sort()
+                if reverse_sort and not sort_by_size:
+                    entries.reverse()
+                if len(targets) > 1:
+                    self._print(f"\n{target}:")
+                if long_format:
+                    for e in entries:
+                        path = os.path.join(target, e) if target != "." else e
+                        if vfs:
+                            is_dir = vfs.isdir(path)
+                        else:
+                            is_dir = os.path.isdir(os.path.expanduser(path))
+                        prefix = "d" if is_dir else "-"
+                        size = 0
+                        if not vfs:
+                            try:
+                                size = os.path.getsize(os.path.expanduser(path))
+                            except OSError:
+                                pass
+                        self._print(f"  {prefix}rwxr-xr-x  1 user  user  {size:>8}  {e}{'/' if is_dir else ''}")
+                elif one_per_line:
+                    for e in entries:
+                        self._print(f"  {e}")
+                else:
+                    parts_list = []
+                    for e in entries:
+                        path = os.path.join(target, e) if target != "." else e
+                        if vfs:
+                            is_dir = vfs.isdir(path)
+                        else:
+                            is_dir = os.path.isdir(os.path.expanduser(path))
+                        parts_list.append(e + ("/" if is_dir else ""))
+                    self._print("  " + "  ".join(parts_list))
+                self._last_exit_code = 0
+            except FileNotFoundError:
                 self._print(f"  ls: cannot access '{target}': No such file or directory")
                 self._last_exit_code = 1
-                return
-            entries.sort()
-            parts = []
-            for e in entries:
-                path = os.path.join(target, e) if target != "." else e
-                if vfs:
-                    is_dir = vfs.isdir(path)
-                else:
-                    is_dir = os.path.isdir(os.path.expanduser(path))
-                suffix = "/" if is_dir else ""
-                parts.append(e + suffix)
-            if parts:
-                self._print("  " + "  ".join(parts))
-            self._last_exit_code = 0
-        except FileNotFoundError:
-            self._print(f"  ls: cannot access '{target}': No such file or directory")
-            self._last_exit_code = 1
-        except PermissionError:
-            self._print(f"  ls: permission denied: {target}")
-            self._last_exit_code = 1
-        except NotADirectoryError:
-            self._print(f"  ls: not a directory: {target}")
-            self._last_exit_code = 1
+            except PermissionError:
+                self._print(f"  ls: permission denied: {target}")
+                self._last_exit_code = 1
+            except NotADirectoryError:
+                self._print(f"  ls: not a directory: {target}")
+                self._last_exit_code = 1
 
     def _cmd_cat(self, args: str = "") -> None:
         """Concatenate and print files."""
@@ -144,24 +211,59 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
 
     def _cmd_mkdir(self, args: str = "") -> None:
-        """Create directories."""
+        """Create directories (VFS-aware).
+
+        Flags:
+          -p    Create parent directories as needed
+          -v    Verbose
+        """
         if not args:
-            self._print("  Usage: mkdir <dir>")
+            self._print("  Usage: mkdir [-pv] <dir> [...]")
             self._last_exit_code = 1
             return
-        target = os.path.expanduser(args.strip())
-        try:
-            os.makedirs(target, exist_ok=False)
-            self._last_exit_code = 0
-        except FileExistsError:
-            self._print(f"  mkdir: cannot create directory '{target}': File exists")
+        parts = args.strip().split()
+        parents = False
+        verbose = False
+        paths = []
+        for p in parts:
+            if p.startswith("-") and len(p) > 1:
+                flags = p[1:]
+                if "p" in flags:
+                    parents = True
+                if "v" in flags:
+                    verbose = True
+            else:
+                paths.append(p)
+        if not paths:
+            self._print("  Usage: mkdir [-pv] <dir> [...]")
             self._last_exit_code = 1
-        except PermissionError:
-            self._print(f"  mkdir: permission denied: {target}")
-            self._last_exit_code = 1
-        except FileNotFoundError:
-            self._print(f"  mkdir: cannot create directory '{target}': No such file or directory")
-            self._last_exit_code = 1
+            return
+        for p in paths:
+            target = os.path.expanduser(p)
+            try:
+                os.makedirs(target, exist_ok=False)
+                if verbose:
+                    self._print(f"  mkdir: created directory '{target}'")
+                self._last_exit_code = 0
+            except FileExistsError:
+                self._print(f"  mkdir: cannot create directory '{target}': File exists")
+                self._last_exit_code = 1
+            except PermissionError:
+                self._print(f"  mkdir: permission denied: {target}")
+                self._last_exit_code = 1
+            except FileNotFoundError:
+                if parents:
+                    try:
+                        os.makedirs(target, exist_ok=True)
+                        if verbose:
+                            self._print(f"  mkdir: created directory '{target}'")
+                        self._last_exit_code = 0
+                    except PermissionError:
+                        self._print(f"  mkdir: permission denied: {target}")
+                        self._last_exit_code = 1
+                else:
+                    self._print(f"  mkdir: cannot create directory '{target}': No such file or directory")
+                    self._last_exit_code = 1
 
     def _cmd_rm(self, args: str = "") -> None:
         """Remove files or directories."""
@@ -200,17 +302,36 @@ class LinuxCommandsMixin:
                 self._last_exit_code = 1
 
     def _cmd_touch(self, args: str = "") -> None:
-        """Create empty files or update timestamps."""
+        """Create empty files or update timestamps (VFS-aware).
+
+        Flags:
+          -c    Do not create files (only update timestamps)
+          -t    Use specified timestamp (ignored, for compat)
+        """
         if not args:
-            self._print("  Usage: touch <file> [file...]")
+            self._print("  Usage: touch [-c] <file> [file...]")
             self._last_exit_code = 1
             return
-        for p in args.strip().split():
+        parts = args.strip().split()
+        no_create = False
+        paths = []
+        for p in parts:
+            if p == "-c":
+                no_create = True
+            elif p.startswith("-") and len(p) > 1:
+                pass
+            else:
+                paths.append(p)
+        if not paths:
+            self._print("  Usage: touch [-c] <file> [file...]")
+            self._last_exit_code = 1
+            return
+        for p in paths:
             target = os.path.expanduser(p)
             try:
                 if os.path.exists(target):
                     os.utime(target, None)
-                else:
+                elif not no_create:
                     Path(target).write_text("")
                 self._last_exit_code = 0
             except PermissionError:
@@ -218,45 +339,111 @@ class LinuxCommandsMixin:
                 self._last_exit_code = 1
 
     def _cmd_cp(self, args: str = "") -> None:
-        """Copy files."""
+        """Copy files (VFS-aware).
+
+        Flags:
+          -r    Recursive copy directories
+          -f    Force (no prompt)
+          -v    Verbose
+          -p    Preserve permissions
+          -i    Interactive (prompt before overwrite)
+        """
         if not args:
-            self._print("  Usage: cp <src> <dst>")
+            self._print("  Usage: cp [-rfvpi] <src> <dst>")
             self._last_exit_code = 1
             return
         parts = args.strip().split()
-        if len(parts) < 2:
-            self._print("  cp: missing destination")
+        recursive = False
+        force = False
+        verbose = False
+        preserve = False
+        interactive = False
+        paths = []
+        for p in parts:
+            if p.startswith("-") and len(p) > 1:
+                flags = p[1:]
+                if "r" in flags:
+                    recursive = True
+                if "f" in flags:
+                    force = True
+                if "v" in flags:
+                    verbose = True
+                if "p" in flags:
+                    preserve = True
+                if "i" in flags:
+                    interactive = True
+            else:
+                paths.append(p)
+        if len(paths) < 2:
+            self._print("  Usage: cp [-rfvpi] <src> <dst>")
             self._last_exit_code = 1
             return
-        src, dst = os.path.expanduser(parts[0]), os.path.expanduser(parts[1])
+        src, dst = os.path.expanduser(paths[0]), os.path.expanduser(paths[1])
         try:
             import shutil as _shutil
             if os.path.isdir(src):
                 _shutil.copytree(src, dst, dirs_exist_ok=True)
             else:
-                _shutil.copy2(src, dst)
+                if interactive and os.path.exists(dst):
+                    self._print(f"  cp: overwrite '{paths[1]}'? ")
+                    ans = input().strip().lower()
+                    if ans not in ("y", "yes"):
+                        self._last_exit_code = 1
+                        return
+                _shutil.copy2(src, dst) if preserve else _shutil.copy(src, dst)
+            if verbose:
+                self._print(f"  '{paths[0]}' -> '{paths[1]}'")
             self._last_exit_code = 0
         except FileNotFoundError:
-            self._print(f"  cp: cannot stat '{parts[0]}': No such file or directory")
+            self._print(f"  cp: cannot stat '{paths[0]}': No such file or directory")
             self._last_exit_code = 1
         except PermissionError:
             self._print(f"  cp: permission denied")
             self._last_exit_code = 1
 
     def _cmd_mv(self, args: str = "") -> None:
-        """Move or rename files."""
+        """Move or rename files (VFS-aware).
+
+        Flags:
+          -f    Force (no prompt)
+          -v    Verbose
+          -i    Interactive (prompt before overwrite)
+        """
         if not args:
-            self._print("  Usage: mv <src> <dst>")
+            self._print("  Usage: mv [-fvi] <src> <dst>")
             self._last_exit_code = 1
             return
         parts = args.strip().split()
-        if len(parts) < 2:
-            self._print("  mv: missing destination")
+        force = False
+        verbose = False
+        interactive = False
+        paths = []
+        for p in parts:
+            if p.startswith("-") and len(p) > 1:
+                flags = p[1:]
+                if "f" in flags:
+                    force = True
+                if "v" in flags:
+                    verbose = True
+                if "i" in flags:
+                    interactive = True
+            else:
+                paths.append(p)
+        if len(paths) < 2:
+            self._print("  Usage: mv [-fvi] <src> <dst>")
             self._last_exit_code = 1
             return
-        src, dst = os.path.expanduser(parts[0]), os.path.expanduser(parts[1])
+        src, dst = os.path.expanduser(paths[0]), os.path.expanduser(paths[1])
         try:
+            if interactive and os.path.exists(dst):
+                self._print(f"  mv: overwrite '{paths[1]}'? ")
+                ans = input().strip().lower()
+                if ans not in ("y", "yes"):
+                    self._last_exit_code = 1
+                    return
             os.rename(src, dst)
+            if verbose:
+                self._print(f"  '{paths[0]}' -> '{paths[1]}'")
             self._last_exit_code = 0
         except FileNotFoundError:
             self._print(f"  mv: cannot stat '{parts[0]}': No such file or directory")
@@ -2529,13 +2716,36 @@ class LinuxCommandsMixin:
         self._print("\033[2J\033[H", end="")
 
     def _cmd_sleep(self, args: str = "") -> None:
-        """Sleep for N seconds: sleep <seconds>"""
-        try:
-            secs = float(args.strip())
-        except ValueError:
-            secs = 1.0
+        """Sleep for a specified time: sleep [SUFFIX]
+
+        Suffixes: s (seconds, default), m (minutes), h (hours), d (days)
+        """
         import time as _time
-        _time.sleep(secs)
+        parts = args.strip().split() if args else []
+        if not parts:
+            return
+        total = 0.0
+        for part in parts:
+            mult = 1.0
+            raw = part
+            if raw.endswith("s"):
+                raw = raw[:-1]
+                mult = 1.0
+            elif raw.endswith("m"):
+                raw = raw[:-1]
+                mult = 60.0
+            elif raw.endswith("h"):
+                raw = raw[:-1]
+                mult = 3600.0
+            elif raw.endswith("d"):
+                raw = raw[:-1]
+                mult = 86400.0
+            try:
+                total += float(raw) * mult
+            except ValueError:
+                pass
+        if total > 0:
+            _time.sleep(total)
 
     def _cmd_date(self, args: str = "") -> None:
         """Show current date and time: date [-u] [+format]"""
@@ -3463,26 +3673,46 @@ class LinuxCommandsMixin:
         Flags:
           -n SEC    Interval between runs (default 2)
           -c        Clear screen between runs
+
+        Legacy syntax: watch SEC COMMAND
         """
         parts = args.strip().split() if args else []
+        if not parts:
+            self._print("  Usage: watch [-n SEC] [-c] COMMAND [...]")
+            self._last_exit_code = 1
+            return
         interval = 2.0
         clear = False
         i = 0
+        has_flags = False
         while i < len(parts):
             if parts[i] == "-n" and i + 1 < len(parts):
                 try:
                     interval = float(parts[i + 1])
                 except ValueError:
-                    interval = 2.0
+                    self._print(f"  Invalid interval: {parts[i + 1]}")
+                    self._last_exit_code = 1
+                    return
                 i += 2
+                has_flags = True
             elif parts[i] == "-c":
                 clear = True
                 i += 1
+                has_flags = True
             elif parts[i] == "--":
                 i += 1
+                has_flags = True
             else:
                 break
         cmd_parts = parts[i:]
+        if not has_flags:
+            try:
+                interval = float(parts[0])
+                cmd_parts = parts[1:]
+            except ValueError:
+                self._print(f"  Invalid interval: {parts[0]}")
+                self._last_exit_code = 1
+                return
         if not cmd_parts:
             self._print("  Usage: watch [-n SEC] [-c] COMMAND [...]")
             self._last_exit_code = 1
@@ -3525,7 +3755,7 @@ class LinuxCommandsMixin:
         """Repeatedly output a string: yes [STRING]"""
         string = args.strip() if args.strip() else "y"
         count = 0
-        max_count = 50
+        max_count = 100
         try:
             while count < max_count:
                 self._print(string)
@@ -3534,3 +3764,453 @@ class LinuxCommandsMixin:
         except KeyboardInterrupt:
             self._print("")
             self._last_exit_code = 130
+
+    # ── pushd / popd / dirs ───────────────────────────────────────
+
+    def _cmd_pushd(self, args: str = "") -> None:
+        """Push directory onto stack: pushd [DIR]"""
+        parts = args.strip().split() if args else []
+        target = parts[0] if parts else None
+        if not hasattr(self, '_dir_stack'):
+            self._dir_stack = []
+        old_cwd = os.getcwd()
+        if target:
+            try:
+                os.chdir(os.path.expanduser(target))
+            except (FileNotFoundError, NotADirectoryError, PermissionError) as e:
+                self._print(f"  pushd: {e}")
+                self._last_exit_code = 1
+                return
+        elif self._dir_stack:
+            os.chdir(self._dir_stack[-1])
+        else:
+            self._print("  pushd: no directory stack")
+            self._last_exit_code = 1
+            return
+        self._dir_stack.append(old_cwd)
+        self._print("  " + " ".join(self._dir_stack[::-1]))
+        self._last_exit_code = 0
+
+    def _cmd_popd(self, args: str = "") -> None:
+        """Pop directory from stack: popd"""
+        if not hasattr(self, '_dir_stack') or not self._dir_stack:
+            self._print("  popd: directory stack empty")
+            self._last_exit_code = 1
+            return
+        target = self._dir_stack.pop()
+        try:
+            os.chdir(target)
+        except (FileNotFoundError, PermissionError) as e:
+            self._print(f"  popd: {e}")
+            self._last_exit_code = 1
+            return
+        self._print("  " + " ".join(self._dir_stack[::-1]))
+        self._last_exit_code = 0
+
+    def _cmd_dirs(self, args: str = "") -> None:
+        """Display directory stack: dirs [-v]"""
+        if not hasattr(self, '_dir_stack'):
+            self._dir_stack = []
+        stack = self._dir_stack[::-1] + [os.getcwd()]
+        if "-v" in args:
+            for i, d in enumerate(stack):
+                self._print(f"  {i}  {d}")
+        else:
+            self._print("  " + " ".join(stack))
+        self._last_exit_code = 0
+
+    # ── tar ───────────────────────────────────────────────────────
+
+    def _cmd_tar(self, args: str = "") -> None:
+        """Archive files (tar-like).
+
+        Flags:
+          -c    Create archive
+          -x    Extract archive
+          -t    List archive contents
+          -v    Verbose
+          -f FILE    Archive file name
+          -z    gzip compression
+        """
+        import tarfile as _tarfile
+        parts = args.strip().split() if args else []
+        if not parts:
+            self._print("  Usage: tar [-ctxvf] [file] [path ...]")
+            self._last_exit_code = 1
+            return
+        create = False
+        extract = False
+        list_mode = False
+        verbose = False
+        archive_file = None
+        compress = False
+        paths = []
+        i = 0
+        while i < len(parts):
+            p = parts[i]
+            if p.startswith("-") and len(p) > 1:
+                flags = p[1:]
+                if "c" in flags:
+                    create = True
+                if "x" in flags:
+                    extract = True
+                if "t" in flags:
+                    list_mode = True
+                if "v" in flags:
+                    verbose = True
+                if "z" in flags:
+                    compress = True
+                if "f" in flags:
+                    if "f" == flags[-1] and i + 1 < len(parts):
+                        archive_file = parts[i + 1]
+                        i += 2
+                    else:
+                        idx = flags.index("f")
+                        rest = flags[idx + 1:]
+                        if rest:
+                            archive_file = rest
+                            i += 1
+                        elif i + 1 < len(parts):
+                            archive_file = parts[i + 1]
+                            i += 2
+                        else:
+                            i += 1
+                else:
+                    i += 1
+            else:
+                paths.append(p)
+                i += 1
+        if not archive_file:
+            self._print("  tar: archive file name required (-f FILE)")
+            self._last_exit_code = 1
+            return
+        if create:
+            try:
+                mode = "w:gz" if compress else "w"
+                with _tarfile.open(archive_file, mode) as tar:
+                    for path in paths:
+                        target = os.path.expanduser(path)
+                        tar.add(target, arcname=path)
+                        if verbose:
+                            self._print(f"  {path}")
+                self._last_exit_code = 0
+            except Exception as e:
+                self._print(f"  tar: {e}")
+                self._last_exit_code = 1
+        elif extract:
+            try:
+                mode = "r:gz" if compress else "r"
+                with _tarfile.open(archive_file, mode) as tar:
+                    tar.extractall(".")
+                    if verbose:
+                        for m in tar.getmembers():
+                            self._print(f"  {m.name}")
+                self._last_exit_code = 0
+            except Exception as e:
+                self._print(f"  tar: {e}")
+                self._last_exit_code = 1
+        elif list_mode:
+            try:
+                mode = "r:gz" if compress else "r"
+                with _tarfile.open(archive_file, mode) as tar:
+                    for m in tar.getmembers():
+                        self._print(f"  {m.name}")
+                self._last_exit_code = 0
+            except Exception as e:
+                self._print(f"  tar: {e}")
+                self._last_exit_code = 1
+        else:
+            self._print("  Usage: tar [-ctxvf] [file] [path ...]")
+            self._last_exit_code = 1
+
+    # ── gzip / gunzip ─────────────────────────────────────────────
+
+    def _cmd_gzip(self, args: str = "") -> None:
+        """Compress files with gzip.
+
+        Flags:
+          -k    Keep original file
+          -d    Decompress (same as gunzip)
+          -v    Verbose
+        """
+        import gzip as _gzip
+        parts = args.strip().split() if args else []
+        keep = "-k" in parts
+        decompress = "-d" in parts
+        verbose = "-v" in parts
+        paths = [p for p in parts if not p.startswith("-")]
+        if not paths:
+            self._print("  Usage: gzip [-kdv] <file> [...]")
+            self._last_exit_code = 1
+            return
+        for path in paths:
+            target = os.path.expanduser(path)
+            if decompress:
+                out_name = target[:-3] if target.endswith(".gz") else target + ".uncompressed"
+                try:
+                    with _gzip.open(target, "rb") as f_in:
+                        data = f_in.read()
+                    with open(out_name, "wb") as f_out:
+                        f_out.write(data)
+                    if not keep:
+                        os.unlink(target)
+                    if verbose:
+                        self._print(f"  {path}")
+                    self._last_exit_code = 0
+                except Exception as e:
+                    self._print(f"  gzip: {e}")
+                    self._last_exit_code = 1
+            else:
+                out_name = target + ".gz"
+                try:
+                    with open(target, "rb") as f_in:
+                        data = f_in.read()
+                    with _gzip.open(out_name, "wb") as f_out:
+                        f_out.write(data)
+                    if not keep:
+                        os.unlink(target)
+                    if verbose:
+                        self._print(f"  {path}")
+                    self._last_exit_code = 0
+                except Exception as e:
+                    self._print(f"  gzip: {e}")
+                    self._last_exit_code = 1
+
+    def _cmd_gunzip(self, args: str = "") -> None:
+        """Decompress gzip files."""
+        self._cmd_gzip(f"-d {args}")
+
+    # ── which ─────────────────────────────────────────────────────
+
+    def _cmd_which(self, args: str = "") -> None:
+        """Locate a command: which COMMAND [...]"""
+        parts = args.strip().split() if args else []
+        if not parts:
+            self._print("  Usage: which <command> [...]")
+            self._last_exit_code = 1
+            return
+        import shutil as _shutil
+        for cmd in parts:
+            if hasattr(self, f"_cmd_{cmd}"):
+                self._print(f"  {cmd}: shell built-in")
+            elif cmd in self.COMMANDS:
+                self._print(f"  {cmd}: shell built-in")
+            else:
+                found = _shutil.which(cmd)
+                if found:
+                    self._print(f"  {found}")
+                else:
+                    self._print(f"  {cmd} not found")
+        self._last_exit_code = 0
+
+    # ── expr ──────────────────────────────────────────────────────
+
+    def _cmd_expr(self, args: str = "") -> None:
+        """Evaluate an expression: expr EXPRESSION
+
+        Supports: +, -, *, /, %, length, substr, index, match
+        """
+        import re as _re
+        expr = args.strip()
+        if not expr:
+            self._print("  Usage: expr EXPRESSION")
+            self._last_exit_code = 1
+            return
+        try:
+            # Handle length operator
+            m = _re.match(r'^length\s+"(.*)"$', expr)
+            if m:
+                self._print(str(len(m.group(1))))
+                self._last_exit_code = 0
+                return
+            m = _re.match(r"^length\s+'(.*)'$", expr)
+            if m:
+                self._print(str(len(m.group(1))))
+                self._last_exit_code = 0
+                return
+            m = _re.match(r'^length\s+(\S+)$', expr)
+            if m:
+                self._print(str(len(m.group(1))))
+                self._last_exit_code = 0
+                return
+            # Handle substr: substr STRING POS LENGTH
+            m = _re.match(r'^substr\s+"(.*)"\s+(\d+)\s+(\d+)$', expr)
+            if m:
+                s, pos, length = m.group(1), int(m.group(2)), int(m.group(3))
+                self._print(s[pos - 1:pos - 1 + length])
+                self._last_exit_code = 0
+                return
+            # Handle index: index STRING CHARS
+            m = _re.match(r'^index\s+"(.*)"\s+"(.*)"$', expr)
+            if m:
+                s, chars = m.group(1), m.group(2)
+                idx = 0
+                for i, c in enumerate(s):
+                    if c in chars:
+                        idx = i + 1
+                        break
+                self._print(str(idx))
+                self._last_exit_code = 0
+                return
+            # Handle arithmetic: simplify expr args
+            safe = expr.replace("*", " * ").replace("/", " / ").replace("%", " % ")
+            safe = safe.replace("+", " + ").replace("-", " - ")
+            tokens = safe.split()
+            result = 0
+            op = "+"
+            for tok in tokens:
+                if tok in ("+", "-", "*", "/", "%"):
+                    op = tok
+                else:
+                    val = int(tok)
+                    if op == "+":
+                        result += val
+                    elif op == "-":
+                        result -= val
+                    elif op == "*":
+                        result *= val
+                    elif op == "/":
+                        result = result // val if val else 0
+                    elif op == "%":
+                        result = result % val if val else 0
+            self._print(str(result))
+            self._last_exit_code = 0
+        except (ValueError, ZeroDivisionError):
+            self._print("  expr: invalid expression")
+            self._last_exit_code = 1
+
+    # ── eval ──────────────────────────────────────────────────────
+
+    def _cmd_eval(self, args: str = "") -> None:
+        """Evaluate arguments as a command: eval COMMAND ..."""
+        if not args:
+            self._last_exit_code = 0
+            return
+        self._execute_single(args, "")
+        self._last_exit_code = 0
+
+    # ── wait ──────────────────────────────────────────────────────
+
+    def _cmd_wait(self, args: str = "") -> None:
+        """Wait for background processes: wait [PID]"""
+        if not hasattr(self, '_bg_threads'):
+            self._bg_threads = {}
+        if not self._bg_threads:
+            self._last_exit_code = 0
+            return
+        for name, t in list(self._bg_threads.items()):
+            if t.is_alive():
+                t.join(timeout=5)
+        self._last_exit_code = 0
+
+    # ── trap ──────────────────────────────────────────────────────
+
+    def _cmd_trap(self, args: str = "") -> None:
+        """Set a signal handler: trap COMMAND SIGNAL
+
+        Simplified: trap '' SIGNAL to ignore, trap - SIGNAL to reset.
+        """
+        parts = args.strip().split() if args else []
+        if len(parts) < 2:
+            if not parts:
+                self._print("  trap -- listing signal handlers")
+            self._last_exit_code = 0
+            return
+        if not hasattr(self, '_trap_handlers'):
+            self._trap_handlers = {}
+        command = parts[0]
+        for sig in parts[1:]:
+            if command == "-":
+                self._trap_handlers.pop(sig, None)
+            elif command == "":
+                self._trap_handlers[sig] = None
+            else:
+                self._trap_handlers[sig] = command
+        self._last_exit_code = 0
+
+    # ── local ─────────────────────────────────────────────────────
+
+    def _cmd_local(self, args: str = "") -> None:
+        """Declare local variables (no-op in non-function context): local VAR=value"""
+        parts = args.strip().split() if args else []
+        for part in parts:
+            if "=" in part:
+                name, value = part.split("=", 1)
+                self._env[name] = value
+            else:
+                self._env[part] = ""
+        self._last_exit_code = 0
+
+    # ── exec ──────────────────────────────────────────────────────
+
+    def _cmd_exec(self, args: str = "") -> None:
+        """Execute a command (replaces current process in shell semantics): exec COMMAND"""
+        if not args:
+            self._last_exit_code = 0
+            return
+        self._execute_single(args, "")
+        self._last_exit_code = 0
+
+    # ── test / [ ──────────────────────────────────────────────────
+
+    def _cmd_test(self, args: str = "") -> None:
+        """Evaluate a conditional expression: test EXPRESSION"""
+        import os as _os
+        expr = args.strip()
+        if not expr:
+            self._last_exit_code = 1
+            return
+        # Strip [ and ] wrappers
+        if expr.startswith("[") and expr.endswith("]"):
+            expr = expr[1:-1].strip()
+        parts = expr.split()
+        if len(parts) == 1:
+            self._last_exit_code = 0 if _os.path.exists(parts[0]) else 1
+            return
+        if len(parts) == 2:
+            op, arg = parts
+            if op == "-e":
+                self._last_exit_code = 0 if _os.path.exists(arg) else 1
+            elif op == "-f":
+                self._last_exit_code = 0 if _os.path.isfile(arg) else 1
+            elif op == "-d":
+                self._last_exit_code = 0 if _os.path.isdir(arg) else 1
+            elif op == "-r":
+                self._last_exit_code = 0 if _os.path.exists(arg) and _os.access(arg, _os.R_OK) else 1
+            elif op == "-w":
+                self._last_exit_code = 0 if _os.path.exists(arg) and _os.access(arg, _os.W_OK) else 1
+            elif op == "-x":
+                self._last_exit_code = 0 if _os.path.exists(arg) and _os.access(arg, _os.X_OK) else 1
+            elif op == "-s":
+                self._last_exit_code = 0 if _os.path.exists(arg) and _os.path.getsize(arg) > 0 else 1
+            elif op == "-z":
+                self._last_exit_code = 0 if len(arg) == 0 else 1
+            elif op == "-n":
+                self._last_exit_code = 0 if len(arg) > 0 else 1
+            elif op == "!":
+                self._last_exit_code = 0
+            else:
+                self._last_exit_code = 1
+            return
+        if len(parts) == 3:
+            left, op, right = parts
+            if op == "=" or op == "==":
+                self._last_exit_code = 0 if left == right else 1
+            elif op == "!=":
+                self._last_exit_code = 0 if left != right else 1
+            elif op == "-eq":
+                self._last_exit_code = 0 if int(left) == int(right) else 1
+            elif op == "-ne":
+                self._last_exit_code = 0 if int(left) != int(right) else 1
+            elif op == "-lt":
+                self._last_exit_code = 0 if int(left) < int(right) else 1
+            elif op == "-le":
+                self._last_exit_code = 0 if int(left) <= int(right) else 1
+            elif op == "-gt":
+                self._last_exit_code = 0 if int(left) > int(right) else 1
+            elif op == "-ge":
+                self._last_exit_code = 0 if int(left) >= int(right) else 1
+            else:
+                self._last_exit_code = 1
+            return
+        self._last_exit_code = 1
