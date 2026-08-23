@@ -76,7 +76,8 @@ class ModelHealthMonitor:
             try:
                 data = json.loads(self.db_path.read_text())
                 self._history = data if isinstance(data, list) else []
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to load health history from %s, resetting: %s", self.db_path, e)
                 self._history = []
 
     def _save_history(self) -> None:
