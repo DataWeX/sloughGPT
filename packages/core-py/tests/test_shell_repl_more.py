@@ -27191,6 +27191,7 @@ class TestCheckPermissionV3:
         assert result is True or "allowed" in str(result).lower()
 
     def test_check_denied(self, repl):
+        repl._perms._granted.discard("rm")
         result = repl._check_permission("rm", "", False)
         assert result is False
 
