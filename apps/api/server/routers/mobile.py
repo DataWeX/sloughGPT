@@ -584,7 +584,7 @@ class MobileRouter:
         })
         if err:
             raise_error(f"Failed to create knowledge: {err}", "E_DOMAIN")
-        return result
+        return success_response(data=result)
 
     async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest) -> dict:
         """
@@ -611,7 +611,7 @@ class MobileRouter:
         result, err = await self._internal_patch(request, f"/knowledge/{item_id}", update_body)
         if err:
             raise_error(f"Failed to update knowledge: {err}", "E_DOMAIN")
-        return result
+        return success_response(data=result)
 
     async def delete_knowledge(self, request: Request, item_id: str) -> dict:
         """

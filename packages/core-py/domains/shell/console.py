@@ -796,10 +796,10 @@ class Console:
         self._emit("date_picker", {"message": message})
         return self._interactive.date_picker(message, default)
 
-    def color_picker(self, message: str, default: str = "#ffffff") -> str:
+    def color_picker_rgb(self, message: str, default: str = "#ffffff") -> str:
         """Interactive hex color picker with RGB sliders."""
-        self._emit("color_picker", {"message": message})
-        return self._interactive.color_picker(message, default)
+        self._emit("color_picker_rgb", {"message": message})
+        return self._interactive.color_picker_rgb(message, default)
 
     def confirm_timeout(self, message: str, timeout: float = 5.0,
                         default: bool = True) -> bool:
@@ -1192,6 +1192,83 @@ class Console:
         """Display a clock animation spinner."""
         self._emit("spinner_clock", {"message": message})
         self._interactive.spinner_clock(message, duration)
+
+    def select_with_preview_and_confirm(self, message: str, options: list[str],
+                                        preview_fn: Callable[[str], str],
+                                        default: str = "") -> str:
+        """Select with preview and confirm."""
+        self._emit("select_with_preview_and_confirm", {"message": message})
+        return self._interactive.select_with_preview_and_confirm(message, options, preview_fn, default)
+
+    def confirm_with_preview_and_countdown(self, message: str, preview: str,
+                                           timeout: int = 10,
+                                           default: bool = True) -> bool:
+        """Confirm with preview and countdown."""
+        self._emit("confirm_with_preview_and_countdown", {"message": message})
+        return self._interactive.confirm_with_preview_and_countdown(message, preview, timeout, default)
+
+    def progress_bar_with_status_and_eta(self, label: str, current: int,
+                                         total: int, status: str,
+                                         width: int = 30,
+                                         elapsed: float = 0.0) -> None:
+        """Display a progress bar with status and ETA."""
+        self._emit("progress_bar_with_status_and_eta", {"label": label})
+        self._interactive.progress_bar_with_status_and_eta(label, current, total, status, width, elapsed)
+
+    def spinner_with_messages(self, message: str, messages: list[str],
+                              duration: float = 3.0) -> None:
+        """Display a spinner cycling through messages."""
+        self._emit("spinner_with_messages", {"message": message})
+        self._interactive.spinner_with_messages(message, messages, duration)
+
+    def select_with_filter_and_preview(self, message: str,
+                                       options: list[str],
+                                       preview_fn: Callable[[str], str]) -> str:
+        """Select with type-to-filter and live preview."""
+        self._emit("select_with_filter_and_preview", {"message": message})
+        return self._interactive.select_with_filter_and_preview(message, options, preview_fn)
+
+    def select_table_with_preview(self, headers: list[str],
+                                  rows: list[list[str]],
+                                  preview_fn: Callable[[list[str]], str]) -> list[str]:
+        """Select a row from a table with live preview."""
+        self._emit("select_table_with_preview", {})
+        return self._interactive.select_table_with_preview(headers, rows, preview_fn)
+
+    def confirm_with_preview_and_edit_with_timeout(self, message: str,
+                                                   preview: str,
+                                                   edit_prompt: str = "Edit:",
+                                                   timeout: int = 10,
+                                                   default: bool = True) -> tuple[bool, str]:
+        """Confirm with preview, optional edit, and timeout."""
+        self._emit("confirm_with_preview_and_edit_with_timeout", {"message": message})
+        return self._interactive.confirm_with_preview_and_edit_with_timeout(
+            message, preview, edit_prompt, timeout, default)
+
+    def progress_bar_with_eta_and_status(self, label: str, current: int,
+                                         total: int, status: str,
+                                         elapsed: float = 0.0,
+                                         width: int = 30) -> None:
+        """Display a progress bar with ETA and status."""
+        self._emit("progress_bar_with_eta_and_status", {"label": label})
+        self._interactive.progress_bar_with_eta_and_status(
+            label, current, total, status, elapsed, width)
+
+    def spinner_with_dots_and_status(self, message: str, status: str,
+                                     duration: float = 2.0) -> None:
+        """Display a spinner with dots and status."""
+        self._emit("spinner_with_dots_and_status", {"message": message})
+        self._interactive.spinner_with_dots_and_status(message, status, duration)
+
+    def select_with_preview_and_countdown(self, message: str,
+                                          options: list[str],
+                                          preview_fn: Callable[[str], str],
+                                          timeout: int = 10,
+                                          default: str = "") -> str:
+        """Select with preview and countdown."""
+        self._emit("select_with_preview_and_countdown", {"message": message})
+        return self._interactive.select_with_preview_and_countdown(
+            message, options, preview_fn, timeout, default)
 
     # ── Cursor control ───────────────────────────────────────────────
 

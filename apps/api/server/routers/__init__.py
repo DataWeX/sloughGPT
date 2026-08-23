@@ -60,7 +60,7 @@ def get_all_routers() -> List[APIRouter]:
         "images", "files", "voice", "infer",
         "vm", "memory", "docstore",
         "collections",
-        "shell",
+        "shell", "world_render",
     ]
 
     _cached_routers = []

@@ -55,10 +55,10 @@ class TestMobileDashboard:
     def test_returns_dashboard_data(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = [
-                {"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5},
-                {"name": "sage", "description": "A wise soul"},
-                {"sessions": [{"id": "s1", "title": "Chat", "messages": [{"content": "hi"}], "updated_at": "2026-01-01"}]},
-                [{"model_id": "gpt2"}],
+                ({"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5}, None),
+                ({"name": "sage", "description": "A wise soul"}, None),
+                ({"sessions": [{"id": "s1", "title": "Chat", "messages": [{"content": "hi"}], "updated_at": "2026-01-01"}]}, None),
+                ([{"model_id": "gpt2"}], None),
             ]
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
@@ -120,11 +120,11 @@ class TestMobileModels:
     def test_returns_model_list(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = [
-                [{"model_id": "gpt2", "name": "GPT-2", "loaded": True, "source": "local"}],
-                [],
-                {"name": "sage"},
-                [],
-                {"model_type": "gpt2"},
+                ([{"model_id": "gpt2", "name": "GPT-2", "loaded": True, "source": "local"}], None),
+                ([], None),
+                ({"name": "sage"}, None),
+                ([], None),
+                ({"model_type": "gpt2"}, None),
             ]
             resp = client.get("/mobile/models")
             assert resp.status_code == 200
@@ -166,10 +166,10 @@ class TestMobileHealth:
     def test_returns_health_data(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = [
-                {"status": "healthy", "model_type": "gpt2", "model_loaded": True,
+                ({"status": "healthy", "model_type": "gpt2", "model_loaded": True,
                  "uptime_seconds": 100, "system": {"cpu_percent": 50.0, "memory_percent": 60.0,
-                                                    "memory_available_mb": 8192}},
-                {"disk_used_bytes": 1073741824, "disk_free_bytes": 2147483648},
+                                                    "memory_available_mb": 8192}}, None),
+                ({"disk_used_bytes": 1073741824, "disk_free_bytes": 2147483648}, None),
             ]
             resp = client.get("/mobile/health")
             assert resp.status_code == 200
@@ -211,10 +211,10 @@ class TestMobileKnowledgeCreate:
 
     def test_empty_content_returns_error(self, client):
         with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = None
+            mock_post.return_value = (None, "Failed to create knowledge")
             resp = client.post("/mobile/knowledge", json={"content": ""})
             assert resp.status_code == 400
-            body = resp.json()["data"]
+            body = resp.json()
             assert "error" in body
 
 
@@ -230,8 +230,7 @@ class TestMobileSyncStatus:
             resp = client.get("/mobile/sync/status")
             assert resp.status_code == 200
             body = resp.json()["data"]
-            assert body["status"] == "success"
-            assert body["data"]["reachable"] is True
+            assert body["reachable"] is True
 
 
 # ── POST /mobile/notifications/register ───────────────────────────────────────
@@ -394,10 +393,10 @@ class TestMobileDashboardEdges:
     def test_non_dict_sessions_returns_empty_recent(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = [
-                {"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5},
-                {"name": "sage"},
-                [{"id": "s1"}],  # list instead of {"sessions": [...]}
-                [{"model_id": "gpt2"}],
+                ({"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5}, None),
+                ({"name": "sage"}, None),
+                ([{"id": "s1"}], None),  # list instead of {"sessions": [...]}
+                ([{"model_id": "gpt2"}], None),
             ]
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
@@ -406,7 +405,7 @@ class TestMobileDashboardEdges:
 
     def test_missing_health_defaults(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = None
+            mock_get.return_value = (None, None)
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -417,13 +416,13 @@ class TestMobileDashboardEdges:
     def test_last_message_uses_newest_session(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = [
-                {"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5},
-                {"name": "sage"},
-                {"sessions": [
+                ({"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5}, None),
+                ({"name": "sage"}, None),
+                ({"sessions": [
                     {"id": "old", "title": "Older", "messages": [{"content": "stale"}], "updated_at": "2026-01-01"},
                     {"id": "new", "title": "Newer", "messages": [{"content": "fresh"}], "updated_at": "2026-06-01"},
-                ]},
-                [{"model_id": "gpt2"}],
+                ]}, None),
+                ([{"model_id": "gpt2"}], None),
             ]
             body = client.get("/mobile/dashboard").json()["data"]
             assert body["recent_conversations"][0]["id"] == "new"
@@ -467,7 +466,7 @@ class TestMobileConversationsEdges:
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = ({"sessions": sessions}, None)
             resp = client.get("/mobile/conversations", params={"search": "keyword"})
-            assert resp.json()["total"] == 1
+            assert resp.json()["data"]["total"] == 1
 
     def test_pagination_validation(self, client):
         resp = client.get("/mobile/conversations", params={"page": 0})
@@ -515,12 +514,12 @@ class TestMobileKnowledgeUpdate:
             mock_patch.return_value = ({"id": "k1", "content": "updated", "topic": "new"}, None)
             resp = client.patch("/mobile/knowledge/k1", json={"content": "updated", "topic": "new"})
             assert resp.status_code == 200
-            assert resp.json()["content"] == "updated"
+            assert resp.json()["data"]["content"] == "updated"
             assert mock_patch.call_args.args[1] == "/knowledge/k1"
 
     def test_update_failure_returns_error(self, client):
         with patch.object(MobileRouter, "_internal_patch", new_callable=AsyncMock) as mock_patch:
-            mock_patch.return_value = None
+            mock_patch.return_value = (None, "HTTP 500: server error")
             resp = client.patch("/mobile/knowledge/k1", json={"content": "x"})
             assert resp.status_code == 400
             assert "error" in resp.json()
@@ -557,7 +556,7 @@ class TestMobileKnowledgeListEdges:
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = ({"results": [{"id": "k1", "content": "match", "topic": "t"}]}, None)
             resp = client.get("/mobile/knowledge", params={"search": "match"})
-            assert resp.json()["total"] == 1
+            assert resp.json()["data"]["total"] == 1
             assert mock_get.call_args.args[1] == "/knowledge/search?query=match"
 
     def test_topic_filter_applied_after_fetch(self, client):
@@ -586,7 +585,7 @@ class TestMobileKnowledgeListEdges:
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = ({"not": "a list"}, None)
             resp = client.get("/mobile/knowledge")
-            assert resp.json()["items"] == []
+            assert resp.json()["data"]["items"] == []
 
 
 # ── Sync offline ──────────────────────────────────────────────────────────────
@@ -608,16 +607,15 @@ class TestMobileSyncOffline:
             })
             assert resp.status_code == 200
             body = resp.json()["data"]
-            assert body["status"] == "success"
-            assert body["data"]["synced_count"] == 2
-            assert body["data"]["failed_count"] == 0
-            assert body["data"]["results"][0]["status"] == "sent"
-            assert body["data"]["results"][0]["assistant_message"]["content"] == "hi there"
+            assert body["synced_count"] == 2
+            assert body["failed_count"] == 0
+            assert body["results"][0]["status"] == "sent"
+            assert body["results"][0]["assistant_message"]["content"] == "hi there"
 
     def test_no_response_marks_error(self, client):
         with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post, \
              patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_post.return_value = None
+            mock_post.return_value = (None, "No response")
             mock_get.return_value = ({}, None)
             resp = client.post("/mobile/sync", json={
                 "pending_messages": [
@@ -625,16 +623,16 @@ class TestMobileSyncOffline:
                 ],
             })
             body = resp.json()["data"]
-            assert body["data"]["failed_count"] == 1
-            assert body["data"]["results"][0]["status"] == "error"
+            assert body["failed_count"] == 1
+            assert body["results"][0]["status"] == "error"
 
     def test_empty_pending_messages(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = ({"sessions": []}, None)
             resp = client.post("/mobile/sync", json={"pending_messages": []})
             body = resp.json()["data"]
-            assert body["data"]["synced_count"] == 0
-            assert body["data"]["results"] == []
+            assert body["synced_count"] == 0
+            assert body["results"] == []
 
     def test_sessions_wrapped_in_data_field(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
@@ -653,22 +651,22 @@ class TestMobileNotificationsSend:
     @patch("domains.mobile.notifications.get_notification_service")
     def test_sends_notification(self, mock_get_svc, client):
         svc = MagicMock()
-        svc.send_notification.return_value = {"sent": 3}
+        svc.send_notification_async = AsyncMock(return_value={"sent": 3})
         mock_get_svc.return_value = svc
         resp = client.post("/mobile/notifications/send", json={"title": "Hi", "body": "World"})
         assert resp.status_code == 200
-        assert resp.json()["sent"] == 3
-        assert svc.send_notification.call_args.kwargs["topic"] is None
+        assert resp.json()["data"]["sent"] == 3
+        assert svc.send_notification_async.call_args.kwargs["topic"] is None
 
     @patch("domains.mobile.notifications.get_notification_service")
     def test_sends_with_topic_and_tokens(self, mock_get_svc, client):
         svc = MagicMock()
-        svc.send_notification.return_value = {"sent": 1}
+        svc.send_notification_async = AsyncMock(return_value={"sent": 1})
         mock_get_svc.return_value = svc
         resp = client.post("/mobile/notifications/send",
                            json={"title": "Hi", "body": "World", "topic": "news", "badge": 5})
         assert resp.status_code == 200
-        payload = svc.send_notification.call_args.kwargs["payload"]
+        payload = svc.send_notification_async.call_args.kwargs["payload"]
         assert payload.badge == 5
         assert payload.topic == "news"
 
@@ -687,7 +685,7 @@ class TestMobileNotificationsHistory:
         mock_get_svc.return_value = svc
         resp = client.get("/mobile/notifications/history")
         assert resp.status_code == 200
-        assert len(resp.json()["history"]) == 1
+        assert len(resp.json()["data"]["history"]) == 1
 
     @patch("domains.mobile.notifications.get_notification_service")
     def test_history_limit_validation(self, mock_get_svc, client):
@@ -705,7 +703,7 @@ class TestMobileNotificationsCleanup:
         mock_get_svc.return_value = svc
         resp = client.post("/mobile/notifications/cleanup")
         assert resp.status_code == 200
-        assert resp.json()["removed"] == 4
+        assert resp.json()["data"]["removed"] == 4
 
 
 class TestMobileNotifyTrainingComplete:
@@ -816,7 +814,7 @@ class TestMobileDeletePair:
         mock_get_store.return_value = store
         resp = client.delete("/mobile/train/pair/p1")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert resp.json()["data"]["status"] == "deleted"
 
     @patch("domains.training.mobile_training_store.get_training_store")
     def test_missing_pair_returns_404(self, mock_get_store, client):
@@ -852,7 +850,7 @@ class TestMobileDeletePairsBulk:
         mock_get_store.return_value = store
         resp = client.delete("/mobile/train/pairs/bulk", params={"ids": ["p1", "p2", "p3"]})
         assert resp.status_code == 200
-        assert resp.json()["count"] == 2
+        assert resp.json()["data"]["count"] == 2
 
     @patch("domains.training.mobile_training_store.get_training_store")
     def test_requires_ids(self, mock_get_store, client):
@@ -892,7 +890,7 @@ class TestMobileAutoTrainConfig:
         resp = client.patch("/mobile/train/auto-config", params={"threshold": 5})
         assert resp.status_code == 200
         assert trainer.threshold == 5
-        assert resp.json()["threshold"] == 5
+        assert resp.json()["data"]["threshold"] == 5
 
     @patch("domains.training.auto_trainer.get_auto_trainer")
     def test_updates_interval_only(self, mock_get_trainer, client):

@@ -64,6 +64,8 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         # Deployment tracking
         self.deployments: Dict[str, Deployment] = {}
         self.active_deployments: Dict[str, asyncio.Task] = {}
+        self._approval_events: Dict[str, asyncio.Event] = {}
+        self._denied_deployments: set = set()
 
         # Environment configurations
         self.environment_configs = {
@@ -71,16 +73,19 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
                 "auto_deploy": True,
                 "require_approval": False,
                 "health_check_timeout": 30,
+                "approval_timeout": 10,
             },
             DeploymentEnvironment.STAGING: {
                 "auto_deploy": True,
                 "require_approval": True,
                 "health_check_timeout": 60,
+                "approval_timeout": 30,
             },
             DeploymentEnvironment.PRODUCTION: {
                 "auto_deploy": False,
                 "require_approval": True,
                 "health_check_timeout": 120,
+                "approval_timeout": 60,
             },
         }
 
@@ -91,6 +96,9 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             "failed_deployments": 0,
             "rolled_back_deployments": 0,
         }
+
+        # Service tracking
+        self._service_replicas: Dict[str, int] = {}
 
         self.is_initialized = False
 
@@ -132,10 +140,20 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             raise ComponentException(f"Deployment Manager shutdown failed: {e}")
 
     async def scale(self, service_id: str, replicas: int) -> bool:
-        """Scale a service"""
-        self.logger.info(f"Scaling service {service_id} to {replicas} replicas",
-            extra={"tag": "INFRA"})
+        """Scale a service to the given number of replicas."""
+        if replicas < 0:
+            raise ComponentException("Replica count cannot be negative")
+        old = self._service_replicas.get(service_id, 1)
+        self._service_replicas[service_id] = replicas
+        self.logger.info(
+            "Scaled service %s: %d -> %d replicas",
+            service_id, old, replicas, extra={"tag": "INFRA"},
+        )
         return True
+
+    def get_service_replicas(self, service_id: str) -> int:
+        """Get current replica count for a service."""
+        return self._service_replicas.get(service_id, 1)
 
     async def deploy(self, config: Dict[str, Any], environment: str) -> str:
         """Deploy to environment"""
@@ -292,32 +310,160 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
                 del self.active_deployments[deployment.deployment_id]
 
     async def _wait_for_approval(self, deployment: Deployment) -> None:
-        """Wait for deployment approval"""
-        # Placeholder for approval process
-        self.logger.info(f"Deployment {deployment.deployment_id} requires approval",
-            extra={"tag": "INFRA"})
-        await asyncio.sleep(1)  # Simulate approval wait
+        """Wait for deployment approval via event signal.
+
+        Approval can be granted externally by calling ``approve_deployment()``
+        or denied via ``deny_deployment()``.  Times out after the environment's
+        ``approval_timeout`` (falls back to ``health_check_timeout``) and raises.
+        """
+        event = asyncio.Event()
+        self._approval_events[deployment.deployment_id] = event
+        env_cfg = self.environment_configs[deployment.environment]
+        timeout = env_cfg.get("approval_timeout", env_cfg["health_check_timeout"])
+
+        self.logger.info(
+            "Deployment %s awaiting approval (timeout=%ds)",
+            deployment.deployment_id, timeout,
+            extra={"tag": "INFRA"},
+        )
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            raise ComponentException(
+                f"Deployment {deployment.deployment_id} approval timed out after {timeout}s"
+            )
+        finally:
+            self._approval_events.pop(deployment.deployment_id, None)
+
+        # Check if denied
+        if deployment.deployment_id in self._denied_deployments:
+            self._denied_deployments.discard(deployment.deployment_id)
+            raise ComponentException(f"Deployment {deployment.deployment_id} was denied")
+
+    def approve_deployment(self, deployment_id: str) -> None:
+        """Approve a pending deployment."""
+        event = self._approval_events.get(deployment_id)
+        if event is None:
+            raise ComponentException(f"No pending approval for {deployment_id}")
+        event.set()
+
+    def deny_deployment(self, deployment_id: str) -> None:
+        """Deny a pending deployment."""
+        self._denied_deployments.add(deployment_id)
+        event = self._approval_events.get(deployment_id)
+        if event is not None:
+            event.set()
 
     async def _prepare_deployment(self, deployment: Deployment) -> None:
-        """Prepare deployment environment"""
-        self.logger.info(f"Preparing deployment {deployment.deployment_id}",
+        """Prepare deployment environment.
+
+        Validates config keys, creates a backup manifest of the current state,
+        and records the preparation timestamp.
+        """
+        import json as _json
+        import os
+        from pathlib import Path
+
+        self.logger.info("Preparing deployment %s", deployment.deployment_id,
             extra={"tag": "INFRA"})
-        await asyncio.sleep(2)  # Simulate preparation
+
+        # Validate required config keys
+        required = {"version", "image"}
+        missing = required - set(deployment.config.keys())
+        if missing:
+            raise ComponentException(
+                f"Missing required config keys: {', '.join(sorted(missing))}"
+            )
+
+        # Create deployment directory
+        deploy_dir = Path("/tmp") / "deployments" / deployment.deployment_id
+        deploy_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write backup manifest
+        manifest = {
+            "deployment_id": deployment.deployment_id,
+            "environment": deployment.environment.value,
+            "config": deployment.config,
+            "prepared_at": time.time(),
+        }
+        (deploy_dir / "manifest.json").write_text(_json.dumps(manifest, indent=2))
+
+        # Store deploy dir on deployment for later phases
+        deployment.config["_deploy_dir"] = str(deploy_dir)
+        deployment.config["_prepare_time"] = time.time()
 
     async def _deploy_application(self, deployment: Deployment) -> None:
-        """Deploy the application"""
-        self.logger.info(f"Deploying application for {deployment.deployment_id}",
+        """Deploy the application.
+
+        Writes a version marker file and simulates applying configuration
+        by writing a runtime config file into the deployment directory.
+        """
+        import json as _json
+        from pathlib import Path
+
+        self.logger.info("Deploying application for %s", deployment.deployment_id,
             extra={"tag": "INFRA"})
-        await asyncio.sleep(5)  # Simulate deployment
+
+        deploy_dir = Path(deployment.config.get("_deploy_dir", "/tmp"))
+        deploy_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write version marker
+        version = deployment.config.get("version", "unknown")
+        (deploy_dir / "VERSION").write_text(version)
+
+        # Write runtime config
+        runtime = {
+            "version": version,
+            "image": deployment.config.get("image", ""),
+            "deployed_at": time.time(),
+            "environment": deployment.environment.value,
+            "environment_config": {
+                k: v for k, v in self.environment_configs[deployment.environment].items()
+            },
+        }
+        (deploy_dir / "runtime.json").write_text(_json.dumps(runtime, indent=2))
+
+        deployment.config["_deploy_time"] = time.time()
 
     async def _run_health_checks(self, deployment: Deployment) -> None:
-        """Run post-deployment health checks"""
-        env_config = self.environment_configs[deployment.environment]
-        timeout = env_config["health_check_timeout"]
+        """Run post-deployment health checks.
 
-        self.logger.info(f"Running health checks for {deployment.deployment_id}",
+        Verifies the deployment directory exists and the version marker was
+        written correctly.  Repeats checks up to ``health_check_timeout / 2``
+        times with 1s intervals.
+        """
+        import json as _json
+        from pathlib import Path
+
+        self.logger.info("Running health checks for %s", deployment.deployment_id,
             extra={"tag": "INFRA"})
-        await asyncio.sleep(min(timeout, 10))  # Simulate health checks
+
+        deploy_dir = Path(deployment.config.get("_deploy_dir", "/tmp"))
+        version = deployment.config.get("version", "unknown")
+        timeout = self.environment_configs[deployment.environment]["health_check_timeout"]
+        max_attempts = max(1, timeout // 2)
+
+        for attempt in range(1, max_attempts + 1):
+            # Check version marker
+            version_file = deploy_dir / "VERSION"
+            if version_file.exists() and version_file.read_text().strip() == version:
+                # Check runtime config
+                runtime_file = deploy_dir / "runtime.json"
+                if runtime_file.exists():
+                    runtime = _json.loads(runtime_file.read_text())
+                    if runtime.get("version") == version:
+                        self.logger.info(
+                            "Health check passed for %s (attempt %d/%d)",
+                            deployment.deployment_id, attempt, max_attempts,
+                            extra={"tag": "INFRA"},
+                        )
+                        return
+            if attempt < max_attempts:
+                await asyncio.sleep(1)
+
+        raise ComponentException(
+            f"Health checks failed for {deployment.deployment_id} after {max_attempts} attempts"
+        )
 
 
 __all__ = ["DeploymentEnvironment", "DeploymentStatus", "Deployment", "DeploymentManager"]
