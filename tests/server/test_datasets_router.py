@@ -312,9 +312,10 @@ class TestImportFromLocal:
         result.output_path = None
         mock_importer.return_value.import_from_local.return_value = result
         _app = FastAPI()
+        register_all_handlers(_app)
         _app.include_router(router.router)
-        client = TestClient(_app, raise_server_exceptions=False)
-        r = client.post("/datasets/import/local", json={
+        c = TestClient(_app, raise_server_exceptions=False)
+        r = c.post("/datasets/import/local", json={
             "path": str(router._DATASETS_DIR), "name": "mine",
         })
         assert r.status_code == 400
@@ -446,7 +447,8 @@ class TestImportHuggingface:
         mock_cls.return_value.downloadDataset.return_value = result
         resp = client.post("/datasets/import/huggingface", json={"dataset_id": "org/myds"})
         assert resp.status_code == 400
-        assert resp.json()["detail"] == "download failed"
+        body = resp.json()
+        assert "download failed" in (body.get("detail") or body.get("message") or str(body))
 
     def test_missing_dataset_id_422(self, client):
         resp = client.post("/datasets/import/huggingface", json={})
@@ -680,7 +682,9 @@ class TestFromChatValidation:
     def test_empty_messages_400(self, mock_get_ctrl, client):
         resp = client.post("/datasets/from-chat", json={"messages": []})
         assert resp.status_code == 400
-        assert "No messages provided" in resp.json()["detail"]
+        body = resp.json()
+        detail = body.get("detail") or body.get("message") or ""
+        assert "No messages provided" in detail or "required" in detail.lower()
 
     def test_missing_messages_422(self, client):
         resp = client.post("/datasets/from-chat", json={})

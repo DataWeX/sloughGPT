@@ -819,6 +819,42 @@ class Console:
         self._emit("wizard", {"message": message})
         return self._interactive.wizard(steps, message)
 
+    def spreadsheet_editor(self, headers: list[str], rows: list[list[str]],
+                           message: str = "Spreadsheet:") -> list[list[str]]:
+        """Interactive spreadsheet editor."""
+        self._emit("spreadsheet_editor", {"message": message})
+        return self._interactive.spreadsheet_editor(headers, rows, message)
+
+    def hierarchical_menu(self, menu: dict[str, str | list[str] | dict],
+                          message: str = "Menu:") -> str | None:
+        """Navigate a hierarchical menu."""
+        self._emit("hierarchical_menu", {"message": message})
+        return self._interactive.hierarchical_menu(menu, message)
+
+    def form(self, fields: list[dict[str, str | list[str] | None | bool]],
+             message: str = "Form") -> dict[str, str]:
+        """Multi-field form with validation."""
+        self._emit("form", {"message": message})
+        return self._interactive.form(fields, message)
+
+    def playlist_manager(self, items: list[str], message: str = "Playlist:") -> list[str]:
+        """Manage ordered list with move up/down and delete."""
+        self._emit("playlist_manager", {"message": message})
+        return self._interactive.playlist_manager(items, message)
+
+    def kanban_board(self, columns: dict[str, list[str]],
+                     message: str = "Kanban") -> dict[str, list[str]]:
+        """Interactive kanban board."""
+        self._emit("kanban_board", {"message": message})
+        return self._interactive.kanban_board(columns, message)
+
+    def calendar_view(self, year: int, month: int,
+                      events: dict[int, str] | None = None,
+                      message: str = "Calendar") -> int | None:
+        """Interactive calendar view with day selection."""
+        self._emit("calendar_view", {"message": message})
+        return self._interactive.calendar_view(year, month, events, message)
+
     def progress_step(self, steps: list[str], current: int, done: bool = False) -> None:
         """Display a step-by-step progress indicator."""
         self._emit("progress_step", {"current": current, "done": done})

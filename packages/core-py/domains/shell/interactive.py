@@ -2275,6 +2275,518 @@ class InteractivePrompt:
             _clear()
             return results
 
+    # ── Spreadsheet editor ────────────────────────────────────────────
+
+    def spreadsheet_editor(self, headers: list[str], rows: list[list[str]],
+                           message: str = "Spreadsheet:") -> list[list[str]]:
+        """Interactive spreadsheet editor with cell navigation."""
+        if not self._is_tty:
+            return rows
+        return self._spreadsheet_editor_raw(headers, rows, message)
+
+    def _spreadsheet_editor_raw(self, headers: list[str], rows: list[list[str]],
+                                message: str) -> list[list[str]]:
+        fd = self._get_fd()
+        col = 0
+        row = 0
+        editing = False
+        edit_buf = ""
+        col_widths = [max(len(h), max((len(r[i]) for r in rows), default=0))
+                     for i, h in enumerate(headers)]
+
+        def _render() -> str:
+            lines = []
+            header = "  " + "  ".join(f"{_BOLD}{h:<{col_widths[i]}}{_RESET}"
+                                      for i, h in enumerate(headers))
+            lines.append(header)
+            for r_idx, r in enumerate(rows):
+                cells = []
+                for c_idx, c in enumerate(r):
+                    display = c[:col_widths[c_idx]]
+                    if r_idx == row and c_idx == col and editing:
+                        cells.append(f"{_REVERSE}{_CYAN}{edit_buf}\u2502{_RESET_REVERSE}")
+                    elif r_idx == row and c_idx == col:
+                        cells.append(f"{_REVERSE}{display}{_RESET_REVERSE}")
+                    elif r_idx == row:
+                        cells.append(f"{_CYAN}{display}{_RESET}")
+                    elif c_idx == col:
+                        cells.append(f"{_YELLOW}{display}{_RESET}")
+                    else:
+                        cells.append(display)
+                lines.append("  " + "  ".join(cells))
+            pos = f"  {_DIM}row {row + 1}/{len(rows)}, col {col + 1}/{len(headers)}{_RESET}"
+            help_text = f"  {_DIM}(arrows=move, enter=edit, tab=new row, esc=done){_RESET}" if not editing else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
+                + "\n".join(lines)
+                + f"\n{pos}\n{help_text}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(4 + len(rows) + 2):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if editing:
+                        if key.kind == _KEY_ENTER:
+                            rows[row][col] = edit_buf
+                            editing = False
+                        elif key.kind == _KEY_ESC:
+                            editing = False
+                        elif key.kind == _KEY_CHAR:
+                            if key.char == "\x7f":
+                                edit_buf = edit_buf[:-1]
+                            else:
+                                edit_buf += key.char
+                        elif key.kind == _KEY_BACKSPACE:
+                            edit_buf = edit_buf[:-1]
+                    else:
+                        if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                            _clear(); return rows
+                        if key.kind == _KEY_ENTER:
+                            editing = True
+                            edit_buf = rows[row][col]
+                        if key.kind == _KEY_UP:
+                            row = (row - 1) % len(rows)
+                        elif key.kind == _KEY_DOWN:
+                            row = (row + 1) % len(rows)
+                        elif key.kind == _KEY_LEFT:
+                            col = (col - 1) % len(headers)
+                        elif key.kind == _KEY_RIGHT:
+                            col = (col + 1) % len(headers)
+                        elif key.kind == _KEY_TAB:
+                            new_row = [""] * len(headers)
+                            rows.insert(row + 1, new_row)
+                            row += 1
+                            col = 0
+                        elif key.kind == _KEY_DELETE:
+                            if len(rows) > 1:
+                                rows.pop(row)
+                                row = row % len(rows)
+        except (termios.error, OSError):
+            return rows
+
+    # ── Hierarchical menu ─────────────────────────────────────────────
+
+    def hierarchical_menu(self, menu: dict[str, str | list[str] | dict],
+                          message: str = "Menu:") -> str | None:
+        """Navigate a hierarchical menu with nested dicts.
+
+        Args:
+            menu: nested dict structure. Leaf values are action strings.
+                  Nested dicts become submenus.
+            message: prompt text
+
+        Returns:
+            selected action string or None
+        """
+        if not self._is_tty:
+            return None
+        return self._hierarchical_menu_raw(menu, message)
+
+    def _hierarchical_menu_raw(self, menu: dict[str, str | list[str] | dict],
+                               message: str) -> str | None:
+        fd = self._get_fd()
+        path: list[dict] = [menu]
+        idx = 0
+
+        def _current() -> dict:
+            return path[-1]
+
+        def _items() -> list[str]:
+            return list(_current().keys())
+
+        def _render() -> str:
+            items = _items()
+            breadcrumb = " > ".join(str(k) for k in path[1:])
+            breadcrumb_str = f"  {_DIM}{breadcrumb}{_RESET}" if breadcrumb else ""
+            lines = []
+            for i, item in enumerate(items):
+                val = _current()[item]
+                is_dir = isinstance(val, dict)
+                icon = "\U0001f4c1" if is_dir else "\u25b6"
+                prefix = ">> " if i == idx else "   "
+                color = _CYAN if i == idx else ""
+                reset = _RESET if i == idx else ""
+                lines.append(f"  {prefix}{color}{icon} {item}{_RESET}")
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, enter=open, backspace=back){_RESET}\n"
+                + breadcrumb_str
+                + "\n" + "\n".join(lines)
+                + f"{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(3 + len(_items())):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    items = _items()
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return None
+                    if key.kind == _KEY_ENTER:
+                        val = _current()[items[idx]]
+                        if isinstance(val, dict):
+                            path.append(val)
+                            idx = 0
+                        else:
+                            _clear(); return str(val)
+                    if key.kind == _KEY_BACKSPACE:
+                        if len(path) > 1:
+                            path.pop()
+                            idx = 0
+                    if key.kind == _KEY_UP:
+                        idx = (idx - 1) % len(items)
+                    elif key.kind == _KEY_DOWN:
+                        idx = (idx + 1) % len(items)
+        except (termios.error, OSError):
+            return None
+
+    # ── Form builder ──────────────────────────────────────────────────
+
+    def form(self, fields: list[dict[str, str | list[str] | None | bool]],
+             message: str = "Form") -> dict[str, str]:
+        """Multi-field form with validation.
+
+        Each field is a dict with:
+            'label': field label
+            'type': 'text' | 'select' | 'toggle' | 'password'
+            'options': list of options (for select type)
+            'default': default value
+            'required': bool
+        """
+        if not self._is_tty:
+            return {f.get("label", f"field{i}"): str(f.get("default", ""))
+                    for i, f in enumerate(fields)}
+        return self._form_raw(fields, message)
+
+    def _form_raw(self, fields: list[dict[str, str | list[str] | None | bool]],
+                  message: str) -> dict[str, str]:
+        fd = self._get_fd()
+        results: dict[str, str] = {}
+        idx = 0
+        editing = False
+        edit_buf = ""
+
+        def _render() -> str:
+            lines = []
+            for i, field in enumerate(fields):
+                label = str(field.get("label", f"Field {i + 1}"))
+                field_type = str(field.get("type", "text"))
+                default = str(field.get("default", ""))
+                required = field.get("required", False)
+                value = results.get(label, default)
+                req_str = f" {_RED}*{_RESET}" if required else ""
+                if i == idx and editing:
+                    if field_type == "password":
+                        display = "*" * len(edit_buf)
+                    else:
+                        display = edit_buf
+                    lines.append(f"  {_REVERSE}{_CYAN}{label}{req_str}: {display}\u2502{_RESET_REVERSE}{_RESET}")
+                elif i == idx:
+                    lines.append(f"  {_REVERSE}{_CYAN}{label}{req_str}: {value}{_RESET_REVERSE}{_RESET}")
+                else:
+                    lines.append(f"  {label}{req_str}: {value}")
+            help_text = f"  {_DIM}(arrows=navigate, enter=edit, esc=submit){_RESET}" if not editing else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
+                + "\n".join(lines)
+                + f"\n{help_text}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(3 + len(fields) + 1):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    field = fields[idx]
+                    label = str(field.get("label", f"Field {idx + 1}"))
+                    field_type = str(field.get("type", "text"))
+                    default = str(field.get("default", ""))
+                    if editing:
+                        if key.kind == _KEY_ENTER:
+                            if field_type == "toggle":
+                                current = results.get(label, default)
+                                results[label] = "false" if current == "true" else "true"
+                            else:
+                                results[label] = edit_buf
+                            editing = False
+                        elif key.kind == _KEY_ESC:
+                            editing = False
+                        elif key.kind == _KEY_CHAR:
+                            if key.char == "\x7f":
+                                edit_buf = edit_buf[:-1]
+                            else:
+                                edit_buf += key.char
+                        elif key.kind == _KEY_BACKSPACE:
+                            edit_buf = edit_buf[:-1]
+                    else:
+                        if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                            _clear(); return results
+                        if key.kind == _KEY_ENTER:
+                            editing = True
+                            edit_buf = results.get(label, default)
+                        if key.kind == _KEY_UP:
+                            idx = (idx - 1) % len(fields)
+                        elif key.kind == _KEY_DOWN:
+                            idx = (idx + 1) % len(fields)
+        except (termios.error, OSError):
+            return results
+
+    # ── Playlist manager ──────────────────────────────────────────────
+
+    def playlist_manager(self, items: list[str], message: str = "Playlist:") -> list[str]:
+        """Manage ordered list with move up/down and delete."""
+        if not self._is_tty:
+            return items
+        return self._playlist_manager_raw(items, message)
+
+    def _playlist_manager_raw(self, items: list[str], message: str) -> list[str]:
+        fd = self._get_fd()
+        idx = 0
+
+        def _render() -> str:
+            lines = []
+            for i, item in enumerate(items):
+                prefix = ">> " if i == idx else "   "
+                color = _CYAN if i == idx else ""
+                reset = _RESET if i == idx else ""
+                pos = f"{i + 1:>2}. "
+                lines.append(f"  {prefix}{color}{pos}{item}{_RESET}")
+            if not lines:
+                lines = [f"  {_DIM}(empty playlist){_RESET}"]
+            help_text = f"  {_DIM}(arrows=move, d=delete, u=up, n=down, enter=done){_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
+                + "\n".join(lines)
+                + f"\n{help_text}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(3 + len(items) + 1):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC, _KEY_ENTER):
+                        _clear(); return items
+                    if key.kind == _KEY_UP or (key.kind == _KEY_CHAR and key.char == "k"):
+                        idx = (idx - 1) % max(len(items), 1)
+                    elif key.kind == _KEY_DOWN or (key.kind == _KEY_CHAR and key.char == "j"):
+                        idx = (idx + 1) % max(len(items), 1)
+                    elif key.kind == _KEY_CHAR and key.char == "u":
+                        if idx > 0:
+                            items[idx], items[idx - 1] = items[idx - 1], items[idx]
+                            idx -= 1
+                    elif key.kind == _KEY_CHAR and key.char == "n":
+                        if idx < len(items) - 1:
+                            items[idx], items[idx + 1] = items[idx + 1], items[idx]
+                            idx += 1
+                    elif key.kind == _KEY_CHAR and key.char == "d":
+                        if items:
+                            items.pop(idx)
+                            idx = idx % max(len(items), 1)
+                    elif key.kind == _KEY_DELETE:
+                        if items:
+                            items.pop(idx)
+                            idx = idx % max(len(items), 1)
+        except (termios.error, OSError):
+            return items
+
+    # ── Kanban board ──────────────────────────────────────────────────
+
+    def kanban_board(self, columns: dict[str, list[str]],
+                     message: str = "Kanban") -> dict[str, list[str]]:
+        """Interactive kanban board with move between columns."""
+        if not self._is_tty:
+            return columns
+        return self._kanban_board_raw(columns, message)
+
+    def _kanban_board_raw(self, columns: dict[str, list[str]],
+                          message: str) -> dict[str, list[str]]:
+        fd = self._get_fd()
+        col_idx = 0
+        item_idx = 0
+        col_names = list(columns.keys())
+
+        def _render() -> str:
+            lines = []
+            for c, col_name in enumerate(col_names):
+                items = columns[col_name]
+                col_header = f"  {_BOLD}{col_name}{_RESET}"
+                lines.append(col_header)
+                for i, item in enumerate(items):
+                    prefix = ">>" if c == col_idx and i == item_idx else "  "
+                    color = _CYAN if c == col_idx and i == item_idx else ""
+                    reset = _RESET if c == col_idx and i == item_idx else ""
+                    lines.append(f"    {prefix} {color}{item}{_RESET}")
+                if not items:
+                    lines.append(f"    {_DIM}(empty){_RESET}")
+                lines.append("")
+            help_text = f"  {_DIM}(h/l=column, j/k=item, left/right=move, enter=done){_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
+                + "\n".join(lines)
+                + f"\n{help_text}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(3 + len(col_names) * 4):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC, _KEY_ENTER):
+                        _clear(); return columns
+                    col_items = columns[col_names[col_idx]]
+                    if key.kind == _KEY_LEFT or (key.kind == _KEY_CHAR and key.char == "h"):
+                        col_idx = (col_idx - 1) % len(col_names)
+                        item_idx = min(item_idx, len(columns[col_names[col_idx]]) - 1)
+                        item_idx = max(0, item_idx)
+                    elif key.kind == _KEY_RIGHT or (key.kind == _KEY_CHAR and key.char == "l"):
+                        col_idx = (col_idx + 1) % len(col_names)
+                        item_idx = min(item_idx, len(columns[col_names[col_idx]]) - 1)
+                        item_idx = max(0, item_idx)
+                    elif key.kind == _KEY_UP or (key.kind == _KEY_CHAR and key.char == "k"):
+                        item_idx = (item_idx - 1) % max(len(col_items), 1)
+                    elif key.kind == _KEY_DOWN or (key.kind == _KEY_CHAR and key.char == "j"):
+                        item_idx = (item_idx + 1) % max(len(col_items), 1)
+                    elif key.kind == _KEY_LEFT:
+                        if col_idx > 0 and col_items:
+                            item = col_items.pop(item_idx)
+                            columns[col_names[col_idx - 1]].append(item)
+                            item_idx = 0
+                            col_idx -= 1
+                    elif key.kind == _KEY_RIGHT:
+                        if col_idx < len(col_names) - 1 and col_items:
+                            item = col_items.pop(item_idx)
+                            columns[col_names[col_idx + 1]].append(item)
+                            item_idx = 0
+                            col_idx += 1
+        except (termios.error, OSError):
+            return columns
+
+    # ── Calendar view ─────────────────────────────────────────────────
+
+    def calendar_view(self, year: int, month: int,
+                      events: dict[int, str] | None = None,
+                      message: str = "Calendar") -> int | None:
+        """Interactive calendar view with day selection.
+
+        Args:
+            year: year to display
+            month: month to display (1-12)
+            events: dict of day -> event description
+            message: prompt text
+
+        Returns:
+            selected day (1-31) or None
+        """
+        if not self._is_tty:
+            return None
+        return self._calendar_view_raw(year, month, events or {}, message)
+
+    def _calendar_view_raw(self, year: int, month: int,
+                           events: dict[int, str], message: str) -> int | None:
+        import calendar as _cal
+        fd = self._get_fd()
+        day = 1
+        cal = _cal.monthcalendar(year, month)
+        month_name = _cal.month_name[month]
+
+        def _render() -> str:
+            lines = []
+            header = f"  {_BOLD}{month_name} {year}{_RESET}"
+            lines.append(header)
+            lines.append(f"  {'Mo':>3} {'Tu':>3} {'We':>3} {'Th':>3} {'Fr':>3} {'Sa':>3} {'Su':>3}")
+            for week in cal:
+                week_str = ""
+                for d in week:
+                    if d == 0:
+                        week_str += "    "
+                    elif d == day:
+                        week_str += f" {_REVERSE}{_CYAN}{d:>2}{_RESET_REVERSE}"
+                    elif d in events:
+                        week_str += f" {_YELLOW}{d:>2}{_RESET}"
+                    else:
+                        week_str += f" {d:>2}"
+                lines.append(f"  {week_str}")
+            event_str = ""
+            if day in events:
+                event_str = f"  {_DIM}Event: {events[day]}{_RESET}"
+            help_text = f"  {_DIM}(arrows=navigate, enter=select, esc=cancel){_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
+                + "\n".join(lines)
+                + f"\n{event_str}\n{help_text}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(5 + 2):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return None
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return day
+                    if key.kind == _KEY_UP:
+                        day = max(1, day - 7)
+                    elif key.kind == _KEY_DOWN:
+                        day = min(31, day + 7)
+                    elif key.kind == _KEY_LEFT:
+                        day = max(1, day - 1)
+                    elif key.kind == _KEY_RIGHT:
+                        day = min(31, day + 1)
+        except (termios.error, OSError):
+            return None
+
     # ── Color picker ───────────────────────────────────────────────────
 
     def color_picker_rgb(self, message: str, default: str = "#ffffff") -> str:

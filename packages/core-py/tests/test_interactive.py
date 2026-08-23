@@ -3136,3 +3136,145 @@ class TestWizardFallback:
         c = Console(io, has_readline=False)
         result = c.wizard([{"label": "X", "type": "input", "default": ""}])
         assert "X" in result
+
+
+# ── spreadsheet_editor fallback ──────────────────────────────────────────────
+
+class TestSpreadsheetEditorFallback:
+    def test_spreadsheet_editor_returns_rows(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.spreadsheet_editor(["A", "B"], [["1", "2"], ["3", "4"]])
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_spreadsheet_editor_empty(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.spreadsheet_editor(["Col"], [["val"]])
+        assert result == [["val"]]
+
+    def test_console_spreadsheet_editor(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.spreadsheet_editor(["X"], [["a"]])
+        assert result == [["a"]]
+
+
+# ── hierarchical_menu fallback ──────────────────────────────────────────────
+
+class TestHierarchicalMenuFallback:
+    def test_hierarchical_menu_returns_string(self):
+        p, io = _make_prompt(feeds=[""])
+        menu = {"Item 1": "action1", "Item 2": "action2"}
+        result = p.hierarchical_menu(menu)
+        assert result is None
+
+    def test_hierarchical_menu_nested(self):
+        p, io = _make_prompt(feeds=[""])
+        menu = {"Group": {"Sub": "result"}}
+        result = p.hierarchical_menu(menu)
+        assert result is None
+
+    def test_console_hierarchical_menu(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.hierarchical_menu({"A": "action"})
+        assert result is None
+
+
+# ── form fallback ────────────────────────────────────────────────────────────
+
+class TestFormFallback:
+    def test_form_returns_dict(self):
+        p, io = _make_prompt(feeds=["value", ""])
+        result = p.form([
+            {"label": "Name", "type": "text", "default": ""},
+        ])
+        assert isinstance(result, dict)
+        assert "Name" in result
+
+    def test_form_with_select(self):
+        p, io = _make_prompt(feeds=["1", ""])
+        result = p.form([
+            {"label": "Choice", "type": "select", "options": ["A", "B"]},
+        ])
+        assert isinstance(result, dict)
+
+    def test_console_form(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("val")
+        c = Console(io, has_readline=False)
+        result = c.form([{"label": "X", "type": "text", "default": ""}])
+        assert "X" in result
+
+
+# ── playlist_manager fallback ────────────────────────────────────────────────
+
+class TestPlaylistManagerFallback:
+    def test_playlist_manager_returns_list(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.playlist_manager(["song1", "song2"])
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_playlist_manager_empty(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.playlist_manager([])
+        assert result == []
+
+    def test_console_playlist_manager(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.playlist_manager(["a", "b"])
+        assert result == ["a", "b"]
+
+
+# ── kanban_board fallback ────────────────────────────────────────────────────
+
+class TestKanbanBoardFallback:
+    def test_kanban_board_returns_dict(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.kanban_board({"Todo": ["task1"], "Done": []})
+        assert isinstance(result, dict)
+        assert "Todo" in result
+
+    def test_kanban_board_empty(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.kanban_board({"A": [], "B": []})
+        assert result == {"A": [], "B": []}
+
+    def test_console_kanban_board(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.kanban_board({"X": ["y"]})
+        assert result == {"X": ["y"]}
+
+
+# ── calendar_view fallback ───────────────────────────────────────────────────
+
+class TestCalendarViewFallback:
+    def test_calendar_view_returns_none(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.calendar_view(2024, 1)
+        assert result is None
+
+    def test_calendar_view_with_events(self):
+        p, io = _make_prompt(feeds=[""])
+        result = p.calendar_view(2024, 6, events={15: "Meeting"})
+        assert result is None
+
+    def test_console_calendar_view(self):
+        from domains.shell.console import Console
+        io = MemoryIO()
+        io.feed("")
+        c = Console(io, has_readline=False)
+        result = c.calendar_view(2024, 1)
+        assert result is None
