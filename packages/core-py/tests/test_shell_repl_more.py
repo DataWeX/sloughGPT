@@ -835,13 +835,13 @@ class TestCheckPermission:
 
     def test_interactive_yes_grants_session(self, repl, monkeypatch):
         repl._perms._granted.discard("mount")
-        monkeypatch.setattr(repl.console, "ask", lambda msg, default="": "y")
+        monkeypatch.setattr(repl.io, "read", lambda prompt="": "y\n")
         repl._check_permission("mount", "", True)
         assert "mount" in repl._perms._granted
 
     def test_interactive_no_denies(self, repl, monkeypatch):
         repl._perms._granted.discard("mount")
-        monkeypatch.setattr(repl.console, "ask", lambda msg, default="": "N")
+        monkeypatch.setattr(repl.io, "read", lambda prompt="": "N\n")
         repl._check_permission("mount", "", True)
         assert "mount" not in repl._perms._granted
 
@@ -850,15 +850,15 @@ class TestCheckPermission:
         monkeypatch.setattr(repl._perms, "_col", None)
         repl._perms.__init__(db_path)
         repl._perms._granted.discard("mount")
-        monkeypatch.setattr(repl.console, "ask", lambda msg, default="": "always")
+        monkeypatch.setattr(repl.io, "read", lambda prompt="": "always\n")
         repl._check_permission("mount", "", True)
         assert "mount" in repl._perms._granted
 
     def test_interactive_eof_denies(self, repl, monkeypatch):
         repl._perms._granted.discard("mount")
-        def raise_eof(msg, default=""):
+        def raise_eof(prompt=""):
             raise EOFError
-        monkeypatch.setattr(repl.console, "ask", raise_eof)
+        monkeypatch.setattr(repl.io, "read", raise_eof)
         repl._check_permission("mount", "", True)
         assert "mount" not in repl._perms._granted
 

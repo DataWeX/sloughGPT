@@ -492,10 +492,11 @@ class TestAiCommand:
                 repl._cmd_ai("how are you?")
         assert "echo hi" in cap.getvalue()
 
-    def test_ai_falls_back_to_keyword_match_when_api_down(self, repl):
+    def test_ai_shows_error_when_api_down(self, repl):
         with _CaptureOutput() as cap:
             repl._cmd_ai("list models")
-        assert "keyword" in cap.getvalue().lower()
+        output = cap.getvalue().lower()
+        assert "api server is not connected" in output or "not connected" in output
 
 
 # ── source command ──────────────────────────────────────────────────

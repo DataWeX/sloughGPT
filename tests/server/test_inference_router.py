@@ -68,7 +68,7 @@ class TestGenerate:
     """POST /inference/generate"""
 
     @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generate_success(self, mock_get_provider, client):
         mock_prov = MagicMock()
         mock_prov.chat = AsyncMock(return_value="Hello world")
@@ -83,7 +83,7 @@ class TestGenerate:
         assert body["tokens_generated"] == 2
 
     @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generate_provider_failure(self, mock_get_provider, client):
         mock_prov = MagicMock()
         mock_prov.chat = AsyncMock(side_effect=RuntimeError("inference failed"))
@@ -121,7 +121,7 @@ class TestGenerate:
         assert client.get("/inference/generate").status_code == 405
 
     @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generate_custom_params(self, mock_get_provider, client):
         mock_prov = MagicMock()
         mock_prov.chat = AsyncMock(return_value="Response")
@@ -141,7 +141,7 @@ class TestGenerateStream:
     """POST /inference/generate/stream"""
 
     @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generate_stream_success(self, mock_get_provider, client):
         mock_prov = MagicMock()
 
@@ -253,7 +253,7 @@ class TestChat:
 class TestListSessions:
     """GET /chat/sessions"""
 
-    @patch.object(_inference_router, "_build_session_cache")
+    @patch.object(_inference_router, "_build_session_metadata_index")
     def test_list_sessions(self, mock_build, client):
         mock_build.return_value = [
             {"id": "s1", "name": "Chat 1", "messages": [], "updated_at": "2026-01-01"},
@@ -265,14 +265,14 @@ class TestListSessions:
         assert body["status"] == "success"
         assert len(body["data"]) == 2
 
-    @patch.object(_inference_router, "_build_session_cache")
+    @patch.object(_inference_router, "_build_session_metadata_index")
     def test_list_sessions_empty(self, mock_build, client):
         mock_build.return_value = []
         resp = client.get("/chat/sessions")
         assert resp.status_code == 200
         assert resp.json()["data"] == []
 
-    @patch.object(_inference_router, "_build_session_cache")
+    @patch.object(_inference_router, "_build_session_metadata_index")
     def test_list_sessions_archived_filter(self, mock_build, client):
         mock_build.return_value = [
             {"id": "s1", "archived": True},
@@ -341,7 +341,7 @@ class TestContextStoreFact:
         mock_get_core.return_value = core
         resp = client.post("/context/fact?key=name&value=alice")
         assert resp.status_code == 200
-        assert resp.json()["stored"] == "name"
+        assert resp.json()["data"]["stored"] == "name"
         core.store_fact.assert_called_once_with("name", "alice")
 
     @patch.object(_inference_router, "_get_context_core")
@@ -364,7 +364,7 @@ class TestContextReset:
         mock_get_core.return_value = core
         resp = client.post("/context/reset")
         assert resp.status_code == 200
-        assert resp.json()["reset"] == "session"
+        assert resp.json()["data"]["reset"] == "session"
         core.reset_session.assert_called_once()
 
     @patch.object(_inference_router, "_get_context_core")
@@ -373,7 +373,7 @@ class TestContextReset:
         mock_get_core.return_value = core
         resp = client.post("/context/reset?all=true")
         assert resp.status_code == 200
-        assert resp.json()["reset"] == "all"
+        assert resp.json()["data"]["reset"] == "all"
         core.reset_all.assert_called_once()
 
     @patch.object(_inference_router, "_get_context_core")
@@ -392,7 +392,7 @@ class TestContextFactsQuery:
         core.search_semantic.return_value = [{"fact": "1"}]
         mock_get_core.return_value = core
         resp = client.get("/context/facts?query=ai")
-        assert resp.json()["facts"] == [{"fact": "1"}]
+        assert resp.json()["data"]["facts"] == [{"fact": "1"}]
         core.search_semantic.assert_called_once_with("ai")
 
     @patch.object(_inference_router, "_get_context_core")
@@ -405,16 +405,15 @@ class TestContextFactsQuery:
 class TestSearchSessions:
     """GET /chat/sessions/search"""
 
-    @patch.object(_inference_router, "_build_session_cache")
-    def test_search_sessions(self, mock_build, client):
-        mock_build.return_value = [
+    @patch("apps.api.server.routers.inference._search_sessions_sync")
+    def test_search_sessions(self, mock_search, client):
+        mock_search.return_value = [
             {"id": "s1", "name": "Test Chat", "messages": [{"role": "user", "content": "hello"}], "updated_at": "2026-01-01"},
         ]
         resp = client.get("/chat/sessions/search?q=Test")
         assert resp.status_code == 200
 
-    @patch.object(_inference_router, "_build_session_cache")
-    def test_search_sessions_empty_query(self, mock_build, client):
+    def test_search_sessions_empty_query(self, client):
         resp = client.get("/chat/sessions/search")
         assert resp.status_code == 200
         body = resp.json()
@@ -422,8 +421,7 @@ class TestSearchSessions:
         assert body["meta"]["query"] == ""
         assert body["meta"]["total"] == 0
 
-    @patch.object(_inference_router, "_build_session_cache")
-    def test_search_sessions_whitespace_query(self, mock_build, client):
+    def test_search_sessions_whitespace_query(self, client):
         resp = client.get("/chat/sessions/search?q=%20%20")
         assert resp.json()["data"] == []
 
@@ -432,7 +430,7 @@ class TestSuggestions:
     """GET /suggestions"""
 
     def test_chat_suggestions(self, client):
-        resp = client.get("/suggestions")
+        resp = client.get("/chat/suggestions")
         assert resp.status_code == 200
 
     def test_chat_suggestions_alt_path(self, client):
@@ -440,7 +438,7 @@ class TestSuggestions:
         assert resp.status_code == 200
 
     def test_suggestions_data_shape(self, client):
-        resp = client.get("/suggestions")
+        resp = client.get("/chat/suggestions")
         data = resp.json()["data"]
         assert isinstance(data, list)
         assert len(data) >= 1

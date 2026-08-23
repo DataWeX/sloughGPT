@@ -409,7 +409,7 @@ class ShellREPL(LinuxCommandsMixin):
             color = risk_colors.get(risk, _C_RED)
             self._print(f"  {_C_YELLOW}\u26a1 {cmd}{_C_RESET} requires {_C_BOLD}{color}{risk}{_C_RESET} permissions.")
             try:
-                self.io.write(f"  Allow this command? [y/N/always] [{_DIM}n{_RESET}]: ", end="")
+                self.io.write(f"  Allow this command? [y/N/always] [{_C_DIM}n{_C_RESET}]: ", end="")
                 answer = self.io.read("").strip().lower()
             except (EOFError, KeyboardInterrupt):
                 answer = ""
@@ -1428,13 +1428,17 @@ class ShellREPL(LinuxCommandsMixin):
                 self._print("  Usage: alias name=command")
                 return
             items = [f"{name}={cmd}" for name, cmd in sorted(self._aliases.items())]
-            selected = self.console.select_with_details(
-                "Aliases:", items,
-                lambda x: x.split("=", 1)[1] if "=" in x else ""
-            )
-            if selected:
-                name, _, cmd = selected.partition("=")
-                self._print(f"  {name.strip()}={cmd.strip()}")
+            if self.io._is_tty:
+                selected = self.console.select_with_details(
+                    "Aliases:", items,
+                    lambda x: x.split("=", 1)[1] if "=" in x else ""
+                )
+                if selected:
+                    name, _, cmd = selected.partition("=")
+                    self._print(f"  {name.strip()}={cmd.strip()}")
+            else:
+                for item in items:
+                    self._print(f"  {item}")
             return
         if "=" in args:
             name, _, command = args.partition("=")
@@ -1474,13 +1478,17 @@ class ShellREPL(LinuxCommandsMixin):
                 self._print("  Usage: set KEY=VALUE")
                 return
             items = [f"{k}={v}" for k, v in sorted(self._env.items())]
-            selected = self.console.select_with_details(
-                "Environment:", items,
-                lambda x: x.split("=", 1)[1] if "=" in x else ""
-            )
-            if selected:
-                name, _, value = selected.partition("=")
-                self._print(f"  {name.strip()}={value.strip()}")
+            if self.io._is_tty:
+                selected = self.console.select_with_details(
+                    "Environment:", items,
+                    lambda x: x.split("=", 1)[1] if "=" in x else ""
+                )
+                if selected:
+                    name, _, value = selected.partition("=")
+                    self._print(f"  {name.strip()}={value.strip()}")
+            else:
+                for item in items:
+                    self._print(f"  {item}")
             return
         if "=" in args:
             name, _, value = args.partition("=")
