@@ -36,8 +36,8 @@ class TestAutoTrainStart:
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "ready"
-        assert data["epochs"] == 1
+        assert data["data"]["status"] == "ready"
+        assert data["data"]["epochs"] == 1
 
     def test_start_config_accessible_via_status(self):
         client.post("/auto-train/start", json={
@@ -48,8 +48,8 @@ class TestAutoTrainStart:
         resp = client.get("/auto-train/status")
         assert resp.status_code == 200
         data = resp.json()
-        assert data.get("running") is True
-        assert data["config"]["epochs"] == 3
+        assert data["data"].get("running") is True
+        assert data["data"]["config"]["epochs"] == 3
 
 
 class TestAutoTrainCheckpoints:
@@ -97,7 +97,7 @@ class TestAutoTrainSchema:
             "algo": "bpe",
         })
         assert resp.status_code == 200
-        assert resp.json()["status"] == "ready"
+        assert resp.json()["data"]["status"] == "ready"
 
 
 class TestAutoTrainNativeConfig:
@@ -123,18 +123,18 @@ class TestAutoTrainNativeConfig:
         resp = self._start_native()
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "ready"
-        assert data["config"]["n_embed"] == 128
-        assert data["config"]["n_layer"] == 4
-        assert data["config"]["n_head"] == 4
-        assert data["config"]["block_size"] == 128
-        assert data["config"]["checkpoint_dir"] == "models/slonet-native"
+        assert data["data"]["status"] == "ready"
+        assert data["data"]["config"]["n_embed"] == 128
+        assert data["data"]["config"]["n_layer"] == 4
+        assert data["data"]["config"]["n_head"] == 4
+        assert data["data"]["config"]["block_size"] == 128
+        assert data["data"]["config"]["checkpoint_dir"] == "models/slonet-native"
 
     def test_native_params_visible_via_status(self):
         self._start_native(n_embed=256, n_layer=6, n_head=8, block_size=64)
         resp = client.get("/auto-train/status")
         assert resp.status_code == 200
-        cfg = resp.json()["config"]
+        cfg = resp.json()["data"]["config"]
         assert cfg["n_embed"] == 256
         assert cfg["n_layer"] == 6
         assert cfg["n_head"] == 8
@@ -146,7 +146,7 @@ class TestAutoTrainNativeConfig:
             "epochs": 1,
         })
         assert resp.status_code == 200
-        cfg = resp.json()["config"]
+        cfg = resp.json()["data"]["config"]
         assert cfg["n_embed"] == 128
         assert cfg["n_layer"] == 4
         assert cfg["n_head"] == 4
@@ -178,7 +178,7 @@ class TestAutoTrainStatus:
     def test_status_returns_config(self):
         resp = client.get("/auto-train/status")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert isinstance(data, dict)
         assert "running" in data
         assert "config" in data
@@ -203,34 +203,34 @@ class TestAutoTrainStopPauseResume:
     def test_stop_when_no_run(self):
         resp = client.post("/auto-train/stop")
         assert resp.status_code == 200
-        assert resp.json() == {"status": "stopped"}
+        assert resp.json() == {"status": "success", "data": {"status": "stopped"}}
 
     def test_stop_with_active_cancel_event(self):
         import routers.auto_train as mod
         mod._auto_train_cancel_event = threading.Event()
         resp = client.post("/auto-train/stop")
-        assert resp.json()["status"] == "cancelling"
+        assert resp.json()["data"]["status"] == "cancelling"
         assert mod._auto_train_cancel_event.is_set()
 
     def test_pause_when_no_run(self):
         resp = client.post("/auto-train/pause")
-        assert resp.json() == {"success": False, "message": "No active training to pause"}
+        assert resp.json() == {"status": "success", "data": {"success": False, "message": "No active training to pause"}}
 
     def test_pause_and_resume_cycle(self):
         import routers.auto_train as mod
         mod._auto_train_pause_event = threading.Event()
-        pause = client.post("/auto-train/pause").json()
+        pause = client.post("/auto-train/pause").json()["data"]
         assert pause["success"] is True
-        again = client.post("/auto-train/pause").json()
+        again = client.post("/auto-train/pause").json()["data"]
         assert again["success"] is False
-        resume = client.post("/auto-train/resume").json()
+        resume = client.post("/auto-train/resume").json()["data"]
         assert resume["success"] is True
         assert mod._auto_train_pause_event.is_set() is False
 
     def test_resume_when_not_paused(self):
         import routers.auto_train as mod
         mod._auto_train_pause_event = threading.Event()
-        resp = client.post("/auto-train/resume").json()
+        resp = client.post("/auto-train/resume").json()["data"]
         assert resp["success"] is False
 
 
@@ -345,7 +345,7 @@ class TestAutoTrainLog:
     def test_returns_lines(self):
         resp = client.get("/auto-train/log")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert "lines" in body
         assert isinstance(body["lines"], list)
         assert "total" in body

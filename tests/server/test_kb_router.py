@@ -118,7 +118,7 @@ class TestBulkIngest:
             },
         )
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "completed"
         assert data["added"] == 2
         assert data["errors"] == 0
@@ -139,7 +139,7 @@ class TestBulkIngest:
             mem = mock_get_mem.return_value
             resp = client.post("/knowledge/bulk-ingest", json={"items": []})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "completed"
         assert data["added"] == 0
 

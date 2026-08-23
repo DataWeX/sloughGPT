@@ -330,14 +330,14 @@ class TestConversations:
         resp = client.delete("/feedback/conversations/conv-7")
         assert resp.status_code == 200
         ctrl.delete_conversation.assert_called_once_with("conv-7")
-        assert resp.json()["id"] == "conv-7"
+        assert resp.json()["data"]["id"] == "conv-7"
 
     def test_delete_conversation(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         mock_get_ctrl.return_value = ctrl
         resp = client.delete("/feedback/conversations/conv-1")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert resp.json()["data"]["status"] == "deleted"
 
     def test_create_conversation_with_session_id(self, mock_get_ctrl, client):
         ctrl = MagicMock()

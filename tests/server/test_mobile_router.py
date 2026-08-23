@@ -62,7 +62,7 @@ class TestMobileDashboard:
             ]
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["status"] == "healthy"
             assert body["model"]["loaded"] is True
             assert body["soul"]["name"] == "sage"
@@ -85,7 +85,7 @@ class TestMobileConversations:
             }
             resp = client.get("/mobile/conversations")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["total"] == 1
             assert body["conversations"][0]["id"] == "s1"
 
@@ -101,7 +101,7 @@ class TestMobileConversationDetail:
             mock_get.return_value = {"messages": [{"role": "user", "content": "hi"}], "created_at": "2026-01-01"}
             resp = client.get("/mobile/conversations/s1")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["id"] == "s1"
             assert len(body["messages"]) == 1
 
@@ -123,7 +123,7 @@ class TestMobileModels:
             ]
             resp = client.get("/mobile/models")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert "models" in body
             assert "souls" in body
             assert "checkpoints" in body
@@ -142,7 +142,7 @@ class TestMobileSwitchModel:
             mock_get.return_value = {"model_type": "gpt2"}
             resp = client.post("/mobile/models/switch", json={"soul_name": "sage"})
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["soul"] == "sage"
 
     def test_switch_with_empty_body(self, client):
@@ -168,7 +168,7 @@ class TestMobileHealth:
             ]
             resp = client.get("/mobile/health")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["status"] == "healthy"
             assert body["cpu_percent"] == 50.0
             assert body["disk_free_gb"] > 0
@@ -185,7 +185,7 @@ class TestMobileKnowledge:
             mock_get.return_value = [{"id": "k1", "content": "fact", "topic": "general", "importance": 0.8}]
             resp = client.get("/mobile/knowledge")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["total"] == 1
             assert body["items"][0]["content"] == "fact"
 
@@ -201,7 +201,7 @@ class TestMobileKnowledgeCreate:
             mock_post.return_value = {"id": "k2", "content": "new fact", "topic": "science"}
             resp = client.post("/mobile/knowledge", json={"content": "new fact", "topic": "science"})
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["content"] == "new fact"
 
     def test_empty_content_returns_error(self, client):
@@ -209,7 +209,7 @@ class TestMobileKnowledgeCreate:
             mock_post.return_value = None
             resp = client.post("/mobile/knowledge", json={"content": ""})
             assert resp.status_code == 400
-            body = resp.json()
+            body = resp.json()["data"]
             assert "error" in body
 
 
@@ -224,7 +224,7 @@ class TestMobileSyncStatus:
             mock_get.return_value = {"status": "healthy", "model_loaded": True, "inference_count": 10}
             resp = client.get("/mobile/sync/status")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["status"] == "success"
             assert body["data"]["reachable"] is True
 
@@ -259,7 +259,7 @@ class TestMobileNotificationsUnregister:
         mock_get_svc.return_value = svc
         resp = client.post("/mobile/notifications/unregister", json={"token": "expo-token-123"})
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "removed"
 
 
@@ -276,7 +276,7 @@ class TestMobileNotificationsDevices:
         mock_get_svc.return_value = svc
         resp = client.get("/mobile/notifications/devices")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert len(body["devices"]) == 1
 
 
@@ -294,7 +294,7 @@ class TestMobileTrainStats:
         mock_get_store.return_value = store
         resp = client.get("/mobile/train/stats")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["total"] == 100
         assert body["pending"] == 10
 
@@ -313,7 +313,7 @@ class TestMobileTrainPairs:
         mock_get_store.return_value = store
         resp = client.get("/mobile/train/pairs")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["total"] == 1
         assert body["pairs"][0]["user_msg"] == "hi"
 
@@ -347,7 +347,7 @@ class TestMobileTrainCompact:
         mock_get_store.return_value = store
         resp = client.post("/mobile/train/compact")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "compacted"
         assert body["count"] == 42
 
@@ -376,7 +376,7 @@ class TestMobileTrainAutoStatus:
         mock_get_trainer.return_value = trainer
         resp = client.get("/mobile/train/auto-status")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["enabled"] is False
 
 
@@ -396,7 +396,7 @@ class TestMobileDashboardEdges:
             ]
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["recent_conversations"] == []
 
     def test_missing_health_defaults(self, client):
@@ -404,7 +404,7 @@ class TestMobileDashboardEdges:
             mock_get.return_value = None
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["status"] == "unknown"
             assert body["model"]["loaded"] is False
             assert body["soul"]["name"] == "Default"
@@ -420,7 +420,7 @@ class TestMobileDashboardEdges:
                 ]},
                 [{"model_id": "gpt2"}],
             ]
-            body = client.get("/mobile/dashboard").json()
+            body = client.get("/mobile/dashboard").json()["data"]
             assert body["recent_conversations"][0]["id"] == "new"
             assert body["recent_conversations"][0]["last_message"] == "fresh"
 
@@ -440,7 +440,7 @@ class TestMobileConversationsEdges:
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"sessions": sessions}
             resp = client.get("/mobile/conversations", params={"page": 2, "per_page": 1})
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["total"] == 3
             assert len(body["conversations"]) == 1
             assert body["conversations"][0]["id"] == "s1"  # 2nd session (1-indexed page 2)
@@ -453,7 +453,7 @@ class TestMobileConversationsEdges:
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"sessions": sessions}
             resp = client.get("/mobile/conversations", params={"search": "shopping"})
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["total"] == 1
             assert body["conversations"][0]["id"] == "s2"
 
@@ -484,7 +484,7 @@ class TestMobileSwitchModelEdges:
             mock_get.return_value = {"model_type": "qwen"}
             resp = client.post("/mobile/models/switch", json={"model_id": "qwen"})
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["model"] == "qwen"
             assert body["soul"] == ""
 
@@ -540,7 +540,7 @@ class TestMobileKnowledgeDelete:
             mock_delete.return_value = {"status": "deleted"}
             resp = client.delete("/mobile/knowledge/k1")
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["status"] == "deleted"
             assert body["id"] == "k1"
 
@@ -563,7 +563,7 @@ class TestMobileKnowledgeListEdges:
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = items
             resp = client.get("/mobile/knowledge", params={"topic": "science"})
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["total"] == 1
             assert body["items"][0]["id"] == "k1"
 
@@ -572,7 +572,7 @@ class TestMobileKnowledgeListEdges:
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = items
             resp = client.get("/mobile/knowledge", params={"page": 2, "per_page": 1})
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["total"] == 3
             assert len(body["items"]) == 1
             assert body["items"][0]["id"] == "k1"
@@ -602,7 +602,7 @@ class TestMobileSyncOffline:
                 ],
             })
             assert resp.status_code == 200
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["status"] == "success"
             assert body["data"]["synced_count"] == 2
             assert body["data"]["failed_count"] == 0
@@ -619,7 +619,7 @@ class TestMobileSyncOffline:
                     {"id": "m1", "session_id": "s1", "content": "hello", "timestamp": 100},
                 ],
             })
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["data"]["failed_count"] == 1
             assert body["data"]["results"][0]["status"] == "error"
 
@@ -627,7 +627,7 @@ class TestMobileSyncOffline:
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"sessions": []}
             resp = client.post("/mobile/sync", json={"pending_messages": []})
-            body = resp.json()
+            body = resp.json()["data"]
             assert body["data"]["synced_count"] == 0
             assert body["data"]["results"] == []
 
@@ -745,7 +745,7 @@ class TestMobileTrainPending:
         mock_get_store.return_value = store
         resp = client.get("/mobile/train/pending")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["count"] == 1
         assert body["pairs"][0]["id"] == "p1"
 
@@ -767,7 +767,7 @@ class TestMobileSessionPairs:
         mock_get_store.return_value = store
         resp = client.get("/mobile/train/session/s1")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["session_id"] == "s1"
         assert body["count"] == 1
         assert body["pairs"][0]["quality"] == 0.8
@@ -783,7 +783,7 @@ class TestMobileUpdatePairQuality:
         mock_get_store.return_value = store
         resp = client.patch("/mobile/train/pair/p1", json={"quality": 0.9})
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "updated"
         assert body["quality"] == 0.9
 
@@ -832,7 +832,7 @@ class TestMobileDeleteSynced:
         mock_get_store.return_value = store
         resp = client.delete("/mobile/train/synced")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "deleted"
         assert body["count"] == 7
 

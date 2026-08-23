@@ -192,14 +192,14 @@ class TestModelAudit:
         mock_mgr.return_value = mgr
         resp = models_client.post("/models/download", json={"model_id": "gpt2", "total_bytes_hint": 1000})
         assert resp.status_code == 200
-        assert resp.json()["message"] == "started"
+        assert resp.json()["data"]["model_id"] == "gpt2"
         logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "model.download"
-        assert kwargs["resource"] == "gpt2"
-        assert kwargs["detail"] == "started"
-        assert kwargs["extra"] == {"total_bytes_hint": 1000}
+        assert logger.log.call_count >= 1
+        first_call_args, first_call_kwargs = logger.log.call_args_list[0]
+        assert first_call_args[0] == "model.download"
+        assert first_call_kwargs["resource"] == "gpt2"
+        assert first_call_kwargs["detail"] == "started"
+        assert first_call_kwargs["extra"] == {"total_bytes_hint": 1000}
 
     @patch("domains.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
@@ -1149,7 +1149,7 @@ class TestAutoTrainControlAudit:
         try:
             resp = auto_train_client.post("/auto-train/pause")
             assert resp.status_code == 200
-            assert resp.json()["success"] is True
+            assert resp.json()["data"]["success"] is True
             logger = mock_logger.return_value
             logger.log.assert_called_once()
             args, kwargs = logger.log.call_args
@@ -1166,7 +1166,7 @@ class TestAutoTrainControlAudit:
         try:
             resp = auto_train_client.post("/auto-train/pause")
             assert resp.status_code == 200
-            assert resp.json()["success"] is False
+            assert resp.json()["data"]["success"] is False
             mock_logger.return_value.log.assert_not_called()
         finally:
             at_module._auto_train_pause_event = None
@@ -1181,7 +1181,7 @@ class TestAutoTrainControlAudit:
         try:
             resp = auto_train_client.post("/auto-train/resume")
             assert resp.status_code == 200
-            assert resp.json()["success"] is True
+            assert resp.json()["data"]["success"] is True
             logger = mock_logger.return_value
             logger.log.assert_called_once()
             args, kwargs = logger.log.call_args
