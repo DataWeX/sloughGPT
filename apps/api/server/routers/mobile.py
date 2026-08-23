@@ -170,56 +170,56 @@ class MobileRouter:
         self.router.add_api_route(path="/train/auto-config", endpoint=self.update_auto_train_config, methods=["PATCH"])
 
     async def _internal_get(self, request: Request, path: str):
-        """Call an internal GET endpoint via httpx."""
+        """Call an internal GET endpoint via httpx. Returns (data, error_msg)."""
         base_url = str(request.base_url).rstrip("/")
         async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
             try:
                 resp = await client.get(path)
                 if resp.status_code == 200:
-                    return resp.json()
-                return None
+                    return resp.json(), None
+                return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
             except Exception as e:
                 logger.warning("Internal GET %s failed: %s", path, e, extra={"tag": "REQ"})
-                return None
+                return None, str(e)
 
     async def _internal_post(self, request: Request, path: str, body: dict = None):
-        """Call an internal POST endpoint via httpx."""
+        """Call an internal POST endpoint via httpx. Returns (data, error_msg)."""
         base_url = str(request.base_url).rstrip("/")
         async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
             try:
                 resp = await client.post(path, json=body or {})
                 if resp.status_code == 200:
-                    return resp.json()
-                return None
+                    return resp.json(), None
+                return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
             except Exception as e:
                 logger.warning("Internal POST %s failed: %s", path, e, extra={"tag": "REQ"})
-                return None
+                return None, str(e)
 
     async def _internal_patch(self, request: Request, path: str, body: dict = None):
-        """Call an internal PATCH endpoint via httpx."""
+        """Call an internal PATCH endpoint via httpx. Returns (data, error_msg)."""
         base_url = str(request.base_url).rstrip("/")
         async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
             try:
                 resp = await client.patch(path, json=body or {})
                 if resp.status_code == 200:
-                    return resp.json()
-                return None
+                    return resp.json(), None
+                return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
             except Exception as e:
                 logger.warning("Internal PATCH %s failed: %s", path, e, extra={"tag": "REQ"})
-                return None
+                return None, str(e)
 
     async def _internal_delete(self, request: Request, path: str):
-        """Call an internal DELETE endpoint via httpx."""
+        """Call an internal DELETE endpoint via httpx. Returns (data, error_msg)."""
         base_url = str(request.base_url).rstrip("/")
         async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
             try:
                 resp = await client.delete(path)
                 if resp.status_code == 200:
-                    return resp.json()
-                return None
+                    return resp.json(), None
+                return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
             except Exception as e:
                 logger.warning("Internal DELETE %s failed: %s", path, e, extra={"tag": "REQ"})
-                return None
+                return None, str(e)
 
     async def get_dashboard(self, request: Request) -> dict:
         """
@@ -424,24 +424,34 @@ class MobileRouter:
         Side effects:
             - Calls /models/load and/or /souls/switch internally.
         """
+        errors = []
         if body.model_id:
-            await self._internal_post(request, "/models/load", {
+            data, err = await self._internal_post(request, "/models/load", {
                 "model_id": body.model_id,
             })
+            if err:
+                errors.append(f"model_load: {err}")
 
         if body.soul_name:
             soul_body = {"soul": body.soul_name}
             if body.checkpoint_name:
                 soul_body["checkpoint_name"] = body.checkpoint_name
-            await self._internal_post(request, "/souls/switch", soul_body)
+            data, err = await self._internal_post(request, "/souls/switch", soul_body)
+            if err:
+                errors.append(f"soul_switch: {err}")
 
-        health = await self._internal_get(request, "/health") or {}
+        health_data, err = await self._internal_get(request, "/health")
+        health = health_data or {}
+
+        if errors:
+            logger.warning("Mobile switch_model partial failure: %s", "; ".join(errors), extra={"tag": "REQ"})
 
         return success_response(data={
-            "status": "ok",
+            "status": "ok" if not errors else "partial",
             "model": health.get("model_type", ""),
             "soul": body.soul_name or "",
             "checkpoint": body.checkpoint_name,
+            "errors": errors or None,
         })
 
     async def get_health(self, request: Request) -> dict:
@@ -454,8 +464,13 @@ class MobileRouter:
         Side effects:
             - Calls /health/detailed and /system/metrics internally.
         """
-        detailed = await self._internal_get(request, "/health/detailed") or {}
-        metrics = await self._internal_get(request, "/system/metrics") or {}
+        detailed_data, err1 = await self._internal_get(request, "/health/detailed")
+        metrics_data, err2 = await self._internal_get(request, "/system/metrics")
+        detailed = detailed_data or {}
+        metrics = metrics_data or {}
+
+        if err1 or err2:
+            logger.warning("Mobile get_health partial failure: %s; %s", err1, err2, extra={"tag": "REQ"})
 
         system_info = detailed.get("system", {})
 
@@ -553,11 +568,13 @@ class MobileRouter:
         Side effects:
             - Calls POST /knowledge internally.
         """
-        result = await self._internal_post(request, "/knowledge", {
+        result, err = await self._internal_post(request, "/knowledge", {
             "content": body.content,
             "topic": body.topic,
         })
-        return result or raise_error("Failed to create", "E_DOMAIN")
+        if err:
+            raise_error(f"Failed to create knowledge: {err}", "E_DOMAIN")
+        return result
 
     async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest) -> dict:
         """
@@ -581,8 +598,10 @@ class MobileRouter:
         if body.importance is not None:
             update_body["importance"] = body.importance
 
-        result = await self._internal_patch(request, f"/knowledge/{item_id}", update_body)
-        return result or raise_error("Failed to update", "E_DOMAIN")
+        result, err = await self._internal_patch(request, f"/knowledge/{item_id}", update_body)
+        if err:
+            raise_error(f"Failed to update knowledge: {err}", "E_DOMAIN")
+        return result
 
     async def delete_knowledge(self, request: Request, item_id: str) -> dict:
         """
@@ -597,7 +616,9 @@ class MobileRouter:
         Side effects:
             - Calls DELETE /knowledge/{id} internally.
         """
-        await self._internal_delete(request, f"/knowledge/{item_id}")
+        result, err = await self._internal_delete(request, f"/knowledge/{item_id}")
+        if err:
+            raise_error(f"Failed to delete knowledge: {err}", "E_DOMAIN")
         safe_audit_log("mobile.knowledge_delete", resource=item_id)
         return success_response(data={"status": "deleted", "id": item_id})
 

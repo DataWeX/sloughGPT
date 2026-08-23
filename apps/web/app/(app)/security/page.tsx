@@ -7,6 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
 import { SecurityOverviewCard } from '@/components/security/SecurityOverviewCard'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 interface AuditLog {
   event_type: string
@@ -53,8 +54,8 @@ export default function SecurityPage() {
     try {
       const auditUrl = `${useHistory ? '/security/audit?history=true&limit=100' : '/security/audit?limit=100'}${eventParam()}`
       const [logsRes, keysRes] = await Promise.all([
-        apiGet<AuditResponse>(auditUrl).catch(() => null),
-        apiGet<{ count: number; configured: boolean }>('/security/keys').catch(() => null),
+        apiGet<AuditResponse>(auditUrl).catch((e) => { logger.warning('audit log fetch failed', e); return null }),
+        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => { logger.warning('security keys fetch failed', e); return null }),
       ])
       setLogs(logsRes?.logs ?? [])
       const keysData = keysRes && 'count' in keysRes ? keysRes : null

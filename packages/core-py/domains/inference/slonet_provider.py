@@ -700,8 +700,8 @@ class SloNetChatProvider:
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
-        except Exception:  # pragma: no cover — defensive; real ResourceManager never raises here
-            pass
+        except Exception as e:  # pragma: no cover — defensive; real ResourceManager never raises here
+            logger.warning("ResourceManager.apply_blas_env skipped: %s", e)
 
         # Load tokenizer
         instance._tokenizer = instance._load_tokenizer(
@@ -896,8 +896,8 @@ class SloNetChatProvider:
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("ResourceManager.apply_blas_env skipped (soul load): %s", e)
 
         # Load tokenizer from soul metadata if available
         tokenizer_meta = soul.metadata.get("tokenizer")

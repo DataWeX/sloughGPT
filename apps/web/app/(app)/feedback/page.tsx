@@ -10,6 +10,7 @@ import { FeedbackInsightsCard } from '@/components/feedback/FeedbackInsightsCard
 import { WorkflowSection } from '@/components/workflow/WorkflowSection'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 type Tab = 'stats' | 'conversations' | 'training'
 
@@ -30,9 +31,9 @@ export default function FeedbackPage() {
 
   useEffect(() => {
     Promise.all([
-      feedbackController.getFeedbackStats().catch(() => null),
-      feedbackController.getWorkflowStatus().catch(() => null),
-      feedbackController.getTrainingStats().catch(() => null),
+      feedbackController.getFeedbackStats().catch((e) => { logger.warning('feedback stats failed', e); return null }),
+      feedbackController.getWorkflowStatus().catch((e) => { logger.warning('workflow status failed', e); return null }),
+      feedbackController.getTrainingStats().catch((e) => { logger.warning('training stats failed', e); return null }),
     ]).then(([s, w, t]) => {
       setStats(s)
       setWorkflow(w)
@@ -43,9 +44,9 @@ export default function FeedbackPage() {
 
   const handleRefreshStats = async () => {
     const [s, w, t] = await Promise.all([
-      feedbackController.getFeedbackStats().catch(() => null),
-      feedbackController.getWorkflowStatus().catch(() => null),
-      feedbackController.getTrainingStats().catch(() => null),
+      feedbackController.getFeedbackStats().catch((e) => { logger.warning('feedback stats refresh failed', e); return null }),
+      feedbackController.getWorkflowStatus().catch((e) => { logger.warning('workflow status refresh failed', e); return null }),
+      feedbackController.getTrainingStats().catch((e) => { logger.warning('training stats refresh failed', e); return null }),
     ])
     setStats(s)
     setWorkflow(w)

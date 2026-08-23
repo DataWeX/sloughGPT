@@ -18,6 +18,7 @@ import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, getJsonItem } from '@/lib/format-bytes'
 import { StatusCard } from '@/components/monitoring/StatusCard'
+import { logger } from '@/lib/dev-log'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
 import { TrafficCard } from '@/components/monitoring/TrafficCard'
 import { ModelMetricsCard } from '@/components/monitoring/ModelMetricsCard'
@@ -108,18 +109,18 @@ export default function SystemHealthPage() {
 
       // Non-critical endpoints — each degrades independently on failure.
       const [m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
-        systemController.getMetrics().catch(() => null),
-        systemController.getInfo().catch(() => null),
-        systemController.getDisk().catch(() => null),
-        knowledgeController.stats().catch(() => null),
-        knowledgeController.getAdapterStatus().catch(() => null),
-        benchmarkController.quality().catch(() => null),
-        benchmarkController.stats().catch(() => null),
-        multimodalController.getDPOStatus().catch(() => null),
-        multimodalController.getStatus().catch(() => null),
-        systemController.getExecutorStatus().catch(() => null),
-        trainingController.getAutoTrainStatus().catch(() => null),
-        trainingController.list().catch(() => []),
+        systemController.getMetrics().catch((e) => { logger.warning('metrics fetch failed', e); return null }),
+        systemController.getInfo().catch((e) => { logger.warning('info fetch failed', e); return null }),
+        systemController.getDisk().catch((e) => { logger.warning('disk fetch failed', e); return null }),
+        knowledgeController.stats().catch((e) => { logger.warning('knowledge stats failed', e); return null }),
+        knowledgeController.getAdapterStatus().catch((e) => { logger.warning('adapter status failed', e); return null }),
+        benchmarkController.quality().catch((e) => { logger.warning('benchmark quality failed', e); return null }),
+        benchmarkController.stats().catch((e) => { logger.warning('benchmark stats failed', e); return null }),
+        multimodalController.getDPOStatus().catch((e) => { logger.warning('DPO status failed', e); return null }),
+        multimodalController.getStatus().catch((e) => { logger.warning('multimodal status failed', e); return null }),
+        systemController.getExecutorStatus().catch((e) => { logger.warning('executor status failed', e); return null }),
+        trainingController.getAutoTrainStatus().catch((e) => { logger.warning('auto-train status failed', e); return null }),
+        trainingController.list().catch((e) => { logger.warning('training list failed', e); return [] }),
       ])
       if (m != null) setMetrics(m)
       if (i != null) setInfo(i)

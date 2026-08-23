@@ -3319,8 +3319,11 @@ class SloNet:
                     if dw.shape == adapter.down_proj.weight.data.shape:
                         adapter.down_proj.weight.data = dw.copy()
                         adapter.up_proj.weight.data = uw.copy()
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("slo.training.slonet").warning(
+                "Failed to load user adapter for %s: %s (using fresh adapter)", user_id, e,
+            )
 
         self._user_adapters[user_id] = adapter
         return adapter
