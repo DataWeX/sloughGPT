@@ -117,7 +117,7 @@ class BenchmarkRouter:
             ctrl = get_models_controller()
             provider = get_server_state().model.get()
             if provider is None:
-                return success_response(data={"model": model, "model_loaded": False})
+                return {"model": model, "model_loaded": False}
 
             inference_time = _time.time() - ctrl._last_inference_time if ctrl._last_inference_time else 0
             total_tokens = ctrl._total_tokens_generated
@@ -128,7 +128,7 @@ class BenchmarkRouter:
             if inference_time > 0 and total_tokens > 0 and total_inferences > 0:
                 tokens_per_sec = total_tokens / (inference_time * total_inferences)
 
-            return success_response(data={
+            return {
                 "model": model,
                 "model_loaded": True,
                 "model_id": getattr(provider, "model_id", model),
@@ -137,7 +137,7 @@ class BenchmarkRouter:
                 "tokens_per_second": round(tokens_per_sec, 1),
                 "memory_mb": round(_process_memory_mb(), 1),
                 "num_parameters": getattr(provider, "num_parameters", None),
-            })
+            }
         except Exception as e:
             raise_error(str(e), "E_DOMAIN", details={"model": model})
 

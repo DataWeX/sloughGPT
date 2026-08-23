@@ -63,12 +63,12 @@ class AgentsRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route("", self.list_agents, methods=["GET"], response_model=List[AgentOut])
-        self.router.add_api_route("", self.create_agent, methods=["POST"], response_model=AgentOut, status_code=201)
+        self.router.add_api_route("", self.list_agents, methods=["GET"])
+        self.router.add_api_route("", self.create_agent, methods=["POST"], status_code=201)
         self.router.add_api_route("/runs", self.list_runs, methods=["GET"])
         self.router.add_api_route("/runs/{run_id}", self.get_run, methods=["GET"])
-        self.router.add_api_route("/{agent_id}", self.get_agent, methods=["GET"], response_model=AgentOut)
-        self.router.add_api_route("/{agent_id}", self.update_agent, methods=["PUT"], response_model=AgentOut)
+        self.router.add_api_route("/{agent_id}", self.get_agent, methods=["GET"])
+        self.router.add_api_route("/{agent_id}", self.update_agent, methods=["PUT"])
         self.router.add_api_route("/{agent_id}", self.delete_agent, methods=["DELETE"])
         self.router.add_api_route("/{agent_id}/execute", self.execute_agent, methods=["POST"])
         self.router.add_api_route("/orchestrate", self.orchestrate_agents, methods=["POST"])
@@ -90,7 +90,7 @@ class AgentsRouter:
         """
         system = self._get_system()
         agents = await asyncio.to_thread(system.list)
-        return [AgentOut(**a) for a in agents]
+        return success_response(data=[AgentOut(**a).model_dump() for a in agents])
 
     async def create_agent(self, req: AgentCreate) -> dict:
         """Create a new agent with the given name, description, tools, and instructions.
@@ -123,14 +123,14 @@ class AgentsRouter:
             avatar=req.avatar,
         )
         safe_audit_log("agent.create", resource=agent_id, detail=req.name, tools=list(req.tools or []))
-        return AgentOut(**result)
+        return success_response(data=AgentOut(**result).model_dump())
 
     async def get_agent(self, agent_id: str) -> dict:
         """Get a specific agent by ID."""
         result = self._get_system().get(agent_id)
         if result is None:
             raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
-        return AgentOut(**result)
+        return success_response(data=AgentOut(**result).model_dump())
 
     async def update_agent(self, agent_id: str, req: AgentUpdate) -> dict:
         """Update an existing agent by ID with partial field changes.
@@ -161,7 +161,7 @@ class AgentsRouter:
         if result is None:
             raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("agent.update", resource=agent_id)
-        return AgentOut(**result)
+        return success_response(data=AgentOut(**result).model_dump())
 
     async def delete_agent(self, agent_id: str) -> dict:
         """Delete an agent by its unique identifier.
@@ -391,7 +391,7 @@ class AgentsRouter:
         record = await asyncio.to_thread(get_agent_run_store().get, run_id)
         if record is None:
             raise_error("Run not found", "E_NOT_FOUND", status_code=404)
-        return record
+        return success_response(data=record)
 
 
 router = AgentsRouter().router
