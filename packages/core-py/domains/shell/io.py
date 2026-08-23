@@ -48,11 +48,16 @@ class ConsoleIO:
     def __init__(self) -> None:
         self._tty = None
         self._has_readline = False
+        self._uses_stdin = False
 
         try:
             self._tty = open("/dev/tty", "r+", buffering=1)
         except OSError:
             self._tty = None
+
+        # Fallback: if stdin is a TTY, use stdin/stdout directly
+        if self._tty is None and sys.stdin.isatty():
+            self._uses_stdin = True
 
         try:
             import readline  # noqa: F401
@@ -62,7 +67,7 @@ class ConsoleIO:
 
     @property
     def _is_tty(self) -> bool:
-        return self._tty is not None
+        return self._tty is not None or self._uses_stdin
 
     def write(self, text: str, end: str = "\n") -> None:
         if self._tty:

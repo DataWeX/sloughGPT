@@ -395,10 +395,12 @@ class TestIngestUrl:
         err = MagicMock()
         err.http_status = 503
         err.user_message = "upstream failed"
+        err.code = "E_UPSTREAM"
+        err.details = {}
         mock_classify.return_value = err
         resp = client.post("/knowledge/ingest-url", json={"url": "https://example.com/foo"})
         assert resp.status_code == 503
-        mock_emit.assert_called_once()
+        assert mock_emit.call_count == 2
 
 
 class TestLabelMethods:

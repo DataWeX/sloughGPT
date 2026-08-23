@@ -267,9 +267,10 @@ def tui(ctx):
 
 @cli.command(help="Launch interactive shell REPL")
 @click.option("--command", "-c", help="Run a single command and exit")
-@click.option("--tui", is_flag=True, help="Boot into the split-pane curses TUI instead of line mode")
+@click.option("--tui/--no-tui", default=None, help="Curses TUI mode (default when TTY)")
+@click.option("--line", is_flag=True, help="Force line-mode REPL (no TUI)")
 @click.pass_context
-def shell(ctx, command, tui):
+def shell(ctx, command, tui, line):
     """Launch the SloughGPT interactive shell REPL."""
     from utils.helpers import ensure_server
     actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
@@ -277,7 +278,15 @@ def shell(ctx, command, tui):
     from domains.shell import DaitRuntime
 
     os = DaitRuntime(api_url=actual_url)
-    repl = ShellREPL(os, use_tui=True if tui else None)
+    # Default to TUI when TTY, line mode when piped or --line
+    use_tui = True
+    if line:
+        use_tui = False
+    elif tui is not None:
+        use_tui = tui
+    elif not sys.stdout.isatty():
+        use_tui = False
+    repl = ShellREPL(os, use_tui=True if use_tui else None)
     if command:
         commands, is_bg, should_time = repl._parse_pipeline(command)
         if is_bg:

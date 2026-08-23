@@ -1422,8 +1422,18 @@ class ShellREPL(LinuxCommandsMixin):
 
     def _cmd_alias(self, args: str = "") -> None:
         if not args:
-            for name, cmd in sorted(self._aliases.items()):
-                self._print(f"  {name}={cmd}")
+            if not self._aliases:
+                self._print("  No aliases defined")
+                self._print("  Usage: alias name=command")
+                return
+            items = [f"{name}={cmd}" for name, cmd in sorted(self._aliases.items())]
+            selected = self.console.select_with_details(
+                "Aliases:", items,
+                lambda x: x.split("=", 1)[1] if "=" in x else ""
+            )
+            if selected:
+                name, _, cmd = selected.partition("=")
+                self._print(f"  {name.strip()}={cmd.strip()}")
             return
         if "=" in args:
             name, _, command = args.partition("=")
@@ -1458,8 +1468,18 @@ class ShellREPL(LinuxCommandsMixin):
     def _cmd_set(self, args: str = "") -> None:
         """Set or show environment variables."""
         if not args:
-            for k, v in sorted(self._env.items()):
-                self._print(f"  {k}={v}")
+            if not self._env:
+                self._print("  No environment variables set")
+                self._print("  Usage: set KEY=VALUE")
+                return
+            items = [f"{k}={v}" for k, v in sorted(self._env.items())]
+            selected = self.console.select_with_details(
+                "Environment:", items,
+                lambda x: x.split("=", 1)[1] if "=" in x else ""
+            )
+            if selected:
+                name, _, value = selected.partition("=")
+                self._print(f"  {name.strip()}={value.strip()}")
             return
         if "=" in args:
             name, _, value = args.partition("=")
@@ -2240,16 +2260,17 @@ Examples:
         if not jobs:
             self._print("  No running jobs")
             return
-        rows = []
-        for j in jobs:
-            rows.append([
-                str(j.get("id", ""))[:12],
-                j.get("status", ""),
-                str(j.get("name", "")),
-                f"{j.get('progress', 0)}%",
-                str(j.get("loss", "\u2014"))[:8],
-            ])
-        self._table(rows, ["ID", "Status", "Name", "Progress", "Loss"])
+        processes = [{"name": j.get("name", "?"), "status": j.get("status", "?")} for j in jobs]
+        selected = self.console.process_manager(processes, "Jobs:")
+        if selected:
+            job_id = None
+            for j in jobs:
+                if j.get("name") == selected["name"]:
+                    job_id = j.get("id")
+                    break
+            if job_id:
+                self._print(f"  Job: {selected['name']} (ID: {job_id})")
+                self._print(f"  Use: kill {job_id}  to stop")
 
     def _cmd_ps(self, args: str = "") -> None:
         procs = self.os.kernel.list_processes()

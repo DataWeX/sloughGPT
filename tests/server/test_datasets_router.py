@@ -257,7 +257,7 @@ class TestCreateFromChat:
             ],
         })
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "created"
         assert body["messages_exported"] == 2
 
@@ -272,7 +272,7 @@ class TestCreateFromChat:
                 {"role": "user", "content": ""},
             ],
         })
-        assert resp.json()["messages_exported"] == 1
+        assert resp.json()["data"]["messages_exported"] == 1
 
 
 class TestImportFromLocal:
@@ -447,8 +447,7 @@ class TestImportHuggingface:
         mock_cls.return_value.downloadDataset.return_value = result
         resp = client.post("/datasets/import/huggingface", json={"dataset_id": "org/myds"})
         assert resp.status_code == 400
-        body = resp.json()
-        assert "download failed" in (body.get("detail") or body.get("message") or str(body))
+        assert resp.json()["error"] == "download failed"
 
     def test_missing_dataset_id_422(self, client):
         resp = client.post("/datasets/import/huggingface", json={})
@@ -719,11 +718,12 @@ class TestConvertToMessages:
     def test_missing_input_jsonl_404(self, mock_get_ctrl, router):
         mock_get_ctrl.return_value.list_datasets.return_value = [{"id": "ds1", "name": "dia"}]
         _app = FastAPI()
+        register_all_handlers(_app)
         _app.include_router(router.router)
         client = TestClient(_app, raise_server_exceptions=False)
         resp = client.post("/datasets/convert-to-messages?dataset_id=ds1")
         assert resp.status_code == 404
-        assert "input.jsonl" in resp.json()["detail"]
+        assert "input.jsonl" in resp.json()["error"]
 
     @patch("apps.api.server.routers.datasets.get_datasets_controller")
     def test_converts_text_and_messages(self, mock_get_ctrl, router):
@@ -737,11 +737,12 @@ class TestConvertToMessages:
             '{"messages": [{"role": "user", "content": "hi"}]}\n'
         )
         _app = FastAPI()
+        register_all_handlers(_app)
         _app.include_router(router.router)
         client = TestClient(_app, raise_server_exceptions=False)
         resp = client.post("/datasets/convert-to-messages?dataset_id=ds1&system_prompt=BE_STRICT")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "converted"
         assert body["total_conversations"] == 2
         out = router._DATASETS_DIR / "out" / "input.jsonl"

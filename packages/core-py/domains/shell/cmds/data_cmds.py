@@ -87,19 +87,26 @@ def run(argv: list[str], out: Console, api: ShellCommands,
             out.print(f"  Knowledge base: {count} fact(s)")
             topics = stats.get("topics", {})
             if topics:
-                out.print(f"  Topics: {', '.join(sorted(topics.keys()))}")
-            out.print("  Use: recall <query>  to search")
-            return 0
+                out.print("  Topics:")
+                topic_list = list(topics.keys())
+                selected = out.select("Select topic:", topic_list)
+                if selected:
+                    query = selected
+                else:
+                    return 0
+            else:
+                out.print("  Use: recall <query>  to search")
+                return 0
         with out.spinner("Searching knowledge") as s:
             results = api.list_knowledge(query)
         s.ok("Search complete")
         if not results:
             out.print("  No matching facts")
             return 0
-        for r in results[:10]:
-            topic = r.get("topic", "")
-            content = r.get("content", "")[:120]
-            out.print(f"  [{topic}] {content}")
+        items = [f"[{r.get('topic', '')}] {r.get('content', '')[:100]}" for r in results[:20]]
+        selected = out.interactive_search(items)
+        if selected:
+            out.print(f"  {selected}")
         return 0
 
     if cmd == "checkpoints":
@@ -124,8 +131,17 @@ def run(argv: list[str], out: Console, api: ShellCommands,
         if sub == "load":
             name = argv[2] if len(argv) > 2 else ""
             if not name:
-                out.print("  Usage: finetuned load <name>")
-                return 1
+                with out.spinner("Fetching fine-tuned models") as s:
+                    models = api.finetuned_models()
+                s.ok("Models loaded")
+                if not models:
+                    out.print("  No fine-tuned models available")
+                    return 1
+                names = [m.get("model_name", "") for m in models]
+                name = out.select("Select model to load:", names)
+                if not name:
+                    out.print("  Cancelled")
+                    return 0
             with out.spinner(f"Loading {name}") as s:
                 result = api.load_finetuned(name)
             status = result.get("status", "?")
@@ -139,8 +155,20 @@ def run(argv: list[str], out: Console, api: ShellCommands,
         if sub in ("rm", "del", "delete"):
             name = argv[2] if len(argv) > 2 else ""
             if not name:
-                out.print("  Usage: finetuned rm <name>")
-                return 1
+                with out.spinner("Fetching fine-tuned models") as s:
+                    models = api.finetuned_models()
+                s.ok("Models loaded")
+                if not models:
+                    out.print("  No fine-tuned models available")
+                    return 1
+                names = [m.get("model_name", "") for m in models]
+                name = out.select("Select model to delete:", names)
+                if not name:
+                    out.print("  Cancelled")
+                    return 0
+            if not out.confirm(f"Delete {name}?"):
+                out.print("  Cancelled")
+                return 0
             with out.spinner(f"Deleting {name}") as s:
                 result = api.delete_finetuned(name)
             if result.get("status") == "deleted":
