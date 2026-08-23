@@ -12,7 +12,7 @@ from fastapi import APIRouter, Query
 from typing import List
 from pydantic import BaseModel, Field
 
-from schemas.common import success_response, raise_error, safe_audit_log
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 
 logger = logging.getLogger("slo.api.collections")
@@ -74,30 +74,23 @@ class CollectionsRouter:
                     "filters": len(filters),
                 },
             })
-        except AppError:
-            raise
         except Exception as e:
-            return success_response(data={"pipelines": [], "error": str(e)})
+            classify_and_raise(e, source="collections.list_pipelines")
 
     async def create_pipeline(self, req: PipelineConfigRequest) -> dict:
         """Create and register a new collection pipeline."""
         try:
-            from domains.collections import CollectionPipeline
             from domains.collections.registry import get_registry
 
-            source = _build_source(req.source_type, req.source_config)
-            store = _build_store(req.store_type, req.store_config)
-            filters = [_build_filter(fc) for fc in req.filter_chain if fc.get("type")]
-
-            pipeline = CollectionPipeline(
-                source=source,
-                store=store,
-                filters=filters,
-                name=req.name,
-            )
-
             registry = get_registry()
-            registry._pipelines[req.name] = pipeline
+            pipeline = registry.create_pipeline(
+                name=req.name,
+                source_name=req.source_type,
+                store_name=req.store_type,
+                filter_names=[fc.get("type", "") for fc in req.filter_chain if fc.get("type")],
+            )
+            if pipeline is None:
+                raise_error(f"Failed to create pipeline: source '{req.source_type}' or store '{req.store_type}' not registered", code="E_CREATE_FAILED", status_code=400)
 
             safe_audit_log("collection.create", resource=req.name, detail=f"source={req.source_type} store={req.store_type}")
             return success_response(data={
@@ -182,10 +175,8 @@ class CollectionsRouter:
             registry = get_registry()
             stats = registry.stats()
             return success_response(data=stats)
-        except AppError:
-            raise
         except Exception as e:
-            return success_response(data={"error": str(e)})
+            classify_and_raise(e, source="collections.get_stats")
 
     async def get_pipeline(self, pipeline_id: str) -> dict:
         """Get details of a specific pipeline."""
@@ -210,15 +201,13 @@ class CollectionsRouter:
         try:
             from domains.collections.registry import get_registry
             registry = get_registry()
-            if pipeline_id in registry._pipelines:
-                del registry._pipelines[pipeline_id]
+            removed = registry.remove_pipeline(pipeline_id)
+            if not removed:
+                raise_error(f"Pipeline '{pipeline_id}' not found", code="E_NOT_FOUND", status_code=404)
             safe_audit_log("collection.delete", resource=pipeline_id)
             return success_response(data={"deleted": pipeline_id})
-        except AppError:
-            raise
         except Exception as e:
-            logger.warning("Delete pipeline failed: %s", e)
-            raise_error(f"Failed to delete pipeline: {e}", code="E_DELETE_FAILED", status_code=500)
+            classify_and_raise(e, source="collections.delete_pipeline")
 
     async def collect(self, pipeline_id: str) -> dict:
         """Run collection for a specific pipeline."""

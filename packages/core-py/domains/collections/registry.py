@@ -51,6 +51,13 @@ class CollectionRegistry:
     def get_pipeline(self, name: str) -> CollectionPipeline | None:
         return self._pipelines.get(name)
 
+    def remove_pipeline(self, name: str) -> bool:
+        """Remove a pipeline by name. Returns True if it existed."""
+        if name in self._pipelines:
+            del self._pipelines[name]
+            return True
+        return False
+
     def collect(self, pipeline_name: str) -> int:
         pipeline = self._pipelines.get(pipeline_name)
         if pipeline is None:
