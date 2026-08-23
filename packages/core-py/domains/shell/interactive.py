@@ -1731,6 +1731,227 @@ class InteractivePrompt:
         except (termios.error, OSError):
             return default or _dt.date.today().isoformat()
 
+    # ── History search ────────────────────────────────────────────────
+
+    def history_search(self, history: list[str], message: str = "History:") -> str | None:
+        """Interactive history search with type-to-filter (Ctrl+R style)."""
+        if not self._is_tty:
+            return self._select_fallback(message, history[-10:]) if history else None
+        return self._history_search_raw(history, message)
+
+    def _history_search_raw(self, history: list[str], message: str) -> str | None:
+        fd = self._get_fd()
+        query = ""
+        idx = 0
+
+        def _filtered() -> list[str]:
+            if not query:
+                return list(reversed(history[-50:]))
+            q = query.lower()
+            return [h for h in reversed(history) if q in h.lower()][:50]
+
+        def _render() -> str:
+            flt = _filtered()
+            lines = []
+            for i, cmd in enumerate(flt):
+                prefix = ">> " if i == idx else "   "
+                color = _CYAN if i == idx else ""
+                reset = _RESET if i == idx else ""
+                display = cmd[:60] + "..." if len(cmd) > 60 else cmd
+                lines.append(f"  {prefix}{color}{display}{_RESET}")
+            if not lines:
+                lines = [f"  {_DIM}(no matches){_RESET}"]
+            query_display = f"  {_BOLD}Search:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to search history{_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, type=search, enter=select){_RESET}\n"
+                + query_display
+                + "\n" + "\n".join(lines)
+                + f"{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(2 + len(history[-50:])):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    flt = _filtered()
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return None
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return flt[idx] if flt else None
+                    if key.kind == _KEY_UP:
+                        idx = (idx - 1) % max(len(flt), 1)
+                    elif key.kind == _KEY_DOWN:
+                        idx = (idx + 1) % max(len(flt), 1)
+                    elif key.kind == _KEY_CHAR:
+                        if key.char == "\x7f":
+                            query = query[:-1]
+                        else:
+                            query += key.char
+                        idx = 0
+                    elif key.kind == _KEY_BACKSPACE:
+                        query = query[:-1]
+                        idx = 0
+        except (termios.error, OSError):
+            flt = _filtered()
+            return flt[0] if flt else None
+
+    # ── Process manager ───────────────────────────────────────────────
+
+    def process_manager(self, processes: list[dict[str, str]],
+                        message: str = "Processes:") -> dict[str, str] | None:
+        """Interactive process manager with live status.
+
+        Args:
+            processes: list of dicts with at least 'name' and 'status' keys
+            message: prompt text
+
+        Returns:
+            selected process dict or None
+        """
+        if not self._is_tty:
+            return processes[0] if processes else None
+        return self._process_manager_raw(processes, message)
+
+    def _process_manager_raw(self, processes: list[dict[str, str]],
+                             message: str) -> dict[str, str] | None:
+        fd = self._get_fd()
+        idx = 0
+
+        def _render() -> str:
+            lines = []
+            for i, proc in enumerate(processes):
+                name = proc.get("name", "?")
+                status = proc.get("status", "?")
+                status_color = _GREEN if status == "running" else _YELLOW if status == "pending" else _RED
+                prefix = ">> " if i == idx else "   "
+                color = _CYAN if i == idx else ""
+                reset = _RESET if i == idx else ""
+                lines.append(
+                    f"  {prefix}{color}{name:<30} {status_color}{status}{_RESET}{reset}"
+                )
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, enter=select){_RESET}\n"
+                + "\n".join(lines)
+                + f"{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(2 + len(processes)):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return None
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return processes[idx]
+                    if key.kind == _KEY_UP:
+                        idx = (idx - 1) % len(processes)
+                    elif key.kind == _KEY_DOWN:
+                        idx = (idx + 1) % len(processes)
+        except (termios.error, OSError):
+            return processes[idx] if processes else None
+
+    # ── Log viewer ────────────────────────────────────────────────────
+
+    def log_viewer(self, logs: list[str], message: str = "Logs:") -> str | None:
+        """Interactive log viewer with scroll and filter."""
+        if not self._is_tty:
+            return logs[-1] if logs else None
+        return self._log_viewer_raw(logs, message)
+
+    def _log_viewer_raw(self, logs: list[str], message: str) -> str | None:
+        fd = self._get_fd()
+        query = ""
+        scroll = 0
+        max_visible = 20
+
+        def _filtered() -> list[str]:
+            if not query:
+                return logs
+            q = query.lower()
+            return [l for l in logs if q in l.lower()]
+
+        def _render() -> str:
+            flt = _filtered()
+            visible = flt[scroll:scroll + max_visible]
+            lines = []
+            for line in visible:
+                if "error" in line.lower():
+                    color = _RED
+                elif "warn" in line.lower():
+                    color = _YELLOW
+                elif "info" in line.lower():
+                    color = _CYAN
+                else:
+                    color = _DIM
+                display = line[:70] + "..." if len(line) > 70 else line
+                lines.append(f"  {color}{display}{_RESET}")
+            if not lines:
+                lines = [f"  {_DIM}(no logs){_RESET}"]
+            pos = f"  {_DIM}{scroll + 1}-{min(scroll + max_visible, len(flt))}/{len(flt)}{_RESET}"
+            query_display = f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to filter{_RESET}"
+            return (
+                f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows=scroll, type=filter){_RESET}\n"
+                + query_display
+                + "\n" + "\n".join(lines)
+                + f"\n{pos}{_HIDE_CURSOR}"
+            )
+
+        def _clear() -> None:
+            for _ in range(3 + max_visible + 1):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                while True:
+                    sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
+                    sys.stdout.flush()
+                    key = _read_raw_key(fd)
+                    flt = _filtered()
+                    if key.kind in (_KEY_CTRL_C, _KEY_ESC):
+                        _clear(); return None
+                    if key.kind == _KEY_ENTER:
+                        _clear(); return flt[scroll] if flt else None
+                    if key.kind == _KEY_UP:
+                        scroll = max(0, scroll - 1)
+                    elif key.kind == _KEY_DOWN:
+                        scroll = min(max(0, len(flt) - max_visible), scroll + 1)
+                    elif key.kind == _KEY_PAGE_UP:
+                        scroll = max(0, scroll - max_visible)
+                    elif key.kind == _KEY_PAGE_DOWN:
+                        scroll = min(max(0, len(flt) - max_visible), scroll + max_visible)
+                    elif key.kind == _KEY_CHAR:
+                        if key.char == "\x7f":
+                            query = query[:-1]
+                        else:
+                            query += key.char
+                        scroll = 0
+                    elif key.kind == _KEY_BACKSPACE:
+                        query = query[:-1]
+                        scroll = 0
+        except (termios.error, OSError):
+            return logs[-1] if logs else None
+
     # ── Color picker ───────────────────────────────────────────────────
 
     def color_picker_rgb(self, message: str, default: str = "#ffffff") -> str:
