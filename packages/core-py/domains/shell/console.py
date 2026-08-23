@@ -780,6 +780,22 @@ class Console:
         self._emit("file_browser", {"title": title})
         return self._interactive.file_browser(title, start_dir, pattern)
 
+    def history_search(self, history: list[str], message: str = "History:") -> str | None:
+        """Interactive history search with type-to-filter."""
+        self._emit("history_search", {"message": message})
+        return self._interactive.history_search(history, message)
+
+    def process_manager(self, processes: list[dict[str, str]],
+                        message: str = "Processes:") -> dict[str, str] | None:
+        """Interactive process manager with live status."""
+        self._emit("process_manager", {"message": message})
+        return self._interactive.process_manager(processes, message)
+
+    def log_viewer(self, logs: list[str], message: str = "Logs:") -> str | None:
+        """Interactive log viewer with scroll and filter."""
+        self._emit("log_viewer", {"message": message})
+        return self._interactive.log_viewer(logs, message)
+
     def progress_step(self, steps: list[str], current: int, done: bool = False) -> None:
         """Display a step-by-step progress indicator."""
         self._emit("progress_step", {"current": current, "done": done})
