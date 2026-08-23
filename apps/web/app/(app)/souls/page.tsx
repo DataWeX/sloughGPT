@@ -13,6 +13,7 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-controller'
 import { SoulPersonalityCard } from '@/components/souls/SoulPersonalityCard'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 type Tab = 'souls' | 'checkpoints' | 'weights' | 'snapshots' | 'analytics'
 
@@ -160,9 +161,9 @@ export default function SoulsPage() {
   // ── Data Loading ──
   const loadData = useCallback(async () => {
     const [s, c, snaps] = await Promise.all([
-      soulsController.list().catch(() => ({ souls: [], current_soul: null })),
-      soulsController.listCheckpoints().catch(() => ({ checkpoints: [] })),
-      soulsController.listWeightSnapshots().catch(() => []),
+      soulsController.list().catch((e) => { logger.warning('souls list failed', { exception: String(e) }); return { souls: [], current_soul: null } }),
+      soulsController.listCheckpoints().catch((e) => { logger.warning('checkpoints list failed', { exception: String(e) }); return { checkpoints: [] } }),
+      soulsController.listWeightSnapshots().catch((e) => { logger.warning('weight snapshots failed', { exception: String(e) }); return [] }),
     ])
     setSouls(s.souls)
     setCurrentSoul(s.current_soul ?? null)

@@ -81,7 +81,7 @@ export default function KnowledgePage() {
         knowledgeController.list(),
         knowledgeController.stats(),
         knowledgeController.topics(),
-        knowledgeController.getAdapterStatus().catch(() => null),
+        knowledgeController.getAdapterStatus().catch((e) => { logger.warning('adapter status failed', { exception: String(e) }); return null }),
       ])
       setItems(itemsResult)
       setStats(statsResult)

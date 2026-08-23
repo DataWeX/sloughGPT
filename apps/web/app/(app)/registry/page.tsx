@@ -7,6 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 export default function RegistryPage() {
   const [models, setModels] = useState<RegisteredModel[]>([])
@@ -20,9 +21,9 @@ export default function RegistryPage() {
   const fetchData = async () => {
     try {
       const [modelsRes, statsRes, bestRes] = await Promise.all([
-        registryController.list().catch(() => []),
-        registryController.stats().catch(() => null),
-        registryController.best().catch(() => null),
+        registryController.list().catch((e) => { logger.warning('registry list failed', { exception: String(e) }); return [] }),
+        registryController.stats().catch((e) => { logger.warning('registry stats failed', { exception: String(e) }); return null }),
+        registryController.best().catch((e) => { logger.warning('registry best failed', { exception: String(e) }); return null }),
       ])
       setModels(modelsRes)
       setStats(statsRes)

@@ -10,6 +10,7 @@ import { modelController } from '@/lib/model-controller'
 import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity'
 
@@ -41,9 +42,9 @@ export default function BenchmarkPage() {
 
       try {
         const [m, q, s] = await Promise.all([
-          benchmarkController.metrics(model).catch(() => null),
-          benchmarkController.quality().catch(() => null),
-          benchmarkController.stats().catch(() => null),
+          benchmarkController.metrics(model).catch((e) => { logger.warning('benchmark metrics failed', { exception: String(e) }); return null }),
+          benchmarkController.quality().catch((e) => { logger.warning('benchmark quality failed', { exception: String(e) }); return null }),
+          benchmarkController.stats().catch((e) => { logger.warning('benchmark stats failed', { exception: String(e) }); return null }),
         ])
         setMetrics(m)
         setQuality(q)

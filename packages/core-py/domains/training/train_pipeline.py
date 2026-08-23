@@ -683,7 +683,8 @@ class SloughGPTTrainer:
                 self._data_quality["avg_quality"], self._data_quality["repetition_rate"],
                 self._data_quality["diversity"], self._data_quality["language_quality"],
                 extra={"tag": "TRAIN"})
-        except Exception:
+        except Exception as e:
+            logger.warning("Data quality computation failed, using defaults: %s", e)
             self._data_quality = {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0}
 
         # Create model

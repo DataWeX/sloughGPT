@@ -17,6 +17,7 @@ import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString } from '@/lib/format-bytes'
 import { agentSchema, agentExecuteSchema, orchestrateSchema } from '@/lib/validation-schemas'
+import { logger } from '@/lib/dev-log'
 
 const AVAILABLE_TOOLS = ['web_search', 'code_execution', 'file_read', 'knowledge_retrieval', 'image_analysis', 'data_analysis']
 
@@ -304,7 +305,8 @@ export default function AgentsPage() {
       await agentsController.delete(id)
       addToast('Agent deleted', 'success', undefined, () => {
         setAgents(prev => [deleted, ...prev])
-        agentsController.create({ name: deleted.name, description: deleted.description, instructions: deleted.instructions, tools: deleted.tools }).catch(() => {
+        agentsController.create({ name: deleted.name, description: deleted.description, instructions: deleted.instructions, tools: deleted.tools }).catch((e) => {
+          logger.warning('Failed to restore agent', { exception: String(e) })
           addToast('Failed to restore agent', 'error')
           fetchAgents()
         })
