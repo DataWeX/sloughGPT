@@ -296,7 +296,6 @@ class ModelsRouter:
         Sizes are computed in parallel to avoid sequential blocking on Hub API calls.
         All filesystem I/O and network calls run off the event loop via asyncio.to_thread.
         """
-        import asyncio
         ctrl = get_models_controller()
 
         def _build_list():

@@ -153,7 +153,6 @@ class TokenizerRouter:
         if req.texts:
             lines = req.texts
         else:
-            import asyncio
             from urllib.request import urlopen
             url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
             def _fetch():

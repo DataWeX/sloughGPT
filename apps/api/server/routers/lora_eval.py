@@ -63,7 +63,6 @@ class LoraEvalRouter:
                         "elapsed_ms": round(_elapsed_ms, 1),
                     })
             except Exception as e:
-                import logging
                 logging.getLogger("slo.lora_eval").warning("Adapter comparison failed: %s", e)
 
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
