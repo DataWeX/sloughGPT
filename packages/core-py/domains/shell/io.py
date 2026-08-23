@@ -141,6 +141,7 @@ class MemoryIO:
         self._output: list[str] = []
         self._inputs: list[str] = []
         self._input_idx = 0
+        self._is_tty: bool = False
 
     def write(self, text: str, end: str = "\n") -> None:
         self._output.append(text + end if text else end)
@@ -208,11 +209,17 @@ def capture_cmd(repl, method, *args) -> str:
     mem = MemoryIO()
     old_io = repl.io
     old_console_io = repl.console._io
+    old_interactive_io = repl.console._interactive._io
+    old_interactive_tty = repl.console._interactive._is_tty
     repl.io = mem
     repl.console._io = mem
+    repl.console._interactive._io = mem
+    repl.console._interactive._is_tty = False
     try:
         method(*args)
     finally:
         repl.io = old_io
         repl.console._io = old_console_io
+        repl.console._interactive._io = old_interactive_io
+        repl.console._interactive._is_tty = old_interactive_tty
     return mem.get_output()
