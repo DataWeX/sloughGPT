@@ -231,10 +231,12 @@ class MobileRouter:
         Side effects:
             - Calls /health, /souls/current, /chat/sessions, /models internally.
         """
-        health = await self._internal_get(request, "/health") or {}
-        soul = await self._internal_get(request, "/souls/current") or {}
-        sessions_data = await self._internal_get(request, "/chat/sessions") or {}
-        models_resp = await self._internal_get(request, "/models") or {}
+        health_data, _ = await self._internal_get(request, "/health")
+        health = health_data or {}
+        soul_data, _ = await self._internal_get(request, "/souls/current")
+        soul = soul_data or {}
+        sessions_data, _ = await self._internal_get(request, "/chat/sessions")
+        models_resp, _ = await self._internal_get(request, "/models")
         if isinstance(models_resp, dict):
             models = models_resp.get("data", models_resp.get("models", []))
         else:
@@ -291,7 +293,7 @@ class MobileRouter:
         Side effects:
             - Calls /chat/sessions internally.
         """
-        sessions_data = await self._internal_get(request, "/chat/sessions") or {}
+        sessions_data, _ = await self._internal_get(request, "/chat/sessions")
         sessions = sessions_data.get("sessions", []) if isinstance(sessions_data, dict) else []
 
         sessions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
@@ -347,7 +349,8 @@ class MobileRouter:
         Side effects:
             - Calls /session/{id}/messages internally.
         """
-        data = await self._internal_get(request, f"/session/{session_id}/messages") or {}
+        data, _ = await self._internal_get(request, f"/session/{session_id}/messages")
+        data = data or {}
         return success_response(data={
             "id": session_id,
             "messages": data.get("messages", []),
@@ -364,11 +367,16 @@ class MobileRouter:
         Side effects:
             - Calls /models, /souls, /souls/current, /auto-train/checkpoints, /health.
         """
-        models = await self._internal_get(request, "/models") or []
-        souls = await self._internal_get(request, "/souls") or []
-        current_soul = await self._internal_get(request, "/souls/current") or {}
-        checkpoints = await self._internal_get(request, "/auto-train/checkpoints") or []
-        health = await self._internal_get(request, "/health") or {}
+        models_data, _ = await self._internal_get(request, "/models")
+        models = models_data or []
+        souls_data, _ = await self._internal_get(request, "/souls")
+        souls = souls_data or []
+        current_soul_data, _ = await self._internal_get(request, "/souls/current")
+        current_soul = current_soul_data or {}
+        checkpoints_data, _ = await self._internal_get(request, "/auto-train/checkpoints")
+        checkpoints = checkpoints_data or []
+        health_data, _ = await self._internal_get(request, "/health")
+        health = health_data or {}
 
         model_list = []
         if isinstance(models, list):
@@ -518,15 +526,17 @@ class MobileRouter:
             - Calls /knowledge or /knowledge/search internally.
         """
         if search:
-            data = await self._internal_get(
+            data, _ = await self._internal_get(
                 request, f"/knowledge/search?query={search}"
-            ) or {}
+            )
+            data = data or {}
             items = data.get("results", [])
         else:
             params = f"limit={per_page * 5}&offset=0"
             if topic:
                 params += f"&topic={topic}"
-            items = await self._internal_get(request, f"/knowledge?{params}") or []
+            items_data, _ = await self._internal_get(request, f"/knowledge?{params}")
+            items = items_data or []
 
         if not isinstance(items, list):
             items = []
@@ -643,7 +653,7 @@ class MobileRouter:
 
         for msg in body.pending_messages:
             try:
-                chat_result = await self._internal_post(
+                chat_result, _ = await self._internal_post(
                     request,
                     "/chat",
                     {
@@ -676,7 +686,8 @@ class MobileRouter:
                 ))
 
         # Return updated session list — internal /chat/sessions now returns StandardResponse
-        sessions_data = await self._internal_get(request, "/chat/sessions") or {}
+        sessions_data, _ = await self._internal_get(request, "/chat/sessions")
+        sessions_data = sessions_data or {}
         if isinstance(sessions_data, dict) and "data" in sessions_data:
             sessions = sessions_data["data"] if isinstance(sessions_data["data"], list) else []
         elif isinstance(sessions_data, dict) and "sessions" in sessions_data:
@@ -698,7 +709,8 @@ class MobileRouter:
         Returns:
             Server reachable status, model state, and current timestamp.
         """
-        health = await self._internal_get(request, "/health") or {}
+        health_data, _ = await self._internal_get(request, "/health")
+        health = health_data or {}
 
         return success_response(data={
             "reachable": health.get("status") == "healthy",
@@ -809,7 +821,8 @@ class MobileRouter:
         from domains.mobile.notifications import get_notification_service, NotificationPayload
 
         svc = get_notification_service()
-        training = await self._internal_get(request, "/training/status") or {}
+        training_data, _ = await self._internal_get(request, "/training/status")
+        training = training_data or {}
 
         status = training.get("status", "unknown")
         loss = training.get("final_loss")

@@ -1143,6 +1143,56 @@ class Console:
         self._emit("select_with_tags", {"message": message})
         return self._interactive.select_with_tags(message, options, tags)
 
+    def select_with_preview_and_grouping(self, message: str,
+                                         groups: dict[str, list[str]],
+                                         preview_fn: Callable[[str], str]) -> str:
+        """Select from categorized options with group headers and live preview."""
+        self._emit("select_with_preview_and_grouping", {"message": message})
+        return self._interactive.select_with_preview_and_grouping(message, groups, preview_fn)
+
+    def confirm_list_with_preview(self, message: str, items: list[str],
+                                  preview_fn: Callable[[str], str],
+                                  default: bool = True) -> list[str]:
+        """Confirm a list of items with preview."""
+        self._emit("confirm_list_with_preview", {"message": message})
+        return self._interactive.confirm_list_with_preview(message, items, preview_fn, default)
+
+    def progress_bar_multi_segment(self, label: str,
+                                   segments: list[tuple[str, int, str]],
+                                   width: int = 30) -> None:
+        """Display a multi-segment progress bar."""
+        self._emit("progress_bar_multi_segment", {"label": label})
+        self._interactive.progress_bar_multi_segment(label, segments, width)
+
+    def spinner_bounce(self, message: str, duration: float = 2.0) -> None:
+        """Display a bouncing animation spinner."""
+        self._emit("spinner_bounce", {"message": message})
+        self._interactive.spinner_bounce(message, duration)
+
+    def select_with_confirm(self, message: str, options: list[str],
+                            default: str = "") -> str:
+        """Select an option and confirm."""
+        self._emit("select_with_confirm", {"message": message})
+        return self._interactive.select_with_confirm(message, options, default)
+
+    def confirm_with_preview_and_timeout(self, message: str, preview: str,
+                                         timeout: int = 10,
+                                         default: bool = False) -> bool:
+        """Confirm with preview and auto-confirm countdown."""
+        self._emit("confirm_with_preview_and_timeout", {"message": message})
+        return self._interactive.confirm_with_preview_and_timeout(message, preview, timeout, default)
+
+    def progress_bar_animated(self, label: str, current: int, total: int,
+                              width: int = 30) -> None:
+        """Display an animated shimmer progress bar."""
+        self._emit("progress_bar_animated", {"label": label})
+        self._interactive.progress_bar_animated(label, current, total, width)
+
+    def spinner_clock(self, message: str, duration: float = 2.0) -> None:
+        """Display a clock animation spinner."""
+        self._emit("spinner_clock", {"message": message})
+        self._interactive.spinner_clock(message, duration)
+
     # ── Cursor control ───────────────────────────────────────────────
 
     def hide_cursor(self) -> None:

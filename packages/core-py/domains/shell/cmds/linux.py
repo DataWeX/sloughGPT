@@ -884,6 +884,7 @@ class LinuxCommandsMixin:
             -o  Print only the matched part of each line
             -m N  Stop after N matches
             -e PATTERN  Use PATTERN as the pattern (allows patterns starting with -)
+            -E  Extended regular expressions
             -A N  Print N lines after each match
             -B N  Print N lines before each match
             -C N  Print N lines of context (both sides)
@@ -921,6 +922,7 @@ class LinuxCommandsMixin:
         line_numbers = "-n" in flags
         word_boundary = "-w" in flags
         only_matching = "-o" in flags
+        extended_regex = "-E" in flags
         max_count = 0
         for idx_p, p in enumerate(parts):
             if p.startswith("-m") and len(p) > 2:
@@ -975,7 +977,9 @@ class LinuxCommandsMixin:
         try:
             # Build regex
             kwargs = {"flags": _re.IGNORECASE} if ignore_case else {}
-            if word_boundary:
+            if extended_regex:
+                pat = _re.compile(pattern, _re.VERBOSE | (_re.IGNORECASE if ignore_case else 0))
+            elif word_boundary:
                 pat = _re.compile(r"\b" + pattern + r"\b", **kwargs) if kwargs else _re.compile(r"\b" + pattern + r"\b")
             else:
                 pat = _re.compile(pattern, **kwargs) if kwargs else _re.compile(pattern)
@@ -1103,12 +1107,14 @@ class LinuxCommandsMixin:
           -n  Numeric sort (by first field)
           -f  Case-insensitive sort
           -u  Unique lines only
+          -R  Random shuffle
           -k N  Sort by field N (1-based)
           -t C  Field separator character
         """
         parts = args.strip().split() if args else []
         flags = [p for p in parts if p.startswith("-")]
-        reverse = any(f in ("-r", "-R") for f in flags)
+        reverse = any(f in ("-r",) for f in flags)
+        random_shuffle = any(f in ("-R",) for f in flags)
         numeric = any(f in ("-n", "-g") for f in flags)
         ignore_case = any(f in ("-f",) for f in flags)
         unique = any(f in ("-u",) for f in flags)
@@ -1172,7 +1178,11 @@ class LinuxCommandsMixin:
                 return val.lower()
             return val
 
-        lines.sort(key=_sort_key, reverse=reverse)
+        if random_shuffle:
+            import random as _random
+            _random.shuffle(lines)
+        else:
+            lines.sort(key=_sort_key, reverse=reverse)
         if unique:
             seen = set()
             deduped = []
@@ -1524,7 +1534,8 @@ class LinuxCommandsMixin:
             self._print("  Usage: <command> | tr [-d] [-s] [-c] [-t] <set1> <set2>")
             self._last_exit_code = 1
             return
-        parts = args.strip().split() if args else []
+        import shlex as _shlex
+        parts = _shlex.split(args) if args else []
         delete = False
         squeeze = False
         complement = False
@@ -2369,7 +2380,33 @@ class LinuxCommandsMixin:
     # ── system info ─────────────────────────────────────────────────
 
     def _cmd_env(self, args: str = "") -> None:
-        """Print environment variables."""
+        """Print environment variables.
+
+        Flags:
+          -i    Ignore environment (start with empty env)
+          -u NAME   Unset variable NAME
+        """
+        parts = args.strip().split() if args else []
+        ignore = False
+        unset_vars = []
+        i = 0
+        while i < len(parts):
+            if parts[i] == "-i":
+                ignore = True
+                i += 1
+            elif parts[i] == "-u" and i + 1 < len(parts):
+                unset_vars.append(parts[i + 1])
+                i += 2
+            elif parts[i] == "--":
+                i += 1
+            else:
+                break
+        for name in unset_vars:
+            self._env.pop(name, None)
+        if ignore:
+            for k in list(self._env.keys()):
+                if k not in ("PATH", "HOME", "SHELL", "USER"):
+                    del self._env[k]
         for k, v in sorted(self._env.items()):
             self._print(f"  {k}={v}")
         self._last_exit_code = 0

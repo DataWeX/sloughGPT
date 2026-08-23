@@ -31,19 +31,19 @@ def client(app):
 
 
 def _mock_internal_get(data):
-    return AsyncMock(return_value=data)
+    return AsyncMock(return_value=(data, None))
 
 
 def _mock_internal_post(data):
-    return AsyncMock(return_value=data)
+    return AsyncMock(return_value=(data, None))
 
 
 def _mock_internal_patch(data):
-    return AsyncMock(return_value=data)
+    return AsyncMock(return_value=(data, None))
 
 
 def _mock_internal_delete(data):
-    return AsyncMock(return_value=data)
+    return AsyncMock(return_value=(data, None))
 
 
 # ── GET /mobile/dashboard ────────────────────────────────────────────────────
@@ -77,12 +77,17 @@ class TestMobileConversations:
 
     def test_returns_conversation_list(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {
+            mock_get.return_value = ({
                 "sessions": [
+
                     {"id": "s1", "title": "Chat 1", "messages": [{"content": "hello"}],
+
                      "updated_at": "2026-01-01", "created_at": "2026-01-01", "starred": False, "pinned": False},
+
                 ]
+
             }
+, None)
             resp = client.get("/mobile/conversations")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -98,7 +103,7 @@ class TestMobileConversationDetail:
 
     def test_returns_conversation(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"messages": [{"role": "user", "content": "hi"}], "created_at": "2026-01-01"}
+            mock_get.return_value = ({"messages": [{"role": "user", "content": "hi"}], "created_at": "2026-01-01"}, None)
             resp = client.get("/mobile/conversations/s1")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -138,8 +143,8 @@ class TestMobileSwitchModel:
     def test_switch_with_valid_body(self, client):
         with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post, \
              patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_post.return_value = {"status": "ok"}
-            mock_get.return_value = {"model_type": "gpt2"}
+            mock_post.return_value = ({"status": "ok"}, None)
+            mock_get.return_value = ({"model_type": "gpt2"}, None)
             resp = client.post("/mobile/models/switch", json={"soul_name": "sage"})
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -147,7 +152,7 @@ class TestMobileSwitchModel:
 
     def test_switch_with_empty_body(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"model_type": "gpt2"}
+            mock_get.return_value = ({"model_type": "gpt2"}, None)
             resp = client.post("/mobile/models/switch", json={})
             assert resp.status_code == 200
 
@@ -182,7 +187,7 @@ class TestMobileKnowledge:
 
     def test_returns_knowledge_list(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = [{"id": "k1", "content": "fact", "topic": "general", "importance": 0.8}]
+            mock_get.return_value = ([{"id": "k1", "content": "fact", "topic": "general", "importance": 0.8}], None)
             resp = client.get("/mobile/knowledge")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -198,7 +203,7 @@ class TestMobileKnowledgeCreate:
 
     def test_creates_knowledge_item(self, client):
         with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = {"id": "k2", "content": "new fact", "topic": "science"}
+            mock_post.return_value = ({"id": "k2", "content": "new fact", "topic": "science"}, None)
             resp = client.post("/mobile/knowledge", json={"content": "new fact", "topic": "science"})
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -221,7 +226,7 @@ class TestMobileSyncStatus:
 
     def test_returns_sync_status(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"status": "healthy", "model_loaded": True, "inference_count": 10}
+            mock_get.return_value = ({"status": "healthy", "model_loaded": True, "inference_count": 10}, None)
             resp = client.get("/mobile/sync/status")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -438,7 +443,7 @@ class TestMobileConversationsEdges:
     def test_paginates(self, client):
         sessions = [self._make_session(f"s{i}", f"Title {i}", "msg", f"2026-01-{i+1:02d}") for i in range(3)]
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"sessions": sessions}
+            mock_get.return_value = ({"sessions": sessions}, None)
             resp = client.get("/mobile/conversations", params={"page": 2, "per_page": 1})
             body = resp.json()["data"]
             assert body["total"] == 3
@@ -451,7 +456,7 @@ class TestMobileConversationsEdges:
             self._make_session("s2", "Shopping List", "b", "2026-01-01"),
         ]
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"sessions": sessions}
+            mock_get.return_value = ({"sessions": sessions}, None)
             resp = client.get("/mobile/conversations", params={"search": "shopping"})
             body = resp.json()["data"]
             assert body["total"] == 1
@@ -460,7 +465,7 @@ class TestMobileConversationsEdges:
     def test_search_matches_message_content(self, client):
         sessions = [self._make_session("s1", "Title", "unique keyword here", "2026-01-02")]
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"sessions": sessions}
+            mock_get.return_value = ({"sessions": sessions}, None)
             resp = client.get("/mobile/conversations", params={"search": "keyword"})
             assert resp.json()["total"] == 1
 
@@ -480,8 +485,8 @@ class TestMobileSwitchModelEdges:
     def test_switch_with_model_id_only(self, client):
         with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post, \
              patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_post.return_value = {"status": "ok"}
-            mock_get.return_value = {"model_type": "qwen"}
+            mock_post.return_value = ({"status": "ok"}, None)
+            mock_get.return_value = ({"model_type": "qwen"}, None)
             resp = client.post("/mobile/models/switch", json={"model_id": "qwen"})
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -491,8 +496,8 @@ class TestMobileSwitchModelEdges:
     def test_switch_posts_soul_with_checkpoint(self, client):
         with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post, \
              patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_post.return_value = {"status": "ok"}
-            mock_get.return_value = {"model_type": "gpt2"}
+            mock_post.return_value = ({"status": "ok"}, None)
+            mock_get.return_value = ({"model_type": "gpt2"}, None)
             client.post("/mobile/models/switch", json={"soul_name": "sage", "checkpoint_name": "cp1"})
             call = mock_post.call_args_list[-1]
             assert call.args[1] == "/souls/switch"
@@ -507,7 +512,7 @@ class TestMobileKnowledgeUpdate:
 
     def test_updates_item(self, client):
         with patch.object(MobileRouter, "_internal_patch", new_callable=AsyncMock) as mock_patch:
-            mock_patch.return_value = {"id": "k1", "content": "updated", "topic": "new"}
+            mock_patch.return_value = ({"id": "k1", "content": "updated", "topic": "new"}, None)
             resp = client.patch("/mobile/knowledge/k1", json={"content": "updated", "topic": "new"})
             assert resp.status_code == 200
             assert resp.json()["content"] == "updated"
@@ -522,7 +527,7 @@ class TestMobileKnowledgeUpdate:
 
     def test_update_only_sends_provided_fields(self, client):
         with patch.object(MobileRouter, "_internal_patch", new_callable=AsyncMock) as mock_patch:
-            mock_patch.return_value = {}
+            mock_patch.return_value = ({}, None)
             client.patch("/mobile/knowledge/k1", json={"topic": "only"})
             body = mock_patch.call_args.args[2]
             assert body == {"topic": "only"}
@@ -537,7 +542,7 @@ class TestMobileKnowledgeDelete:
 
     def test_deletes_item(self, client):
         with patch.object(MobileRouter, "_internal_delete", new_callable=AsyncMock) as mock_delete:
-            mock_delete.return_value = {"status": "deleted"}
+            mock_delete.return_value = ({"status": "deleted"}, None)
             resp = client.delete("/mobile/knowledge/k1")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -550,7 +555,7 @@ class TestMobileKnowledgeListEdges:
 
     def test_search_uses_search_endpoint(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"results": [{"id": "k1", "content": "match", "topic": "t"}]}
+            mock_get.return_value = ({"results": [{"id": "k1", "content": "match", "topic": "t"}]}, None)
             resp = client.get("/mobile/knowledge", params={"search": "match"})
             assert resp.json()["total"] == 1
             assert mock_get.call_args.args[1] == "/knowledge/search?query=match"
@@ -561,7 +566,7 @@ class TestMobileKnowledgeListEdges:
             {"id": "k2", "content": "b", "topic": "sports"},
         ]
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = items
+            mock_get.return_value = (items, None)
             resp = client.get("/mobile/knowledge", params={"topic": "science"})
             body = resp.json()["data"]
             assert body["total"] == 1
@@ -570,7 +575,7 @@ class TestMobileKnowledgeListEdges:
     def test_pagination_slices_items(self, client):
         items = [{"id": f"k{i}", "content": f"c{i}", "topic": "t"} for i in range(3)]
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = items
+            mock_get.return_value = (items, None)
             resp = client.get("/mobile/knowledge", params={"page": 2, "per_page": 1})
             body = resp.json()["data"]
             assert body["total"] == 3
@@ -579,7 +584,7 @@ class TestMobileKnowledgeListEdges:
 
     def test_non_list_items_treated_empty(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"not": "a list"}
+            mock_get.return_value = ({"not": "a list"}, None)
             resp = client.get("/mobile/knowledge")
             assert resp.json()["items"] == []
 
@@ -593,8 +598,8 @@ class TestMobileSyncOffline:
     def test_syncs_messages_and_returns_counts(self, client):
         with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post, \
              patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_post.return_value = {"message": "hi there", "timestamp": 111}
-            mock_get.return_value = {"sessions": [{"id": "s1", "title": "T"}]}
+            mock_post.return_value = ({"message": "hi there", "timestamp": 111}, None)
+            mock_get.return_value = ({"sessions": [{"id": "s1", "title": "T"}]}, None)
             resp = client.post("/mobile/sync", json={
                 "pending_messages": [
                     {"id": "m1", "session_id": "s1", "content": "hello", "timestamp": 100},
@@ -613,7 +618,7 @@ class TestMobileSyncOffline:
         with patch.object(MobileRouter, "_internal_post", new_callable=AsyncMock) as mock_post, \
              patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
             mock_post.return_value = None
-            mock_get.return_value = {}
+            mock_get.return_value = ({}, None)
             resp = client.post("/mobile/sync", json={
                 "pending_messages": [
                     {"id": "m1", "session_id": "s1", "content": "hello", "timestamp": 100},
@@ -625,7 +630,7 @@ class TestMobileSyncOffline:
 
     def test_empty_pending_messages(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"sessions": []}
+            mock_get.return_value = ({"sessions": []}, None)
             resp = client.post("/mobile/sync", json={"pending_messages": []})
             body = resp.json()["data"]
             assert body["data"]["synced_count"] == 0
@@ -633,7 +638,7 @@ class TestMobileSyncOffline:
 
     def test_sessions_wrapped_in_data_field(self, client):
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"data": [{"id": "s9"}]}
+            mock_get.return_value = ({"data": [{"id": "s9"}]}, None)
             resp = client.post("/mobile/sync", json={"pending_messages": []})
             sessions = resp.json()["data"]["sessions"]
             assert sessions[0]["id"] == "s9"
@@ -712,7 +717,7 @@ class TestMobileNotifyTrainingComplete:
         svc.send_notification.return_value = {"sent": 1}
         mock_get_svc.return_value = svc
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"status": "complete", "final_loss": 1.5}
+            mock_get.return_value = ({"status": "complete", "final_loss": 1.5}, None)
             resp = client.post("/mobile/notify/training-complete")
         assert resp.status_code == 200
         payload = svc.send_notification.call_args.kwargs["payload"]
@@ -725,7 +730,7 @@ class TestMobileNotifyTrainingComplete:
         svc.send_notification.return_value = {"sent": 0}
         mock_get_svc.return_value = svc
         with patch.object(MobileRouter, "_internal_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"status": "running"}
+            mock_get.return_value = ({"status": "running"}, None)
             resp = client.post("/mobile/notify/training-complete")
         assert resp.status_code == 200
         payload = svc.send_notification.call_args.kwargs["payload"]

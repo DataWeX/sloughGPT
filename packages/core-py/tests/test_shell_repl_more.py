@@ -29147,3 +29147,88 @@ class TestCmdTouchFlags:
     def test_touch_no_args(self, repl):
         repl._cmd_touch("")
         assert repl._last_exit_code == 1
+
+
+# ── env -i / -u ──────────────────────────────────────────────────
+
+
+class TestCmdEnvFlags:
+    def test_env_u(self, repl):
+        repl._env["DELME"] = "yes"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_env("-u DELME")
+        assert "DELME" not in cap.getvalue()
+        assert "DELME" not in repl._env
+
+    def test_env_no_flags(self, repl):
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_env("")
+        assert repl._last_exit_code == 0
+        assert len(cap.getvalue()) > 0
+
+
+# ── grep -E extended regex ───────────────────────────────────────
+
+
+class TestCmdGrepExtended:
+    def test_grep_E(self, repl):
+        repl._piped_input = "abc\n123\ndef\n456"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_grep("-E [0-9]+")
+        out = cap.getvalue()
+        assert "123" in out
+        assert "456" in out
+        assert "abc" not in out
+
+
+# ── sort -R random ───────────────────────────────────────────────
+
+
+class TestCmdSortRandom:
+    def test_sort_R(self, repl):
+        repl._piped_input = "a\nb\nc\nd\ne"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_sort("-R")
+        out = cap.getvalue().strip()
+        lines = out.split("\n")
+        assert len(lines) == 5
+        assert set(lines) == {"a", "b", "c", "d", "e"}
+
+
+# ── wc -m (multibyte chars) ──────────────────────────────────────
+
+
+class TestCmdWcMultibyte:
+    def test_wc_m(self, repl):
+        repl._piped_input = "hello"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_wc("-m")
+        out = cap.getvalue().strip()
+        assert "5" in out
+
+
+# ── tr enhanced ──────────────────────────────────────────────────
+
+
+class TestCmdTrEnhanced:
+    def test_tr_complement(self, repl):
+        repl._piped_input = "abc123"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_tr("-c -d 0-9")
+        out = cap.getvalue()
+        assert "123" in out
+        assert "abc" not in out
+
+    def test_tr_delete(self, repl):
+        repl._piped_input = "hello world"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_tr("-d ' '")
+        out = cap.getvalue()
+        assert "helloworld" in out
+
+    def test_tr_squeeze(self, repl):
+        repl._piped_input = "a  b   c    d"
+        with _CaptureOutput(repl) as cap:
+            repl._cmd_tr("-s ' '")
+        out = cap.getvalue()
+        assert "  " not in out.strip()
