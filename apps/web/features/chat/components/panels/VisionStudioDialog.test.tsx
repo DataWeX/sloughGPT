@@ -192,7 +192,7 @@ describe('VisionStudioDialog', () => {
         onSendText={onSendText}
       />
     )
-    expect(screen.getByText(/Drop an image here or click to upload/)).toBeDefined()
+    expect(screen.getByText(/Drop an image here or browse/)).toBeDefined()
   })
 
   it('shows file input for image upload', () => {
