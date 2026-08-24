@@ -228,61 +228,34 @@ class MemoryRouter:
             classify_and_raise(e, source="memory.consolidate")
 
     def archive(self, limit: Optional[int] = None) -> dict:
-        """
-        Return recent task-backed provenance archive records, newest first.
-
-        Args:
-            limit: max records to return (default 20, clamped 1..1000).
-
-        Returns:
-            dict: ``{records: [...], total: N}``.
-
-        Side effects:
-            - none; read-only.
-        """
-        from domains.memory.task_memory import list_archive
-        if limit is None:
-            limit = 20
-        limit = max(1, min(int(limit), 1000))
-        records = list_archive(limit=limit)
-        return success_response(data={"records": records, "total": len(records)})
+        """Return recent task-backed provenance archive records, newest first."""
+        try:
+            from domains.memory.task_memory import list_archive
+            if limit is None:
+                limit = 20
+            limit = max(1, min(int(limit), 1000))
+            records = list_archive(limit=limit)
+            return success_response(data={"records": records, "total": len(records)})
+        except Exception as e:
+            classify_and_raise(e, source="memory.archive")
 
     def archive_stats(self) -> dict:
-        """
-        Summarize the task-backed provenance archive.
-
-        Returns:
-            dict: ``{path, records, bytes, task_types, oldest_ts, newest_ts}``.
-
-        Side effects:
-            - none; read-only.
-        """
-        from domains.memory.task_memory import archive_stats
-        return success_response(data=archive_stats())
+        """Summarize the task-backed provenance archive."""
+        try:
+            from domains.memory.task_memory import archive_stats
+            return success_response(data=archive_stats())
+        except Exception as e:
+            classify_and_raise(e, source="memory.archive_stats")
 
     def archive_prune(self, retain_days: Optional[float] = None) -> dict:
-        """
-        Delete archive records older than the retention window.
-
-        Args:
-            retain_days: retention window in days; records older than this are
-                removed. ``0`` prunes everything. Defaults to
-                ``MemoryConfig.archive_retention_days`` when omitted.
-
-        Returns:
-            dict: ``{pruned: N}`` — records removed.
-
-        Side effects:
-            - rewrites ``facts.jsonl`` keeping only records inside the window.
-        """
-        from domains.memory.task_memory import prune_archive
+        """Delete archive records older than the retention window."""
         try:
+            from domains.memory.task_memory import prune_archive
             removed = prune_archive(retain_days=retain_days)
+            safe_audit_log("memory.archive_prune", resource="archive", detail=f"pruned={removed}")
+            return success_response(data={"pruned": removed})
         except Exception as e:
-            logger.error("Archive prune failed (retain_days=%s): %s", retain_days, e, exc_info=True)
-            raise
-        safe_audit_log("memory.archive_prune", resource="archive", detail=f"pruned={removed}")
-        return success_response(data={"pruned": removed})
+            classify_and_raise(e, source="memory.archive_prune")
 
 
 router = MemoryRouter().router
