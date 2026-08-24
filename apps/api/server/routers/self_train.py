@@ -78,59 +78,44 @@ class SelfTrainRouter:
             classify_and_raise(e, source="self_train_start")
 
     async def stop_self_train(self) -> dict:
-        """Stop the running self-training subprocess.
-
-        Attempts a graceful terminate with a 5-second timeout, then falls
-        back to kill if the process does not exit. Clears the process
-        reference in server state.
-
-        Returns:
-            Success envelope with status "stopped" or "not_running".
-
-        Side effects:
-            - Terminates or kills the self-training subprocess.
-            - Clears server_state._self_train_proc.
-            - Writes an audit log entry for the stop action.
-        """
-        proc = server_state._self_train_proc
-        if proc is None or proc.poll() is not None:
-            return success_response(data={"status": "not_running"})
+        """Stop the running self-training subprocess."""
         try:
-            proc.terminate()
-            await asyncio.to_thread(proc.wait, 5)
-            server_state._self_train_proc = None
-            logger.info("Self-training stopped gracefully (pid=%d)", proc.pid)
-            safe_audit_log("self_train.stop", resource=str(proc.pid), detail="stopped")
-            return success_response(data={"status": "stopped"})
+            proc = server_state._self_train_proc
+            if proc is None or proc.poll() is not None:
+                return success_response(data={"status": "not_running"})
+            try:
+                proc.terminate()
+                await asyncio.to_thread(proc.wait, 5)
+                server_state._self_train_proc = None
+                logger.info("Self-training stopped gracefully (pid=%d)", proc.pid)
+                safe_audit_log("self_train.stop", resource=str(proc.pid), detail="stopped")
+                return success_response(data={"status": "stopped"})
+            except Exception as e:
+                proc.kill()
+                server_state._self_train_proc = None
+                logger.warning("Self-training killed after terminate timeout (pid=%d): %s", proc.pid, e)
+                safe_audit_log("self_train.stop", resource=str(proc.pid), detail="killed")
+                raise_error(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
         except Exception as e:
-            proc.kill()
-            server_state._self_train_proc = None
-            logger.warning("Self-training killed after terminate timeout (pid=%d): %s", proc.pid, e)
-            safe_audit_log("self_train.stop", resource=str(proc.pid), detail="killed")
-            raise_error(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
+            classify_and_raise(e, source="self_train.stop")
 
     async def get_self_train_status(self) -> dict:
-        """Check the current status of the self-training subprocess.
-
-        Returns whether training is running, has exited, or has not started.
-        Includes the last 50 lines of training history from the history file.
-
-        Returns:
-            Success envelope with status (not_started/running/exited),
-            optional pid/returncode, and history lines.
-        """
-        proc = server_state._self_train_proc
-        history_path = self._repo_root / "data" / "self_train_history.txt"
-        history = []
-        if history_path.exists():
-            _text = await asyncio.to_thread(history_path.read_text)
-            history = _text.strip().split("\n")[-50:]
-        if proc is None:
-            return success_response(data={"status": "not_started", "history": history})
-        ret = proc.poll()
-        if ret is None:
-            return success_response(data={"status": "running", "pid": proc.pid, "history": history})
-        return success_response(data={"status": "exited", "returncode": ret, "history": history})
+        """Check the current status of the self-training subprocess."""
+        try:
+            proc = server_state._self_train_proc
+            history_path = self._repo_root / "data" / "self_train_history.txt"
+            history = []
+            if history_path.exists():
+                _text = await asyncio.to_thread(history_path.read_text)
+                history = _text.strip().split("\n")[-50:]
+            if proc is None:
+                return success_response(data={"status": "not_started", "history": history})
+            ret = proc.poll()
+            if ret is None:
+                return success_response(data={"status": "running", "pid": proc.pid, "history": history})
+            return success_response(data={"status": "exited", "returncode": ret, "history": history})
+        except Exception as e:
+            classify_and_raise(e, source="self_train.status")
 
 
 router = SelfTrainRouter().router

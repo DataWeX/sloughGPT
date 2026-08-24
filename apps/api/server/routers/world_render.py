@@ -179,14 +179,17 @@ class WorldRenderRouter:
 
     async def get_stats(self) -> dict:
         """Get world rendering statistics."""
-        return success_response(data={
-            "status": "available",
-            "components": ["RenderBridge", "NeuralRenderBridge", "WorldToSceneMapper"],
-            "materials": {
-                "air": 0, "ground": 1, "food": 2, "toxic": 3,
-                "signal": 4, "nest": 5, "water": 6,
-            },
-        })
+        try:
+            return success_response(data={
+                "status": "available",
+                "components": ["RenderBridge", "NeuralRenderBridge", "WorldToSceneMapper"],
+                "materials": {
+                    "air": 0, "ground": 1, "food": 2, "toxic": 3,
+                    "signal": 4, "nest": 5, "water": 6,
+                },
+            })
+        except Exception as e:
+            classify_and_raise(e, source="world.stats")
 
 
 router = WorldRenderRouter().router

@@ -222,7 +222,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       userMessage: userMsg?.content || '', assistantResponse: assistantMsg?.content || '',
       rating, conversationId: sessionIdRef.current, userId: userIdRef.current,
     })
-    showToast(success ? 'Thanks for the feedback!' : 'Failed to submit feedback', success ? 'success' : 'error')
+    showToast(success ? 'Thanks for the feedback!' : 'Could not submit feedback', success ? 'success' : 'error')
   }, [showToast, recordFeedback])
 
   const handleThumbsUp = useCallback((messageId: string) => {
@@ -286,7 +286,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
   const handleCopyMarkdown = useCallback(async () => {
     const ok = await copyConversationAsMarkdown(messagesRef.current)
-    showToast(ok ? 'Copied to clipboard' : 'Failed to copy', ok ? 'success' : 'error')
+    showToast(ok ? 'Copied to clipboard' : 'Could not copy', ok ? 'success' : 'error')
   }, [showToast])
 
   // ── Suggestion click ──────────────────────────────────────────────────────

@@ -14,7 +14,7 @@ interface ActivityTickerProps {
 /**
  * Compact live ticker showing error activity.
  * Single line: dot + count + last error + time.
- * Click to expand into full list.
+ * Expand into full list.
  */
 export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
   const errors = useErrorStore(s => s.errors)

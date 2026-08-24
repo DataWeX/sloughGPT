@@ -406,7 +406,7 @@ export function VisionStudioDialog({
                 ) : (
                   <>
                     <IconUpload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">Click to select an image for training</p>
+                    <p className="text-xs text-muted-foreground">Select an image for training</p>
                   </>
                 )}
                 <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />

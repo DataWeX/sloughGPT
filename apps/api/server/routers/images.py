@@ -316,26 +316,32 @@ class ImagesRouter:
 
     async def list_gallery(self) -> dict:
         """List all generated images in the gallery."""
-        gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
+        try:
+            gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
 
-        def _scan_gallery():
-            if not gallery_dir.exists():
-                return []
-            images = []
-            for filepath in sorted(gallery_dir.glob("generated_*.png"), key=lambda x: x.stat().st_mtime, reverse=True):
-                images.append({
-                    "id": filepath.stem,
-                    "path": f"/data/gallery/{filepath.name}",
-                    "created": int(filepath.stat().st_mtime),
-                })
-            return images[:50]
+            def _scan_gallery():
+                if not gallery_dir.exists():
+                    return []
+                images = []
+                for filepath in sorted(gallery_dir.glob("generated_*.png"), key=lambda x: x.stat().st_mtime, reverse=True):
+                    images.append({
+                        "id": filepath.stem,
+                        "path": f"/data/gallery/{filepath.name}",
+                        "created": int(filepath.stat().st_mtime),
+                    })
+                return images[:50]
 
-        images = await asyncio.to_thread(_scan_gallery)
-        return success_response(data={"images": images})
+            images = await asyncio.to_thread(_scan_gallery)
+            return success_response(data={"images": images})
+        except Exception as e:
+            classify_and_raise(e, source="images.gallery")
 
     async def list_styles(self) -> dict:
         """List available image generation styles."""
-        return success_response(data={"styles": list(self.STYLES.items())})
+        try:
+            return success_response(data={"styles": list(self.STYLES.items())})
+        except Exception as e:
+            classify_and_raise(e, source="images.styles")
 
 
 def hex_to_rgb(hex_color: str) -> tuple:

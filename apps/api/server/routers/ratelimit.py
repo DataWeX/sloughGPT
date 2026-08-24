@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request
 import time
 from collections import defaultdict
 
-from schemas.common import success_response
+from schemas.common import success_response, classify_and_raise
 
 
 class _RateLimiter:
@@ -50,20 +50,26 @@ class RatelimitRouter:
 
     async def get_rate_limit_status(self) -> dict:
         """Get current rate limit configuration"""
-        return success_response(data={
-            "requests_per_minute": self._rate_limiter.requests_per_minute,
-            "burst_size": self._rate_limiter.burst_size,
-            "enabled": True,
-        })
+        try:
+            return success_response(data={
+                "requests_per_minute": self._rate_limiter.requests_per_minute,
+                "burst_size": self._rate_limiter.burst_size,
+                "enabled": True,
+            })
+        except Exception as e:
+            classify_and_raise(e, source="ratelimit.status")
 
     async def check_rate_limit(self, request: Request) -> dict:
         """Check if request would be rate limited"""
-        client_ip = request.client.host if request.client else "unknown"
-        allowed = self._rate_limiter.is_allowed(client_ip)
-        return success_response(data={
-            "allowed": allowed,
-            "wait_time": 0 if allowed else self._rate_limiter.get_wait_time(client_ip),
-        })
+        try:
+            client_ip = request.client.host if request.client else "unknown"
+            allowed = self._rate_limiter.is_allowed(client_ip)
+            return success_response(data={
+                "allowed": allowed,
+                "wait_time": 0 if allowed else self._rate_limiter.get_wait_time(client_ip),
+            })
+        except Exception as e:
+            classify_and_raise(e, source="ratelimit.check")
 
 
 router = RatelimitRouter().router

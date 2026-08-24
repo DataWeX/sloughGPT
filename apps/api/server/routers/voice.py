@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from schemas.common import raise_error, success_response, safe_audit_log
+from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
 
 logger = logging.getLogger("slo.routers.voice")
 
@@ -117,12 +117,15 @@ class VoiceRouter:
 
     async def voice_status(self) -> dict:
         """Check if server-side TTS model is available."""
-        available = self._tts_backend.load()
-        return success_response(data={
-            "server_tts": available,
-            "model": self._tts_backend._model_id if available else None,
-            "error": self._tts_backend._error,
-        })
+        try:
+            available = self._tts_backend.load()
+            return success_response(data={
+                "server_tts": available,
+                "model": self._tts_backend._model_id if available else None,
+                "error": self._tts_backend._error,
+            })
+        except Exception as e:
+            classify_and_raise(e, source="voice.status")
 
 
 router = VoiceRouter().router

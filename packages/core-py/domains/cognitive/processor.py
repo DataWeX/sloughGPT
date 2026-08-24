@@ -75,7 +75,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             self.logger.info("Cognitive Processor initialized successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Cognitive Processor: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to initialize Cognitive Processor: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Cognitive Processor initialization failed: {e}")
 
     async def shutdown(self) -> None:
@@ -108,7 +108,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             self.logger.info("Cognitive Processor shutdown successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to shutdown Cognitive Processor: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to shutdown Cognitive Processor: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Cognitive Processor shutdown failed: {e}")
 
     async def process_thought(self, thought: Thought) -> Thought:
@@ -147,12 +147,12 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             await self._cleanup_old_thoughts()
 
             self.logger.debug(
-                f"Processed thought: {thought.content[:50]}... in {processing_time:.3f}s"
+                "Processed thought: %.50s... in %.3fs", thought.content, processing_time
             )
             return thought
 
         except Exception as e:
-            self.logger.error(f"Failed to process thought: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to process thought: %s", e, extra={"tag": "COG"})
             self._update_processing_stats(0, False)
             raise ComponentException(f"Thought processing failed: {e}")
 
@@ -166,7 +166,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             return "monitoring_unavailable"
 
         except Exception as e:
-            self.logger.error(f"Failed to get cognitive state: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to get cognitive state: %s", e, extra={"tag": "COG"})
             return "error"
 
     async def set_cognitive_state(self, state: str) -> None:
@@ -174,7 +174,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
         try:
             # This would interface with the metacognitive monitor
             # to adjust cognitive parameters based on desired state
-            self.logger.info(f"Cognitive state change requested: {state}", extra={"tag": "COG"})
+            self.logger.info("Cognitive state change requested: %s", state, extra={"tag": "COG"})
 
             if self.metacognitive_monitor:
                 # Adjust monitoring level based on state
@@ -186,7 +186,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                     await self.metacognitive_monitor.set_monitoring_level("adaptive")
 
         except Exception as e:
-            self.logger.error(f"Failed to set cognitive state: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to set cognitive state: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Cognitive state setting failed: {e}")
 
     # Private methods
@@ -219,7 +219,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             return memory_context
 
         except Exception as e:
-            self.logger.error(f"Memory retrieval failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Memory retrieval failed: %s", e, extra={"tag": "COG"})
             return {}
 
     async def _apply_reasoning(
@@ -249,7 +249,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             }
 
         except Exception as e:
-            self.logger.error(f"Reasoning application failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Reasoning application failed: %s", e, extra={"tag": "COG"})
             return {}
 
     async def _store_thought_memory(self, thought: Thought) -> None:
@@ -276,10 +276,10 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             # Add memory ID to thought metadata
             thought.metadata["memory_id"] = memory_id
 
-            self.logger.debug(f"Stored thought as memory: {memory_id}")
+            self.logger.debug("Stored thought as memory: %s", memory_id)
 
         except Exception as e:
-            self.logger.error(f"Thought memory storage failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Thought memory storage failed: %s", e, extra={"tag": "COG"})
 
     async def _calculate_thought_importance(self, thought: Thought) -> float:
         """Calculate importance score for thought storage"""
@@ -346,7 +346,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Processing loop error: {e}", extra={"tag": "COG"})
+                self.logger.error("Processing loop error: %s", e, extra={"tag": "COG"})
                 await asyncio.sleep(0.1)
 
     # Public API methods
@@ -381,7 +381,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                 processed_thought = await self.process_thought(thought)
                 processed_thoughts.append(processed_thought)
             except Exception as e:
-                self.logger.error(f"Failed to process thought in batch: {e}", extra={"tag": "COG"})
+                self.logger.error("Failed to process thought in batch: %s", e, extra={"tag": "COG"})
                 # Add original thought if processing failed
                 processed_thoughts.append(thought)
 
@@ -403,7 +403,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                 )
                 assessment["metacognitive_report"] = metacognitive_report
             except Exception as e:
-                self.logger.error(f"Failed to get metacognitive report: {e}", extra={"tag": "COG"})
+                self.logger.error("Failed to get metacognitive report: %s", e, extra={"tag": "COG"})
 
         # Add memory statistics if available
         if self.memory_manager:
