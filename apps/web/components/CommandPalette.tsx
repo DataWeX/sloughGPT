@@ -8,6 +8,7 @@ import { sessionController } from '@/lib/session-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useModels, useSouls } from '@/lib/query/api-hooks'
+import { useToastStore } from '@/lib/store/toast-store'
 import { NAV_SECTIONS } from '@/lib/navigation'
 
 interface CommandAction {
@@ -71,7 +72,10 @@ export function CommandPalette() {
       id: `model-${m.id}`, label: `Switch to ${m.name}`, description: m.loaded ? 'Currently loaded' : 'Load and switch',
       icon: m.loaded ? '✓' : '🧠', category: 'model' as const,
       run: async () => {
-        if (!m.loaded) { try { await modelController.load(m.id) } catch { /* ignore */ } }
+        if (!m.loaded) {
+          try { await modelController.load(m.id) }
+          catch { addToast('Could not load model', 'error') }
+        }
         router.push('/chat')
       },
     }))

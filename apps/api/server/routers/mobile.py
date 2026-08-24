@@ -352,9 +352,9 @@ class MobileRouter:
             status, model info, current soul, recent conversations, stats.
         """
         health = self._get_health_data()
-        soul = await asyncio.to_thread(self._get_current_soul)
-        sessions = await asyncio.to_thread(self._get_sessions_list)
-        models = await asyncio.to_thread(self._get_models_list)
+        soul = self._get_current_soul()
+        sessions = self._get_sessions_list()
+        models = self._get_models_list()
 
         if isinstance(sessions, dict):
             sessions = sessions.get("data", [])
@@ -598,10 +598,7 @@ class MobileRouter:
     async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest) -> dict:
         """Update a knowledge item."""
         try:
-            await asyncio.to_thread(
-                self._update_knowledge_item, item_id,
-                content=body.content, topic=body.topic, importance=body.importance,
-            )
+            self._update_knowledge_item(item_id, content=body.content, topic=body.topic, importance=body.importance)
             return success_response(data={"id": item_id, "updated": True})
         except Exception as e:
             raise_error(f"Failed to update knowledge: {e}", "E_DOMAIN")
@@ -609,7 +606,7 @@ class MobileRouter:
     async def delete_knowledge(self, request: Request, item_id: str) -> dict:
         """Delete a knowledge item."""
         try:
-            await asyncio.to_thread(self._delete_knowledge_item, item_id)
+            self._delete_knowledge_item(item_id)
         except Exception as e:
             raise_error(f"Failed to delete knowledge: {e}", "E_DOMAIN")
         safe_audit_log("mobile.knowledge_delete", resource=item_id)
@@ -658,7 +655,7 @@ class MobileRouter:
                     error=str(e),
                 ))
 
-        sessions = await asyncio.to_thread(self._get_sessions_list)
+        sessions = self._get_sessions_list()
         if isinstance(sessions, dict):
             sessions = sessions.get("data", [])
         elif not isinstance(sessions, list):
@@ -778,7 +775,7 @@ class MobileRouter:
         from domains.mobile.notifications import get_notification_service, NotificationPayload
 
         svc = get_notification_service()
-        training = await asyncio.to_thread(self._get_training_status)
+        training = self._get_training_status()
 
         status = training.get("status", "unknown")
         loss = training.get("final_loss")

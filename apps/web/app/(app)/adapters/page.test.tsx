@@ -45,6 +45,27 @@ vi.mock('@/lib/lora-eval-controller', () => ({
 
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://test-api' }))
+vi.mock('@/components/PageContainer', () => ({
+  PageContainer: ({ title, children, loading, error, onRetry, headerRight }: any) => (
+    <div>
+      <h1>{title}</h1>
+      {headerRight && <div>{headerRight}</div>}
+      {error ? <div>{error}</div> : children}
+    </div>
+  ),
+}))
+vi.mock('@/components/adapters/AdapterHealthCard', () => ({
+  AdapterHealthCard: ({ adapters }: any) => (
+    <div data-testid="adapter-health-card">
+      <div>Total Feedback</div>
+      {adapters?.length > 0 && <div>Rank {adapters[0]?.rank} ({adapters.length})</div>}
+      {adapters?.[0] && <div>{adapters[0].feedback_count} fb</div>}
+    </div>
+  ),
+}))
+vi.mock('@/lib/error-utils', () => ({
+  extractErrorMessage: (e: any, fallback: string) => e instanceof Error ? e.message : fallback,
+}))
 
 import AdaptersPage from './page'
 

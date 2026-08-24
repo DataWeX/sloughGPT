@@ -664,7 +664,7 @@ class InferenceRouter:
             token_count = 0
             collected = []
             _token_gen_start = time.time()
-            _max_token_wait_s = 120.0
+            _max_token_wait_s = cfg.generate_timeout
             _heartbeat_interval_s = 10.0
             _last_heartbeat = time.time()
             _batch: list[str] = []
@@ -1100,7 +1100,7 @@ class InferenceRouter:
                     full_response_parts: list[str] = []
                     logger.debug("chat_stream: about to call provider.chat_stream()")
                     _token_gen_start = time.time()
-                    _max_token_wait_s = 120.0
+                    _max_token_wait_s = cfg.generate_timeout
                     _heartbeat_interval_s = 10.0
                     _last_heartbeat = time.time()
                     _batch: list[str] = []

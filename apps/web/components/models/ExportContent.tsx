@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Badge, IconDownload, IconRefresh } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
 import { ExportHistoryCard, recordExport } from '@/components/export/ExportHistoryCard'
-import { downloadJson, downloadBlob } from '@/lib/download-utils'
+import { downloadBlob } from '@/lib/download-utils'
 import { apiGet } from '@/lib/http-client'
 
 interface ExportFormat {

@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from '@/lib/http-client'
+import { apiGet, apiPut, apiDelete, apiPatch } from '@/lib/http-client'
 
 const COLLECTIONS = [
   'sessions', 'pendingMessages', 'knowledge', 'bookmarks',

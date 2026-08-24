@@ -501,13 +501,16 @@ async def export_training_job(job_id: str):
     )
 
 
+class ExportTextRequest(BaseModel):
+    """Request model for /training/export-text."""
+    min_quality: float = Field(default=0, ge=0.0, le=1.0)
+    target_count: int = Field(default=100, ge=1, le=10000)
+
+
 @router.post("/training/export-text")
-async def export_feedback_pairs(request: Request):
+async def export_feedback_pairs(request: ExportTextRequest):
     """Export feedback conversation pairs with a minimum quality threshold."""
     from controllers.feedback import get_feedback_controller
-    body = await request.json()
-    min_quality = body.get("min_quality", 0)
-    target_count = body.get("target_count", 100)
     ctrl = get_feedback_controller()
     pairs = []
     feedback_file = ctrl.feedback_dir / "feedback.jsonl"
@@ -517,7 +520,7 @@ async def export_feedback_pairs(request: Request):
                 fb = json.loads(line)
                 if fb.get("user_message") and fb.get("assistant_response"):
                     pairs.append(fb)
-                    if len(pairs) >= target_count:
+                    if len(pairs) >= request.target_count:
                         break
     output_file = ctrl.feedback_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
     with open(output_file, "w") as f:

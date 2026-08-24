@@ -219,7 +219,7 @@ class SessionRouter:
 
                 full_response = ""
                 _token_gen_start = time.time()
-                _max_token_wait_s = 120.0
+                _max_token_wait_s = cfg.generate_timeout
                 _heartbeat_interval_s = 10.0
                 _last_heartbeat = time.time()
                 try:
