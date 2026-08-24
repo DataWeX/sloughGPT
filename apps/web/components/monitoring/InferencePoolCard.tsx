@@ -5,6 +5,7 @@ import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { systemController, type InferencePoolStatus } from '@/lib/system-controller'
+import { useToastStore } from '@/lib/store/toast-store'
 
 interface InferencePoolCardProps {
   onRefresh?: () => void
@@ -13,19 +14,44 @@ interface InferencePoolCardProps {
 export const InferencePoolCard = memo(function InferencePoolCard({ onRefresh }: InferencePoolCardProps) {
   const [status, setStatus] = useState<InferencePoolStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const addToast = useToastStore(s => s.addToast)
 
   const fetchStatus = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     try {
       const s = await systemController.getInferencePoolStatus()
       setStatus(s)
-    } catch { /* silent */ }
-    setLoading(false)
-  }, [])
+    } catch {
+      addToast('Could not load inference pool status', 'error')
+      setError('Failed to load')
+    } finally {
+      setLoading(false)
+    }
+  }, [addToast])
 
   useEffect(() => { void fetchStatus() }, [fetchStatus])
 
   if (loading) return null
-  if (!status) return null
+
+  if (error || !status) {
+    return (
+      <Card className="p-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Inference Pool</span>
+          {onRefresh && (
+            <Button variant="outline" size="sm" className="text-[10px] h-7" onClick={() => { void fetchStatus(); onRefresh() }}>
+              Retry
+            </Button>
+          )}
+        </div>
+        <CardContent className="p-0">
+          <p className="text-xs text-muted-foreground py-2">{error || 'Not available'}</p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="p-3">

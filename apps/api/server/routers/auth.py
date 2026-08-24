@@ -18,7 +18,7 @@ from schemas.common import success_response, raise_error, safe_audit_log, classi
 # ---------- request / response models ----------
 
 class TokenRequest(BaseModel):
-    api_key: str = Field(max_length=500)
+    api_key: str = Field(..., min_length=1, max_length=500)
 
 
 class TokenResponse(BaseModel):
@@ -28,14 +28,14 @@ class TokenResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(max_length=100)
-    password: str = Field(max_length=500)
+    username: str = Field(..., min_length=1, max_length=100)
+    password: str = Field(..., min_length=1, max_length=500)
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(max_length=100)
-    email: str = Field(max_length=254)
-    password: str = Field(max_length=500)
+    username: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=8, max_length=500)
 
 
 class UserInfo(BaseModel):

@@ -9,6 +9,18 @@ help = "Manage datasets, knowledge, checkpoints, and more"
 names = ["datasets", "checkpoints", "finetuned", "knowledge", "remember", "recall", "tokenizer"]
 
 
+def _format_error(e: Exception, cmd: str = "") -> str:
+    """Format an exception into a user-friendly error message."""
+    import requests as _req
+    etype = type(e).__name__
+    if isinstance(e, (_req.ConnectionError, ConnectionError)):
+        return f"Cannot connect to API server. Use 'api start'."
+    if isinstance(e, (_req.Timeout, TimeoutError)):
+        return f"Request timed out."
+    prefix = f"[{cmd}] " if cmd else ""
+    return f"{prefix}{etype}: {e}"
+
+
 def run(argv: list[str], out, api, env: dict) -> int:
     cmd = argv[0] if argv else "datasets"
     args = argv[1:]
@@ -31,7 +43,7 @@ def _datasets(args, out, api):
     try:
         data = api.datasets()
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "datasets"))
         return 1
     if not data:
         out.write("No datasets found.")
@@ -57,7 +69,7 @@ def _checkpoints(args, out, api):
     try:
         data = api.checkpoints()
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "checkpoints"))
         return 1
     if not data:
         out.write("No checkpoints found.")
@@ -75,7 +87,7 @@ def _finetuned(args, out, api):
         try:
             data = api.finetuned_models()
         except Exception as e:
-            out.write(f"Error: {e}")
+            out.write(_format_error(e, "finetuned"))
             return 1
         if not data:
             out.write("No fine-tuned models found.")
@@ -101,7 +113,7 @@ def _finetuned(args, out, api):
         try:
             result = api.load_finetuned(name)
         except Exception as e:
-            out.write(f"Error: {e}")
+            out.write(_format_error(e, "finetuned load"))
             return 1
         status = result.get("status", "error")
         if status == "loaded":
@@ -118,7 +130,7 @@ def _finetuned(args, out, api):
         try:
             result = api.delete_finetuned(name)
         except Exception as e:
-            out.write(f"Error: {e}")
+            out.write(_format_error(e, "finetuned rm"))
             return 1
         status = result.get("status", "error")
         if status == "deleted":
@@ -137,7 +149,7 @@ def _knowledge(args, out, api):
     try:
         stats = api.knowledge_stats()
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "knowledge"))
         return 1
     total = stats.get("total_items", 0)
     topics = stats.get("topics", {})
@@ -153,7 +165,7 @@ def _knowledge_search(args, out, api):
     try:
         results = api.list_knowledge(query)
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "knowledge search"))
         return 1
     if not results:
         out.write(f"No results for '{query}'.")
@@ -172,7 +184,7 @@ def _remember(args, out, api):
     try:
         result = api.add_knowledge(fact)
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "remember"))
         return 1
     status = result.get("status", "error")
     if status == "stored":
@@ -187,7 +199,7 @@ def _recall(args, out, api):
         try:
             stats = api.knowledge_stats()
         except Exception as e:
-            out.write(f"Error: {e}")
+            out.write(_format_error(e, "recall"))
             return 1
         total = stats.get("total_items", 0)
         if total == 0:
@@ -202,7 +214,7 @@ def _tokenizer(args, out, api):
     try:
         stats = api.tokenizer_stats()
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "tokenizer"))
         return 1
     if "error" in stats:
         out.write(f"Tokenizer error: {stats['error']}")

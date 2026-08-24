@@ -9,9 +9,19 @@ def _data(resp):
     return body.get("data", body)
 
 
+_rate_limit_client = None
+
+
+def _get_client():
+    global _rate_limit_client
+    if _rate_limit_client is None:
+        _rate_limit_client = get_test_client()
+    return _rate_limit_client
+
+
 class TestRateLimitStatus:
     def test_status_returns_config(self):
-        client = get_test_client()
+        client = _get_client()
         resp = client.get("/rate-limit/status")
         assert resp.status_code == 200
         data = _data(resp)
@@ -23,7 +33,7 @@ class TestRateLimitStatus:
         assert data["enabled"] is True
 
     def test_status_defaults(self):
-        client = get_test_client()
+        client = _get_client()
         resp = client.get("/rate-limit/status")
         data = _data(resp)
         assert data["requests_per_minute"] == 60
@@ -32,7 +42,7 @@ class TestRateLimitStatus:
 
 class TestRateLimitCheck:
     def test_check_allowed(self):
-        client = get_test_client()
+        client = _get_client()
         resp = client.get("/rate-limit/check")
         assert resp.status_code == 200
         data = _data(resp)
@@ -41,14 +51,14 @@ class TestRateLimitCheck:
         assert isinstance(data["allowed"], bool)
 
     def test_check_first_request_allowed(self):
-        client = get_test_client()
+        client = _get_client()
         resp = client.get("/rate-limit/check")
         data = _data(resp)
         assert data["allowed"] is True
         assert data["wait_time"] == 0
 
     def test_rate_limiting_kicks_in(self):
-        client = get_test_client()
+        client = _get_client()
         for _ in range(65):
             client.get("/rate-limit/check")
         resp = client.get("/rate-limit/check")
