@@ -87,9 +87,10 @@ vi.mock('@/components/dataset/DatasetInsightsCard', () => ({
 vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="import-modal" /> }))
 
 vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ title, children, loading, loadingContent }: any) => (
+  PageContainer: ({ title, children, loading, loadingContent, headerRight }: any) => (
     <div className="sl-page mx-auto max-w-4xl">
       <h1>{loading ? '...' : title}</h1>
+      {headerRight && <div>{headerRight}</div>}
       {loading ? loadingContent : children}
     </div>
   ),
@@ -225,18 +226,21 @@ describe('DatasetDetailPage', () => {
     mocks.delete.mockResolvedValue({})
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('Import Data')).toBeTruthy()
     })
-    const deleteBtns = screen.getAllByRole('button')
-    const deleteBtn = deleteBtns.find(b => b.textContent?.includes('Delete') && b.textContent?.includes('icon-trash'))
+    const allBtns = screen.getAllByRole('button')
+    const deleteBtn = allBtns.find(b => {
+      const text = b.textContent || ''
+      return text.includes('Delete') && text.includes('trash')
+    })
+    expect(deleteBtn).toBeTruthy()
     fireEvent.click(deleteBtn!)
     await waitFor(() => {
       expect(screen.getByTestId('alert-dialog')).toBeTruthy()
     })
-    const confirmBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Delete'))
-    const actionBtns = screen.getByTestId('alert-dialog').querySelectorAll('button')
-    const deleteAction = Array.from(actionBtns).find(b => b.textContent?.includes('Delete') && !b.textContent?.includes('Cancel'))
-    fireEvent.click(deleteAction!)
+    const dialogBtns = screen.getByTestId('alert-dialog').querySelectorAll('button')
+    const confirmBtn = Array.from(dialogBtns).find(b => b.textContent?.includes('Delete'))
+    fireEvent.click(confirmBtn!)
     await waitFor(() => {
       expect(mocks.delete).toHaveBeenCalledWith('ds-1')
     })
