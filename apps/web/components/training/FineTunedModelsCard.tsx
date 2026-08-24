@@ -118,7 +118,7 @@ export function FineTunedModelsCard({
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2" aria-busy="true">
             {[1, 2].map(i => (
               <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 p-3">
                 <div className="space-y-1.5 flex-1">

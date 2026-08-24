@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
@@ -14,7 +15,7 @@ export function formatTokens(n: number): string {
   return `${n}`
 }
 
-export function TrafficCard({ liveHealth }: TrafficCardProps) {
+export const TrafficCard = memo(function TrafficCard({ liveHealth }: TrafficCardProps) {
   if (!liveHealth) return null
 
   const rpm = liveHealth.requests_per_minute ?? 0
@@ -45,4 +46,4 @@ export function TrafficCard({ liveHealth }: TrafficCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

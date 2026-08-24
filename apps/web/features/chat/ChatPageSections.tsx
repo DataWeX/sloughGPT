@@ -3,6 +3,7 @@
 import dynamicNext from 'next/dynamic'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
+import { useCallback } from 'react'
 import { generationConfigController } from '@/lib/generation-config-controller'
 import { ChatArea, ErrorBanner } from '@/features/chat/components'
 import { ImageDropZone } from '@/features/chat/components/layout/ImageDropZone'
@@ -58,6 +59,17 @@ export function ChatToolbarSection({ controller }: ChatPageSectionProps) {
 
 export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
   const { ui, model, chat, clearChat } = controller
+
+  const handleTemperatureChange = useCallback((temp: number) => {
+    model.setTemperature(temp)
+    generationConfigController.update({ temperature: temp }).catch(e => { logger.warning('Could not generation config temperature save', { exception: String(e) }) })
+  }, [model])
+
+  const handleMaxTokensChange = useCallback((tokens: number) => {
+    model.setMaxTokens(tokens)
+    generationConfigController.update({ max_new_tokens: tokens }).catch(e => { logger.warning('Could not generation config max_tokens save', { exception: String(e) }) })
+  }, [model])
+
   if (!ui.showSettings) return null
   return (
     <ChatSettings
@@ -67,14 +79,8 @@ export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
       maxTokens={model.maxTokens}
       onModelChange={model.setModel}
       availableModels={model.availableModels}
-      onTemperatureChange={(temp) => {
-        model.setTemperature(temp)
-        generationConfigController.update({ temperature: temp }).catch(e => { logger.warning('Could not generation config temperature save', { exception: String(e) }) })
-      }}
-      onMaxTokensChange={(tokens) => {
-        model.setMaxTokens(tokens)
-        generationConfigController.update({ max_new_tokens: tokens }).catch(e => { logger.warning('Could not generation config max_tokens save', { exception: String(e) }) })
-      }}
+      onTemperatureChange={handleTemperatureChange}
+      onMaxTokensChange={handleMaxTokensChange}
       onClear={clearChat}
       hasMessages={chat.messages.length > 0}
     />
@@ -101,6 +107,45 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
     isBookmarked, handleToggleBookmark, handleDeleteMessage, handleSaveToKnowledge,
     collapsibleLength,
   } = controller
+
+  const handleStop = useCallback(() => {
+    if (chat.loadingRef.current) {
+      chat.loadingRef.current.abort()
+    }
+    chat.setLoading(false)
+  }, [chat])
+
+  const handleAudioTranscript = useCallback((text: string) => {
+    chat.setInput(prev => prev ? `${prev} ${text}` : text)
+  }, [chat])
+
+  const handleGeneratedImage = useCallback((dataUrl: string, prompt: string) => {
+    chat.setMessages(prev => [...prev, {
+      id: `img-${Date.now()}`, role: 'user',
+      content: `[Generate image: ${prompt}]`, timestamp: new Date(),
+      images: [{ id: `gen-${Date.now()}`, dataUrl, name: 'generated.png' }],
+    }])
+    showToast('Image generated — see message above', 'info')
+  }, [chat, showToast])
+
+  const handlePDFError = useCallback((error: string) => {
+    showToast(`PDF analysis failed: ${error}`, 'error')
+  }, [showToast])
+
+  const handlePDFAnalysis = useCallback((analysis: string, filename: string) => {
+    chat.setMessages(prev => [...prev, {
+      id: `pdf-user-${Date.now()}`,
+      role: 'user',
+      content: `📎 Uploaded PDF: ${filename}`,
+      timestamp: new Date(),
+    }, {
+      id: `pdf-${Date.now()}`,
+      role: 'assistant',
+      content: analysis,
+      timestamp: new Date(),
+    }])
+    showToast('PDF analyzed — see response below', 'info')
+  }, [chat, showToast])
 
   return (
     <>
@@ -169,43 +214,14 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           value={chat.input}
           onChange={chat.setInput}
           onSend={handleWriteSend}
-          onStop={() => {
-            if (chat.loadingRef.current) {
-              chat.loadingRef.current.abort()
-            }
-            chat.setLoading(false)
-          }}
+          onStop={handleStop}
           images={chat.images}
           onAddImage={chat.handleAddImage}
           onRemoveImage={chat.handleRemoveImage}
-          onAudioTranscript={(text) => {
-            chat.setInput(prev => prev ? `${prev} ${text}` : text)
-          }}
-          onGeneratedImage={(dataUrl, prompt) => {
-            chat.setMessages(prev => [...prev, {
-              id: `img-${Date.now()}`, role: 'user',
-              content: `[Generate image: ${prompt}]`, timestamp: new Date(),
-              images: [{ id: `gen-${Date.now()}`, dataUrl, name: 'generated.png' }],
-            }])
-            showToast('Image generated — see message above', 'info')
-          }}
-          onPDFError={(error) => {
-            showToast(`PDF analysis failed: ${error}`, 'error')
-          }}
-          onPDFAnalysis={(analysis, filename) => {
-            chat.setMessages(prev => [...prev, {
-              id: `pdf-user-${Date.now()}`,
-              role: 'user',
-              content: `📎 Uploaded PDF: ${filename}`,
-              timestamp: new Date(),
-            }, {
-              id: `pdf-${Date.now()}`,
-              role: 'assistant',
-              content: analysis,
-              timestamp: new Date(),
-            }])
-            showToast('PDF analyzed — see response below', 'info')
-          }}
+          onAudioTranscript={handleAudioTranscript}
+          onGeneratedImage={handleGeneratedImage}
+          onPDFError={handlePDFError}
+          onPDFAnalysis={handlePDFAnalysis}
           onExecuteCommand={handleExecuteCommand}
           isBookmarked={isBookmarked}
           onBookmark={handleToggleBookmark}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, memo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
@@ -69,8 +70,8 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
-export function TrendChart({ liveHealth }: TrendChartProps) {
-  const data = buildPoints(liveHealth)
+export const TrendChart = memo(function TrendChart({ liveHealth }: TrendChartProps) {
+  const data = useMemo(() => buildPoints(liveHealth), [liveHealth])
 
   if (!data.length) {
     return (
@@ -142,4 +143,4 @@ export function TrendChart({ liveHealth }: TrendChartProps) {
       </ComposedChart>
     </ResponsiveContainer>
   )
-}
+})

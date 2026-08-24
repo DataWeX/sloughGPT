@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 
 interface AlertPanelProps {
@@ -10,7 +11,7 @@ interface AlertPanelProps {
   alerts: Array<{ time: string; type: string; value: number }>
 }
 
-export function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, onMemThresholdChange, alerts }: AlertPanelProps) {
+export const AlertPanel = memo(function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, onMemThresholdChange, alerts }: AlertPanelProps) {
   const hasNotificationAPI = typeof window !== 'undefined' && 'Notification' in window
 
   return (
@@ -60,4 +61,4 @@ export function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, o
       )}
     </Card>
   )
-}
+})

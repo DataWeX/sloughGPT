@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -20,7 +21,7 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-export function TrainingHistory({ jobs }: TrainingHistoryProps) {
+export const TrainingHistory = memo(function TrainingHistory({ jobs }: TrainingHistoryProps) {
   const router = useRouter()
   return (
     <Card className="p-3">
@@ -55,4 +56,4 @@ export function TrainingHistory({ jobs }: TrainingHistoryProps) {
       </CardContent>
     </Card>
   )
-}
+})

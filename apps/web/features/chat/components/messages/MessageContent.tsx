@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Button, Textarea } from '@sloughgpt/strui'
 import { Markdown } from './Markdown'
 
@@ -29,7 +29,7 @@ function highlightText(text: string, query: string): (string | JSX.Element)[] {
   )
 }
 
-export function MessageContent({
+export const MessageContent = memo(function MessageContent({
   content,
   role,
   searchQuery,
@@ -149,4 +149,4 @@ export function MessageContent({
       )}
     </div>
   )
-}
+})

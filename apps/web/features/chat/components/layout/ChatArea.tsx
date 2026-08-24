@@ -26,7 +26,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   } | null
   onRefreshHealth: () => void
   onCopy: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void

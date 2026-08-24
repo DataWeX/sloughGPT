@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -154,11 +154,11 @@ export default function AutoTrainPage() {
     return () => clearInterval(id)
   }, [ready])
 
-  const chartData: LossPoint[] = (session.lossHistory ?? []).map((p: { step: number; loss: number }) => ({
+  const chartData: LossPoint[] = useMemo(() => (session.lossHistory ?? []).map((p: { step: number; loss: number }) => ({
     step: p.step,
     value: p.loss,
     type: 'train' as const,
-  }))
+  })), [session.lossHistory])
 
   const completedCount = checkpoints.checkpoints.filter(c => c.final_train_loss != null).length
 

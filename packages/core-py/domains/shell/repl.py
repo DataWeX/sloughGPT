@@ -2733,7 +2733,11 @@ Examples:
                 self._print("  Usage: train distill <dataset> [teacher] [epochs]")
                 return
             teacher = parts[2] if len(parts) > 2 else "gpt2"
-            epochs = int(parts[3]) if len(parts) > 3 else 5
+            try:
+                epochs = int(parts[3]) if len(parts) > 3 else 5
+            except ValueError:
+                self._print(f"  Invalid epochs: {parts[3]!r} — must be a positive integer")
+                return
             r = self._spinner_call("Starting distillation", lambda: self.cmds.train_distill(dataset, teacher=teacher, epochs=epochs))
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
@@ -2750,7 +2754,11 @@ Examples:
             if not model or not dataset:
                 self._print("  Usage: train hf <model> <dataset> [epochs]")
                 return
-            epochs = int(parts[3]) if len(parts) > 3 else 3
+            try:
+                epochs = int(parts[3]) if len(parts) > 3 else 3
+            except ValueError:
+                self._print(f"  Invalid epochs: {parts[3]!r} — must be a positive integer")
+                return
             r = self._spinner_call("Starting fine-tune", lambda: self.cmds.train_hf(model, dataset, epochs=epochs))
             if "error" in r:
                 self._print(f"  Error: {r['error']}")

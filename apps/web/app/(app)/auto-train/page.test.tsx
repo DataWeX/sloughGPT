@@ -20,7 +20,7 @@ vi.mock('@sloughgpt/strui', () => {
     Skeleton: () => <div data-testid="skeleton" />,
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children, columns }: any) => <div data-columns={columns}>{children}</div>,
-    Badge: ({ label, variant, size, className }: any) => <span data-variant={variant} className={className}>{label || children}</span>,
+    Badge: ({ label, variant, size, className, children }: any) => <span data-variant={variant} className={className}>{label || children}</span>,
     Slider: ({ value, onValueChange, min, max, step }: any) => (
       <input type="range" value={value?.[0]} min={min} max={max} step={step}
         onChange={e => onValueChange?.([Number(e.target.value)])} />
@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => ({
   addToast: vi.fn(),
   session: {
     trainingRunning: false, paused: false, loss: null, progress: 0, globalStep: 0, totalSteps: 0,
-    stepsPerSec: null, epoch: 0, totalEpochs: 0, eta: 0, elapsedSeconds: 0, message: '',
+    stepsPerSec: null as number | null, epoch: 0, totalEpochs: 0, eta: 0, elapsedSeconds: 0, message: '',
     lossHistory: [] as any[],
     startSSETraining: vi.fn(), stopTraining: vi.fn(), pauseTraining: vi.fn(), resumeTraining: vi.fn(),
   },

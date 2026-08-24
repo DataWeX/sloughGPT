@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { cn, Card } from '@sloughgpt/strui'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
 
@@ -18,7 +18,7 @@ function ToolIcon({ name }: { name: string }) {
   return <span className="mr-1.5 text-xs">{icons[name] || '\u2699\uFE0F'}</span>
 }
 
-function ToolCallCard({ event }: { event: ToolCallEvent }) {
+const ToolCallCard = memo(function ToolCallCard({ event }: { event: ToolCallEvent }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -65,7 +65,7 @@ function ToolCallCard({ event }: { event: ToolCallEvent }) {
       )}
     </Card>
   )
-}
+})
 
 export function ToolCallPanel({ events }: ToolCallPanelProps) {
   if (!events.length) return null

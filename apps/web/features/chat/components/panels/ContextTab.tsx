@@ -100,7 +100,7 @@ export function ContextTab() {
       </div>
 
       {loading ? (
-        <p className="text-[10px] text-muted-foreground text-center py-3">Loading context…</p>
+        <p className="text-[10px] text-muted-foreground text-center py-3" aria-busy="true">Loading context…</p>
       ) : !hasAnything ? (
         <p className="text-xs text-muted-foreground text-center py-4">
           Context unavailable right now. Please try again.

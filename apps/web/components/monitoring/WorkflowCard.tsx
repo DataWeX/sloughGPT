@@ -88,7 +88,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
 
   if (loading && !status) {
     return (
-      <Card className="p-4">
+      <Card className="p-4" aria-busy="true">
         <CardContent className="p-0">
           <div className="animate-pulse h-20 rounded bg-muted/50" />
         </CardContent>

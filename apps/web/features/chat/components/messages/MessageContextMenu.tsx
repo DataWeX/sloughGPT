@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconPin } from '@sloughgpt/strui'
 
@@ -12,7 +12,7 @@ interface MessageContextMenuProps {
   onCopy?: (text: string) => void
   onEdit?: (messageId: string) => void
   onBookmark?: (messageId: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   children: React.ReactNode
@@ -43,7 +43,7 @@ function simpleMarkdownToHtml(md: string): string {
     .replace(/$/, '</p>')
 }
 
-export function MessageContextMenu({
+export const MessageContextMenu = memo(function MessageContextMenu({
   messageId,
   content,
   role,
@@ -122,7 +122,7 @@ export function MessageContextMenu({
     ...(role === 'assistant' && onRegenerate ? [{
       label: 'Regenerate',
       icon: <IconRefresh className="h-3.5 w-3.5" />,
-      onClick: () => { onRegenerate(); setOpen(false) },
+      onClick: () => { onRegenerate(messageId); setOpen(false) },
     }] : []),
     ...(onSaveToKnowledge ? [{
       label: 'Save to knowledge',
@@ -186,4 +186,4 @@ export function MessageContextMenu({
       )}
     </>
   )
-}
+})

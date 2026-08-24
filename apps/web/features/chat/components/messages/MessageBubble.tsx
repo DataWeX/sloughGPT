@@ -16,7 +16,7 @@ export interface MessageBubbleProps {
   showTimestamp: boolean
   images?: ImageAttachment[]
   onCopy?: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void

@@ -118,10 +118,10 @@ function SidebarContent({
     }
   }
 
-  const starred = filtered.filter(c => c.starred).slice(0, 10)
-  const unstarred = filtered.filter(c => !c.starred)
-  const pinned = unstarred.filter(c => c.pinned)
-  const unpinned = unstarred.filter(c => !c.pinned)
+  const starred = useMemo(() => filtered.filter(c => c.starred).slice(0, 10), [filtered])
+  const unstarred = useMemo(() => filtered.filter(c => !c.starred), [filtered])
+  const pinned = useMemo(() => unstarred.filter(c => c.pinned), [unstarred])
+  const unpinned = useMemo(() => unstarred.filter(c => !c.pinned), [unstarred])
 
   function recencyGroup(dateStr: string | undefined): string {
     if (!dateStr) return 'Older'

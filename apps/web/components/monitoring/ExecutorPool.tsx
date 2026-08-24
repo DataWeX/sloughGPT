@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -10,7 +11,7 @@ interface ExecutorPoolProps {
   onRefresh: () => void
 }
 
-export function ExecutorPool({ status, onRefresh }: ExecutorPoolProps) {
+export const ExecutorPool = memo(function ExecutorPool({ status, onRefresh }: ExecutorPoolProps) {
   if (!status.initialized) return null
 
   return (
@@ -61,4 +62,4 @@ export function ExecutorPool({ status, onRefresh }: ExecutorPoolProps) {
       </CardContent>
     </Card>
   )
-}
+})

@@ -111,8 +111,8 @@ class TrainingRequest(TrainDataSourceBody, _TrainHyperparameters):
     / ``chars``. See *Checkpoint vocabulary* in CONTRIBUTING.
     """
 
-    name: str
-    model: str
+    name: str = Field(..., min_length=1, max_length=200)
+    model: str = Field(..., min_length=1, max_length=200)
 
 
 class DistillStartRequest(BaseModel):
@@ -122,16 +122,16 @@ class DistillStartRequest(BaseModel):
     The student is created as a SloNet LSTM with the given architecture.
     """
     teacher_model: str = Field(default="gpt2", description="Teacher model ID registered in the model server")
-    dataset: str = ""
-    name: str = "distill-job"
-    temperature: float = 4.0
-    alpha: float = 0.5
-    beta: float = 0.5
-    epochs: int = 10
-    embed_dim: int = 64
-    n_layers: int = 2
-    n_heads: int = 4
-    block_size: int = 64
+    dataset: str = Field(..., min_length=1, max_length=200)
+    name: str = Field(default="distill-job", min_length=1, max_length=200)
+    temperature: float = Field(default=4.0, ge=0.1, le=20.0)
+    alpha: float = Field(default=0.5, ge=0.0, le=1.0)
+    beta: float = Field(default=0.5, ge=0.0, le=1.0)
+    epochs: int = Field(default=10, ge=1, le=1000)
+    embed_dim: int = Field(default=64, ge=16, le=1024)
+    n_layers: int = Field(default=2, ge=1, le=24)
+    n_heads: int = Field(default=4, ge=1, le=64)
+    block_size: int = Field(default=64, ge=8, le=2048)
 
 
 class LoraFinetuneRequest(BaseModel):

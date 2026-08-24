@@ -56,7 +56,8 @@ const mocks = vi.hoisted(() => ({
   exportDataset: vi.fn(),
 }))
 
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'ds-1' }), useRouter: () => ({ push: mocks.push }) }))
+const stableRouter = { push: vi.fn() }
+vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'ds-1' }), useRouter: () => stableRouter }))
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mocks.addToast }) }))
 vi.mock('@/lib/dataset-controller', () => ({
   datasetController: {
@@ -84,6 +85,15 @@ vi.mock('@/components/dataset/DatasetInsightsCard', () => ({
   DatasetInsightsCard: ({ preview }: any) => <div data-testid="insights-card">Insights</div>,
 }))
 vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="import-modal" /> }))
+
+vi.mock('@/components/PageContainer', () => ({
+  PageContainer: ({ title, children, loading, loadingContent }: any) => (
+    <div className="sl-page mx-auto max-w-4xl">
+      <h1>{loading ? '...' : title}</h1>
+      {loading ? loadingContent : children}
+    </div>
+  ),
+}))
 
 import Page from './page'
 
@@ -114,7 +124,7 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
     })
-    expect(screen.getByText('Datasets')).toBeTruthy()
+    expect(screen.getByText('Datasets', { selector: 'span' })).toBeTruthy()
   })
 
   it('shows KPI grid', async () => {
@@ -122,9 +132,9 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
     })
-    expect(screen.getByText('ID')).toBeTruthy()
-    expect(screen.getByText('Source')).toBeTruthy()
-    expect(screen.getByText('Size')).toBeTruthy()
+    expect(screen.getByTestId('stat-ID')).toBeTruthy()
+    expect(screen.getByTestId('stat-Source')).toBeTruthy()
+    expect(screen.getByTestId('stat-Size')).toBeTruthy()
   })
 
   it('shows tags', async () => {
@@ -166,7 +176,7 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Versions')).toBeTruthy()
     })
-    expect(screen.getByText('20260801120000')).toBeTruthy()
+    expect(screen.getByText(/20260801120000/)).toBeTruthy()
   })
 
   it('shows empty versions', async () => {
@@ -218,11 +228,16 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
     })
-    const deleteBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Delete') && !b.textContent?.includes('Webhook'))
+    const deleteBtns = screen.getAllByRole('button')
+    const deleteBtn = deleteBtns.find(b => b.textContent?.includes('Delete') && !b.textContent?.includes('Webhook') && !b.textContent?.includes('Snapshot'))
     fireEvent.click(deleteBtn!)
+    await waitFor(() => {
+      expect(screen.getByText('Delete Webhook')).toBeTruthy()
+    })
     fireEvent.click(screen.getByText('Delete Webhook'))
     await waitFor(() => {
       expect(mocks.delete).toHaveBeenCalledWith('ds-1')
+      expect(stableRouter.push).toHaveBeenCalledWith('/datasets')
     })
   })
 

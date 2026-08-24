@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { formatUptime } from '@/lib/chat-utils'
@@ -14,7 +15,7 @@ interface StatusCardProps {
   loaded: boolean
 }
 
-export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRate, loaded }: StatusCardProps) {
+export const StatusCard = memo(function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRate, loaded }: StatusCardProps) {
   const apiOk = (liveHealth?.health_status ?? detailed?.status) === 'healthy'
   const modelLoaded = liveHealth?.model_loaded ?? detailed?.model_loaded ?? false
   const modelLoading = liveHealth?.model_loading ?? detailed?.model_loading ?? false
@@ -108,4 +109,4 @@ export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRa
       </CardContent>
     </Card>
   )
-}
+})

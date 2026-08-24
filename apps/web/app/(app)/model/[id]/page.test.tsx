@@ -13,7 +13,7 @@ vi.mock('@sloughgpt/strui', () => {
     Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
     CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
     Skeleton: () => <div data-testid="skeleton" />,
-    Badge: ({ label, variant, size, className }: any) => <span data-variant={variant} className={className}>{label || children}</span>,
+    Badge: ({ label, variant, size, className, children }: any) => <span data-variant={variant} className={className}>{label || children}</span>,
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children, columns }: any) => <div data-columns={columns}>{children}</div>,
     KeyValueList: ({ items }: any) => <div>{items?.map((item: any, i: number) => <div key={i} data-testid={`kv-${item.label}`}><span>{item.label}</span><span>{item.value}</span></div>)}</div>,
@@ -43,7 +43,8 @@ const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
 }))
 
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'gpt2' }), useRouter: () => ({ push: mocks.push }) }))
+const stableRouter = { push: vi.fn() }
+vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'gpt2' }), useRouter: () => stableRouter }))
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mocks.addToast }) }))
 vi.mock('@/lib/model-controller', () => ({
   modelController: {
@@ -76,6 +77,15 @@ vi.mock('@/lib/dev-log', () => ({
 }))
 vi.mock('@/components/model/QuantizeCard', () => ({
   QuantizeCard: ({ isLoaded, modelId }: any) => <div data-testid="quantize-card" data-loaded={isLoaded}>Quantize</div>,
+}))
+
+vi.mock('@/components/PageContainer', () => ({
+  PageContainer: ({ title, children, loading, loadingContent }: any) => (
+    <div className="sl-page mx-auto max-w-4xl">
+      <h1>{loading ? '...' : title}</h1>
+      {loading ? loadingContent : children}
+    </div>
+  ),
 }))
 
 import Page from './page'
@@ -282,6 +292,6 @@ describe('ModelDetailPage', () => {
       expect(screen.getByText('Chat with this model')).toBeTruthy()
     })
     fireEvent.click(screen.getByText('Chat with this model'))
-    expect(mocks.push).toHaveBeenCalledWith('/chat')
+    expect(stableRouter.push).toHaveBeenCalledWith('/chat')
   })
 })

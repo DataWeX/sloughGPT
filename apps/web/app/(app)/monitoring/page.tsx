@@ -308,7 +308,7 @@ export default function SystemHealthPage() {
     >
       {/* Loading: skeleton while fetch is in progress */}
       {!loaded && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3" aria-busy="true">
           <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
             {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
           </div></CardContent></Card>

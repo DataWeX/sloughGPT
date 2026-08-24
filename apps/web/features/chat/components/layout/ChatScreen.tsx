@@ -45,7 +45,7 @@ interface ChatScreenProps {
   } | null
   onRefreshHealth: () => void
   onCopy: (text: string) => void
-  onRegenerate?: (fromMessageId?: string) => void
+  onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
@@ -174,7 +174,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 onThumbsUp={onThumbsUp}
                 onThumbsDown={onThumbsDown}
                 onEdit={onEdit}
-                onRegenerate={showRegenerate ? () => onRegenerate?.(message.id) : undefined}
+                onRegenerate={showRegenerate ? onRegenerate : undefined}
                 onSuggestionClick={onSuggestionClick}
                 searchQuery={searchQuery}
                 isStreaming={isStreaming}

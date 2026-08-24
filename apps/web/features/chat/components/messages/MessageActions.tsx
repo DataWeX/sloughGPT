@@ -13,7 +13,7 @@ interface MessageActionsProps {
   messageId: string
   role?: 'user' | 'assistant'
   onCopy?: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string) => void
@@ -199,7 +199,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={onRegenerate}
+          onClick={() => onRegenerate(messageId)}
           className="p-2"
           aria-label="Regenerate response"
         >
