@@ -42,6 +42,7 @@ import SelfTrainPage from './page'
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn()
+  HTMLDivElement.prototype.scrollIntoView = vi.fn()
 })
 
 describe('SelfTrainPage', () => {

@@ -52,7 +52,7 @@ class SloNetServer:
         model_factory: Optional[Callable[[], Any]] = None,
         model_id: str = "slonet",
         max_workers: int = 4,
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         enable_circuit_breaker: bool = True,
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",

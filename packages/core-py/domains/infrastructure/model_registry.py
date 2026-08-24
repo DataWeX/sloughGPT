@@ -19,6 +19,7 @@ import time
 from threading import Lock
 from typing import Any, Optional, Union
 
+from .constants import DEFAULT_GENERATE_TIMEOUT
 from .model_server import ModelServer, ModelStatus
 
 logger = logging.getLogger("slo.infrastructure.model_registry")
