@@ -94,6 +94,7 @@ export function TrainingPresets({
           return (
             <button
               key={p.name}
+              type="button"
               onClick={() => onApply(p)}
               className="group relative flex items-center gap-1 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-[11px] hover:bg-primary/10 hover:border-primary/30 transition-colors"
             >

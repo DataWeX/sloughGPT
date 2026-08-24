@@ -255,6 +255,7 @@ export function WebhooksCard({ addToast }: Props) {
         {(retryQueue.length > 0 || deadLetters.length > 0) && (
           <div className="border-t pt-3 space-y-2">
             <button
+              type="button"
               className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground"
               onClick={() => setShowRetries(!showRetries)}
               aria-expanded={showRetries}

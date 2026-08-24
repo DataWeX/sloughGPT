@@ -135,6 +135,7 @@ export default function SelfTrainPage() {
             <div className="flex flex-col gap-1">
               <Label variant="uppercase">Mode</Label>
               <button
+                type="button"
                 onClick={() => setForever(!forever)}
                 disabled={isRunning}
                 className={`h-8 rounded border px-2 text-xs transition-colors ${

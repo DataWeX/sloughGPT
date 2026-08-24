@@ -3,12 +3,12 @@ import time
 import threading
 import queue
 import logging
-import copy
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-from typing import Optional, List, Iterator, AsyncIterator, Dict, Any, Callable
+from typing import Optional, List, Iterator, AsyncIterator, Any, Callable
 
 import numpy as np
 
+from .constants import DEFAULT_GENERATE_TIMEOUT
 from domains.infrastructure.model_server import CircuitBreaker, ModelMetrics
 
 logger = logging.getLogger("slo.infrastructure.slonet_server")

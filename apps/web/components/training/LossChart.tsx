@@ -98,6 +98,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
     <div className="w-full relative group">
       {(data.length > 5) && (
         <button
+          type="button"
           onClick={() => onExportData ?? exportLossCSV(data, rewardData)}
           className="absolute top-1 right-1 z-10 h-5 w-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-muted/60"
           aria-label="Export chart data as CSV"

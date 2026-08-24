@@ -42,8 +42,10 @@ import gc
 import traceback
 import sys
 import threading
-from typing import Any, Optional, Callable, Generator
-from dataclasses import dataclass, field
+from typing import Any, Optional, Generator
+from dataclasses import dataclass
+
+from .constants import DEFAULT_GENERATE_TIMEOUT
 
 logger = logging.getLogger("slo.infrastructure.model_worker")
 

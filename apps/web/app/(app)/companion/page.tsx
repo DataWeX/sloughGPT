@@ -145,6 +145,7 @@ export default function CompanionPage() {
             {presets.map(p => (
               <button
                 key={p.id}
+                type="button"
                 onClick={() => handlePreset(p.id)}
                 className="rounded-md bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors"
                 title={p.description}

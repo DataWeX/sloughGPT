@@ -86,6 +86,7 @@ export function ModelDropdown({
             return (
               <button
                 key={m}
+                type="button"
                 onClick={() => onSelectModel(m)}
                 className={cn(
                   'w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center justify-between',

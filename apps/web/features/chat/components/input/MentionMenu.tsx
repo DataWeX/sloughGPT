@@ -136,6 +136,7 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
         <button
           key={`${item.type}-${item.id}`}
           ref={el => { itemRefs.current[i] = el }}
+          type="button"
           role="option"
           aria-selected={i === selectedIndex}
           onClick={() => select(item)}

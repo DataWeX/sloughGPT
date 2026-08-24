@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from domains.memory.memory_service import get_memory_service
-from schemas.common import raise_error, safe_audit_log, success_response
+from schemas.common import raise_error, safe_audit_log, success_response, classify_and_raise
 
 logger = logging.getLogger("slo.api.memory")
 
@@ -99,237 +99,133 @@ class MemoryRouter:
         return get_memory_service()
 
     def stats(self) -> dict:
-        """
-        Return memory statistics (facts, topic buckets, enabled state).
-
-        Returns:
-            dict: ``{enabled, total_facts, topics, visited_urls}``.
-
-        Side effects:
-            - none; read-only.
-        """
-        svc = self._service()
-        stats = svc.stats() or {}
-        stats["enabled"] = svc.enabled
-        return stats
+        """Return memory statistics (facts, topic buckets, enabled state)."""
+        try:
+            svc = self._service()
+            stats = svc.stats() or {}
+            stats["enabled"] = svc.enabled
+            return stats
+        except Exception as e:
+            classify_and_raise(e, source="memory.stats")
 
     def list_memory(
         self,
         limit: int = Query(default=50, ge=1, le=1000, description="Maximum number of items to return"),
     ) -> dict:
-        """
-        List stored memory items, most recent first.
-
-        Args:
-            limit: maximum number of items to return (default 50).
-
-        Returns:
-            dict: ``{items: [...], total: N}``.
-
-        Side effects:
-            - none; read-only.
-        """
-        items = self._service().list_all(limit=limit)
-        return success_response(data={"items": items, "total": len(items)})
+        """List stored memory items, most recent first."""
+        try:
+            items = self._service().list_all(limit=limit)
+            return success_response(data={"items": items, "total": len(items)})
+        except Exception as e:
+            classify_and_raise(e, source="memory.list")
 
     def search(
         self,
         q: str = Query(..., min_length=1, description="The lookup text"),
         limit: int = Query(default=5, ge=1, le=100, description="Maximum number of results"),
     ) -> dict:
-        """
-        Semantic-search stored memory.
-
-        Args:
-            q: the lookup text (query parameter).
-            limit: maximum number of results (default 5).
-
-        Returns:
-            dict: ``{results: [...], total: N}``.
-
-        Side effects:
-            - none; read-only.
-        """
-        results = self._service().retrieve(q.strip(), limit=limit)
-        return success_response(data={"results": results, "total": len(results)})
+        """Semantic-search stored memory."""
+        try:
+            results = self._service().retrieve(q.strip(), limit=limit)
+            return success_response(data={"results": results, "total": len(results)})
+        except Exception as e:
+            classify_and_raise(e, source="memory.search")
 
     def store(self, req: StoreRequest) -> dict:
-        """
-        Persist one explicit fact.
-
-        Args:
-            req: ``{content, topic, source}`` request body.
-
-        Returns:
-            dict: ``{stored: bool, content, topic, source}``.
-
-        Side effects:
-            - writes the fact into the underlying knowledge store.
-        """
-        content = req.content.strip()
-        if not content:
-            raise_error("content is required", "E_BAD_REQUEST", status_code=400)
-        topic = req.topic or "manual"
-        source = req.source or "api"
+        """Persist one explicit fact."""
         try:
+            content = req.content.strip()
+            if not content:
+                raise_error("content is required", "E_BAD_REQUEST", status_code=400)
+            topic = req.topic or "manual"
+            source = req.source or "api"
             stored = self._service().store(content, topic, source)
+            safe_audit_log("memory.store", resource=topic, detail=f"stored={stored}")
+            return success_response(data={"stored": stored, "content": content, "topic": topic, "source": source})
         except Exception as e:
-            logger.error("Memory store failed (topic=%s): %s", topic, e, exc_info=True)
-            raise
-        safe_audit_log("memory.store", resource=topic, detail=f"stored={stored}")
-        return success_response(data={"stored": stored, "content": content, "topic": topic, "source": source})
+            classify_and_raise(e, source="memory.store")
 
     def remember(self, req: RememberRequest) -> dict:
-        """
-        Persist one completed turn as durable memory.
-
-        Args:
-            req: ``{user_message, assistant_response}`` request body.
-
-        Returns:
-            dict: ``{stored: bool, reason: str}``.
-
-        Side effects:
-            - extracts and stores facts from the turn.
-        """
-        user_message = req.user_message.strip()
-        assistant_response = req.assistant_response.strip()
-        if not user_message or not assistant_response:
-            raise_error("user_message and assistant_response are required", "E_BAD_REQUEST", status_code=400)
+        """Persist one completed turn as durable memory."""
         try:
+            user_message = req.user_message.strip()
+            assistant_response = req.assistant_response.strip()
+            if not user_message or not assistant_response:
+                raise_error("user_message and assistant_response are required", "E_BAD_REQUEST", status_code=400)
             stored = self._service().remember(user_message, assistant_response)
+            reason = "stored" if stored else "skipped (disabled, too short, or nothing new)"
+            return success_response(data={"stored": stored, "reason": reason})
         except Exception as e:
-            logger.error("Memory remember failed: %s", e, exc_info=True)
-            raise
-        reason = "stored" if stored else "skipped (disabled, too short, or nothing new)"
-        return success_response(data={"stored": stored, "reason": reason})
+            classify_and_raise(e, source="memory.remember")
 
     def set_config(self, req: ConfigRequest) -> dict:
-        """
-        Update runtime memory settings.
-
-        Args:
-            req: body with optional ``enabled`` and/or
-                ``archive_retention_days``. Omitted fields are left unchanged.
-
-        Returns:
-            dict: the full updated settings snapshot.
-
-        Side effects:
-            - mutates the process-wide ``MemoryConfig`` singleton; every
-              subsequent memory call reflects the new state until the next
-              update or process restart.
-        """
-        svc = self._service()
-        if req.enabled is not None:
-            svc.set_enabled(req.enabled)
-        if req.archive_retention_days is not None:
-            svc.set_archive_retention(req.archive_retention_days)
-        safe_audit_log("memory.config", resource="memory", detail=f"enabled={req.enabled} retention={req.archive_retention_days}")
-        return success_response(data=svc.config_snapshot())
+        """Update runtime memory settings."""
+        try:
+            svc = self._service()
+            if req.enabled is not None:
+                svc.set_enabled(req.enabled)
+            if req.archive_retention_days is not None:
+                svc.set_archive_retention(req.archive_retention_days)
+            safe_audit_log("memory.config", resource="memory", detail=f"enabled={req.enabled} retention={req.archive_retention_days}")
+            return success_response(data=svc.config_snapshot())
+        except Exception as e:
+            classify_and_raise(e, source="memory.set_config")
 
     def get_config(self) -> dict:
-        """
-        Return the current runtime memory settings.
-
-        Returns:
-            dict: ``{enabled, min_chars, max_facts, store_path,
-                sync_remember, consolidation_threshold,
-                maintenance_interval_minutes, archive_retention_days}``.
-
-        Side effects:
-            - none; read-only.
-        """
-        return success_response(data=self._service().config_snapshot())
+        """Return the current runtime memory settings."""
+        try:
+            return success_response(data=self._service().config_snapshot())
+        except Exception as e:
+            classify_and_raise(e, source="memory.get_config")
 
     def delete_item(self, item_id: str) -> dict:
-        """
-        Remove one stored memory item by entry id.
-
-        Args:
-            item_id: the vector-store entry id (from ``list``/``search``).
-
-        Returns:
-            dict: ``{deleted: 0|1}`` — 1 when the item was removed.
-
-        Side effects:
-            - removes the matching fact from the knowledge store (persisted).
-        """
-        if not item_id or not item_id.strip():
-            raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
-        removed = self._service().delete([item_id.strip()])
-        safe_audit_log("memory.delete", resource=item_id, detail=f"deleted={removed}")
-        return success_response(data={"deleted": removed})
+        """Remove one stored memory item by entry id."""
+        try:
+            if not item_id or not item_id.strip():
+                raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
+            removed = self._service().delete([item_id.strip()])
+            safe_audit_log("memory.delete", resource=item_id, detail=f"deleted={removed}")
+            return success_response(data={"deleted": removed})
+        except Exception as e:
+            classify_and_raise(e, source="memory.delete")
 
     def update_item(self, item_id: str, req: UpdateRequest) -> dict:
-        """
-        Edit a stored memory item's text (and optionally its topic/importance).
-
-        Args:
-            item_id: the vector-store entry id (from ``list``/``search``).
-            req: new content, optional topic, and optional importance.
-
-        Returns:
-            dict: ``{updated: 0|1, duplicate: bool}`` — ``duplicate`` is True
-                when the new text already exists as another fact.
-
-        Side effects:
-            - replaces the fact's text/embedding in the knowledge store.
-        """
-        if not item_id or not item_id.strip():
-            raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
-        if not req.content or not req.content.strip():
-            raise_error("content is required", "E_BAD_REQUEST", status_code=400)
-        updated = self._service().update(item_id.strip(), req.content, topic=req.topic, importance=req.importance)
-        safe_audit_log("memory.update", resource=item_id, detail=f"updated={updated}")
-        return success_response(data={"updated": 1 if updated else 0, "duplicate": not updated})
+        """Edit a stored memory item's text (and optionally its topic/importance)."""
+        try:
+            if not item_id or not item_id.strip():
+                raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
+            if not req.content or not req.content.strip():
+                raise_error("content is required", "E_BAD_REQUEST", status_code=400)
+            updated = self._service().update(item_id.strip(), req.content, topic=req.topic, importance=req.importance)
+            safe_audit_log("memory.update", resource=item_id, detail=f"updated={updated}")
+            return success_response(data={"updated": 1 if updated else 0, "duplicate": not updated})
+        except Exception as e:
+            classify_and_raise(e, source="memory.update")
 
     def clear(self) -> dict:
-        """
-        Remove every stored memory item.
-
-        Returns:
-            dict: ``{cleared: N}``.
-
-        Side effects:
-            - wipes the underlying knowledge store.
-        """
-        removed = self._service().clear()
-        safe_audit_log("memory.clear", resource="all", detail=f"cleared={removed}")
-        return success_response(data={"cleared": removed})
-    def consolidate(self, threshold: Optional[float] = None) -> dict:
-        """
-        Merge near-duplicate facts, keeping the longest in each cluster.
-
-        Runs the same planning the ``memory.consolidate`` task uses: facts in
-        the same topic whose n-gram cosine similarity is at or above the
-        threshold are collapsed, deleting the shorter copies.
-
-        Args:
-            threshold: min n-gram cosine for near-dup merge; defaults to
-                ``MemoryConfig.consolidation_threshold`` when omitted.
-
-        Returns:
-            dict: ``{removed: N, kept: N, threshold: float}``.
-
-        Side effects:
-            - deletes near-duplicate facts from the shared memory store.
-        """
-        from domains.memory.consolidation import plan_consolidation
-        from domains.memory.memory_config import MemoryConfig
-        svc = self._service()
-        if threshold is None:
-            threshold = MemoryConfig.get().consolidation_threshold
-        threshold = float(threshold)
-        facts = svc.list_all(limit=5000)
-        plan = plan_consolidation(facts, threshold=threshold)
+        """Remove every stored memory item."""
         try:
-            removed = svc.delete(plan["remove_ids"]) if plan["remove_ids"] else 0
+            removed = self._service().clear()
+            safe_audit_log("memory.clear", resource="all", detail=f"cleared={removed}")
+            return success_response(data={"cleared": removed})
         except Exception as e:
-            logger.error("Memory consolidation delete failed (threshold=%s): %s", threshold, e, exc_info=True)
-            raise
-        safe_audit_log("memory.consolidate", resource="all", detail=f"removed={removed}, kept={len(plan['keep_ids'])}")
-        return success_response(data={"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold})
+            classify_and_raise(e, source="memory.clear")
+    def consolidate(self, threshold: Optional[float] = None) -> dict:
+        """Merge near-duplicate facts, keeping the longest in each cluster."""
+        try:
+            from domains.memory.consolidation import plan_consolidation
+            from domains.memory.memory_config import MemoryConfig
+            svc = self._service()
+            if threshold is None:
+                threshold = MemoryConfig.get().consolidation_threshold
+            threshold = float(threshold)
+            facts = svc.list_all(limit=5000)
+            plan = plan_consolidation(facts, threshold=threshold)
+            removed = svc.delete(plan["remove_ids"]) if plan["remove_ids"] else 0
+            safe_audit_log("memory.consolidate", resource="all", detail=f"removed={removed}, kept={len(plan['keep_ids'])}")
+            return success_response(data={"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold})
+        except Exception as e:
+            classify_and_raise(e, source="memory.consolidate")
 
     def archive(self, limit: Optional[int] = None) -> dict:
         """

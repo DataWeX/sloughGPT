@@ -146,6 +146,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         <div className="flex items-center gap-2">
           <span className="text-[8px] text-muted-foreground/50">^⇧D</span>
           <button
+            type="button"
             onClick={() => onOpenChange(false)}
             className="p-0.5 rounded hover:bg-muted/60 transition-colors"
             aria-label="Close debug overlay"

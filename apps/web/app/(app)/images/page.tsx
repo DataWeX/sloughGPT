@@ -89,6 +89,7 @@ export default function ImagesPage() {
             {styles.map(s => (
               <button
                 key={s.key}
+                type="button"
                 onClick={() => setSelectedStyle(s.key)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                   selectedStyle === s.key

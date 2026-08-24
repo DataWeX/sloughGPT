@@ -185,6 +185,7 @@ export function FineTunedModelsCard({
                       )}
                       <div className="min-w-0 flex-1">
                         <button
+                          type="button"
                           onClick={() => router.push(`/model/${encodeURIComponent(m.name)}`)}
                           className="flex items-center gap-2 text-left w-full"
                           aria-label={`View details for ${m.name}`}

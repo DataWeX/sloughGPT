@@ -244,7 +244,7 @@ def _parse_subtitle_text(text: str) -> list:
 class StartRequest(BaseModel):
     teacher_model: str = Field(default="gpt2", description="Teacher model ID registered in the model server")
     temperature: float = Field(default=0.8, ge=0.1, le=2.0)
-    soul_name: str = "assistant"
+    soul_name: str = Field(default="assistant", min_length=1, max_length=200)
     epochs: int = Field(default=20, ge=1, le=1000)
     learning_rate: float = Field(default=3e-4, ge=1e-5, le=1.0)
     batch_size: int = Field(default=16, ge=1, le=1024, description="Chunk size for training")

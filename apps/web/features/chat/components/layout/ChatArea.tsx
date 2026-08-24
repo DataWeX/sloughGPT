@@ -158,6 +158,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
 
           {filteredMessages.length > 0 && !isNearBottom && (
             <button
+              type="button"
               onClick={() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' })}
               className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
               aria-label="Jump to latest messages"

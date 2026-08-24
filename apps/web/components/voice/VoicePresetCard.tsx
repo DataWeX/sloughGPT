@@ -177,6 +177,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       className={`text-left font-medium text-xs px-2 py-0.5 rounded transition-colors ${
                         activeName === p.name
                           ? 'bg-primary/15 text-primary'

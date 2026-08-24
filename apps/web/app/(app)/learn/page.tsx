@@ -120,6 +120,7 @@ export default function LearnPage() {
       {(['search', 'ingest', 'knowledge', 'feeds'] as Tab[]).map(t => (
         <button
           key={t}
+          type="button"
           onClick={() => {
             setTab(t)
             if (t === 'knowledge') handleLoadKnowledge()

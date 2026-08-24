@@ -117,6 +117,7 @@ export default function BenchmarkPage() {
         {(['metrics', 'quality', 'responses', 'perplexity'] as Tab[]).map(t => (
           <button
             key={t}
+            type="button"
             onClick={() => {
               setTab(t)
               if (t === 'responses') handleLoadResponses()

@@ -149,6 +149,7 @@ export default function ExportPage() {
             {formats.map(f => (
               <button
                 key={f.key}
+                type="button"
                 onClick={() => setSelectedFormat(f.key)}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   selectedFormat === f.key

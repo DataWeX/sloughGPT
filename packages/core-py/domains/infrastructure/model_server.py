@@ -28,15 +28,14 @@ import queue
 import time
 import gc
 import os
-import functools
-from threading import Lock, Thread, Event
+from threading import Lock, Thread
 from typing import Generator as GeneratorType
 
 from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 
-from domains.infrastructure.structured_log import StructuredLogger, LogContext
+from domains.infrastructure.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.infrastructure.model_server")
 
@@ -1062,7 +1061,7 @@ class LocalBackend(GenerateBackend):
                     session_id, prefix_len, input_ids.shape[1],
                 )
 
-        streamer = _TokenStreamer(self._tokenizer, skip_prompt=True, timeout=120.0)
+        streamer = _TokenStreamer(self._tokenizer, skip_prompt=True, timeout=DEFAULT_GENERATE_TIMEOUT)
 
         gen_kwargs = dict(
             input_ids=input_ids,

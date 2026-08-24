@@ -126,6 +126,7 @@ export default function InferPage() {
           {tabs.map(t => (
             <button
               key={t.key}
+              type="button"
               onClick={() => setTab(t.key)}
               disabled={!t.available}
               className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${

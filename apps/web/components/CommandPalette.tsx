@@ -197,6 +197,7 @@ export function CommandPalette() {
                       </p>
                     )}
                     <button
+                      type="button"
                       className={cn(
                         'flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
                         i === selectedIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted'

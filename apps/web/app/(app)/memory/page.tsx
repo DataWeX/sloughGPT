@@ -214,6 +214,7 @@ export default function MemoryPage() {
                 {displayItems.map(item => (
                   <button
                     key={item.id}
+                    type="button"
                     onClick={() => { setSelectedItem(item); setEditContent(item.content); setEditMode(false) }}
                     className={`w-full rounded border p-2 text-left text-xs transition-colors ${
                       selectedItem?.id === item.id

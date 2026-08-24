@@ -211,6 +211,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 {suggestions.map(s => (
                   <button
                     key={s}
+                    type="button"
                     onClick={() => onSuggestionClick(s)}
                     className="px-2.5 py-1 rounded-full border border-border/50 bg-muted/30 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
                   >

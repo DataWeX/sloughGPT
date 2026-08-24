@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import {
   Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton,
   SearchInput, Slider, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -513,7 +514,7 @@ export default function SoulsPage() {
                 <div className="text-center py-8 space-y-2">
                   <p className="text-sm text-muted-foreground">No checkpoints found.</p>
                   <div className="text-xs text-muted-foreground">
-                    <a href="/training" className="text-primary hover:underline">Train a model</a>
+                    <Link href="/training" className="text-primary hover:underline">Train a model</Link>
                     {' '}to create checkpoints.
                   </div>
                 </div>

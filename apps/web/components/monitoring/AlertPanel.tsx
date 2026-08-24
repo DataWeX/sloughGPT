@@ -20,6 +20,7 @@ export const AlertPanel = memo(function AlertPanel({ cpuThreshold, memThreshold,
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alert thresholds</span>
         {hasNotificationAPI && (
           <button
+            type="button"
             onClick={() => {
               if (Notification.permission === 'granted') {
                 new Notification('Notifications enabled', { body: 'You will be notified when thresholds are breached.' })

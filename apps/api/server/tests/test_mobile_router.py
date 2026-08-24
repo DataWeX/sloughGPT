@@ -252,20 +252,6 @@ class TestMobileKnowledge:
 
     def test_list_knowledge_paginated(self, client):
         """GET /mobile/knowledge should return paginated items."""
-        items = [
-            MagicMock(
-                id=f"item_{i}",
-                content=f"Knowledge {i}",
-                topic="tech",
-                importance=0.8,
-                source="manual",
-                url="",
-                timestamp=0,
-                score=0,
-            )
-            for i in range(1, 51)
-        ]
-
         with patch("routers.mobile.MobileRouter._get_knowledge_items", return_value=[
             {
                 "id": f"item_{i}",

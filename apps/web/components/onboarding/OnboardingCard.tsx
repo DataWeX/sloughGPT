@@ -61,6 +61,7 @@ export function OnboardingCard({ onComplete }: Props) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">{current.title}</CardTitle>
           <button
+            type="button"
             onClick={handleComplete}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >

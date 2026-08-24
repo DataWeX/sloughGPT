@@ -28,6 +28,7 @@ import logging
 import os
 import selectors
 import socket
+from .constants import DEFAULT_GENERATE_TIMEOUT
 import struct
 import sys
 import threading
@@ -97,7 +98,7 @@ class InferenceEngine:
         self._reload_count: int = 0
 
         # Config
-        self._request_timeout: float = 120.0
+        self._request_timeout: float = DEFAULT_GENERATE_TIMEOUT
 
     @property
     def addr(self) -> tuple:

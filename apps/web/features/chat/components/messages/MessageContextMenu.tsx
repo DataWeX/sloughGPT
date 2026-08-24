@@ -168,6 +168,7 @@ export const MessageContextMenu = memo(function MessageContextMenu({
           {items.map((item, idx) => (
             <button
               key={idx}
+              type="button"
               role="menuitem"
               tabIndex={0}
               disabled={item.disabled}

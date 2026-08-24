@@ -29,6 +29,7 @@ const ToolCallCard = memo(function ToolCallCard({ event }: { event: ToolCallEven
       event.status === 'error' && 'border-destructive/30 bg-destructive/5',
     )}>
       <button
+        type="button"
         className="flex w-full items-center justify-between gap-2 text-left"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}

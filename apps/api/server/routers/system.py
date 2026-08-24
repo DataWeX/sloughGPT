@@ -9,7 +9,7 @@ import psutil
 import platform
 import time
 
-from schemas.common import success_response, raise_error, safe_audit_log
+from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
 from infrastructure.auth import require_auth_if_enabled
 from typing import AsyncGenerator
 

@@ -150,6 +150,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                   ) : (
                     <>
                       <button
+                        type="button"
                         className="w-full text-left"
                         onClick={() => handleUse(p)}
                         title="Use this prompt"

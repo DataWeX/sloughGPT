@@ -90,6 +90,7 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
           {LEVELS.map(level => (
             <button
               key={level}
+              type="button"
               onClick={() => toggleLevel(level)}
               className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
                 filterLevel.size === 0 || filterLevel.has(level)
