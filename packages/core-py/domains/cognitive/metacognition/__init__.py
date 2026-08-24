@@ -219,7 +219,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             return monitoring_results
 
         except Exception as e:
-            self.logger.error(f"Thought process monitoring failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Thought process monitoring failed: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Thought process monitoring failed: {e}")
 
     async def assess_confidence(self, thought: Thought) -> float:
@@ -255,11 +255,11 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             # Ensure confidence is within valid range
             assessed_confidence = max(0.0, min(1.0, assessed_confidence))
 
-            self.logger.debug(f"Assessed confidence for thought: {assessed_confidence:.2f}")
+            self.logger.debug("Assessed confidence for thought: %.2f", assessed_confidence)
             return assessed_confidence
 
         except Exception as e:
-            self.logger.error(f"Confidence assessment failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Confidence assessment failed: %s", e, extra={"tag": "COG"})
             return float(thought.confidence)  # Fallback to base confidence
 
     async def trigger_reflection(self, trigger: str) -> None:
