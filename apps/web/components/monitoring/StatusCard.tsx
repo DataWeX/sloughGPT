@@ -40,25 +40,25 @@ export const StatusCard = memo(function StatusCard({ liveHealth, detailed, conne
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
         {connectionStatus === 'connected' && liveHealth && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-medium">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" aria-hidden="true" />
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
             live
           </span>
         )}
         {connectionStatus === 'connected' && liveHealth?.is_inferencing && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
             inferencing
           </span>
         )}
         {connectionStatus === 'connecting' && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning/10 text-warning text-[10px] font-medium">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning animate-pulse" aria-hidden="true" />
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
             reconnecting
           </span>
         )}
         {(connectionStatus === 'offline' || connectionStatus === 'reloading') && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
             {connectionStatus === 'reloading' ? 'reloading' : 'offline'}
           </span>
         )}
@@ -68,12 +68,12 @@ export const StatusCard = memo(function StatusCard({ liveHealth, detailed, conne
           <StatCard
             label="API"
             value={!loaded ? <Skeleton className="h-5 w-16" /> : <span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive'}`} aria-hidden="true" />}
+            icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive'}`} />}
           />
           <StatCard
             label="Model"
             value={!loaded ? <Skeleton className="h-5 w-20" /> : <span className="font-mono">{modelValue}</span>}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : modelLoaded ? 'bg-success' : 'bg-warning'}`} aria-hidden="true" />}
+            icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : modelLoaded ? 'bg-success' : 'bg-warning'}`} />}
           />
           <StatCard
             label="Uptime"
@@ -93,7 +93,7 @@ export const StatusCard = memo(function StatusCard({ liveHealth, detailed, conne
             label="Tokens/s"
             value={!loaded ? <Skeleton className="h-5 w-12" /> : liveHealth?.tokens_per_sec != null ? liveHealth.tokens_per_sec.toFixed(1) : <Skeleton className="h-5 w-12" />}
             numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${liveHealth && (liveHealth.tokens_per_sec ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} aria-hidden="true" />}
+            icon={<span className={`inline-block w-2 h-2 rounded-full ${liveHealth && (liveHealth.tokens_per_sec ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
           />
           <StatCard
             label="Errors"

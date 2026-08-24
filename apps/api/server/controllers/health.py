@@ -63,8 +63,7 @@ def _is_model_loading() -> bool:
             return False
         uptime = (datetime.now() - _health_start_time).total_seconds()
         return uptime < 90
-    except Exception as e:
-        logger.debug("Could not check model loading state: %s", e)
+    except Exception:
         return False
 
 
@@ -83,8 +82,7 @@ def _is_app_ready() -> bool:
     try:
         from startup_progress import STARTUP_PHASE
         return STARTUP_PHASE.get("phase") in ("running", "ready")
-    except Exception as e:
-        logger.debug("Could not check app ready state: %s", e)
+    except Exception:
         return True
 
 
@@ -109,8 +107,6 @@ def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]
             return True, registry_health["default_model"], registry_health
     except ImportError:
         pass
-    except Exception as e:
-        logger.debug("Could not query model registry: %s", e)
 
     # Fallback: check models controller
     try:
@@ -121,8 +117,6 @@ def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]
             return True, current.get("model_id"), registry_health
     except ImportError:
         pass
-    except Exception as e:
-        logger.debug("Could not query models controller: %s", e)
 
     # Fallback: check server_state (used by autoload in lifespan)
     try:
@@ -133,8 +127,6 @@ def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]
             return True, server_state.model_type, registry_health
     except ImportError:
         pass
-    except Exception as e:
-        logger.debug("Could not query server state: %s", e)
 
     return False, None, registry_health
 
@@ -158,8 +150,6 @@ def _get_model_device() -> Optional[str]:
             return current["device"]
     except ImportError:
         pass
-    except Exception as e:
-        logger.debug("Could not query models controller for device: %s", e)
     try:
         from domains.infrastructure.model_registry import get_model_registry
         registry = get_model_registry()
@@ -168,8 +158,8 @@ def _get_model_device() -> Optional[str]:
             for m in health.get("models", []):
                 if m.get("is_default") and m.get("device"):
                     return m["device"]
-    except Exception as e:
-        logger.debug("Could not query model registry for device: %s", e)
+    except Exception:
+        pass
     return None
 
 
@@ -202,8 +192,7 @@ def _get_inference_stats() -> Dict[str, Any]:
         return ctrl.get_inference_stats()
     except ImportError:
         return {}
-    except Exception as e:
-        logger.debug("Could not get inference stats: %s", e)
+    except Exception:
         return {}
 
 
@@ -219,8 +208,7 @@ def _get_quantization_info() -> Dict[str, Any]:
         if provider is not None and hasattr(provider, 'quantization_report'):
             return provider.quantization_report()
         return {}
-    except Exception as e:
-        logger.debug("Could not get quantization info: %s", e)
+    except Exception:
         return {}
 
 
@@ -240,8 +228,7 @@ def _get_kv_session_info() -> Dict[str, Any]:
             stats["enabled"] = True
             return stats
         return {"enabled": False}
-    except Exception as e:
-        logger.debug("Could not get KV session info: %s", e)
+    except Exception:
         return {"enabled": False}
 
 

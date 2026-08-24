@@ -1,7 +1,5 @@
 'use client'
 
-import { memo } from 'react'
-import { useMemo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
@@ -9,7 +7,7 @@ interface PathLatenciesCardProps {
   liveHealth: LiveHealthSnapshot | null
 }
 
-export const PathLatenciesCard = memo(function PathLatenciesCard({ liveHealth }: PathLatenciesCardProps) {
+export function PathLatenciesCard({ liveHealth }: PathLatenciesCardProps) {
   const latencies = liveHealth?.path_latencies ?? []
   if (latencies.length === 0) return null
 
@@ -34,4 +32,4 @@ export const PathLatenciesCard = memo(function PathLatenciesCard({ liveHealth }:
       </CardContent>
     </Card>
   )
-})
+}

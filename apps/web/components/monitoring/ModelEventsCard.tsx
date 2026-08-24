@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 import { timeAgo } from '@/lib/time-ago'
@@ -16,7 +16,7 @@ const EVENT_STYLES: Record<string, string> = {
   error: 'bg-destructive/15 text-destructive',
 }
 
-export const ModelEventsCard = memo(function ModelEventsCard({ liveHealth }: ModelEventsCardProps) {
+export function ModelEventsCard({ liveHealth }: ModelEventsCardProps) {
   const events = liveHealth?.model_events ?? []
   const [tick, setTick] = useState(0)
 
@@ -54,4 +54,4 @@ export const ModelEventsCard = memo(function ModelEventsCard({ liveHealth }: Mod
       </CardContent>
     </Card>
   )
-})
+}

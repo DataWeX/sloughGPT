@@ -709,4 +709,4 @@ if __name__ == "__main__":  # pragma: no cover (requires GPT-2 download)
         log_interval=5, eval_interval=25,
     )
     model, meta = distill_gpt2_to_slo(text, config)
-    print(json.dumps(meta, indent=2))
+    logger.info("%s", json.dumps(meta, indent=2))

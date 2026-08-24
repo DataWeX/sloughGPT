@@ -119,6 +119,8 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/meta-weights': IconActivity,
   '/infer': IconBrain,
   '/world': IconVision,
+  '/kb': IconBrain,
+  '/token-tree': IconBrain,
   '/experiments': IconActivity,
   '/monitoring': IconActivity,
   '/errors': IconActivity,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 import { timeAgo } from '@/lib/time-ago'
@@ -9,7 +9,7 @@ interface RateViolationsCardProps {
   liveHealth: LiveHealthSnapshot | null
 }
 
-export const RateViolationsCard = memo(function RateViolationsCard({ liveHealth }: RateViolationsCardProps) {
+export function RateViolationsCard({ liveHealth }: RateViolationsCardProps) {
   const violations = liveHealth?.rate_violations ?? []
   const [tick, setTick] = useState(0)
 
@@ -38,4 +38,4 @@ export const RateViolationsCard = memo(function RateViolationsCard({ liveHealth 
       </CardContent>
     </Card>
   )
-})
+}

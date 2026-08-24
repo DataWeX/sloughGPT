@@ -1656,8 +1656,8 @@ def main():
             trainer.train()
     except ValueError as exc:
         raise SystemExit(f"error: {exc}") from exc
-    print("\n=== Generated Text ===")
-    print(trainer.generate("First"))
+    logger.info("=== Generated Text ===")
+    logger.info("%s", trainer.generate("First"))
 
 
 if __name__ == "__main__":  # pragma: no cover (entry-point guard)

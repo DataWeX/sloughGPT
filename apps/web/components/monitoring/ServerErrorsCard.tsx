@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 import { timeAgo } from '@/lib/time-ago'
@@ -9,7 +9,7 @@ interface ServerErrorsCardProps {
   liveHealth: LiveHealthSnapshot | null
 }
 
-export const ServerErrorsCard = memo(function ServerErrorsCard({ liveHealth }: ServerErrorsCardProps) {
+export function ServerErrorsCard({ liveHealth }: ServerErrorsCardProps) {
   const errors = liveHealth?.recent_errors ?? []
   const [tick, setTick] = useState(0)
 
@@ -44,4 +44,4 @@ export const ServerErrorsCard = memo(function ServerErrorsCard({ liveHealth }: S
       </CardContent>
     </Card>
   )
-})
+}

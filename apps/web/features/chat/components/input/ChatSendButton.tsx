@@ -1,6 +1,5 @@
 'use client'
 
-import { memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconSend, IconStop } from '@sloughgpt/strui'
 

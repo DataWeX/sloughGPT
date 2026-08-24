@@ -4,7 +4,7 @@ Workflow Router - Background task management
 Delegates to the canonical FeedbackWorkflowManager from the feedback domain.
 """
 import logging
-from typing import Dict, Any, Literal
+from typing import Dict, Any
 from pydantic import BaseModel
 from fastapi import APIRouter
 
