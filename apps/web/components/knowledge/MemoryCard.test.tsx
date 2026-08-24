@@ -258,7 +258,7 @@ describe('MemoryCard', () => {
     render(<MemoryCard />)
     await screen.findByText('Recent fact')
 
-    const order = () => screen.getAllByTitle('Click to copy').map(el => el.textContent)
+    const order = () => screen.getAllByTitle('Copy to clipboard').map(el => el.textContent)
     expect(order()).toEqual(['Recent fact', 'Mid fact', 'Old fact'])
 
     fireEvent.click(screen.getByLabelText('Toggle memory sort order'))
@@ -281,7 +281,7 @@ describe('MemoryCard', () => {
     fireEvent.click(importance)
     await waitFor(() => expect(screen.getAllByText('Importance').length).toBeGreaterThanOrEqual(1))
 
-    const order = () => screen.getAllByTitle('Click to copy').map(el => el.textContent)
+    const order = () => screen.getAllByTitle('Copy to clipboard').map(el => el.textContent)
     expect(order()).toEqual(['High importance fact', 'Mid importance fact', 'Low importance fact'])
   })
 

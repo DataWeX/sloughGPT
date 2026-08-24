@@ -341,12 +341,12 @@ class InferenceRouter:
         self._BG_TASKS: set = set()
 
         _SESSIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
-        _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         self._SESSIONS_DIR = _SESSIONS_DIR
 
         _VOICE_DIR = Path(__file__).parent.parent.parent.parent / "data" / "voice_messages"
-        _VOICE_DIR.mkdir(parents=True, exist_ok=True)
         self._VOICE_DIR = _VOICE_DIR
+
+        self._dirs_created = False
 
         self._session_repo = FileRepository[dict](
             directory=str(self._SESSIONS_DIR),
@@ -372,6 +372,14 @@ class InferenceRouter:
         self._background_flush_task: Optional[asyncio.Task] = None
 
         self._register_routes()
+
+    def _ensure_dirs(self):
+        """Create session/voice directories on first access (lazy)."""
+        if self._dirs_created:
+            return
+        self._SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        self._VOICE_DIR.mkdir(parents=True, exist_ok=True)
+        self._dirs_created = True
 
     # ── Internal helpers ──
 
@@ -463,6 +471,7 @@ class InferenceRouter:
         Reads only the first 4KB of each file to extract id, name, updated_at,
         created_at, and message_count. Falls back to full read if partial parse fails.
         """
+        self._ensure_dirs()
         now = time.time()
         if self._session_metadata_cache is not None and now - self._session_metadata_cache_ts < self._session_cache_ttl:
             return self._session_metadata_cache

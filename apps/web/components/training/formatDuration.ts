@@ -9,7 +9,8 @@ export function formatDuration(sec: number | null): string {
   return `${s}s`
 }
 
-export function formatElapsed(start: string | number | Date, end?: string | number | Date): string {
+export function formatElapsed(start: string | number | Date | null, end?: string | number | Date | null): string {
+  if (!start) return ''
   const s = typeof start === 'number' ? start : new Date(start).getTime()
   const e = end ? (typeof end === 'number' ? end : new Date(end).getTime()) : Date.now()
   const ms = e - s

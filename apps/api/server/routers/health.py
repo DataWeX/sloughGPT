@@ -222,30 +222,58 @@ class HealthRouter:
         summary, and top-level system metrics. Designed for the frontend
         status bar — lighter than ``/health/detailed``.
 
+        During cold start, ``get_detailed_health`` can block on first-time
+        module imports. A 5-second timeout with a lightweight fallback
+        prevents the frontend status bar from hanging.
+
         Returns:
             Envelope with ``score``, ``status``, ``summary``,
             ``diagnoses``, ``model_loaded``, ``cpu_percent``,
             ``memory_percent``.
         """
         ctrl = get_health_controller()
-        detailed = await asyncio.to_thread(ctrl.get_detailed_health)
-        hs = detailed.get("health_score", {})
-        return success_response(data={
-            "score": hs.get("score", 0),
-            "status": hs.get("status", "unknown"),
-            "summary": hs.get("summary", ""),
-            "diagnoses": hs.get("diagnoses", []),
-            "model_loaded": detailed.get("model_loaded", False),
-            "model_loading": detailed.get("model_loading", False),
-            "model_type": detailed.get("model_type"),
-            "soul": detailed.get("soul"),
-            "uptime_seconds": detailed.get("uptime_seconds", 0),
-            "request_count": detailed.get("request_count", 0),
-            "error_count": detailed.get("error_count", 0),
-            "tokens_per_sec": detailed.get("tokens_per_sec", 0),
-            "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
-            "memory_percent": detailed.get("system", {}).get("memory_percent"),
-        })
+        try:
+            detailed = await asyncio.wait_for(
+                asyncio.to_thread(ctrl.get_detailed_health),
+                timeout=5.0,
+            )
+            hs = detailed.get("health_score", {})
+            data = {
+                "score": hs.get("score", 0),
+                "status": hs.get("status", "unknown"),
+                "summary": hs.get("summary", ""),
+                "diagnoses": hs.get("diagnoses", []),
+                "model_loaded": detailed.get("model_loaded", False),
+                "model_loading": detailed.get("model_loading", False),
+                "model_type": detailed.get("model_type"),
+                "soul": detailed.get("soul"),
+                "uptime_seconds": detailed.get("uptime_seconds", 0),
+                "request_count": detailed.get("request_count", 0),
+                "error_count": detailed.get("error_count", 0),
+                "tokens_per_sec": detailed.get("tokens_per_sec", 0),
+                "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
+                "memory_percent": detailed.get("system", {}).get("memory_percent"),
+            }
+        except (asyncio.TimeoutError, Exception):
+            # Fast fallback during cold start
+            import state as server_state
+            data = {
+                "score": 0,
+                "status": "starting",
+                "summary": "Server is starting up.",
+                "diagnoses": [],
+                "model_loaded": server_state.model is not None or server_state.provider is not None,
+                "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
+                "model_type": getattr(server_state, "model_type", None),
+                "soul": None,
+                "uptime_seconds": 0,
+                "request_count": 0,
+                "error_count": 0,
+                "tokens_per_sec": 0,
+                "cpu_percent": None,
+                "memory_percent": None,
+            }
+        return success_response(data=data)
 
     def _build_health_snapshot(self, ctrl) -> dict:
         """Build a single SSE health snapshot.

@@ -136,7 +136,7 @@ describe('SettingsPage', () => {
   it('renders Connection card', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Connection').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('API server and authentication').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Service connection and authentication').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders API URL input with default value', () => {

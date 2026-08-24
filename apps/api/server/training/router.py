@@ -2202,10 +2202,18 @@ def _resolve_finetuned(name: str) -> Path:
     return target
 
 
+_finetuned_models_cache: tuple[float, dict] | None = None
+_FINETUNED_CACHE_TTL = 30.0
+
+
 @router.get("/training/finetuned-models")
 async def list_finetuned_models():
     """List HF fine-tuned model directories under ``models/hf-finetuned/``."""
+    global _finetuned_models_cache
     base = _finetuned_dir()
+    now = time.monotonic()
+    if _finetuned_models_cache and (now - _finetuned_models_cache[0]) < _FINETUNED_CACHE_TTL:
+        return _finetuned_models_cache[1]
     models = []
     if base.is_dir():
         for d in sorted(base.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -2222,12 +2230,13 @@ async def list_finetuned_models():
                 "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
                 "model": meta.get("model") or display_name,
                 "dataset": meta.get("dataset") or (d.name.split("_")[1] if "_" in d.name else ""),
-                # Legacy keys consumed by the shell `finetuned` command table.
                 "model_name": d.name,
                 "final_loss": meta.get("final_loss"),
                 "epochs": meta.get("epochs") or 0,
             })
-    return {"models": models}
+    result = {"models": models}
+    _finetuned_models_cache = (now, result)
+    return result
 
 
 @router.post("/training/finetuned-models/{name}/load")
