@@ -193,46 +193,41 @@ class ModelsRouter:
 
     async def list_models(self) -> dict:
         """List available/loaded models with plain-language descriptions."""
-        ctrl = get_models_controller()
-
-        # Get current model info
-        current = ctrl.get_current_model()
-
-        models = []
-
-        # Add currently loaded model
-        if current:
-            params = int(current.get("parameters", 0) or 0)
-            vocab = int(current.get("vocab_size", 0) or 0)
-            models.append(ModelInfo(
-                model_id=current["model_id"],
-                status=ModelStatus.LOADED,
-                device=current["device"],
-                parameters=params,
-                vocab_size=vocab,
-                loaded_at=current.get("loaded_at"),
-                description=self._describe_model(current["model_id"], params, loaded=True),
-            ))
-
-        # Add available HuggingFace models (skip if already listed as loaded)
-        loaded_ids = {m.model_id for m in models}
-        hf_models = ctrl.list_hf_models()
-        for entry in hf_models:
-            model_id = entry["model_id"]
-            if model_id not in loaded_ids:
-                params = int(entry.get("parameters", 0) or 0)
-                vocab = int(entry.get("vocab_size", 0) or 0)
+        try:
+            ctrl = get_models_controller()
+            current = ctrl.get_current_model()
+            models = []
+            if current:
+                params = int(current.get("parameters", 0) or 0)
+                vocab = int(current.get("vocab_size", 0) or 0)
                 models.append(ModelInfo(
-                    model_id=model_id,
-                    status=ModelStatus.AVAILABLE,
-                    device="cpu",
+                    model_id=current["model_id"],
+                    status=ModelStatus.LOADED,
+                    device=current["device"],
                     parameters=params,
                     vocab_size=vocab,
-                    loaded_at=None,
-                    description=self._describe_model(model_id, params, loaded=False),
+                    loaded_at=current.get("loaded_at"),
+                    description=self._describe_model(current["model_id"], params, loaded=True),
                 ))
-
-        return success_response(data=[m.model_dump() for m in models])
+            loaded_ids = {m.model_id for m in models}
+            hf_models = ctrl.list_hf_models()
+            for entry in hf_models:
+                model_id = entry["model_id"]
+                if model_id not in loaded_ids:
+                    params = int(entry.get("parameters", 0) or 0)
+                    vocab = int(entry.get("vocab_size", 0) or 0)
+                    models.append(ModelInfo(
+                        model_id=model_id,
+                        status=ModelStatus.AVAILABLE,
+                        device="cpu",
+                        parameters=params,
+                        vocab_size=vocab,
+                        loaded_at=None,
+                        description=self._describe_model(model_id, params, loaded=False),
+                    ))
+            return success_response(data=[m.model_dump() for m in models])
+        except Exception as e:
+            classify_and_raise(e, source="models.list")
 
     async def load_model(
         self,
@@ -240,137 +235,141 @@ class ModelsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Load a model"""
-        ctrl = get_models_controller()
-        _t0 = time.monotonic()
-        result = ctrl.load_model(req.model_id, req.device.value, req.quantize)
-        _elapsed_ms = (time.monotonic() - _t0) * 1000
         try:
-            from domains.infrastructure.server_state import get_server_state
-            ss = get_server_state()
-            if result.get("status") == "loaded":
-                resolved_device = result.get("device") or req.device.value
-                ss.record_model_event("load", req.model_id, f"device={resolved_device}")
-            else:
-                ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
+            ctrl = get_models_controller()
+            _t0 = time.monotonic()
+            result = ctrl.load_model(req.model_id, req.device.value, req.quantize)
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
+            try:
+                from domains.infrastructure.server_state import get_server_state
+                ss = get_server_state()
+                if result.get("status") == "loaded":
+                    resolved_device = result.get("device") or req.device.value
+                    ss.record_model_event("load", req.model_id, f"device={resolved_device}")
+                else:
+                    ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
+            except Exception as e:
+                logger.warning("Failed to record model load event: %s", e)
+            logger.info("Model loaded: %s (%.0fms)", req.model_id, _elapsed_ms)
+            safe_audit_log("model.load", resource=req.model_id, detail=f"{result.get('status', 'unknown')} ({_elapsed_ms:.0f}ms)", device=req.device.value, quantize=req.quantize)
+            return wrap_controller_result(result)
         except Exception as e:
-            logger.warning("Failed to record model load event: %s", e)
-        logger.info("Model loaded: %s (%.0fms)", req.model_id, _elapsed_ms)
-        safe_audit_log("model.load", resource=req.model_id, detail=f"{result.get('status', 'unknown')} ({_elapsed_ms:.0f}ms)", device=req.device.value, quantize=req.quantize)
-        return wrap_controller_result(result)
+            classify_and_raise(e, source="models.load")
 
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Unload current model"""
-        ctrl = get_models_controller()
-        model_id = ctrl._current_model
-        if not model_id:
-            try:
-                from domains.infrastructure.model_registry import get_model_registry
-                model_id = get_model_registry().default_id
-            except Exception as e:
-                logger.warning("Failed to get default model_id for unload: %s", e)
-        result = ctrl.unload_model()
         try:
-            from domains.infrastructure.server_state import get_server_state
-            ss = get_server_state()
-            ss.record_model_event("unload", model_id or "unknown")
+            ctrl = get_models_controller()
+            model_id = ctrl._current_model
+            if not model_id:
+                try:
+                    from domains.infrastructure.model_registry import get_model_registry
+                    model_id = get_model_registry().default_id
+                except Exception as e:
+                    logger.warning("Failed to get default model_id for unload: %s", e)
+            result = ctrl.unload_model()
+            try:
+                from domains.infrastructure.server_state import get_server_state
+                ss = get_server_state()
+                ss.record_model_event("unload", model_id or "unknown")
+            except Exception as e:
+                logger.warning("Failed to record model unload event: %s", e)
+            safe_audit_log("model.unload", resource=model_id or "unknown", detail=result.get("status", "unknown"))
+            return wrap_controller_result(result)
         except Exception as e:
-            logger.warning("Failed to record model unload event: %s", e)
-        safe_audit_log("model.unload", resource=model_id or "unknown", detail=result.get("status", "unknown"))
-        return wrap_controller_result(result)
+            classify_and_raise(e, source="models.unload")
 
     async def current_model(self) -> dict:
         """Get current model info"""
-        ctrl = get_models_controller()
-        model = ctrl.get_current_model()
-        if not model:
-            raise_error("No model loaded", "E_NOT_FOUND")
-        return success_response(data=model)
+        try:
+            ctrl = get_models_controller()
+            model = ctrl.get_current_model()
+            if not model:
+                raise_error("No model loaded", "E_NOT_FOUND")
+            return success_response(data=model)
+        except Exception as e:
+            classify_and_raise(e, source="models.current")
 
     async def list_hf_models(self, q: Optional[str] = None) -> dict:
-        """List HuggingFace available models with actual sizes and cache status.
+        """List HuggingFace available models with actual sizes and cache status."""
+        try:
+            ctrl = get_models_controller()
 
-        Models come from two sources:
-        1. HuggingFace Hub API (top 50 text-generation by downloads, or curated fallback)
-        2. Local HF cache — any model that has safetensors files on disk
+            def _build_list():
+                model_ids = ctrl.list_hf_models(q)
 
-        Sizes are computed in parallel to avoid sequential blocking on Hub API calls.
-        All filesystem I/O and network calls run off the event loop via asyncio.to_thread.
-        """
-        ctrl = get_models_controller()
-
-        def _build_list():
-            model_ids = ctrl.list_hf_models(q)
-
-            def _is_cached(model_id: str) -> bool:
-                try:
-                    return is_model_cached(model_id)
-                except Exception as exc:
-                    logger.error("is_model_cached(%s) failed: %s", model_id, exc, extra={"tag": "MODEL"})
-                    return False
-
-            def _cache_model_id(cache_dir_name: str) -> Optional[str]:
-                if not cache_dir_name.startswith("models--"):
-                    return None
-                return cache_dir_name[len("models--"):].replace("--", "/")
-
-            models_out = []
-            seen_ids = set()
-
-            all_model_ids = []
-            for m in model_ids:
-                mid = m["model_id"] if isinstance(m, dict) else m
-                if mid not in seen_ids:
-                    seen_ids.add(mid)
-                    all_model_ids.append(mid)
-
-            if not q and _hf_cache_dir.exists():
-                try:
-                    for entry in _hf_cache_dir.iterdir():
-                        if not entry.name.startswith("models--") or not entry.is_dir():
-                            continue
-                        cached_id = _cache_model_id(entry.name)
-                        if cached_id and cached_id not in seen_ids:
-                            seen_ids.add(cached_id)
-                            all_model_ids.append(cached_id)
-                except Exception:
-                    logger.debug("Failed to scan HF cache", exc_info=True)
-            size_results: dict[str, Optional[float]] = {}
-            cached_results: dict[str, bool] = {}
-
-            def _compute_one(mid: str):
-                return mid, compute_model_size_gb(mid), _is_cached(mid)
-
-            from domains.infrastructure.resource_manager import get_resource_manager
-            rm = get_resource_manager()
-            max_workers = min(max(len(all_model_ids), rm.inference_pool_size * 2), 16)
-            with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                futures = {pool.submit(_compute_one, mid): mid for mid in all_model_ids}
-                for future in as_completed(futures):
+                def _is_cached(model_id: str) -> bool:
                     try:
-                        mid, size_gb, cached = future.result()
-                        size_results[mid] = size_gb
-                        cached_results[mid] = cached
+                        return is_model_cached(model_id)
+                    except Exception as exc:
+                        logger.error("is_model_cached(%s) failed: %s", model_id, exc, extra={"tag": "MODEL"})
+                        return False
+
+                def _cache_model_id(cache_dir_name: str) -> Optional[str]:
+                    if not cache_dir_name.startswith("models--"):
+                        return None
+                    return cache_dir_name[len("models--"):].replace("--", "/")
+
+                models_out = []
+                seen_ids = set()
+
+                all_model_ids = []
+                for m in model_ids:
+                    mid = m["model_id"] if isinstance(m, dict) else m
+                    if mid not in seen_ids:
+                        seen_ids.add(mid)
+                        all_model_ids.append(mid)
+
+                if not q and _hf_cache_dir.exists():
+                    try:
+                        for entry in _hf_cache_dir.iterdir():
+                            if not entry.name.startswith("models--") or not entry.is_dir():
+                                continue
+                            cached_id = _cache_model_id(entry.name)
+                            if cached_id and cached_id not in seen_ids:
+                                seen_ids.add(cached_id)
+                                all_model_ids.append(cached_id)
                     except Exception:
-                        mid = futures[future]
-                        size_results[mid] = None
-                        cached_results[mid] = False
+                        logger.debug("Failed to scan HF cache", exc_info=True)
+                size_results: dict[str, Optional[float]] = {}
+                cached_results: dict[str, bool] = {}
 
-            for mid in all_model_ids:
-                size_gb = size_results.get(mid)
-                models_out.append({
-                    "id": mid,
-                    "name": self._model_display_name(mid),
-                    "hf_model_id": mid,
-                    "source": "huggingface",
-                    "size_mb": size_gb * 1024 if size_gb is not None else None,
-                    "size_gb": size_gb,
-                    "cached": cached_results.get(mid, False),
-                })
+                def _compute_one(mid: str):
+                    return mid, compute_model_size_gb(mid), _is_cached(mid)
 
-            return models_out
+                from domains.infrastructure.resource_manager import get_resource_manager
+                rm = get_resource_manager()
+                max_workers = min(max(len(all_model_ids), rm.inference_pool_size * 2), 16)
+                with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                    futures = {pool.submit(_compute_one, mid): mid for mid in all_model_ids}
+                    for future in as_completed(futures):
+                        try:
+                            mid, size_gb, cached = future.result()
+                            size_results[mid] = size_gb
+                            cached_results[mid] = cached
+                        except Exception:
+                            mid = futures[future]
+                            size_results[mid] = None
+                            cached_results[mid] = False
 
-        models = await asyncio.to_thread(_build_list)
-        return success_response(data=models, meta={"q": q})
+                for mid in all_model_ids:
+                    size_gb = size_results.get(mid)
+                    models_out.append({
+                        "id": mid,
+                        "name": self._model_display_name(mid),
+                        "hf_model_id": mid,
+                        "source": "huggingface",
+                        "size_mb": size_gb * 1024 if size_gb is not None else None,
+                        "size_gb": size_gb,
+                        "cached": cached_results.get(mid, False),
+                    })
+
+                return models_out
+
+            models = await asyncio.to_thread(_build_list)
+            return success_response(data=models, meta={"q": q})
+        except Exception as e:
+            classify_and_raise(e, source="models.hf_list")
 
     async def get_model_logs(self, limit: int = 50, model_filter: Optional[str] = None) -> dict:
         """Get model request logs (for debugging/monitoring)."""

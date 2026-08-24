@@ -624,6 +624,7 @@ function ConvRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={onPin}
             className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             aria-label={c.pinned ? 'Unpin' : 'Pin'}
@@ -631,6 +632,7 @@ function ConvRow({
             <IconPin className={cn("h-2.5 w-2.5", c.pinned ? "text-primary" : "text-muted-foreground/40")} />
           </button>
           <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e) }}
             className={cn(
               "h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
@@ -645,6 +647,7 @@ function ConvRow({
             )}
           </button>
           <button
+            type="button"
             onClick={onStar}
             className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             aria-label={c.starred ? 'Unstar' : 'Star'}
@@ -697,6 +700,7 @@ function ConvRow({
         {onExport && !editing && (
           <>
             <button
+              type="button"
               onClick={(e) => onExport(e, 'json')}
               className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
               aria-label="Export as JSON"
@@ -705,6 +709,7 @@ function ConvRow({
               <IconDownload className="h-2.5 w-2.5" />
             </button>
             <button
+              type="button"
               onClick={(e) => onExport(e, 'markdown')}
               className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
               aria-label="Export as Markdown"
@@ -716,6 +721,7 @@ function ConvRow({
         )}
         {onDuplicate && !editing && (
           <button
+            type="button"
             onClick={onDuplicate}
             className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
             aria-label={`Duplicate ${c.name}`}
@@ -726,6 +732,7 @@ function ConvRow({
         )}
         {onArchive && !editing && (
           <button
+            type="button"
             onClick={onArchive}
             className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
             aria-label="Archive"
@@ -735,6 +742,7 @@ function ConvRow({
         )}
         {onDelete && !editing && (
           <button
+            type="button"
             onClick={onDelete}
             className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
             aria-label={`Delete ${c.name}`}
