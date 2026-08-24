@@ -82,7 +82,7 @@ class ProcessGuard:
     def __init__(
         self,
         worker_id: str = "guard",
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         stall_timeout: float = 120.0,
         max_restarts: int = 3,
         restart_delay: float = 1.0,
