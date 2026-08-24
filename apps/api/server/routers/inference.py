@@ -1502,6 +1502,7 @@ class InferenceRouter:
         duration_ms: int = Form(0),
     ) -> dict:
         """send_voice_message."""
+        self._ensure_dirs()
         if not file.content_type or not file.content_type.startswith("audio/"):
             raise_error("Only audio files accepted", "E_BAD_REQUEST", status_code=400)
 
@@ -1535,6 +1536,7 @@ class InferenceRouter:
 
     async def get_voice_audio(self, session_id: str, message_id: str) -> dict:
         """get_voice_audio."""
+        self._ensure_dirs()
         base = self._VOICE_DIR.resolve()
         audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
         if not str(audio_path).startswith(str(base)):

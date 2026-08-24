@@ -548,8 +548,8 @@ class StartupOrchestrator:
                             _loop.run_until_complete(_inst.list_checkpoints())
                         finally:
                             _loop.close()
-                    except Exception:
-                        pass  # Non-fatal; first real request will compute fresh
+                    except Exception as e:
+                        logger.debug("Checkpoint warmup failed (non-fatal): %s", e, extra={"tag": "START"})
 
                 threading.Thread(target=_warm_checkpoints, name="ckpt-warmup", daemon=True).start()
 
