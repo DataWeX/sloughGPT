@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { StatCard } from '@/components/StatCard'
 import { vectorController, type VectorSearchResult } from '@/lib/vector-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -91,12 +90,12 @@ export default function VectorPage() {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <KpiGrid>
         <StatCard label="Provider" value={provider === 'in_memory' ? 'In Memory' : provider} />
         <StatCard label="Vectors" value={loading ? '...' : String(count)} />
         <StatCard label="Dimension" value="384" />
         <StatCard label="Status" value={count > 0 ? 'Active' : 'Empty'} />
-      </div>
+      </KpiGrid>
 
       <Card>
         <CardHeader>

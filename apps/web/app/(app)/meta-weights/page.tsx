@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { StatCard } from '@/components/StatCard'
 import { metaWeightsController, type MetaWeights, type MetaWeightStats } from '@/lib/meta-weights-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -62,12 +61,12 @@ export default function MetaWeightsPage() {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <KpiGrid>
         <StatCard label="Status" value={loading ? '...' : (stats ? 'Active' : 'Unavailable')} />
         <StatCard label="Samples" value={loading ? '...' : String(stats?.history_length ?? 0)} />
         <StatCard label="Avg Temperature" value={stats?.avg_temperature?.toFixed(2) ?? '—'} />
         <StatCard label="Avg Top P" value={stats?.avg_top_p?.toFixed(2) ?? '—'} />
-      </div>
+      </KpiGrid>
 
       <Card>
         <CardHeader>
