@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { userAdaptersController, type UserAdapterInfo, type UserAdapterStats } from '@/lib/user-adapters-controller'
@@ -22,6 +22,7 @@ export default function AdaptersPage() {
   const [aggregateResult, setAggregateResult] = useState<string | null>(null)
   const [pruning, setPruning] = useState(false)
   const [evalHistory, setEvalHistory] = useState<LoraEvalResult[]>([])
+  const [pendingResetUserId, setPendingResetUserId] = useState<string | null>(null)
   const [runningEval, setRunningEval] = useState(false)
 
   const refreshData = async () => {
@@ -87,7 +88,7 @@ export default function AdaptersPage() {
   }
 
   const handleReset = async (userId: string) => {
-    if (!window.confirm(`Reset adapter for ${userId}? This cannot be undone.`)) return
+    setPendingResetUserId(userId); return
     try {
       await userAdaptersController.reset(userId)
       await refreshData()
@@ -115,7 +116,24 @@ export default function AdaptersPage() {
     return (
       <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" loadingCards={1}>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-      </PageContainer>
+  
+      <AlertDialog open={pendingResetUserId !== null} onOpenChange={(open) => { if (!open) setPendingResetUserId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset adapter?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset the adapter for this user. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => { const userId = pendingResetUserId; setPendingResetUserId(null); if (userId) { try { await userAdaptersController.reset(userId); await refreshData(); addToast(`Adapter for ${userId} reset`, 'success') } catch { addToast('Could not reset adapter', 'error') } } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </PageContainer>
     )
   }
 
@@ -123,7 +141,24 @@ export default function AdaptersPage() {
     return (
       <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" error={error} onRetry={() => void refreshData()}>
         <></>
-      </PageContainer>
+  
+      <AlertDialog open={pendingResetUserId !== null} onOpenChange={(open) => { if (!open) setPendingResetUserId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset adapter?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset the adapter for this user. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => { const userId = pendingResetUserId; setPendingResetUserId(null); if (userId) { try { await userAdaptersController.reset(userId); await refreshData(); addToast(`Adapter for ${userId} reset`, 'success') } catch { addToast('Could not reset adapter', 'error') } } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </PageContainer>
     )
   }
 
@@ -266,6 +301,23 @@ export default function AdaptersPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={pendingResetUserId !== null} onOpenChange={(open) => { if (!open) setPendingResetUserId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset adapter?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset the adapter for this user. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => { const userId = pendingResetUserId; setPendingResetUserId(null); if (userId) { try { await userAdaptersController.reset(userId); await refreshData(); addToast(`Adapter for ${userId} reset`, 'success') } catch { addToast('Could not reset adapter', 'error') } } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageContainer>
   )
 }

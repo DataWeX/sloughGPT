@@ -6,6 +6,8 @@ Provides paginated, trimmed payloads suitable for the React Native mobile app.
 All endpoints prefixed with /mobile.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -15,7 +17,6 @@ from typing import Optional, List, AsyncGenerator
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-import httpx
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
@@ -169,57 +170,179 @@ class MobileRouter:
         self.router.add_api_route(path="/train/auto-status", endpoint=self.get_auto_train_status, methods=["GET"])
         self.router.add_api_route(path="/train/auto-config", endpoint=self.update_auto_train_config, methods=["PATCH"])
 
-    async def _internal_get(self, request: Request, path: str):
-        """Call an internal GET endpoint via httpx. Returns (data, error_msg)."""
-        base_url = str(request.base_url).rstrip("/")
-        async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
-            try:
-                resp = await client.get(path)
-                if resp.status_code == 200:
-                    return resp.json(), None
-                return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
-            except Exception as e:
-                logger.warning("Internal GET %s failed: %s", path, e, extra={"tag": "REQ"})
-                return None, str(e)
+    @staticmethod
+    def _get_health_data():
+        """Get basic health data directly from the health controller."""
+        from controllers.health import get_health_controller
+        return get_health_controller().get_basic_health()
 
-    async def _internal_post(self, request: Request, path: str, body: dict = None):
-        """Call an internal POST endpoint via httpx. Returns (data, error_msg)."""
-        base_url = str(request.base_url).rstrip("/")
-        async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
-            try:
-                resp = await client.post(path, json=body or {})
-                if resp.status_code == 200:
-                    return resp.json(), None
-                return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
-            except Exception as e:
-                logger.warning("Internal POST %s failed: %s", path, e, extra={"tag": "REQ"})
-                return None, str(e)
+    @staticmethod
+    def _get_detailed_health():
+        """Get detailed health data directly from the health controller."""
+        from controllers.health import get_health_controller
+        return get_health_controller().get_detailed_health()
 
-    async def _internal_patch(self, request: Request, path: str, body: dict = None):
-        """Call an internal PATCH endpoint via httpx. Returns (data, error_msg)."""
-        base_url = str(request.base_url).rstrip("/")
-        async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
-            try:
-                resp = await client.patch(path, json=body or {})
-                if resp.status_code == 200:
-                    return resp.json(), None
-                return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
-            except Exception as e:
-                logger.warning("Internal PATCH %s failed: %s", path, e, extra={"tag": "REQ"})
-                return None, str(e)
+    @staticmethod
+    def _get_sessions_list():
+        """Get session list directly from the inference router."""
+        try:
+            from routers.inference import _instance
+            return asyncio.to_thread(_instance._build_session_metadata_index)
+        except Exception:
+            from domains.infrastructure.session_core import SessionCore
+            return SessionCore.list_sessions()
 
-    async def _internal_delete(self, request: Request, path: str):
-        """Call an internal DELETE endpoint via httpx. Returns (data, error_msg)."""
-        base_url = str(request.base_url).rstrip("/")
-        async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
-            try:
-                resp = await client.delete(path)
-                if resp.status_code == 200:
-                    return resp.json(), None
-                return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
-            except Exception as e:
-                logger.warning("Internal DELETE %s failed: %s", path, e, extra={"tag": "REQ"})
-                return None, str(e)
+    @staticmethod
+    def _get_session_messages(session_id: str):
+        """Get session messages directly."""
+        from domains.infrastructure.session_core import SessionCore
+        return SessionCore.get_messages(session_id)
+
+    @staticmethod
+    def _get_souls():
+        """Get soul list directly from the SloManager."""
+        from domains.inference.slo_manager import get_slo_manager
+        mgr = get_slo_manager()
+        souls = mgr.list_souls()
+        return [{"name": s.name, "description": s.description, "traits": getattr(s, "traits", [])} for s in souls]
+
+    @staticmethod
+    def _get_current_soul():
+        """Get current soul directly from the SloManager."""
+        from domains.inference.slo_manager import get_slo_manager
+        soul = get_slo_manager().get_current_soul()
+        if soul is None:
+            return {"name": None}
+        return {"name": soul.name, "description": soul.description, "traits": getattr(soul, "traits", [])}
+
+    @staticmethod
+    def _get_models_list():
+        """Get model list directly from the models controller."""
+        from controllers.models import get_models_controller
+        ctrl = get_models_controller()
+        current = ctrl.get_current_model()
+        models = ctrl.list_hf_models()
+        result = []
+        for m in models:
+            result.append({
+                "model_id": m.get("model_id", m.get("id", "")),
+                "name": m.get("name", m.get("model_id", "")),
+                "loaded": m.get("status") == "loaded",
+                "size_gb": m.get("size_gb", 0),
+                "source": m.get("source", "local"),
+            })
+        if current:
+            result.insert(0, {
+                "model_id": current.get("model_id", current.get("id", "")),
+                "name": current.get("name", current.get("model_id", "")),
+                "loaded": True,
+                "size_gb": current.get("size_gb", 0),
+                "source": current.get("source", "local"),
+            })
+        return result
+
+    @staticmethod
+    def _get_knowledge_items(limit: int = 200, offset: int = 0, topic: str | None = None):
+        """Get knowledge items directly."""
+        from domains.learner.knowledge import get_knowledge_memory
+        km = get_knowledge_memory()
+        items = km.list_all(top_k=limit + offset)
+        if topic:
+            items = [i for i in items if getattr(i, "topic", None) == topic]
+        return [
+            {"id": getattr(i, "id", ""), "content": getattr(i, "content", ""),
+             "topic": getattr(i, "topic", ""), "source": getattr(i, "source", "manual"),
+             "importance": getattr(i, "importance", 0.5), "url": getattr(i, "url", ""),
+             "timestamp": getattr(i, "timestamp", 0), "score": getattr(i, "score", 0)}
+            for i in items[offset:offset + limit]
+        ]
+
+    @staticmethod
+    def _search_knowledge(query: str, limit: int = 10):
+        """Search knowledge items directly."""
+        from domains.learner.knowledge import get_knowledge_memory
+        km = get_knowledge_memory()
+        results = km.search(query, top_k=limit)
+        return [
+            {"id": getattr(r, "id", ""), "content": getattr(r, "content", ""),
+             "topic": getattr(r, "topic", ""), "source": getattr(r, "source", "manual"),
+             "importance": getattr(r, "importance", 0.5), "score": getattr(r, "score", 0)}
+            for r in results
+        ]
+
+    @staticmethod
+    def _create_knowledge_item(content: str, topic: str | None = None):
+        """Create a knowledge item directly."""
+        from domains.learner.knowledge import get_knowledge_memory
+        km = get_knowledge_memory()
+        return km.store(content, topic=topic)
+
+    @staticmethod
+    def _update_knowledge_item(item_id: str, content: str | None = None, topic: str | None = None, importance: float | None = None):
+        """Update a knowledge item directly."""
+        from domains.learner.knowledge import get_knowledge_memory
+        km = get_knowledge_memory()
+        return km.update(item_id, content=content, topic=topic, importance=importance)
+
+    @staticmethod
+    def _delete_knowledge_item(item_id: str):
+        """Delete a knowledge item directly."""
+        from domains.learner.knowledge import get_knowledge_memory
+        km = get_knowledge_memory()
+        return km.delete(item_id)
+
+    @staticmethod
+    def _get_checkpoints():
+        """Get training checkpoints directly."""
+        try:
+            from training.controller import get_training_controller
+            return get_training_controller().list_checkpoints()
+        except Exception:
+            return []
+
+    @staticmethod
+    def _get_training_status():
+        """Get training status directly."""
+        from training.controller import get_training_controller
+        return get_training_controller().get_status()
+
+    @staticmethod
+    def _get_system_metrics():
+        """Get system metrics directly."""
+        import psutil
+        return {
+            "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "memory_percent": psutil.virtual_memory().percent,
+            "memory_used_gb": round(psutil.virtual_memory().used / (1024 ** 3), 2),
+            "memory_total_gb": round(psutil.virtual_memory().total / (1024 ** 3), 2),
+            "cpu_count_logical": psutil.cpu_count(logical=True),
+            "cpu_count_physical": psutil.cpu_count(logical=False),
+        }
+
+    @staticmethod
+    def _get_disk_info():
+        """Get disk usage info."""
+        import psutil
+        disk = psutil.disk_usage("/")
+        return {
+            "total_gb": round(disk.total / (1024 ** 3), 2),
+            "used_gb": round(disk.used / (1024 ** 3), 2),
+            "free_gb": round(disk.free / (1024 ** 3), 2),
+            "percent": disk.percent,
+        }
+
+    @staticmethod
+    def _switch_soul(soul_name: str, checkpoint_name: str | None = None):
+        """Switch soul directly."""
+        from domains.inference.slo_manager import get_slo_manager
+        mgr = get_slo_manager()
+        return mgr.switch_soul(soul_name, checkpoint_name=checkpoint_name)
+
+    @staticmethod
+    def _load_model(model_id: str):
+        """Load a model directly."""
+        from controllers.models import get_models_controller
+        return get_models_controller().load_model(model_id)
 
     async def get_dashboard(self, request: Request) -> dict:
         """
@@ -227,31 +350,21 @@ class MobileRouter:
 
         Returns:
             status, model info, current soul, recent conversations, stats.
-
-        Side effects:
-            - Calls /health, /souls/current, /chat/sessions, /models internally.
         """
-        health_data, _ = await self._internal_get(request, "/health")
-        health = health_data or {}
-        soul_data, _ = await self._internal_get(request, "/souls/current")
-        soul = soul_data or {}
-        sessions_data, _ = await self._internal_get(request, "/chat/sessions")
-        models_resp, _ = await self._internal_get(request, "/models")
-        if isinstance(models_resp, dict):
-            models = models_resp.get("data", models_resp.get("models", []))
-        else:
-            models = models_resp if isinstance(models_resp, list) else []
+        health = await asyncio.to_thread(self._get_health_data)
+        soul = await asyncio.to_thread(self._get_current_soul)
+        sessions = await asyncio.to_thread(self._get_sessions_list)
+        models = await asyncio.to_thread(self._get_models_list)
 
-        sessions = sessions_data.get("sessions", []) if isinstance(sessions_data, dict) else []
+        if isinstance(sessions, dict):
+            sessions = sessions.get("data", [])
 
         recent = []
         for s in sorted(sessions, key=lambda x: x.get("updated_at", ""), reverse=True)[:5]:
-            msgs = s.get("messages", [])
-            last_msg = msgs[-1].get("content", "") if msgs else ""
             recent.append({
-                "id": s.get("id", ""),
-                "title": s.get("title", "New Chat"),
-                "last_message": last_msg[:120],
+                "id": s.get("id", s.get("session_id", "")),
+                "title": s.get("name", s.get("title", "New Chat")),
+                "last_message": "",
                 "updated_at": s.get("updated_at", ""),
             })
 
@@ -279,22 +392,10 @@ class MobileRouter:
         per_page: int = Query(20, ge=1, le=100),
         search: Optional[str] = Query(None),
     ) -> dict:
-        """
-        Paginated conversation list for mobile.
-
-        Args:
-            page: Page number (1-indexed).
-            per_page: Items per page (max 100).
-            search: Optional search filter on title/message content.
-
-        Returns:
-            Paginated conversations with last message preview.
-
-        Side effects:
-            - Calls /chat/sessions internally.
-        """
-        sessions_data, _ = await self._internal_get(request, "/chat/sessions")
-        sessions = sessions_data.get("sessions", []) if isinstance(sessions_data, dict) else []
+        """Paginated conversation list for mobile."""
+        sessions = await asyncio.to_thread(self._get_sessions_list)
+        if isinstance(sessions, dict):
+            sessions = sessions.get("data", [])
 
         sessions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
 
@@ -302,11 +403,7 @@ class MobileRouter:
             search_lower = search.lower()
             sessions = [
                 s for s in sessions
-                if search_lower in (s.get("title", "") or "").lower()
-                or any(
-                    search_lower in m.get("content", "").lower()
-                    for m in s.get("messages", [])[-3:]
-                )
+                if search_lower in (s.get("name", s.get("title", "")) or "").lower()
             ]
 
         total = len(sessions)
@@ -316,15 +413,13 @@ class MobileRouter:
 
         result = []
         for s in page_sessions:
-            msgs = s.get("messages", [])
-            last_msg = msgs[-1].get("content", "") if msgs else ""
             result.append({
-                "id": s.get("id", ""),
-                "title": s.get("title", "New Chat"),
-                "last_message": last_msg[:200],
+                "id": s.get("id", s.get("session_id", "")),
+                "title": s.get("name", s.get("title", "New Chat")),
+                "last_message": "",
                 "updated_at": s.get("updated_at", ""),
                 "created_at": s.get("created_at", ""),
-                "message_count": len(msgs),
+                "message_count": s.get("message_count", 0),
                 "starred": s.get("starred", False),
                 "pinned": s.get("pinned", False),
             })

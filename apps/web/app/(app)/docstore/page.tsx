@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from '@/lib/http-client'
 
@@ -34,6 +34,7 @@ export default function DocstorePage() {
   const [editMode, setEditMode] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [newDocId, setNewDocId] = useState('')
+  const [pendingClear, setPendingClear] = useState(false)
   const [newDocContent, setNewDocContent] = useState('{}')
   const [showCreate, setShowCreate] = useState(false)
   const [page, setPage] = useState(1)
@@ -117,7 +118,7 @@ export default function DocstorePage() {
   }, [selected, selectedDoc, editContent, addToast, fetchDocs])
 
   const clearCollection = useCallback(async () => {
-    if (!window.confirm(`Delete ALL documents in "${selected}"?`)) return
+    setPendingClear(true); return
     try {
       await apiDelete(`/docstore/${selected}`)
       addToast(`Cleared ${selected}`, 'success')
@@ -283,6 +284,23 @@ export default function DocstorePage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={pendingClear} onOpenChange={setPendingClear}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete all documents?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all documents in "{selected}". This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => { setPendingClear(false); try { await apiDelete(`/docstore/${selected}`); addToast(`Cleared ${selected}`, 'success'); setDocs([]); setSelectedDoc(null); setCollectionMeta(prev => ({ ...prev, [selected]: 0 })) } catch { addToast('Could not clear collection', 'error') } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete all
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageContainer>
   )
 }
