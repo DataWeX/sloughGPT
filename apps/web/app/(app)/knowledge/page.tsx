@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
+
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -19,6 +20,7 @@ import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type Topi
 import { getRAGStats, clearRAG, listRAGDocuments, syncKGToRAG, type RAGStats, type RAGDocument } from '@/lib/rag-controller'
 import { KnowledgeCategoryChart } from '@/components/knowledge/KnowledgeCategoryChart'
 import { MemoryCard } from '@/components/knowledge/MemoryCard'
+import { SpacedReviewCard } from '@/components/knowledge/SpacedReviewCard'
 import { LearnSection } from '@/components/learn/LearnSection'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, MS_PER_SECOND } from '@/lib/format-bytes'
@@ -88,7 +90,7 @@ export default function KnowledgePage() {
       setTopics(topicsResult.topics || [])
       if (adapterResult) setAdapterStatus(adapterResult)
     } catch {
-      addToast('Failed to load knowledge', 'error')
+      addToast('Could not load knowledge', 'error')
     } finally {
       setLoading(false)
     }
@@ -102,7 +104,7 @@ export default function KnowledgePage() {
       setRagStats(s)
       setRagDocs(docs.documents || [])
     } catch {
-      addToast('Failed to load RAG data. Is the RAG server running?', 'error')
+      addToast('Could not load deep memory data', 'error')
     }
   }, [])
 
@@ -114,9 +116,9 @@ export default function KnowledgePage() {
       await clearRAG()
       setRagStats({ total_documents: 0, total_chunks: 0, index_size: 0 })
       setRagDocs([])
-      addToast('RAG index cleared', 'success')
+      addToast('Deep memory index cleared', 'success')
     } catch {
-      addToast('Failed to clear RAG index', 'error')
+      addToast('Could not clear deep memory index', 'error')
     } finally {
       setRagClearing(false)
     }
@@ -126,10 +128,10 @@ export default function KnowledgePage() {
     setRagSyncing(true)
     try {
       const result = await syncKGToRAG()
-      addToast(`Synced ${result.total_triples} KG triples to RAG`, 'success')
+      addToast(`Synced ${result.total_triples} knowledge connections to deep memory`, 'success')
       await fetchRAGData()
     } catch {
-      addToast('Failed to sync KG to RAG', 'error')
+      addToast('Could not sync to deep memory', 'error')
     } finally {
       setRagSyncing(false)
     }
@@ -219,7 +221,7 @@ export default function KnowledgePage() {
         setItems(prev => [deleted, ...prev])
         setStats(prev => prev ? { ...prev, total_items: prev.total_items + 1 } : prev)
         knowledgeController.add(deleted.content, deleted.topic, false).catch(() => {
-          addToast('Failed to restore item', 'error')
+          addToast('Could not restore item', 'error')
         })
       })
     } catch {
@@ -244,7 +246,7 @@ export default function KnowledgePage() {
         setStats(prev => prev ? { ...prev, total_items: prev.total_items + deletedIds.size } : prev)
         knowledgeController.batchIngest(deletedItems.map(i => ({ content: i.content, tags: [i.topic] }))).catch(e => {
           logger.error('knowledge batch undo re-ingest failed', { count: deletedIds.size, exception: String(e) })
-          addToast('Failed to restore deleted items', 'error')
+          addToast('Could not restore deleted items', 'error')
         })
       })
     } catch {
@@ -268,7 +270,7 @@ export default function KnowledgePage() {
       addToast(`Updated ${affectedIds.size} items to "${newTopic}"`, 'success')
     } catch {
       setItems(prev => prev.map(i => affectedIds.has(i.id) ? { ...i, topic: oldTopics.get(i.id) || 'general' } : i))
-      addToast('Failed to reassign topics', 'error')
+      addToast('Could not reassign topics', 'error')
     }
   }
 
@@ -308,7 +310,7 @@ export default function KnowledgePage() {
     } catch {
       setItems(prev => prev.filter(i => i.id !== tempId))
       setStats(prev => prev ? { ...prev, total_items: prev.total_items - 1 } : prev)
-      addToast('Failed to add knowledge', 'error')
+      addToast('Could not add knowledge', 'error')
     }
   }
 
@@ -554,11 +556,11 @@ export default function KnowledgePage() {
       headerRight={headerRight}
       toolbar={toolbar}
     >
-        {stats && (
+      {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Facts</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Things I remember</p>
                 <p className="text-xl font-semibold mt-1">{stats.total_items}</p>
               </CardContent>
             </Card>
@@ -570,8 +572,8 @@ export default function KnowledgePage() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Avg Importance</p>
-                <p className="text-xl font-semibold mt-1">{stats.avg_importance.toFixed(1)}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">How much I care</p>
+                <p className="text-xl font-semibold mt-1">{stats.avg_importance >= 0.7 ? 'A lot' : stats.avg_importance >= 0.4 ? 'Somewhat' : 'A little'}</p>
               </CardContent>
             </Card>
             <Card>
@@ -585,14 +587,16 @@ export default function KnowledgePage() {
 
         {items.length > 0 && <KnowledgeCategoryChart items={items} stats={stats} />}
 
+        <SpacedReviewCard addToast={addToast} />
+
         {adapterStatus && (
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Knowledge Adapter</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Memory Training</p>
                   {adapterStatus.adapter_exists ? (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">Trained</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">Ready</span>
                   ) : (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Not trained</span>
                   )}
@@ -607,18 +611,15 @@ export default function KnowledgePage() {
                   {adapterTraining ? (
                     <span className="flex items-center gap-1">
                       <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      Training…
+                      Learning...
                     </span>
-                  ) : adapterStatus.adapter_exists ? 'Retrain' : 'Train Adapter'}
+                  ) : adapterStatus.adapter_exists ? 'Retrain' : 'Train memory'}
                 </Button>
               </div>
               <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                <span>{adapterStatus.fact_count} facts in adapter</span>
+                <span>{adapterStatus.fact_count} things learned</span>
                 {adapterStatus.trained_at && (
-                  <span>Trained {new Date(adapterStatus.trained_at * MS_PER_SECOND).toLocaleDateString()}</span>
-                )}
-                {adapterStatus.post_training_loss != null && (
-                  <span>Loss {adapterStatus.post_training_loss.toFixed(3)}</span>
+                  <span>Last trained {new Date(adapterStatus.trained_at * MS_PER_SECOND).toLocaleDateString()}</span>
                 )}
               </div>
             </CardContent>
@@ -630,9 +631,9 @@ export default function KnowledgePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">RAG Index</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Deep Memory</p>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">
-                    {ragStats.total_chunks} chunks
+                    {ragStats.total_chunks} pieces
                   </span>
                 </div>
                 <div className="flex gap-2">
@@ -646,9 +647,9 @@ export default function KnowledgePage() {
                     {ragSyncing ? (
                       <span className="flex items-center gap-1">
                         <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        Syncing…
+                        Syncing...
                       </span>
-                    ) : 'Sync KG'}
+                    ) : 'Sync'}
                   </Button>
                   <Button
                     size="sm"
@@ -656,7 +657,7 @@ export default function KnowledgePage() {
                     className="h-7 text-xs px-2.5"
                     onClick={() => setShowRagDocs(!showRagDocs)}
                   >
-                    {showRagDocs ? 'Hide' : 'Documents'}
+                    {showRagDocs ? 'Hide' : 'Sources'}
                   </Button>
                   <Button
                     size="sm"
@@ -665,14 +666,13 @@ export default function KnowledgePage() {
                     onClick={handleRAGClear}
                     disabled={ragClearing}
                   >
-                    {ragClearing ? 'Clearing…' : 'Clear'}
+                    {ragClearing ? 'Clearing...' : 'Clear'}
                   </Button>
                 </div>
               </div>
               <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                <span>{ragStats.total_documents} documents</span>
-                <span>{ragStats.total_chunks} chunks indexed</span>
-                <span>{ragStats.index_size} embeddings</span>
+                <span>{ragStats.total_documents} sources</span>
+                <span>{ragStats.total_chunks} pieces indexed</span>
               </div>
               {showRagDocs && ragDocs.length > 0 && (
                 <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
@@ -683,7 +683,7 @@ export default function KnowledgePage() {
                           {(doc.metadata?.source as string) || 'unknown'}
                         </span>
                         <span className="text-muted-foreground">
-                          {doc.num_chunks} chunks · {doc.chunk_size} tokens
+                          {doc.num_chunks} pieces
                         </span>
                       </div>
                     </div>
@@ -691,7 +691,7 @@ export default function KnowledgePage() {
                 </div>
               )}
               {showRagDocs && ragDocs.length === 0 && (
-                <p className="mt-3 text-[11px] text-muted-foreground">No documents in RAG index.</p>
+                <p className="mt-3 text-[11px] text-muted-foreground">No sources yet.</p>
               )}
             </CardContent>
           </Card>
@@ -700,7 +700,7 @@ export default function KnowledgePage() {
         {topics.length > 0 && (
           <Card>
             <CardContent className="p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-2">Topic Distribution</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-2">What we talk about</p>
               <div className="space-y-1.5">
                 {topics.slice(0, 8).map(t => {
                   const pct = stats ? Math.round((t.count / stats.total_items) * 100) : 0
@@ -761,8 +761,8 @@ export default function KnowledgePage() {
           </div>
         ) : displayItems.length === 0 ? (
           <EmptyCard
-            message={search ? 'No results found' : 'No knowledge stored'}
-            description={search ? 'Try a different search term' : 'Add facts the AI should remember across conversations. Click the + button to get started.'}
+            message={search ? 'No results found' : 'Nothing here yet'}
+            description={search ? 'Try a different search term' : 'Add things you want your AI to remember about you. Click the + button to get started.'}
             icon={<IconSearch className="h-5 w-5" />}
             action={null}
           />
@@ -914,122 +914,122 @@ export default function KnowledgePage() {
 
         <LearnSection />
 
-      <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete knowledge?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this fact from the knowledge base.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete knowledge?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove this fact from the knowledge base.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
-      <AlertDialog open={pendingBatchDelete} onOpenChange={() => setPendingBatchDelete(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedIds.size} items?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove these facts from the knowledge base.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBatchDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete all
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <AlertDialog open={pendingBatchDelete} onOpenChange={() => setPendingBatchDelete(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {selectedIds.size} items?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove these facts from the knowledge base.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleBatchDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete all
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
-      <AlertDialog open={showBulkTopic} onOpenChange={() => setShowBulkTopic(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Move {selectedIds.size} items to topic</AlertDialogTitle>
-            <AlertDialogDescription>
-              Assign all selected knowledge items to a new topic.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2">
-            <Input
-              value={bulkTopic}
-              onChange={e => setBulkTopic(e.target.value)}
-              placeholder="Enter topic name..."
-              autoFocus
-              onKeyDown={e => { if (e.key === 'Enter' && bulkTopic.trim()) handleBulkTopicReassign() }}
-            />
-            <div className="flex flex-wrap gap-1 mt-2">
-              {topics.slice(0, 6).map(t => (
-                <button
-                  key={t.name}
-                  onClick={() => setBulkTopic(t.name)}
-                  className="text-[10px] px-2 py-0.5 rounded-full border border-border/40 text-muted-foreground hover:bg-muted/50 transition-colors"
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <Button size="sm" disabled={!bulkTopic.trim()} onClick={handleBulkTopicReassign}>Move</Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={showAdd} onOpenChange={() => setShowAdd(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Add knowledge</AlertDialogTitle>
-            <AlertDialogDescription>
-              Add a fact the AI should remember across conversations.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3 py-2">
-            <div>
-              <textarea
-                className={`w-full p-2.5 text-sm border rounded-lg resize-none h-24 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 ${addErrors.content ? 'border-destructive ring-destructive/20' : 'border-input'}`}
-                placeholder="Enter a fact, preference, or piece of context..."
-                value={newContent}
-                onChange={e => {
-                  const val = e.target.value
-                  setNewContent(val)
-                  if (addErrors.content) setAddErrors(prev => ({ ...prev, content: undefined }))
-                  if (newTopic === 'general' || newTopic === '') {
-                    setNewTopic(suggestTopic(val))
-                  }
-                }}
-                autoFocus
-                aria-invalid={!!addErrors.content}
-                aria-describedby={addErrors.content ? 'add-content-error' : undefined}
-                aria-label="New knowledge content"
-              />
-              {addErrors.content && (
-                <p id="add-content-error" className="text-[10px] text-destructive mt-1" role="alert">{addErrors.content}</p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground shrink-0">Topic:</label>
+        <AlertDialog open={showBulkTopic} onOpenChange={() => setShowBulkTopic(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Move {selectedIds.size} items to topic</AlertDialogTitle>
+              <AlertDialogDescription>
+                Assign all selected knowledge items to a new topic.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-2">
               <Input
-                value={newTopic}
-                onChange={e => setNewTopic(e.target.value)}
-                className="h-8 text-xs flex-1"
-                placeholder="general"
+                value={bulkTopic}
+                onChange={e => setBulkTopic(e.target.value)}
+                placeholder="Enter topic name..."
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter' && bulkTopic.trim()) handleBulkTopicReassign() }}
               />
+              <div className="flex flex-wrap gap-1 mt-2">
+                {topics.slice(0, 6).map(t => (
+                  <button
+                    key={t.name}
+                    onClick={() => setBulkTopic(t.name)}
+                    className="text-[10px] px-2 py-0.5 rounded-full border border-border/40 text-muted-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setNewContent(''); setNewTopic('general') }}>Cancel</AlertDialogCancel>
-            <Button size="sm" disabled={!newContent.trim()} onClick={handleAdd}>Add</Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </PageContainer>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <Button size="sm" disabled={!bulkTopic.trim()} onClick={handleBulkTopicReassign}>Move</Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showAdd} onOpenChange={() => setShowAdd(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Add knowledge</AlertDialogTitle>
+              <AlertDialogDescription>
+                Add a fact the AI should remember across conversations.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3 py-2">
+              <div>
+                <textarea
+                  className={`w-full p-2.5 text-sm border rounded-lg resize-none h-24 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 ${addErrors.content ? 'border-destructive ring-destructive/20' : 'border-input'}`}
+                  placeholder="Enter a fact, preference, or piece of context..."
+                  value={newContent}
+                  onChange={e => {
+                    const val = e.target.value
+                    setNewContent(val)
+                    if (addErrors.content) setAddErrors(prev => ({ ...prev, content: undefined }))
+                    if (newTopic === 'general' || newTopic === '') {
+                      setNewTopic(suggestTopic(val))
+                    }
+                  }}
+                  autoFocus
+                  aria-invalid={!!addErrors.content}
+                  aria-describedby={addErrors.content ? 'add-content-error' : undefined}
+                  aria-label="New knowledge content"
+                />
+                {addErrors.content && (
+                  <p id="add-content-error" className="text-[10px] text-destructive mt-1" role="alert">{addErrors.content}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground shrink-0">Topic:</label>
+                <Input
+                  value={newTopic}
+                  onChange={e => setNewTopic(e.target.value)}
+                  className="h-8 text-xs flex-1"
+                  placeholder="general"
+                />
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setNewContent(''); setNewTopic('general') }}>Cancel</AlertDialogCancel>
+              <Button size="sm" disabled={!newContent.trim()} onClick={handleAdd}>Add</Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </PageContainer>
   )
 }

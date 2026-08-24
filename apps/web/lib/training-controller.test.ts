@@ -282,9 +282,9 @@ describe('trainingJobsController.webhooks', () => {
   })
 
   it('webhookStats GETs /training/webhooks/stats', async () => {
-    apiClient.apiGet.mockResolvedValue({ total: 5, success_rate: 0.9 })
+    apiClient.apiGet.mockResolvedValue({ total_webhooks: 5, success_rate: 0.9, total_deliveries: 10, successful_deliveries: 9, failed_deliveries: 1, active_webhooks: 3, pending_retries: 0, dead_letters: 0 })
     const result = await trainingJobsController.webhookStats()
-    expect(result.total).toBe(5)
+    expect(result.total_webhooks).toBe(5)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/webhooks/stats')
   })
 })

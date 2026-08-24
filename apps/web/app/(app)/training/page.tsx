@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Button } from '@sloughgpt/strui'
@@ -22,6 +22,19 @@ import { TrainingHealthCard } from '@/components/training/TrainingHealthCard'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
 import { TurboCard } from '@/components/training/TurboCard'
 import { APILogsCard } from '@/components/training/APILogsCard'
+import { FeedbackTrainCard } from '@/components/training/FeedbackTrainCard'
+import { RecoveryCard } from '@/components/training/RecoveryCard'
+import { WebhooksCard } from '@/components/training/WebhooksCard'
+import { TrainingBuildsCard } from '@/components/training/TrainingBuildsCard'
+import { TrainingDataCard } from '@/components/training/TrainingDataCard'
+
+type ManualTab = 'train' | 'results' | 'settings'
+
+const MANUAL_TABS: { id: ManualTab; label: string }[] = [
+  { id: 'train', label: 'Train' },
+  { id: 'results', label: 'Results' },
+  { id: 'settings', label: 'Settings' },
+]
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
@@ -31,6 +44,7 @@ export default function TrainingPage() {
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
+  const [manualTab, setManualTab] = useState<ManualTab>('train')
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
 
@@ -115,7 +129,7 @@ export default function TrainingPage() {
     if (runningJob && !session.trainingRunning) {
       writeTraining({
         phase: 'TRAINING',
-        method: (runningJob.method as 'slnet' | 'hf' | 'turbo' | null) || 'slnet',
+        method: (runningJob.method as 'slonet' | 'hf' | 'turbo' | null) || 'slonet',
         loss: runningJob.loss ?? runningJob.train_loss ?? null,
         progress: runningJob.progress ?? 0,
         epoch: runningJob.current_epoch ?? 0,
@@ -173,9 +187,19 @@ export default function TrainingPage() {
       URL.revokeObjectURL(url)
       addToast('Metrics exported', 'success')
     } catch {
-      addToast('Failed to export metrics', 'error')
+      addToast('Could not export metrics', 'error')
     }
   }, [addToast])
+
+  const handlePurgeJobs = useCallback(async () => {
+    try {
+      const result = await trainingJobsController.purgeJobs()
+      addToast(`Purged ${result.purged} completed jobs`, 'success')
+      void checkpoints.fetchJobs()
+    } catch {
+      addToast('Could not purge jobs', 'error')
+    }
+  }, [addToast, checkpoints])
 
   return (
     <PageContainer
@@ -194,7 +218,7 @@ export default function TrainingPage() {
                   addToast('Training stopped', 'success')
                   void checkpoints.fetchJobs()
                 } catch {
-                  addToast('Failed to stop training', 'error')
+                  addToast('Could not stop training', 'error')
                 }
               }}
             >
@@ -202,7 +226,19 @@ export default function TrainingPage() {
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={handleExportMetrics}>Export metrics</Button>
-          <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchJobs(); void checkpoints.fetchCheckpoints() }}>Refresh</Button>
+          {completedCount > 0 && (
+            <Button size="sm" variant="ghost" onClick={handlePurgeJobs}>Purge completed</Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void checkpoints.fetchJobs()
+              void checkpoints.fetchCheckpoints()
+            }}
+          >
+            Refresh
+          </Button>
         </div>
       }
     >
@@ -218,21 +254,66 @@ export default function TrainingPage() {
 
         <TrainingHealthCard checkpoints={checkpoints.checkpoints} />
 
-        {/* Pipeline */}
-        <TrainingPipeline
-          form={form}
-          datasets={datasets}
-          session={session}
-          checkpoints={checkpoints}
-          onTest={() => test.setTestDialogOpen(true)}
-          addToast={addToast}
-        />
+        {/* Manual sub-tabs */}
+        <div className="flex flex-wrap gap-1.5">
+          {MANUAL_TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setManualTab(t.id)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                manualTab === t.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-        {/* Fast train (turbo) */}
-        <TurboCard datasets={datasets} session={session} addToast={addToast} />
+            {/* Train tab */}
+            {manualTab === 'train' && (
+              <>
+                {/* Pipeline */}
+                <TrainingPipeline
+                  form={form}
+                  datasets={datasets}
+                  session={session}
+                  checkpoints={checkpoints}
+                  onTest={() => test.setTestDialogOpen(true)}
+                  addToast={addToast}
+                />
 
-        {/* Train from API conversation logs */}
-        <APILogsCard addToast={addToast} />
+                {/* Fast train (turbo) */}
+                <TurboCard datasets={datasets} session={session} addToast={addToast} />
+
+                {/* Train from feedback */}
+                <FeedbackTrainCard addToast={addToast} />
+
+                {/* Train from API conversation logs */}
+                <APILogsCard addToast={addToast} />
+              </>
+            )}
+
+            {/* Results tab */}
+            {manualTab === 'results' && (
+              <>
+                {/* All builds */}
+                <TrainingBuildsCard addToast={addToast} />
+
+                {/* Training data */}
+                <TrainingDataCard addToast={addToast} />
+              </>
+            )}
+
+            {/* Settings tab */}
+            {manualTab === 'settings' && (
+              <>
+                {/* Recoverable jobs */}
+                <RecoveryCard addToast={addToast} />
+
+                {/* Webhooks */}
+                <WebhooksCard addToast={addToast} />
+              </>
+            )}
 
       <TestModelDialog
         open={test.testDialogOpen}

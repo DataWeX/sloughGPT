@@ -137,7 +137,7 @@ describe('TurboCard', () => {
     render(<TurboCard datasets={makeDatasets() as unknown as UseTrainingDatasetsReturn} session={session} addToast={addToast} />)
     fireEvent.click(screen.getByText('Load for chat'))
     await vi.waitFor(() => {
-      expect(addToast).toHaveBeenCalledWith('Failed to load trained version', 'error')
+      expect(addToast).toHaveBeenCalledWith('Could not load trained version', 'error')
     })
   })
 

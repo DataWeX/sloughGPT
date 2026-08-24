@@ -92,9 +92,7 @@ import KnowledgePage from './page'
 afterEach(() => cleanup())
 
 function expectEmptyStateVisible() {
-  // Specific to the empty-state copy (not the broad /no/ regex, which also
-  // matches labels like "Knowledge" / "Not trained").
-  const emptyStates = screen.getAllByText(/No knowledge stored|No results found/)
+  const emptyStates = screen.getAllByText(/Nothing here yet|No results found/)
   expect(emptyStates.length).toBeGreaterThan(0)
 }
 
@@ -316,7 +314,7 @@ describe('KnowledgePage — error handling flow', () => {
     mockList.mockRejectedValue(new Error('Network error'))
     render(<KnowledgePage />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not load knowledge', 'error')
     })
   })
 

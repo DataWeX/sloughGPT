@@ -12,7 +12,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -282,12 +282,6 @@ async def train_resolve(body: TrainResolveRequest) -> dict[str, Any]:
     return out
 
 
-@router.get("/train/status")
-async def train_status():
-    """Legacy training status stub."""
-    return {"status": "ready", "message": "Use /train endpoint to start training"}
-
-
 @router.get("/training/jobs")
 async def list_training_jobs():
     """List all tracked training jobs with plain-language status.
@@ -325,13 +319,13 @@ async def stop_training_job(job_id: str):
     try:
         from domains.infrastructure.cancel_manager import get_cancel_manager
         get_cancel_manager().cancel(job_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("cancel_manager.cancel failed: %s", exc)
     try:
         from infrastructure.auth import get_audit_logger
         get_audit_logger().log("training.stop", resource=job_id, detail=f"from={prev_status}")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("audit log failed: %s", exc)
     return {"status": "stopping", "job_id": job_id}
 
 
@@ -438,8 +432,8 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
             resource=job_id,
             detail=f"deleted_files={len(deleted_files)}",
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("audit log failed: %s", exc)
 
     return {
         "status": "deleted",
@@ -450,7 +444,7 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
 
 @router.post("/training/jobs/purge")
 async def purge_training_jobs(
-    status: Optional[str] = Query(None, description="Only purge jobs in this terminal status"),
+    status: str | None = Query(None, description="Only purge jobs in this terminal status"),
     auth_user: dict = Depends(require_auth_if_enabled),
 ):
     """Remove all terminal training jobs from the in-memory tracker.
@@ -585,8 +579,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             detail="char",
             extra={"job_id": job_id, "model": request.model, "epochs": request.epochs, "source_kind": source_kind},
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("audit log failed: %s", exc)
 
     # Trigger webhook notification for training started
     try:
@@ -802,7 +796,7 @@ class VisualTrainRequest(BaseModel):
     use_lora: bool = False
     lora_rank: int = 8
     freeze_vision: bool = True
-    name: Optional[str] = None
+    name: str | None = None
 
 
 @router.post("/training/visual-start")
@@ -1734,7 +1728,7 @@ async def control_start_training():
     }
 
 
-def _signal_current_job(pause: Optional[bool] = None, cancel: bool = False) -> Dict[str, Any]:
+def _signal_current_job(pause: bool | None = None, cancel: bool = False) -> dict[str, Any]:
     """Signal the controller's current job with cooperative control events.
 
     Sets/clears the job's ``_pause_event`` and sets ``_cancel_event`` so the
@@ -1748,7 +1742,7 @@ def _signal_current_job(pause: Optional[bool] = None, cancel: bool = False) -> D
     job = training_jobs.get(jid)
     if not job:
         return {}
-    signaled: Dict[str, Any] = {}
+    signaled: dict[str, Any] = {}
     if pause is not None:
         ev = job.get("_pause_event")
         if ev is not None:
@@ -1891,7 +1885,7 @@ async def register_webhook(
     url: str,
     events: str,  # JSON stringified array
     description: str = "",
-    secret: Optional[str] = None,
+    secret: str | None = None,
 ):
     """
     Register a new webhook endpoint.
@@ -2054,6 +2048,20 @@ async def test_webhook(req: TestWebhookRequest):
         "error": delivery.error,
         "response_body": delivery.response_body,
     }
+
+
+@router.get("/training/webhooks/retry-queue")
+async def get_webhook_retry_queue():
+    """Get pending webhook retries."""
+    store = get_webhook_store()
+    return {"retries": store.get_retry_queue()}
+
+
+@router.get("/training/webhooks/dead-letters")
+async def get_webhook_dead_letters(limit: int = 50):
+    """Get dead-lettered webhook deliveries."""
+    store = get_webhook_store()
+    return {"dead_letters": store.get_dead_letters(limit=limit)}
 
 
 @router.get("/training/builds")

@@ -52,7 +52,7 @@ export const TurboCard = memo(function TurboCard({
       await trainingJobsController.loadCheckpoint(name)
       addToast(`Loaded trained version: ${name}`, 'success')
     } catch {
-      addToast('Failed to load trained version', 'error')
+      addToast('Could not load trained version', 'error')
     } finally {
       setLoadingModel(false)
     }

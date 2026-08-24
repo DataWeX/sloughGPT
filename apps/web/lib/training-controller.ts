@@ -86,8 +86,14 @@ export interface AutoTrainStartResponse {
 }
 
 export interface WebhookStats {
-  total: number
-  success_rate: number
+  total_webhooks: number
+  active_webhooks: number
+  total_deliveries: number
+  successful_deliveries: number
+  failed_deliveries: number
+  success_rate: string | number
+  pending_retries: number
+  dead_letters: number
 }
 
 export interface FineTunedModel {
@@ -386,6 +392,19 @@ export const trainingJobsController = {
 
   async webhookStats(): Promise<WebhookStats> {
     return apiGet<WebhookStats>('/training/webhooks/stats')
+  },
+
+  async getWebhookRetryQueue(): Promise<{ retries: Array<{
+    delivery_id: string; webhook_id: string; event: string; attempt_count: number; next_retry_at: number
+  }> }> {
+    return apiGet('/training/webhooks/retry-queue')
+  },
+
+  async getWebhookDeadLetters(limit: number = 50): Promise<{ dead_letters: Array<{
+    delivery_id: string; webhook_id: string; event: string; error: string | null;
+    status_code: number | null; attempt_count: number; dead_lettered_at: string
+  }> }> {
+    return apiGet(`/training/webhooks/dead-letters?limit=${limit}`)
   },
 
   // Recovery
