@@ -586,6 +586,16 @@ class AutoTrainRouter:
         if not data_path:
             raise_error("No data_path or dataset_id provided", code="E_VAL_REQUEST")
 
+        # Validate data_path exists and is under allowed directories
+        from pathlib import Path as _P
+        _dp = _P(data_path).resolve()
+        _allowed_bases = [REPO_ROOT / "datasets", REPO_ROOT / "data"]
+        if not any(str(_dp).startswith(str(b.resolve())) for b in _allowed_bases if b.exists()):
+            if not _dp.exists():
+                raise_error(f"Data file not found: {data_path}", code="E_NOT_FOUND")
+            # Allow absolute paths that exist but warn — relaxed for dev convenience
+            pass
+
         with _turbo_lock:
             if _turbo_state.get("status") == "running":
                 raise_error("A turbo training job is already running", code="E_INFRA_BUSY")

@@ -29,12 +29,13 @@ from typing import Optional, Dict, List, Tuple, Union, Any
 import numpy as np
 
 from domains.infrastructure.structured_log import StructuredLogger
+from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
 
 logger = StructuredLogger("slo.inference.slonet_provider")
 
 # Streaming robustness timeouts (overridable in tests).
 _STREAM_GET_TIMEOUT_S = 30.0
-_STREAM_TOTAL_TIMEOUT_S = 120.0
+_STREAM_TOTAL_TIMEOUT_S = DEFAULT_GENERATE_TIMEOUT
 
 # Lazy import to avoid circular dependency
 _SloLayerNorm = None

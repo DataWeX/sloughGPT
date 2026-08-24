@@ -12,6 +12,7 @@ export function TrainingDataCard({ addToast }: Props) {
   const [stats, setStats] = useState<TrainingDataStats | null>(null)
   const [pairs, setPairs] = useState<TrainingPair[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
@@ -19,6 +20,7 @@ export function TrainingDataCard({ addToast }: Props) {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const [statsResult, pairsResult] = await Promise.all([
         trainingJobsController.getTrainingStats(),
@@ -28,12 +30,14 @@ export function TrainingDataCard({ addToast }: Props) {
       setPairs(pairsResult.pairs ?? [])
       setTotal(pairsResult.total ?? 0)
     } catch {
+      addToast('Failed to load training data', 'error')
+      setError('Could not load training data')
       setStats(null)
       setPairs([])
     } finally {
       setLoading(false)
     }
-  }, [page, search])
+  }, [page, search, addToast])
 
   useEffect(() => { void fetchData() }, [fetchData])
 
@@ -92,6 +96,11 @@ export function TrainingDataCard({ addToast }: Props) {
       <CardContent className="space-y-3">
         {loading && !stats ? (
           <p className="text-xs text-muted-foreground">Loading...</p>
+        ) : error ? (
+          <div className="text-center py-4">
+            <p className="text-sm text-destructive mb-2">{error}</p>
+            <Button size="sm" variant="ghost" onClick={() => void fetchData()}>Retry</Button>
+          </div>
         ) : stats ? (
           <div className="grid grid-cols-4 gap-2 text-center text-xs">
             <div className="rounded bg-muted/30 p-2">

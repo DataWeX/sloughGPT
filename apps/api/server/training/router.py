@@ -1470,7 +1470,7 @@ async def load_adapter(request: LoadAdapterRequest):
         raise_error("No subprocess worker found. Load adapter via direct model access instead.", "E_BAD_REQUEST", status_code=400)
     try:
         result = process_guard.load_adapter(
-            str(adapter_path), merge=request.merge, timeout=120.0
+            str(adapter_path), merge=request.merge, timeout=cfg.generate_timeout
         )
         logger.info("Loaded adapter via worker: %s", adapter_path.name, extra={"tag": "TRAIN"})
         return result

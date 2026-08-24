@@ -36,8 +36,11 @@ export function LearnSection() {
     learnerController.status().then(s => {
       setStatus(s)
       setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
+    }).catch(() => {
+      addToast('Failed to load learner status', 'error')
+      setLoading(false)
+    })
+  }, [addToast])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return

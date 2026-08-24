@@ -266,6 +266,7 @@ function SidebarContent({
           </Button>
           {isDrawer && onClose && (
             <button
+              type="button"
               onClick={onClose}
               className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Close sidebar"
@@ -312,6 +313,7 @@ function SidebarContent({
               No conversations match &ldquo;{q}&rdquo;
             </p>
             <button
+              type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('search-conversations'))}
               className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
             >
@@ -409,6 +411,7 @@ function SidebarContent({
           {(archivedCount ?? 0) > 0 && (
             <div className="mt-2 border-t border-border/30 pt-2">
               <button
+                type="button"
                 onClick={async () => {
                   const next = !archivedExpanded
                   setArchivedExpanded(next)

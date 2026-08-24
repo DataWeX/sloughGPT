@@ -865,7 +865,7 @@ class _TokenStreamer:
     Provides the same text_queue / stop_signal interface used by generate_stream_sync.
     """
 
-    def __init__(self, tokenizer, skip_prompt: bool = False, timeout: float = 120.0):
+    def __init__(self, tokenizer, skip_prompt: bool = False, timeout: float = DEFAULT_GENERATE_TIMEOUT):
         self._tokenizer = tokenizer
         self._skip_prompt = skip_prompt
         self._timeout = timeout
