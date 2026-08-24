@@ -1535,9 +1535,7 @@ class SloNetChatProvider:
                 for token in _stream_generate():
                     q.put(token)
             except Exception as e:
-                import sys, traceback
-                print(f"[chat_stream] Producer error: {e}", file=sys.stderr, flush=True)
-                traceback.print_exc(file=sys.stderr)
+                logger.error("[chat_stream] Producer error: %s", e, exc_info=True)
                 err_q.put(e)
             finally:
                 q.put(sentinel)
