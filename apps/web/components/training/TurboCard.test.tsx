@@ -74,7 +74,7 @@ describe('TurboCard', () => {
     const session = makeSession()
     render(<TurboCard datasets={datasets as unknown as UseTrainingDatasetsReturn} session={session} addToast={vi.fn()} />)
     fireEvent.click(screen.getByText('Start turbo train'))
-    expect(session.startTurboTrain).toHaveBeenCalledWith('1', TURBO_DEFAULTS, expect.any(Function))
+    expect(session.startTurboTrain).toHaveBeenCalledWith('1', TURBO_DEFAULTS, expect.any(Function), undefined)
   })
 
   it('renders live progress and stop during training', () => {

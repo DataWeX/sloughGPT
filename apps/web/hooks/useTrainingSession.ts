@@ -52,7 +52,7 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
   startSSETraining: (body: Record<string, unknown>, addToast: TrainingToastFn, onCheckpointUpdate?: () => void) => void
   startFineTune: (params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean; loraRank?: number; loraAlpha?: number }, addToast: TrainingToastFn, onComplete?: () => void) => void
   startVisualTraining: (params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean }, addToast: TrainingToastFn, onComplete?: () => void) => void
-  startTurboTrain: (datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number }, addToast: TrainingToastFn) => void
+  startTurboTrain: (datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number }, addToast: TrainingToastFn, experimentId?: string) => void
   stopTurboTrain: () => void
 }
 
@@ -107,8 +107,27 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       const shell = readTraining()
       if (isTrainingActive(shell)) {
         _log.info('Shell has active training, starting poll', { phase: shell.phase, method: shell.method })
-        if (shell.method === 'turbo' && shell.jobId) startTurboPoll()
-        else if (shell.jobId) startStandardPoll(shell.jobId)
+        if ((shell.method === 'turbo' || shell.method === 'slonet') && !shell.jobId) {
+          // Auto-train SSE stores state in _turbo_state on the backend
+          startTurboPoll()
+        } else if (shell.method === 'turbo' && shell.jobId) {
+          startTurboPoll()
+        } else if (shell.jobId) {
+          startStandardPoll(shell.jobId)
+        } else {
+          // No jobId — check server for active training
+          const turboStatus = await trainingJobsController.getTurboStatus().catch(() => null)
+          if (turboStatus?.status === 'running') {
+            writeTraining({
+              phase: 'TRAINING', method: 'slonet',
+              progress: turboStatus.progress ?? 0, globalStep: turboStatus.global_step ?? 0,
+              totalSteps: turboStatus.total_steps ?? 0, stepsPerSec: turboStatus.steps_per_sec ?? null,
+              eta: turboStatus.eta_s ?? null, elapsedSeconds: turboStatus.elapsed_s ?? null,
+              jobId: turboStatus.job_id ?? null, avgQuality: turboStatus.avg_quality ?? null,
+            })
+            startTurboPoll()
+          }
+        }
         return
       }
       try {
@@ -133,7 +152,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         if (runningJob) {
           _log.info('Server has active standard training, restoring to shell', { jobId: runningJob.id })
           writeTraining({
-            phase: 'TRAINING', method: (runningJob.method as TrainingShellState['method']) ?? 'slnet',
+            phase: 'TRAINING', method: (runningJob.method as TrainingShellState['method']) ?? 'slonet',
             loss: runningJob.loss ?? runningJob.train_loss ?? null, progress: runningJob.progress ?? 0,
             epoch: runningJob.current_epoch ?? 0, totalEpochs: runningJob.epochs ?? 0,
             globalStep: runningJob.global_step ?? 0, totalSteps: runningJob.total_steps ?? 0,
@@ -249,7 +268,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const startTurboTrain = useCallback((
     datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number },
-    addToast: TrainingToastFn,
+    addToast: TrainingToastFn, experimentId?: string,
   ) => {
     clearAllPolls()
     appShellStore.getState().resetTraining()
@@ -257,6 +276,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     trainingJobsController.startTurboTrain({
       dataset_id: datasetId, epochs: config.epochs, learning_rate: config.lr,
       n_embed: config.embed, n_head: config.heads, n_layer: config.layers,
+      experiment_id: experimentId,
     }).then(result => {
       if (result.status === 'error') { writeTraining({ error: result.message || 'Training failed', phase: 'error' }); return }
       addToast('Turbo training started', 'info')

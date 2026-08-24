@@ -74,6 +74,7 @@ export interface AutoTrainStartRequest {
   temperature?: number
   source_text?: string
   checkpoint_name?: string
+  experiment_id?: string
 }
 
 export interface AutoTrainStartResponse {
@@ -141,6 +142,7 @@ export interface TurboTrainStartRequest {
   n_layer?: number
   block_size?: number
   dropout?: number
+  experiment_id?: string
   // Legacy fields (kept for backward compat)
   n_decoder_layers?: number
   max_tgt_len?: number
@@ -183,6 +185,7 @@ export interface TrainFromSessionsParams {
   min_pair_quality?: number
   max_pairs?: number
   session_ids?: string[]
+  experiment_id?: string
 }
 
 export const trainingJobsController = {
@@ -399,6 +402,14 @@ export const trainingJobsController = {
     return apiPost('/training/webhooks/test', { url })
   },
 
+  async getWebhookDeliveries(webhookId: string, limit?: number): Promise<Array<{
+    id: string; webhook_id: string; event: string; status: number; success: boolean; delivered_at: string
+  }>> {
+    const qs = limit ? `?limit=${limit}` : ''
+    const data = await apiGet<{ deliveries: Array<{ id: string; webhook_id: string; event: string; status: number; success: boolean; delivered_at: string }> }>(`/training/webhooks/${webhookId}/deliveries${qs}`)
+    return data.deliveries || []
+  },
+
   // Training status
   async getStatus(): Promise<Record<string, unknown>> {
     return apiGet<Record<string, unknown>>('/training/status')
@@ -447,6 +458,11 @@ export const trainingJobsController = {
     const res = await authFetch(`/training/export/${jobId}`)
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
+  },
+
+  async purgeJobs(status?: string): Promise<{ purged: number }> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+    return apiPost<{ purged: number }>(`/training/jobs/purge${qs}`)
   },
 
   // ---------------------------------------------------------------------------

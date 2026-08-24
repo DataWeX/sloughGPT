@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, memo } from 'react'
+import { useState, memo, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/components/training/formatDuration'
 import { trainingJobsController } from '@/lib/training-controller'
+import { experimentsController, type Experiment } from '@/lib/experiments-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 
@@ -23,14 +24,20 @@ export const TurboCard = memo(function TurboCard({
 }) {
   const [config, setConfig] = useState<TurboConfig>(TURBO_DEFAULTS)
   const [loadingModel, setLoadingModel] = useState(false)
+  const [experiments, setExperiments] = useState<Experiment[]>([])
+  const [selectedExperimentId, setSelectedExperimentId] = useState<string>('')
   const running = session.turboPhase === 'training'
+
+  useEffect(() => {
+    experimentsController.list().then(setExperiments).catch(() => {})
+  }, [])
 
   const start = () => {
     if (!datasets.selectedDataset) {
       addToast('Select a dataset first', 'error')
       return
     }
-    session.startTurboTrain(datasets.selectedDataset, config, addToast)
+    session.startTurboTrain(datasets.selectedDataset, config, addToast, selectedExperimentId || undefined)
   }
 
   const loadForChat = async () => {
@@ -142,6 +149,19 @@ export const TurboCard = memo(function TurboCard({
                   onChange={setNum('layers')} className="h-8 text-xs font-mono" />
               </div>
             </div>
+            {experiments.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="turbo-experiment" variant="uppercase">Experiment</Label>
+                <select id="turbo-experiment" value={selectedExperimentId}
+                  onChange={e => setSelectedExperimentId(e.target.value)}
+                  className="h-8 text-xs font-mono rounded-md border border-border bg-background px-2">
+                  <option value="">None</option>
+                  {experiments.map(exp => (
+                    <option key={exp.id} value={exp.id}>{exp.name || exp.id}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <Button size="sm" onClick={start} disabled={!datasets.selectedDataset}>
               Start turbo train
             </Button>

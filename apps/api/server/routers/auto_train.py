@@ -14,7 +14,7 @@ mutable globals.
 from dataclasses import dataclass, field, is_dataclass, asdict
 import asyncio
 import threading
-from typing import Any, Dict, Optional, AsyncGenerator
+from typing import Any, AsyncGenerator
 from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse, FileResponse
@@ -48,21 +48,58 @@ except ImportError:
         return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
 
 
+def _log_experiment_metric(experiment_id: str, metric: str, value: float, step: int = 0) -> None:
+    """Append a metric entry to an experiment's metrics JSONL file."""
+    try:
+        from datetime import datetime, timezone
+        exp_dir = Path(__file__).resolve().parent.parent.parent.parent / "data" / "experiments"
+        metrics_file = exp_dir / f"{experiment_id}_metrics.jsonl"
+        entry = {
+            "experiment_id": experiment_id,
+            "metric": metric,
+            "value": value,
+            "step": step,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(metrics_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+
+
+def _log_experiment_param(experiment_id: str, param_name: str, value: Any) -> None:
+    """Append a param entry to an experiment's params JSONL file."""
+    try:
+        from datetime import datetime, timezone
+        exp_dir = Path(__file__).resolve().parent.parent.parent.parent / "data" / "experiments"
+        params_file = exp_dir / f"{experiment_id}_params.jsonl"
+        entry = {
+            "experiment_id": experiment_id,
+            "param": param_name,
+            "value": value,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(params_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+
+
 @dataclass
 class AutoTrainState:
     running: bool = False
     config: dict = field(default_factory=dict)
-    student_net: Optional[object] = None
-    student_tokenizer: Optional[object] = None
+    student_net: object | None = None
+    student_tokenizer: object | None = None
     complete_enqueued: bool = False
 
 
-_auto_train_cancel_event: Optional[threading.Event] = None
-_auto_train_pause_event: Optional[threading.Event] = None
+_auto_train_cancel_event: threading.Event | None = None
+_auto_train_pause_event: threading.Event | None = None
 
 _turbo_lock = threading.Lock()
 _turbo_cancel_event = threading.Event()
-_turbo_state: Dict[str, Any] = {
+_turbo_state: dict[str, Any] = {
     "status": "idle",  # idle | running | complete | error
     "job_id": None,
     "global_step": 0,
@@ -211,9 +248,9 @@ class StartRequest(BaseModel):
     epochs: int = Field(default=20, ge=1, le=1000)
     learning_rate: float = Field(default=3e-4, ge=1e-5, le=1.0)
     batch_size: int = Field(default=16, ge=1, le=1024, description="Chunk size for training")
-    source_text: Optional[str] = Field(default=None, description="Custom training text (SRT, plain, or lines). If provided, train on this instead of generating from teacher.")
-    checkpoint_name: Optional[str] = Field(default=None, description="Load existing checkpoint and continue training")
-    dataset_id: Optional[str] = Field(default=None, description="Dataset ID from /datasets to train on")
+    source_text: str | None = Field(default=None, description="Custom training text (SRT, plain, or lines). If provided, train on this instead of generating from teacher.")
+    checkpoint_name: str | None = Field(default=None, description="Load existing checkpoint and continue training")
+    dataset_id: str | None = Field(default=None, description="Dataset ID from /datasets to train on")
     early_stopping_patience: int = Field(default=5, ge=0, le=100, description="Stop if no eval improvement for N evaluations (0 = disabled)")
     # Native training architecture params (used when method=native)
     n_embed: int = Field(default=128, ge=16, le=1024, description="Embedding dimension for native training")
@@ -221,13 +258,14 @@ class StartRequest(BaseModel):
     n_head: int = Field(default=4, ge=1, le=64, description="Number of attention heads for native training")
     block_size: int = Field(default=128, ge=8, le=2048, description="Context window size for native training")
     dropout: float = Field(default=0.1, ge=0.0, le=0.9, description="Dropout rate for native training")
-    checkpoint_dir: Optional[str] = Field(default=None, description="Override checkpoint output directory (default: models/auto-training)")
+    checkpoint_dir: str | None = Field(default=None, description="Override checkpoint output directory (default: models/auto-training)")
+    experiment_id: str | None = Field(default=None, description="Link to an experiment — auto-logs loss/accuracy metrics")
 
 
 class TurboStartRequest(BaseModel):
     method: str = Field(default="slonet", description="Training method: 'slonet', 'transformer', 'nanogpt', 'hf'")
     data_path: str = Field(default="", description="Path to training data file")
-    dataset_id: Optional[str] = Field(default=None, description="Dataset ID to train on")
+    dataset_id: str | None = Field(default=None, description="Dataset ID to train on")
     epochs: int = Field(default=3, ge=1, le=1000)
     batch_size: int = Field(default=4, ge=1, le=256)
     learning_rate: float = Field(default=3e-4, ge=1e-5, le=1.0)
@@ -237,8 +275,9 @@ class TurboStartRequest(BaseModel):
     n_layer: int = Field(default=3, ge=1, le=24)
     block_size: int = Field(default=128, ge=8, le=2048)
     dropout: float = Field(default=0.1, ge=0.0, le=0.9)
-    n_decoder_layers: Optional[int] = Field(default=None, description="Deprecated: use n_layer")
-    max_tgt_len: Optional[int] = Field(default=None, description="Deprecated: use block_size")
+    n_decoder_layers: int | None = Field(default=None, description="Deprecated: use n_layer")
+    max_tgt_len: int | None = Field(default=None, description="Deprecated: use block_size")
+    experiment_id: str | None = Field(default=None, description="Link to an experiment — auto-logs loss/accuracy metrics")
 
 
 class FromSessionsRequest(BaseModel):
@@ -253,8 +292,9 @@ class FromSessionsRequest(BaseModel):
     soul_name: str = Field(default="chat-trained")
     min_pair_quality: float = Field(default=2.0, ge=0.0, le=5.0)
     max_pairs: int = Field(default=500, ge=10, le=10000)
-    checkpoint_name: Optional[str] = Field(default=None, description="Resume from existing checkpoint")
-    session_ids: Optional[list] = Field(default=None, description="If provided, only train from these session IDs")
+    checkpoint_name: str | None = Field(default=None, description="Resume from existing checkpoint")
+    session_ids: list | None = Field(default=None, description="If provided, only train from these session IDs")
+    experiment_id: str | None = Field(default=None, description="Link to an experiment — auto-logs loss/accuracy metrics")
 
 
 def _resolve_dataset_path(dataset_id: str) -> str:
@@ -404,11 +444,11 @@ class AutoTrainRouter:
         self.TURBO_DIR = REPO_ROOT / "models" / "turbo-trained"
         self.TURBO_DIR.mkdir(parents=True, exist_ok=True)
         self.LORA_DIR = LORA_DIR
-        self._checkpoints_cache: Optional[tuple] = None
+        self._checkpoints_cache: tuple | None = None
         self._checkpoints_cache_ts: float = 0
         self._register_routes()
 
-    def _find_checkpoint(self, name: str) -> Optional[Path]:
+    def _find_checkpoint(self, name: str) -> Path | None:
         """Locate a checkpoint file by name across all checkpoint directories.
 
         Searches ``CHECKPOINTS_DIR`` then ``TURBO_DIR``, appending each known
@@ -506,6 +546,7 @@ class AutoTrainRouter:
             "block_size": req.block_size,
             "dropout": req.dropout,
             "checkpoint_dir": req.checkpoint_dir,
+            "experiment_id": req.experiment_id,
         }
         self.state.running = True
         import state as _srv_state
@@ -579,6 +620,7 @@ class AutoTrainRouter:
             "checkpoint": None,
             "checkpoint_dir": str(output_dir),
             "error": None,
+            "experiment_id": req.experiment_id,
         }
         from training.runtime import get_training_runtime
         get_training_runtime().register(
@@ -621,7 +663,7 @@ class AutoTrainRouter:
                 except Exception as exc:
                     autotrain_logger.debug("CancelManager.finish failed: %s", exc)
 
-        def on_progress(info: Dict[str, Any]) -> None:
+        def on_progress(info: dict[str, Any]) -> None:
             """on_progress."""
             with _turbo_lock:
                 _turbo_state["global_step"] = int(info.get("global_step", _turbo_state["global_step"]))
@@ -641,6 +683,9 @@ class AutoTrainRouter:
                     job["train_loss"] = _turbo_state["loss"]
                     job["loss"] = _turbo_state["loss"]
                 get_training_runtime().sync(job_id)
+            eid = req.experiment_id
+            if eid and _turbo_state["loss"] is not None:
+                _log_experiment_metric(eid, "train_loss", float(_turbo_state["loss"]), int(_turbo_state["global_step"]))
 
         try:
             n_layer = req.n_layer or req.n_decoder_layers or 3
@@ -828,7 +873,7 @@ class AutoTrainRouter:
         self.state.running = True
 
         # Register with CancelManager
-        _stream_cm_op_id: Optional[str] = None
+        _stream_cm_op_id: str | None = None
         try:
             from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
             _mgr = get_cancel_manager()
@@ -862,6 +907,7 @@ class AutoTrainRouter:
             "checkpoint": None,
             "checkpoint_dir": str(CHECKPOINTS_DIR),
             "error": None,
+            "experiment_id": self.state.config.get("experiment_id"),
         }
         get_training_runtime().register(task_id, runtime_job, None, dict(self.state.config))
 
@@ -926,6 +972,13 @@ class AutoTrainRouter:
                                     except Exception as exc:
                                         autotrain_logger.debug("Checkpoint glob failed: %s", exc)
                                     get_training_runtime().sync(task_id)
+                                    _eid = self.state.config.get("experiment_id")
+                                    if _eid and ev.get("status") == "complete":
+                                        _fl = job.get("train_loss") or job.get("loss")
+                                        if _fl is not None:
+                                            _log_experiment_metric(_eid, "final_train_loss", float(_fl), int(job.get("global_step", 0)))
+                                        _log_experiment_param(_eid, "epochs", self.state.config.get("epochs", 0))
+                                        _log_experiment_param(_eid, "learning_rate", self.state.config.get("learning_rate", 0))
                                 _finish_cm(
                                     "complete" if ev.get("status") == "complete" else "failed",
                                     str(ev.get("message") or ev.get("data") or "") if ev.get("status") != "complete" else "",
@@ -1300,6 +1353,7 @@ class AutoTrainRouter:
             "max_pairs": req.max_pairs,
             "checkpoint_name": req.checkpoint_name,
             "session_ids": req.session_ids,
+            "experiment_id": req.experiment_id,
             "started_at": time.time(),
         }
         safe_audit_log("training.start", resource=req.soul_name or "from-sessions", detail="from-sessions", session_ids=len(req.session_ids) if req.session_ids else 0, epochs=req.epochs)
@@ -1347,7 +1401,7 @@ class AutoTrainRouter:
         autotrain_logger.info("From-sessions training task enqueued: %s", task_id, extra={"tag": "TRAIN"})
 
         # Register with CancelManager
-        _sess_cm_op_id: Optional[str] = None
+        _sess_cm_op_id: str | None = None
         try:
             from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
             _mgr = get_cancel_manager()
@@ -1378,6 +1432,7 @@ class AutoTrainRouter:
             "checkpoint": None,
             "checkpoint_dir": str(CHECKPOINTS_DIR),
             "error": None,
+            "experiment_id": self.state.config.get("experiment_id"),
         }
         get_training_runtime().register(task_id, runtime_job, None, dict(self.state.config))
 
@@ -1441,6 +1496,13 @@ class AutoTrainRouter:
                                     except Exception as exc:
                                         autotrain_logger.debug("Checkpoint glob failed: %s", exc)
                                     get_training_runtime().sync(task_id)
+                                    _eid = self.state.config.get("experiment_id")
+                                    if _eid and ev.get("status") == "complete":
+                                        _fl = job.get("train_loss") or job.get("loss")
+                                        if _fl is not None:
+                                            _log_experiment_metric(_eid, "final_train_loss", float(_fl), int(job.get("global_step", 0)))
+                                        _log_experiment_param(_eid, "epochs", self.state.config.get("epochs", 0))
+                                        _log_experiment_param(_eid, "learning_rate", self.state.config.get("learning_rate", 0))
                                 _finish_cm(
                                     "complete" if ev.get("status") == "complete" else "failed",
                                     str(ev.get("message") or ev.get("data") or "") if ev.get("status") != "complete" else "",
@@ -1530,7 +1592,7 @@ class AutoTrainRouter:
             return {"name": name, "soul": "unknown"}
         return self._load_soul_from_path(ckpt_file)
 
-    def _load_lora_soul(self, name: str) -> Optional[dict]:
+    def _load_lora_soul(self, name: str) -> dict | None:
         candidate = None
         for lora_dir in (self.LORA_DIR, self.CHECKPOINTS_DIR):
             for ext in ("", ".soul"):
