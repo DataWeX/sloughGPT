@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
@@ -16,7 +17,7 @@ function severityClass(severity: string): string {
   }
 }
 
-export function DiagnosticsCard({ liveHealth }: DiagnosticsCardProps) {
+export const DiagnosticsCard = memo(function DiagnosticsCard({ liveHealth }: DiagnosticsCardProps) {
   if (!liveHealth) return null
   const { diagnoses, health_summary, health_score, health_status } = liveHealth
   if (diagnoses.length === 0 && !health_summary) return null
@@ -48,4 +49,4 @@ export function DiagnosticsCard({ liveHealth }: DiagnosticsCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

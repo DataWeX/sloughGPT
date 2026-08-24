@@ -87,10 +87,9 @@ vi.mock('@/components/dataset/DatasetInsightsCard', () => ({
 vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="import-modal" /> }))
 
 vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ title, children, loading, loadingContent, headerRight }: any) => (
+  PageContainer: ({ title, children, loading, loadingContent }: any) => (
     <div className="sl-page mx-auto max-w-4xl">
       <h1>{loading ? '...' : title}</h1>
-      {headerRight && <div>{headerRight}</div>}
       {loading ? loadingContent : children}
     </div>
   ),

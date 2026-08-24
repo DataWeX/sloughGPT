@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { chatController, type ContextInspector } from '@/lib/chat-controller'

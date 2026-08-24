@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 import { formatTokens } from './TrafficCard'
@@ -10,7 +10,7 @@ interface ModelMetricsCardProps {
 }
 
 export const ModelMetricsCard = memo(function ModelMetricsCard({ liveHealth }: ModelMetricsCardProps) {
-  const metrics = liveHealth?.model_metrics ?? []
+  const metrics = useMemo(() => liveHealth?.model_metrics ?? [], [liveHealth])
   if (metrics.length === 0) return null
 
   return (

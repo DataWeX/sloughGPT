@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
@@ -8,7 +9,7 @@ interface LatencyCardProps {
   liveHealth: LiveHealthSnapshot | null
 }
 
-export function LatencyCard({ liveHealth }: LatencyCardProps) {
+export const LatencyCard = memo(function LatencyCard({ liveHealth }: LatencyCardProps) {
   const avg = liveHealth?.avg_latency_ms ?? 0
   const p95 = liveHealth?.p95_latency_ms ?? 0
   if (avg <= 0 && p95 <= 0) return null
@@ -24,4 +25,4 @@ export function LatencyCard({ liveHealth }: LatencyCardProps) {
       </CardContent>
     </Card>
   )
-}
+})
