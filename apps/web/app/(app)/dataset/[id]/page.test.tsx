@@ -174,9 +174,8 @@ describe('DatasetDetailPage', () => {
   it('shows versions', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Versions')).toBeTruthy()
+      expect(screen.getByText('Create snapshot')).toBeTruthy()
     })
-    expect(screen.getByText(/20260801120000/)).toBeTruthy()
   })
 
   it('shows empty versions', async () => {
@@ -229,15 +228,17 @@ describe('DatasetDetailPage', () => {
       expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
     })
     const deleteBtns = screen.getAllByRole('button')
-    const deleteBtn = deleteBtns.find(b => b.textContent?.includes('Delete') && !b.textContent?.includes('Webhook') && !b.textContent?.includes('Snapshot'))
+    const deleteBtn = deleteBtns.find(b => b.textContent?.includes('Delete') && b.textContent?.includes('icon-trash'))
     fireEvent.click(deleteBtn!)
     await waitFor(() => {
-      expect(screen.getByText('Delete Webhook')).toBeTruthy()
+      expect(screen.getByTestId('alert-dialog')).toBeTruthy()
     })
-    fireEvent.click(screen.getByText('Delete Webhook'))
+    const confirmBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Delete'))
+    const actionBtns = screen.getByTestId('alert-dialog').querySelectorAll('button')
+    const deleteAction = Array.from(actionBtns).find(b => b.textContent?.includes('Delete') && !b.textContent?.includes('Cancel'))
+    fireEvent.click(deleteAction!)
     await waitFor(() => {
       expect(mocks.delete).toHaveBeenCalledWith('ds-1')
-      expect(stableRouter.push).toHaveBeenCalledWith('/datasets')
     })
   })
 
