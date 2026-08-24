@@ -146,11 +146,22 @@ All other existing routers (e.g., `/chat`, `/auto-train`, `/feedback`) retain th
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/vm/status` | Get VM status. |
-| `POST` | `/vm/start` | Start the VM. |
-| `POST` | `/vm/stop` | Stop the VM. |
-| `POST` | `/vm/exec` | Execute a VM instruction. |
-| `GET` | `/vm/memory` | Get VM memory dump. |
+| `POST` | `/vm/run` | Run x86 assembly in sandboxed VM. |
+| `GET` | `/vm/training/jobs/{job_id}` | Training job status launched via VM syscall. |
+| `POST` | `/vm/training/jobs/{job_id}/stop` | Stop a running VM training job. |
+| `GET` | `/vm/builtins` | List built-in x86 assembly programs. |
+| `GET` | `/vm/info` | VM capabilities and limits. |
+
+## Infer Router (`/infer`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/infer` | Generate text from a prompt. |
+| `POST` | `/infer/embed` | Compute text embeddings. |
+| `POST` | `/infer/tokenize` | Tokenize text into token IDs. |
+| `POST` | `/infer/detokenize` | Convert token IDs back to text. |
+| `GET` | `/infer/health` | Check inference engine health. |
+| `GET` | `/infer/info` | Get loaded model information. |
 
 ## Benchmark Router (`/benchmark`)
 

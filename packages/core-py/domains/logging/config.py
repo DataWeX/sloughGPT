@@ -463,8 +463,9 @@ def setup_logging(
         try:
             file_handler = _create_file_handler(log_path, level=logging.DEBUG)
             root.addHandler(file_handler)
-        except Exception:
-            pass  # File logging is best-effort
+        except Exception as e:
+            # File logging is best-effort — warn once so operators know it failed
+            logging.getLogger(__name__).warning("Could not create log file handler: %s", e)
 
     # OutputBuffer bridge (for SSE streaming)
     bridge = None

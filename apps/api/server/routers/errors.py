@@ -155,7 +155,7 @@ class ErrorsRouter:
     def _fingerprint(self, message: str) -> str:
         normalized = re.sub(r'\d+', 'N', message.lower())
         normalized = re.sub(r'[a-f0-9]{8,}', 'ID', normalized)
-        return hashlib.md5(normalized.encode()).hexdigest()[:12]
+        return hashlib.sha256(normalized.encode()).hexdigest()[:12]
 
     # ── Route handlers ──────────────────────────────────────────────────
 

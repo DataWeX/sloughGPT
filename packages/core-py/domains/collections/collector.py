@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 import threading
 from typing import Iterator
@@ -7,6 +8,8 @@ from typing import Iterator
 from .filters import Filter, FilterChain
 from .sources import Record, Source
 from .stores import Store
+
+logger = logging.getLogger(__name__)
 
 
 class Collector:
@@ -25,8 +28,9 @@ class Collector:
                     self.stats["collected"] += 1
                 else:
                     self.stats["filtered"] += 1
-            except Exception:
+            except Exception as e:
                 self.stats["errors"] += 1
+                logger.debug("Collection error: %s", e)
         return self.store.count() - before
 
     def read(self) -> Iterator[Record]:
@@ -108,8 +112,9 @@ class BatchCollector:
                     self.stats["collected"] += 1
                 else:
                     self.stats["filtered"] += 1
-            except Exception:
+            except Exception as e:
                 self.stats["errors"] += 1
+                logger.debug("Collection error in batch collector: %s", e)
 
             if len(batch) >= self.batch_size:
                 self._write_batch(batch)
@@ -127,9 +132,11 @@ class BatchCollector:
                     self.store.write(record)
                 self.stats["batches"] += 1
                 return
-            except Exception:
+            except Exception as e:
                 if attempt < self.max_retries - 1:
                     self.stats["retries"] += 1
+                    logger.debug("Batch write retry %d/%d: %s", attempt + 1, self.max_retries, e)
                     time.sleep(self.retry_delay * (attempt + 1))
                 else:
                     self.stats["errors"] += len(batch)
+                    logger.warning("Batch write failed after %d retries: %s", self.max_retries, e)

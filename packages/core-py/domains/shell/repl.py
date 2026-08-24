@@ -3035,7 +3035,7 @@ Examples:
             return
         try:
             if args.strip():
-                results = self._spinner_call("Searching", lambda: self.cmds.search_knowledge(args.strip()), ok_msg=None)
+                results = self._spinner_call("Searching", lambda: self.cmds.list_knowledge(args.strip()), ok_msg=None)
                 if not results:
                     self._print("  No results found")
                     return
