@@ -83,7 +83,7 @@ describe('TokenTreePage', () => {
   })
 
   it('displays stats', async () => {
-    mockGetStats.mockResolvedValue({ trained: true, vocab_size: 256, num_merges: 100, embedding_points: 50, num_base_tokens: 256, embedding_compression_ratio: 1.5, embed_dim: 64 })
+    mockGetStats.mockResolvedValue({ trained: true, vocab_size: 256, num_merges: 100, embedding_points: 50, num_base_tokens: 128, embedding_compression_ratio: 1.5, embed_dim: 64 })
     render(<TokenTreePage />)
     await waitFor(() => {
       expect(screen.getByText('Yes')).toBeInTheDocument()
@@ -185,8 +185,13 @@ describe('TokenTreePage', () => {
     mockCompare.mockResolvedValue({ a: { name: 'tree', stats: {} }, b: { name: 'forest', stats: {} }, shared_tokens: 5, only_a_tokens: 2, only_b_tokens: 3, shared_merges: 4, only_a_merges: 1, only_b_merges: 2, shared_examples: [['ab', 10]], only_a_examples: [['cd', 5]], only_b_examples: [['ef', 3]] })
     render(<TokenTreePage />)
     fireEvent.click(screen.getByText('Compare'))
-    fireEvent.change(screen.getByPlaceholderText(''), { target: { value: 'tree' } })
+    const inputs = screen.getAllByRole('textbox')
+    fireEvent.change(inputs[0], { target: { value: 'tree' } })
+    fireEvent.change(inputs[1], { target: { value: 'forest' } })
     fireEvent.click(screen.getByText('Compare', { selector: 'button' }))
+    await waitFor(() => {
+      expect(mockCompare).toHaveBeenCalledWith('tree', 'forest', 10)
+    }, { timeout: 5000 })
   })
 
   it('refreshes on Refresh click', async () => {

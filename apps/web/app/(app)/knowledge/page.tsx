@@ -827,7 +827,7 @@ export default function KnowledgePage() {
                               placeholder="Topic"
                               onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(item.id); if (e.key === 'Escape') setEditingId(null) }}
                             />
-                            <button onClick={() => handleSaveEdit(item.id)} className="text-success hover:text-success/80 p-1" aria-label="Save edit">
+                            <button type="button" onClick={() => handleSaveEdit(item.id)} className="text-success hover:text-success/80 p-1" aria-label="Save edit">
                               <IconCheck className="h-3.5 w-3.5" />
                             </button>
                             <button onClick={() => setEditingId(null)} className="text-muted-foreground hover:text-foreground p-1" aria-label="Cancel edit">

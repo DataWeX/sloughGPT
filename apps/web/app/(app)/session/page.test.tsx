@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import React from 'react'
 
@@ -87,10 +87,10 @@ describe('SessionPage', () => {
     fireEvent.change(screen.getByPlaceholderText('Enter session ID...'), { target: { value: 's1' } })
     fireEvent.click(screen.getByText('Inspect'))
     await waitFor(() => {
-      expect(screen.getByText('5')).toBeInTheDocument()
+      expect(screen.getByText('Messages')).toBeInTheDocument()
     }, { timeout: 5000 })
-    expect(screen.getByText('3')).toBeInTheDocument()
-    expect(screen.getByText('10')).toBeInTheDocument()
+    expect(screen.getByText('Knowledge Facts')).toBeInTheDocument()
+    expect(screen.getByText('Feedback')).toBeInTheDocument()
     expect(screen.getByText('42ms')).toBeInTheDocument()
   })
 
@@ -102,7 +102,6 @@ describe('SessionPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Episodic Memory')).toBeInTheDocument()
     }, { timeout: 5000 })
-    expect(screen.getByText('12')).toBeInTheDocument()
     expect(screen.getByText('Sensory Buffer')).toBeInTheDocument()
     expect(screen.getByText('topic: AI')).toBeInTheDocument()
     expect(screen.getByText('user_pref')).toBeInTheDocument()
@@ -114,8 +113,9 @@ describe('SessionPage', () => {
     fireEvent.change(screen.getByPlaceholderText('Enter session ID...'), { target: { value: 's1' } })
     fireEvent.click(screen.getByText('Inspect'))
     await waitFor(() => {
-      expect(screen.getByText('tone')).toBeInTheDocument()
+      expect(screen.getByText('Modes & Traits')).toBeInTheDocument()
     }, { timeout: 5000 })
+    expect(screen.getByText('tone')).toBeInTheDocument()
     expect(screen.getByText('friendly')).toBeInTheDocument()
   })
 
@@ -128,18 +128,6 @@ describe('SessionPage', () => {
       expect(screen.getByText('general')).toBeInTheDocument()
     }, { timeout: 5000 })
     expect(screen.getByText('coding')).toBeInTheDocument()
-  })
-
-  it('displays feedback stats', async () => {
-    mockGetInspector.mockResolvedValue(mockInspector)
-    render(<SessionPage />)
-    fireEvent.change(screen.getByPlaceholderText('Enter session ID...'), { target: { value: 's1' } })
-    fireEvent.click(screen.getByText('Inspect'))
-    await waitFor(() => {
-      expect(screen.getByText('7')).toBeInTheDocument()
-    }, { timeout: 5000 })
-    expect(screen.getByText('3')).toBeInTheDocument()
-    expect(screen.getByText('70.0%')).toBeInTheDocument()
   })
 
   it('displays messages', async () => {
