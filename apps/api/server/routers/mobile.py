@@ -351,10 +351,10 @@ class MobileRouter:
         Returns:
             status, model info, current soul, recent conversations, stats.
         """
-        health = await asyncio.to_thread(self._get_health_data)
-        soul = await asyncio.to_thread(self._get_current_soul)
-        sessions = await asyncio.to_thread(self._get_sessions_list)
-        models = await asyncio.to_thread(self._get_models_list)
+        health = self._get_health_data()
+        soul = self._get_current_soul()
+        sessions = self._get_sessions_list()
+        models = self._get_models_list()
 
         if isinstance(sessions, dict):
             sessions = sessions.get("data", [])
