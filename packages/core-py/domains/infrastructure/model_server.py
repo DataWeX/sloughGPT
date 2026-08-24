@@ -1456,7 +1456,7 @@ class ModelServer:
             if hasattr(self._model_ref, "device"):
                 self._device = str(self._model_ref.device)
             elif hasattr(self._model_ref, "parameters"):
-                p = next(self._model_ref.parameters(), None)
+                p = next(iter(self._model_ref.parameters()), None)
                 if p is not None:
                     self._device = str(p.device)
         except Exception as e:

@@ -29,8 +29,8 @@ _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "hug
 
 
 class ExportRequest(BaseModel):
-    output_path: str = "models/exported"
-    format: str = "sou"
+    output_path: str = Field(default="models/exported", max_length=500)
+    format: str = Field(default="sou", pattern=r'^(sou|safetensors|onnx|gguf)$')
     include_tokenizer: bool = True
 
 
@@ -41,13 +41,13 @@ class DownloadRequest(BaseModel):
 
 class QuantizeRequest(BaseModel):
     """Request body for POST /models/quantize."""
-    bits: int = 8
-    mode: str = "symmetric"
+    bits: int = Field(default=8, pattern=r'^(4|8)$')
+    mode: str = Field(default="symmetric", pattern=r'^(symmetric|asymmetric)$')
 
 
 class PrecisionRequest(BaseModel):
     """Request body for POST /models/precision."""
-    mode: str = "auto"
+    mode: str = Field(default="auto", pattern=r'^(auto|fp32|fp16)$')
 
 
 class ProcessGuardRequest(BaseModel):

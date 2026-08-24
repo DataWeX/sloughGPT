@@ -9,3 +9,7 @@ Import from here instead of duplicating literal values.
 # Used by ProcessGuard, ModelServer, ModelWorkerProcess, ModelRegistry,
 # SloNetServer, InferenceClient, and InferenceEngine.
 DEFAULT_GENERATE_TIMEOUT: float = 120.0
+
+# Default stall timeout for worker process monitoring (seconds).
+# Used by ProcessGuard and ModelWorkerProcess.
+DEFAULT_STALL_TIMEOUT: float = 120.0

@@ -19,6 +19,7 @@ from domains.infrastructure.inference_protocol import (
     decode_header,
     encode_message,
 )
+from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { logger } from '@/lib/dev-log'
 import { apiPost } from '@/lib/http-client'
-import { useToastStore } from '@/lib/store/toast-store'
+import { useToastStore } from '@/lib/toast-store'
 
 interface DpoStatus {
   status: string
@@ -30,6 +30,7 @@ interface FeedbackCardProps {
 }
 
 export const FeedbackCard = memo(function FeedbackCard({ dpoStatus, visualStatus, dpoRunning, onDpoRunningChange, onRefresh }: FeedbackCardProps) {
+  const addToast = useToastStore(s => s.addToast)
   if (!dpoStatus && !visualStatus) return null
 
   return (
@@ -68,6 +69,7 @@ export const FeedbackCard = memo(function FeedbackCard({ dpoStatus, visualStatus
                 await apiPost('/multimodal/dpo', {})
                 onRefresh()
               } catch (err) {
+                addToast('DPO training failed', 'error')
                 logger.error('Could not dpo training', { exception: String(err) })
               }
               onDpoRunningChange(false)

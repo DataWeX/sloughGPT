@@ -28,6 +28,7 @@ import os
 from typing import Any, Optional, Callable, Generator
 
 from domains.infrastructure.model_worker import WorkerStreamStalledError
+from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STALL_TIMEOUT
 
 
 def resolve_memory_limit_mb(
@@ -83,7 +84,7 @@ class ProcessGuard:
         self,
         worker_id: str = "guard",
         generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
-        stall_timeout: float = 120.0,
+        stall_timeout: float = DEFAULT_STALL_TIMEOUT,
         max_restarts: int = 3,
         restart_delay: float = 1.0,
         health_check_interval: float = 1.0,
