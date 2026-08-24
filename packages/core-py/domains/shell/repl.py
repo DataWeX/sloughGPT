@@ -2985,7 +2985,7 @@ Examples:
                 rows.append([name, mtype, status])
             self._table(rows, ["Model", "Type", "Status"])
         except Exception as e:
-            self._print(f"  Error: {e}")
+            self._print(self._format_error(e, "models"))
 
     def _cmd_souls(self, args: str = "") -> None:
         """List available souls."""
