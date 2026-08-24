@@ -485,6 +485,7 @@ export default function AgentsPage() {
             </div>
             <div>
               <Input
+                id="create-agent-name"
                 placeholder="Name"
                 aria-label="Agent name"
                 value={newName}
@@ -494,8 +495,9 @@ export default function AgentsPage() {
                 }}
                 className={createErrors.name ? 'border-destructive ring-destructive/20' : ''}
                 aria-invalid={!!createErrors.name}
+                aria-describedby={createErrors.name ? 'create-name-error' : undefined}
               />
-              {createErrors.name && <p className="text-xs text-destructive mt-1" role="alert">{createErrors.name}</p>}
+              {createErrors.name && <p id="create-name-error" className="text-xs text-destructive mt-1" role="alert">{createErrors.name}</p>}
             </div>
             <Input placeholder="Description (optional)" value={newDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDesc(e.target.value)} />
             <textarea
@@ -601,6 +603,7 @@ export default function AgentsPage() {
                     <div className="space-y-2">
                       <div>
                         <Input
+                          id="edit-agent-name"
                           value={editName}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                             setEditName(e.target.value)
@@ -610,8 +613,9 @@ export default function AgentsPage() {
                           aria-label="Agent name"
                           className={editErrors.name ? 'border-destructive ring-destructive/20' : ''}
                           aria-invalid={!!editErrors.name}
+                          aria-describedby={editErrors.name ? 'edit-name-error' : undefined}
                         />
-                        {editErrors.name && <p className="text-xs text-destructive mt-1" role="alert">{editErrors.name}</p>}
+                        {editErrors.name && <p id="edit-name-error" className="text-xs text-destructive mt-1" role="alert">{editErrors.name}</p>}
                       </div>
                       <Input value={editDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditDesc(e.target.value)} placeholder="Description" aria-label="Agent description" />
                       <textarea
@@ -686,6 +690,7 @@ export default function AgentsPage() {
                           <div className="space-y-2">
                             <div>
                               <Input
+                                id="exec-prompt"
                                 placeholder="What should this agent do?"
                                 value={execPrompt}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -695,8 +700,9 @@ export default function AgentsPage() {
                                 onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleExecute(agent.id) } }}
                                 className={execErrors.prompt ? 'border-destructive ring-destructive/20' : ''}
                                 aria-invalid={!!execErrors.prompt}
+                                aria-describedby={execErrors.prompt ? 'exec-prompt-error' : undefined}
                               />
-                              {execErrors.prompt && <p className="text-xs text-destructive mt-1" role="alert">{execErrors.prompt}</p>}
+                              {execErrors.prompt && <p id="exec-prompt-error" className="text-xs text-destructive mt-1" role="alert">{execErrors.prompt}</p>}
                             </div>
                             <div className="flex gap-2">
                               <Button size="sm" onClick={() => handleExecute(agent.id)} disabled={execRunning || !execPrompt.trim()}>
@@ -738,6 +744,7 @@ export default function AgentsPage() {
             </p>
             <div>
               <Input
+                id="orch-goal"
                 placeholder="Goal — e.g. research transformers and write a summary"
                 value={orchGoal}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -747,8 +754,9 @@ export default function AgentsPage() {
                 onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && !e.shiftKey && orchGoal.trim() && !orchRunning) { e.preventDefault(); handleOrchestrate() } }}
                 className={orchErrors.goal ? 'border-destructive ring-destructive/20' : ''}
                 aria-invalid={!!orchErrors.goal}
+                aria-describedby={orchErrors.goal ? 'orch-goal-error' : undefined}
               />
-              {orchErrors.goal && <p className="text-xs text-destructive mt-1" role="alert">{orchErrors.goal}</p>}
+              {orchErrors.goal && <p id="orch-goal-error" className="text-xs text-destructive mt-1" role="alert">{orchErrors.goal}</p>}
             </div>
             <textarea
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"

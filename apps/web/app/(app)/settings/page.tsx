@@ -257,8 +257,9 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">API URL</label>
+              <label htmlFor="settings-api-url" className="text-sm font-medium">API URL</label>
               <Input
+                id="settings-api-url"
                 value={settings.apiUrl}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   updateSettings({ apiUrl: e.target.value })
@@ -284,8 +285,9 @@ export default function SettingsPage() {
               <p className="text-[11px] text-muted-foreground">Service address. Changes take effect on next request.</p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">HuggingFace Token</label>
+              <label htmlFor="settings-hf-token" className="text-sm font-medium">HuggingFace Token</label>
               <Input
+                id="settings-hf-token"
                 type="password"
                 value={settings.hfToken}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSettings({ hfToken: e.target.value })}

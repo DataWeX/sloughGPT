@@ -113,28 +113,38 @@ export default function AuthPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-3">
               <Input
+                id="auth-username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 placeholder="Username"
                 required
+                aria-required="true"
+                aria-label="Username"
+                aria-describedby={error ? 'auth-error' : undefined}
               />
               {mode === 'register' && (
                 <Input
+                  id="auth-email"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="Email"
                   required
+                  aria-required="true"
+                  aria-label="Email"
                 />
               )}
               <Input
+                id="auth-password"
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Password"
                 required
+                aria-required="true"
+                aria-label="Password"
               />
-              {error && <div className="text-xs text-destructive">{error}</div>}
+              {error && <div id="auth-error" role="alert" className="text-xs text-destructive">{error}</div>}
               <div className="flex items-center gap-3">
                 <Button size="sm" type="submit" disabled={loading}>
                   {loading ? 'Processing...' : mode === 'login' ? 'Login' : 'Register'}
