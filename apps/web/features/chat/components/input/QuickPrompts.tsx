@@ -152,7 +152,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                       <button
                         className="w-full text-left"
                         onClick={() => handleUse(p)}
-                        title="Click to insert"
+                        title="Use this prompt"
                       >
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs">{p.icon}</span>

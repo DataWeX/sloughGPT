@@ -233,7 +233,7 @@ describe('LearnPage', () => {
     mockQueryKnowledge.mockRejectedValue(new Error('boom'))
     await renderLoaded()
     await act(async () => { screen.getByRole('button', { name: 'Knowledge' }).click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not load knowledge', 'error') })
   })
 
   it('lists subscribed RSS feeds', async () => {

@@ -251,7 +251,7 @@ describe('MonitoringPage — collapsed sections exist', () => {
   it('has Server Output section header', async () => {
     render(<MonitoringPage />)
     await waitFor(() => {
-      expect(screen.getAllByText(/server output/i).length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText(/service output/i).length).toBeGreaterThanOrEqual(1)
     })
     await act(async () => {})
   })

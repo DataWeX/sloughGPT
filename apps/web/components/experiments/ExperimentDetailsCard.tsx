@@ -18,14 +18,16 @@ interface ExperimentData {
 export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardProps) {
   const [data, setData] = useState<ExperimentData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchData = async () => {
     setLoading(true)
+    setError(null)
     try {
       const result = await experimentsController.getExperimentData(experimentId)
       setData(result)
-    } catch {
-      // silently ignore
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load experiment data')
     } finally {
       setLoading(false)
     }
@@ -38,6 +40,18 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
       <Card data-testid="experiment-details">
         <CardHeader><CardTitle className="text-base">Experiment Data</CardTitle></CardHeader>
         <CardContent><div className="h-20 animate-pulse bg-muted/50 rounded" /></CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card data-testid="experiment-details">
+        <CardHeader><CardTitle className="text-base">Experiment Data</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-destructive">{error}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={fetchData}>Retry</Button>
+        </CardContent>
       </Card>
     )
   }

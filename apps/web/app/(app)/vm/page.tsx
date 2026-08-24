@@ -1355,7 +1355,7 @@ export default function VMPage() {
                         key={reg.name}
                         className="flex justify-between text-xs font-mono px-2 py-1 bg-muted/30 rounded hover:bg-muted/60 text-left transition-colors"
                         onClick={() => navigator.clipboard.writeText(reg.hex)}
-                        title="Click to copy"
+                        title="Copy to clipboard"
                       >
                         <span className="text-muted-foreground">{reg.name}</span>
                         <span>{reg.hex}</span>

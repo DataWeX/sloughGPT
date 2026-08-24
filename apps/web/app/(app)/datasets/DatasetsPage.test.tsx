@@ -174,7 +174,7 @@ describe('DatasetsPage', () => {
     fireEvent.click(screen.getByLabelText('Export Shakespeare'))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Export failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not export', 'error')
     })
     vi.unstubAllGlobals()
   })

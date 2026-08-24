@@ -99,7 +99,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
       <CardContent className="space-y-4">
         {loadFailed ? (
           <div className="text-center py-4 text-sm text-muted-foreground">
-            Could not load saved trees. <button onClick={load} className="text-primary underline">Retry</button>
+            Could not load saved trees. <button type="button" onClick={load} className="text-primary underline">Retry</button>
           </div>
         ) : stats === null ? (
           <div className="space-y-2">

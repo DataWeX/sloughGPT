@@ -83,7 +83,7 @@ describe('VoicePage — voice UI flow', () => {
   it('shows server engine name', async () => {
     render(<VoicePage />)
     await waitFor(() => {
-      expect(screen.getByText('Server (bark)')).toBeTruthy()
+      expect(screen.getByText('AI model (bark)')).toBeTruthy()
     })
   })
 

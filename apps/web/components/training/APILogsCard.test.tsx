@@ -83,7 +83,7 @@ describe('APILogsCard', () => {
       expect(screen.getByText('Training failed')).toBeInTheDocument()
       expect(screen.getByText('boom')).toBeInTheDocument()
     })
-    expect(toast).toHaveBeenCalledWith('Training failed', 'error')
+    expect(toast).toHaveBeenCalledWith('Could not training', 'error')
   })
 
   it('dismiss error returns to idle', async () => {

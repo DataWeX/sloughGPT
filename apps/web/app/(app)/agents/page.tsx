@@ -16,6 +16,7 @@ import { agentsController, type Agent, type OrchestrateTask, type AgentRun } fro
 import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString } from '@/lib/format-bytes'
+import { formatElapsed } from '@/components/training/formatDuration'
 import { agentSchema, agentExecuteSchema, orchestrateSchema } from '@/lib/validation-schemas'
 import { logger } from '@/lib/dev-log'
 
@@ -54,18 +55,6 @@ function taskBadgeStyle(status: RunStatus): string {
   if (status === 'completed') return 'bg-success/15 text-success'
   if (status === 'failed') return 'bg-destructive/15 text-destructive'
   return 'bg-muted text-muted-foreground'
-}
-
-function formatDuration(startedAt: string | null, finishedAt: string | null): string {
-  if (!startedAt) return ''
-  const start = new Date(startedAt).getTime()
-  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now()
-  const ms = end - start
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  const min = Math.floor(ms / 60000)
-  const sec = Math.floor((ms % 60000) / 1000)
-  return `${min}m ${sec}s`
 }
 
 function getAgentTaskStats(tasks: OrchestrateTask[]): Record<string, { completed: number; failed: number; total: number }> {
@@ -965,7 +954,7 @@ export default function AgentsPage() {
                       </span>
                       {run.started_at && (
                         <span className="shrink-0 text-xs text-muted-foreground/70">
-                          {formatDuration(run.started_at, run.finished_at)}
+                          {formatElapsed(run.started_at, run.finished_at)}
                         </span>
                       )}
                       <span className="shrink-0 text-xs text-muted-foreground">
@@ -1051,7 +1040,7 @@ export default function AgentsPage() {
                               <span className="text-sm flex-1 truncate">{run.goal}</span>
                               {run.started_at && (
                                 <span className="text-xs text-muted-foreground/70">
-                                  {formatDuration(run.started_at, run.finished_at)}
+                                  {formatElapsed(run.started_at, run.finished_at)}
                                 </span>
                               )}
                               <span className="text-xs text-muted-foreground">{run.started_at ? new Date(run.started_at).toLocaleString() : ''}</span>

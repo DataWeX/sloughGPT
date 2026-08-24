@@ -6,7 +6,7 @@ type ErrorType = 'network' | 'server' | 'model' | 'timeout' | 'unknown'
 
 const ERROR_MESSAGES: Record<ErrorType, { title: string; suggestion: string }> = {
   network: {
-    title: 'Could not connection',
+    title: 'Connection failed',
     suggestion: 'Check if the service is running.',
   },
   server: {

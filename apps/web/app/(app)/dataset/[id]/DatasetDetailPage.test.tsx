@@ -257,7 +257,7 @@ describe('DatasetDetailPage', () => {
     render(<DatasetDetailPage />)
     await waitForName()
     await act(async () => { screen.getByRole('button', { name: /Convert to chat format/ }).click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Conversion failed', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not conversion', 'error') })
     expect(screen.queryByText('Open converted dataset')).toBeFalsy()
   })
 

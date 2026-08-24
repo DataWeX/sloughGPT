@@ -99,7 +99,7 @@ export function WorkflowSection() {
       {triggerMsg && (
         <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
           {triggerMsg}
-          <button className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
         </div>
       )}
 

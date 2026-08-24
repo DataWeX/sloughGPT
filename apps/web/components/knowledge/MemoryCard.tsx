@@ -829,7 +829,7 @@ export function MemoryCard() {
                   <div className="min-w-0 flex-1">
                   <p
                     className="text-sm line-clamp-2 cursor-pointer select-text hover:text-foreground/80 transition-colors"
-                    title="Click to copy"
+                    title="Copy to clipboard"
                     onClick={() => handleCopy(item.content)}
                   >
                     {item.content}

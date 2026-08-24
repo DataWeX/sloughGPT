@@ -123,7 +123,7 @@ export default function ExportContent() {
       {exportError && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {exportError}
-          <button className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
         </div>
       )}
       {formatLoadError && (
@@ -145,6 +145,7 @@ export default function ExportContent() {
           <div className="flex flex-wrap gap-2">
             {formats.map(f => (
               <button
+                type="button"
                 key={f.key}
                 onClick={() => setSelectedFormat(f.key)}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${

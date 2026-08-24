@@ -28,9 +28,13 @@ def _api_get(path: str) -> dict[str, Any] | list:
         r = requests.get(f"{get_api_base()}{path}", timeout=15)
         if r.status_code == 200:
             return r.json()
-        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+    except requests.ConnectionError:
+        return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
+    except requests.Timeout:
+        return {"error": "Request timed out", "error_type": "Timeout"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "error_type": type(e).__name__}
 
 
 def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
@@ -39,18 +43,28 @@ def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
         r = requests.post(f"{get_api_base()}{path}", json=data or {}, timeout=120)
         if r.status_code in (200, 201):
             return r.json()
-        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+    except requests.ConnectionError:
+        return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
+    except requests.Timeout:
+        return {"error": "Request timed out", "error_type": "Timeout"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "error_type": type(e).__name__}
 
 
 def _api_delete(path: str) -> dict[str, Any]:
     import requests
     try:
         r = requests.delete(f"{get_api_base()}{path}", timeout=15)
-        return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}"}
+        if r.status_code == 200:
+            return r.json()
+        return {"error": f"HTTP {r.status_code}", "error_type": "HTTPError", "status_code": r.status_code}
+    except requests.ConnectionError:
+        return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
+    except requests.Timeout:
+        return {"error": "Request timed out", "error_type": "Timeout"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "error_type": type(e).__name__}
 
 
 class ShellCommands:

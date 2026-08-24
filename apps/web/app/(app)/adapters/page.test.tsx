@@ -230,7 +230,7 @@ describe('AdaptersPage', () => {
     render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getByText('Run LoRA Eval')).toBeTruthy() })
     await act(async () => { screen.getByText('Run LoRA Eval').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Eval failed', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not eval', 'error') })
   })
 
   it('loads eval history after running eval', async () => {

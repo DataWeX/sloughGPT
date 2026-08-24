@@ -73,11 +73,15 @@ def _is_app_ready() -> bool:
     Health must not report the model as loaded until the lifecycle reaches
     RUNNING — otherwise clients see ``model_loaded: true`` during the startup
     window and hit routes that are not registered yet (404 "Not Found").
+
+    Reads from ``STARTUP_PHASE`` (set by the startup orchestrator) instead of
+    creating the lifecycle singleton, which would race with
+    ``StartupOrchestrator._init_lifecycle()`` when health routes are queried
+    pre-lifespan.
     """
     try:
-        from domains.infrastructure.lifecycle import get_lifecycle_manager
-        mgr = get_lifecycle_manager()
-        return mgr.is_running()
+        from startup_progress import STARTUP_PHASE
+        return STARTUP_PHASE.get("phase") in ("running", "ready")
     except Exception:
         return True
 

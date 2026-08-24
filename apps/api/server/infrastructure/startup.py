@@ -296,6 +296,11 @@ class StartupOrchestrator:
                 logger.warning("Lifecycle startup incomplete — running fallback phases", extra={"tag": "START"})
                 await self._phase5_model_registry()
                 await self._phase6_routers()
+            else:
+                # Lifecycle reached RUNNING — update STARTUP_PHASE so health
+                # endpoints can report readiness without creating the lifecycle
+                # singleton (which would race with _init_lifecycle's event bus).
+                STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")
         else:
             # Fallback: run phases directly
             await self._phase5_model_registry()

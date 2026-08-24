@@ -258,7 +258,7 @@ export function VisionStudioDialog({
               >
                 <IconUpload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm font-medium mb-1">
-                  {previewUrl ? 'Click to change image' : 'Drop an image here or click to upload'}
+                  {previewUrl ? 'Change image' : 'Drop an image here or browse'}
                 </p>
                 <p className="text-xs text-muted-foreground">Supports JPG, PNG, WebP</p>
                 <input

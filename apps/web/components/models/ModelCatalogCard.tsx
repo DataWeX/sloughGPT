@@ -142,6 +142,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
                           onClick={(e) => toggleFavorite(model.id, e)}
                           className={cn(
                             "h-4 w-4 flex items-center justify-center rounded shrink-0 transition-all",

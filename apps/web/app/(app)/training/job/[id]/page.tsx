@@ -23,16 +23,7 @@ import { trainingJobsController, type TrainingJob } from '@/lib/training-control
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
-import { MS_PER_SECOND, MS_PER_MINUTE, MS_PER_HOUR } from '@/lib/format-bytes'
-
-function formatDuration(start: number | string, end?: number | string): string {
-  const s = new Date(start).getTime()
-  const e = end ? new Date(end).getTime() : Date.now()
-  const ms = e - s
-  if (ms < MS_PER_MINUTE) return `${Math.floor(ms / MS_PER_SECOND)}s`
-  if (ms < MS_PER_HOUR) return `${Math.floor(ms / MS_PER_MINUTE)}m ${Math.floor((ms % MS_PER_MINUTE) / MS_PER_SECOND)}s`
-  return `${Math.floor(ms / MS_PER_HOUR)}h ${Math.floor((ms % MS_PER_HOUR) / MS_PER_MINUTE)}m`
-}
+import { formatElapsed } from '@/components/training/formatDuration'
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'error' }> = {
   running: { label: 'Running', variant: 'default' },
@@ -372,7 +363,7 @@ export default function TrainingJobDetailPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Duration</p>
-                  <p className="text-xs mt-0.5">{formatDuration(job.created_at, job.finished_at)}</p>
+                  <p className="text-xs mt-0.5">{formatElapsed(job.created_at, job.finished_at)}</p>
                 </div>
                 {job.checkpoint && (
                   <div className="col-span-2">

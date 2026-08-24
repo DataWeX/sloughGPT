@@ -154,7 +154,7 @@ describe('TokenizerPage', () => {
     const ta = screen.getByPlaceholderText('Enter text to tokenize...')
     await act(async () => { fireEvent.change(ta, { target: { value: 'hello' } }) })
     await act(async () => { screen.getByText('Tokenize').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Tokenization failed', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not tokenization', 'error') })
   })
 
   it('loads vocab entries on Vocab tab with pagination disabled at start', async () => {

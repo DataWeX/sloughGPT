@@ -90,7 +90,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
       <CardContent className="space-y-4">
         {loadFailed ? (
           <div className="text-center py-4 text-sm text-muted-foreground">
-            Could not load saved trees. <button onClick={load} className="text-primary underline">Retry</button>
+            Could not load saved trees. <button type="button" onClick={load} className="text-primary underline">Retry</button>
           </div>
         ) : trees.length === 0 ? (
           <div className="text-center py-6 text-sm text-muted-foreground">

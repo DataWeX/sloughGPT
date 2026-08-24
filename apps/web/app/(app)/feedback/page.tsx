@@ -294,13 +294,13 @@ export default function FeedbackPage() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <Button size="sm" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('aggregate'); addToast('Could not aggregation triggered', 'success'); handlerefreshstats() } catch { addtoast('aggregation', 'error') } finally { setWorkflowBusy(false) } }}>
+                  <Button size="sm" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('aggregate'); addToast('Aggregation triggered', 'success'); handleRefreshStats() } catch { addToast('aggregation', 'error') } finally { setWorkflowBusy(false) } }}>
                     Aggregate
                   </Button>
-                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('prune'); addToast('Could not prune triggered', 'success'); handlerefreshstats() } catch { addtoast('prune', 'error') } finally { setWorkflowBusy(false) } }}>
+                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('prune'); addToast('Prune triggered', 'success'); handleRefreshStats() } catch { addToast('prune', 'error') } finally { setWorkflowBusy(false) } }}>
                     Prune
                   </Button>
-                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('export'); addToast('Could not export triggered', 'success') } catch { addtoast('export', 'error') } finally { setWorkflowBusy(false) } }}>
+                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('export'); addToast('Export triggered', 'success') } catch { addToast('export', 'error') } finally { setWorkflowBusy(false) } }}>
                     Export
                   </Button>
                 </div>

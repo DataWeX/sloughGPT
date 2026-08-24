@@ -503,7 +503,7 @@ export function MemoryTab() {
                   <div className="flex items-start justify-between gap-1">
                     <span
                       className="block cursor-pointer select-text hover:text-foreground/80 transition-colors"
-                      title="Click to copy"
+                      title="Copy to clipboard"
                       role="button"
                       tabIndex={0}
                       onClick={() => handleCopy(item.content, item.id)}

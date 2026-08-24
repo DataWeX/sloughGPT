@@ -100,7 +100,7 @@ describe('ExportPage — initial load flow', () => {
     mockGetExportFormats.mockRejectedValue(new Error('no formats'))
     render(<ExportPage />)
     await waitFor(() => {
-      expect(screen.getByText(/failed to load export formats/i)).toBeTruthy()
+      expect(screen.getByText(/Could not load export formats/i)).toBeTruthy()
     })
   })
 })
@@ -218,7 +218,7 @@ describe('ExportPage — error handling flow', () => {
     mockGetExportFormats.mockRejectedValue(new Error('no formats'))
     render(<ExportPage />)
     await waitFor(() => {
-      expect(screen.getByText(/failed to load export formats/i)).toBeTruthy()
+      expect(screen.getByText(/Could not load export formats/i)).toBeTruthy()
     })
   })
 })

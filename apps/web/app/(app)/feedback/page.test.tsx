@@ -427,7 +427,7 @@ describe('FeedbackPage — workflow actions', () => {
       await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy() })
 
       await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0]) })
-      expect(mockAddToast).toHaveBeenCalledWith('Aggregation failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('aggregation', 'error')
     }
   })
 })

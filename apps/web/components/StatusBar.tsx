@@ -10,12 +10,7 @@ import { cn, IconMenu, IconGrid } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 import { logger } from '@/lib/dev-log'
-
-function formatDuration(ms: number): string {
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
-}
+import { formatDuration } from '@/components/training/formatDuration'
 
 function getFailureSummary(failures: { kind: string; timeoutMs: number; error: string; timestamp: number }[]): string {
   if (failures.length === 0) return ''
@@ -86,7 +81,7 @@ export function StatusBar() {
   if (connectionStatus === 'connecting' && health === null) {
     statusText = 'Connecting...'
   } else if (connectionStatus === 'offline') {
-    const elapsed = lastOffline ? formatDuration(now - lastOffline) : ''
+    const elapsed = lastOffline ? formatDuration((now - lastOffline) / 1000) : ''
     const failInfo = getFailureSummary(recentFailures)
     statusText = failInfo
       ? `Offline — ${failInfo}${elapsed ? ` (${elapsed})` : ''}`
