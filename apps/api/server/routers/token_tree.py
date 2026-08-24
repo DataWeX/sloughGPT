@@ -27,7 +27,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from domains.training.token_tree_manager import get_token_tree_manager
-from schemas.common import raise_error, success_response, safe_audit_log
+from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
 
 
 class TrainTreeRequest(BaseModel):

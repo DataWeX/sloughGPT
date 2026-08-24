@@ -224,7 +224,9 @@ class CompanionRouter:
                 {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}},
                 {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}},
             ]
-        return success_response(data={"presets": presets})
+            return success_response(data={"presets": presets})
+        except Exception as e:
+            classify_and_raise(e, source="companion.presets")
 
 
 _companion_router = CompanionRouter()
