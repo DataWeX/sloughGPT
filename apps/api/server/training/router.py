@@ -17,7 +17,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
 
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error

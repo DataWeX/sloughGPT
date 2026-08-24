@@ -1393,7 +1393,7 @@ class ShellREPL(LinuxCommandsMixin):
                 with threading.Lock():
                     self._print(f"\n[bg-{bg_id}] {out}", end="")
             except Exception as e:
-                self._print(f"\n[bg-{bg_id}] Error: {e}")
+                self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
         t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
         t.start()

@@ -2,6 +2,7 @@
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { renderHook, act, cleanup } from '@testing-library/react'
+import React from 'react'
 import { useHomePageData } from './useHomePageData'
 
 const mockModelStatus = vi.fn().mockResolvedValue({ loaded: false, model_type: null })
@@ -56,9 +57,17 @@ vi.mock('@/lib/dataset-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/query/api-hooks', () => ({
-  useModels: () => ({ data: mockModelList.mock.results[0]?.value ?? [] }),
-  useSouls: () => ({ data: mockSoulsList.mock.results[0]?.value ?? { souls: [], current_soul: '' } }),
+vi.mock('@/lib/query', () => ({
+  useQuery: (_key: unknown, fetcher: () => Promise<unknown>) => {
+    const [data, setData] = React.useState<unknown>(undefined)
+    React.useEffect(() => { fetcher().then(setData).catch(() => {}) }, [fetcher])
+    return { data }
+  },
+  useMutation: (mutate: (...a: unknown[]) => Promise<unknown>) => ({
+    mutate: (...a: unknown[]) => mutate(...a),
+    isLoading: false,
+  }),
+  useInvalidate: () => vi.fn(),
 }))
 
 vi.mock('@/hooks/useLiveStatus', () => ({
