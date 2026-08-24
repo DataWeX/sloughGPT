@@ -1353,6 +1353,7 @@ export default function VMPage() {
                   <div className="grid grid-cols-2 gap-1">
                     {result.registers.map((reg: VMRegister) => (
                       <button
+                        type="button"
                         key={reg.name}
                         className="flex justify-between text-xs font-mono px-2 py-1 bg-muted/30 rounded hover:bg-muted/60 text-left transition-colors"
                         onClick={() => navigator.clipboard.writeText(reg.hex)}

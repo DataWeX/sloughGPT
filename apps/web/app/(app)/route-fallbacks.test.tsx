@@ -39,7 +39,7 @@ describe('route loading skeletons', () => {
   afterEach(() => cleanup())
 
   it('covers every route loading fallback', () => {
-    expect(loadings.length).toBe(40)
+    expect(loadings.length).toBe(47)
   })
 
   it.each(loadings)('renders %s with a skeleton', (key) => {

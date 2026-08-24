@@ -3735,6 +3735,22 @@ Examples:
         self._last_exit_code = 1
         return False
 
+    def _format_error(self, e: Exception, cmd: str = "") -> str:
+        """Format an exception into a user-friendly error message."""
+        import requests as _req
+        etype = type(e).__name__
+        if isinstance(e, (_req.ConnectionError, ConnectionError)):
+            hint = " Is the API server running? Use 'api start'."
+            return f"  Connection failed ({etype}): {e}{hint}"
+        if isinstance(e, (_req.Timeout, TimeoutError)):
+            return f"  Request timed out ({etype}): {e}"
+        if isinstance(e, PermissionError):
+            return f"  Permission denied: {e}"
+        if isinstance(e, FileNotFoundError):
+            return f"  File not found: {e}"
+        prefix = f"  [{cmd}] " if cmd else "  "
+        return f"{prefix}{etype}: {e}"
+
     def _cmd_boot(self, args: str = "") -> None:
         """Boot the shell — start kernel + init system + services.
 

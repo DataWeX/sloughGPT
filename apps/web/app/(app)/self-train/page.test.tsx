@@ -6,6 +6,12 @@ const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
 const mockAddToast = vi.fn()
 
+beforeAll(() => {
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = vi.fn()
+  }
+})
+
 vi.mock('@/lib/http-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
   apiPost: (...args: unknown[]) => mockApiPost(...args),
