@@ -9,6 +9,7 @@ from typing import Optional, List, Iterator, AsyncIterator, Dict, Any, Callable
 
 import numpy as np
 
+from .constants import DEFAULT_GENERATE_TIMEOUT
 from domains.infrastructure.model_server import CircuitBreaker, ModelMetrics
 
 logger = logging.getLogger("slo.infrastructure.slonet_server")
