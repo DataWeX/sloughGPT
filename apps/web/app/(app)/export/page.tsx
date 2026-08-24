@@ -220,7 +220,7 @@ export default function ExportPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Checkpoints</CardTitle>
-          <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints}>
+          <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
             <IconRefresh className={`h-3.5 w-3.5 ${loadingCheckpoints ? 'animate-spin' : ''}`} />
           </Button>
         </CardHeader>

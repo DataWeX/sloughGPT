@@ -141,7 +141,7 @@ export default function FeedbackPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Feedback Summary</CardTitle>
-              <Button size="sm" variant="ghost" onClick={handleRefreshStats}>
+              <Button size="sm" variant="ghost" onClick={handleRefreshStats} aria-label="Refresh stats">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -188,7 +188,7 @@ export default function FeedbackPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Conversations ({conversations.length})</CardTitle>
-            <Button size="sm" variant="ghost" onClick={handleLoadConversations}>
+            <Button size="sm" variant="ghost" onClick={handleLoadConversations} aria-label="Refresh conversations">
               <IconRefresh className="h-4 w-4" />
             </Button>
           </CardHeader>
@@ -269,7 +269,7 @@ export default function FeedbackPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Workflow Controls</CardTitle>
-                <Button size="sm" variant="ghost" onClick={handleRefreshStats}>
+                <Button size="sm" variant="ghost" onClick={handleRefreshStats} aria-label="Refresh stats">
                   <IconRefresh className="h-4 w-4" />
                 </Button>
               </CardHeader>

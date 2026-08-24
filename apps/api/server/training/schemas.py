@@ -48,14 +48,14 @@ class _TrainHyperparameters(BaseModel):
     vocabulary formats are documented under *Checkpoint vocabulary* in CONTRIBUTING.
     """
 
-    epochs: Optional[int] = 3
-    batch_size: Optional[int] = 32
-    learning_rate: Optional[float] = 1e-3
-    n_embed: Optional[int] = 128
-    n_layer: Optional[int] = 4
-    n_head: Optional[int] = 4
-    block_size: Optional[int] = 128
-    max_steps: Optional[int] = None
+    epochs: Optional[int] = Field(default=3, ge=1, le=1000)
+    batch_size: Optional[int] = Field(default=32, ge=1, le=1024)
+    learning_rate: Optional[float] = Field(default=1e-3, gt=0, le=1.0)
+    n_embed: Optional[int] = Field(default=128, ge=16, le=1024)
+    n_layer: Optional[int] = Field(default=4, ge=1, le=24)
+    n_head: Optional[int] = Field(default=4, ge=1, le=64)
+    block_size: Optional[int] = Field(default=128, ge=8, le=2048)
+    max_steps: Optional[int] = Field(default=None, ge=1)
     log_interval: int = Field(default=10, ge=1, le=50_000)
     eval_interval: int = Field(default=100, ge=1, le=1_000_000)
     dropout: float = Field(default=0.1, ge=0.0, le=0.9)
@@ -64,11 +64,11 @@ class _TrainHyperparameters(BaseModel):
     max_grad_norm: float = Field(default=1.0, ge=0.0)
     warmup_steps: int = Field(default=100, ge=0, le=1_000_000)
     min_lr: float = Field(default=1e-5, ge=0.0)
-    scheduler: str = "cosine"
+    scheduler: str = Field(default="cosine", pattern=r"^(cosine|linear|step|none)$")
     use_lora: bool = False
     lora_rank: int = Field(default=8, ge=1, le=256)
     lora_alpha: int = Field(default=16, ge=1, le=1024)
-    checkpoint_dir: str = "checkpoints"
+    checkpoint_dir: str = Field(default="checkpoints", max_length=200)
     checkpoint_interval: int = Field(default=500, ge=1, le=1_000_000)
     save_best_only: bool = False
     max_checkpoints: int = Field(default=5, ge=1, le=100)

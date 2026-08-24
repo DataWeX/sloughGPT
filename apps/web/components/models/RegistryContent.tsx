@@ -78,7 +78,7 @@ export default function RegistryContent() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Registered Models</CardTitle>
-          <Button size="sm" variant="ghost" onClick={fetchData}>
+          <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh models">
             <IconRefresh className="h-4 w-4" />
           </Button>
         </CardHeader>

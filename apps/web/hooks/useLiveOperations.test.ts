@@ -160,7 +160,7 @@ describe('initOperationsStream', () => {
     initOperationsStream()
     _onClose!()
     expect(mockFetch).toHaveBeenCalled()
-    vi.advanceTimersByTime(5000)
+    vi.advanceTimersByTime(15000)
     expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
@@ -169,14 +169,14 @@ describe('initOperationsStream', () => {
     initOperationsStream()
     _onError!()
     expect(mockFetch).toHaveBeenCalled()
-    vi.advanceTimersByTime(5000)
+    vi.advanceTimersByTime(15000)
     expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
   it('starts fallback poll after grace period if no init', async () => {
     const { initOperationsStream } = await importFresh()
     initOperationsStream()
-    vi.advanceTimersByTime(5000)
+    vi.advanceTimersByTime(15000)
     expect(mockFetch).toHaveBeenCalled()
   })
 })

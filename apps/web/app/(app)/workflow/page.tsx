@@ -96,7 +96,7 @@ export default function WorkflowPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Status</CardTitle>
           <div className="flex gap-1.5">
-            <Button size="sm" variant="ghost" onClick={fetchStatus}>
+            <Button size="sm" variant="ghost" onClick={fetchStatus} aria-label="Refresh">
               <IconRefresh className="h-4 w-4" />
             </Button>
           </div>

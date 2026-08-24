@@ -86,7 +86,7 @@ export function VoiceSection() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">TTS Backend</CardTitle>
-          <Button size="sm" variant="ghost" onClick={handleRefreshStatus}>
+          <Button size="sm" variant="ghost" onClick={handleRefreshStatus} aria-label="Refresh TTS status">
             <IconRefresh className="h-4 w-4" />
           </Button>
         </CardHeader>

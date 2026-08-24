@@ -105,7 +105,7 @@ export function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
               <Badge label="Poor" variant="error" size="sm" />
             )}
           </div>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={fetchPreview} disabled={loading}>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={fetchPreview} disabled={loading} aria-label="Refresh preview">
             <IconRefresh className={loading ? 'animate-spin h-3 w-3' : 'h-3 w-3'} />
           </Button>
         </div>

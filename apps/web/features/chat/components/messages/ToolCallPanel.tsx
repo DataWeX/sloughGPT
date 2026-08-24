@@ -31,6 +31,7 @@ function ToolCallCard({ event }: { event: ToolCallEvent }) {
       <button
         className="flex w-full items-center justify-between gap-2 text-left"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
       >
         <div className="flex items-center gap-1.5 min-w-0">
           <ToolIcon name={event.tool} />

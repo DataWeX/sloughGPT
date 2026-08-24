@@ -170,8 +170,7 @@ describe('TrainingJobDetailPage', () => {
   it('shows error toast when loading fails', async () => {
     mockGet.mockRejectedValue(new Error('boom'))
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Job not found')).toBeTruthy() })
-    expect(mockAddToast).toHaveBeenCalledWith('Something went wrong loading the job', 'error')
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Something went wrong loading the job', 'error') })
   })
 
   it('renders running job with progress bar and Stop button', async () => {

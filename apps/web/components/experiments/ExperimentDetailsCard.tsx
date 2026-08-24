@@ -92,7 +92,7 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
               </span>
             )}
           </div>
-          <Button size="sm" variant="ghost" onClick={fetchData}>
+          <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
             <IconRefresh className="h-3.5 w-3.5" />
           </Button>
         </div>

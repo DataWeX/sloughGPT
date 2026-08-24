@@ -105,7 +105,7 @@ export default function VoicePage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Text-to-Speech</CardTitle>
-          <Button size="sm" variant="ghost" onClick={handleRefreshStatus}>
+          <Button size="sm" variant="ghost" onClick={handleRefreshStatus} aria-label="Refresh status">
             <IconRefresh className="h-4 w-4" />
           </Button>
         </CardHeader>

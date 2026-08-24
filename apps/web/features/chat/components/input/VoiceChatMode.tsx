@@ -69,6 +69,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           <button
             onClick={() => setShowTranscript(!showTranscript)}
             className="text-xs px-2 py-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
+            aria-expanded={showTranscript}
           >
             {showTranscript ? 'Hide' : 'Show'} transcript
           </button>
@@ -76,6 +77,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             onClick={() => setShowSettings(!showSettings)}
             className="p-1.5 rounded-full hover:bg-muted transition-colors"
             aria-label="Voice settings"
+            aria-expanded={showSettings}
           >
             <IconSettings className="h-4 w-4" />
           </button>

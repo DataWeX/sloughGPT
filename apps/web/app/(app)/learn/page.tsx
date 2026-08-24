@@ -208,7 +208,7 @@ export default function LearnPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Knowledge ({knowledge.length})</CardTitle>
-            <Button size="sm" variant="ghost" onClick={handleLoadKnowledge}>
+            <Button size="sm" variant="ghost" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
               <IconRefresh className={`h-4 w-4 ${loadingKnowledge ? 'animate-spin' : ''}`} />
             </Button>
           </CardHeader>

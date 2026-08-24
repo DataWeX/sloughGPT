@@ -341,6 +341,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="p-2"
             aria-label="Add reaction"
+            aria-expanded={showEmojiPicker}
           >
             <span className="text-sm">😊</span>
           </Button>

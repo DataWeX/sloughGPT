@@ -23,7 +23,7 @@ let _refCount = 0
 function startFallback() {
   if (_fallbackTimer) return
   operationsStore.getState().fetch()
-  _fallbackTimer = setInterval(() => operationsStore.getState().fetch(), 5000)
+  _fallbackTimer = setInterval(() => operationsStore.getState().fetch(), 15000)
 }
 
 function stopFallback() {

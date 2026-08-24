@@ -153,7 +153,7 @@ export default function FilesPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Files</CardTitle>
             <div className="flex gap-2">
-              <Button size="sm" variant="ghost" onClick={fetchFiles}>
+              <Button size="sm" variant="ghost" onClick={fetchFiles} aria-label="Refresh files">
                 <IconRefresh className="h-4 w-4" />
               </Button>
               <input

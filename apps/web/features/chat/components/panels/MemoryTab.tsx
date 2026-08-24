@@ -568,6 +568,7 @@ export function MemoryTab() {
             <button
               onClick={() => setShowAll(v => !v)}
               className="block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
+              aria-expanded={showAll}
             >
               {showAll ? 'Show fewer' : `Show all ${topicFiltered.length}`}
             </button>

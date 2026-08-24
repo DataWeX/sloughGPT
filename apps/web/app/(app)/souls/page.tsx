@@ -361,7 +361,7 @@ export default function SoulsPage() {
       <AppRouteHeader
         left={<AppRouteHeaderLead title="Souls" subtitle={`${souls.length} personalities · ${currentSoul ?? 'none'} active`} />}
         right={
-          <Button size="sm" variant="ghost" onClick={handleRefresh}>
+          <Button size="sm" variant="ghost" onClick={handleRefresh} aria-label="Refresh">
             <IconRefresh className="h-4 w-4" />
           </Button>
         }
@@ -422,6 +422,9 @@ export default function SoulsPage() {
                           : 'border-border/60 hover:bg-muted/50'
                       }`}
                       onClick={() => setDetailSoul(soul)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailSoul(soul); } }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <TraitRadar values={soul.personality || {}} size={48} />
@@ -500,7 +503,7 @@ export default function SoulsPage() {
                   placeholder="Search checkpoints..."
                   className="max-w-xs"
                 />
-                <Button size="sm" variant="ghost" onClick={handleRefresh}>
+                <Button size="sm" variant="ghost" onClick={handleRefresh} aria-label="Refresh">
                   <IconRefresh className="h-4 w-4" />
                 </Button>
               </div>
@@ -518,7 +521,7 @@ export default function SoulsPage() {
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {filteredCheckpoints.map(cp => (
                     <div key={cp.name} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2.5 text-sm group hover:bg-muted/50 transition-colors">
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleCheckpointInfo(cp.name)}>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleCheckpointInfo(cp.name)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCheckpointInfo(cp.name); } }} role="button" tabIndex={0}>
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{cp.name}</span>
                           {cp.verdict && (
@@ -560,7 +563,7 @@ export default function SoulsPage() {
                             <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                           ) : 'Load'}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDownloadCheckpoint(cp.name)}>
+                        <Button size="sm" variant="ghost" onClick={() => handleDownloadCheckpoint(cp.name)} aria-label="Download checkpoint">
                           <IconDownload className="h-3.5 w-3.5" />
                         </Button>
                         <Button
@@ -568,6 +571,7 @@ export default function SoulsPage() {
                           variant="ghost"
                           className="text-destructive"
                           onClick={() => { setDeleteTarget(cp.name); setDeleteType('checkpoint') }}
+                          aria-label="Delete checkpoint"
                         >
                           <IconTrash className="h-3.5 w-3.5" />
                         </Button>
@@ -664,7 +668,7 @@ export default function SoulsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Weight Snapshots</CardTitle>
-              <Button size="sm" variant="ghost" onClick={handleLoadSnapshots}>
+              <Button size="sm" variant="ghost" onClick={handleLoadSnapshots} aria-label="Refresh snapshots">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>

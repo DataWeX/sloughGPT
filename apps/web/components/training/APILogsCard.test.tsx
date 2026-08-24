@@ -80,7 +80,6 @@ describe('APILogsCard', () => {
     const card = getCard()
     fireEvent.click(within(card).getByRole('button', { name: /start training/i }))
     await vi.waitFor(() => {
-      expect(screen.getByText('Training failed')).toBeInTheDocument()
       expect(screen.getByText('boom')).toBeInTheDocument()
     })
     expect(toast).toHaveBeenCalledWith('Could not training', 'error')

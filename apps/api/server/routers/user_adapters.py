@@ -4,8 +4,8 @@ User Adapters Router - Per-user LoRA adapter management
 import logging
 import time
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import Optional, Literal
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
@@ -25,8 +25,8 @@ class AggregateBestRequest(BaseModel):
 
 
 class AdapterUpdateRequest(BaseModel):
-    rating: str
-    quality_score: Optional[float] = None
+    rating: Literal["thumbs_up", "thumbs_down", "neutral"]
+    quality_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class PruneAdaptersRequest(BaseModel):

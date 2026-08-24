@@ -11,10 +11,15 @@ from typing import Optional, Any, Dict, AsyncGenerator
 from pydantic import BaseModel, Field
 import re
 import json, asyncio, logging
+import time
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 from infrastructure.auth import require_auth_if_enabled
+
+# Response cache for list_souls: avoids FS glob + per-soul metadata parse.
+_list_souls_cache: tuple[float, dict] | None = None
+_LIST_SOULS_CACHE_TTL = 30.0
 
 try:
     from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
@@ -417,15 +422,17 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.list_souls() and get_current_soul()
         """
+        global _list_souls_cache
+        now = time.monotonic()
+        if _list_souls_cache and (now - _list_souls_cache[0]) < _LIST_SOULS_CACHE_TTL:
+            return _list_souls_cache[1]
         try:
             import asyncio
             from domains.inference.slo_manager import get_slo_manager
             manager = get_slo_manager()
-            # list_souls() is sync (filesystem glob).  Offload the first
-            # scan to a thread so the event loop stays responsive.
             souls = await asyncio.to_thread(manager.list_souls)
             current = manager.get_current_soul()
-            return success_response(data=[
+            result = success_response(data=[
                 {
                     "name": s.name,
                     "path": s.path,
@@ -448,6 +455,8 @@ Be yourself — let your personality shape how you respond."""
                 }
                 for s in souls
             ], meta={"current_soul": current.name if current else None})
+            _list_souls_cache = (now, result)
+            return result
         except Exception as e:
             classify_and_raise(e, source="list_souls")
 

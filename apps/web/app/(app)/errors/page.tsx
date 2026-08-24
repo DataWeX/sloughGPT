@@ -136,7 +136,7 @@ export default function ErrorsPage() {
               <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
                 {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={fetchData}>
+              <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </div>

@@ -163,7 +163,7 @@ export default function CompanionPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Personality Traits</CardTitle>
             <div className="flex gap-1.5">
-              <Button size="sm" variant="ghost" onClick={handleReset}>
+              <Button size="sm" variant="ghost" onClick={handleReset} aria-label="Reset">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </div>

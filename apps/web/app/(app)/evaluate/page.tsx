@@ -371,7 +371,7 @@ export default function EvaluatePage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-base">Model Metrics</CardTitle>
-                  <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={smRunning}>
+                  <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={smRunning} aria-label="Refresh metrics">
                     <IconRefresh className={`h-4 w-4 ${smRunning ? 'animate-spin' : ''}`} />
                   </Button>
                 </CardHeader>
@@ -448,7 +448,7 @@ export default function EvaluatePage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Logged Responses ({responses.length})</CardTitle>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={handleLoadResponses}>
+                  <Button size="sm" variant="ghost" onClick={handleLoadResponses} aria-label="Refresh responses">
                     <IconRefresh className="h-4 w-4" />
                   </Button>
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={handleClearHistory}>

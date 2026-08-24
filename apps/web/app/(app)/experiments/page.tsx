@@ -205,7 +205,7 @@ export default function ExperimentsPage() {
               <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
                 {autoRefresh ? 'Auto' : 'Refresh'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={fetchExperiments}>
+              <Button size="sm" variant="ghost" onClick={fetchExperiments} aria-label="Refresh">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </div>
@@ -273,6 +273,9 @@ export default function ExperimentsPage() {
                             : 'border-border/60 hover:bg-muted/50'
                       }`}
                       onClick={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(selectedId === exp.id ? null : exp.id); } }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <input

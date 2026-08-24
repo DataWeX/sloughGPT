@@ -2,6 +2,7 @@
 Feedback Router - MVC View layer
 """
 import logging
+import time
 from fastapi import APIRouter, Query
 
 from pydantic import BaseModel, Field
@@ -10,6 +11,10 @@ from schemas.common import raise_error, success_response, classify_and_raise, sa
 from controllers.feedback import get_feedback_controller
 
 logger = logging.getLogger("slo.api.feedback")
+
+# Response cache for stats/summary: avoids 3x MogDB count() per call.
+_feedback_stats_cache: tuple[float, dict] | None = None
+_FEEDBACK_STATS_CACHE_TTL = 10.0
 
 
 class WorkflowFeedbackRequest(BaseModel):
@@ -78,10 +83,16 @@ class FeedbackRouter:
 
     async def get_feedback_stats(self) -> dict:
         """Retrieve aggregate feedback statistics across all conversations."""
+        global _feedback_stats_cache
+        now = time.monotonic()
+        if _feedback_stats_cache and (now - _feedback_stats_cache[0]) < _FEEDBACK_STATS_CACHE_TTL:
+            return _feedback_stats_cache[1]
         try:
             ctrl = get_feedback_controller()
             stats = ctrl.get_stats()
-            return FeedbackStats(**stats)
+            result = FeedbackStats(**stats)
+            _feedback_stats_cache = (now, result)
+            return result
         except Exception as e:
             classify_and_raise(e, source="feedback.get_stats")
 

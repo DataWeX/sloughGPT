@@ -179,6 +179,9 @@ export function WebhooksCard({ addToast }: Props) {
             <div
               className="flex cursor-pointer items-center justify-between p-3 hover:bg-muted/30"
               onClick={() => void toggleDeliveries(w.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void toggleDeliveries(w.id); } }}
+              role="button"
+              tabIndex={0}
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-xs">{w.url}</p>
@@ -252,6 +255,7 @@ export function WebhooksCard({ addToast }: Props) {
             <button
               className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground"
               onClick={() => setShowRetries(!showRetries)}
+              aria-expanded={showRetries}
             >
               <span>{showRetries ? '▼' : '▶'}</span>
               <span>Retry queue ({retryQueue.length})</span>

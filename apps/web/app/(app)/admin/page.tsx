@@ -541,7 +541,7 @@ export default function AdminPage() {
                 <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
                   {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={fetchErrors}>
+                <Button size="sm" variant="ghost" onClick={fetchErrors} aria-label="Refresh">
                   <IconRefresh className="h-4 w-4" />
                 </Button>
               </div>

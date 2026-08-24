@@ -131,7 +131,7 @@ export default function AdaptersPage() {
     <PageContainer
       title="Adapters"
       subtitle="Per-user LoRA adapter management"
-      headerRight={<Button size="sm" variant="ghost" onClick={refreshData}><IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>}
+      headerRight={<Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh"><IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>}
     >
       {aggregateResult && (
         <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
@@ -168,7 +168,7 @@ export default function AdaptersPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Actions</CardTitle>
-          <Button size="sm" variant="ghost" onClick={refreshData}>
+          <Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh">
             <IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </CardHeader>

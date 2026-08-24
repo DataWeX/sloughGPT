@@ -63,7 +63,7 @@ export function WorkflowSection() {
     <>
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
         <h2 className="text-base font-medium">Feedback Pipeline</h2>
-        <Button size="sm" variant="ghost" onClick={fetchStatus}>
+        <Button size="sm" variant="ghost" onClick={fetchStatus} aria-label="Refresh">
           <IconRefresh className="h-4 w-4" />
         </Button>
       </div>
