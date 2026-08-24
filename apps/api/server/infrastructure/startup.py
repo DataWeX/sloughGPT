@@ -1016,7 +1016,7 @@ def _register_loaded(cfg, process_guard) -> None:
     if server_state.model is not None and server_state.tokenizer is not None:
         server = registry.register(
             server_state.model_type, server_state.model, server_state.tokenizer,
-            make_default=True, generate_timeout=120.0,
+            make_default=True, generate_timeout=cfg.generate_timeout,
             process_guard=process_guard,
             idle_timeout_s=cfg.idle_timeout_seconds,
         )

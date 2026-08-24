@@ -208,6 +208,7 @@ export default function KbPage() {
           {tabs.map(t => (
             <button
               key={t.key}
+              type="button"
               onClick={() => setTab(t.key)}
               className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -222,6 +223,7 @@ export default function KbPage() {
           <div className="space-y-3">
             <div className="flex flex-wrap gap-1">
               <button
+                type="button"
                 onClick={() => { setSelectedTopic(null); setPage(0) }}
                 className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
                   selectedTopic === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
@@ -232,6 +234,7 @@ export default function KbPage() {
               {topics.map(t => (
                 <button
                   key={t.name}
+                  type="button"
                   onClick={() => { setSelectedTopic(t.name); setPage(0) }}
                   className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
                     selectedTopic === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'

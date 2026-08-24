@@ -153,6 +153,7 @@ export default function DocstorePage() {
         {COLLECTIONS.map(c => (
           <button
             key={c}
+            type="button"
             onClick={() => setSelected(c)}
             className={`rounded border px-2 py-1.5 text-xs text-left transition-colors ${
               selected === c
@@ -219,6 +220,7 @@ export default function DocstorePage() {
                 {pageDocs.map(d => (
                   <button
                     key={d._id}
+                    type="button"
                     onClick={() => { setSelectedDoc(d); setEditMode(false); setEditContent(JSON.stringify(d, null, 2)) }}
                     className={`w-full rounded border p-2 text-left text-xs transition-colors ${
                       selectedDoc?._id === d._id

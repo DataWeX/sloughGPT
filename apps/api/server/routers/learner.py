@@ -15,7 +15,7 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from schemas.common import success_response, raise_error, safe_audit_log
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 
 
 class LearnSearchRequest(BaseModel):
@@ -43,22 +43,25 @@ class LearnerRouter:
     @staticmethod
     def learn_search(req: LearnSearchRequest) -> dict:
         """Search web, fetch full articles, store facts, and fine-tune."""
-        import time as _time
-        _t0 = _time.monotonic()
-        from domains.learner import get_learner
-        learner = get_learner()
-        result = learner.search_and_learn(req.query, req.max_results)
-        status = learner.status()
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("learner.search", resource=req.query, detail=f"elapsed={_elapsed_ms:.0f}ms facts={result.get('new_facts', 0)}")
-        return success_response(data={
-            "tokens_ingested": result.get("tokens_ingested", 0),
-            "new_facts": result.get("new_facts", 0),
-            "rejected": result.get("rejected", 0),
-            "filter_stats": result.get("filter_stats", {}),
-            "elapsed_ms": round(_elapsed_ms, 1),
-            **status,
-        })
+        try:
+            import time as _time
+            _t0 = _time.monotonic()
+            from domains.learner import get_learner
+            learner = get_learner()
+            result = learner.search_and_learn(req.query, req.max_results)
+            status = learner.status()
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("learner.search", resource=req.query, detail=f"elapsed={_elapsed_ms:.0f}ms facts={result.get('new_facts', 0)}")
+            return success_response(data={
+                "tokens_ingested": result.get("tokens_ingested", 0),
+                "new_facts": result.get("new_facts", 0),
+                "rejected": result.get("rejected", 0),
+                "filter_stats": result.get("filter_stats", {}),
+                "elapsed_ms": round(_elapsed_ms, 1),
+                **status,
+            })
+        except Exception as e:
+            classify_and_raise(e, source="learner.search")
 
     @staticmethod
     def learn_feed(
@@ -66,45 +69,42 @@ class LearnerRouter:
         url: Optional[str] = Query(None, max_length=2000),
         poll_interval: int = Query(3600, ge=60, le=86400),
     ) -> dict:
-        """Manage RSS feed subscriptions.
-
-        Args:
-            action: "subscribe" — add a feed, "unsubscribe" — remove, "list" — show all
-            url: feed URL (required for subscribe/unsubscribe)
-            poll_interval: seconds between polls (default 3600)
-
-        Returns:
-            feed list or operation result
-        """
-        from domains.learner import get_learner
-        learner = get_learner()
-        if action == "subscribe":
-            if not url:
-                raise_error("url required", code="E_VAL_REQUEST")
-            ok = learner.subscribe_feed(url, poll_interval)
-            safe_audit_log("learner.feed_subscribe", resource=url, detail=f"poll_interval={poll_interval}")
-            return success_response(data={"status": "ok" if ok else "already_subscribed", "feeds": learner.list_feeds()})
-        elif action == "unsubscribe":
-            if not url:
-                raise_error("url required", code="E_VAL_REQUEST")
-            ok = learner.unsubscribe_feed(url)
-            safe_audit_log("learner.feed_unsubscribe", resource=url)
-            return success_response(data={"status": "ok" if ok else "not_found", "feeds": learner.list_feeds()})
-        elif action == "list":
-            return success_response(data={"feeds": learner.list_feeds()})
-        raise_error("unknown action", code="E_VAL_REQUEST")
+        """Manage RSS feed subscriptions."""
+        try:
+            from domains.learner import get_learner
+            learner = get_learner()
+            if action == "subscribe":
+                if not url:
+                    raise_error("url required", code="E_VAL_REQUEST")
+                ok = learner.subscribe_feed(url, poll_interval)
+                safe_audit_log("learner.feed_subscribe", resource=url, detail=f"poll_interval={poll_interval}")
+                return success_response(data={"status": "ok" if ok else "already_subscribed", "feeds": learner.list_feeds()})
+            elif action == "unsubscribe":
+                if not url:
+                    raise_error("url required", code="E_VAL_REQUEST")
+                ok = learner.unsubscribe_feed(url)
+                safe_audit_log("learner.feed_unsubscribe", resource=url)
+                return success_response(data={"status": "ok" if ok else "not_found", "feeds": learner.list_feeds()})
+            elif action == "list":
+                return success_response(data={"feeds": learner.list_feeds()})
+            raise_error("unknown action", code="E_VAL_REQUEST")
+        except Exception as e:
+            classify_and_raise(e, source="learner.feed")
 
     @staticmethod
     def learn_ingest_url(url: str = Query(..., min_length=1, max_length=2000)) -> dict:
         """Ingest a single URL: scrape article, store facts, fine-tune."""
-        import time as _time
-        _t0 = _time.monotonic()
-        from domains.learner import get_learner
-        learner = get_learner()
-        result = learner.ingest_url(url)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("learner.ingest_url", resource=url, detail=f"elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data={**result, "elapsed_ms": round(_elapsed_ms, 1)})
+        try:
+            import time as _time
+            _t0 = _time.monotonic()
+            from domains.learner import get_learner
+            learner = get_learner()
+            result = learner.ingest_url(url)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("learner.ingest_url", resource=url, detail=f"elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={**result, "elapsed_ms": round(_elapsed_ms, 1)})
+        except Exception as e:
+            classify_and_raise(e, source="learner.ingest_url")
 
     @staticmethod
     def learn_knowledge(
@@ -112,25 +112,19 @@ class LearnerRouter:
         query: Optional[str] = Query(None, max_length=1000),
         top_k: int = Query(10, ge=1, le=100),
     ) -> dict:
-        """Query learned knowledge by topic or keyword search.
-
-        Args:
-            topic: exact topic name to retrieve facts for
-            query: keyword search across all topics
-            top_k: max results (default 10)
-
-        Returns:
-            facts matching the query
-        """
-        from domains.learner import get_learner
-        learner = get_learner()
-        if topic:
-            facts = learner.query_knowledge(topic)
-        elif query:
-            facts = learner.search_knowledge(query, top_k=top_k)
-        else:
-            facts = []
-        return success_response(data={"facts": facts, "count": len(facts)})
+        """Query learned knowledge by topic or keyword search."""
+        try:
+            from domains.learner import get_learner
+            learner = get_learner()
+            if topic:
+                facts = learner.query_knowledge(topic)
+            elif query:
+                facts = learner.search_knowledge(query, top_k=top_k)
+            else:
+                facts = []
+            return success_response(data={"facts": facts, "count": len(facts)})
+        except Exception as e:
+            classify_and_raise(e, source="learner.knowledge")
 
     @staticmethod
     def learn_ingest(
@@ -138,20 +132,21 @@ class LearnerRouter:
         conversations: Optional[list[list[str]]] = None,
     ) -> dict:
         """Ingest raw text or conversation pairs into the learner."""
-        import time as _time
-        _t0 = _time.monotonic()
-        from domains.learner import get_learner
-        learner = get_learner()
-
-        if text:
-            learner.ingest_text(text)
-        if conversations:
-            pairs = [(c[0], c[1]) for c in conversations if len(c) >= 2]
-            learner.ingest_conversation(pairs)
-
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("learner.ingest", detail=f"elapsed={_elapsed_ms:.0f}ms text={'yes' if text else 'no'} conversations={'yes' if conversations else 'no'}")
-        return success_response(data={**learner.status(), "elapsed_ms": round(_elapsed_ms, 1)})
+        try:
+            import time as _time
+            _t0 = _time.monotonic()
+            from domains.learner import get_learner
+            learner = get_learner()
+            if text:
+                learner.ingest_text(text)
+            if conversations:
+                pairs = [(c[0], c[1]) for c in conversations if len(c) >= 2]
+                learner.ingest_conversation(pairs)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("learner.ingest", detail=f"elapsed={_elapsed_ms:.0f}ms text={'yes' if text else 'no'} conversations={'yes' if conversations else 'no'}")
+            return success_response(data={**learner.status(), "elapsed_ms": round(_elapsed_ms, 1)})
+        except Exception as e:
+            classify_and_raise(e, source="learner.ingest")
 
     @staticmethod
     def learn_train() -> dict:

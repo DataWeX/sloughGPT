@@ -395,9 +395,10 @@ export default function HomePage() {
             <div className="space-y-1.5">
               {recentSessions.slice(0, 3).map(s => (
                 <button
-                  key={s.id}
-                  onClick={() => router.push(`/chat?session=${s.id}`)}
-                  className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                   key={s.id}
+                   type="button"
+                   onClick={() => router.push(`/chat?session=${s.id}`)}
+                   className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
                   <span className="text-xs truncate flex-1">{s.name}</span>
@@ -432,6 +433,7 @@ export default function HomePage() {
               {recentDatasets.map(ds => (
                 <button
                   key={ds.id}
+                  type="button"
                   onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
                   className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
                 >
@@ -454,6 +456,7 @@ export default function HomePage() {
 
       {recentSessions.length > 0 && (
         <button
+          type="button"
           onClick={() => router.push(`/chat?session=${recentSessions[0].id}`)}
           className="w-full text-left rounded-lg border border-border/30 bg-card p-3 flex items-center gap-3 hover:border-border/60 hover:bg-muted/30 transition-colors group"
         >

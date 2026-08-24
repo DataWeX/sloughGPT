@@ -58,7 +58,7 @@ export function useChatLocalEngine(
       return true
     } catch (err) {
       const msg = extractErrorMessage(err, 'unknown error')
-      showToast(`Failed to load local AI: ${msg}`, 'error')
+      showToast(`Could not load local AI: ${msg}`, 'error')
       logger.debug('Could not local engine init', { error: msg, url: localModelUrl })
       return false
     } finally {

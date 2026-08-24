@@ -93,7 +93,7 @@ export function useTrainingPolling(): TrainingPolling {
         standardRetryRef.current++
         if (standardRetryRef.current >= MAX_POLL_RETRIES) {
           clearInterval(pollId); standardPollRef.current = null
-          writeTraining({ phase: 'error', error: 'Lost connection to training server' })
+          writeTraining({ phase: 'error', error: 'Lost connection to training service' })
           opts?.addToast?.('Lost connection to training — check server status', 'error')
         }
       }
@@ -143,7 +143,7 @@ export function useTrainingPolling(): TrainingPolling {
         turboRetryRef.current++
         if (turboRetryRef.current >= MAX_POLL_RETRIES) {
           clearInterval(pollId); turboPollRef.current = null
-          writeTraining({ phase: 'error', error: 'Lost connection to training server' })
+          writeTraining({ phase: 'error', error: 'Lost connection to training service' })
           addToast?.('Lost connection to training — check server status', 'error')
         }
       }

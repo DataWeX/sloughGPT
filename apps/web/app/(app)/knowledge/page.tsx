@@ -707,6 +707,7 @@ export default function KnowledgePage() {
                   return (
                     <div key={t.name} className="flex items-center gap-2">
                       <button
+                        type="button"
                         onClick={() => setActiveTopic(activeTopic === t.name ? null : t.name)}
                         className={`text-[11px] w-24 text-left truncate transition-colors ${activeTopic === t.name ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
                       >
@@ -971,6 +972,7 @@ export default function KnowledgePage() {
                 {topics.slice(0, 6).map(t => (
                   <button
                     key={t.name}
+                    type="button"
                     onClick={() => setBulkTopic(t.name)}
                     className="text-[10px] px-2 py-0.5 rounded-full border border-border/40 text-muted-foreground hover:bg-muted/50 transition-colors"
                   >

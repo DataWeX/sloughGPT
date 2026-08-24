@@ -61,7 +61,7 @@ class FeedbackRouter:
             }, message="recorded")
         except Exception as e:
             logger.error("Failed to record workflow feedback (conversation=%s): %s", req.conversation_id, e)
-            raise
+            classify_and_raise(e, source="feedback.record_workflow")
 
     async def record_feedback(self, req: FeedbackRequest) -> dict:
         """Record user feedback and pipe into learning systems."""
@@ -79,7 +79,7 @@ class FeedbackRouter:
             return FeedbackResponse(**feedback)
         except Exception as e:
             logger.error("Failed to record feedback (message=%s): %s", req.message_id, e)
-            raise
+            classify_and_raise(e, source="feedback.record")
 
     async def get_feedback_stats(self) -> dict:
         """Retrieve aggregate feedback statistics across all conversations."""

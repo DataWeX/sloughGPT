@@ -674,7 +674,7 @@ class ModelWorkerProcess:
     def __init__(
         self,
         worker_id: str = "worker",
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         stall_timeout: float = _STALL_TIMEOUT_S,
         extra_sys_paths: Optional[list] = None,
         # SloNet mode (preferred)

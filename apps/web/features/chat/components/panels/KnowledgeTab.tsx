@@ -147,6 +147,7 @@ export function KnowledgeTab({
           />
           {knowledgeSearch && (
             <button
+              type="button"
               onClick={() => setKnowledgeSearch('')}
               aria-label="Clear search"
               className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
@@ -220,6 +221,7 @@ export function KnowledgeTab({
                   </div>
                   <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button
+                      type="button"
                       onClick={() => { setEditingId(item.id); setEditText(item.content) }}
                       className="text-muted-foreground hover:text-foreground p-0.5"
                       aria-label="Edit knowledge"
@@ -227,6 +229,7 @@ export function KnowledgeTab({
                       <IconEdit className="h-3 w-3" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => removeKnowledge(item.id)}
                       className="text-muted-foreground hover:text-destructive p-0.5"
                       aria-label="Remove knowledge"
@@ -243,6 +246,7 @@ export function KnowledgeTab({
 
       {knowledge.length > 0 && (
         <button
+          type="button"
           onClick={() => saveKnowledge([])}
           className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
         >

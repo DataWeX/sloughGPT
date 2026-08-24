@@ -407,7 +407,7 @@ export function useChatPageController(
       await knowledgeController.add(content.slice(0, MAX_KNOWLEDGE_CONTENT_CHARS), 'chat-saved', true)
       showToast('Saved to knowledge', 'success')
     } catch {
-      showToast('Failed to save to knowledge', 'error')
+      showToast('Could not save to knowledge', 'error')
     }
   }, [showToast])
 
@@ -437,7 +437,7 @@ export function useChatPageController(
       chat.handleAddImage(dataUrl)
       showToast('Image attached — drop more or send message', 'info')
     } catch {
-      showToast('Failed to attach image', 'error')
+      showToast('Could not attach image', 'error')
     }
   }, [chat, showToast])
 

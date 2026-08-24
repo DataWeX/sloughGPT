@@ -475,6 +475,7 @@ export default function AgentsPage() {
                 {AGENT_TEMPLATES.map(t => (
                   <button
                     key={t.name}
+                    type="button"
                     onClick={() => { setNewName(t.name); setNewDesc(t.desc); setNewInstructions(t.instructions); setNewTools([...t.tools]) }}
                     className="rounded-full px-3 py-1 text-xs font-medium border border-border/60 bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 focus:ring-2 focus:ring-primary/30 transition-colors"
                   >
@@ -511,6 +512,7 @@ export default function AgentsPage() {
               {AVAILABLE_TOOLS.map(t => (
                 <button
                   key={t}
+                  type="button"
                   onClick={() => toggleTool(t, newTools, setNewTools)}
                   aria-pressed={newTools.includes(t)}
                   className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
@@ -629,6 +631,7 @@ export default function AgentsPage() {
                         {AVAILABLE_TOOLS.map(t => (
                           <button
                             key={t}
+                            type="button"
                             onClick={() => toggleTool(t, editTools, setEditTools)}
                             aria-pressed={editTools.includes(t)}
                             className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
@@ -867,12 +870,14 @@ export default function AgentsPage() {
               <CardTitle className="text-base">Run History</CardTitle>
               <div className="flex items-center gap-1">
                 <button
+                  type="button"
                   onClick={() => setRunViewMode('list')}
                   className={`text-xs px-2 py-1 rounded transition-colors ${runViewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
                 >
                   List
                 </button>
                 <button
+                  type="button"
                   onClick={() => setRunViewMode('timeline')}
                   className={`text-xs px-2 py-1 rounded transition-colors ${runViewMode === 'timeline' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
                 >
@@ -901,6 +906,7 @@ export default function AgentsPage() {
                         {[null, 'completed', 'failed', 'running'].map(s => (
                           <button
                             key={s ?? 'all'}
+                            type="button"
                             onClick={() => setRunStatusFilter(s)}
                             className={`text-xs px-2 py-1 rounded-full border transition-colors ${runStatusFilter === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
                           >
@@ -922,6 +928,7 @@ export default function AgentsPage() {
                       return (
                         <div className="flex flex-wrap gap-1">
                           <button
+                            type="button"
                             onClick={() => setRunAgentFilter(null)}
                             className={`text-xs px-2 py-1 rounded border transition-colors ${runAgentFilter === null ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
                           >
@@ -930,6 +937,7 @@ export default function AgentsPage() {
                           {Array.from(agentNames).sort().map(name => (
                             <button
                               key={name}
+                              type="button"
                               onClick={() => setRunAgentFilter(runAgentFilter === name ? null : name)}
                               className={`text-xs px-2 py-1 rounded border transition-colors ${runAgentFilter === name ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
                             >
@@ -952,6 +960,7 @@ export default function AgentsPage() {
                 return (
                   <div key={run.id} className={`rounded-lg border border-border/60 transition-colors ${expanded ? 'border-primary/40' : 'hover:bg-muted/50'}`}>
                     <button
+                      type="button"
                       className="w-full flex items-center gap-2 px-3 py-2 text-left"
                       onClick={() => setExpandedRun(expanded ? null : run.id)}
                       aria-expanded={expanded}

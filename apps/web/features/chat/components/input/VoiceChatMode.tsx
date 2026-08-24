@@ -67,6 +67,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => setShowTranscript(!showTranscript)}
             className="text-xs px-2 py-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
             aria-expanded={showTranscript}
@@ -74,6 +75,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             {showTranscript ? 'Hide' : 'Show'} transcript
           </button>
           <button
+            type="button"
             onClick={() => setShowSettings(!showSettings)}
             className="p-1.5 rounded-full hover:bg-muted transition-colors"
             aria-label="Voice settings"
@@ -82,6 +84,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             <IconSettings className="h-4 w-4" />
           </button>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 rounded-full hover:bg-muted transition-colors"
             aria-label="Exit voice mode"
@@ -126,6 +129,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-muted-foreground">Auto-resume Listening</label>
               <button
+                type="button"
                 onClick={() => updateSettings({ autoResume: !settings.autoResume })}
                 role="switch"
                 aria-checked={settings.autoResume}
@@ -143,6 +147,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-muted-foreground">Push-to-talk (Space)</label>
               <button
+                type="button"
                 onClick={() => updateSettings({ pushToTalk: !settings.pushToTalk })}
                 className={`w-9 h-5 rounded-full transition-colors ${
                   settings.pushToTalk ? 'bg-primary' : 'bg-muted-foreground/30'
@@ -157,6 +162,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-muted-foreground">Stream speech (speak as ready)</label>
               <button
+                type="button"
                 onClick={() => updateSettings({ streamingTTS: !settings.streamingTTS })}
                 className={`w-9 h-5 rounded-full transition-colors ${
                   settings.streamingTTS ? 'bg-primary' : 'bg-muted-foreground/30'

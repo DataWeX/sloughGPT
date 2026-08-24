@@ -1163,7 +1163,7 @@ class ModelServer:
         tokenizer: Any = None,
         model_id: str = "unknown",
         max_concurrent: Optional[int] = None,
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         enable_circuit_breaker: bool = True,
         failure_threshold: int = 3,
         recovery_timeout: float = 30.0,

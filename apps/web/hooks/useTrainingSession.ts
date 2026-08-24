@@ -171,7 +171,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             dataQuality: (turboStatus.result?.data_quality as TrainingShellState['dataQuality']) ?? null,
           })
         }
-      } catch (e: unknown) { logger.warning('Could not training server reconciliation', { exception: String((e instanceof Error ? e.message : e) || e) }) }
+      } catch (e: unknown) { logger.warning('Could not training service reconciliation', { exception: String((e instanceof Error ? e.message : e) || e) }) }
     }
     reconcile()
     return () => { cancelled = true }

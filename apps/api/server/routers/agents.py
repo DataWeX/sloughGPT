@@ -79,18 +79,13 @@ class AgentsRouter:
         return get_agent_system()
 
     async def list_agents(self) -> dict:
-        """List all agents stored in the agent system.
-
-        Returns:
-            List of AgentOut objects, each containing id, name,
-            description, instructions, tools, and avatar fields.
-
-        Side effects:
-            Reads from the agent system singleton.
-        """
-        system = self._get_system()
-        agents = await asyncio.to_thread(system.list)
-        return success_response(data=[AgentOut(**a).model_dump() for a in agents])
+        """List all agents stored in the agent system."""
+        try:
+            system = self._get_system()
+            agents = await asyncio.to_thread(system.list)
+            return success_response(data=[AgentOut(**a).model_dump() for a in agents])
+        except Exception as e:
+            classify_and_raise(e, source="agents.list")
 
     async def create_agent(self, req: AgentCreate) -> dict:
         """Create a new agent with the given name, description, tools, and instructions.
@@ -127,73 +122,59 @@ class AgentsRouter:
 
     async def get_agent(self, agent_id: str) -> dict:
         """Get a specific agent by ID."""
-        result = self._get_system().get(agent_id)
-        if result is None:
-            raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
-        return success_response(data=AgentOut(**result).model_dump())
+        try:
+            result = self._get_system().get(agent_id)
+            if result is None:
+                raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
+            return success_response(data=AgentOut(**result).model_dump())
+        except Exception as e:
+            classify_and_raise(e, source="agents.get")
 
     async def update_agent(self, agent_id: str, req: AgentUpdate) -> dict:
-        """Update an existing agent by ID with partial field changes.
-
-        Args:
-            agent_id: The unique identifier of the agent to update.
-            req: AgentUpdate with optional name, description, instructions,
-                tools, and avatar fields. Only non-None fields are applied.
-
-        Returns:
-            AgentOut with the updated agent data.
-
-        Side effects:
-            Modifies the agent record in the agent system store.
-            Logs an audit entry for agent update.
-            Raises 404 if no agent with the given ID is found.
-        """
-        system = self._get_system()
-        result = await asyncio.to_thread(
-            system.update,
-            agent_id=agent_id,
-            name=req.name,
-            description=req.description,
-            instructions=req.instructions,
-            tools=req.tools,
-            avatar=req.avatar,
-        )
-        if result is None:
-            raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
-        safe_audit_log("agent.update", resource=agent_id)
-        return success_response(data=AgentOut(**result).model_dump())
+        """Update an existing agent by ID with partial field changes."""
+        try:
+            system = self._get_system()
+            result = await asyncio.to_thread(
+                system.update,
+                agent_id=agent_id,
+                name=req.name,
+                description=req.description,
+                instructions=req.instructions,
+                tools=req.tools,
+                avatar=req.avatar,
+            )
+            if result is None:
+                raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
+            safe_audit_log("agent.update", resource=agent_id)
+            return success_response(data=AgentOut(**result).model_dump())
+        except Exception as e:
+            classify_and_raise(e, source="agents.update")
 
     async def delete_agent(self, agent_id: str) -> dict:
-        """Delete an agent by its unique identifier.
-
-        Args:
-            agent_id: The unique identifier of the agent to delete.
-
-        Returns:
-            Success response with status "deleted".
-
-        Side effects:
-            Removes the agent from the agent system store.
-            Logs an audit entry for agent deletion.
-            Raises 404 if no agent with the given ID is found.
-        """
-        if not await asyncio.to_thread(self._get_system().delete, agent_id):
-            raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
-        safe_audit_log("agent.delete", resource=agent_id)
-        return success_response(data={"status": "deleted"})
+        """Delete an agent by its unique identifier."""
+        try:
+            if not await asyncio.to_thread(self._get_system().delete, agent_id):
+                raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
+            safe_audit_log("agent.delete", resource=agent_id)
+            return success_response(data={"status": "deleted"})
+        except Exception as e:
+            classify_and_raise(e, source="agents.delete")
 
     async def execute_agent(self, agent_id: str, req: ExecuteRequest) -> dict:
         """Execute an agent on a user request."""
-        result = await self._get_system().execute(
-            agent_id=agent_id,
-            request=req.request,
-            session_id=req.session_id,
-            user_id=req.user_id,
-        )
-        if "error" in result:
-            raise_error(result["error"], "E_NOT_FOUND", status_code=404)
-        safe_audit_log("agent.execute", resource=agent_id, user_id=req.user_id or "", session_id=req.session_id or "")
-        return result
+        try:
+            result = await self._get_system().execute(
+                agent_id=agent_id,
+                request=req.request,
+                session_id=req.session_id,
+                user_id=req.user_id,
+            )
+            if "error" in result:
+                raise_error(result["error"], "E_NOT_FOUND", status_code=404)
+            safe_audit_log("agent.execute", resource=agent_id, user_id=req.user_id or "", session_id=req.session_id or "")
+            return result
+        except Exception as e:
+            classify_and_raise(e, source="agents.execute")
 
     # ── Orchestration ─────────────────────────────────────────────────────
 

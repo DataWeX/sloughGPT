@@ -608,6 +608,7 @@ export function MemoryCard() {
             />
             {search && (
               <button
+                type="button"
                 onClick={() => setSearch('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Clear search"
@@ -860,6 +861,7 @@ export function MemoryCard() {
                   <span className="text-[10px] text-muted-foreground font-mono shrink-0">{item.score.toFixed(2)}</span>
                 )}
                 <button
+                  type="button"
                   onClick={() => startEdit(item)}
                   className="h-7 w-7 shrink-0 flex items-center justify-center rounded text-muted-foreground opacity-60 lg:opacity-0 lg:group-hover:opacity-100 hover:text-primary hover:bg-primary/10 transition-all"
                   aria-label="Edit memory item"
@@ -867,6 +869,7 @@ export function MemoryCard() {
                   <IconEdit className="h-3.5 w-3.5" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPendingDelete(item)}
                   className="h-7 w-7 shrink-0 flex items-center justify-center rounded text-muted-foreground opacity-60 lg:opacity-0 lg:group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all"
                   aria-label="Delete memory item"

@@ -189,6 +189,7 @@ function SidebarContent({
         <div className="flex items-center gap-1">
           {!isDrawer && onToggleCollapse && (
             <button
+              type="button"
               onClick={onToggleCollapse}
               className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0"
               aria-label="Collapse sidebar"
@@ -204,6 +205,7 @@ function SidebarContent({
                 {unreadCount}
               </span>
               <button
+                type="button"
                 onClick={() => { conversations.filter(c => c.unread).forEach(c => onToggleUnreadConversation?.(c.id, false)) }}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Mark all as read"
@@ -214,6 +216,7 @@ function SidebarContent({
           )}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setSortOpen(!sortOpen)}
               className={cn(
                 "h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 transition-colors",
@@ -234,6 +237,7 @@ function SidebarContent({
                     { value: 'messages', label: 'Message count' },
                   ] as const).map(opt => (
                     <button
+                      type="button"
                       key={opt.value}
                       onClick={() => { setSortMode(opt.value); setSortOpen(false) }}
                       className={cn(

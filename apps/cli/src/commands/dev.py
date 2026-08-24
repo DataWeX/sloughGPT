@@ -117,10 +117,9 @@ def _get_startup_progress(port: int) -> dict | None:
 
 
 def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
-    """Wait for API with live ProgressBar showing startup phases."""
-    from utils.progress import ProgressBar
+    """Wait for API with live spinner showing startup phases."""
+    from utils.progress import Spinner
 
-    bar = ProgressBar(total=timeout, desc="Starting API", width=30, show_eta=True)
     phase_names = {
         "initializing": "Initializing",
         "task_queue": "Task queue",
@@ -133,36 +132,27 @@ def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
         "ready": "Ready",
     }
 
+    spinner = Spinner(text="Waiting for API")
+    spinner.start()
+
     for elapsed in range(timeout):
         if _check_api_ready(port):
-            bar.set_progress(timeout)
-            bar.desc = "API ready"
-            bar.finish()
+            spinner.stop("API ready")
             return True
 
         progress = _get_startup_progress(port)
         if progress:
             phase = progress.get("phase", "initializing")
             step = progress.get("step", 0)
-            total = progress.get("total", 9)
-            msg = progress.get("message", "")
+            total = progress.get("total", 8)
             name = phase_names.get(phase, phase)
-            bar.desc = f"[{step}/{total}] {name}"
-            bar.set_progress(min(elapsed, timeout - 1))
+            spinner.text = f"[{step}/{total}] {name}"
         else:
-            bar.desc = "Waiting for API"
-            bar.set_progress(min(elapsed, timeout - 1))
+            spinner.text = "Waiting for API"
 
         time.sleep(1)
 
-    bar.desc = "Timed out"
-    # Don't use bar.finish() — it forces 100% which is misleading on failure.
-    # Just render the current state and print the line.
-    bar._render()
-    if bar._is_tty:
-        sys.stdout.write(f"\r\033[2K{bar._last_rendered}\n")
-        sys.stdout.flush()
-    bar._last_rendered = ""
+    spinner.stop("Timed out")
     return False
 
 

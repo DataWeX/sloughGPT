@@ -48,7 +48,7 @@ class TestMobileDashboard:
             response = client.get("/mobile/dashboard")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["status"] == "healthy"
         assert data["model"]["name"] == "gpt2"
         assert data["model"]["loaded"] is True
@@ -68,7 +68,7 @@ class TestMobileDashboard:
             response = client.get("/mobile/dashboard")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["status"] == "unknown"
 
 
@@ -92,7 +92,7 @@ class TestMobileConversations:
             response = client.get("/mobile/conversations?page=1&per_page=10")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert len(data["conversations"]) == 10
         assert data["total"] == 25
         assert data["page"] == 1
@@ -119,7 +119,7 @@ class TestMobileConversations:
             response = client.get("/mobile/conversations?search=Python")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert len(data["conversations"]) == 1
         assert data["conversations"][0]["title"] == "Python Help"
 
@@ -134,7 +134,7 @@ class TestMobileConversations:
             response = client.get("/mobile/conversations/session_123")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["id"] == "session_123"
         assert len(data["messages"]) == 2
 
@@ -168,7 +168,7 @@ class TestMobileModels:
             response = client.get("/mobile/models")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["current"]["model_id"] == "gpt2"
         assert data["current"]["soul"] == "Default"
         assert len(data["models"]) == 2
@@ -190,7 +190,7 @@ class TestMobileModels:
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["status"] == "ok"
         assert data["model"] == "llama"
         assert data["soul"] == "Creative"
@@ -231,7 +231,7 @@ class TestMobileHealth:
             response = client.get("/mobile/health")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["status"] == "healthy"
         assert data["model"]["name"] == "gpt2"
         assert data["model"]["loaded"] is True
@@ -277,7 +277,7 @@ class TestMobileKnowledge:
             response = client.get("/mobile/knowledge?page=1&per_page=20")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert len(data["items"]) == 20
         assert data["total"] == 50
         assert data["page"] == 1
@@ -294,7 +294,7 @@ class TestMobileKnowledge:
             response = client.get("/mobile/knowledge?topic=tech")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert len(data["items"]) == 2
         assert all(item["topic"] == "tech" for item in data["items"])
 
@@ -308,7 +308,7 @@ class TestMobileKnowledge:
             response = client.get("/mobile/knowledge?search=Python")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert len(data["items"]) == 1
         assert "Python" in data["items"][0]["content"]
 
@@ -321,7 +321,7 @@ class TestMobileKnowledge:
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["content"] == "New knowledge"
         assert data["topic"] == "tech"
         assert data["id"] == "new_item"
@@ -335,7 +335,7 @@ class TestMobileKnowledge:
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["updated"] is True
         assert data["id"] == "item_1"
 
@@ -345,6 +345,6 @@ class TestMobileKnowledge:
             response = client.delete("/mobile/knowledge/item_1")
 
         assert response.status_code == 200
-        data = response.json()
+        data = resp_data(response)
         assert data["status"] == "deleted"
         assert data["id"] == "item_1"

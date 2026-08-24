@@ -54,6 +54,7 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
 
   return (
     <button
+      type="button"
       onClick={onExpand}
       className={cn(
         'flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-left w-full',
@@ -134,6 +135,7 @@ export function ErrorList({ className }: { className?: string }) {
             </div>
           </div>
           <button
+            type="button"
             onClick={() => dismissError(e.id)}
             className="shrink-0 opacity-50 hover:opacity-100 text-xs leading-none"
             aria-label="Dismiss"

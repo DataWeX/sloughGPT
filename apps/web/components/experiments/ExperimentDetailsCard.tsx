@@ -27,7 +27,7 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
       const result = await experimentsController.getExperimentData(experimentId)
       setData(result)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load experiment data')
+      setError(e instanceof Error ? e.message : 'Could not load experiment data')
     } finally {
       setLoading(false)
     }

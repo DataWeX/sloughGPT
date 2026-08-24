@@ -90,6 +90,7 @@ export function ContextTab() {
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">What the model sees</span>
         <button
+          type="button"
           onClick={fetchAll}
           disabled={loading}
           className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
@@ -173,6 +174,7 @@ export function ContextTab() {
               {inspector.system_prompt && (
                 <div className="pt-1 border-t border-border/30">
                   <button
+                    type="button"
                     onClick={() => setShowPrompt(s => !s)}
                     className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
                     aria-expanded={showPrompt}

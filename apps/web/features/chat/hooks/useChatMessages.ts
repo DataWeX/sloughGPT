@@ -196,7 +196,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
         sessionIdRef.current,
         contextMessages.map(m => ({ role: m.role, content: m.content }))
       )) {
-        if (data.error) { showToast('Failed to regenerate response', 'error'); break }
+        if (data.error) { showToast('Could not regenerate response', 'error'); break }
         if (data.token) {
           tokenBufRef.current.push({ id: assistantId, text: data.token })
           scheduleFlush()

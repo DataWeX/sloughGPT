@@ -19,6 +19,7 @@ export const ChatToolbar = memo(function ChatToolbar() {
   return (
     <div className="z-10 flex items-center justify-end lg:justify-center px-2 py-1.5 border-b border-border/30 shrink-0 bg-background/80 backdrop-blur-sm gap-1.5">
       <button
+        type="button"
         className="flex lg:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors"
         onClick={ctx.sidebar.onToggle}
         aria-label="Toggle conversations"
@@ -27,6 +28,7 @@ export const ChatToolbar = memo(function ChatToolbar() {
       </button>
 
       <button
+        type="button"
         className="flex lg:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors text-muted-foreground"
         onClick={ctx.conversations.onNewChat}
         aria-label="New chat"
@@ -40,6 +42,7 @@ export const ChatToolbar = memo(function ChatToolbar() {
       </div>
 
       <button
+        type="button"
         className="flex sm:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors"
         onClick={() => ctx.search.setShowMobile(!ctx.search.showMobile)}
         aria-label="Toggle search"

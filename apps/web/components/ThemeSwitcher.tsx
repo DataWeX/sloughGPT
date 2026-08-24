@@ -27,6 +27,7 @@ export function ThemeSwitcher() {
           {THEMES.map((t) => (
             <button
               key={t.id}
+              type="button"
               onClick={() => setTheme(t.id)}
               className={`h-3.5 w-3.5 rounded-none transition-all duration-200 ease-smooth ${
                 theme === t.id
@@ -47,6 +48,7 @@ export function ThemeSwitcher() {
         {PALETTE_IDS.map((id) => (
           <button
             key={id}
+            type="button"
             onClick={() => setPalette(id)}
             className={`h-3.5 w-3.5 rounded-full transition-all duration-200 ease-smooth ${
               palette === id

@@ -349,6 +349,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             <div className="absolute bottom-full left-0 mb-1 flex gap-0.5 bg-popover/95 backdrop-blur-sm border border-border/40 rounded-lg p-1 shadow-xl z-50">
               {QUICK_REACTIONS.map(emoji => (
                 <button
+                  type="button"
                   key={emoji}
                   onClick={() => {
                     handleToggleReaction(emoji)
@@ -369,6 +370,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
       <div className="flex flex-wrap gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
         {Object.entries(localReactions).map(([emoji, users]) => (
           <button
+            type="button"
             key={emoji}
             onClick={() => handleToggleReaction(emoji)}
             className={cn(

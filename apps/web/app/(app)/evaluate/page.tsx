@@ -327,6 +327,7 @@ export default function EvaluatePage() {
         ]).map(t => (
           <button
             key={t.key}
+            type="button"
             onClick={() => setSection(t.key)}
             className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
               section === t.key ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
@@ -344,6 +345,7 @@ export default function EvaluatePage() {
             {(['metrics', 'quality', 'responses', 'perplexity'] as SingleModelTab[]).map(t => (
               <button
                 key={t}
+                type="button"
                 onClick={() => {
                   setSmTab(t)
                   if (t === 'responses') handleLoadResponses()

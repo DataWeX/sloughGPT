@@ -227,6 +227,7 @@ export default function DatasetsPage() {
         {(['date', 'size', 'name'] as const).map(s => (
           <button
             key={s}
+            type="button"
             onClick={() => setSortBy(s)}
             className={`text-xs px-2 py-1 rounded border transition-colors ${sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
           >
@@ -399,6 +400,7 @@ export default function DatasetsPage() {
                         <IconDownload className="h-4 w-4" />
                       </Button>
                       <button
+                        type="button"
                         className={`h-6 w-6 rounded border transition-colors flex items-center justify-center ${compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50'}`}
                         onClick={() => toggleCompare(ds.id)}
                         aria-label={`Select ${ds.name} for comparison`}

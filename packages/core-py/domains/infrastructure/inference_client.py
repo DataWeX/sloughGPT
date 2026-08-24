@@ -38,7 +38,7 @@ class InferenceClient:
         host: str = "127.0.0.1",
         port: int = 9100,
         connect_timeout: float = 10.0,
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         restart_fn=None,
     ):
         self.host = host

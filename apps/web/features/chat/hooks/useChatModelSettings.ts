@@ -117,7 +117,7 @@ export function useChatModelSettings(
       try {
         const result = await modelController.load(m)
         if (result && (result.status === 'error' || result.error)) {
-          showToast(`Failed to load ${m}: ${result.error || 'unknown error'}`, 'error')
+          showToast(`Could not load ${m}: ${result.error || 'unknown error'}`, 'error')
           setLoadingModel(null)
           return
         }

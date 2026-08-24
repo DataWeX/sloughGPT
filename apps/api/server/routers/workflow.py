@@ -44,49 +44,61 @@ class WorkflowRouter:
 
     async def get_workflow_status(self) -> Dict[str, Any]:
         """Get current workflow status and statistics."""
-        return success_response(data=self._get_workflow().get_status())
+        try:
+            return success_response(data=self._get_workflow().get_status())
+        except Exception as e:
+            classify_and_raise(e, source="workflow.status")
 
     async def start_workflow(self, request: WorkflowStartRequest) -> Dict[str, Any]:
         """Start the automated feedback workflow."""
-        from domains.feedback import WorkflowConfig
-        config = WorkflowConfig(
-            aggregate_interval_minutes=request.aggregate_interval_minutes,
-            prune_interval_minutes=request.prune_interval_minutes,
-            export_interval_hours=request.export_interval_hours,
-            health_check_interval_seconds=request.health_check_interval_seconds,
-        )
-        workflow = self._get_workflow()
-        workflow.config = config
-        workflow.start()
-        safe_audit_log("workflow.start", detail=f"aggregate={request.aggregate_interval_minutes}m prune={request.prune_interval_minutes}m export={request.export_interval_hours}h")
-        logger.info("Workflow started (aggregate=%dm, prune=%dm, export=%dh)", request.aggregate_interval_minutes, request.prune_interval_minutes, request.export_interval_hours)
-        return success_response(data={"status": "started", "config": request.model_dump()})
+        try:
+            from domains.feedback import WorkflowConfig
+            config = WorkflowConfig(
+                aggregate_interval_minutes=request.aggregate_interval_minutes,
+                prune_interval_minutes=request.prune_interval_minutes,
+                export_interval_hours=request.export_interval_hours,
+                health_check_interval_seconds=request.health_check_interval_seconds,
+            )
+            workflow = self._get_workflow()
+            workflow.config = config
+            workflow.start()
+            safe_audit_log("workflow.start", detail=f"aggregate={request.aggregate_interval_minutes}m prune={request.prune_interval_minutes}m export={request.export_interval_hours}h")
+            logger.info("Workflow started (aggregate=%dm, prune=%dm, export=%dh)", request.aggregate_interval_minutes, request.prune_interval_minutes, request.export_interval_hours)
+            return success_response(data={"status": "started", "config": request.model_dump()})
+        except Exception as e:
+            classify_and_raise(e, source="workflow.start")
 
     async def stop_workflow(self) -> Dict[str, Any]:
         """Stop the automated feedback workflow."""
-        workflow = self._get_workflow()
-        workflow.stop()
-        safe_audit_log("workflow.stop")
-        logger.info("Workflow stopped")
-        return success_response(data={"status": "stopped"})
+        try:
+            workflow = self._get_workflow()
+            workflow.stop()
+            safe_audit_log("workflow.stop")
+            logger.info("Workflow stopped")
+            return success_response(data={"status": "stopped"})
+        except Exception as e:
+            classify_and_raise(e, source="workflow.stop")
 
     async def trigger_workflow(self, action: str) -> Dict[str, Any]:
         """Manually trigger a workflow action (aggregate, prune, export)."""
-        workflow = self._get_workflow()
-        if action == "aggregate":
-            logger.info("Workflow action triggered: aggregate")
-            safe_audit_log("workflow.trigger", resource="aggregate")
-            return workflow.trigger_aggregate()
-        elif action == "prune":
-            logger.info("Workflow action triggered: prune")
-            safe_audit_log("workflow.trigger", resource="prune")
-            return workflow.trigger_prune()
-        elif action == "export":
-            logger.info("Workflow action triggered: export")
-            safe_audit_log("workflow.trigger", resource="export")
-            return workflow.trigger_export()
-        else:
-            raise_error(f"Unknown action: {action}", "E_BAD_REQUEST", status_code=400)
+        try:
+            workflow = self._get_workflow()
+            if action == "aggregate":
+                logger.info("Workflow action triggered: aggregate")
+                safe_audit_log("workflow.trigger", resource="aggregate")
+                return workflow.trigger_aggregate()
+            elif action == "prune":
+                logger.info("Workflow action triggered: prune")
+                safe_audit_log("workflow.trigger", resource="prune")
+                return workflow.trigger_prune()
+            elif action == "export":
+                logger.info("Workflow action triggered: export")
+                safe_audit_log("workflow.trigger", resource="export")
+                return workflow.trigger_export()
+            else:
+                raise_error(f"Unknown action: {action}", "E_BAD_REQUEST", status_code=400)
+        except Exception as e:
+            classify_and_raise(e, source="workflow.trigger")
 
 
 _workflow_router = WorkflowRouter()

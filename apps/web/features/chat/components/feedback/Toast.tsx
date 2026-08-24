@@ -128,6 +128,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
           {toast.message}
           {toast.verbose && (
             <button
+              type="button"
               onClick={e => { e.stopPropagation(); setShowVerbose(v => !v) }}
               className="sl-toast__verbose"
             >
@@ -137,6 +138,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         </span>
         {toast.onUndo && (
           <button
+            type="button"
             onClick={e => { e.stopPropagation(); toast.onUndo!(); dismiss() }}
             className="sl-toast__undo"
           >
@@ -144,6 +146,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
           </button>
         )}
         <button
+          type="button"
           onClick={e => { e.stopPropagation(); dismiss() }}
           className="sl-toast__close"
           aria-label={`Dismiss notification: ${toast.message}`}
@@ -178,6 +181,7 @@ export function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainer
     <div className="sl-toast-container" role="region" aria-label="Notifications">
       {toasts.length > 2 && onClearAll && (
         <button
+          type="button"
           onClick={onClearAll}
           className="absolute top-1 right-1 z-10 text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
           aria-label="Dismiss all notifications"
@@ -210,6 +214,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
     <ToastProvider>
       {toasts.length > 2 && onClearAll && (
         <button
+          type="button"
           onClick={onClearAll}
           className="fixed bottom-20 right-4 z-[101] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
           aria-label="Dismiss all notifications"

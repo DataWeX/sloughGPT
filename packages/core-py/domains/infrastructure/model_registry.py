@@ -55,7 +55,7 @@ class ModelRegistry:
         tokenizer: Any,
         make_default: bool = False,
         max_concurrent: Optional[int] = None,
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         enable_circuit_breaker: bool = True,
         process_guard: Optional[Any] = None,
         idle_timeout_s: float = 0.0,

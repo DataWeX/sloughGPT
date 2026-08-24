@@ -75,6 +75,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               </p>
             </div>
             <button
+              type="button"
               onClick={() => setShowDetails(!showDetails)}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -88,6 +89,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Error Details</span>
                 <button
+                  type="button"
                   onClick={copyToClipboard}
                   className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 >

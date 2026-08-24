@@ -19,6 +19,7 @@ export function ChatBookmarksPanel({ bookmarks, onRemove, onClear, onJumpToMessa
   return (
     <div className={cn('border rounded-lg overflow-hidden', className)}>
       <button
+        type="button"
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center justify-between w-full px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/30 transition-colors"
         aria-expanded={!collapsed}
@@ -48,11 +49,12 @@ export function ChatBookmarksPanel({ bookmarks, onRemove, onClear, onJumpToMessa
                 key={bm.id}
                 className="group flex items-start gap-2 px-3 py-2 hover:bg-muted/20 transition-colors"
               >
-                <button
-                  onClick={() => onJumpToMessage?.(bm.id)}
-                  className="flex-1 min-w-0 text-left"
-                  title={bm.content.slice(0, 120)}
-                >
+              <button
+                type="button"
+                onClick={() => onJumpToMessage?.(bm.id)}
+                className="flex-1 min-w-0 text-left"
+                title={bm.content.slice(0, 120)}
+              >
                   <div className={cn(
                     'text-[10px] font-medium mb-0.5',
                     bm.role === 'assistant' ? 'text-primary/70' : 'text-foreground/70'

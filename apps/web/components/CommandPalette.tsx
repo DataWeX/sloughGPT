@@ -8,7 +8,7 @@ import { sessionController } from '@/lib/session-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useModels, useSouls } from '@/lib/query/api-hooks'
-import { useToastStore } from '@/lib/store/toast-store'
+import { useToastStore } from '@/lib/toast-store'
 import { NAV_SECTIONS } from '@/lib/navigation'
 
 interface CommandAction {
@@ -30,6 +30,7 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null)
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
+  const addToast = useToastStore(s => s.addToast)
 
   // Use shared query cache for models and souls — eliminates 2 independent API calls.
   const { data: modelsData } = useModels()

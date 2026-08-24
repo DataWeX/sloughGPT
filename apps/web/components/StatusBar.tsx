@@ -120,6 +120,7 @@ export function StatusBar() {
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
         <button
+          type="button"
           onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-output-panel')) }}
           className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 transition-colors"
           aria-label="Toggle service output"
@@ -128,6 +129,7 @@ export function StatusBar() {
           <IconMenu className="w-3 h-3" aria-hidden="true" />
         </button>
         <button
+          type="button"
           onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-whatsnew')) }}
           className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 transition-colors relative"
           aria-label={unseenCount > 0 ? `${unseenCount} new feature${unseenCount === 1 ? '' : 's'}` : "What's new"}
