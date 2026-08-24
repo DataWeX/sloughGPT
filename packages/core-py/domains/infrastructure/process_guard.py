@@ -27,6 +27,7 @@ import threading
 import os
 from typing import Any, Optional, Callable, Generator
 
+from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
 from domains.infrastructure.model_worker import WorkerStreamStalledError
 
 

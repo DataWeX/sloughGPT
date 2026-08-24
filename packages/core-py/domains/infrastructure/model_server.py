@@ -28,6 +28,7 @@ import queue
 import time
 import gc
 import os
+from .constants import DEFAULT_GENERATE_TIMEOUT
 import functools
 from threading import Lock, Thread, Event
 from typing import Generator as GeneratorType
@@ -1163,7 +1164,7 @@ class ModelServer:
         tokenizer: Any = None,
         model_id: str = "unknown",
         max_concurrent: Optional[int] = None,
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         enable_circuit_breaker: bool = True,
         failure_threshold: int = 3,
         recovery_timeout: float = 30.0,
