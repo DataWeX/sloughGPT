@@ -69,6 +69,7 @@ export function AuthSessionInfoCard({ token, user, onLogout }: AuthSessionInfoCa
             </div>
           )}
           <button
+            type="button"
             onClick={onLogout}
             className="text-xs text-destructive hover:underline"
           >

@@ -257,6 +257,7 @@ export default function TokenTreePage() {
         <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
           {tabs.map(t => (
             <button
+              type="button"
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${

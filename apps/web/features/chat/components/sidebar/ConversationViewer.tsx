@@ -211,6 +211,7 @@ export function ConversationViewer({
                   </div>
                   <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button
+                      type="button"
                       onClick={async () => {
                         await navigator.clipboard.writeText(message.content)
                         setCopiedId(message.id)

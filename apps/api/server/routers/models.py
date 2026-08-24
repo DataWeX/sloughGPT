@@ -380,6 +380,8 @@ class ModelsRouter:
             return success_response(data=[], meta={})
         except ImportError:
             return success_response(data=[], meta={})
+        except Exception as e:
+            classify_and_raise(e, source="models.logs")
 
     async def export_model(self, request: ExportRequest) -> dict:
         """Export current model to file."""
@@ -410,29 +412,30 @@ class ModelsRouter:
 
     async def get_export_formats(self) -> dict:
         """Get list of supported export formats."""
-        from domains.training.export import list_export_formats
-        return success_response(data=list_export_formats())
+        try:
+            from domains.training.export import list_export_formats
+            return success_response(data=list_export_formats())
+        except Exception as e:
+            classify_and_raise(e, source="models.export_formats")
 
     async def start_download(self, req: DownloadRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
-        """
-        Start downloading a model from HuggingFace Hub with progress tracking.
+        """Start downloading a model from HuggingFace Hub with progress tracking."""
+        try:
+            from domains.infrastructure.download_manager import get_download_manager
 
-        Returns immediately with download status. Poll `/models/download/{model_id}`
-        for progress updates.
-        """
-        from domains.infrastructure.download_manager import get_download_manager
+            mgr = get_download_manager()
 
-        mgr = get_download_manager()
+            if mgr.is_cached(req.model_id):
+                return success_response(data={"model_id": req.model_id}, message="already_cached")
 
-        if mgr.is_cached(req.model_id):
-            return success_response(data={"model_id": req.model_id}, message="already_cached")
+            if mgr.is_downloading(req.model_id):
+                return success_response(data={"model_id": req.model_id}, message="already_downloading")
 
-        if mgr.is_downloading(req.model_id):
-            return success_response(data={"model_id": req.model_id}, message="already_downloading")
-
-        asyncio.create_task(self._run_download(req.model_id, req.total_bytes_hint))
-        safe_audit_log("model.download", resource=req.model_id, detail="started", total_bytes_hint=req.total_bytes_hint)
-        return success_response(data={"model_id": req.model_id}, message="started")
+            asyncio.create_task(self._run_download(req.model_id, req.total_bytes_hint))
+            safe_audit_log("model.download", resource=req.model_id, detail="started", total_bytes_hint=req.total_bytes_hint)
+            return success_response(data={"model_id": req.model_id}, message="started")
+        except Exception as e:
+            classify_and_raise(e, source="models.download_start")
 
     async def _run_download(self, model_id: str, total_bytes_hint: int):
         """Background task that runs the actual download."""

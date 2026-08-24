@@ -107,6 +107,7 @@ export default function TokenizerPage() {
     <div className="flex gap-1 border-b border-border/30 pb-0">
       {(['playground', 'vocab', 'samples', 'train'] as Tab[]).map(t => (
         <button
+          type="button"
           key={t}
           onClick={() => {
             setTab(t)

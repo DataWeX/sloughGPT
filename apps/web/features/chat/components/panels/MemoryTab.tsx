@@ -287,6 +287,7 @@ export function MemoryTab() {
           </span>
           {enabled && items.length > 0 && (
             <button
+              type="button"
               onClick={handleConsolidate}
               disabled={consolidating}
               className="text-[10px] text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
@@ -308,6 +309,7 @@ export function MemoryTab() {
             />
           </div>
           <button
+            type="button"
             onClick={fetchData}
             disabled={loading}
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
@@ -316,6 +318,7 @@ export function MemoryTab() {
             <IconRefresh className={cn('h-3 w-3', loading && 'animate-spin')} />
           </button>
           <button
+            type="button"
             onClick={() => setPendingClear(true)}
             disabled={items.length === 0}
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
@@ -342,6 +345,7 @@ export function MemoryTab() {
               />
               {search && (
                 <button
+                  type="button"
                   onClick={() => setSearch('')}
                   className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Clear search"
@@ -478,6 +482,7 @@ export function MemoryTab() {
         <div className="text-center py-4">
           <p className="text-xs text-muted-foreground">No memory matches that search.</p>
           <button
+            type="button"
             onClick={() => setSearch('')}
             className="mt-1 text-[10px] text-primary hover:underline"
             aria-label="Clear search"
@@ -547,6 +552,7 @@ export function MemoryTab() {
                     <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">{item.score.toFixed(2)}</span>
                   )}
                   <button
+                    type="button"
                     onClick={() => startEdit(item)}
                     className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
                     aria-label="Edit memory item"
@@ -554,6 +560,7 @@ export function MemoryTab() {
                     <IconEdit className="h-3 w-3" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => deleteItem(item)}
                     className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
                     aria-label="Delete memory item"
@@ -566,6 +573,7 @@ export function MemoryTab() {
           </ul>
           {searchResults === null && topicFiltered.length > MAX_VISIBLE && (
             <button
+              type="button"
               onClick={() => setShowAll(v => !v)}
               className="block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
               aria-expanded={showAll}

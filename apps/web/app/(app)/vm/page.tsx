@@ -1067,6 +1067,7 @@ export default function VMPage() {
                     <Button
                       size="sm"
                       variant="ghost"
+                      type="button"
                       onClick={() => navigator.clipboard.writeText(result.training_result as string)}
                     >
                       Copy

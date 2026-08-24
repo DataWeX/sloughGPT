@@ -154,6 +154,7 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
               </p>
               {results.map(r => (
                 <button
+                  type="button"
                   key={r.session.id}
                   onClick={() => { onNavigate(r.session.id); onClose() }}
                   className="w-full text-left p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40"

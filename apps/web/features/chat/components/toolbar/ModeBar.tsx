@@ -64,6 +64,7 @@ interface ModeBarProps {
 function SubOptionPill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "px-2 py-0.5 rounded text-[11px] transition-all",

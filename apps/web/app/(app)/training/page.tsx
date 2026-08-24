@@ -258,6 +258,7 @@ export default function TrainingPage() {
         <div className="flex flex-wrap gap-1.5">
           {MANUAL_TABS.map(t => (
             <button
+              type="button"
               key={t.id}
               onClick={() => setManualTab(t.id)}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${

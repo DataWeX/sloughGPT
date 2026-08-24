@@ -115,6 +115,7 @@ export default function FeedbackPage() {
       <div className="flex gap-1 border-b border-border/30 pb-0">
         {(['stats', 'conversations', 'training'] as Tab[]).map(t => (
           <button
+            type="button"
             key={t}
             onClick={() => {
               setTab(t)

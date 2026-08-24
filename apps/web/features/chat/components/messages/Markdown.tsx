@@ -58,6 +58,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 bg-muted/20">
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{language || 'code'}</span>
         <button
+          type="button"
           onClick={handleCopy}
           className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
           aria-label="Copy code"
