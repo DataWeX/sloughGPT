@@ -45,6 +45,8 @@ const translations: Record<Locale, Translations> = {
     'nav.voice': 'Voice',
     'nav.vector': 'Vector Store',
     'nav.meta-weights': 'Meta-Weights',
+    'nav.infer': 'API Playground',
+    'nav.world': 'World Render',
     'nav.section.core': 'Core',
     'nav.section.ai': 'AI',
     'nav.section.system': 'System',
