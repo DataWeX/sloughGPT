@@ -39,7 +39,7 @@ export default function MemoryPage() {
       setItems(listResp.items ?? [])
       setStats(statsResp)
     } catch {
-      addToast('Failed to load memory', 'error')
+      addToast('Could not load memory', 'error')
     } finally {
       setLoading(false)
     }
@@ -54,7 +54,7 @@ export default function MemoryPage() {
       const resp = await memoryController.search(searchQuery, 20)
       setSearchResults(resp.results ?? [])
     } catch {
-      addToast('Search failed', 'error')
+      addToast('Could not search', 'error')
     } finally {
       setSearching(false)
     }
@@ -69,7 +69,7 @@ export default function MemoryPage() {
       setShowStore(false)
       void fetchAll()
     } catch {
-      addToast('Failed to store', 'error')
+      addToast('Could not store', 'error')
     }
   }, [storeContent, storeTopic, addToast, fetchAll])
 
@@ -80,7 +80,7 @@ export default function MemoryPage() {
       setItems(prev => prev.filter(i => i.id !== id))
       if (selectedItem?.id === id) setSelectedItem(null)
     } catch {
-      addToast('Failed to delete', 'error')
+      addToast('Could not delete', 'error')
     }
   }, [selectedItem, addToast])
 
@@ -92,7 +92,7 @@ export default function MemoryPage() {
       setEditMode(false)
       void fetchAll()
     } catch {
-      addToast('Failed to update', 'error')
+      addToast('Could not update', 'error')
     }
   }, [selectedItem, editContent, addToast, fetchAll])
 
@@ -102,7 +102,7 @@ export default function MemoryPage() {
       addToast(`Consolidated: ${resp.removed ?? 0} removed, ${resp.kept ?? 0} kept`, 'success')
       void fetchAll()
     } catch {
-      addToast('Failed to consolidate', 'error')
+      addToast('Could not consolidate', 'error')
     }
   }, [addToast, fetchAll])
 

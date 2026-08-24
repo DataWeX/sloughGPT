@@ -1461,3 +1461,6 @@ class MobileRouter:
         if interval_s is not None:
             trainer.interval_s = interval_s
         return success_response(data=trainer.status())
+
+
+router = MobileRouter().router

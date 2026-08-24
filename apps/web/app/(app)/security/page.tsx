@@ -54,14 +54,14 @@ export default function SecurityPage() {
     try {
       const auditUrl = `${useHistory ? '/security/audit?history=true&limit=100' : '/security/audit?limit=100'}${eventParam()}`
       const [logsRes, keysRes] = await Promise.all([
-        apiGet<AuditResponse>(auditUrl).catch((e) => { logger.warning('audit log fetch failed', e); return null }),
-        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => { logger.warning('security keys fetch failed', e); return null }),
+        apiGet<AuditResponse>(auditUrl).catch((e) => { logger.warning('Could not audit log fetch', e); return null }),
+        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => { logger.warning('Could not security keys fetch', e); return null }),
       ])
       setLogs(logsRes?.logs ?? [])
       const keysData = keysRes && 'count' in keysRes ? keysRes : null
       setKeyInfo(keysData)
     } catch {
-      addToast('Failed to load security data', 'error')
+      addToast('Could not load security data', 'error')
     } finally {
       setLoading(false)
     }
@@ -87,7 +87,7 @@ export default function SecurityPage() {
       const older = res?.logs ?? []
       setLogs(prev => mergeLogs(prev, older))
     } catch {
-      addToast('Failed to load older audit logs', 'error')
+      addToast('Could not load older audit logs', 'error')
     } finally {
       setLoadingMore(false)
     }

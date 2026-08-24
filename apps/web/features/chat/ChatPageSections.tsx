@@ -69,11 +69,11 @@ export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
       availableModels={model.availableModels}
       onTemperatureChange={(temp) => {
         model.setTemperature(temp)
-        generationConfigController.update({ temperature: temp }).catch(e => { logger.warning('generation config temperature save failed', { exception: String(e) }) })
+        generationConfigController.update({ temperature: temp }).catch(e => { logger.warning('Could not generation config temperature save', { exception: String(e) }) })
       }}
       onMaxTokensChange={(tokens) => {
         model.setMaxTokens(tokens)
-        generationConfigController.update({ max_new_tokens: tokens }).catch(e => { logger.warning('generation config max_tokens save failed', { exception: String(e) }) })
+        generationConfigController.update({ max_new_tokens: tokens }).catch(e => { logger.warning('Could not generation config max_tokens save', { exception: String(e) }) })
       }}
       onClear={clearChat}
       hasMessages={chat.messages.length > 0}

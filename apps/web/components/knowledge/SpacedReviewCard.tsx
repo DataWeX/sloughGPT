@@ -26,11 +26,12 @@ export function SpacedReviewCard({ addToast }: Props) {
       setCompleted(0)
       setShowAnswer(false)
     } catch {
+      addToast('Could not load review items', 'error')
       setDueIds([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [addToast])
 
   useEffect(() => { void fetchDue() }, [fetchDue])
 

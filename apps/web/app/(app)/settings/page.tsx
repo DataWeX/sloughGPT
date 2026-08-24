@@ -113,7 +113,7 @@ export default function SettingsPage() {
       setProcessGuard(status)
       addToast(enabled ? 'Process isolation enabled' : 'Process isolation disabled', 'success')
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Failed to toggle process guard'), 'error')
+      addToast(extractErrorMessage(e, 'Could not toggle process guard'), 'error')
     }
   }
 
@@ -134,7 +134,7 @@ export default function SettingsPage() {
         setConnectionTest({ status: 'error', error: 'Unexpected response' })
       }
     } catch (e: unknown) {
-      setConnectionTest({ status: 'error', error: extractErrorMessage(e, 'Connection failed') })
+      setConnectionTest({ status: 'error', error: extractErrorMessage(e, 'Could not connection') })
     }
   }
 
@@ -253,7 +253,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Connection</CardTitle>
-            <CardDescription>API server and authentication</CardDescription>
+            <CardDescription>Service connection and authentication</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -274,14 +274,14 @@ export default function SettingsPage() {
                 }}
                 placeholder={PUBLIC_API_URL}
                 className={`font-mono text-xs ${settingsErrors.apiUrl ? 'border-destructive ring-destructive/20' : ''}`}
-                aria-label="API server URL"
+                aria-label="Service URL"
                 aria-invalid={!!settingsErrors.apiUrl}
                 aria-describedby={settingsErrors.apiUrl ? 'apiurl-error' : undefined}
               />
               {settingsErrors.apiUrl && (
                 <p id="apiurl-error" className="text-[10px] text-destructive" role="alert">{settingsErrors.apiUrl}</p>
               )}
-              <p className="text-[11px] text-muted-foreground">Backend server address. Changes take effect on next request.</p>
+              <p className="text-[11px] text-muted-foreground">Service address. Changes take effect on next request.</p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">HuggingFace Token</label>
@@ -472,7 +472,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             {healthError && !detailed && !metrics ? (
               <div className="text-center py-6">
-                <p className="text-sm text-destructive mb-3">Could not connect to server</p>
+                <p className="text-sm text-destructive mb-3">Could not connect to service</p>
                 <Button size="sm" variant="outline" onClick={fetchHealth}>
                   <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
                   Retry
@@ -656,7 +656,7 @@ export default function SettingsPage() {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground pt-1">
-                  Process isolation runs the model in a subprocess. If it crashes, the server survives and restarts it automatically. Uses ~2 GB more RAM.
+                  Process isolation runs the model in a subprocess. If it crashes, the app survives and restarts it automatically. Uses ~2 GB more RAM.
                 </p>
               </div>
             ) : (

@@ -165,9 +165,9 @@ export function MessageContextMenu({
             }
           }}
         >
-          {items.map((item) => (
+          {items.map((item, idx) => (
             <button
-              key={item.label}
+              key={idx}
               role="menuitem"
               tabIndex={0}
               disabled={item.disabled}

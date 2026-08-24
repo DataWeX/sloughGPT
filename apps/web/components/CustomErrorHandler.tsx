@@ -47,7 +47,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
   const isNetworkError = error.message.includes('fetch') ||
                          error.message.includes('network') ||
                          error.message.includes('ECONNREFUSED') ||
-                         error.message.includes('Failed to fetch')
+                         error.message.includes('Could not fetch')
 
   const isAuthError = error.message.includes('401') ||
                       error.message.includes('Unauthorized')
@@ -119,7 +119,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
 
           {isNetworkError && (
             <p className="text-xs text-muted-foreground text-center">
-              Check your internet connection and try again. The server might be unreachable.
+              Check your internet connection and try again. The service might be unreachable.
             </p>
           )}
         </CardContent>

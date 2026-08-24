@@ -55,7 +55,7 @@ export function useChatModelValue(opts: Pick<UseChatContextValueOpts, 'model' | 
           loss_history: data.loss_history ?? prev.loss_history,
         }
       })
-    } catch { showToast('Training step failed', 'error') }
+    } catch { showToast('Could not training step', 'error') }
     finally { model.setLearnerTraining(false) }
   }, [model.setLearnerTraining, model.setLearnerInfo, showToast])
 

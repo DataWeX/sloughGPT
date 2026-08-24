@@ -3,15 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useErrorStore } from '@/lib/error-store'
 import { cn } from '@sloughgpt/strui'
-
-function timeAgo(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000)
-  if (s < 5) return 'just now'
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  return `${Math.floor(m / 60)}h ago`
-}
+import { timeAgo } from '@/lib/time-ago'
 
 interface ActivityTickerProps {
   className?: string

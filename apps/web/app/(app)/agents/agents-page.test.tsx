@@ -116,7 +116,7 @@ describe('AgentsPage Run History', () => {
   it('handles run history fetch failure gracefully', async () => {
     mockListRuns.mockRejectedValue(new Error('500'))
     render(<AgentsPage />)
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to load run history', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not load run history', 'error') })
   })
 
   it('calls listRuns with default limit on mount', async () => {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { timeAgo } from '@/lib/time-ago'
 
 const STORAGE_KEY = 'sloughgpt-export-history'
 
@@ -35,14 +36,6 @@ export function recordExport(format: string, fileCount: number) {
     label: format.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
   })
   saveHistory(history.slice(0, 20))
-}
-
-function timeAgo(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60000) return 'just now'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-  return `${Math.floor(diff / 86400000)}d ago`
 }
 
 function formatColor(format: string): string {

@@ -11,7 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from pathlib import Path
 
@@ -35,8 +35,8 @@ class ExportRequest(BaseModel):
 
 
 class DownloadRequest(BaseModel):
-    model_id: str
-    total_bytes_hint: int = 0
+    model_id: str = Field(..., min_length=1, max_length=200)
+    total_bytes_hint: int = Field(default=0, ge=0)
 
 
 class QuantizeRequest(BaseModel):

@@ -47,7 +47,7 @@ export default function DocstorePage() {
       setDocs(data.documents ?? [])
       setCollectionMeta(prev => ({ ...prev, [collection]: data.total ?? data.documents?.length ?? 0 }))
     } catch {
-      addToast(`Failed to load ${collection}`, 'error')
+      addToast(`Could not load ${collection}`, 'error')
       setDocs([])
     } finally {
       setLoading(false)
@@ -69,7 +69,7 @@ export default function DocstorePage() {
       setDocs(prev => prev.filter(d => d._id !== docId))
       if (selectedDoc?._id === docId) setSelectedDoc(null)
     } catch {
-      addToast('Failed to delete document', 'error')
+      addToast('Could not delete document', 'error')
     }
   }, [selected, selectedDoc, addToast])
 
@@ -93,7 +93,7 @@ export default function DocstorePage() {
       setShowCreate(false)
       void fetchDocs(selected)
     } catch {
-      addToast('Failed to create document', 'error')
+      addToast('Could not create document', 'error')
     }
   }, [selected, newDocId, newDocContent, addToast, fetchDocs])
 
@@ -112,7 +112,7 @@ export default function DocstorePage() {
       setEditMode(false)
       void fetchDocs(selected)
     } catch {
-      addToast('Failed to save document', 'error')
+      addToast('Could not save document', 'error')
     }
   }, [selected, selectedDoc, editContent, addToast, fetchDocs])
 
@@ -125,7 +125,7 @@ export default function DocstorePage() {
       setSelectedDoc(null)
       setCollectionMeta(prev => ({ ...prev, [selected]: 0 }))
     } catch {
-      addToast('Failed to clear collection', 'error')
+      addToast('Could not clear collection', 'error')
     }
   }, [selected, addToast])
 
@@ -140,7 +140,7 @@ export default function DocstorePage() {
   return (
     <PageContainer
       title="Document store"
-      subtitle="Browse and manage server-side documents"
+      subtitle="Browse and manage stored documents"
       headerRight={
         <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" onClick={() => void fetchDocs(selected)}>Refresh</Button>

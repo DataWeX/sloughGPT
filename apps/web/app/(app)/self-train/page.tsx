@@ -29,7 +29,7 @@ export default function SelfTrainPage() {
       const data = await apiGet<SelfTrainStatus>('/self-train/status')
       setStatus(data)
     } catch {
-      addToast('Failed to check status', 'error')
+      addToast('Could not check status', 'error')
     } finally {
       setLoading(false)
     }
@@ -60,7 +60,7 @@ export default function SelfTrainPage() {
       addToast('Self-training started', 'success')
       void fetchStatus()
     } catch {
-      addToast('Failed to start', 'error')
+      addToast('Could not start', 'error')
     } finally {
       setStarting(false)
     }
@@ -72,7 +72,7 @@ export default function SelfTrainPage() {
       addToast('Self-training stopped', 'success')
       void fetchStatus()
     } catch {
-      addToast('Failed to stop', 'error')
+      addToast('Could not stop', 'error')
     }
   }, [addToast, fetchStatus])
 

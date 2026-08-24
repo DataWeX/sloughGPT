@@ -134,7 +134,7 @@ export default function AgentsPage() {
       const data = await agentsController.list()
       setAgents(data)
     } catch {
-      addToast('Failed to load agents', 'error')
+      addToast('Could not load agents', 'error')
     }
     setLoading(false)
   }, [addToast])
@@ -147,7 +147,7 @@ export default function AgentsPage() {
       const res = await agentsController.listRuns(20)
       setRuns(res.runs || [])
     } catch {
-      addToast('Failed to load run history', 'error')
+      addToast('Could not load run history', 'error')
     }
     setRunsLoading(false)
   }, [addToast])
@@ -250,7 +250,7 @@ export default function AgentsPage() {
       addToast('Agent created', 'success')
     } catch {
       setAgents(prev => prev.filter(a => a.id !== tempId))
-      addToast('Failed to create agent', 'error')
+      addToast('Could not create agent', 'error')
     }
     setCreating(false)
   }
@@ -293,7 +293,7 @@ export default function AgentsPage() {
       addToast('Agent updated', 'success')
     } catch {
       if (oldAgent) setAgents(prev => prev.map(a => a.id === id ? oldAgent : a))
-      addToast('Update failed', 'error')
+      addToast('Could not update', 'error')
     }
   }
 
@@ -306,14 +306,14 @@ export default function AgentsPage() {
       addToast('Agent deleted', 'success', undefined, () => {
         setAgents(prev => [deleted, ...prev])
         agentsController.create({ name: deleted.name, description: deleted.description, instructions: deleted.instructions, tools: deleted.tools }).catch((e) => {
-          logger.warning('Failed to restore agent', { exception: String(e) })
-          addToast('Failed to restore agent', 'error')
+          logger.warning('Could not restore agent', { exception: String(e) })
+          addToast('Could not restore agent', 'error')
           fetchAgents()
         })
       })
     } catch {
       setAgents(prev => [deleted, ...prev])
-      addToast('Failed to delete agent', 'error')
+      addToast('Could not delete agent', 'error')
     }
   }
 
@@ -345,7 +345,7 @@ export default function AgentsPage() {
       addToast(`Deleted ${deletedIds.size} agents`, 'success')
     } catch {
       setAgents(prev => [...deletedAgents, ...prev])
-      addToast('Failed to delete some agents', 'error')
+      addToast('Could not delete some agents', 'error')
     }
   }
 
@@ -369,7 +369,7 @@ export default function AgentsPage() {
       const res = await agentsController.execute(id, execPrompt)
       setExecResult(res.response)
     } catch {
-      setExecResult('Execution failed')
+      setExecResult('Could not execution')
     }
     setExecRunning(false)
   }
@@ -448,7 +448,7 @@ export default function AgentsPage() {
       addToast(`Cloned "${agent.name}"`, 'success')
       await fetchAgents()
     } catch {
-      addToast('Failed to clone agent', 'error')
+      addToast('Could not clone agent', 'error')
     }
   }
 

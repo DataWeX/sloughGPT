@@ -40,7 +40,7 @@ export function ImageSection() {
       setGallery(galleryRes?.images ?? [])
       setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
     } catch {
-      addToast('Failed to load image data', 'error')
+      addToast('Could not load image data', 'error')
     } finally {
       setLoading(false)
     }
@@ -62,7 +62,7 @@ export function ImageSection() {
       setLastGenerated(data.image ?? null)
       await fetchData()
     } catch (err) {
-      setGenError(err instanceof Error ? err.message : 'Generation failed')
+      setGenError(err instanceof Error ? err.message : 'Could not generation')
     } finally {
       setGenerating(false)
     }

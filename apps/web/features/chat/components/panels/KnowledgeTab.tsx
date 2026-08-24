@@ -33,7 +33,7 @@ export function KnowledgeTab({
   }, [knowledge, knowledgeSearch])
 
   useEffect(() => {
-    chatDB.getKnowledge().then(items => setKnowledge(items)).catch(e => logger.debug('Failed to load knowledge from DB', { exception: String(e) }))
+    chatDB.getKnowledge().then(items => setKnowledge(items)).catch(e => logger.debug('Could not load knowledge from DB', { exception: String(e) }))
   }, [])
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export function KnowledgeTab({
           await chatDB.clearKnowledge()
           await chatDB.importKnowledge(merged)
         }
-      }).catch(e => logger.debug('Failed to fetch backend knowledge', { exception: String(e) }))
+      }).catch(e => logger.debug('Could not fetch backend knowledge', { exception: String(e) }))
     }).catch(() => /* dynamic import failed — knowledge controller unavailable */ {})
     return () => { cancelled = true }
   }, [])
@@ -119,7 +119,7 @@ export function KnowledgeTab({
       const backendId = backendContentIds.get(item.content)
       if (backendId) {
         import('@/lib/knowledge-controller').then(({ knowledgeController }) => {
-          knowledgeController.delete(backendId).catch(e => logger.debug('Backend knowledge delete failed', { exception: String(e) }))
+          knowledgeController.delete(backendId).catch(e => logger.debug('Could not backend knowledge delete', { exception: String(e) }))
         }).catch(() => /* dynamic import failed */ {})
       }
     }

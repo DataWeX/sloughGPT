@@ -190,7 +190,7 @@ export default function EvaluatePage() {
       setCmpResults(prev => ({ ...prev, [modelId]: result }))
     } catch {
       setCmpResults(prev => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
-      addToast(`Performance test failed for ${modelId}`, 'error')
+      addToast(`Could not complete performance test for ${modelId}`, 'error')
     } finally { setCmpRunning(prev => { const n = new Set(prev); n.delete(modelId); return n }) }
   }
 

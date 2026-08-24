@@ -31,7 +31,7 @@ export function useTrainingStream() {
     closeStream()
     trainingJobsController.startAutoTrain(body).then(() => {
       writeTraining({
-        phase: 'TRAINING', method: 'slnet',
+        phase: 'TRAINING', method: 'slonet',
         loss: null, progress: 0, epoch: 0, totalEpochs: 0,
         globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null,
         elapsedSeconds: null, message: '', lossHistory: [], evalResult: null,
@@ -97,8 +97,8 @@ export function useTrainingStream() {
           }
           if (env.status === 'error') {
             closeStream()
-            writeTraining({ phase: 'error', error: 'Training failed' })
-            addToast('Training failed', 'error')
+            writeTraining({ phase: 'error', error: 'Could not training' })
+            addToast('Could not training', 'error')
           }
         } catch (err) { _log.error('SSE parse error', { exception: String(err) }) }
       }
@@ -111,7 +111,7 @@ export function useTrainingStream() {
           addToast('Connection lost during training', 'error')
         } else { esRetries++ }
       }
-    }).catch(() => addToast('Failed to start training', 'error'))
+    }).catch(() => addToast('Could not start training', 'error'))
   }, [closeStream])
 
   useEffect(() => () => closeStream(), [closeStream])

@@ -82,7 +82,7 @@ export default function AutoTrainPage() {
       session.stopTraining()
       addToast('Training stopped', 'success')
     } catch {
-      addToast('Failed to stop training', 'error')
+      addToast('Could not stop training', 'error')
     }
   }, [session, addToast])
 
@@ -90,7 +90,7 @@ export default function AutoTrainPage() {
     try {
       await session.pauseTraining(addToast)
     } catch {
-      addToast('Failed to pause training', 'error')
+      addToast('Could not pause training', 'error')
     }
   }, [session, addToast])
 
@@ -98,7 +98,7 @@ export default function AutoTrainPage() {
     try {
       await session.resumeTraining(addToast)
     } catch {
-      addToast('Failed to resume training', 'error')
+      addToast('Could not resume training', 'error')
     }
   }, [session, addToast])
 
@@ -107,7 +107,7 @@ export default function AutoTrainPage() {
       await trainingJobsController.loadCheckpoint(name)
       addToast(`Loaded checkpoint: ${name}`, 'success')
     } catch {
-      addToast('Failed to load checkpoint', 'error')
+      addToast('Could not load checkpoint', 'error')
     }
   }, [addToast])
 
@@ -117,7 +117,7 @@ export default function AutoTrainPage() {
       addToast(`Deleted checkpoint: ${name}`, 'success')
       void checkpoints.fetchCheckpoints()
     } catch {
-      addToast('Failed to delete checkpoint', 'error')
+      addToast('Could not delete checkpoint', 'error')
     }
   }, [addToast, checkpoints])
 
@@ -127,7 +127,7 @@ export default function AutoTrainPage() {
       const logs = await trainingJobsController.getTrainingLog()
       setJobLogs(logs)
     } catch {
-      addToast('Failed to fetch logs', 'error')
+      addToast('Could not fetch logs', 'error')
     } finally {
       setLogsLoading(false)
     }

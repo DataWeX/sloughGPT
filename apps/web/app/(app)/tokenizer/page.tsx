@@ -51,7 +51,7 @@ export default function TokenizerPage() {
       setStats(s)
       setLoading(false)
     }).catch(() => {
-      setLoadError('Could not load tokenizer data. Is the server running?')
+      setLoadError('Could not load tokenizer data. Please try again.')
       setLoading(false)
     })
   }, [])
@@ -63,7 +63,7 @@ export default function TokenizerPage() {
       const res = await tokenizerController.tokenize(inputText)
       setTokenResult(res)
     } catch {
-      addToast('Tokenization failed', 'error')
+      addToast('Could not tokenization', 'error')
     } finally {
       setTokenizing(false)
     }
@@ -76,7 +76,7 @@ export default function TokenizerPage() {
       setVocabTotal(res.total)
       setVocabOffset(offset)
     } catch {
-      addToast('Failed to load vocabulary', 'error')
+      addToast('Could not load vocabulary', 'error')
     }
   }
 
@@ -85,7 +85,7 @@ export default function TokenizerPage() {
       const res = await tokenizerController.getSamples()
       setSamples(res.samples)
     } catch {
-      addToast('Failed to load samples', 'error')
+      addToast('Could not load samples', 'error')
     }
   }
 
@@ -97,7 +97,7 @@ export default function TokenizerPage() {
       setTrainResult(`Trained on ${res.corpus_size} lines. Vocab: ${res.stats.vocab_size}`)
       setStats(res.stats)
     } catch (err) {
-      setTrainResult(err instanceof Error ? err.message : 'Training failed')
+      setTrainResult(err instanceof Error ? err.message : 'Could not training')
     } finally {
       setTraining(false)
     }
@@ -143,7 +143,7 @@ export default function TokenizerPage() {
 
       {!loading && !loadError && !stats && (
         <div className="text-center py-8 text-sm text-muted-foreground">
-          No tokenizer data available. Train a tokenizer or check server status.
+          No tokenizer data available. Train a tokenizer or try again later.
           <div className="mt-2">
             <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/training')}>
               Go to Training

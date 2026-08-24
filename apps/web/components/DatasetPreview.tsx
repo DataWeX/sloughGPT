@@ -40,7 +40,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
         setPreview(previewData)
         setValidation(null)
       } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load preview'))
+        setError(extractErrorMessage(err, 'Could not load preview'))
       } finally {
         setLoading(false)
       }
@@ -63,7 +63,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
     return (
       <Card>
         <CardContent className="py-8 text-center text-destructive" role="alert" aria-live="assertive">
-          {error || 'Failed to load preview'}
+          {error || 'Could not load preview'}
         </CardContent>
       </Card>
     )

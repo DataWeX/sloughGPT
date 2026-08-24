@@ -125,7 +125,7 @@ export function WebhooksCard({ addToast }: Props) {
       await trainingJobsController.testWebhook(url)
       addToast('Webhook test sent', 'success')
     } catch {
-      addToast('Webhook test failed', 'error')
+      addToast('Could not webhook test', 'error')
     } finally {
       setTestingUrl(null)
     }

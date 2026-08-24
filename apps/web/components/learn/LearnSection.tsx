@@ -47,7 +47,7 @@ export function LearnSection() {
       const res = await learnerController.search(searchQuery)
       setSearchResult(`Ingested ${res.tokens_ingested} tokens, ${res.new_facts} new facts`)
     } catch (err) {
-      setSearchResult(err instanceof Error ? err.message : 'Search failed')
+      setSearchResult(err instanceof Error ? err.message : 'Could not search')
     } finally {
       setSearching(false)
     }
@@ -62,7 +62,7 @@ export function LearnSection() {
       setIngestResult(`Added ${res.facts_added} facts from URL`)
       setIngestUrl('')
     } catch (err) {
-      setIngestResult(err instanceof Error ? err.message : 'Ingest failed')
+      setIngestResult(err instanceof Error ? err.message : 'Could not ingest')
     } finally {
       setIngesting(false)
     }
@@ -77,7 +77,7 @@ export function LearnSection() {
       setIngestResult(`Added ${res.facts_added} facts from text`)
       setIngestText('')
     } catch (err) {
-      setIngestResult(err instanceof Error ? err.message : 'Ingest failed')
+      setIngestResult(err instanceof Error ? err.message : 'Could not ingest')
     } finally {
       setIngesting(false)
     }
@@ -89,7 +89,7 @@ export function LearnSection() {
       const res = await learnerController.queryKnowledge(knowledgeQuery || undefined)
       setKnowledge(res.facts ?? [])
     } catch {
-      addToast('Failed to load knowledge', 'error')
+      addToast('Could not load knowledge', 'error')
     } finally {
       setLoadingKnowledge(false)
     }
@@ -100,7 +100,7 @@ export function LearnSection() {
       const res = await learnerController.listFeeds()
       setFeeds(res.feeds ?? [])
     } catch {
-      addToast('Failed to load feeds', 'error')
+      addToast('Could not load feeds', 'error')
     }
   }
 

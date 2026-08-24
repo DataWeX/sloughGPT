@@ -54,7 +54,7 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
       const res = await apiGet<{ operations: Operation[]; counts: Record<string, number> }>('/operations')
       set({ operations: res.operations, counts: res.counts, loading: false })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : 'Failed to fetch operations', loading: false })
+      set({ error: err instanceof Error ? err.message : 'Could not fetch operations', loading: false })
     }
   },
 
@@ -76,7 +76,7 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
       await get().fetch()
       return res.count
     } catch (e) {
-      _log.warning('CancelAll failed', { error: e instanceof Error ? e.message : String(e) })
+      _log.warning('Could not cancelall', { error: e instanceof Error ? e.message : String(e) })
       return 0
     }
   },

@@ -161,9 +161,9 @@ export default function SoulsPage() {
   // ── Data Loading ──
   const loadData = useCallback(async () => {
     const [s, c, snaps] = await Promise.all([
-      soulsController.list().catch((e) => { logger.warning('souls list failed', { exception: String(e) }); return { souls: [], current_soul: null } }),
-      soulsController.listCheckpoints().catch((e) => { logger.warning('checkpoints list failed', { exception: String(e) }); return { checkpoints: [] } }),
-      soulsController.listWeightSnapshots().catch((e) => { logger.warning('weight snapshots failed', { exception: String(e) }); return [] }),
+      soulsController.list().catch((e) => { logger.warning('Could not souls list', { exception: String(e) }); return { souls: [], current_soul: null } }),
+      soulsController.listCheckpoints().catch((e) => { logger.warning('Could not checkpoints list', { exception: String(e) }); return { checkpoints: [] } }),
+      soulsController.listWeightSnapshots().catch((e) => { logger.warning('Could not weight snapshots', { exception: String(e) }); return [] }),
     ])
     setSouls(s.souls)
     setCurrentSoul(s.current_soul ?? null)
@@ -189,7 +189,7 @@ export default function SoulsPage() {
       setCurrentSoul(name)
       addToast(`Switched to ${name}`, 'success')
     } catch {
-      addToast('Failed to switch soul', 'error')
+      addToast('Could not switch soul', 'error')
     } finally {
       setSwitching(null)
     }
@@ -203,7 +203,7 @@ export default function SoulsPage() {
       addToast(`Loaded checkpoint: ${name}`, 'success')
       await handleRefresh()
     } catch {
-      addToast('Failed to load checkpoint', 'error')
+      addToast('Could not load checkpoint', 'error')
     } finally {
       setLoadingCheckpoint(null)
     }
@@ -215,7 +215,7 @@ export default function SoulsPage() {
       addToast(`Deleted checkpoint: ${name}`, 'success')
       setCheckpoints(prev => prev.filter(cp => cp.name !== name))
     } catch {
-      addToast('Failed to delete checkpoint', 'error')
+      addToast('Could not delete checkpoint', 'error')
     }
     setDeleteTarget(null)
   }
@@ -231,7 +231,7 @@ export default function SoulsPage() {
       URL.revokeObjectURL(url)
       addToast(`Downloaded ${name}`, 'success')
     } catch {
-      addToast('Download failed', 'error')
+      addToast('Could not download', 'error')
     }
   }
 
@@ -240,7 +240,7 @@ export default function SoulsPage() {
       const info = await soulsController.checkpointInfo(name)
       if (info) setCheckpointDetail(info)
     } catch {
-      addToast('Failed to load checkpoint info', 'error')
+      addToast('Could not load checkpoint info', 'error')
     }
   }
 
@@ -255,7 +255,7 @@ export default function SoulsPage() {
       setEditedWeights(JSON.parse(JSON.stringify(w)))
       setModes(m)
     } catch {
-      addToast('Failed to load trait weights', 'error')
+      addToast('Could not load trait weights', 'error')
     }
   }
 
@@ -274,7 +274,7 @@ export default function SoulsPage() {
       setTraitWeights(JSON.parse(JSON.stringify(editedWeights)))
       addToast('Trait weights saved', 'success')
     } catch {
-      addToast('Failed to save trait weights', 'error')
+      addToast('Could not save trait weights', 'error')
     } finally {
       setSavingWeights(false)
     }
@@ -287,7 +287,7 @@ export default function SoulsPage() {
     try {
       setSnapshots(await soulsController.listWeightSnapshots())
     } catch {
-      addToast('Failed to load snapshots', 'error')
+      addToast('Could not load snapshots', 'error')
     }
   }
 
@@ -299,7 +299,7 @@ export default function SoulsPage() {
       await handleLoadSnapshots()
       addToast('Snapshot saved', 'success')
     } catch {
-      addToast('Failed to save snapshot', 'error')
+      addToast('Could not save snapshot', 'error')
     }
   }
 
@@ -309,7 +309,7 @@ export default function SoulsPage() {
       await handleLoadWeights()
       addToast('Snapshot loaded', 'success')
     } catch {
-      addToast('Failed to load snapshot', 'error')
+      addToast('Could not load snapshot', 'error')
     }
   }
 
@@ -319,7 +319,7 @@ export default function SoulsPage() {
       await handleLoadSnapshots()
       addToast('Snapshot deleted', 'success')
     } catch {
-      addToast('Failed to delete snapshot', 'error')
+      addToast('Could not delete snapshot', 'error')
     }
     setDeleteTarget(null)
   }

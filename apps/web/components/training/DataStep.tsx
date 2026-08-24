@@ -45,7 +45,7 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
       await datasets.fetchDatasets()
       datasets.setSelectedDataset(result.dataset_id)
     } catch {
-      addToast?.(`Failed to import ${datasetId}`, 'error')
+      addToast?.(`Could not import ${datasetId}`, 'error')
     } finally {
       setImportingKaggle(null)
     }
@@ -62,7 +62,7 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
       await datasets.fetchDatasets()
       datasets.setSelectedDataset(result.dataset_id)
     } catch {
-      addToast?.(`Failed to import ${datasetId}`, 'error')
+      addToast?.(`Could not import ${datasetId}`, 'error')
     } finally {
       setImportingHF(null)
     }

@@ -83,7 +83,7 @@ export default function KnowledgePage() {
         knowledgeController.list(),
         knowledgeController.stats(),
         knowledgeController.topics(),
-        knowledgeController.getAdapterStatus().catch((e) => { logger.warning('adapter status failed', { exception: String(e) }); return null }),
+        knowledgeController.getAdapterStatus().catch((e) => { logger.warning('Could not adapter status', { exception: String(e) }); return null }),
       ])
       setItems(itemsResult)
       setStats(statsResult)
@@ -144,7 +144,7 @@ export default function KnowledgePage() {
       setAdapterStatus(result.adapter_status)
       addToast(`Adapter trained on ${result.fact_count} facts in ${result.elapsed.toFixed(1)}s`, 'success')
     } catch {
-      addToast('Adapter training failed', 'error')
+      addToast('Could not adapter training', 'error')
     } finally {
       setAdapterTraining(false)
     }
@@ -175,7 +175,7 @@ export default function KnowledgePage() {
       const result = await knowledgeController.search(search)
       setSearchResults(result.results || [])
     } catch {
-      addToast('Search failed', 'error')
+      addToast('Could not search', 'error')
     }
   }, [search, addToast])
 
@@ -227,7 +227,7 @@ export default function KnowledgePage() {
     } catch {
       setItems(prev => [deleted, ...prev])
       setStats(prev => prev ? { ...prev, total_items: prev.total_items + 1 } : prev)
-      addToast('Delete failed', 'error')
+      addToast('Could not delete', 'error')
     }
   }
 
@@ -252,7 +252,7 @@ export default function KnowledgePage() {
     } catch {
       setItems(prev => [...deletedItems, ...prev])
       setStats(prev => prev ? { ...prev, total_items: prev.total_items + deletedIds.size } : prev)
-      addToast('Batch delete failed', 'error')
+      addToast('Could not batch delete', 'error')
     }
   }
 
@@ -333,7 +333,7 @@ export default function KnowledgePage() {
       setEditingId(null)
       addToast('Updated', 'info')
     } catch {
-      addToast('Update failed', 'error')
+      addToast('Could not update', 'error')
     }
   }
 
@@ -344,7 +344,7 @@ export default function KnowledgePage() {
       setEditingImportanceId(null)
       addToast('Importance updated', 'info')
     } catch {
-      addToast('Update failed', 'error')
+      addToast('Could not update', 'error')
     }
   }
 
@@ -419,7 +419,7 @@ export default function KnowledgePage() {
       addToast(`Imported ${facts.length} facts`, 'success')
       await fetchData()
     } catch {
-      addToast('Import failed', 'error')
+      addToast('Could not import', 'error')
     } finally {
       setImporting(false)
       setImportProgress(null)

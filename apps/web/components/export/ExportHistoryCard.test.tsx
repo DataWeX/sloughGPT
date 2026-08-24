@@ -17,8 +17,8 @@ beforeEach(() => {
 
 describe('ExportHistoryCard', () => {
   it('renders empty state for empty history', () => {
-    render(<ExportHistoryCard />)
-    expect(screen.getAllByText('No export history').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<ExportHistoryCard />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders when history exists', () => {

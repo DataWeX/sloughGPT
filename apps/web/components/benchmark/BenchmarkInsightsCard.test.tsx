@@ -29,8 +29,8 @@ const stats = { total: 42, avg_tokens: 64 }
 
 describe('BenchmarkInsightsCard', () => {
   it('renders empty state for all null props', () => {
-    render(<BenchmarkInsightsCard metrics={null} quality={null} stats={null} />)
-    expect(screen.getAllByText('No benchmark data available').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<BenchmarkInsightsCard metrics={null} quality={null} stats={null} />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders card with quality data', () => {

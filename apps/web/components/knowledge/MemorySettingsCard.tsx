@@ -20,11 +20,11 @@ export function MemorySettingsCard() {
       const c = await memoryController.getConfig()
       setConfig(c)
     } catch {
-      // unavailable
+      addToast('Could not load memory config', 'error')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [addToast])
 
   useEffect(() => { fetchConfig() }, [fetchConfig])
 
@@ -99,7 +99,7 @@ export function MemorySettingsCard() {
           size="sm"
           variant="outline"
           className="h-7 text-xs"
-          onClick={() => memoryController.consolidate().then(() => addToast('Consolidation triggered', 'success')).catch(e => addToast(extractErrorMessage(e, 'Consolidation failed'), 'error'))}
+          onClick={() => memoryController.consolidate().then(() => addToast('Consolidation triggered', 'success')).catch(e => addToast(extractErrorMessage(e, 'Could not consolidation'), 'error'))}
         >
           Run Consolidation Now
         </Button>

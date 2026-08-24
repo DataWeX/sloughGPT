@@ -39,15 +39,15 @@ describe('useConversionStatus', () => {
     expect(result.current.status?.progress).toBe(50)
   })
 
-  it('polls every 500ms', async () => {
+  it('polls every 2000ms', async () => {
     mockApiGet.mockResolvedValue({ data: { stage: 'converting', progress: 30 } })
 
     renderHook(() => useConversionStatus('my-model'))
 
-    await vi.advanceTimersByTimeAsync(600)
+    await vi.advanceTimersByTimeAsync(2200)
     expect(mockApiGet.mock.calls.length).toBeGreaterThanOrEqual(2)
 
-    await vi.advanceTimersByTimeAsync(600)
+    await vi.advanceTimersByTimeAsync(2200)
     expect(mockApiGet.mock.calls.length).toBeGreaterThanOrEqual(3)
   })
 

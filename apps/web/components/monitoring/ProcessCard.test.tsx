@@ -9,13 +9,13 @@ describe('ProcessCard', () => {
   afterEach(cleanup)
 
   it('renders empty state when detailed is null', () => {
-    render(<ProcessCard detailed={null} />)
-    expect(screen.getAllByText('Process info unavailable').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<ProcessCard detailed={null} />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders empty state when system is undefined', () => {
-    render(<ProcessCard detailed={{}} />)
-    expect(screen.getAllByText('Process info unavailable').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<ProcessCard detailed={{}} />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders CPU and Memory from system block', () => {

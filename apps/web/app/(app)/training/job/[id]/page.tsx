@@ -98,7 +98,7 @@ export default function TrainingJobDetailPage() {
         consecutiveErrors++
         if (consecutiveErrors >= 5) {
           clearInterval(id)
-          addToast('Lost connection to training server', 'error')
+          addToast('Lost connection to training service', 'error')
         }
       }
     }, 3000)
@@ -112,7 +112,7 @@ export default function TrainingJobDetailPage() {
     try {
       await modelController.loadModelPath(job.checkpoint)
       addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
-    } catch { addToast('Failed to load trained version', 'error') }
+    } catch { addToast('Could not load trained version', 'error') }
   }
 
   const handleDelete = async () => {
@@ -233,7 +233,7 @@ export default function TrainingJobDetailPage() {
                         await trainingJobsController.stop(job.id)
                         addToast('Training stopped', 'info')
                         await fetchJob()
-                      } catch { addToast('Failed to stop training', 'error') }
+                      } catch { addToast('Could not stop training', 'error') }
                     }}>
                       Stop
                     </Button>
@@ -248,7 +248,7 @@ export default function TrainingJobDetailPage() {
                           const blob = await trainingJobsController.downloadTrainingJob(job.id)
                           downloadBlob(blob, `${job.id}.checkpoint`)
                           addToast('Checkpoint downloaded', 'success')
-                        } catch { addToast('Download failed', 'error') }
+                        } catch { addToast('Could not download', 'error') }
                       }}>
                         <IconDownload className="h-4 w-4 mr-1" /> Export
                       </Button>
@@ -259,7 +259,7 @@ export default function TrainingJobDetailPage() {
                       try {
                         await modelController.loadModelPath(job.checkpoint)
                         addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
-                      } catch { addToast('Failed to load model', 'error') }
+                      } catch { addToast('Could not load model', 'error') }
                     }
                     router.push('/chat')
                   }}>

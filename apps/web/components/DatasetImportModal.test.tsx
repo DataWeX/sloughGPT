@@ -74,7 +74,7 @@ describe('DatasetImportModal', () => {
     expect(screen.getByText('HuggingFace')).toBeDefined()
     expect(screen.getByText('Kaggle')).toBeDefined()
     expect(screen.getByText('URL')).toBeDefined()
-    expect(screen.getByText('Server Path')).toBeDefined()
+    expect(screen.getByText('Folder Path')).toBeDefined()
   })
 
   it('renders name input', () => {

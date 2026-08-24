@@ -31,7 +31,7 @@ export default function AdaptersPage() {
       setStats(listRes.stats)
       setAdapters(listRes.adapters ?? [])
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Failed to refresh adapters'), 'error')
+      addToast(extractErrorMessage(e, 'Could not refresh adapters'), 'error')
     }
   }
 
@@ -46,7 +46,7 @@ export default function AdaptersPage() {
         setStats(listRes.stats)
         setAdapters(listRes.adapters ?? [])
       } catch (e) {
-        if (!ignore) setError(extractErrorMessage(e, 'Failed to load adapters'))
+        if (!ignore) setError(extractErrorMessage(e, 'Could not load adapters'))
       } finally {
         if (!ignore) setLoading(false)
       }
@@ -67,7 +67,7 @@ export default function AdaptersPage() {
         setAggregateResult(`Aggregated ${res.user_count ?? 0} adapters`)
       }
     } catch (err) {
-      setAggregateResult(err instanceof Error ? err.message : 'Aggregation failed')
+      setAggregateResult(err instanceof Error ? err.message : 'Could not aggregation')
     } finally {
       setAggregating(false)
     }
@@ -80,7 +80,7 @@ export default function AdaptersPage() {
       setAggregateResult(`Pruned ${res.deleted_count} adapters`)
       await refreshData()
     } catch (err) {
-      setAggregateResult(err instanceof Error ? err.message : 'Prune failed')
+      setAggregateResult(err instanceof Error ? err.message : 'Could not prune')
     } finally {
       setPruning(false)
     }
@@ -93,7 +93,7 @@ export default function AdaptersPage() {
       await refreshData()
       addToast(`Adapter for ${userId} reset`, 'success')
     } catch {
-      addToast('Failed to reset adapter', 'error')
+      addToast('Could not reset adapter', 'error')
     }
   }
 
@@ -105,7 +105,7 @@ export default function AdaptersPage() {
       setEvalHistory(evalResults)
       addToast('Evaluation complete', 'success')
     } catch {
-      addToast('Eval failed', 'error')
+      addToast('Could not eval', 'error')
     } finally {
       setRunningEval(false)
     }

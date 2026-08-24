@@ -138,11 +138,11 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
         } catch (err) {
           const msg = extractErrorMessage(err)
           if (msg.includes('501') || msg.includes('not available')) {
-            addToast('Server speech recognition not available — use Chrome or Edge for browser voice input', 'error')
+            addToast('Speech recognition not available — use Chrome or Edge for browser voice input', 'error')
           } else {
-            addToast('Audio transcription failed', 'error')
+            addToast('Could not audio transcription', 'error')
           }
-          logger.error('Audio transcription failed', { exception: String(err) })
+          logger.error('Could not audio transcription', { exception: String(err) })
         }
       }
 
@@ -158,7 +158,7 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
       } else {
         addToast('Could not access microphone', 'error')
       }
-      logger.error('Microphone access failed', { exception: String(err) })
+      logger.error('Could not microphone access', { exception: String(err) })
     }
   }, [onTranscript])
 

@@ -32,7 +32,7 @@ export default function ExperimentsPage() {
     try {
       setExperiments(await experimentsController.list())
     } catch {
-      addToast('Failed to load experiments', 'error')
+      addToast('Could not load experiments', 'error')
     } finally {
       setLoading(false)
     }
@@ -59,7 +59,7 @@ export default function ExperimentsPage() {
       setNewName('')
       await fetchExperiments()
     } catch {
-      addToast('Failed to create experiment', 'error')
+      addToast('Could not create experiment', 'error')
     } finally {
       setCreating(false)
     }
@@ -70,7 +70,7 @@ export default function ExperimentsPage() {
       await experimentsController.delete(id)
       await fetchExperiments()
     } catch {
-      addToast('Failed to delete experiment', 'error')
+      addToast('Could not delete experiment', 'error')
     }
   }
 
@@ -130,7 +130,7 @@ export default function ExperimentsPage() {
       await fetchExperiments()
       addToast(`Deleted ${selectedIds.size} experiments`, 'success')
     } catch {
-      addToast('Batch delete failed', 'error')
+      addToast('Could not batch delete', 'error')
     } finally {
       setBatchDeleting(false)
     }

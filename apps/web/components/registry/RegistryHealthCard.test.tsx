@@ -44,8 +44,8 @@ const statsOpen: RegistryStats = {
 
 describe('RegistryHealthCard', () => {
   it('renders empty state when no models', () => {
-    render(<RegistryHealthCard models={[]} stats={stats} />)
-    expect(screen.getAllByText('No models registered').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<RegistryHealthCard models={[]} stats={stats} />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders health card with models', () => {

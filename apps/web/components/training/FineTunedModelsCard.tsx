@@ -32,7 +32,7 @@ export function FineTunedModelsCard({
       const list = await trainingJobsController.listFineTuned()
       setModels(list)
     } catch (e) {
-      setError(extractErrorMessage(e, 'Failed to load models'))
+      setError(extractErrorMessage(e, 'Could not load models'))
     } finally {
       setLoading(false)
     }
@@ -47,7 +47,7 @@ export function FineTunedModelsCard({
       addToast(`${name} loaded for chat`, 'success')
       onLoaded?.()
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Load failed'), 'error')
+      addToast(extractErrorMessage(e, 'Could not load'), 'error')
     } finally {
       setLoadingName(null)
     }
@@ -59,7 +59,7 @@ export function FineTunedModelsCard({
       addToast(`Deleted ${name}`, 'success')
       void fetchModels()
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Delete failed'), 'error')
+      addToast(extractErrorMessage(e, 'Could not delete'), 'error')
     }
   }
 
@@ -70,7 +70,7 @@ export function FineTunedModelsCard({
       addToast(`${name} unloaded`, 'info')
       onLoaded?.()
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Unload failed'), 'error')
+      addToast(extractErrorMessage(e, 'Could not unload'), 'error')
     } finally {
       setLoadingName(null)
     }
@@ -102,7 +102,7 @@ export function FineTunedModelsCard({
       addToast(`Deleted ${selectedIds.size} models`, 'success')
       void fetchModels()
     } catch {
-      addToast('Batch delete failed', 'error')
+      addToast('Could not batch delete', 'error')
     } finally {
       setBatchDeleting(false)
     }

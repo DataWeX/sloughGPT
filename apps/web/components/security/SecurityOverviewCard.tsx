@@ -1,6 +1,7 @@
 'use client'
 
 import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { timeAgo } from '@/lib/time-ago'
 
 interface AuditLog {
   event_type: string
@@ -33,21 +34,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   Data: 'bg-accent/15 text-accent',
   Destructive: 'bg-destructive/15 text-destructive',
   System: 'bg-muted text-muted-foreground',
-}
-
-function timeAgo(ts: string): string {
-  try {
-    const d = new Date(ts)
-    if (isNaN(d.getTime())) return ''
-    const diffMs = Date.now() - d.getTime()
-    const diffM = Math.floor(diffMs / 60000)
-    const diffH = Math.floor(diffM / 60)
-    const diffD = Math.floor(diffH / 24)
-    if (diffD > 0) return `${diffD}d ago`
-    if (diffH > 0) return `${diffH}h ago`
-    if (diffM > 0) return `${diffM}m ago`
-    return 'just now'
-  } catch { return '' }
 }
 
 export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: SecurityOverviewCardProps) {

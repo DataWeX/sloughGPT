@@ -69,7 +69,7 @@ export function useV86(): UseV86Result {
         ctrl.persistState().catch(e => { logger.warning('VM auto-save failed', { exception: String(e) }) })
       }, AUTO_SAVE_INTERVAL_MS)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to start Linux VM')
+      setError(err instanceof Error ? err.message : 'Could not start Linux VM')
     }
   }, [])
 

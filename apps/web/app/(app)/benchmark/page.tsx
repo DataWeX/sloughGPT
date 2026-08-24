@@ -48,9 +48,9 @@ export default function BenchmarkPage() {
         setMetrics(m)
         setQuality(q)
         setStats(s)
-        if (!m && !q && !s) setLoadError('Could not load benchmark data. Is the server running?')
+        if (!m && !q && !s) setLoadError('Could not load benchmark data. Please try again.')
       } catch {
-        setLoadError('Could not load benchmark data. Is the server running?')
+        setLoadError('Could not load benchmark data. Please try again.')
       } finally {
         setLoading(false)
       }
@@ -64,7 +64,7 @@ export default function BenchmarkPage() {
       const m = await benchmarkController.run({ model: currentModel })
       setMetrics(m)
     } catch {
-      addToast('Failed to run benchmark', 'error')
+      addToast('Could not run benchmark', 'error')
     } finally {
       setRunning(false)
     }
@@ -75,7 +75,7 @@ export default function BenchmarkPage() {
       const data = await benchmarkController.history(20)
       setResponses(data)
     } catch {
-      addToast('Failed to load responses', 'error')
+      addToast('Could not load responses', 'error')
     }
   }
 
@@ -85,7 +85,7 @@ export default function BenchmarkPage() {
       setResponses([])
       setStats(null)
     } catch {
-      addToast('Failed to clear history', 'error')
+      addToast('Could not clear history', 'error')
     }
   }
 
@@ -99,7 +99,7 @@ export default function BenchmarkPage() {
       )
       setPplxResult(data)
     } catch {
-      addToast('Failed to calculate perplexity', 'error')
+      addToast('Could not calculate perplexity', 'error')
     } finally {
       setPplxLoading(false)
     }

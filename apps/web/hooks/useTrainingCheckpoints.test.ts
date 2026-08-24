@@ -84,7 +84,7 @@ describe('useTrainingCheckpoints', () => {
     mockLoadCheckpoint.mockRejectedValue(new Error('fail'))
     const { result } = renderHook(() => useTrainingCheckpoints())
     await result.current.handleLoadCheckpoint('cp1', addToast)
-    expect(addToast).toHaveBeenCalledWith('Failed to load trained version', 'error')
+    expect(addToast).toHaveBeenCalledWith('Could not load trained version', 'error')
   })
 
   it('handleDeleteCheckpoint with confirm deletes and shows toast', async () => {

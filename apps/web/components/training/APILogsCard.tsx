@@ -95,21 +95,21 @@ export function APILogsCard({
           addToast('Training complete!', 'success')
         } else if (status === 'error') {
           setPhase('error')
-          setError(message || 'Training failed')
-          addToast('Training failed', 'error')
+          setError(message || 'Could not training')
+          addToast('Could not training', 'error')
         }
       }
     } catch (err: unknown) {
       setPhase('error')
       setError(err instanceof Error ? err.message : 'Unknown error')
-      addToast('Training failed', 'error')
+      addToast('Could not training', 'error')
     }
   }, [config, addToast])
 
   const stop = useCallback(() => {
     trainingController.cancelFromSessionsSloNet().catch(e => {
-      logger.error('training cancel failed', { exception: String(e) })
-      addToast('Failed to cancel training', 'error')
+      logger.error('Could not training cancel', { exception: String(e) })
+      addToast('Could not cancel training', 'error')
     })
     setPhase('idle')
   }, [addToast])
@@ -126,7 +126,7 @@ export function APILogsCard({
       await soulsController.loadCheckpoint(name)
       addToast(`Loaded: ${name}`, 'success')
     } catch {
-      addToast('Failed to load checkpoint', 'error')
+      addToast('Could not load checkpoint', 'error')
     } finally {
       setLoadingModel(false)
     }

@@ -392,6 +392,26 @@ def _load_soul_meta(ckpt_file: Path) -> dict:
     return {}
 
 
+# Per-file metadata cache: keyed by (file_path, mtime) to avoid re-reading
+# .meta.json / binary headers for unchanged files on repeated scans.
+_meta_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _load_soul_meta_cached(ckpt_file: Path) -> dict:
+    """Wrapper around _load_soul_meta with a per-file mtime cache."""
+    try:
+        mtime = ckpt_file.stat().st_mtime
+    except OSError:
+        return _load_soul_meta(ckpt_file)
+    cache_key = str(ckpt_file)
+    cached = _meta_cache.get(cache_key)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    result = _load_soul_meta(ckpt_file)
+    _meta_cache[cache_key] = (mtime, result)
+    return result
+
+
 def _describe_checkpoint(ckpt: dict) -> str:
     parts = []
     soul = ckpt.get("soul", "")
@@ -1025,7 +1045,7 @@ class AutoTrainRouter:
         """list_checkpoints."""
         import time
         now = time.monotonic()
-        if self._checkpoints_cache and (now - self._checkpoints_cache_ts) < 5:
+        if self._checkpoints_cache and (now - self._checkpoints_cache_ts) < 30:
             return success_response(data=self._checkpoints_cache[0])
 
         def _scan():
@@ -1555,7 +1575,7 @@ class AutoTrainRouter:
         if st is None:
             st = ckpt_file.stat()
         size_mb = round(st.st_size / (1024 * 1024), 2)
-        meta = _load_soul_meta(ckpt_file)
+        meta = _load_soul_meta_cached(ckpt_file)
 
         if meta:
             m = meta.get("metadata", {})

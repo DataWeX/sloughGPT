@@ -1,6 +1,7 @@
 """
 Dev commands - Development server, health checks, and API status.
 """
+import re
 import subprocess
 import sys
 import os
@@ -41,6 +42,56 @@ def _check_port(port: int) -> bool:
         return True
     except Exception:
         return False
+
+
+def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
+    """Extract the most useful error lines from captured output.
+
+    Shows the actual error instead of shutdown noise. Priority:
+    1. Lines with CRITICAL/ERROR/exception/traceback/failed keywords
+    2. Lines showing startup phase progress
+    3. Lines showing lifecycle transitions
+    4. Last N lines as fallback
+    """
+    all_lines = list(lines)
+    if not all_lines:
+        return ["(no output captured)"]
+
+    # Noise to suppress — shutdown hook completions, uvicorn boilerplate
+    noise_re = re.compile(
+        r"(Shutdown hook .* completed in|Application shutdown complete|"
+        r"Finished server process|Waiting for application (startup|shutdown)|"
+        r"Application startup complete|Uvicorn running on)",
+    )
+
+    # Phase 1: Find actual errors and critical messages
+    error_keywords = re.compile(
+        r"(CRITICAL|ERROR|exception|traceback|failed|error|crashed|timed out|refused|exit code|ModuleNotFoundError|ImportError)",
+        re.IGNORECASE,
+    )
+    error_lines = [l for l in all_lines if error_keywords.search(l)]
+
+    # Phase 2: Find startup phase progress lines
+    phase_keywords = re.compile(
+        r"(Phase \d|lifecycle|startup|registering_routers|model_load|ready|preparing|Starting SloughGPT)",
+        re.IGNORECASE,
+    )
+    phase_lines = [l for l in all_lines if phase_keywords.search(l) and not noise_re.search(l)]
+
+    # Deduplicate while preserving order
+    seen = set()
+    result = []
+    for l in error_lines + phase_lines:
+        if l not in seen:
+            seen.add(l)
+            result.append(l)
+
+    if result:
+        return result[-max_lines:]
+
+    # Fallback: last N non-noise lines
+    useful = [l for l in all_lines if not noise_re.search(l)]
+    return useful[-max_lines:] if useful else all_lines[-max_lines:]
 
 
 def _check_api_ready(port: int) -> bool:
@@ -413,8 +464,8 @@ def _cmd_api_only(args):
 
     if not _wait_for_api_with_progress(api_port):
         log.error("API failed to start within 90s")
-        log.info("Last output:")
-        for line in list(api_lines)[-20:]:
+        log.info("Relevant output:")
+        for line in _extract_error_lines(api_lines):
             log.info(f"  | {line}")
         stop_event.set()
         _kill_port(api_port)
@@ -536,8 +587,8 @@ def _cmd_api_and_mobile(args):
     # ── Wait for API readiness ────────────────────────────
     if not _wait_for_api_with_progress(api_port):
         log.error("API failed to start within 90s")
-        log.info("Last API output:")
-        for line in list(api_lines)[-20:]:
+        log.info("Relevant output:")
+        for line in _extract_error_lines(api_lines):
             log.info(f"  | {line}")
         stop_event.set()
         _cleanup(api_proc, mobile_proc, api_port, 8081)
@@ -552,8 +603,8 @@ def _cmd_api_and_mobile(args):
             break
         if mobile_proc.poll() is not None:
             log.error(f"Metro bundler exited with code {mobile_proc.returncode}")
-            log.info("Last metro output:")
-            for line in list(mobile_lines)[-20:]:
+            log.info("Relevant metro output:")
+            for line in _extract_error_lines(mobile_lines):
                 log.info(f"  | {line}")
             stop_event.set()
             _cleanup(api_proc, mobile_proc, api_port, 8081)
@@ -714,8 +765,8 @@ def _cmd_api_and_web(args):
         build_proc.wait()
         if build_proc.returncode != 0:
             log.error("Next.js build failed")
-            log.info("Build output (last 20 lines):")
-            for line in list(build_lines)[-20:]:
+            log.info("Relevant build output:")
+            for line in _extract_error_lines(build_lines):
                 log.info(f"  | {line}")
             stop_event.set()
             _kill_port(api_port)
@@ -782,8 +833,8 @@ def _cmd_api_and_web(args):
     # ── Wait for API readiness ────────────────────────────────────
     if not _wait_for_api_with_progress(api_port):
         log.error("API failed to start within 90s")
-        log.info("Last API output:")
-        for line in list(api_lines)[-20:]:
+        log.info("Relevant output:")
+        for line in _extract_error_lines(api_lines):
             log.info(f"  | {line}")
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
@@ -801,8 +852,8 @@ def _cmd_api_and_web(args):
         # Check if web process died
         if web_proc.poll() is not None:
             log.error(f"Web server exited with code {web_proc.returncode}")
-            log.info("Last web output:")
-            for line in list(web_lines)[-20:]:
+            log.info("Relevant web output:")
+            for line in _extract_error_lines(web_lines):
                 log.info(f"  | {line}")
             stop_event.set()
             _cleanup(api_proc, web_proc, api_port, web_port)

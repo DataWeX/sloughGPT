@@ -209,7 +209,7 @@ describe('AdaptersPage', () => {
     await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
     const delBtns = container.querySelectorAll('button.text-destructive')
     await act(async () => { (delBtns[0] as HTMLElement).click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to reset adapter', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not reset adapter', 'error') })
     vi.mocked(window.confirm).mockRestore()
   })
 

@@ -34,7 +34,7 @@ export default function ErrorsPage() {
       setTotal(r.total)
       setTrends(t)
     } catch {
-      addToast('Failed to load error data', 'error')
+      addToast('Could not load error data', 'error')
     } finally {
       setLoading(false)
     }
@@ -59,7 +59,7 @@ export default function ErrorsPage() {
       await errorsController.clear()
       await fetchData()
     } catch {
-      addToast('Failed to clear errors', 'error')
+      addToast('Could not clear errors', 'error')
     } finally {
       setClearing(false)
     }
@@ -70,7 +70,7 @@ export default function ErrorsPage() {
       const data = await errorsController.export()
       downloadJson(data, `errors-${Date.now()}.json`)
     } catch {
-      addToast('Failed to export errors', 'error')
+      addToast('Could not export errors', 'error')
     }
   }
 

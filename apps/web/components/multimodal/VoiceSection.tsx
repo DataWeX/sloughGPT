@@ -21,7 +21,7 @@ export function VoiceSection() {
   useEffect(() => {
     voiceController.getStatus()
       .then(d => setStatus(d))
-      .catch(() => { addToast('Failed to load voice status', 'error') })
+      .catch(() => { addToast('Could not load voice status', 'error') })
       .finally(() => setLoading(false))
   }, [])
 
@@ -29,7 +29,7 @@ export function VoiceSection() {
     try {
       setStatus(await voiceController.getStatus())
     } catch {
-      addToast('Failed to refresh voice status', 'error')
+      addToast('Could not refresh voice status', 'error')
     }
   }
 
@@ -57,7 +57,7 @@ export function VoiceSection() {
         }
       }
     } catch (err) {
-      setTtsError(err instanceof Error ? err.message : 'TTS failed')
+      setTtsError(err instanceof Error ? err.message : 'Could not tts')
     } finally {
       setGenerating(false)
     }
@@ -77,7 +77,7 @@ export function VoiceSection() {
         </KpiGrid>
       ) : (
         <KpiGrid>
-          <StatCard label="Server TTS" value={status?.server_tts ? 'Available' : 'Unavailable'} />
+          <StatCard label="Text-to-Speech" value={status?.server_tts ? 'Available' : 'Unavailable'} />
           <StatCard label="Model" value={status?.model ?? 'None'} />
           <StatCard label="TTS Calls" value={ttsCount} />
         </KpiGrid>
@@ -94,7 +94,7 @@ export function VoiceSection() {
           {status ? (
             <div className="space-y-3">
               <KpiGrid columns={4}>
-                <StatCard label="Server" value={<span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>{status.server_tts ? 'Online' : 'Offline'}</span>} />
+                <StatCard label="Service" value={<span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>{status.server_tts ? 'Online' : 'Offline'}</span>} />
                 <StatCard label="Model" value={status.model ?? '—'} />
                 <StatCard label="Fallback" value="Browser" />
                 <StatCard label="Status" value={<span className={status.error ? 'text-destructive' : 'text-success'}>{status.error ? 'Error' : 'Ready'}</span>} />
@@ -144,8 +144,8 @@ export function VoiceSection() {
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground space-y-1">
-            <p>Server-side TTS uses HuggingFace bark-small model when available.</p>
-            <p>Falls back to browser native speechSynthesis if server model is unavailable.</p>
+            <p>Text-to-speech uses HuggingFace bark-small model when available.</p>
+            <p>Falls back to browser native speechSynthesis if the model is unavailable.</p>
             <p>Voice input is available in the chat page via the microphone button.</p>
           </div>
         </CardContent>

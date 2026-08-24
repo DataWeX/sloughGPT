@@ -79,7 +79,7 @@ async function request<T>(
         let detail: string | undefined
         try { const j = JSON.parse(text); detail = j.detail ?? j.message ?? j.error }
         catch { detail = text || res.statusText }
-        const message = Array.isArray(detail) ? detail.map((d: { msg?: string } | string) => typeof d === 'string' ? d : d.msg ?? '').join('; ') : detail || 'Request failed'
+        const message = Array.isArray(detail) ? detail.map((d: { msg?: string } | string) => typeof d === 'string' ? d : d.msg ?? '').join('; ') : detail || 'Could not request'
 
         if (!opts?.silent) {
           const apiErr = new ApiError(message, status, { raw: text }, requestId)
@@ -121,7 +121,7 @@ async function request<T>(
       const isConnRefused = message_ === 'Failed to fetch' || cause?.code === 'ECONNREFUSED'
       const message = isTimeout
         ? `Request timed out after ${timeoutMs / 1000}s`
-        : isConnRefused ? 'Connection unavailable — server may be starting up' : (message_ || 'Request failed')
+        : isConnRefused ? 'Connection unavailable — server may be starting up' : (message_ || 'Could not request')
 
       const kind = isTimeout ? 'timeout' : isConnRefused ? 'connection_refused' : 'unknown'
 
@@ -157,9 +157,24 @@ async function request<T>(
   }
 }
 
+// In-flight GET dedup: concurrent identical GETs share one network round-trip.
+// Skipped when a signal is provided (caller owns cancellation semantics).
+const _inflight = new Map<string, Promise<unknown>>()
+
 export async function apiGet<T>(url: string, params?: Record<string, string>, opts?: RequestOptions): Promise<T> {
   const qs = params ? '?' + new URLSearchParams(params).toString() : ''
-  return request<T>('GET', url + qs, undefined, opts)
+  const fullUrl = url + qs
+  if (!opts?.signal) {
+    const existing = _inflight.get(fullUrl)
+    if (existing) return existing as Promise<T>
+  }
+  const p = request<T>('GET', fullUrl, undefined, opts)
+  if (!opts?.signal) _inflight.set(fullUrl, p)
+  try {
+    return await p
+  } finally {
+    if (!opts?.signal) _inflight.delete(fullUrl)
+  }
 }
 
 export async function apiPost<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {

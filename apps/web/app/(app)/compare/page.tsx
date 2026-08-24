@@ -76,7 +76,7 @@ export default function ComparePage() {
           type: m.type,
         }))
         setModels(entries)
-      } catch { addToast('Failed to load models', 'error')
+      } catch { addToast('Could not load models', 'error')
       } finally { setLoading(false) }
     })()
   }, [addToast])
@@ -89,7 +89,7 @@ export default function ComparePage() {
       setResults(prev => ({ ...prev, [modelId]: result }))
     } catch {
       setResults(prev => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
-      addToast(`Performance test failed for ${modelId}`, 'error')
+      addToast(`Could not complete performance test for ${modelId}`, 'error')
     } finally { setRunning(prev => { const n = new Set(prev); n.delete(modelId); return n }) }
   }
 

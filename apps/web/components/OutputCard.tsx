@@ -76,7 +76,7 @@ const LogLine = React.memo(function LogLine({ line }: { line: OutputLine }) {
   )
 })
 
-export function OutputCard({ title = 'Server Output', height, tail, maxLines, compact }: OutputCardProps) {
+export function OutputCard({ title = 'Service Output', height, tail, maxLines, compact }: OutputCardProps) {
   const { lines, streaming, clear, scrollRef, paused, togglePause, exportLines } = useServerOutput({ tail, maxLines })
   const h = height ?? (compact ? 'h-[220px]' : 'h-[280px]')
 
@@ -120,11 +120,11 @@ export function OutputCard({ title = 'Server Output', height, tail, maxLines, co
           ref={scrollRef}
           className={`${h} overflow-y-auto rounded-lg border bg-zinc-950 text-zinc-300 p-3`}
           role="log"
-          aria-label="Server output"
+          aria-label="Service output"
         >
           {lines.length === 0 ? (
             <div className="text-zinc-500 py-4 text-center text-xs">
-              {streaming ? 'Waiting for output...' : 'Output will appear here during server activity'}
+              {streaming ? 'Waiting for output...' : 'Output will appear here during service activity'}
             </div>
           ) : (
             lines.map((line, i) => <LogLine key={`${line.ts}-${i}`} line={line} />)

@@ -127,8 +127,8 @@ export function StatusBar() {
         <button
           onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-output-panel')) }}
           className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 transition-colors"
-          aria-label="Toggle server output"
-          title="Server output"
+          aria-label="Toggle service output"
+          title="Service output"
         >
           <IconMenu className="w-3 h-3" />
         </button>

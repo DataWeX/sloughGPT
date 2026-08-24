@@ -81,7 +81,7 @@ const commands: ChatCommand[] = [
         await ctx.setModel(name)
         ctx.addSystemMessage(`✅ Switched to model **${name}**`)
       } catch {
-        ctx.addSystemMessage(`❌ Failed to load model **${name}**`)
+        ctx.addSystemMessage(`❌ Could not load model **${name}**`)
       }
       return { handled: true }
     },

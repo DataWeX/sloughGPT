@@ -97,8 +97,8 @@ export default function AdminPage() {
     try {
       const auditUrl = `${useHistory ? '/security/audit?history=true&limit=100' : '/security/audit?limit=100'}${eventParam()}`
       const [logsRes, keysRes] = await Promise.all([
-        apiGet<AuditResponse>(auditUrl).catch((e) => { logger.warning('audit log fetch failed', e); return null }),
-        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => { logger.warning('security keys fetch failed', e); return null }),
+        apiGet<AuditResponse>(auditUrl).catch((e) => { logger.warning('Could not audit log fetch', e); return null }),
+        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => { logger.warning('Could not security keys fetch', e); return null }),
       ])
       setLogs(logsRes?.logs ?? [])
       const keysData = keysRes && 'count' in keysRes ? keysRes : null
@@ -149,7 +149,7 @@ export default function AdminPage() {
       setCurrentUser(data.user)
       localStorage.setItem('auth_token', data.token)
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Connection failed')
+      setAuthError(err instanceof Error ? err.message : 'Could not connection')
     } finally {
       setAuthLoading(false)
     }
@@ -510,7 +510,7 @@ export default function AdminPage() {
                       try {
                         const data = await authController.verify(token!)
                         addToast(data?.valid ? 'Token is valid' : 'Token is invalid', data?.valid ? 'success' : 'error')
-                      } catch { addToast('Verification failed', 'error') }
+                      } catch { addToast('Could not verification', 'error') }
                     }}
                   >
                     Verify Token

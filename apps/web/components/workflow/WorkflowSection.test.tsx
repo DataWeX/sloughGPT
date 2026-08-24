@@ -122,7 +122,7 @@ describe('WorkflowSection', () => {
     mocks.mockStatus.mockRejectedValue(new Error('down'))
     render(<WorkflowSection />)
     expect(await screen.findByText('Feedback Pipeline')).toBeDefined()
-    expect(mocks.mockAddToast).toHaveBeenCalledWith('Failed to load workflow status', 'error')
+    expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not load workflow status', 'error')
   })
 
   it('runs a manual trigger and shows the result message', async () => {

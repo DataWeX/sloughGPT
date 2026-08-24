@@ -123,7 +123,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       const now = Date.now()
       if (now - lastSaveRef.current > 500) {
         lastSaveRef.current = now
-        sessionsRef.current.saveSessionToStorage(updated, sessionIdRef.current).catch((e) => logger.warning('Session save failed', { error: e }))
+        sessionsRef.current.saveSessionToStorage(updated, sessionIdRef.current).catch((e) => logger.warning('Could not session save', { error: e }))
       }
       return updated
     })
@@ -266,9 +266,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
       multimodalController.getCapabilities().then(caps => {
         multimodalController.getTrainingReport().then(r => {
           onVisionUpdate(caps, r.caption_history || [], r.vocab_size)
-        }).catch(err => _log.warning('Vision report failed', { error: String(err) }))
-      }).catch(err => _log.warning('Vision capabilities failed', { error: String(err) }))
-    }).catch(err => _log.warning('Image training failed', { error: String(err) }))
+        }).catch(err => _log.warning('Could not vision report', { error: String(err) }))
+      }).catch(err => _log.warning('Could not vision capabilities', { error: String(err) }))
+    }).catch(err => _log.warning('Could not image training', { error: String(err) }))
   }, [onVisionUpdate])
 
   const handleRemoveImage = useCallback((id: string) => {
@@ -347,7 +347,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     const knowledgeFacts = appState.injectedKnowledge.map((k: { content: string }) => k.content)
 
     const messagesWithNew = [...messagesRef.current, userMessage, assistantMessage]
-    sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch((e) => logger.warning('Session save failed', { error: e }))
+    sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch((e) => logger.warning('Could not session save', { error: e }))
     messagesRef.current = messagesWithNew
     loadingRef.current = new AbortController()
 
@@ -446,10 +446,10 @@ export function useChatMessages(config: ChatMessagesConfig) {
           },
         })
         if (streamComplete) {
-          storeSessionContext(sessionIdRef.current, messagesRef.current).catch((e) => logger.warning('Session context store failed', { error: e }))
+          storeSessionContext(sessionIdRef.current, messagesRef.current).catch((e) => logger.warning('Could not session context store', { error: e }))
           knowledgeController.context().then(res => {
             onKnowledgeUpdate({ count: res.count, context: res.context })
-          }).catch((e) => logger.debug('Search query failed', e))
+          }).catch((e) => logger.debug('Could not search query', e))
         }
       }
     } catch (err) {

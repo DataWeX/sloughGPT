@@ -70,7 +70,7 @@ export async function shellExecStream(
       } else if (phase === 'STREAMING' && status === 'error') {
         completed = true
         errored = true
-        const msg = d.error || 'Command failed'
+        const msg = d.error || 'Could not command'
         callbacks.onError?.(msg) ?? logger.error('shell command error', { exception: msg })
       } else if (event.status === 'error') {
         errored = true

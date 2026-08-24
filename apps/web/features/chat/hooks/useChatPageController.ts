@@ -226,10 +226,12 @@ export function useChatPageController(
   useEffect(() => {
     fetchStats()
     fetchAdapterStats()
+    const { fetchInitialData: fetchModelData } = model
+    const { fetchInitialData: fetchAgentData } = agents
     const healthModel = health && health !== 'offline' && (health.model_loaded || health.model_type) ? health.model_type : undefined
-    model.fetchInitialData(healthModel)
-    agents.fetchInitialData()
-  }, [fetchStats, fetchAdapterStats, health, model, agents])
+    fetchModelData(healthModel)
+    fetchAgentData()
+  }, [fetchStats, fetchAdapterStats, health, model.fetchInitialData, agents.fetchInitialData])
 
   // ── Flyweights: clearChat / selectAgent with toast ────────────────────────
 
@@ -276,7 +278,7 @@ export function useChatPageController(
     try {
       await cmd.execute(args, context)
     } catch (err: unknown) {
-      showToast(formatToastError(err, 'Command failed'), 'error')
+      showToast(formatToastError(err, 'Could not command'), 'error')
     }
   }, [chat, clearChat, model, showToast, router, ui])
 
@@ -467,7 +469,7 @@ export function useChatPageController(
       }])
       showToast('PDF analyzed — see response below', 'info')
     } catch (err: unknown) {
-      showToast(formatToastError(err, 'PDF analysis failed'), 'error')
+      showToast(formatToastError(err, 'Could not pdf analysis'), 'error')
     }
   }, [chat, showToast])
 

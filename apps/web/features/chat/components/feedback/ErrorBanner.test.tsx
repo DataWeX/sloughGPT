@@ -43,7 +43,7 @@ describe('getErrorInfo', () => {
 
   it('returns generic message for 0', () => {
     const r = getErrorInfo(0)
-    expect(r.message).toBe('Could not connect to API server.')
+    expect(r.message).toBe('Could not connect to the service.')
   })
 })
 

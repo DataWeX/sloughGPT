@@ -116,7 +116,7 @@ export function VisionStudioDialog({
       setAnalyzeResult(result)
       refreshReport()
     } catch (e) {
-      setAnalyzeError(extractErrorMessage(e, 'Analysis failed'))
+      setAnalyzeError(extractErrorMessage(e, 'Could not analysis'))
     } finally {
       setAnalyzeLoading(false)
     }
@@ -136,7 +136,7 @@ export function VisionStudioDialog({
       setAnalyzeResult(result)
       refreshReport()
     } catch (e) {
-      setAnalyzeError(extractErrorMessage(e, 'Retry failed'))
+      setAnalyzeError(extractErrorMessage(e, 'Could not retry'))
     } finally {
       setRetryLoading(false)
     }
@@ -168,7 +168,7 @@ export function VisionStudioDialog({
       setTrainResult({ caption: result.caption, accuracy: result.accuracy })
       refreshReport()
     } catch {
-      setTrainResult({ caption: 'Training failed', accuracy: 0 })
+      setTrainResult({ caption: 'Could not training', accuracy: 0 })
     } finally {
       setTrainLoading(false)
     }
@@ -184,7 +184,7 @@ export function VisionStudioDialog({
       const result = await multimodalController.generateImage(genPrompt.trim())
       if (result?.image) setGenResult(result.image)
     } catch {
-      setGenError('Generation failed')
+      setGenError('Could not generation')
     } finally {
       setGenLoading(false)
     }

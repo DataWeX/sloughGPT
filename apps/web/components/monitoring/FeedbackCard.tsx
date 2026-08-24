@@ -66,7 +66,7 @@ export function FeedbackCard({ dpoStatus, visualStatus, dpoRunning, onDpoRunning
                 await apiPost('/multimodal/dpo', {})
                 onRefresh()
               } catch (err) {
-                logger.error('DPO training failed', { exception: String(err) })
+                logger.error('Could not dpo training', { exception: String(err) })
               }
               onDpoRunningChange(false)
             }}

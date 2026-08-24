@@ -73,7 +73,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
       const res = await tokenTreeController.compare(a, b, 10)
       setResult(res)
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to compare token trees', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not compare token trees', 'error')
     } finally {
       setComparing(false)
     }

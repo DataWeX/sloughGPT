@@ -41,7 +41,7 @@ export default function CollectionsPage() {
       setPipelines(data.pipelines ?? [])
       setStats(data.counts ?? null)
     } catch {
-      addToast('Failed to load collections', 'error')
+      addToast('Could not load collections', 'error')
     } finally {
       setLoading(false)
     }
@@ -68,7 +68,7 @@ export default function CollectionsPage() {
       setShowCreate(false)
       void fetchPipelines()
     } catch {
-      addToast('Failed to create pipeline', 'error')
+      addToast('Could not create pipeline', 'error')
     } finally {
       setCreating(false)
     }
@@ -81,7 +81,7 @@ export default function CollectionsPage() {
       addToast('Pipeline executed', 'success')
       void fetchPipelines()
     } catch {
-      addToast('Failed to run pipeline', 'error')
+      addToast('Could not run pipeline', 'error')
     } finally {
       setRunningId(null)
     }
@@ -93,7 +93,7 @@ export default function CollectionsPage() {
       addToast('Pipeline deleted', 'success')
       void fetchPipelines()
     } catch {
-      addToast('Failed to delete pipeline', 'error')
+      addToast('Could not delete pipeline', 'error')
     }
   }, [addToast, fetchPipelines])
 

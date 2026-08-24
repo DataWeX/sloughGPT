@@ -68,12 +68,33 @@ class HealthRouter:
         phase, and resource allocation. This is the primary health check
         for load balancers and monitoring dashboards.
 
+        During cold start, ``get_basic_health`` can block on first-time
+        module imports (psutil, controllers.models, lifecycle) when the
+        model-load thread is also importing. A 5-second timeout with a
+        lightweight fallback prevents the CLI's 90s startup timer from
+        firing on a healthy server.
+
         Returns:
             Envelope with ``model_loaded``, ``model_type``, ``device``,
             ``is_inferencing``, ``lifecycle``, ``resource_allocation``.
         """
         ctrl = get_health_controller()
-        return success_response(data=await asyncio.to_thread(ctrl.get_basic_health))
+        try:
+            data = await asyncio.wait_for(
+                asyncio.to_thread(ctrl.get_basic_health),
+                timeout=5.0,
+            )
+        except (asyncio.TimeoutError, Exception):
+            # Fast fallback during cold start — read lightweight sources only
+            import state as server_state
+            data = {
+                "status": "healthy",
+                "model_loaded": server_state.model is not None or server_state.provider is not None,
+                "model_type": getattr(server_state, "model_type", None),
+                "lifecycle": {"phase": STARTUP_PHASE.get("phase", "initializing")},
+                "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
+            }
+        return success_response(data=data)
 
     async def liveness(self) -> dict:
         """Kubernetes liveness probe.

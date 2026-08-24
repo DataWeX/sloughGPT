@@ -46,7 +46,7 @@ export default function DatasetsPage() {
       setDatasets(list)
     } catch {
       setFetchError(true)
-      addToast('Failed to load datasets', 'error')
+      addToast('Could not load datasets', 'error')
     } finally {
       setLoading(false)
     }
@@ -122,7 +122,7 @@ export default function DatasetsPage() {
       })
     } catch {
       setDatasets(prev => [deleted, ...prev])
-      addToast('Delete failed', 'error')
+      addToast('Could not delete', 'error')
     }
   }
 
@@ -138,7 +138,7 @@ export default function DatasetsPage() {
       URL.revokeObjectURL(url)
       addToast(`Exported "${ds.name}"`, 'success')
     } catch {
-      addToast('Export failed', 'error')
+      addToast('Could not export', 'error')
     }
   }
 
@@ -165,7 +165,7 @@ export default function DatasetsPage() {
       const preview = await datasetController.preview(ds.id, 5)
       setPreviewData(preview)
     } catch {
-      addToast('Failed to load preview', 'error')
+      addToast('Could not load preview', 'error')
     } finally {
       setPreviewLoading(false)
     }
@@ -316,7 +316,7 @@ export default function DatasetsPage() {
         ) : fetchError && datasets.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center">
-              <p className="text-sm text-destructive mb-3">Failed to load datasets</p>
+              <p className="text-sm text-destructive mb-3">Could not load datasets</p>
               <Button size="sm" variant="outline" onClick={fetchDatasets}>
                 <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
                 Retry

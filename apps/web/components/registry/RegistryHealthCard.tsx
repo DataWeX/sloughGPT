@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import type { RegisteredModel, RegistryStats } from '@/lib/registry-controller'
+import { timeAgo } from '@/lib/time-ago'
 
 interface RegistryHealthCardProps {
   models: RegisteredModel[]
@@ -14,24 +15,6 @@ function statusVariant(status: string): 'success' | 'error' | 'warning' | 'secon
   if (status === 'failed') return 'error'
   if (status === 'loading') return 'warning'
   return 'secondary'
-}
-
-function timeAgo(ts?: string): string {
-  if (!ts) return ''
-  try {
-    const d = new Date(ts)
-    if (isNaN(d.getTime())) return ''
-    const diffMs = Date.now() - d.getTime()
-    const diffM = Math.floor(diffMs / 60000)
-    const diffH = Math.floor(diffM / 60)
-    const diffD = Math.floor(diffH / 24)
-    if (diffD > 0) return `${diffD}d ago`
-    if (diffH > 0) return `${diffH}h ago`
-    if (diffM > 0) return `${diffM}m ago`
-    return 'just now'
-  } catch {
-    return ''
-  }
 }
 
 export function RegistryHealthCard({ models, stats }: RegistryHealthCardProps) {

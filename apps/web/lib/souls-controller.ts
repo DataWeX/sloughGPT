@@ -184,7 +184,7 @@ export const soulsController = {
 
   async downloadCheckpoint(name: string): Promise<Blob> {
     const response = await authFetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
-    if (!response.ok) throw new Error('Download failed')
+    if (!response.ok) throw new Error('Could not download')
     return response.blob()
   },
 }

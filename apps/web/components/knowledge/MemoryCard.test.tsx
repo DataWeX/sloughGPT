@@ -842,7 +842,7 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle automatic memory' }))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Failed to update memory setting', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not update memory setting', 'error')
     })
   })
 })

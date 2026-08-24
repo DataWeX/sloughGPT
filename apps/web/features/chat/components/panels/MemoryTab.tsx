@@ -134,7 +134,7 @@ export function MemoryTab() {
       if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
       copyTimerRef.current = window.setTimeout(() => setCopiedId(null), 1500)
     } catch (err) {
-      logger.debug('Memory copy failed', { exception: String(err) })
+      logger.debug('Could not memory copy', { exception: String(err) })
     }
   }, [])
 
@@ -154,7 +154,7 @@ export function MemoryTab() {
         setAddError('Already remembered (or memory is disabled)')
       }
     } catch {
-      setAddError('Failed to store fact')
+      setAddError('Could not store fact')
     } finally {
       setAdding(false)
     }
@@ -189,7 +189,7 @@ export function MemoryTab() {
         setEditError('Memory item not found')
       }
     } catch {
-      setEditError('Failed to update memory item')
+      setEditError('Could not update memory item')
     } finally {
       setSavingEdit(false)
     }
@@ -206,7 +206,7 @@ export function MemoryTab() {
           : 'No near-duplicate facts found'
       )
     } catch {
-      setConsolidateMsg('Failed to consolidate memory')
+      setConsolidateMsg('Could not consolidate memory')
     } finally {
       setConsolidating(false)
       if (consolidateTimerRef.current) window.clearTimeout(consolidateTimerRef.current)
@@ -221,7 +221,7 @@ export function MemoryTab() {
     try {
       await memoryController.delete(item.id)
     } catch (err) {
-      logger.debug('Memory delete failed', { exception: String(err) })
+      logger.debug('Could not memory delete', { exception: String(err) })
       fetchData()
     }
   }
@@ -232,7 +232,7 @@ export function MemoryTab() {
       const result = await memoryController.clear()
       logger.debug('Memory cleared', { cleared: result.cleared })
     } catch (err) {
-      logger.debug('Memory clear failed', { exception: String(err) })
+      logger.debug('Could not memory clear', { exception: String(err) })
     }
     fetchData()
   }
@@ -270,7 +270,7 @@ export function MemoryTab() {
       const result = await memoryController.setEnabled(next)
       setStats(prev => (prev ? { ...prev, enabled: result.enabled } : prev))
     } catch (err) {
-      logger.debug('Memory toggle failed', { exception: String(err) })
+      logger.debug('Could not memory toggle', { exception: String(err) })
     } finally {
       setToggling(false)
     }

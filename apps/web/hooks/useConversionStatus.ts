@@ -52,7 +52,7 @@ export function useConversionStatus(modelId: string | null) {
   const startTracking = useCallback((id: string) => {
     apiGet<{ data?: ConversionStatus }>(`/models/conversion-status?model_id=${encodeURIComponent(id)}`, undefined, { silent: true })
       .then(data => { if (data?.data) setStatus(data.data) })
-      .catch(e => { logger.warning('startTracking conversion status failed', { model_id: id, exception: String(e) }) })
+      .catch(e => { logger.warning('Could not starttracking conversion status', { model_id: id, exception: String(e) }) })
   }, [])
 
   return { status, startTracking }

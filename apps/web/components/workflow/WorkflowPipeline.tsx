@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import type { WorkflowStatus } from '@/lib/workflow-controller'
+import { timeAgo } from '@/lib/time-ago'
 
 interface WorkflowPipelineProps {
   status: WorkflowStatus | null
@@ -56,22 +57,6 @@ function buildSteps(status: WorkflowStatus | null): PipelineStep[] {
       enabled: status.running,
     },
   ]
-}
-
-function timeAgo(ts?: number): string {
-  if (!ts || ts === 0) return 'never'
-  try {
-    const diff = Date.now() / 1000 - ts
-    const diffM = Math.floor(diff / 60)
-    const diffH = Math.floor(diffM / 60)
-    const diffD = Math.floor(diffH / 24)
-    if (diffD > 0) return `${diffD}d ago`
-    if (diffH > 0) return `${diffH}h ago`
-    if (diffM > 0) return `${diffM}m ago`
-    return 'just now'
-  } catch {
-    return 'never'
-  }
 }
 
 export function WorkflowPipeline({ status }: WorkflowPipelineProps) {

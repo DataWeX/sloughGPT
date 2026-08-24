@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import { timeAgo } from '@/lib/time-ago'
 
 interface ModelEventsCardProps {
   liveHealth: LiveHealthSnapshot | null
@@ -13,15 +14,6 @@ const EVENT_STYLES: Record<string, string> = {
   unload: 'bg-muted text-muted-foreground',
   swap: 'bg-primary/15 text-primary',
   error: 'bg-destructive/15 text-destructive',
-}
-
-function timeAgo(ts: number): string {
-  const s = Math.floor((Date.now() / 1000 - ts))
-  if (s < 5) return 'just now'
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  return `${Math.floor(m / 60)}h ago`
 }
 
 export function ModelEventsCard({ liveHealth }: ModelEventsCardProps) {

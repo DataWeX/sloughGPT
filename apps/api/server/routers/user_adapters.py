@@ -2,6 +2,7 @@
 User Adapters Router - Per-user LoRA adapter management
 """
 import logging
+import time
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from typing import Optional
@@ -10,6 +11,11 @@ from schemas.common import raise_error, success_response, classify_and_raise, sa
 from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.api.user_adapters")
+
+# Response cache for list_adapters: avoids repeated MongoDB + O(n) disk stat calls.
+# Keyed by a fixed sentinel; TTL 15s.
+_list_cache: tuple[float, dict] | None = None
+_LIST_CACHE_TTL = 15.0
 
 
 class AggregateBestRequest(BaseModel):
@@ -56,12 +62,18 @@ class UserAdaptersRouter:
         Raises:
             503 if the per-user LoRA module is not available.
         """
+        global _list_cache
+        now = time.monotonic()
+        if _list_cache and (now - _list_cache[0]) < _LIST_CACHE_TTL:
+            return success_response(data=_list_cache[1])
         try:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             adapters = store.get_all_adapters()
             stats = store.get_stats()
-            return success_response(data={"adapters": adapters, "stats": stats})
+            result = {"adapters": adapters, "stats": stats}
+            _list_cache = (now, result)
+            return success_response(data=result)
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
         except Exception as exc:

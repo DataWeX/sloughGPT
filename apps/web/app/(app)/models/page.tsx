@@ -71,7 +71,7 @@ export default function ModelsPage() {
       await switchSoul({ name, checkpointName })
       addToast(checkpointName ? `${name} + ${checkpointName}` : name, 'success')
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed'), 'error')
+      addToast(extractErrorMessage(err, 'Could not load model'), 'error')
     } finally {
       setSwitchingSoul(null)
     }
@@ -83,7 +83,7 @@ export default function ModelsPage() {
       addToast('Personality updated', 'success')
       setTraitWeights(weights)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to save traits'), 'error')
+      addToast(extractErrorMessage(err, 'Could not save traits'), 'error')
     }
   }, [addToast])
 
@@ -168,7 +168,7 @@ export default function ModelsPage() {
 
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'
-    : !isOnline ? 'API offline'
+    : !isOnline ? 'Service offline'
     : health.model_loaded ? `${modelDisplayName(health.model_type)} · running`
     : 'No model loaded'
 
@@ -206,7 +206,7 @@ export default function ModelsPage() {
         {modelsError && models.length === 0 && (
           <Card>
             <CardContent className="py-4 flex items-center justify-between">
-              <span className="text-sm text-destructive">Failed to load models</span>
+              <span className="text-sm text-destructive">Could not load models</span>
               <Button size="sm" variant="outline" onClick={() => refetchModels()}>Retry</Button>
             </CardContent>
           </Card>
@@ -214,7 +214,7 @@ export default function ModelsPage() {
         {soulsError && souls.length === 0 && (
           <Card>
             <CardContent className="py-4 flex items-center justify-between">
-              <span className="text-sm text-destructive">Failed to load personalities</span>
+              <span className="text-sm text-destructive">Could not load personalities</span>
               <Button size="sm" variant="outline" onClick={() => refetchSouls()}>Retry</Button>
             </CardContent>
           </Card>

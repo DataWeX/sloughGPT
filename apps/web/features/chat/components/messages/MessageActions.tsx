@@ -164,7 +164,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
       setSavedToKnowledge(true)
       addToast('Saved to knowledge', 'success')
     } catch {
-      addToast('Failed to save to knowledge', 'error')
+      addToast('Could not save to knowledge', 'error')
     }
   }, [content, savedToKnowledge, addToast])
 

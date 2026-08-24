@@ -26,24 +26,26 @@ export function CommandPalette() {
   const [recentSessions, setRecentSessions] = useState<{ id: string; name: string }[]>([])
   const [models, setModels] = useState<{ id: string; name: string; loaded: boolean }[]>([])
   const [souls, setSouls] = useState<{ name: string; description?: string }[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
 
   useEffect(() => {
+    let failed = false
     sessionController.list().then(sessions => {
       setRecentSessions(sessions.slice(0, 5).map(s => ({ id: s.id, name: s.name || 'Untitled' })))
-    }).catch(() => /* session list unavailable */ {})
+    }).catch(() => { failed = true; if (!loadError) setLoadError('Some data unavailable') })
     modelController.list().then(list => {
       setModels(list.map(m => ({
         id: m.id || m.name,
         name: (m.id || m.name).replace(/^hf\//, ''),
         loaded: m.loaded || false,
       })))
-    }).catch(() => /* model list unavailable */ {})
+    }).catch(() => { failed = true; if (!loadError) setLoadError('Some data unavailable') })
     soulsController.list().then(res => {
       setSouls(res.souls.map(s => ({ name: s.name, description: s.description })))
-    }).catch(() => /* soul list unavailable */ {})
+    }).catch(() => { failed = true; if (!loadError) setLoadError('Some data unavailable') })
   }, [])
 
   const actions: CommandAction[] = useMemo(() => {
@@ -201,6 +203,11 @@ export function CommandPalette() {
               })
             )}
           </div>
+          {loadError && (
+            <div className="border-t border-border/30 px-3 py-1.5">
+              <p className="text-[10px] text-muted-foreground">{loadError}</p>
+            </div>
+          )}
         </div>
       </div>
     </>

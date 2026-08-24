@@ -115,7 +115,7 @@ describe('ExperimentsPage', () => {
     await waitFor(() => { expect(screen.getByText('Create')).toBeTruthy() })
     await act(async () => { fireEvent.change(screen.getByPlaceholderText('Experiment name'), { target: { value: 'X' } }) })
     await act(async () => { screen.getByText('Create').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to create experiment', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not create experiment', 'error') })
   })
 
   it('deletes an experiment', async () => {
@@ -135,7 +135,7 @@ describe('ExperimentsPage', () => {
     await waitFor(() => { expect(screen.getByText('distill-run-3')).toBeTruthy() })
     const delBtn = container.querySelector('button.text-destructive') as HTMLElement
     await act(async () => { delBtn.click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to delete experiment', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not delete experiment', 'error') })
   })
 
   it('filters experiments by search query', async () => {

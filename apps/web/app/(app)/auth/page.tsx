@@ -45,7 +45,7 @@ export default function AuthPage() {
       setCurrentUser(data.user)
       localStorage.setItem('auth_token', data.token)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Connection failed')
+      setError(err instanceof Error ? err.message : 'Could not connection')
     } finally {
       setLoading(false)
     }
@@ -170,7 +170,7 @@ export default function AuthPage() {
                   try {
                     const data = await authController.verify(token!)
                     alert(data?.valid ? 'Token valid' : 'Token invalid')
-                  } catch { alert('Verification failed') }
+                  } catch { alert('Could not verification') }
                 }}
               >
                 Verify Token

@@ -28,8 +28,8 @@ const adapters = [
 
 describe('AdapterHealthCard', () => {
   it('renders empty state for empty adapters', () => {
-    render(<AdapterHealthCard adapters={[]} />)
-    expect(screen.getAllByText('No adapters yet').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<AdapterHealthCard adapters={[]} />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders health card', () => {

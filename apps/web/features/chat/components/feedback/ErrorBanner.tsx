@@ -6,12 +6,12 @@ type ErrorType = 'network' | 'server' | 'model' | 'timeout' | 'unknown'
 
 const ERROR_MESSAGES: Record<ErrorType, { title: string; suggestion: string }> = {
   network: {
-    title: 'Connection failed',
-    suggestion: 'Check if the API server is running on port 8000.',
+    title: 'Could not connection',
+    suggestion: 'Check if the service is running.',
   },
   server: {
-    title: 'Server error',
-    suggestion: 'The API returned an error. Try again or restart the server.',
+    title: 'Service error',
+    suggestion: 'The request returned an error. Try again or restart the service.',
   },
   model: {
     title: 'Model not loaded',
@@ -84,10 +84,10 @@ export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
 
 export function getErrorInfo(status: number, message?: string): { type: ErrorType; message: string; canRetry: boolean } {
   if (status === 0) {
-    return { type: 'network', message: 'Could not connect to API server.', canRetry: true }
+    return { type: 'network', message: 'Could not connect to the service.', canRetry: true }
   }
   if (status === 404) {
-    return { type: 'server', message: 'Chat endpoint not found. Is the API server running?', canRetry: true }
+    return { type: 'server', message: 'Chat endpoint not found. Please try again.', canRetry: true }
   }
   if (status === 500) {
     return { type: 'server', message: message || 'Internal server error.', canRetry: true }

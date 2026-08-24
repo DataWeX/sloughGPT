@@ -26,7 +26,7 @@ export default function FilesPage() {
       setLoadError(null)
       setFiles(await filesController.list())
     } catch {
-      setLoadError('Failed to load files. Is the server running?')
+      setLoadError('Could not load files. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -46,7 +46,7 @@ export default function FilesPage() {
       setUploadMsg(`Uploaded ${data.filename ?? file.name}`)
       await fetchFiles()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Upload failed', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not upload', 'error')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -58,7 +58,7 @@ export default function FilesPage() {
       await filesController.delete(id)
       await fetchFiles()
     } catch {
-      addToast('Failed to delete file', 'error')
+      addToast('Could not delete file', 'error')
     }
   }
 
@@ -68,7 +68,7 @@ export default function FilesPage() {
       await filesController.ingest(id)
       await fetchFiles()
     } catch {
-      addToast('Failed to index file', 'error')
+      addToast('Could not index file', 'error')
     } finally {
       setIngesting(null)
     }
@@ -79,7 +79,7 @@ export default function FilesPage() {
     try {
       setFiles(await filesController.search(searchQuery))
     } catch {
-      addToast('Failed to search files', 'error')
+      addToast('Could not search files', 'error')
     }
   }
 
@@ -109,7 +109,7 @@ export default function FilesPage() {
       await fetchFiles()
       addToast(`Deleted ${selected.size} files`, 'success')
     } catch {
-      addToast('Batch delete failed', 'error')
+      addToast('Could not batch delete', 'error')
     } finally {
       setBatchDeleting(false)
     }

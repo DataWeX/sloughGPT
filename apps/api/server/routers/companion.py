@@ -42,7 +42,7 @@ class PresetRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     """Chat with companion."""
-    message: str = Field(max_length=10000)
+    message: str = Field(..., min_length=1, max_length=10000)
     user_name: Optional[str] = Field(default=None, max_length=100)
     user_mood: Optional[str] = Field(default=None, max_length=100)
     include_system_prompt: bool = True

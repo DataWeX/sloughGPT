@@ -99,14 +99,14 @@ export const modelController = {
     try {
       return await apiGet<HealthStatus>('/health', undefined, { silent: true })
     } catch (e) {
-      _log.warning('Health check failed', { exception: String(e) })
+      _log.warning('Could not health check', { exception: String(e) })
       return null
     }
   },
 
   async load(modelId: string, device = 'auto'): Promise<ModelLoadResponse> {
     const result = await apiPost<ModelLoadResponse>('/models/load', { model_id: modelId, device })
-    if (result.status === 'error') throw new Error(result.error || 'Model load failed')
+    if (result.status === 'error') throw new Error(result.error || 'Could not model load')
     return result
   },
 
@@ -119,7 +119,7 @@ export const modelController = {
         device: data.device ?? null,
       }
     } catch (e) {
-      _log.warning('Status check failed', { exception: String(e) })
+      _log.warning('Could not status check', { exception: String(e) })
       return { loaded: false, model_type: null, device: null }
     }
   },
@@ -129,7 +129,7 @@ export const modelController = {
       const models = await this.list()
       return models.find((m) => m.id === modelId) || null
     } catch (e) {
-      _log.warning('Model info fetch failed', { exception: String(e) })
+      _log.warning('Could not model info fetch', { exception: String(e) })
       return null
     }
   },

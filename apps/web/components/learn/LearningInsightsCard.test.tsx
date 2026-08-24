@@ -16,8 +16,8 @@ const facts = [
 
 describe('LearningInsightsCard', () => {
   it('renders empty state for empty facts', () => {
-    render(<LearningInsightsCard facts={[]} />)
-    expect(screen.getAllByText('No learning facts yet').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<LearningInsightsCard facts={[]} />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders insights card', () => {

@@ -28,7 +28,7 @@ export default function RegistryPage() {
       setStats(statsRes)
       setBestModel(bestRes)
     } catch {
-      addToast('Failed to load registry data', 'error')
+      addToast('Could not load registry data', 'error')
     } finally {
       setLoading(false)
     }

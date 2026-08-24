@@ -141,7 +141,7 @@ describe('SettingsPage', () => {
 
   it('renders API URL input with default value', () => {
     render(<SettingsPage />)
-    const inputs = screen.getAllByLabelText('API server URL')
+    const inputs = screen.getAllByLabelText('Service URL')
     expect(inputs.length).toBeGreaterThanOrEqual(1)
     expect(inputs[0]).toHaveValue('http://localhost:8000')
   })

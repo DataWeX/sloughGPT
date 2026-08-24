@@ -86,8 +86,8 @@ export function useTrainingPolling(): TrainingPolling {
           opts?.addToast?.(opts.completeMessage ?? 'Training complete', 'success')
           opts?.onComplete?.(job)
         } else {
-          writeTraining({ phase: 'error', error: job.error || 'Training failed' })
-          opts?.addToast?.(job.error || 'Training failed', 'error')
+          writeTraining({ phase: 'error', error: job.error || 'Could not training' })
+          opts?.addToast?.(job.error || 'Could not training', 'error')
         }
       } catch (e) {
         standardRetryRef.current++
@@ -136,8 +136,8 @@ export function useTrainingPolling(): TrainingPolling {
           })
           addToast?.('Turbo training complete!', 'success')
         } else {
-          writeTraining({ phase: 'error', error: s.error || 'Training failed' })
-          addToast?.(s.error || 'Training failed', 'error')
+          writeTraining({ phase: 'error', error: s.error || 'Could not training' })
+          addToast?.(s.error || 'Could not training', 'error')
         }
       } catch (e) {
         turboRetryRef.current++

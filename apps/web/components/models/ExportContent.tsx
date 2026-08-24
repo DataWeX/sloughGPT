@@ -79,7 +79,7 @@ export default function ExportContent() {
       setExportResult(`Exported ${fileCount} file(s) in ${res.format} format`)
       recordExport(res.format, fileCount)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Export failed')
+      setExportError(err instanceof Error ? err.message : 'Could not export')
     } finally {
       setExporting(false)
     }
@@ -91,7 +91,7 @@ export default function ExportContent() {
       const blob = await trainingJobsController.exportTrainingPairs()
       downloadBlob(blob, `training-pairs-${Date.now()}.jsonl`)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Training data export failed')
+      setExportError(err instanceof Error ? err.message : 'Could not training data export')
     } finally {
       setExportingPairs(false)
     }
@@ -102,7 +102,7 @@ export default function ExportContent() {
       const blob = await trainingJobsController.downloadCheckpoint(name)
       downloadBlob(blob, `${name}.soul`)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Checkpoint download failed')
+      setExportError(err instanceof Error ? err.message : 'Could not checkpoint download')
     }
   }
 

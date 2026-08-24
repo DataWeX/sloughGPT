@@ -83,7 +83,7 @@ export const ChatInput = memo(function ChatInput({
   const isDisabled = loading || health === 'offline'
   const hasModel = health !== null && health !== 'offline' && 'model_loaded' in health && health.model_loaded
   const placeholder = health === 'offline'
-    ? 'API offline...'
+    ? 'Service offline...'
     : hasModel
       ? 'Type a message...'
       : 'Loading model...'

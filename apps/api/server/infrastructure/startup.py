@@ -530,6 +530,24 @@ class StartupOrchestrator:
                 except Exception as e:
                     logger.debug("SloManager pre-init failed: %s", e, extra={"tag": "START"})
 
+                # Background checkpoint warmup: first list_checkpoints() call
+                # is slow (~1-5s) due to directory scanning and metadata parsing.
+                # Run it in a background thread so the server starts accepting
+                # requests immediately.
+                def _warm_checkpoints():
+                    try:
+                        import asyncio as _aio
+                        from routers.auto_train import _auto_train_instance as _inst
+                        _loop = _aio.new_event_loop()
+                        try:
+                            _loop.run_until_complete(_inst.list_checkpoints())
+                        finally:
+                            _loop.close()
+                    except Exception:
+                        pass  # Non-fatal; first real request will compute fresh
+
+                threading.Thread(target=_warm_checkpoints, name="ckpt-warmup", daemon=True).start()
+
                 return
             except Exception as e:
                 last_exc = e

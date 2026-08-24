@@ -1,5 +1,5 @@
 /**
- * OutputPanel — floating collapsible panel for server output.
+ * OutputPanel — floating collapsible panel for service output.
  * Toggled via status bar button or Ctrl+` keyboard shortcut.
  * Supports level/source/search filtering, pause, and export.
  */
@@ -66,7 +66,7 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <div className="flex items-center gap-2">
           <span className={`inline-block w-2 h-2 rounded-full ${streaming && !paused ? 'bg-success animate-pulse' : paused ? 'bg-warning' : 'bg-muted-foreground/50'}`} />
-          <span className="text-sm font-medium">Server Output</span>
+          <span className="text-sm font-medium">Service Output</span>
           <span className="text-xs text-muted-foreground">({filtered.length}/{lines.length})</span>
         </div>
         <div className="flex items-center gap-1">
@@ -125,7 +125,7 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
         ref={scrollRef}
         className="flex-1 overflow-y-auto font-mono text-[11px] p-2 space-y-0.5"
         role="log"
-        aria-label="Server output panel"
+        aria-label="Service output panel"
       >
         {filtered.length === 0 ? (
           <div className="text-muted-foreground py-8 text-center text-xs">

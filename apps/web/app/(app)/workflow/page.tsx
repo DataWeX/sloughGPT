@@ -22,7 +22,7 @@ export default function WorkflowPage() {
     try {
       setStatus(await workflowController.status())
     } catch {
-      addToast('Failed to load workflow status', 'error')
+      addToast('Could not load workflow status', 'error')
     } finally {
       setLoading(false)
     }
@@ -40,7 +40,7 @@ export default function WorkflowPage() {
       }
       await fetchStatus()
     } catch {
-      addToast('Failed to toggle workflow', 'error')
+      addToast('Could not toggle workflow', 'error')
     } finally {
       setToggling(false)
     }

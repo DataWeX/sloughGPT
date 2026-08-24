@@ -27,7 +27,7 @@ export default function BatchTrainingCard({ batchUploading, trainStatus, onFileU
     <Card>
       <CardHeader><CardTitle className="text-base">Train with multiple images</CardTitle></CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-xs text-muted-foreground">Train on multiple images at once. Upload files or specify a server directory path.</p>
+        <p className="text-xs text-muted-foreground">Train on multiple images at once. Upload files or specify a folder path.</p>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => batchFileInputRef.current?.click()} disabled={batchUploading || trainStatus?.running}>
             <IconUpload className="h-3.5 w-3.5 mr-1" />
@@ -36,7 +36,7 @@ export default function BatchTrainingCard({ batchUploading, trainStatus, onFileU
           <input ref={batchFileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => onFileUpload(Array.from(e.target.files || []))} />
         </div>
         <div className="flex items-center gap-2">
-          <Input value={batchDirPath} onChange={e => setBatchDirPath(e.target.value)} placeholder="/path/to/images on server" className="h-8 text-xs flex-1" aria-label="Server directory path for batch training" />
+          <Input value={batchDirPath} onChange={e => setBatchDirPath(e.target.value)} placeholder="/path/to/images" className="h-8 text-xs flex-1" aria-label="Folder path for batch training" />
           <Button size="sm" className="h-8 text-xs shrink-0" onClick={handleBatchDir} disabled={!batchDirPath.trim() || trainStatus?.running}>
             {trainStatus?.running ? 'Training…' : 'Train from directory'}
           </Button>

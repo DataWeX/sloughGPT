@@ -37,7 +37,7 @@ const SOURCE_OPTIONS: SourceOption[] = [
   { value: 'kaggle', label: 'Kaggle', description: 'Download from Kaggle' },
   { value: 'csv', label: 'CSV', description: 'Import CSV from URL' },
   { value: 'url', label: 'URL', description: 'Download from a URL' },
-  { value: 'local', label: 'Server Path', description: 'Folder on this machine' },
+  { value: 'local', label: 'Folder Path', description: 'Folder on this machine' },
 ]
 
 const DEFAULT_EXTENSIONS = ['.py', '.js', '.ts', '.md', '.txt', '.json', '.yaml', '.csv', '.pdf']
@@ -104,7 +104,7 @@ export function DatasetImportModal({
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      const message = extractErrorMessage(err, 'Search failed')
+      const message = extractErrorMessage(err, 'Could not search')
       setError(message)
       reportError(message, 'dataset-import', { metadata: { source, action: 'search' } })
     } finally {
@@ -177,7 +177,7 @@ export function DatasetImportModal({
 
         case 'local':
           if (!path.trim()) {
-            throw new Error('Server path is required')
+            throw new Error('Folder path is required')
           }
           if (!name.trim()) {
             throw new Error('Dataset name is required')
@@ -221,7 +221,7 @@ export function DatasetImportModal({
       }, 2000)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      const message = extractErrorMessage(err, 'Import failed')
+      const message = extractErrorMessage(err, 'Could not import')
       setError(message)
       reportError(message, 'dataset-import', { metadata: { source, action: 'import' } })
     } finally {
@@ -513,9 +513,9 @@ export function DatasetImportModal({
           {source === 'local' && (
             <div className="space-y-3">
               <div>
-                <Label htmlFor="local-path">Server Path</Label>
+                <Label htmlFor="local-path">Folder Path</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Absolute path to a folder on this server. Matching files will be imported as a dataset.
+                  Absolute path to a folder. Matching files will be imported as a dataset.
                 </p>
                 <Input
                   id="local-path"
@@ -570,7 +570,7 @@ export function DatasetImportModal({
             <div className="flex items-center gap-3 rounded-md bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <Spinner className="w-4 h-4" />
               <span>
-                {source === 'local' ? 'Scanning server path...' :
+                {source === 'local' ? 'Scanning folder...' :
                  source === 'github' ? 'Cloning repository...' :
                  source === 'huggingface' ? 'Downloading from HuggingFace...' :
                  'Importing...'}

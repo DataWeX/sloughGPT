@@ -1707,10 +1707,20 @@ class LinuxCommandsMixin:
         while i < len(parts):
             p = parts[i]
             if p == "-w" and i + 1 < len(parts):
-                width = int(parts[i + 1])
+                try:
+                    width = int(parts[i + 1])
+                except ValueError:
+                    self.console.print(f"  fold: invalid width: {parts[i + 1]}")
+                    self._last_exit_code = 1
+                    return
                 i += 2
             elif p.startswith("-w") and len(p) > 2:
-                width = int(p[2:])
+                try:
+                    width = int(p[2:])
+                except ValueError:
+                    self.console.print(f"  fold: invalid width: {p[2:]}")
+                    self._last_exit_code = 1
+                    return
                 i += 1
             elif p == "-s":
                 break_spaces = True
@@ -2277,18 +2287,25 @@ class LinuxCommandsMixin:
             self._last_exit_code = 0 if parts[0] == parts[2] else 1
         elif len(parts) == 3 and parts[1] == "!=":
             self._last_exit_code = 0 if parts[0] != parts[2] else 1
-        elif len(parts) == 3 and parts[1] == "-eq":
-            self._last_exit_code = 0 if int(parts[0]) == int(parts[2]) else 1
-        elif len(parts) == 3 and parts[1] == "-ne":
-            self._last_exit_code = 0 if int(parts[0]) != int(parts[2]) else 1
-        elif len(parts) == 3 and parts[1] == "-lt":
-            self._last_exit_code = 0 if int(parts[0]) < int(parts[2]) else 1
-        elif len(parts) == 3 and parts[1] == "-le":
-            self._last_exit_code = 0 if int(parts[0]) <= int(parts[2]) else 1
-        elif len(parts) == 3 and parts[1] == "-gt":
-            self._last_exit_code = 0 if int(parts[0]) > int(parts[2]) else 1
-        elif len(parts) == 3 and parts[1] == "-ge":
-            self._last_exit_code = 0 if int(parts[0]) >= int(parts[2]) else 1
+        elif len(parts) == 3 and parts[1] in ("-eq", "-ne", "-lt", "-le", "-gt", "-ge"):
+            try:
+                a, b = int(parts[0]), int(parts[2])
+            except ValueError:
+                self.console.print(f"  test: integer expression expected: {parts[0] if not parts[0].lstrip('-').isdigit() else parts[2]}")
+                self._last_exit_code = 2
+                return
+            if parts[1] == "-eq":
+                self._last_exit_code = 0 if a == b else 1
+            elif parts[1] == "-ne":
+                self._last_exit_code = 0 if a != b else 1
+            elif parts[1] == "-lt":
+                self._last_exit_code = 0 if a < b else 1
+            elif parts[1] == "-le":
+                self._last_exit_code = 0 if a <= b else 1
+            elif parts[1] == "-gt":
+                self._last_exit_code = 0 if a > b else 1
+            elif parts[1] == "-ge":
+                self._last_exit_code = 0 if a >= b else 1
         else:
             self._last_exit_code = 1
 
@@ -2303,7 +2320,12 @@ class LinuxCommandsMixin:
         i = 0
         while i < len(parts):
             if parts[i] == "-n" and i + 1 < len(parts):
-                n = int(parts[i + 1])
+                try:
+                    n = int(parts[i + 1])
+                except ValueError:
+                    self.console.print(f"  xargs: invalid number: {parts[i + 1]}")
+                    self._last_exit_code = 1
+                    return
                 i += 2
             elif parts[i].startswith("-I") and len(parts[i]) > 2:
                 placeholder = parts[i][2:]

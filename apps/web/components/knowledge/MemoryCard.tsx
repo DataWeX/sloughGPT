@@ -162,7 +162,7 @@ export function MemoryCard() {
       setItems(listResult.items || [])
       setArchiveStats(archiveResult)
     } catch {
-      addToast('Failed to load memory', 'error')
+      addToast('Could not load memory', 'error')
     } finally {
       setLoading(false)
     }
@@ -195,7 +195,7 @@ export function MemoryCard() {
       setSearchResults(result.results || [])
       setSearched(true)
     } catch {
-      addToast('Memory search failed', 'error')
+      addToast('Could not memory search', 'error')
     }
   }, [addToast])
 
@@ -222,7 +222,7 @@ export function MemoryCard() {
         addToast('Already remembered (or memory is disabled)', 'error')
       }
     } catch {
-      addToast('Failed to store memory', 'error')
+      addToast('Could not store memory', 'error')
     } finally {
       setAdding(false)
     }
@@ -248,7 +248,7 @@ export function MemoryCard() {
       setSearched(false)
       await fetchData()
     } catch {
-      addToast('Failed to clear memory', 'error')
+      addToast('Could not clear memory', 'error')
     } finally {
       setClearing(false)
     }
@@ -266,7 +266,7 @@ export function MemoryCard() {
       }
       await fetchData()
     } catch {
-      addToast('Failed to delete memory item', 'error')
+      addToast('Could not delete memory item', 'error')
     } finally {
       setDeleting(false)
     }
@@ -316,7 +316,7 @@ export function MemoryCard() {
       }
       await fetchData()
     } catch {
-      addToast('Failed to delete memory items', 'error')
+      addToast('Could not delete memory items', 'error')
     } finally {
       setDeleting(false)
     }
@@ -351,7 +351,7 @@ export function MemoryCard() {
         addToast('Memory item not found', 'error')
       }
     } catch {
-      addToast('Failed to update memory item', 'error')
+      addToast('Could not update memory item', 'error')
     } finally {
       setSavingEdit(false)
     }
@@ -368,7 +368,7 @@ export function MemoryCard() {
       }
       await fetchData()
     } catch {
-      addToast('Failed to consolidate memory', 'error')
+      addToast('Could not consolidate memory', 'error')
     } finally {
       setConsolidating(false)
     }
@@ -381,7 +381,7 @@ export function MemoryCard() {
       addToast(result.pruned > 0 ? `Pruned ${result.pruned} archive record(s)` : 'Archive already within retention', 'success')
       await fetchData()
     } catch {
-      addToast('Failed to prune archive', 'error')
+      addToast('Could not prune archive', 'error')
     } finally {
       setPruning(false)
     }
@@ -399,7 +399,7 @@ export function MemoryCard() {
       setRetentionDays(config.archive_retention_days)
       addToast(`Archive retention set to ${config.archive_retention_days} day(s)`, 'success')
     } catch {
-      addToast('Failed to save retention', 'error')
+      addToast('Could not save retention', 'error')
     } finally {
       setSavingRetention(false)
     }
@@ -411,7 +411,7 @@ export function MemoryCard() {
       const result = await memoryController.archive(20)
       setArchiveRecords(result.records || [])
     } catch {
-      addToast('Failed to load archive records', 'error')
+      addToast('Could not load archive records', 'error')
     } finally {
       setArchiveLoading(false)
     }
@@ -429,7 +429,7 @@ export function MemoryCard() {
       downloadJson(data, `memory-export-${todayDateString()}.json`)
       addToast(`Exported ${data.length} memory item(s)`, 'success')
     } catch {
-      addToast('Failed to export memory', 'error')
+      addToast('Could not export memory', 'error')
     }
   }, [addToast])
 
@@ -457,7 +457,7 @@ export function MemoryCard() {
       addToast(`Imported ${stored} of ${entries.length} memory item(s)`, 'success')
       await fetchData()
     } catch {
-      addToast('Failed to import memory', 'error')
+      addToast('Could not import memory', 'error')
     } finally {
       setImporting(false)
       setImportProgress(null)
@@ -471,7 +471,7 @@ export function MemoryCard() {
       downloadJson(result.records || [], `memory-archive-${todayDateString()}.json`)
       addToast(`Exported ${result.records?.length ?? 0} archive record(s)`, 'success')
     } catch {
-      addToast('Failed to export archive', 'error')
+      addToast('Could not export archive', 'error')
     } finally {
       setExportingArchive(false)
     }
@@ -491,7 +491,7 @@ export function MemoryCard() {
       setSearched(false)
       await fetchData()
     } catch {
-      addToast('Failed to update memory setting', 'error')
+      addToast('Could not update memory setting', 'error')
     } finally {
       setToggling(false)
     }

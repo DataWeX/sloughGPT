@@ -196,7 +196,7 @@ describe('TokenizerPage', () => {
     mockGetVocab.mockRejectedValue(new Error('boom'))
     await renderLoaded()
     await act(async () => { screen.getByText('Vocab').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to load vocabulary', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not load vocabulary', 'error') })
   })
 
   it('loads and renders tokenization samples', async () => {
@@ -227,7 +227,7 @@ describe('TokenizerPage', () => {
     mockGetSamples.mockRejectedValue(new Error('boom'))
     await renderLoaded()
     await act(async () => { screen.getByText('Samples').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to load samples', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not load samples', 'error') })
   })
 
   it('trains tokenizer with configured vocab size and shows result', async () => {

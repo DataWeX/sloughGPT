@@ -622,7 +622,7 @@ describe('MemoryTab', () => {
     fireEvent.click(screen.getByLabelText('Edit memory item'))
     fireEvent.change(screen.getByLabelText('Edit memory fact text'), { target: { value: 'Updated text.' } })
     fireEvent.click(screen.getByText('Save'))
-    expect(await screen.findByText('Failed to update memory item')).toBeDefined()
+    expect(await screen.findByText('Could not update memory item')).toBeDefined()
   })
 
   it('shows search score when results are from search', async () => {
@@ -667,7 +667,7 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByText('Consolidate'))
-    expect(await screen.findByText('Failed to consolidate memory')).toBeDefined()
+    expect(await screen.findByText('Could not consolidate memory')).toBeDefined()
   })
 
   it('disables the consolidate button while running', async () => {

@@ -28,7 +28,7 @@ export function useTrainingDatasets(addToast: (msg: string, type?: 'success' | '
     try {
       const list = await datasetController.list()
       setDatasets(list)
-    } catch { addToast('Failed to fetch datasets', 'error') }
+    } catch { addToast('Could not fetch datasets', 'error') }
     finally { setLoadingDatasets(false) }
   }, [addToast])
 

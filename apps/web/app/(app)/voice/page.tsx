@@ -23,7 +23,7 @@ export default function VoicePage() {
   useEffect(() => {
     voiceController.getStatus()
       .then(d => setStatus(d))
-      .catch(() => { addToast('Failed to load voice status', 'error') })
+      .catch(() => { addToast('Could not load voice status', 'error') })
       .finally(() => setLoading(false))
   }, [])
 
@@ -31,7 +31,7 @@ export default function VoicePage() {
     try {
       setStatus(await voiceController.getStatus())
     } catch {
-      addToast('Failed to refresh voice status', 'error')
+      addToast('Could not refresh voice status', 'error')
     }
   }
 
@@ -68,7 +68,7 @@ export default function VoicePage() {
         }
       }
     } catch (err) {
-      setTtsError(err instanceof Error ? err.message : 'TTS failed')
+      setTtsError(err instanceof Error ? err.message : 'Could not tts')
     } finally {
       setGenerating(false)
     }
@@ -92,12 +92,12 @@ export default function VoicePage() {
     <PageContainer title="Voice" subtitle="Text-to-speech via browser speech synthesis">
       <KpiGrid>
         <StatCard
-          label="Server TTS"
+          label="Text-to-Speech"
           value={status?.server_tts ? 'Available' : 'Not supported'}
         />
         <StatCard
           label="Engine"
-          value={status?.model ? `Server (${status.model})` : 'Browser SpeechSynthesis'}
+          value={status?.model ? `AI model (${status.model})` : 'Browser SpeechSynthesis'}
         />
         <StatCard label="TTS Calls" value={ttsCount} />
       </KpiGrid>
@@ -112,7 +112,7 @@ export default function VoicePage() {
         <CardContent>
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
-              Server-side TTS requires the transformers library (not available).
+              Text-to-speech requires the transformers library (not available).
               Text is spoken using your browser&apos;s built-in speech synthesis.
             </div>
           </div>
@@ -154,8 +154,8 @@ export default function VoicePage() {
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground space-y-1">
-            <p>Server-side TTS uses HuggingFace bark-small model when available.</p>
-            <p>Falls back to browser native speechSynthesis if server model is unavailable.</p>
+            <p>Text-to-speech uses HuggingFace bark-small model when available.</p>
+            <p>Falls back to browser native speechSynthesis if the model is unavailable.</p>
             <p>Voice input is available in the chat page via the microphone button.</p>
           </div>
         </CardContent>

@@ -42,7 +42,7 @@ export default function CompanionPage() {
       setPresets(presetRes.presets)
       setSystemPrompt(promptRes.system_prompt)
     }).catch((err) => {
-      if (!ignore) setError(extractErrorMessage(err, 'Failed to load companion data'))
+      if (!ignore) setError(extractErrorMessage(err, 'Could not load companion data'))
     }).finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
   }, [])
@@ -61,7 +61,7 @@ export default function CompanionPage() {
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to save personality'), 'error')
+      addToast(extractErrorMessage(err, 'Could not save personality'), 'error')
     } finally {
       setSaving(false)
     }
@@ -74,7 +74,7 @@ export default function CompanionPage() {
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to apply preset'), 'error')
+      addToast(extractErrorMessage(err, 'Could not apply preset'), 'error')
     }
   }
 
@@ -85,7 +85,7 @@ export default function CompanionPage() {
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to reset companion'), 'error')
+      addToast(extractErrorMessage(err, 'Could not reset companion'), 'error')
     }
   }
 

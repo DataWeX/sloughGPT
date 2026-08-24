@@ -209,7 +209,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
                       await trainingJobsController.loadAdapter(session.checkpoint!, false)
                       addToast('LoRA adapter loaded into model', 'success')
                     } catch (e) {
-                      addToast('Failed to load adapter: ' + (e instanceof Error ? e.message : String(e)), 'error')
+                      addToast('Could not load adapter: ' + (e instanceof Error ? e.message : String(e)), 'error')
                     }
                   }}>Load LoRA adapter</Button>
                 )}
@@ -224,7 +224,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
 
           {session.phase === 'error' && (
             <TrainingErrorBanner
-              error={session.message || 'Training failed'}
+              error={session.message || 'Could not training'}
               onRetry={session.resetTraining}
               onDismiss={session.resetTraining}
             />

@@ -18,6 +18,7 @@ import { IconChevronRight, IconMessage, IconSearch, IconBolt, IconChart, LossCur
 import { apiGet } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { chatController } from '@/lib/chat-controller'
+import { timeAgo } from '@/lib/time-ago'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { knowledgeController } from '@/lib/knowledge-controller'
@@ -28,7 +29,7 @@ import { datasetController } from '@/lib/dataset-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { useHomePageData } from '@/hooks/useHomePageData'
 import { formatUptime } from '@/lib/chat-utils'
-import { MS_PER_MINUTE, formatBytes } from '@/lib/format-bytes'
+import { formatBytes } from '@/lib/format-bytes'
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -189,7 +190,7 @@ export default function HomePage() {
               <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                 <div className="h-full bg-warning transition-all duration-500" style={{width: `${(startup.step / startup.total) * 100}%`}} />
               </div>
-              <p className="text-xs text-muted-foreground">Server may take 90s on first cold start (PyTorch import).</p>
+              <p className="text-xs text-muted-foreground">First startup may take 90 seconds while AI components load.</p>
             </CardContent>
           </Card>
         ) : (
@@ -404,14 +405,7 @@ export default function HomePage() {
                   {s.pinned && <span className="text-xs text-primary shrink-0">📌</span>}
                   <span className="text-xs text-muted-foreground shrink-0">
                     {s.message_count != null && <span>{s.message_count}m · </span>}
-                    {(() => {
-                      const d = Date.now() - new Date(s.updated_at).getTime()
-                      const m = Math.floor(d / MS_PER_MINUTE)
-                      if (m < 1) return 'now'
-                      if (m < 60) return `${m}m`
-                      const h = Math.floor(m / 60)
-                      return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`
-                    })()}
+                    {timeAgo(s.updated_at)}
                   </span>
                 </button>
               ))}
@@ -455,7 +449,6 @@ export default function HomePage() {
       {!onboardingDismissed && (
         <OnboardingCard
           onComplete={() => setOnboardingDismissed(true)}
-          onSkip={() => setOnboardingDismissed(true)}
         />
       )}
 

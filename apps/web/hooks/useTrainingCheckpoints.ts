@@ -37,7 +37,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       const data = await trainingJobsController.listCheckpoints()
       setCheckpoints(data)
-    } catch (e) { logger.warning('checkpoints fetch failed', { exception: String(e instanceof Error ? e.message : e) }) }
+    } catch (e) { logger.warning('Could not checkpoints fetch', { exception: String(e instanceof Error ? e.message : e) }) }
     finally { setLoadingCheckpoints(false) }
   }, [])
 
@@ -45,13 +45,13 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       const data = await trainingJobsController.listBuilds()
       setBuilds(data)
-    } catch (e) { logger.warning('checkpoints builds fetch failed', { exception: String(e instanceof Error ? e.message : e) }) }
+    } catch (e) { logger.warning('Could not checkpoints builds fetch', { exception: String(e instanceof Error ? e.message : e) }) }
     finally { setLoadingBuilds(false) }
   }, [])
 
   const fetchJobs = useCallback(async () => {
     try { setJobs(await trainingJobsController.list()) }
-    catch (e) { logger.warning('checkpoints jobs fetch failed', { exception: String(e instanceof Error ? e.message : e) }) }
+    catch (e) { logger.warning('Could not checkpoints jobs fetch', { exception: String(e instanceof Error ? e.message : e) }) }
     finally { setLoadingJobs(false) }
   }, [])
 
@@ -60,7 +60,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
       await trainingJobsController.loadCheckpoint?.(name)
       setActiveCheckpoint(name)
       addToast(`Loaded trained version: ${name}`, 'success')
-    } catch { addToast('Failed to load trained version', 'error') }
+    } catch { addToast('Could not load trained version', 'error') }
   }, [])
 
   const handleDeleteCheckpoint = useCallback(async (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
@@ -70,7 +70,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
       setCheckpoints(prev => prev.filter(c => c.name !== name))
       setActiveCheckpoint(prev => prev === name ? null : prev)
       addToast(`Deleted ${name}`, 'success')
-    } catch { addToast('Failed to delete trained version', 'error') }
+    } catch { addToast('Could not delete trained version', 'error') }
   }, [])
 
   return {

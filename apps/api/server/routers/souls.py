@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict, AsyncGenerator
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import re
 import json, asyncio, logging
 
@@ -56,16 +56,16 @@ class SloRouterState:
 
 
 class SwitchRequest(BaseModel):
-    name: str
-    checkpoint_name: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=200)
+    checkpoint_name: Optional[str] = Field(default=None, max_length=200)
 
 
 class SloChatRequest(BaseModel):
-    checkpoint_name: str
-    prompt: str
-    max_new_tokens: int = 100
-    temperature: float = 0.8
-    top_p: float = 0.9
+    checkpoint_name: str = Field(..., min_length=1, max_length=100)
+    prompt: str = Field(..., min_length=1, max_length=10000)
+    max_new_tokens: int = Field(default=100, ge=1, le=4096)
+    temperature: float = Field(default=0.8, ge=0.1, le=2.0)
+    top_p: float = Field(default=0.9, ge=0.1, le=1.0)
 
 
 class SaveWeightsRequest(BaseModel):
@@ -449,7 +449,7 @@ Be yourself — let your personality shape how you respond."""
                 for s in souls
             ], meta={"current_soul": current.name if current else None})
         except Exception as e:
-            raise_error(str(e), "E_DOMAIN")
+            classify_and_raise(e, source="list_souls")
 
     async def get_soul(self, soul_name: str) -> dict:
         """Get details for a specific soul by name."""
@@ -613,7 +613,7 @@ Be yourself — let your personality shape how you respond."""
             config = get_trait_config()
             return success_response(data=config.list_snapshots())
         except Exception as e:
-            raise_error(str(e), "E_DOMAIN")
+            classify_and_raise(e, source="list_weight_snapshots")
 
     async def save_weight_snapshot(self, name: str) -> dict:
         """

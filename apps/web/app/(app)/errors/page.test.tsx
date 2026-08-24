@@ -134,7 +134,7 @@ describe('ErrorsPage', () => {
   it('shows error toast when initial fetch fails', async () => {
     mockGetGrouped.mockRejectedValueOnce(new Error('boom'))
     render(<ErrorsPage />)
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to load error data', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not load error data', 'error') })
   })
 
   it('filters grouped errors by search term', async () => {
@@ -176,7 +176,7 @@ describe('ErrorsPage', () => {
     mockClear.mockRejectedValue(new Error('boom'))
     await renderLoaded()
     await act(async () => { screen.getByText('Clear All').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to clear errors', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not clear errors', 'error') })
   })
 
   it('exports errors as JSON via downloadJson', async () => {
@@ -193,7 +193,7 @@ describe('ErrorsPage', () => {
     mockExport.mockRejectedValue(new Error('boom'))
     await renderLoaded()
     await act(async () => { screen.getByText('Export All').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to export errors', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not export errors', 'error') })
   })
 
   it('toggles auto-refresh label', async () => {

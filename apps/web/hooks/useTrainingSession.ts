@@ -132,8 +132,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       }
       try {
         const [turboStatus, jobs] = await Promise.all([
-          trainingJobsController.getTurboStatus().catch((e) => { _log.debug('Failed to fetch turbo status', { error: e instanceof Error ? e.message : String(e) }); return null }),
-          trainingJobsController.list().catch((e) => { _log.debug('Failed to fetch training jobs', { error: e instanceof Error ? e.message : String(e) }); return [] }),
+          trainingJobsController.getTurboStatus().catch((e) => { _log.debug('Could not fetch turbo status', { error: e instanceof Error ? e.message : String(e) }); return null }),
+          trainingJobsController.list().catch((e) => { _log.debug('Could not fetch training jobs', { error: e instanceof Error ? e.message : String(e) }); return [] }),
         ])
         if (cancelled) return
         if (turboStatus?.status === 'running') {
@@ -171,7 +171,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             dataQuality: (turboStatus.result?.data_quality as TrainingShellState['dataQuality']) ?? null,
           })
         }
-      } catch (e: unknown) { logger.warning('training server reconciliation failed', { exception: String((e instanceof Error ? e.message : e) || e) }) }
+      } catch (e: unknown) { logger.warning('Could not training server reconciliation', { exception: String((e instanceof Error ? e.message : e) || e) }) }
     }
     reconcile()
     return () => { cancelled = true }
@@ -192,15 +192,15 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   }, [closeStream, clearAllPolls])
 
   const stopTraining = useCallback(() => {
-    trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
-    operationsStore.getState().cancelAll('training').catch((e) => logger.warning('training cancelAll failed', { exception: String(e?.message || e) }))
+    trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Could not stop training', e))
+    operationsStore.getState().cancelAll('training').catch((e) => logger.warning('Could not training cancelall', { exception: String(e?.message || e) }))
     resetTraining()
   }, [resetTraining])
 
   const pauseTraining = useCallback(async (addToast?: TrainingToastFn) => {
     try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch (e: unknown) {
-      const msg = extractErrorMessage(e, 'Pause failed')
-      _log.warning('pause failed', { error: msg })
+      const msg = extractErrorMessage(e, 'Could not pause')
+      _log.warning('Could not pause', { error: msg })
       addToast?.(msg, 'error')
       writeTraining({ message: msg })
     }
@@ -208,8 +208,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const resumeTraining = useCallback(async (addToast?: TrainingToastFn) => {
     try { await trainingJobsController.resumeTraining(); writeTraining({ message: '' }) } catch (e: unknown) {
-      const msg = extractErrorMessage(e, 'Resume failed')
-      _log.warning('resume failed', { error: msg })
+      const msg = extractErrorMessage(e, 'Could not resume')
+      _log.warning('Could not resume', { error: msg })
       addToast?.(msg, 'error')
       writeTraining({ message: msg })
     }
@@ -233,7 +233,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       const jobId = resp.job_id as string
       addToast('LoRA training queued', 'info')
       writeTraining({ totalEpochs: params.epochs, jobId })
-      operationsStore.getState().fetch().catch((e) => _log.debug('Failed to fetch operations', { error: e instanceof Error ? e.message : String(e) }))
+      operationsStore.getState().fetch().catch((e) => _log.debug('Could not fetch operations', { error: e instanceof Error ? e.message : String(e) }))
       startStandardPoll(jobId, { addToast, onComplete })
     }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [startStandardPoll])
@@ -252,7 +252,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       const jobId = resp.job_id as string
       addToast(resp.message || 'Image model training queued', 'info')
       writeTraining({ totalEpochs: params.stage1Epochs + params.stage2Epochs, jobId })
-      operationsStore.getState().fetch().catch((e) => _log.debug('Failed to fetch operations', { error: e instanceof Error ? e.message : String(e) }))
+      operationsStore.getState().fetch().catch((e) => _log.debug('Could not fetch operations', { error: e instanceof Error ? e.message : String(e) }))
       startStandardPoll(jobId, {
         addToast, completeMessage: 'Image model training complete',
         onComplete: (job) => {
@@ -278,16 +278,16 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       n_embed: config.embed, n_head: config.heads, n_layer: config.layers,
       experiment_id: experimentId,
     }).then(result => {
-      if (result.status === 'error') { writeTraining({ error: result.message || 'Training failed', phase: 'error' }); return }
+      if (result.status === 'error') { writeTraining({ error: result.message || 'Could not training', phase: 'error' }); return }
       addToast('Turbo training started', 'info')
-      operationsStore.getState().fetch().catch((e) => _log.debug('Failed to fetch operations', { error: e instanceof Error ? e.message : String(e) }))
+      operationsStore.getState().fetch().catch((e) => _log.debug('Could not fetch operations', { error: e instanceof Error ? e.message : String(e) }))
       startTurboPoll(addToast)
-    }).catch((e: unknown) => { writeTraining({ error: extractErrorMessage(e, 'Training request failed'), phase: 'error' }) })
+    }).catch((e: unknown) => { writeTraining({ error: extractErrorMessage(e, 'Could not training request'), phase: 'error' }) })
   }, [clearAllPolls, startTurboPoll])
 
   const stopTurboTrain = useCallback(() => {
-    trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop turbo training', e))
-    operationsStore.getState().cancelAll('training').catch((e) => _log.debug('Failed to cancel all training ops', { error: e instanceof Error ? e.message : String(e) }))
+    trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Could not stop turbo training', e))
+    operationsStore.getState().cancelAll('training').catch((e) => _log.debug('Could not cancel all training ops', { error: e instanceof Error ? e.message : String(e) }))
     resetTraining()
   }, [resetTraining])
 

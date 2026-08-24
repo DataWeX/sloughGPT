@@ -22,7 +22,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       const s = await workflowController.status()
       setStatus(s)
     } catch (e: unknown) {
-      logger.warning('Workflow status fetch failed', { exception: String(e) })
+      logger.warning('Could not workflow status fetch', { exception: String(e) })
     } finally {
       setLoading(false)
     }
@@ -43,7 +43,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       } catch (e: unknown) {
         if (gen === generation) {
           failures++
-          logger.warning('Workflow poll failed', { exception: String(e) })
+          logger.warning('Could not workflow poll', { exception: String(e) })
         }
       } finally {
         if (gen === generation) setLoading(false)
@@ -70,8 +70,8 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       await refetch()
       onRefresh?.()
     } catch (e: unknown) {
-      logger.warning('Workflow start failed', { exception: String(e) })
-      addToast('Failed to start workflow', 'error')
+      logger.warning('Could not workflow start', { exception: String(e) })
+      addToast('Could not start workflow', 'error')
     }
   }
 
@@ -81,8 +81,8 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       await refetch()
       onRefresh?.()
     } catch (e: unknown) {
-      logger.warning('Workflow stop failed', { exception: String(e) })
-      addToast('Failed to stop workflow', 'error')
+      logger.warning('Could not workflow stop', { exception: String(e) })
+      addToast('Could not stop workflow', 'error')
     }
   }
 

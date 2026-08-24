@@ -81,8 +81,8 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         {isOffline && (
           <SystemBanner
             type="offline"
-            title="API Server Offline"
-            message="The API server is not responding. Make sure it is running."
+            title="Service Unavailable"
+            message="The service is not responding. Please try again."
             actionLabel="Check Again"
             onAction={onRefreshHealth}
           />

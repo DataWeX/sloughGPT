@@ -67,7 +67,7 @@ export function ContextTab() {
       setKnowledgeCount(Array.isArray(knowledge) ? knowledge.length : null)
       setFeedback(fb)
     } catch (err) {
-      logger.debug('Context inspector fetch failed', { exception: String(err) })
+      logger.debug('Could not context inspector fetch', { exception: String(err) })
     } finally {
       setLoading(false)
     }
@@ -103,7 +103,7 @@ export function ContextTab() {
         <p className="text-[10px] text-muted-foreground text-center py-3">Loading context…</p>
       ) : !hasAnything ? (
         <p className="text-xs text-muted-foreground text-center py-4">
-          Context unavailable right now. Start the API server and load a model.
+          Context unavailable right now. Please try again.
         </p>
       ) : (
         <>

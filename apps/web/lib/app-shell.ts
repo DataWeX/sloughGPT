@@ -12,7 +12,7 @@ import { persist } from 'zustand/middleware'
 
 export interface TrainingShellState {
   phase: 'idle' | 'TRAINING' | 'complete' | 'error'
-  method: 'slnet' | 'hf' | 'turbo' | null
+  method: 'slonet' | 'hf' | 'turbo' | null
   loss: number | null
   progress: number
   epoch: number

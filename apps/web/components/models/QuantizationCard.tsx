@@ -44,7 +44,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
       setResult(res)
       addToast(`${res.bits}-bit ${mode} quantization applied (${res.layers_quantized} layers)`, 'success')
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Quantization failed'), 'error')
+      addToast(extractErrorMessage(err, 'Could not quantization'), 'error')
     } finally {
       setQuantizing(false)
     }
@@ -58,7 +58,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
       setShowLayers(false)
       addToast('Reset to float32', 'success')
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Reset failed'), 'error')
+      addToast(extractErrorMessage(err, 'Could not reset'), 'error')
     } finally {
       setResetting(false)
     }

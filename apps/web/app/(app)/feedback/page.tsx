@@ -31,22 +31,22 @@ export default function FeedbackPage() {
 
   useEffect(() => {
     Promise.all([
-      feedbackController.getFeedbackStats().catch((e) => { logger.warning('feedback stats failed', e); return null }),
-      feedbackController.getWorkflowStatus().catch((e) => { logger.warning('workflow status failed', e); return null }),
-      feedbackController.getTrainingStats().catch((e) => { logger.warning('training stats failed', e); return null }),
+      feedbackController.getFeedbackStats().catch((e) => { logger.warning('Could not feedback stats', e); return null }),
+      feedbackController.getWorkflowStatus().catch((e) => { logger.warning('Could not workflow status', e); return null }),
+      feedbackController.getTrainingStats().catch((e) => { logger.warning('Could not training stats', e); return null }),
     ]).then(([s, w, t]) => {
       setStats(s)
       setWorkflow(w)
       setTrainStats(t)
-      if (!s && !w && !t) setLoadError('Could not load feedback data. Is the server running?')
+      if (!s && !w && !t) setLoadError('Could not load feedback data. Please try again.')
     }).finally(() => setLoading(false))
   }, [])
 
   const handleRefreshStats = async () => {
     const [s, w, t] = await Promise.all([
-      feedbackController.getFeedbackStats().catch((e) => { logger.warning('feedback stats refresh failed', e); return null }),
-      feedbackController.getWorkflowStatus().catch((e) => { logger.warning('workflow status refresh failed', e); return null }),
-      feedbackController.getTrainingStats().catch((e) => { logger.warning('training stats refresh failed', e); return null }),
+      feedbackController.getFeedbackStats().catch((e) => { logger.warning('Could not feedback stats refresh', e); return null }),
+      feedbackController.getWorkflowStatus().catch((e) => { logger.warning('Could not workflow status refresh', e); return null }),
+      feedbackController.getTrainingStats().catch((e) => { logger.warning('Could not training stats refresh', e); return null }),
     ])
     setStats(s)
     setWorkflow(w)
@@ -57,7 +57,7 @@ export default function FeedbackPage() {
     try {
       setConversations(await feedbackConversationsController.list())
     } catch {
-      addToast('Failed to load conversations', 'error')
+      addToast('Could not load conversations', 'error')
     }
   }
 
@@ -69,7 +69,7 @@ export default function FeedbackPage() {
       setNewConvName('')
       await handleLoadConversations()
     } catch {
-      addToast('Failed to create conversation', 'error')
+      addToast('Could not create conversation', 'error')
     } finally {
       setCreating(false)
     }
@@ -80,7 +80,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.delete(id)
       await handleLoadConversations()
     } catch {
-      addToast('Failed to delete conversation', 'error')
+      addToast('Could not delete conversation', 'error')
     }
   }
 
@@ -89,7 +89,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.togglePin(conv.id, !conv.pinned)
       await handleLoadConversations()
     } catch {
-      addToast('Failed to update pin', 'error')
+      addToast('Could not update pin', 'error')
     }
   }
 
@@ -98,7 +98,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.toggleStar(conv.id, !conv.starred)
       await handleLoadConversations()
     } catch {
-      addToast('Failed to update star', 'error')
+      addToast('Could not update star', 'error')
     }
   }
 
@@ -294,13 +294,13 @@ export default function FeedbackPage() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <Button size="sm" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('aggregate'); addToast('Aggregation triggered', 'success'); handleRefreshStats() } catch { addToast('Aggregation failed', 'error') } finally { setWorkflowBusy(false) } }}>
+                  <Button size="sm" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('aggregate'); addToast('Could not aggregation triggered', 'success'); handlerefreshstats() } catch { addtoast('aggregation', 'error') } finally { setWorkflowBusy(false) } }}>
                     Aggregate
                   </Button>
-                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('prune'); addToast('Prune triggered', 'success'); handleRefreshStats() } catch { addToast('Prune failed', 'error') } finally { setWorkflowBusy(false) } }}>
+                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('prune'); addToast('Could not prune triggered', 'success'); handlerefreshstats() } catch { addtoast('prune', 'error') } finally { setWorkflowBusy(false) } }}>
                     Prune
                   </Button>
-                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('export'); addToast('Export triggered', 'success') } catch { addToast('Export failed', 'error') } finally { setWorkflowBusy(false) } }}>
+                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('export'); addToast('Could not export triggered', 'success') } catch { addtoast('export', 'error') } finally { setWorkflowBusy(false) } }}>
                     Export
                   </Button>
                 </div>

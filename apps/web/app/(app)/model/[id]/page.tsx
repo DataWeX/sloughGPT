@@ -91,7 +91,7 @@ export default function ModelDetailPage() {
     fetchData()
     generationConfigController.get().then(cfg => {
       if (cfg && typeof cfg.temperature === 'number') setGenConfig(cfg)
-    }).catch((e) => logger.debug('Config load failed', e)).finally(() => setConfigLoading(false))
+    }).catch((e) => logger.debug('Could not config load', e)).finally(() => setConfigLoading(false))
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [modelId, fetchData, router])
 
@@ -121,7 +121,7 @@ export default function ModelDetailPage() {
       addToast(`Model ready: ${modelId} (${device})`, 'success')
     } catch (err) {
       setLoadState('error')
-      addToast(extractErrorMessage(err, `Failed to load ${modelId}`), 'error')
+      addToast(extractErrorMessage(err, `Could not load ${modelId}`), 'error')
     }
   }
 
@@ -132,7 +132,7 @@ export default function ModelDetailPage() {
       setHealth(prev => prev ? { ...prev, model_loaded: false, model_type: '' } : null)
       addToast('Model stopped', 'info')
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to stop model'), 'error')
+      addToast(extractErrorMessage(err, 'Could not stop model'), 'error')
     }
   }
 
@@ -142,7 +142,7 @@ export default function ModelDetailPage() {
       await generationConfigController.update(genConfig)
       addToast('Generation config updated', 'success')
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to save config'), 'error')
+      addToast(extractErrorMessage(err, 'Could not save config'), 'error')
     } finally {
       setConfigSaving(false)
     }
@@ -155,8 +155,8 @@ export default function ModelDetailPage() {
       const result = await benchmarkController.run({ model: modelId })
       setBenchmark(result)
     } catch (err) {
-      setBenchmark({ error: extractErrorMessage(err, 'Benchmark failed') } as BenchmarkResult)
-      addToast(extractErrorMessage(err, 'Performance test failed'), 'error')
+      setBenchmark({ error: extractErrorMessage(err, 'Could not benchmark') } as BenchmarkResult)
+      addToast(extractErrorMessage(err, 'Could not performance test'), 'error')
     } finally {
       setBenchmarking(false)
     }
@@ -389,7 +389,7 @@ export default function ModelDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Recent Activity</CardTitle>
-              <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => { logger.debug('Activity log refresh failed') })}>
+              <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => { logger.debug('Could not activity log refresh') })}>
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -423,7 +423,7 @@ function ModelTestPrompt({ modelId }: { modelId: string }) {
       const data = await generateController.generate({ prompt: prompt.trim(), max_new_tokens: 200 })
       setOutput(data.text || '')
     } catch {
-      addToast('Test failed — is the model loaded?', 'error')
+      addToast('Could not complete test — is the model loaded?', 'error')
     } finally {
       setLoading(false)
     }

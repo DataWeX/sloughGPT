@@ -109,18 +109,18 @@ export default function SystemHealthPage() {
 
       // Non-critical endpoints — each degrades independently on failure.
       const [m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
-        systemController.getMetrics().catch((e) => { logger.warning('metrics fetch failed', e); return null }),
-        systemController.getInfo().catch((e) => { logger.warning('info fetch failed', e); return null }),
-        systemController.getDisk().catch((e) => { logger.warning('disk fetch failed', e); return null }),
-        knowledgeController.stats().catch((e) => { logger.warning('knowledge stats failed', e); return null }),
-        knowledgeController.getAdapterStatus().catch((e) => { logger.warning('adapter status failed', e); return null }),
-        benchmarkController.quality().catch((e) => { logger.warning('benchmark quality failed', e); return null }),
-        benchmarkController.stats().catch((e) => { logger.warning('benchmark stats failed', e); return null }),
-        multimodalController.getDPOStatus().catch((e) => { logger.warning('DPO status failed', e); return null }),
-        multimodalController.getStatus().catch((e) => { logger.warning('multimodal status failed', e); return null }),
-        systemController.getExecutorStatus().catch((e) => { logger.warning('executor status failed', e); return null }),
+        systemController.getMetrics().catch((e) => { logger.warning('Could not metrics fetch', e); return null }),
+        systemController.getInfo().catch((e) => { logger.warning('Could not info fetch', e); return null }),
+        systemController.getDisk().catch((e) => { logger.warning('Could not disk fetch', e); return null }),
+        knowledgeController.stats().catch((e) => { logger.warning('Could not knowledge stats', e); return null }),
+        knowledgeController.getAdapterStatus().catch((e) => { logger.warning('Could not adapter status', e); return null }),
+        benchmarkController.quality().catch((e) => { logger.warning('Could not benchmark quality', e); return null }),
+        benchmarkController.stats().catch((e) => { logger.warning('Could not benchmark stats', e); return null }),
+        multimodalController.getDPOStatus().catch((e) => { logger.warning('Could not dpo status', e); return null }),
+        multimodalController.getStatus().catch((e) => { logger.warning('Could not multimodal status', e); return null }),
+        systemController.getExecutorStatus().catch((e) => { logger.warning('Could not executor status', e); return null }),
         trainingController.getAutoTrainStatus().catch((e) => { logger.warning('auto-train status failed', e); return null }),
-        trainingController.list().catch((e) => { logger.warning('training list failed', e); return [] }),
+        trainingController.list().catch((e) => { logger.warning('Could not training list', e); return [] }),
       ])
       if (m != null) setMetrics(m)
       if (i != null) setInfo(i)
@@ -142,7 +142,7 @@ export default function SystemHealthPage() {
       setLastUpdated(new Date().toLocaleTimeString())
       return true
     } catch (e: unknown) {
-      setError(extractErrorMessage(e, 'Failed to load system health'))
+      setError(extractErrorMessage(e, 'Could not load system health'))
       return false
     } finally {
       if (showRefreshing) setRefreshing(false)
@@ -452,9 +452,9 @@ export default function SystemHealthPage() {
         </FoldSection>
       )}
 
-      {/* Collapsible: Server Output & Activity */}
+      {/* Collapsible: Service Output & Activity */}
       {loaded && (
-        <FoldSection heading="Server Output" open={false}>
+        <FoldSection heading="Service Output" open={false}>
           <div className="space-y-3">
             <OutputCard compact />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
