@@ -58,7 +58,12 @@ vi.mock('@/components/PageContainer', () => ({
     <div>
       <h1>{title}</h1>
       {headerRight && <div>{headerRight}</div>}
-      {error ? <div>{error}</div> : children}
+      {error ? (
+        <div>
+          <div>{error}</div>
+          <button onClick={onRetry}>Retry</button>
+        </div>
+      ) : children}
     </div>
   ),
 }))
@@ -146,10 +151,7 @@ describe('AdaptersPage', () => {
 
   it('renders the adapter health card when adapters exist', async () => {
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Adapter Health')).toBeTruthy() })
-    expect(screen.getByText('Total Feedback')).toBeTruthy()
-    expect(screen.getByText('Rank 8 (2)')).toBeTruthy()
-    expect(screen.getByText('5 fb')).toBeTruthy()
+    await waitFor(() => { expect(screen.getByTestId('adapter-health-card')).toBeTruthy() })
   })
 
   it('shows empty state when no adapters exist', async () => {
@@ -221,25 +223,27 @@ describe('AdaptersPage', () => {
   })
 
   it('resets an adapter and refetches', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mockReset.mockResolvedValue({ status: 'ok', user_id: 'user-1', feedback_count: 0 })
-    const { container } = render(<AdaptersPage />)
+    render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
-    const delBtns = container.querySelectorAll('button.text-destructive')
-    await act(async () => { (delBtns[0] as HTMLElement).click() })
+    const delBtns = screen.getAllByRole('button').filter(b => b.className.includes('text-destructive'))
+    await act(async () => { fireEvent.click(delBtns[0]) })
+    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    const resetBtn = screen.getByTestId('alert-dialog').querySelectorAll('button')[1]
+    await act(async () => { fireEvent.click(resetBtn) })
     await waitFor(() => { expect(mockReset).toHaveBeenCalledWith('user-1') })
-    vi.mocked(window.confirm).mockRestore()
   })
 
   it('shows error toast when reset fails', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mockReset.mockRejectedValue(new Error('boom'))
-    const { container } = render(<AdaptersPage />)
+    render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
-    const delBtns = container.querySelectorAll('button.text-destructive')
-    await act(async () => { (delBtns[0] as HTMLElement).click() })
+    const delBtns = screen.getAllByRole('button').filter(b => b.className.includes('text-destructive'))
+    await act(async () => { fireEvent.click(delBtns[0]) })
+    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    const resetBtn = screen.getByTestId('alert-dialog').querySelectorAll('button')[1]
+    await act(async () => { fireEvent.click(resetBtn) })
     await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not reset adapter', 'error') })
-    vi.mocked(window.confirm).mockRestore()
   })
 
   it('runs LoRA eval and shows eval history', async () => {

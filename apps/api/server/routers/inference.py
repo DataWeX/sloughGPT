@@ -25,8 +25,11 @@ from domains.learner import get_learner
 from domains.learner.entity_extractor import extract_and_store
 from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
 from domains.infrastructure.request_coalescer import get_coalescer
+from config import ServerConfig
 
 logger = logging.getLogger("slo.inference")
+
+cfg = ServerConfig.from_env()
 
 try:
     from domains.api.sse_envelope import sse_event as _sse_event, sse_token, sse_error

@@ -90,7 +90,8 @@ describe('SessionPage', () => {
       expect(screen.getByText('Messages')).toBeInTheDocument()
     }, { timeout: 5000 })
     expect(screen.getByText('Knowledge Facts')).toBeInTheDocument()
-    expect(screen.getByText('Feedback')).toBeInTheDocument()
+    expect(screen.getAllByText('Feedback').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('Inspect Time')).toBeInTheDocument()
     expect(screen.getByText('42ms')).toBeInTheDocument()
   })
 

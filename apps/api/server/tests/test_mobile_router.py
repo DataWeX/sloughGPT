@@ -40,10 +40,10 @@ class TestMobileDashboard:
         mock_models = [{"id": "gpt2", "name": "GPT-2"}]
 
         with (
-            patch("apps.api.server.routers.mobile.MobileRouter._get_health_data", return_value=mock_health),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_current_soul", return_value=mock_soul),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_sessions_list", return_value=mock_sessions),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_models_list", return_value=mock_models),
+            patch("routers.mobile.MobileRouter._get_health_data", return_value=mock_health),
+            patch("routers.mobile.MobileRouter._get_current_soul", return_value=mock_soul),
+            patch("routers.mobile.MobileRouter._get_sessions_list", return_value=mock_sessions),
+            patch("routers.mobile.MobileRouter._get_models_list", return_value=mock_models),
         ):
             response = client.get("/mobile/dashboard")
 
@@ -60,10 +60,10 @@ class TestMobileDashboard:
     def test_dashboard_handles_missing_data(self, client):
         """Dashboard should handle empty/missing data gracefully."""
         with (
-            patch("apps.api.server.routers.mobile.MobileRouter._get_health_data", return_value={}),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_current_soul", return_value={}),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_sessions_list", return_value=[]),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_models_list", return_value=[]),
+            patch("routers.mobile.MobileRouter._get_health_data", return_value={}),
+            patch("routers.mobile.MobileRouter._get_current_soul", return_value={}),
+            patch("routers.mobile.MobileRouter._get_sessions_list", return_value=[]),
+            patch("routers.mobile.MobileRouter._get_models_list", return_value=[]),
         ):
             response = client.get("/mobile/dashboard")
 
@@ -88,7 +88,7 @@ class TestMobileConversations:
             for i in range(1, 26)
         ]
 
-        with patch("apps.api.server.routers.mobile.MobileRouter._get_sessions_list", return_value=sessions):
+        with patch("routers.mobile.MobileRouter._get_sessions_list", return_value=sessions):
             response = client.get("/mobile/conversations?page=1&per_page=10")
 
         assert response.status_code == 200
@@ -115,7 +115,7 @@ class TestMobileConversations:
             },
         ]
 
-        with patch("apps.api.server.routers.mobile.MobileRouter._get_sessions_list", return_value=sessions):
+        with patch("routers.mobile.MobileRouter._get_sessions_list", return_value=sessions):
             response = client.get("/mobile/conversations?search=Python")
 
         assert response.status_code == 200
@@ -130,7 +130,7 @@ class TestMobileConversations:
             {"role": "assistant", "content": "Hi!", "timestamp": "2024-01-01T00:00:01"},
         ]
 
-        with patch("apps.api.server.routers.mobile.MobileRouter._get_session_messages", return_value=messages):
+        with patch("routers.mobile.MobileRouter._get_session_messages", return_value=messages):
             response = client.get("/mobile/conversations/session_123")
 
         assert response.status_code == 200
@@ -159,11 +159,11 @@ class TestMobileModels:
         mock_health = {"model_type": "gpt2"}
 
         with (
-            patch("apps.api.server.routers.mobile.MobileRouter._get_models_list", return_value=mock_models),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_souls", return_value=mock_souls),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_current_soul", return_value=mock_current_soul),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_checkpoints", return_value=mock_checkpoints),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_health_data", return_value=mock_health),
+            patch("routers.mobile.MobileRouter._get_models_list", return_value=mock_models),
+            patch("routers.mobile.MobileRouter._get_souls", return_value=mock_souls),
+            patch("routers.mobile.MobileRouter._get_current_soul", return_value=mock_current_soul),
+            patch("routers.mobile.MobileRouter._get_checkpoints", return_value=mock_checkpoints),
+            patch("routers.mobile.MobileRouter._get_health_data", return_value=mock_health),
         ):
             response = client.get("/mobile/models")
 
@@ -180,9 +180,9 @@ class TestMobileModels:
         mock_health = {"model_type": "llama"}
 
         with (
-            patch("apps.api.server.routers.mobile.MobileRouter._load_model", return_value=None),
-            patch("apps.api.server.routers.mobile.MobileRouter._switch_soul", return_value=None),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_health_data", return_value=mock_health),
+            patch("routers.mobile.MobileRouter._load_model", return_value=None),
+            patch("routers.mobile.MobileRouter._switch_soul", return_value=None),
+            patch("routers.mobile.MobileRouter._get_health_data", return_value=mock_health),
         ):
             response = client.post(
                 "/mobile/models/switch",
@@ -224,9 +224,9 @@ class TestMobileHealth:
         }
 
         with (
-            patch("apps.api.server.routers.mobile.MobileRouter._get_detailed_health", return_value=mock_detailed),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_system_metrics", return_value=mock_metrics),
-            patch("apps.api.server.routers.mobile.MobileRouter._get_disk_info", return_value=mock_disk),
+            patch("routers.mobile.MobileRouter._get_detailed_health", return_value=mock_detailed),
+            patch("routers.mobile.MobileRouter._get_system_metrics", return_value=mock_metrics),
+            patch("routers.mobile.MobileRouter._get_disk_info", return_value=mock_disk),
         ):
             response = client.get("/mobile/health")
 
@@ -261,7 +261,7 @@ class TestMobileKnowledge:
             for i in range(1, 51)
         ]
 
-        with patch("apps.api.server.routers.mobile.MobileRouter._get_knowledge_items", return_value=[
+        with patch("routers.mobile.MobileRouter._get_knowledge_items", return_value=[
             {
                 "id": f"item_{i}",
                 "content": f"Knowledge {i}",
@@ -290,7 +290,7 @@ class TestMobileKnowledge:
             {"id": "3", "content": "Tech 2", "topic": "tech", "importance": 0.7, "source": "manual", "url": "", "timestamp": 0, "score": 0},
         ]
 
-        with patch("apps.api.server.routers.mobile.MobileRouter._get_knowledge_items", return_value=items):
+        with patch("routers.mobile.MobileRouter._get_knowledge_items", return_value=items):
             response = client.get("/mobile/knowledge?topic=tech")
 
         assert response.status_code == 200
@@ -304,7 +304,7 @@ class TestMobileKnowledge:
             {"id": "1", "content": "Python programming", "topic": "tech", "importance": 0.9, "source": "manual", "score": 0.95},
         ]
 
-        with patch("apps.api.server.routers.mobile.MobileRouter._search_knowledge", return_value=results):
+        with patch("routers.mobile.MobileRouter._search_knowledge", return_value=results):
             response = client.get("/mobile/knowledge?search=Python")
 
         assert response.status_code == 200
@@ -314,7 +314,7 @@ class TestMobileKnowledge:
 
     def test_create_knowledge_item(self, client):
         """POST /mobile/knowledge should create a new item."""
-        with patch("apps.api.server.routers.mobile.MobileRouter._create_knowledge_item", return_value="new_item"):
+        with patch("routers.mobile.MobileRouter._create_knowledge_item", return_value="new_item"):
             response = client.post(
                 "/mobile/knowledge",
                 json={"content": "New knowledge", "topic": "tech"},
@@ -328,7 +328,7 @@ class TestMobileKnowledge:
 
     def test_update_knowledge_item(self, client):
         """PATCH /mobile/knowledge/{id} should update an item."""
-        with patch("apps.api.server.routers.mobile.MobileRouter._update_knowledge_item", return_value=True):
+        with patch("routers.mobile.MobileRouter._update_knowledge_item", return_value=True):
             response = client.patch(
                 "/mobile/knowledge/item_1",
                 json={"content": "Updated content", "topic": "science", "importance": 0.9},
@@ -341,7 +341,7 @@ class TestMobileKnowledge:
 
     def test_delete_knowledge_item(self, client):
         """DELETE /mobile/knowledge/{id} should delete an item."""
-        with patch("apps.api.server.routers.mobile.MobileRouter._delete_knowledge_item", return_value=True):
+        with patch("routers.mobile.MobileRouter._delete_knowledge_item", return_value=True):
             response = client.delete("/mobile/knowledge/item_1")
 
         assert response.status_code == 200
