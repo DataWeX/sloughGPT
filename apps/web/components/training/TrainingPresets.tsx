@@ -80,6 +80,7 @@ export function TrainingPresets({
             value={presetName}
             onChange={e => setPresetName(e.target.value)}
             placeholder="Preset name..."
+            aria-label="Preset name"
             className="h-7 flex-1 rounded-md border border-border/60 bg-background px-2 text-xs"
             onKeyDown={e => e.key === 'Enter' && handleSave()}
           />

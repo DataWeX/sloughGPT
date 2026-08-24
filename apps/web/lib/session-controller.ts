@@ -7,6 +7,33 @@ import { logger } from './dev-log'
 
 const _log = logger.child('session-controller')
 
+export interface SessionInspector {
+  session: {
+    id: string
+    message_count: number
+    messages: Array<{ role: string; content: string; ts?: number }>
+  }
+  knowledge: {
+    total_facts: number
+    topics: string[]
+  }
+  traits: Record<string, unknown>
+  modes: Record<string, string>
+  feedback: {
+    total: number
+    thumbs_up: number
+    thumbs_down: number
+  }
+  workspace: {
+    working_memory: string[]
+    semantic_keys: string[]
+    episodic_count: number
+    sensory_buffer_size: number
+    system_prompt: string
+  }
+  elapsed_ms: number
+}
+
 export interface Conversation {
   id: string
   name: string
@@ -110,5 +137,13 @@ export const sessionController = {
       ? await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`, undefined, { signal: opts.signal, silent: opts.silent })
       : await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`)
     return data.messages || []
+  },
+
+  async getInspector(sessionId: string): Promise<SessionInspector> {
+    return apiGet<SessionInspector>(`/session/${sessionId}/inspector`)
+  },
+
+  async regenerate(sessionId: string): Promise<{ status: string }> {
+    return apiPost<{ status: string }>(`/session/${sessionId}/regenerate`)
   },
 }

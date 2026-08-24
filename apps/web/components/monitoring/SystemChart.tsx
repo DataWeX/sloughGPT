@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
 
 interface ChartPoint {
@@ -32,7 +33,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   )
 }
 
-export function SystemChart({ data, showTokens = true, showLatency = true }: SystemChartProps) {
+export const SystemChart = memo(function SystemChart({ data, showTokens = true, showLatency = true }: SystemChartProps) {
   if (!data.length) {
     return (
       <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
@@ -120,4 +121,4 @@ export function SystemChart({ data, showTokens = true, showLatency = true }: Sys
       </ComposedChart>
     </ResponsiveContainer>
   )
-}
+})

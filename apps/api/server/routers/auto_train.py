@@ -1108,6 +1108,10 @@ class AutoTrainRouter:
 
     async def delete_checkpoint(self, name: str) -> dict:
         """delete_checkpoint."""
+        import re
+        if not re.match(r'^[\w\-]+(\.\w+)*$', name):
+            raise_error(f"Invalid checkpoint name: {name!r}", code="E_VAL_REQUEST", details={"name": name})
+
         deleted = []
 
         def _delete():
@@ -1118,10 +1122,11 @@ class AutoTrainRouter:
                     else:
                         candidates = [base / (name + ext)]
                     for candidate in candidates:
-                        if candidate.exists():
-                            candidate.unlink()
+                        resolved = candidate.resolve()
+                        if resolved.exists() and str(resolved).startswith(str(base.resolve())):
+                            resolved.unlink()
                             deleted.append(candidate.name)
-                        meta = Path(str(candidate) + ".meta.json")
+                        meta = Path(str(resolved) + ".meta.json")
                         if meta.exists():
                             meta.unlink()
 

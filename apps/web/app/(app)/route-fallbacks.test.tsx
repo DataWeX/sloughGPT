@@ -21,7 +21,7 @@ describe('route error boundaries', () => {
   afterEach(() => cleanup())
 
   it('covers every route error boundary', () => {
-    expect(errors.length).toBe(35)
+    expect(errors.length).toBe(40)
   })
 
   it.each(errors)('renders %s and retries', (key) => {

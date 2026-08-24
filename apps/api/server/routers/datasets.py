@@ -449,10 +449,13 @@ class DatasetsRouter:
 
     async def search_books(self, q: str = Query(..., description="Search by title or ISBN"), limit: int = Query(10, ge=1, le=50)) -> dict:
         """Search books by title or ISBN via Open Library."""
-        from domains.training.data_import import BooksSearch
-        searcher = BooksSearch()
-        results = searcher.search(q, limit)
-        return success_response(data={"books": results})
+        try:
+            from domains.training.data_import import BooksSearch
+            searcher = BooksSearch()
+            results = searcher.search(q, limit)
+            return success_response(data={"books": results})
+        except Exception as e:
+            classify_and_raise(e, source="search_books")
 
     async def search_github(self, q: str = Query(..., description="Search query"), limit: int = Query(10, ge=1, le=50)) -> dict:
         """Search GitHub for repositories matching a query string.
@@ -468,22 +471,25 @@ class DatasetsRouter:
         Side effects:
             Calls the GitHub Search API via GitHubSearch.search_repos().
         """
-        from domains.training.data_import import GitHubSearch
-        searcher = GitHubSearch()
-        items = searcher.search_repos(q, limit)
-        repos = [
-            {
-                "id": item["full_name"],
-                "name": item["full_name"].split("/")[1] if "/" in item["full_name"] else item["full_name"],
-                "full_name": item["full_name"],
-                "description": item.get("description"),
-                "stars": item.get("stargazers_count", 0),
-                "url": item.get("html_url", ""),
-                "language": item.get("language"),
-            }
-            for item in items
-        ]
-        return success_response(data={"repos": repos})
+        try:
+            from domains.training.data_import import GitHubSearch
+            searcher = GitHubSearch()
+            items = searcher.search_repos(q, limit)
+            repos = [
+                {
+                    "id": item["full_name"],
+                    "name": item["full_name"].split("/")[1] if "/" in item["full_name"] else item["full_name"],
+                    "full_name": item["full_name"],
+                    "description": item.get("description"),
+                    "stars": item.get("stargazers_count", 0),
+                    "url": item.get("html_url", ""),
+                    "language": item.get("language"),
+                }
+                for item in items
+            ]
+            return success_response(data={"repos": repos})
+        except Exception as e:
+            classify_and_raise(e, source="search_github")
 
     async def import_from_isbn(self, request: ISBNImportRequest) -> dict:
         """Import book by ISBN. Fetches full text if available on Project Gutenberg."""

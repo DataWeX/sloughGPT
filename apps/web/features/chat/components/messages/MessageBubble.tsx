@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn, IconStar } from '@sloughgpt/strui'
 import { timeAgo } from '@/lib/time-ago'
 import { MessageActions } from './MessageActions'
@@ -64,7 +64,8 @@ export const MessageBubble = memo(function MessageBubble({
 
   useEffect(() => { setIsVisible(true) }, [])
 
-
+  const handleEditStart = useCallback(() => setIsEditing(true), [])
+  const handleEditCancel = useCallback(() => setIsEditing(false), [])
 
   const hasContent = content && content.trim().length > 0
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
@@ -77,7 +78,7 @@ export const MessageBubble = memo(function MessageBubble({
       role={role}
       isBookmarked={isBookmarked}
       onCopy={onCopy}
-      onEdit={onEdit ? () => setIsEditing(true) : undefined}
+      onEdit={onEdit ? handleEditStart : undefined}
       onBookmark={onBookmark}
       onRegenerate={showActions ? onRegenerate : undefined}
       onDelete={onDelete}
@@ -152,8 +153,8 @@ export const MessageBubble = memo(function MessageBubble({
           collapsibleLength={collapsibleLength}
           isEditing={isEditing}
           onEdit={onEdit}
-          onEditStart={() => setIsEditing(true)}
-          onEditCancel={() => setIsEditing(false)}
+          onEditStart={handleEditStart}
+          onEditCancel={handleEditCancel}
         />
 
         {showTimestamp && (
@@ -189,7 +190,7 @@ export const MessageBubble = memo(function MessageBubble({
           messageId={id}
           role={role}
           onCopy={onCopy}
-          onEdit={() => setIsEditing(true)}
+          onEdit={handleEditStart}
           onSuggestionClick={onSuggestionClick}
           onDelete={onDelete}
         />

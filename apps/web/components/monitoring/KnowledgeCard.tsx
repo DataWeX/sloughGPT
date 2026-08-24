@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 
@@ -9,7 +10,7 @@ interface KnowledgeCardProps {
   loaded: boolean
 }
 
-export function KnowledgeCard({ knowledgeStats, adapterStatus, loaded }: KnowledgeCardProps) {
+export const KnowledgeCard = memo(function KnowledgeCard({ knowledgeStats, adapterStatus, loaded }: KnowledgeCardProps) {
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Knowledge</span>
@@ -32,4 +33,4 @@ export function KnowledgeCard({ knowledgeStats, adapterStatus, loaded }: Knowled
       </CardContent>
     </Card>
   )
-}
+})

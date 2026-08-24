@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { AutoTrainStatus } from '@/lib/training-controller'
@@ -8,7 +9,7 @@ interface AutoTrainCardProps {
   status: AutoTrainStatus
 }
 
-export function AutoTrainCard({ status }: AutoTrainCardProps) {
+export const AutoTrainCard = memo(function AutoTrainCard({ status }: AutoTrainCardProps) {
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Auto-Trainer</span>
@@ -35,4 +36,4 @@ export function AutoTrainCard({ status }: AutoTrainCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

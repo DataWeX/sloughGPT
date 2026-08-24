@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -27,7 +28,7 @@ interface FeedbackCardProps {
   onRefresh: () => void
 }
 
-export function FeedbackCard({ dpoStatus, visualStatus, dpoRunning, onDpoRunningChange, onRefresh }: FeedbackCardProps) {
+export const FeedbackCard = memo(function FeedbackCard({ dpoStatus, visualStatus, dpoRunning, onDpoRunningChange, onRefresh }: FeedbackCardProps) {
   if (!dpoStatus && !visualStatus) return null
 
   return (
@@ -77,4 +78,4 @@ export function FeedbackCard({ dpoStatus, visualStatus, dpoRunning, onDpoRunning
       </CardContent>
     </Card>
   )
-}
+})

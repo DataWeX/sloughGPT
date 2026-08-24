@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import type { KvSessionsInfo } from '@/lib/system-controller'
@@ -8,7 +9,7 @@ interface KvCacheCardProps {
   kvSessions: KvSessionsInfo
 }
 
-export function KvCacheCard({ kvSessions }: KvCacheCardProps) {
+export const KvCacheCard = memo(function KvCacheCard({ kvSessions }: KvCacheCardProps) {
   if (!kvSessions.enabled) return null
 
   return (
@@ -42,4 +43,4 @@ export function KvCacheCard({ kvSessions }: KvCacheCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

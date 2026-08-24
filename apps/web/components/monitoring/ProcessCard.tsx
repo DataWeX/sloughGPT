@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 
@@ -24,7 +25,7 @@ interface ProcessCardProps {
   } | null
 }
 
-export function ProcessCard({ detailed }: ProcessCardProps) {
+export const ProcessCard = memo(function ProcessCard({ detailed }: ProcessCardProps) {
   if (!detailed?.system) return null
 
   const sys = detailed.system
@@ -84,4 +85,4 @@ export function ProcessCard({ detailed }: ProcessCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

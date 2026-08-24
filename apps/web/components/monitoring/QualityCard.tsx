@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 
@@ -31,7 +32,7 @@ function QualityDot({ score }: { score: number }) {
   )
 }
 
-export function QualityCard({ quality, stats }: QualityCardProps) {
+export const QualityCard = memo(function QualityCard({ quality, stats }: QualityCardProps) {
   if (quality.total_responses === 0) return null
 
   return (
@@ -52,4 +53,4 @@ export function QualityCard({ quality, stats }: QualityCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

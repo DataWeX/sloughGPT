@@ -3,9 +3,14 @@ LoRA Evaluation Router - Trigger adapter quality evaluation.
 """
 import asyncio
 import logging
+import re
+from pathlib import Path
 from fastapi import APIRouter, Query
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+
+_VALID_ADAPTER_PATH = re.compile(r'^[\w\-/]+\.npz$')
+_ADAPTER_BASE = Path("data/user_adapters").resolve()
 
 
 class LoraEvalRouter:
@@ -37,6 +42,11 @@ class LoraEvalRouter:
             - calls LoRAEvaluator.run() with and without adapter
             - saves results to eval history
         """
+        if not _VALID_ADAPTER_PATH.match(adapter_path):
+            raise_error(f"Invalid adapter path: {adapter_path!r}", code="E_VAL_REQUEST", details={"adapter_path": adapter_path})
+        resolved = Path(adapter_path).resolve()
+        if not str(resolved).startswith(str(_ADAPTER_BASE)):
+            raise_error(f"Adapter path must be under data/user_adapters/: {adapter_path!r}", code="E_VAL_REQUEST", details={"adapter_path": adapter_path})
         try:
             import time as _time
             from domains.feedback.lora_eval import get_lora_evaluator

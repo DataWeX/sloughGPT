@@ -116,6 +116,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                   onChange={e => form.setTrainingEpochs(Number(e.target.value))}
                   error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
                   aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                   className="h-8 text-xs font-mono" />
               </div>
               <div className="flex flex-col gap-1">
@@ -124,6 +125,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                   onChange={e => form.setTrainingBatchSize(Number(e.target.value))}
                   error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
                   aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                   className="h-8 text-xs font-mono" />
               </div>
               <div className="flex flex-col gap-1">
@@ -132,6 +134,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                   onChange={e => form.setTrainingLR(Number(e.target.value) || 1e-3)}
                   error={form.trainingLR <= 0 || form.trainingLR > 1}
                   aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
+                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                   className="h-8 text-xs font-mono" />
               </div>
             </div>

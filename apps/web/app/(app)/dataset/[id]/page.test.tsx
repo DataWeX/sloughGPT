@@ -226,21 +226,18 @@ describe('DatasetDetailPage', () => {
     mocks.delete.mockResolvedValue({})
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Import Data')).toBeTruthy()
-    }, { timeout: 5000 })
-    const allBtns = screen.getAllByRole('button')
-    const deleteBtn = allBtns.find(b => {
-      const text = b.textContent || ''
-      return text.includes('Delete') && text.includes('trash')
+      expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
     })
+    const deleteBtn = screen.getAllByRole('button').find(b =>
+      b.textContent?.toLowerCase().includes('delete') && b.className.includes('destructive')
+    )
     expect(deleteBtn).toBeTruthy()
     fireEvent.click(deleteBtn!)
     await waitFor(() => {
       expect(screen.getByTestId('alert-dialog')).toBeTruthy()
     })
-    const dialogBtns = screen.getByTestId('alert-dialog').querySelectorAll('button')
-    const confirmBtn = Array.from(dialogBtns).find(b => b.textContent?.includes('Delete'))
-    fireEvent.click(confirmBtn!)
+    const confirmBtn = screen.getByTestId('alert-dialog').querySelectorAll('button')[1]
+    fireEvent.click(confirmBtn)
     await waitFor(() => {
       expect(mocks.delete).toHaveBeenCalledWith('ds-1')
     })

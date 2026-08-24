@@ -187,7 +187,7 @@ class MobileRouter:
         """Get session list directly from the inference router."""
         try:
             from routers.inference import _instance
-            return asyncio.to_thread(_instance._build_session_metadata_index)
+            return _instance._build_session_metadata_index()
         except Exception:
             from domains.infrastructure.session_core import SessionCore
             return SessionCore.list_sessions()
