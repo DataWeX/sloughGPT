@@ -441,7 +441,7 @@ def create_slo_guard(
     max_restarts: int = 3,
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
-    generate_timeout: float = 120.0,
+    generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
     stall_timeout: float = 120.0,
     max_concurrent: Optional[int] = None,
     quantize: bool = False,

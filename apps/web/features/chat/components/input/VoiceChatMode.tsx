@@ -241,6 +241,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
         {/* Orb + controls */}
         <VoiceOrb state={state} micLevel={micLevel}>
           <button
+            type="button"
             onClick={handleToggle}
             disabled={isProcessing}
             className={`
