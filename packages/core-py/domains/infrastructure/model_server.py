@@ -35,6 +35,7 @@ from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 
+from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
 from domains.infrastructure.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.infrastructure.model_server")

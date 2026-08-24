@@ -265,7 +265,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
     async def trigger_reflection(self, trigger: str) -> None:
         """Trigger a reflection process"""
         try:
-            self.logger.info("Triggering reflection for: %s", trigger, extra={"tag": "COG"})
+            self.logger.info(f"Triggering reflection for: {trigger}", extra={"tag": "COG"})
 
             reflection_insight = await self._perform_reflection(trigger)
 
@@ -275,10 +275,10 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
                 # Apply reflection insights
                 await self._apply_reflection_insights(reflection_insight)
 
-                self.logger.info("Reflection completed: %s", reflection_insight.content, extra={"tag": "COG"})
+                self.logger.info(f"Reflection completed: {reflection_insight.content}", extra={"tag": "COG"})
             else:
                 self.logger.warning(
-                    "Reflection failed to generate insights for trigger: %s", trigger, extra={"tag": "COG"}
+                    f"Reflection failed to generate insights for trigger: {trigger}", extra={"tag": "COG"}
                 )
 
         except Exception as e:

@@ -388,10 +388,12 @@ async def vm_info() -> dict:
                 "protected mode (32-bit)",
                 "flat memory model",
                 "ring 0 only",
-            "INT 0x80 syscalls",
-            "PIT timer",
-            "keyboard/screen I/O",
-            "process scheduling",
-            "RBAC permissions",
-        ],
-    })
+                "INT 0x80 syscalls",
+                "PIT timer",
+                "keyboard/screen I/O",
+                "process scheduling",
+                "RBAC permissions",
+            ],
+        })
+    except Exception as e:
+        classify_and_raise(e, source="vm.info")
