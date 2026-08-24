@@ -296,13 +296,7 @@ async def run_assembly(req: VMRunRequest) -> dict:
 
     except Exception as e:
         logger.exception("VM execution error")
-        elapsed = (time.monotonic() - t0) * 1000
-        return VMRunResponse(
-            success=False, exit_code=-1, steps_executed=0,
-            elapsed_ms=round(elapsed, 2), output="",
-            registers=[], eip=0, eip_hex="0x0", status="error",
-            error=str(e),
-        )
+        classify_and_raise(e, source="vm.run")
 
 
 @router.get("/training/jobs/{job_id}", response_model=VMTrainingJobResponse)

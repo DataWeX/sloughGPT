@@ -29,7 +29,7 @@ vi.mock('@sloughgpt/strui', () => {
     Input: ({ value, onChange, placeholder, className, onKeyDown }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} className={className} onKeyDown={onKeyDown} />
     ),
-    Label: ({ children, className }: any) => <label className={children}</label>,
+    Label: ({ children, className }: any) => <label className={className}>{children}</label>,
     Textarea: ({ value, onChange, rows, className }: any) => (
       <textarea value={value} onChange={onChange} rows={rows} className={className} />
     ),

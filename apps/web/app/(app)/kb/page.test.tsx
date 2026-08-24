@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import React from 'react'
 
@@ -62,6 +62,13 @@ vi.mock('@/components/PageContainer', () => ({
 
 import KbPage from './page'
 
+const statsResponse = {
+  total_items: 10,
+  topics: [{ name: 'general', count: 5 }],
+  avg_importance: 0.75,
+  sources: { manual: 8, web: 2 },
+}
+
 describe('KbPage', () => {
   afterEach(() => {
     cleanup()
@@ -78,7 +85,7 @@ describe('KbPage', () => {
   })
 
   it('fetches stats on mount', async () => {
-    mockStats.mockResolvedValue({ total_items: 10, topics: [{ name: 'general', count: 5 }], avg_importance: 0.7, sources: { manual: 10 } })
+    mockStats.mockResolvedValue(statsResponse)
     mockTopics.mockResolvedValue([{ name: 'general', count: 5 }])
     mockList.mockResolvedValue([])
     render(<KbPage />)
@@ -96,7 +103,7 @@ describe('KbPage', () => {
     await waitFor(() => {
       expect(screen.getByText('10')).toBeInTheDocument()
     }, { timeout: 5000 })
-    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getAllByText('1')).toHaveLength(2)
     expect(screen.getByText('0.75')).toBeInTheDocument()
   })
 
@@ -106,15 +113,18 @@ describe('KbPage', () => {
     mockList.mockResolvedValue([])
     render(<KbPage />)
     expect(screen.getByText('Browse')).toBeInTheDocument()
-    expect(screen.getByText('Add Entry')).toBeInTheDocument()
-    expect(screen.getByText('Search')).toBeInTheDocument()
+    expect(screen.getAllByText('Add Entry').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Search').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Knowledge Gaps')).toBeInTheDocument()
   })
 
   it('displays knowledge items in browse tab', async () => {
     mockStats.mockResolvedValue({ total_items: 2, topics: [], avg_importance: 0.7, sources: {} })
     mockTopics.mockResolvedValue([])
-    mockList.mockResolvedValue([{ id: 'k1', content: 'Fact about AI', topic: 'ai', source: 'manual', importance: 0.9 }, { id: 'k2', content: 'Fact about coding', topic: 'code', source: 'web', importance: 0.5 }])
+    mockList.mockResolvedValue([
+      { id: 'k1', content: 'Fact about AI', topic: 'ai', source: 'manual', importance: 0.9 },
+      { id: 'k2', content: 'Fact about coding', topic: 'code', source: 'web', importance: 0.5 },
+    ])
     render(<KbPage />)
     await waitFor(() => {
       expect(screen.getByText('Fact about AI')).toBeInTheDocument()
@@ -138,9 +148,14 @@ describe('KbPage', () => {
     mockList.mockResolvedValue([])
     mockAdd.mockResolvedValue({})
     render(<KbPage />)
-    fireEvent.click(screen.getByText('Add Entry'))
+    const addTab = screen.getAllByText('Add Entry')[0]
+    fireEvent.click(addTab)
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Enter knowledge content...')).toBeInTheDocument()
+    })
     fireEvent.change(screen.getByPlaceholderText('Enter knowledge content...'), { target: { value: 'New fact' } })
-    fireEvent.click(screen.getByText('Add Entry', { selector: 'button' }))
+    const addButtons = screen.getAllByText('Add Entry')
+    fireEvent.click(addButtons[addButtons.length - 1])
     await waitFor(() => {
       expect(mockAdd).toHaveBeenCalledWith('New fact', 'general', 'manual', 0.7)
     }, { timeout: 5000 })
@@ -151,11 +166,18 @@ describe('KbPage', () => {
     mockStats.mockResolvedValue({ total_items: 0, topics: [], avg_importance: 0, sources: {} })
     mockTopics.mockResolvedValue([])
     mockList.mockResolvedValue([])
-    mockSearch.mockResolvedValue([{ id: 'k1', content: 'AI fact', topic: 'ai', source: 'manual', importance: 0.9, score: 0.95 }])
+    mockSearch.mockResolvedValue([
+      { id: 'k1', content: 'AI fact', topic: 'ai', source: 'manual', importance: 0.9, score: 0.95 },
+    ])
     render(<KbPage />)
-    fireEvent.click(screen.getByText('Search'))
+    const searchTab = screen.getAllByText('Search')[0]
+    fireEvent.click(searchTab)
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Search knowledge...')).toBeInTheDocument()
+    })
     fireEvent.change(screen.getByPlaceholderText('Search knowledge...'), { target: { value: 'AI' } })
-    fireEvent.click(screen.getByText('Search', { selector: 'button' }))
+    const searchButtons = screen.getAllByText('Search')
+    fireEvent.click(searchButtons[searchButtons.length - 1])
     await waitFor(() => {
       expect(mockSearch).toHaveBeenCalledWith('AI', 20)
     }, { timeout: 5000 })
@@ -164,13 +186,16 @@ describe('KbPage', () => {
   it('deletes an entry', async () => {
     mockStats.mockResolvedValue({ total_items: 1, topics: [], avg_importance: 0.7, sources: {} })
     mockTopics.mockResolvedValue([])
-    mockList.mockResolvedValue([{ id: 'k1', content: 'Fact', topic: 't', source: 'manual', importance: 0.5 }])
+    mockList.mockResolvedValue([
+      { id: 'k1', content: 'Fact', topic: 't', source: 'manual', importance: 0.5 },
+    ])
     mockRemove.mockResolvedValue({})
     render(<KbPage />)
     await waitFor(() => {
       expect(screen.getByText('Fact')).toBeInTheDocument()
     }, { timeout: 5000 })
-    fireEvent.click(screen.getByText('Delete'))
+    const deleteButtons = screen.getAllByText('Delete')
+    fireEvent.click(deleteButtons[deleteButtons.length - 1])
     await waitFor(() => {
       expect(mockRemove).toHaveBeenCalledWith('k1')
     }, { timeout: 5000 })
@@ -184,6 +209,9 @@ describe('KbPage', () => {
     mockGaps.mockResolvedValue({ gaps: ['No coding knowledge'], suggestions: ['Learn Python'] })
     render(<KbPage />)
     fireEvent.click(screen.getByText('Knowledge Gaps'))
+    await waitFor(() => {
+      expect(screen.getByText('Analyze Knowledge Gaps')).toBeInTheDocument()
+    })
     fireEvent.click(screen.getByText('Analyze Knowledge Gaps'))
     await waitFor(() => {
       expect(screen.getByText('No coding knowledge')).toBeInTheDocument()
@@ -197,7 +225,10 @@ describe('KbPage', () => {
     mockList.mockRejectedValue(new Error('network'))
     render(<KbPage />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Could not load knowledge'), 'error')
+      expect(mockAddToast).toHaveBeenCalledWith(
+        expect.stringContaining('Could not load knowledge'),
+        'error',
+      )
     }, { timeout: 5000 })
   })
 
