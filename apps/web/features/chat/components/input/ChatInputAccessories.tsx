@@ -103,7 +103,7 @@ export function ChatInputAccessories({
         aria-label="Upload audio"
         title="Upload audio file"
       >
-        <IconUpload className="h-4 w-4" />
+        <IconUpload className="h-4 w-4" aria-hidden="true" />
       </Button>
       <input
         ref={audioInputRef}

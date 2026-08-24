@@ -21,9 +21,9 @@ const STYLES: Record<SystemBannerType, string> = {
 }
 
 const ICONS: Record<SystemBannerType, React.ReactNode> = {
-      offline: <IconCloudOff className="h-4 w-4" />,
-  warning: <IconAlert className="h-4 w-4" />,
-  info: <IconInfo className="h-4 w-4" />,
+      offline: <IconCloudOff className="h-4 w-4" aria-hidden="true" />,
+  warning: <IconAlert className="h-4 w-4" aria-hidden="true" />,
+  info: <IconInfo className="h-4 w-4" aria-hidden="true" />,
 }
 
 export function SystemBanner({ type, title, message, actionLabel, onAction, onDismiss }: SystemBannerProps) {

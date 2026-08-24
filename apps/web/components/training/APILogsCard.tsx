@@ -151,7 +151,7 @@ export function APILogsCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {isRunning ? (
-          <div className="space-y-3" aria-live="polite">
+          <div className="space-y-3" aria-live="polite" aria-atomic="true">
             <Progress
               value={progress}
               max={100}

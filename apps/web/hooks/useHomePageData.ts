@@ -11,6 +11,7 @@ import { feedbackController, type FeedbackStats } from '@/lib/feedback-controlle
 import { datasetController } from '@/lib/dataset-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { useApiReady } from '@/hooks/useLiveStatus'
+import { useModels, useSouls } from '@/lib/query/api-hooks'
 import { logger } from '@/lib/dev-log'
 
 export interface HomePageData {
@@ -68,27 +69,44 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
 
   const ready = useApiReady()
 
+  // Use shared query cache for models and souls — eliminates 2 redundant API calls.
+  const { data: modelsData } = useModels()
+  const { data: soulsData } = useSouls()
+
+  // Derive model count from the query cache instead of a separate API call.
+  useEffect(() => {
+    if (modelsData) {
+      const list = modelsData ?? []
+      setModelCount(list.length)
+    }
+  }, [modelsData])
+
+  // Derive current soul from the query cache instead of a separate API call.
+  useEffect(() => {
+    if (soulsData) {
+      const data = soulsData as any
+      const active = data.current_soul
+        ? (data.souls || [])?.find((s: Soul) => s.name === data.current_soul)
+        : null
+      setCurrentSoul(active || null)
+    }
+  }, [soulsData])
+
+  // Use health snapshot for model status instead of a separate API call.
+  useEffect(() => {
+    if (health && health !== 'offline') {
+      setModelStatus({ loaded: health.model_loaded, model: health.model_type })
+    }
+  }, [health])
+
   const inferenceCount = health && health !== 'offline' ? health.inference_count ?? 0 : null
   const healthSummary = health && health !== 'offline' ? health.model_type ?? null : null
-  const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   useEffect(() => {
     if (!ready) return
     const cancelled = { current: false }
-    modelController.status().then(status => {
-      if (!cancelled.current) setModelStatus({ loaded: status.loaded, model: status.model_type })
-    }).catch(e => { logger.warning('Could not home model status', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
-    soulsController.list().then(data => {
-      if (!cancelled.current) {
-        const active = data.current_soul
-          ? data.souls?.find((s: Soul) => s.name === data.current_soul)
-          : null
-        setCurrentSoul(active || null)
-      }
-    }).catch(e => { logger.warning('Could not home souls list', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, soul: true })) })
-    modelController.list().then(models => {
-      if (!cancelled.current) setModelCount(models.length)
-    }).catch(e => { logger.warning('Could not home model list', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
+    // Sessions, training, knowledge, feedback, and datasets are NOT available
+    // via SSE/live status — these still need dedicated API calls.
     sessionController.list().then(sessions => {
       if (!cancelled.current) {
         const sorted = [...sessions]

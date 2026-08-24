@@ -90,7 +90,7 @@ export function OutputCard({ title = 'Service Output', height, tail, maxLines, c
       {lines.length > 0 && (
         <>
           <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => exportLines('text')} aria-label="Export as log file">
-            <IconDownload className="h-2.5 w-2.5" />
+            <IconDownload className="h-2.5 w-2.5" aria-hidden="true" />
           </Button>
           <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={clear} aria-label="Clear output">
             Clear

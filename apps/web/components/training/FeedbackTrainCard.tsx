@@ -123,7 +123,7 @@ export function FeedbackTrainCard({ addToast }: Props) {
         </p>
 
         {isRunning ? (
-          <div className="space-y-3" aria-live="polite">
+          <div className="space-y-3" aria-live="polite" aria-atomic="true">
             <Progress value={progress} max={100} />
             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
               <span>Progress {progress}%</span>

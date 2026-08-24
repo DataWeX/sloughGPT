@@ -120,7 +120,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
             onClick={refetch}
             aria-label="Refresh"
           >
-            <IconRefresh className="h-3.5 w-3.5" />
+            <IconRefresh className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
           {status?.running ? (
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleStop}>

@@ -191,7 +191,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           aria-label={copied ? "Copied" : "Copy message"}
           aria-pressed={copied}
         >
-          {copied ? <IconCheck className="h-3.5 w-3.5" /> : <IconCopy className="h-3.5 w-3.5" />}
+          {copied ? <IconCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <IconCopy className="h-3.5 w-3.5" aria-hidden="true" />}
         </Button>
       )}
 
@@ -203,7 +203,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           className="p-2"
           aria-label="Regenerate response"
         >
-          <IconRefresh className="h-3.5 w-3.5" />
+          <IconRefresh className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       )}
 
@@ -241,7 +241,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           className="p-2"
           aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark message'}
         >
-          <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />
+          <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} aria-hidden="true" />
         </Button>
       )}
 
@@ -285,7 +285,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           onClick={() => onEdit(messageId)}
           aria-label="Edit and resend message"
         >
-          <IconEdit className="h-3.5 w-3.5" />
+          <IconEdit className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       )}
 
@@ -297,7 +297,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           aria-label="Delete message"
           className="hover:text-destructive text-muted-foreground p-2"
         >
-          <IconTrash className="h-3.5 w-3.5" />
+          <IconTrash className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       )}
 
@@ -311,7 +311,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             aria-label="Rewrite this message"
             title="Rewrite"
           >
-            <IconRewrite className="h-3.5 w-3.5" />
+            <IconRewrite className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
@@ -320,7 +320,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             aria-label="Explain this message"
             title="Explain"
           >
-            <IconExplain className="h-3.5 w-3.5" />
+            <IconExplain className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
@@ -329,7 +329,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             aria-label="Translate to Spanish"
             title="Translate"
           >
-            <IconTranslate className="h-3.5 w-3.5" />
+            <IconTranslate className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
         </>
       )}

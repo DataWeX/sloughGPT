@@ -13,7 +13,7 @@ import json
 import logging
 import subprocess
 import time as _time
-from typing import Optional, List, AsyncGenerator
+from typing import AsyncGenerator
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -31,22 +31,22 @@ class UnregisterDeviceRequest(BaseModel):
 
 class SwitchRequest(BaseModel):
     """Request body for model/soul switching."""
-    model_id: Optional[str] = None
-    soul_name: Optional[str] = None
-    checkpoint_name: Optional[str] = None
+    model_id: str | None = None
+    soul_name: str | None = None
+    checkpoint_name: str | None = None
 
 
 class KnowledgeCreateRequest(BaseModel):
     """Request body for creating a knowledge item."""
     content: str
-    topic: Optional[str] = None
+    topic: str | None = None
 
 
 class KnowledgeUpdateRequest(BaseModel):
     """Request body for updating a knowledge item."""
-    content: Optional[str] = None
-    topic: Optional[str] = None
-    importance: Optional[float] = None
+    content: str | None = None
+    topic: str | None = None
+    importance: float | None = None
 
 
 class PendingMessage(BaseModel):
@@ -60,16 +60,16 @@ class PendingMessage(BaseModel):
 
 class SyncRequest(BaseModel):
     """Offline sync payload from mobile."""
-    pending_messages: List[PendingMessage] = []
-    last_sync_timestamp: Optional[int] = None
+    pending_messages: list[PendingMessage] = []
+    last_sync_timestamp: int | None = None
 
 
 class SyncResult(BaseModel):
     """Result of syncing a single pending message."""
     id: str
     status: str  # "sent" | "error"
-    assistant_message: Optional[dict] = None
-    error: Optional[str] = None
+    assistant_message: dict | None = None
+    error: str | None = None
 
 
 class DeviceRegistrationRequest(BaseModel):
@@ -77,17 +77,17 @@ class DeviceRegistrationRequest(BaseModel):
     token: str
     platform: str  # "ios" | "android" | "web"
     user_id: str = "default"
-    topics: Optional[List[str]] = None
+    topics: list[str] | None = None
 
 
 class NotificationSendRequest(BaseModel):
     """Request body for sending a push notification."""
     title: str
     body: str
-    topic: Optional[str] = None
-    data: Optional[dict] = None
-    tokens: Optional[List[str]] = None
-    badge: Optional[int] = None
+    topic: str | None = None
+    data: dict | None = None
+    tokens: list[str] | None = None
+    badge: int | None = None
 
 
 class TrainingPair(BaseModel):
@@ -102,7 +102,7 @@ class TrainingPair(BaseModel):
 
 class MobileTrainRequest(BaseModel):
     """Batch of training pairs from the mobile app."""
-    pairs: List[TrainingPair]
+    pairs: list[TrainingPair]
     checkpoint: str
 
 
@@ -124,8 +124,8 @@ class FromSessionsRequest(BaseModel):
     """Optional params for training from server sessions."""
     limit: int = Field(default=50, ge=5, le=500)
     min_length: int = Field(default=5, ge=1)
-    model: Optional[str] = None
-    session_ids: Optional[list[str]] = None
+    model: str | None = None
+    session_ids: list[str] | None = None
 
 
 class MobileRouter:
@@ -390,7 +390,7 @@ class MobileRouter:
         request: Request,
         page: int = Query(1, ge=1),
         per_page: int = Query(20, ge=1, le=100),
-        search: Optional[str] = Query(None),
+        search: str | None = Query(None),
     ) -> dict:
         """Paginated conversation list for mobile."""
         sessions = await asyncio.to_thread(self._get_sessions_list)
@@ -441,25 +441,12 @@ class MobileRouter:
         })
 
     async def get_models(self, request: Request) -> dict:
-        """
-        Model catalog with souls and checkpoints for mobile.
-
-        Returns:
-            Current pipeline state, available models, souls, and checkpoints.
-
-        Side effects:
-            - Calls /models, /souls, /souls/current, /auto-train/checkpoints, /health.
-        """
-        models_data, _ = await self._internal_get(request, "/models")
-        models = models_data or []
-        souls_data, _ = await self._internal_get(request, "/souls")
-        souls = souls_data or []
-        current_soul_data, _ = await self._internal_get(request, "/souls/current")
-        current_soul = current_soul_data or {}
-        checkpoints_data, _ = await self._internal_get(request, "/auto-train/checkpoints")
-        checkpoints = checkpoints_data or []
-        health_data, _ = await self._internal_get(request, "/health")
-        health = health_data or {}
+        """Available models with current selection and checkpoint options."""
+        models = await asyncio.to_thread(self._get_models_list)
+        soul = await asyncio.to_thread(self._get_current_soul)
+        souls = await asyncio.to_thread(self._get_souls)
+        checkpoints = await asyncio.to_thread(self._get_checkpoints)
+        health = await asyncio.to_thread(self._get_health_data)
 
         model_list = []
         if isinstance(models, list):
@@ -484,17 +471,18 @@ class MobileRouter:
         cp_list = []
         if isinstance(checkpoints, list):
             for cp in checkpoints:
-                cp_list.append({
-                    "name": cp.get("name", ""),
-                    "soul": cp.get("soul", ""),
-                    "loss": cp.get("loss"),
-                    "steps": cp.get("steps"),
-                })
+                if isinstance(cp, dict):
+                    cp_list.append({
+                        "name": cp.get("name", cp.get("checkpoint_name", "")),
+                        "soul": cp.get("soul", ""),
+                        "loss": cp.get("loss"),
+                        "steps": cp.get("steps"),
+                    })
 
         return success_response(data={
             "current": {
                 "model_id": health.get("model_type", ""),
-                "soul": current_soul.get("name", ""),
+                "soul": soul.get("name", ""),
                 "checkpoint": None,
             },
             "models": model_list,
@@ -503,36 +491,21 @@ class MobileRouter:
         })
 
     async def switch_model(self, request: Request, body: SwitchRequest) -> dict:
-        """
-        Switch model and/or soul in one call.
-
-        Args:
-            body: model_id, soul_name, checkpoint_name (all optional).
-
-        Returns:
-            Updated status after switch.
-
-        Side effects:
-            - Calls /models/load and/or /souls/switch internally.
-        """
+        """Switch model and/or soul in one call."""
         errors = []
         if body.model_id:
-            data, err = await self._internal_post(request, "/models/load", {
-                "model_id": body.model_id,
-            })
-            if err:
-                errors.append(f"model_load: {err}")
+            try:
+                await asyncio.to_thread(self._load_model, body.model_id)
+            except Exception as e:
+                errors.append(f"model_load: {e}")
 
         if body.soul_name:
-            soul_body = {"soul": body.soul_name}
-            if body.checkpoint_name:
-                soul_body["checkpoint_name"] = body.checkpoint_name
-            data, err = await self._internal_post(request, "/souls/switch", soul_body)
-            if err:
-                errors.append(f"soul_switch: {err}")
+            try:
+                await asyncio.to_thread(self._switch_soul, body.soul_name, body.checkpoint_name)
+            except Exception as e:
+                errors.append(f"soul_switch: {e}")
 
-        health_data, err = await self._internal_get(request, "/health")
-        health = health_data or {}
+        health = await asyncio.to_thread(self._get_health_data)
 
         if errors:
             logger.warning("Mobile switch_model partial failure: %s", "; ".join(errors), extra={"tag": "REQ"})
@@ -546,22 +519,10 @@ class MobileRouter:
         })
 
     async def get_health(self, request: Request) -> dict:
-        """
-        System health summary for mobile.
-
-        Returns:
-            API status, model info, uptime, CPU, memory, disk, inference count.
-
-        Side effects:
-            - Calls /health/detailed and /system/metrics internally.
-        """
-        detailed_data, err1 = await self._internal_get(request, "/health/detailed")
-        metrics_data, err2 = await self._internal_get(request, "/system/metrics")
-        detailed = detailed_data or {}
-        metrics = metrics_data or {}
-
-        if err1 or err2:
-            logger.warning("Mobile get_health partial failure: %s; %s", err1, err2, extra={"tag": "REQ"})
+        """System health summary for mobile."""
+        detailed = await asyncio.to_thread(self._get_detailed_health)
+        metrics = await asyncio.to_thread(self._get_system_metrics)
+        disk = await asyncio.to_thread(self._get_disk_info)
 
         system_info = detailed.get("system", {})
 
@@ -578,8 +539,8 @@ class MobileRouter:
             "memory_available_gb": round(
                 system_info.get("memory_available_mb", 0) / 1024, 2
             ),
-            "disk_used_gb": round(metrics.get("disk_used_bytes", 0) / (1024 ** 3), 2),
-            "disk_free_gb": round(metrics.get("disk_free_bytes", 0) / (1024 ** 3), 2),
+            "disk_used_gb": disk.get("used_gb", 0),
+            "disk_free_gb": disk.get("free_gb", 0),
             "inference_count": detailed.get("inference", {}).get(
                 "inference_count", detailed.get("inference_count", 0)
             ),
@@ -590,36 +551,14 @@ class MobileRouter:
         request: Request,
         page: int = Query(1, ge=1),
         per_page: int = Query(20, ge=1, le=100),
-        topic: Optional[str] = Query(None),
-        search: Optional[str] = Query(None),
+        topic: str | None = Query(None),
+        search: str | None = Query(None),
     ) -> dict:
-        """
-        Paginated knowledge items for mobile.
-
-        Args:
-            page: Page number (1-indexed).
-            per_page: Items per page (max 100).
-            topic: Optional topic filter.
-            search: Optional search query.
-
-        Returns:
-            Paginated knowledge items.
-
-        Side effects:
-            - Calls /knowledge or /knowledge/search internally.
-        """
+        """Paginated knowledge items for mobile."""
         if search:
-            data, _ = await self._internal_get(
-                request, f"/knowledge/search?query={search}"
-            )
-            data = data or {}
-            items = data.get("results", [])
+            items = await asyncio.to_thread(self._search_knowledge, search, per_page * 5)
         else:
-            params = f"limit={per_page * 5}&offset=0"
-            if topic:
-                params += f"&topic={topic}"
-            items_data, _ = await self._internal_get(request, f"/knowledge?{params}")
-            items = items_data or []
+            items = await asyncio.to_thread(self._get_knowledge_items, per_page * 5, 0, topic)
 
         if not isinstance(items, list):
             items = []
@@ -649,69 +588,30 @@ class MobileRouter:
         })
 
     async def create_knowledge(self, request: Request, body: KnowledgeCreateRequest) -> dict:
-        """
-        Add a knowledge item.
-
-        Args:
-            body: content and optional topic.
-
-        Returns:
-            Created knowledge item.
-
-        Side effects:
-            - Calls POST /knowledge internally.
-        """
-        result, err = await self._internal_post(request, "/knowledge", {
-            "content": body.content,
-            "topic": body.topic,
-        })
-        if err:
-            raise_error(f"Failed to create knowledge: {err}", "E_DOMAIN")
-        return success_response(data=result)
+        """Add a knowledge item."""
+        try:
+            item_id = await asyncio.to_thread(self._create_knowledge_item, body.content, body.topic)
+            return success_response(data={"id": item_id, "content": body.content, "topic": body.topic})
+        except Exception as e:
+            raise_error(f"Failed to create knowledge: {e}", "E_DOMAIN")
 
     async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest) -> dict:
-        """
-        Update a knowledge item.
-
-        Args:
-            item_id: Knowledge item ID.
-            body: Fields to update.
-
-        Returns:
-            Updated knowledge item.
-
-        Side effects:
-            - Calls PATCH /knowledge/{id} internally.
-        """
-        update_body = {}
-        if body.content is not None:
-            update_body["content"] = body.content
-        if body.topic is not None:
-            update_body["topic"] = body.topic
-        if body.importance is not None:
-            update_body["importance"] = body.importance
-
-        result, err = await self._internal_patch(request, f"/knowledge/{item_id}", update_body)
-        if err:
-            raise_error(f"Failed to update knowledge: {err}", "E_DOMAIN")
-        return success_response(data=result)
+        """Update a knowledge item."""
+        try:
+            await asyncio.to_thread(
+                self._update_knowledge_item, item_id,
+                content=body.content, topic=body.topic, importance=body.importance,
+            )
+            return success_response(data={"id": item_id, "updated": True})
+        except Exception as e:
+            raise_error(f"Failed to update knowledge: {e}", "E_DOMAIN")
 
     async def delete_knowledge(self, request: Request, item_id: str) -> dict:
-        """
-        Delete a knowledge item.
-
-        Args:
-            item_id: Knowledge item ID.
-
-        Returns:
-            Deletion status.
-
-        Side effects:
-            - Calls DELETE /knowledge/{id} internally.
-        """
-        result, err = await self._internal_delete(request, f"/knowledge/{item_id}")
-        if err:
-            raise_error(f"Failed to delete knowledge: {err}", "E_DOMAIN")
+        """Delete a knowledge item."""
+        try:
+            await asyncio.to_thread(self._delete_knowledge_item, item_id)
+        except Exception as e:
+            raise_error(f"Failed to delete knowledge: {e}", "E_DOMAIN")
         safe_audit_log("mobile.knowledge_delete", resource=item_id)
         return success_response(data={"status": "deleted", "id": item_id})
 
@@ -721,29 +621,19 @@ class MobileRouter:
 
         Processes queued messages from the offline cache, sends them to the
         chat endpoint, and returns results for each.
-
-        Args:
-            body: List of pending messages and optional last sync timestamp.
-
-        Returns:
-            List of sync results (one per pending message) + updated sessions.
-
-        Side effects:
-            - Calls POST /chat for each pending message.
-            - Calls /chat/sessions to refresh session list.
         """
-        results: List[SyncResult] = []
+        from routers.inference import _instance as _inference, Message, ChatRequest
+
+        results: list[SyncResult] = []
 
         for msg in body.pending_messages:
             try:
-                chat_result, _ = await self._internal_post(
-                    request,
-                    "/chat",
-                    {
-                        "messages": [{"role": "user", "content": msg.content}],
-                        "session_id": msg.session_id,
-                    },
+                chat_req = ChatRequest(
+                    messages=[Message(role="user", content=msg.content)],
+                    session_id=msg.session_id,
                 )
+                chat_resp = await _inference.chat(chat_req)
+                chat_result = chat_resp.model_dump() if hasattr(chat_resp, "model_dump") else (chat_resp if isinstance(chat_resp, dict) else {})
 
                 if chat_result and chat_result.get("message"):
                     results.append(SyncResult(
@@ -768,14 +658,10 @@ class MobileRouter:
                     error=str(e),
                 ))
 
-        # Return updated session list — internal /chat/sessions now returns StandardResponse
-        sessions_data, _ = await self._internal_get(request, "/chat/sessions")
-        sessions_data = sessions_data or {}
-        if isinstance(sessions_data, dict) and "data" in sessions_data:
-            sessions = sessions_data["data"] if isinstance(sessions_data["data"], list) else []
-        elif isinstance(sessions_data, dict) and "sessions" in sessions_data:
-            sessions = sessions_data["sessions"]
-        else:
+        sessions = await asyncio.to_thread(self._get_sessions_list)
+        if isinstance(sessions, dict):
+            sessions = sessions.get("data", [])
+        elif not isinstance(sessions, list):
             sessions = []
 
         return success_response(data={
@@ -786,14 +672,8 @@ class MobileRouter:
         })
 
     async def sync_status(self, request: Request) -> dict:
-        """
-        Check server connectivity and last sync state.
-
-        Returns:
-            Server reachable status, model state, and current timestamp.
-        """
-        health_data, _ = await self._internal_get(request, "/health")
-        health = health_data or {}
+        """Check server connectivity and last sync state."""
+        health = await asyncio.to_thread(self._get_health_data)
 
         return success_response(data={
             "reachable": health.get("status") == "healthy",
@@ -831,7 +711,7 @@ class MobileRouter:
         removed = svc.unregister_device(body.token)
         return success_response(data={"status": "removed" if removed else "not_found"})
 
-    async def list_devices(self, topic: Optional[str] = Query(None)) -> dict:
+    async def list_devices(self, topic: str | None = Query(None)) -> dict:
         """
         List registered devices.
 
@@ -894,18 +774,11 @@ class MobileRouter:
         return success_response(data={"removed": removed})
 
     async def notify_training_complete(self, request: Request) -> dict:
-        """
-        Send a training-complete notification to all registered devices.
-
-        Side effects:
-            - Reads training status from internal endpoint.
-            - Sends push notification to all devices subscribed to 'training' topic.
-        """
+        """Send a training-complete notification to all registered devices."""
         from domains.mobile.notifications import get_notification_service, NotificationPayload
 
         svc = get_notification_service()
-        training_data, _ = await self._internal_get(request, "/training/status")
-        training = training_data or {}
+        training = await asyncio.to_thread(self._get_training_status)
 
         status = training.get("status", "unknown")
         loss = training.get("final_loss")
@@ -1082,9 +955,9 @@ class MobileRouter:
         self,
         limit: int = Query(50, ge=1, le=500),
         offset: int = Query(0, ge=0),
-        min_quality: Optional[float] = Query(None),
-        session_id: Optional[str] = Query(None),
-        search: Optional[str] = Query(None),
+        min_quality: float | None = Query(None),
+        session_id: str | None = Query(None),
+        search: str | None = Query(None),
     ) -> dict:
         """
         List training pairs with optional filters.
@@ -1132,8 +1005,8 @@ class MobileRouter:
 
     async def export_training_pairs(
         self,
-        min_quality: Optional[float] = Query(None),
-        session_id: Optional[str] = Query(None),
+        min_quality: float | None = Query(None),
+        session_id: str | None = Query(None),
         limit: int = Query(500, ge=1, le=5000),
     ) -> AsyncGenerator[str, None]:
         """
@@ -1520,8 +1393,8 @@ class MobileRouter:
 
     async def update_auto_train_config(
         self,
-        threshold: Optional[int] = Query(None, ge=1, le=100),
-        interval_s: Optional[int] = Query(None, ge=30, le=3600),
+        threshold: int | None = Query(None, ge=1, le=100),
+        interval_s: int | None = Query(None, ge=30, le=3600),
     ) -> dict:
         """
         Update auto-trainer configuration at runtime.

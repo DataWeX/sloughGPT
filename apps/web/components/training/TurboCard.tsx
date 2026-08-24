@@ -68,7 +68,7 @@ export const TurboCard = memo(function TurboCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {running ? (
-          <div className="space-y-3" aria-live="polite">
+          <div className="space-y-3" aria-live="polite" aria-atomic="true">
             <Progress value={session.turboProgress} max={100} />
             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
               <span>

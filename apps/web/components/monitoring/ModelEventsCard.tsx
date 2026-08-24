@@ -28,7 +28,7 @@ export function ModelEventsCard({ liveHealth }: ModelEventsCardProps) {
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Model events</span>
-      <CardContent className="p-0 max-h-[220px] overflow-y-auto space-y-1.5">
+      <CardContent className="p-0 max-h-[220px] overflow-y-auto space-y-1.5" role="log" aria-live="polite" aria-label="Model event log">
         {events.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">No model events yet</p>
         ) : events.map((e, i) => (

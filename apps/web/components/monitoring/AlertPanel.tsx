@@ -48,7 +48,7 @@ export function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, o
       {alerts.length > 0 && (
         <>
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-3 mb-1 block">Recent alerts</span>
-          <div className="space-y-1 max-h-24 overflow-y-auto">
+          <div className="space-y-1 max-h-24 overflow-y-auto" role="log" aria-live="polite" aria-label="Recent alerts">
             {alerts.slice(0, 5).map((alert, i) => (
               <div key={i} className="flex items-center justify-between text-[10px]">
                 <span className="text-warning">{alert.type} {alert.value.toFixed(0)}%</span>

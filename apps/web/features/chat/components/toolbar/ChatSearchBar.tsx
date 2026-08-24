@@ -22,7 +22,7 @@ export function ChatSearchBar() {
       {searchQuery && (
         <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
           {matchCount > 0 && (
-            <span className="hidden sm:inline text-[10px] text-muted-foreground whitespace-nowrap mr-0.5" aria-live="polite" role="status">
+            <span className="hidden sm:inline text-[10px] text-muted-foreground whitespace-nowrap mr-0.5" aria-live="polite" role="status" aria-atomic="true">
               {matchIndex + 1}/{matchCount}
             </span>
           )}
@@ -32,7 +32,7 @@ export function ChatSearchBar() {
             disabled={matchCount === 0}
             aria-label="Previous match"
           >
-            <IconChevronUp className="h-3 w-3" />
+            <IconChevronUp className="h-3 w-3" aria-hidden="true" />
           </button>
           <button
             onClick={onNextMatch}
@@ -40,7 +40,7 @@ export function ChatSearchBar() {
             disabled={matchCount === 0}
             aria-label="Next match"
           >
-            <IconChevronDown className="h-3 w-3" />
+            <IconChevronDown className="h-3 w-3" aria-hidden="true" />
           </button>
           <button
             onClick={onClear}

@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from schemas.common import success_response, raise_error, safe_audit_log
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.world_render")
 
@@ -76,7 +76,7 @@ class WorldRenderRouter:
                 "tensor_keys": list(tensors.keys()),
             })
         except Exception as e:
-            raise_error(f"Render failed: {e}", code="E_RENDER_FAILED", status_code=500)
+            classify_and_raise(e, source="render_world")
 
     async def render_world_image(self, config: RenderConfigRequest | None = None) -> Response:
         """Render the world and return a PNG image."""
@@ -111,7 +111,7 @@ class WorldRenderRouter:
 
             return Response(content=ppm_data, media_type="image/x-portable-pixmap")
         except Exception as e:
-            raise_error(f"Render failed: {e}", code="E_RENDER_FAILED", status_code=500)
+            classify_and_raise(e, source="render_world_image")
 
     async def neural_process(self, config: RenderConfigRequest | None = None) -> dict:
         """Render the world and process through the neural pipeline."""
@@ -146,7 +146,7 @@ class WorldRenderRouter:
                 "stats": bridge.stats,
             })
         except Exception as e:
-            raise_error(f"Neural processing failed: {e}", code="E_NEURAL_FAILED", status_code=500)
+            classify_and_raise(e, source="neural_process")
 
     async def run_tick(self, config: SimTickRequest | None = None) -> dict:
         """Run a simulation tick with optional rendering."""
@@ -175,7 +175,7 @@ class WorldRenderRouter:
                 "render_stats": render_bridge.stats if render_bridge else None,
             })
         except Exception as e:
-            raise_error(f"Tick failed: {e}", code="E_TICK_FAILED", status_code=500)
+            classify_and_raise(e, source="run_tick")
 
     async def get_stats(self) -> dict:
         """Get world rendering statistics."""

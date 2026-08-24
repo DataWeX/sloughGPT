@@ -104,7 +104,7 @@ class CollectionsRouter:
             raise
         except Exception as e:
             logger.warning("Create pipeline failed: %s", e)
-            raise_error(f"Failed to create pipeline: {e}", code="E_CREATE_FAILED", status_code=500)
+            classify_and_raise(e, source="create_pipeline")
 
     async def run_pipeline(self, name: str = Query(..., description="Pipeline name")) -> dict:
         """Run a collection pipeline once."""
@@ -129,7 +129,7 @@ class CollectionsRouter:
             raise
         except Exception as e:
             logger.warning("Run pipeline failed: %s", e)
-            raise_error(f"Failed to run pipeline: {e}", code="E_RUN_FAILED", status_code=500)
+            classify_and_raise(e, source="run_pipeline")
 
     async def collect_direct(self, req: CollectRequest) -> dict:
         """Collect data directly without pre-creating a pipeline."""
@@ -166,7 +166,7 @@ class CollectionsRouter:
             raise
         except Exception as e:
             logger.warning("Direct collect failed: %s", e)
-            raise_error(f"Failed to collect: {e}", code="E_COLLECT_FAILED", status_code=500)
+            classify_and_raise(e, source="collect_direct")
 
     async def get_stats(self) -> dict:
         """Get overall collection stats."""
@@ -194,7 +194,7 @@ class CollectionsRouter:
         except AppError:
             raise
         except Exception as e:
-            raise_error(f"Failed to get pipeline: {e}", code="E_GET_FAILED", status_code=500)
+            classify_and_raise(e, source="get_pipeline")
 
     async def delete_pipeline(self, pipeline_id: str) -> dict:
         """Delete a pipeline from the registry."""
@@ -226,7 +226,7 @@ class CollectionsRouter:
         except AppError:
             raise
         except Exception as e:
-            raise_error(f"Failed to collect: {e}", code="E_COLLECT_FAILED", status_code=500)
+            classify_and_raise(e, source="collect")
 
     async def get_records(
         self,
@@ -251,7 +251,7 @@ class CollectionsRouter:
         except AppError:
             raise
         except Exception as e:
-            raise_error(f"Failed to get records: {e}", code="E_RECORDS_FAILED", status_code=500)
+            classify_and_raise(e, source="get_records")
 
 
 def _build_source(source_type: str, config: dict):

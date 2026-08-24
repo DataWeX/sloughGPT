@@ -141,7 +141,7 @@ export function ModelDropdown({
               {dlProgress.percentage.toFixed(0)}%
             </span>
           )}
-          <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
+          <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[200px] max-h-[300px] overflow-y-auto">

@@ -125,7 +125,7 @@ export function StatusBar() {
           aria-label="Toggle service output"
           title="Service output"
         >
-          <IconMenu className="w-3 h-3" />
+          <IconMenu className="w-3 h-3" aria-hidden="true" />
         </button>
         <button
           onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-whatsnew')) }}
@@ -133,7 +133,7 @@ export function StatusBar() {
           aria-label={unseenCount > 0 ? `${unseenCount} new feature${unseenCount === 1 ? '' : 's'}` : "What's new"}
           title="What's new"
         >
-          <IconGrid className="w-3 h-3" />
+          <IconGrid className="w-3 h-3" aria-hidden="true" />
           {unseenCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium leading-none">
               {unseenCount > 9 ? '9+' : unseenCount}

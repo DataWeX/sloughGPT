@@ -1015,8 +1015,9 @@ export default function KnowledgePage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground shrink-0">Topic:</label>
+                <label htmlFor="add-knowledge-topic" className="text-xs text-muted-foreground shrink-0">Topic:</label>
                 <Input
+                  id="add-knowledge-topic"
                   value={newTopic}
                   onChange={e => setNewTopic(e.target.value)}
                   className="h-8 text-xs flex-1"

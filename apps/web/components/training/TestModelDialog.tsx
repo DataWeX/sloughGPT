@@ -31,6 +31,7 @@ export function TestModelDialog({
           <DialogTitle className="text-base">Test the model</DialogTitle>
         </DialogHeader>
         <Textarea
+          aria-label="Test prompt"
           value={prompt}
           onChange={e => onPromptChange(e.target.value)}
           placeholder="Type a prompt to test the trained model..."

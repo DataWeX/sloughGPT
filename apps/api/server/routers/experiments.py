@@ -10,15 +10,15 @@ from pathlib import Path
 from typing import Optional, Any
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from schemas.common import raise_error, success_response, safe_audit_log
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.experiments")
 
 
 class ExperimentCreate(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=200, pattern=r'^[a-zA-Z0-9_\- ]+$')
     config: Optional[dict] = None
 
 
@@ -57,7 +57,7 @@ class ExperimentsRouter:
             safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
             return success_response(data={"id": exp_id, "name": req.name, "created": True})
         except Exception as e:
-            raise_error(f"Failed to create experiment: {e}", "E_SERVER_ERROR", status_code=500)
+            classify_and_raise(e, source="create_experiment")
 
     async def list_experiments(self) -> dict:
         """List all ML experiments stored on disk.
@@ -175,7 +175,7 @@ class ExperimentsRouter:
             metrics, params, status = await asyncio.to_thread(_read_data)
             return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
         except Exception as e:
-            raise_error(f"Failed to read experiment data: {e}", "E_SERVER_ERROR", status_code=500)
+            classify_and_raise(e, source="get_experiment_data")
 
     async def complete_experiment(self, experiment_id: str) -> dict:
         """Mark experiment as complete and persist status to disk."""
@@ -197,7 +197,7 @@ class ExperimentsRouter:
             safe_audit_log("experiment.complete", resource=e_id)
             return success_response(data={"id": e_id, "status": "completed"})
         except Exception as e:
-            raise_error(f"Failed to complete experiment: {e}", "E_SERVER_ERROR", status_code=500)
+            classify_and_raise(e, source="complete_experiment")
 
     async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0) -> dict:
         """Log a metric for an experiment."""
@@ -214,7 +214,7 @@ class ExperimentsRouter:
             safe_audit_log("experiment.log_metric", resource=e_id, detail=f"metric={metric_name} value={value}")
             return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
         except Exception as e:
-            raise_error(f"Failed to log metric: {e}", "E_SERVER_ERROR", status_code=500)
+            classify_and_raise(e, source="log_metric")
 
     async def log_param(self, experiment_id: str, param_name: str, value: Any) -> dict:
         """Log a parameter for an experiment."""
@@ -231,7 +231,7 @@ class ExperimentsRouter:
             safe_audit_log("experiment.log_param", resource=e_id, detail=f"param={param_name}")
             return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})
         except Exception as e:
-            raise_error(f"Failed to log param: {e}", "E_SERVER_ERROR", status_code=500)
+            classify_and_raise(e, source="log_param")
 
 
 router = ExperimentsRouter().router

@@ -114,7 +114,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
 
         {ragVerification && (
           <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 pb-1">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground rounded-md border border-border/40 bg-muted/30 px-3 py-1.5">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground rounded-md border border-border/40 bg-muted/30 px-3 py-1.5" role="status" aria-live="polite">
               <span className={cn(
                 "inline-block h-1.5 w-1.5 rounded-full",
                 ragVerification.is_verified ? "bg-success" : ragVerification.confidence > 0.5 ? "bg-warning" : "bg-destructive"

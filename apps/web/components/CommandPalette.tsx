@@ -7,6 +7,7 @@ import { modelController } from '@/lib/model-controller'
 import { sessionController } from '@/lib/session-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
+import { useModels, useSouls } from '@/lib/query/api-hooks'
 import { NAV_SECTIONS } from '@/lib/navigation'
 
 interface CommandAction {
@@ -24,28 +25,34 @@ export function CommandPalette() {
   const [query, setQuery] = useState('')
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [recentSessions, setRecentSessions] = useState<{ id: string; name: string }[]>([])
-  const [models, setModels] = useState<{ id: string; name: string; loaded: boolean }[]>([])
-  const [souls, setSouls] = useState<{ name: string; description?: string }[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
 
+  // Use shared query cache for models and souls — eliminates 2 independent API calls.
+  const { data: modelsData } = useModels()
+  const { data: soulsData } = useSouls()
+
+  const models = useMemo(() => {
+    const list = modelsData ?? []
+    return list.map((model) => ({
+      id: model.id || model.name,
+      name: (model.id || model.name).replace(/^hf\//, ''),
+      loaded: model.loaded || false,
+    }))
+  }, [modelsData])
+
+  const souls = useMemo(() => {
+    const data = soulsData as any
+    const list = data?.souls || []
+    return list.map((soul: any) => ({ name: soul.name, description: soul.description }))
+  }, [soulsData])
+
   useEffect(() => {
-    let failed = false
     sessionController.list().then(sessions => {
       setRecentSessions(sessions.slice(0, 5).map(s => ({ id: s.id, name: s.name || 'Untitled' })))
-    }).catch(() => { failed = true; if (!loadError) setLoadError('Some data unavailable') })
-    modelController.list().then(list => {
-      setModels(list.map(m => ({
-        id: m.id || m.name,
-        name: (m.id || m.name).replace(/^hf\//, ''),
-        loaded: m.loaded || false,
-      })))
-    }).catch(() => { failed = true; if (!loadError) setLoadError('Some data unavailable') })
-    soulsController.list().then(res => {
-      setSouls(res.souls.map(s => ({ name: s.name, description: s.description })))
-    }).catch(() => { failed = true; if (!loadError) setLoadError('Some data unavailable') })
+    }).catch(() => { if (!loadError) setLoadError('Some data unavailable') })
   }, [])
 
   const actions: CommandAction[] = useMemo(() => {
@@ -82,7 +89,7 @@ export function CommandPalette() {
       id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: '💭', category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),
     }))
 
-    const soulActs: CommandAction[] = souls.map(s => ({
+    const soulActs: CommandAction[] = souls.map((s: { name: string; description?: string }) => ({
       id: `soul-${s.name}`, label: `Switch soul: ${s.name}`, description: s.description || 'Switch personality',
       icon: '🎭', category: 'soul' as const,
       run: async () => { await soulsController.switch(s.name); router.push('/chat') },

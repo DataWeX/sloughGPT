@@ -96,7 +96,7 @@ export const ChatInput = memo(function ChatInput({
     >
       <div className="mx-auto max-w-3xl">
         {loading && (
-          <div className="flex justify-center pb-1" role="status" aria-live="polite">
+          <div className="flex justify-center pb-1" role="status" aria-live="polite" aria-atomic="true">
             <div className="flex gap-[3px] items-center">
               <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
               <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />

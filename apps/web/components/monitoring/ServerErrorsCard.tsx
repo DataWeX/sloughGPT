@@ -21,7 +21,7 @@ export function ServerErrorsCard({ liveHealth }: ServerErrorsCardProps) {
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Server errors</span>
-      <CardContent className="p-0 max-h-[220px] overflow-y-auto space-y-1.5">
+      <CardContent className="p-0 max-h-[220px] overflow-y-auto space-y-1.5" role="log" aria-live="polite" aria-label="Server error log">
         {errors.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">No errors recorded yet</p>
         ) : errors.map((e, i) => (

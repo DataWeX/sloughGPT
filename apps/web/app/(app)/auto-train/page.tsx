@@ -190,7 +190,7 @@ export default function AutoTrainPage() {
             <p className="text-lg font-medium">{completedCount}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card role="status" aria-live="polite">
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Status</p>
             <p className="text-lg font-medium">
@@ -214,7 +214,7 @@ export default function AutoTrainPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {trainingRunning ? (
-            <div className="space-y-3" aria-live="polite">
+            <div className="space-y-3" aria-live="polite" aria-atomic="true">
               <Progress value={session.progress} max={100} />
               <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
                 <span>Step {session.globalStep}/{session.totalSteps || '--'}</span>
@@ -281,8 +281,9 @@ export default function AutoTrainPage() {
 
               {inputMode === 'checkpoint' && (
                 <div className="space-y-2">
-                  <Label>Select checkpoint</Label>
+                  <Label htmlFor="at-checkpoint">Select checkpoint</Label>
                   <select
+                    id="at-checkpoint"
                     value={selectedCheckpoint}
                     onChange={e => setSelectedCheckpoint(e.target.value)}
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"

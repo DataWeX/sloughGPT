@@ -115,7 +115,7 @@ export const MessageBubble = memo(function MessageBubble({
         {role === 'user' ? 'You' : 'Assistant'}
         {isBookmarked && (
           <span className="ml-1.5 text-warning" aria-label="Bookmarked">
-            <IconStar className="h-2.5 w-2.5 inline" filled />
+            <IconStar className="h-2.5 w-2.5 inline" filled aria-hidden="true" />
           </span>
         )}
         {role === 'assistant' && model && !isError && (

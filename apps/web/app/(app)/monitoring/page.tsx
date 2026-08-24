@@ -286,7 +286,7 @@ export default function SystemHealthPage() {
   const headerRight = (
     <div className="flex items-center gap-3">
       {lastUpdated && (
-        <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">Updated {lastUpdated}</span>
+        <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono" aria-live="polite" aria-atomic="true">Updated {lastUpdated}</span>
       )}
       <div className="flex items-center gap-1.5">
         <label className="text-[10px] text-muted-foreground">Auto</label>

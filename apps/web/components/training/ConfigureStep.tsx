@@ -89,7 +89,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                   className="w-full rounded-md border border-border/60 bg-background p-3 pb-7 text-xs font-mono text-foreground resize-y min-h-[80px]"
                   aria-label="Training text input"
                 />
-                <span className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground/50 tabular-nums" aria-live="polite">
+                <span className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground/50 tabular-nums" aria-live="polite" aria-atomic="true">
                   {form.textInput.length > 0 ? `${form.textInput.length.toLocaleString()} chars · ~${Math.ceil(form.textInput.length / 4)} tokens` : ''}
                 </span>
               </div>
@@ -97,9 +97,9 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
 
             {form.method === 'finetune' && form.availableModels.length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
+                <label htmlFor="train-base-model" className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
                 <Select value={form.selectedModel} onValueChange={form.setSelectedModel}>
-                  <SelectTrigger className="h-8 text-xs font-mono max-w-sm" aria-label="Base model">
+                  <SelectTrigger id="train-base-model" className="h-8 text-xs font-mono max-w-sm" aria-label="Base model">
                     <SelectValue placeholder="Select model..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -137,7 +137,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
             </div>
 
             {hpErrors.length > 0 && (
-              <div className="text-[11px] text-destructive space-y-0.5">
+              <div id="configure-hp-errors" className="text-[11px] text-destructive space-y-0.5">
                 {hpErrors.map(e => <div key={e}>{e}</div>)}
               </div>
             )}

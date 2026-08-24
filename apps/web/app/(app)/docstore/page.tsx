@@ -268,6 +268,7 @@ export default function DocstorePage() {
             {selectedDoc ? (
               editMode ? (
                 <textarea
+                  aria-label="Edit document content"
                   value={editContent}
                   onChange={e => setEditContent(e.target.value)}
                   rows={20}

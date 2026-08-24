@@ -558,6 +558,7 @@ export default function AgentsPage() {
                 {agents.length > 2 && (
                   <input
                     type="text"
+                    aria-label="Search agents"
                     value={agentSearch}
                     onChange={e => setAgentSearch(e.target.value)}
                     placeholder="Search agents..."

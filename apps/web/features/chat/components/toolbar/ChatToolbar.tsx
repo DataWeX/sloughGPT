@@ -23,7 +23,7 @@ export const ChatToolbar = memo(function ChatToolbar() {
         onClick={ctx.sidebar.onToggle}
         aria-label="Toggle conversations"
       >
-        <IconMenu className="w-4 h-4" />
+        <IconMenu className="w-4 h-4" aria-hidden="true" />
       </button>
 
       <button
@@ -32,7 +32,7 @@ export const ChatToolbar = memo(function ChatToolbar() {
         aria-label="New chat"
         title="New chat"
       >
-        <IconPlus className="w-4 h-4" />
+        <IconPlus className="w-4 h-4" aria-hidden="true" />
       </button>
 
       <div className={cn('sm:flex flex-1 sm:flex-initial', ctx.search.showMobile ? 'flex' : 'hidden')}>
@@ -44,7 +44,7 @@ export const ChatToolbar = memo(function ChatToolbar() {
         onClick={() => ctx.search.setShowMobile(!ctx.search.showMobile)}
         aria-label="Toggle search"
       >
-        <IconSearch className="w-4 h-4" />
+        <IconSearch className="w-4 h-4" aria-hidden="true" />
       </button>
 
       {currentName && (

@@ -115,7 +115,7 @@ export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSu
         <div className="pt-2">
           <Link href="/models">
             <Button size="sm" className="gap-1.5">
-              <IconBeaker className="w-3.5 h-3.5" />
+              <IconBeaker className="w-3.5 h-3.5" aria-hidden="true" />
               Load a model to start chatting
             </Button>
           </Link>

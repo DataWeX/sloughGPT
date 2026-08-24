@@ -96,10 +96,11 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
         <div className="border-b border-border/50 px-4 py-3 bg-muted/30">
           <div className="max-w-lg mx-auto space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Speech Rate</label>
+              <label htmlFor="voice-speech-rate" className="text-xs font-medium text-muted-foreground">Speech Rate</label>
               <span className="text-xs text-muted-foreground/60">{settings.rate.toFixed(1)}x</span>
             </div>
             <Slider
+              id="voice-speech-rate"
               value={[settings.rate]}
               onValueChange={([v]) => updateSettings({ rate: v })}
               min={0.5}
@@ -108,12 +109,13 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             />
 
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Interrupt Sensitivity</label>
+              <label htmlFor="voice-interrupt-sensitivity" className="text-xs font-medium text-muted-foreground">Interrupt Sensitivity</label>
               <span className="text-xs text-muted-foreground/60">
                 {settings.interruptThreshold < 0.1 ? 'High' : settings.interruptThreshold < 0.2 ? 'Medium' : 'Low'}
               </span>
             </div>
             <Slider
+              id="voice-interrupt-sensitivity"
               value={[settings.interruptThreshold]}
               onValueChange={([v]) => updateSettings({ interruptThreshold: v })}
               min={0.05}

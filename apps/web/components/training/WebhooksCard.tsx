@@ -227,6 +227,8 @@ export function WebhooksCard({ addToast }: Props) {
         <div className="space-y-2 border-t pt-3">
           <p className="text-xs font-medium">Add webhook</p>
           <Input
+            id="webhook-url"
+            aria-label="Webhook URL"
             placeholder="https://example.com/webhook"
             value={newUrl}
             onChange={e => setNewUrl(e.target.value)}

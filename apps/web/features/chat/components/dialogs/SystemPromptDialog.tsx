@@ -145,6 +145,7 @@ export function SystemPromptDialog({ open, onOpenChange, value, onSave }: System
                 {showSaveInput ? (
                   <div className="flex items-center gap-1">
                     <Input
+                      aria-label="Preset name"
                       value={presetName}
                       onChange={e => setPresetName(e.target.value)}
                       placeholder="Preset name..."

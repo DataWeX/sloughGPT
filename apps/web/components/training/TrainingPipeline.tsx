@@ -184,7 +184,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
 
           {session.phase === 'complete' && (
             <div className="space-y-3">
-              <div className="rounded-md bg-success/10 border border-success/20 p-3 text-sm text-success">
+              <div className="rounded-md bg-success/10 border border-success/20 p-3 text-sm text-success" role="status" aria-live="polite">
                 Training complete
                 {session.distillCheckpoint && <span className="text-muted-foreground ml-1">— {session.distillCheckpoint}</span>}
               </div>

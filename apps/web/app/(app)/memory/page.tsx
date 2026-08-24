@@ -176,8 +176,9 @@ export default function MemoryPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-col gap-1">
-              <Label variant="uppercase">Content</Label>
+              <Label htmlFor="memory-content" variant="uppercase">Content</Label>
               <textarea
+                id="memory-content"
                 value={storeContent}
                 onChange={e => setStoreContent(e.target.value)}
                 rows={3}
@@ -186,8 +187,8 @@ export default function MemoryPage() {
             </div>
             <div className="flex items-center gap-2">
               <div className="flex flex-col gap-1">
-                <Label variant="uppercase">Topic</Label>
-                <Input value={storeTopic} onChange={e => setStoreTopic(e.target.value)}
+                <Label htmlFor="memory-topic" variant="uppercase">Topic</Label>
+                <Input id="memory-topic" value={storeTopic} onChange={e => setStoreTopic(e.target.value)}
                   className="h-8 text-xs w-40" />
               </div>
               <Button size="sm" className="mt-4" onClick={storeItem}>Store</Button>

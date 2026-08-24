@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { metaWeightsController } from './meta-weights-controller'
 
 const mockApiPost = vi.fn()
 const mockApiGet = vi.fn()
 
-vi.mock('./http-client', () => ({
+vi.mock('@/lib/http-client', () => ({
   apiPost: (...args: unknown[]) => mockApiPost(...args),
   apiGet: (...args: unknown[]) => mockApiGet(...args),
 }))
+
+const { metaWeightsController } = await import('@/lib/meta-weights-controller')
 
 describe('metaWeightsController', () => {
   beforeEach(() => {
