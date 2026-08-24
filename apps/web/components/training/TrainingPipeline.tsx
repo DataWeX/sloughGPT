@@ -224,7 +224,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
 
           {session.phase === 'error' && (
             <TrainingErrorBanner
-              error={session.message || 'Could not training'}
+              error={session.message || 'Training failed'}
               onRetry={session.resetTraining}
               onDismiss={session.resetTraining}
             />

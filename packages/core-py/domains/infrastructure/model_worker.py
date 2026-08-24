@@ -776,7 +776,7 @@ class ModelWorkerProcess:
         self._health.started_at = self._started_at
 
         # Wait for ready signal
-        deadline = time.time() + 120.0
+        deadline = time.time() + self._generate_timeout
         ready = False
         while time.time() < deadline:
             try:
@@ -1113,7 +1113,7 @@ class ModelWorkerProcess:
 
     # ── Adapter loading ──────────────────────────────────────────────────
 
-    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = 120.0) -> dict:
+    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = DEFAULT_GENERATE_TIMEOUT) -> dict:
         """Send load_adapter request to worker and wait for result.
 
         Args:

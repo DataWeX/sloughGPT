@@ -46,7 +46,7 @@ describe('useChatLocalEngine', () => {
     const { result } = renderHook(() => useChatLocalEngine(showToast))
     const ok = await act(async () => result.current.initLocalEngine())
     expect(ok).toBe(false)
-    expect(showToast).toHaveBeenCalledWith('Failed to load local AI: No .soul file URL configured', 'error')
+    expect(showToast).toHaveBeenCalledWith('Could not load local AI: No .soul file URL configured', 'error')
   })
 
   it('initLocalEngine loads LSTM model', async () => {

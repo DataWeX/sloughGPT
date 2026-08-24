@@ -6,7 +6,7 @@ Mocks the static helper methods on MobileRouter instead of httpx.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from test_support import get_test_client
 
 
@@ -14,6 +14,11 @@ from test_support import get_test_client
 def client():
     """Create test client."""
     return get_test_client()
+
+
+def resp_data(response):
+    """Unwrap StandardResponse to get inner data."""
+    return response.json()["data"]
 
 
 class TestMobileDashboard:
