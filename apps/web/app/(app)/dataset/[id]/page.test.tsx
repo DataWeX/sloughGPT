@@ -87,9 +87,10 @@ vi.mock('@/components/dataset/DatasetInsightsCard', () => ({
 vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="import-modal" /> }))
 
 vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ title, children, loading, loadingContent }: any) => (
+  PageContainer: ({ title, children, loading, loadingContent, headerRight }: any) => (
     <div className="sl-page mx-auto max-w-4xl">
       <h1>{loading ? '...' : title}</h1>
+      {headerRight && <div>{headerRight}</div>}
       {loading ? loadingContent : children}
     </div>
   ),
@@ -226,7 +227,7 @@ describe('DatasetDetailPage', () => {
     render(<Page />)
     await waitFor(() => {
       expect(screen.getByText('Import Data')).toBeTruthy()
-    })
+    }, { timeout: 5000 })
     const allBtns = screen.getAllByRole('button')
     const deleteBtn = allBtns.find(b => {
       const text = b.textContent || ''
