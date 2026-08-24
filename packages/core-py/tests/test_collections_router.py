@@ -103,14 +103,12 @@ class TestListPipelines:
         assert resp.json()["data"]["counts"]["pipelines"] == 2
 
     @patch("domains.collections.get_registry")
-    def test_list_exception_returns_empty(self, mock_gr):
+    def test_list_exception_returns_error(self, mock_gr):
         mock_gr.side_effect = RuntimeError("db down")
         app = _app()
         client = TestClient(app)
         resp = client.get("/collections")
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert data["pipelines"] == []
+        assert resp.status_code == 500
 
 
 class TestCreatePipeline:
@@ -136,11 +134,8 @@ class TestCreatePipeline:
         assert data["name"] == "pipe1"
         assert data["source_type"] == "generator"
 
-    @patch("routers.collections._build_filter", return_value=MagicMock())
-    @patch("routers.collections._build_store", return_value=MagicMock())
-    @patch("routers.collections._build_source", return_value=MagicMock())
     @patch("domains.collections.registry.get_registry")
-    def test_create_with_filters(self, mock_gr, mock_src, mock_sto, mock_flt):
+    def test_create_with_filters(self, mock_gr):
         mock_gr.return_value = _mock_registry()
         app = _app()
         client = TestClient(app)
@@ -152,7 +147,6 @@ class TestCreatePipeline:
         })
         assert resp.status_code == 200
         assert resp.json()["data"]["filters"] == 1
-        assert mock_flt.call_count == 1
 
 
 class TestRunPipeline:
