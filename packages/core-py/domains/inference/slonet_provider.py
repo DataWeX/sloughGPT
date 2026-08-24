@@ -559,7 +559,7 @@ class SloNetChatProvider:
         # silently skip quantization — float32 BLAS is both faster and exact.
         if quantize:
             from domains.infrastructure.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
-            from domains.infrastructure.quantization import Quantine, walk_slo_linears, TensorInfo
+            from domains.infrastructure.quantization import Quantine, walk_slo_linears
             from pathlib import Path as PathlibPath
 
             if not bool(_HAS_AVX2):

@@ -1409,7 +1409,7 @@ class ShellREPL(LinuxCommandsMixin):
             try:
                 self._execute_pipeline(commands)
             except Exception as e:
-                self._print(f"\n[bg-{bg_id}] Error: {e}")
+                self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
         t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
         t.start()
